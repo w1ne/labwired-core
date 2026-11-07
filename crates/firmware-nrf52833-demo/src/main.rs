@@ -14,8 +14,8 @@
 // micro:bit v2 UART is bridged to the interface MCU (KL27/DAPLink): target TX
 // is P0.06 and target RX is P1.08 (tech.microbit.org/hardware/schematic/; the
 // schematic's UART_INT_* labels are from the interface chip's perspective, and
-// codal-microbit-v2 sets MICROBIT_PIN_UART_TX = P0.06). No LED is driven: the
-// 5x5 matrix is charlieplexed and is not modelled.
+// codal-microbit-v2 sets MICROBIT_PIN_UART_TX = P0.06). The board profile has
+// a row/column matrix model, but this UART smoke does not exercise it.
 
 #![no_std]
 #![no_main]

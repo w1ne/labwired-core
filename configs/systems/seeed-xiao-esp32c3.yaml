@@ -1,0 +1,6 @@
+# Seeed Studio XIAO ESP32-C3. The profile exposes its documented D0-D10 pins
+# as GPIO and loads only the real ESP32-C3 GPIO model. This board has no
+# onboard user LED; D10 is used with an external LED in the smoke example.
+name: "seeed-xiao-esp32c3"
+chip: "../chips/esp32c3-xiao-gpio-smoke.yaml"
+external_devices: []

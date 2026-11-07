@@ -1,0 +1,24 @@
+{
+  "tool": "labwired_verify",
+  "board": "nucleo-u575zi-q",
+  "mcu_component": "nucleo-u575zi-q",
+  "language": "arduino",
+  "entry_path": "src/main.ino",
+  "source_file": "mcp-oracle-check.ino",
+  "oracle": {
+    "serial": [{"contains": "U575_VCP_OK"}]
+  },
+  "status": "model_verified",
+  "run_status": "pass",
+  "stop_reason": "assertions_passed",
+  "serial": "U575_VCP_OK\r\n",
+  "verification": "serial contains U575_VCP_OK",
+  "gaps": [
+    {
+      "code": "approximation",
+      "scope": "model",
+      "detail": "No power net drives the MCU; an ideal rail is assumed, so power-on and brown-out reset are not simulated."
+    }
+  ],
+  "note": "Separate Arduino VCP oracle check because this hosted board profile supports Arduino, not the repository's Rust smoke. Model verification only; not hardware evidence."
+}

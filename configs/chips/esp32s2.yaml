@@ -1,0 +1,36 @@
+# Narrow ESP32-S2 profile for the ESP32-S2-DevKitM-1-N4R2 onboarding smoke.
+# It models the real LX7 core, S2 memory windows, UART0 TX and the GPIO output
+# registers used by the board's GPIO18 WS2812. ROM boot, Wi-Fi, USB OTG, PSRAM,
+# ADC, touch, and every peripheral not listed here are outside this profile.
+name: "esp32s2"
+arch: "xtensa-lx7"
+cpu_hz: 240_000_000
+
+# ESP32-S2-DevKitM-1-N4R2 uses the ESP32-S2-MINI-2 module with 4 MiB flash.
+# The smoke loads a freestanding ELF into the XIP instruction window; it does
+# not model the cache/MMU remap or a ROM-launched flash image.
+flash:
+  base: 0x40080000
+  size: "4096KB"
+ram:
+  # ESP32-S2 internal SRAM data window (320 KiB), datasheet address map.
+  base: 0x3FFB0000
+  size: "320KB"
+
+pins:
+  GPIO18: { gpio: "gpio", bit: 18 }
+
+peripherals:
+  - id: "uart0"
+    type: "esp32s2_uart"
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32s3/uart0.yaml"
+
+  - id: "gpio"
+    type: "esp32s2_gpio"
+    base_address: 0x60004000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/gpio.yaml"

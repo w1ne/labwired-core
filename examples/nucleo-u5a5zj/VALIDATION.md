@@ -4,7 +4,31 @@ Run commands from the Core repository root. The target is **sim-validated**:
 the descriptors and peripheral behavior are simulator models based on ST's
 reference material. No physical U5A5 capture or acceptance is claimed.
 
-## Board I/O smoke
+## Onboarding board I/O smoke
+
+The dedicated onboarding firmware exercises USART1 and toggles all three
+active-high user LEDs: LD1/PC7, LD2/PB7 and LD3/PG2. Build and capture the
+committed evidence with:
+
+```bash
+./scripts/onboarding_smoke.sh \
+  --target-id nucleo-u5a5zj-q \
+  --crate firmware-stm32u575-demo \
+  --target thumbv8m.main-none-eabi \
+  --script examples/nucleo-u5a5zj/onboarding-smoke.yaml \
+  --system configs/systems/nucleo-u5a5zj.yaml \
+  --out-dir examples/nucleo-u5a5zj/evidence
+```
+
+The committed local simulator result must report five passing assertions:
+USART1 contains `U5A5ZJ_OK`, each LED pin has at least eight edges, and the run
+reaches the configured step limit. `evidence/vendor-status.md` records the
+live ST status and stock check. The hosted verifier attempt is separately
+recorded in `evidence/hosted-verification.json`; its Zephyr build environment
+currently stops before compilation because it has Python 3.11.2 instead of
+the required Python 3.12 or later.
+
+## Existing UART-only example smoke
 
 The shared U575 demo firmware is used for its USART1 smoke path. It verifies
 that the Nucleo system boots and captures the `OK` UART output; it is not a

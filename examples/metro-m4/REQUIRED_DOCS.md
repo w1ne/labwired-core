@@ -9,7 +9,9 @@
 
 1. Adafruit Metro M4 Express pinout / product page:
    https://learn.adafruit.com/adafruit-metro-m4-express-featuring-atsamd51/pinouts
-2. Adafruit ArduinoCore-samd Metro M4 variant (D13=PA16, Serial1=SERCOM3 on PA22/PA23):
+2. Adafruit Metro M4 product listing and current order status:
+   https://www.adafruit.com/product/3382
+3. Adafruit ArduinoCore-samd Metro M4 variant (D13=PA16, Serial1=SERCOM3 on PA22/PA23):
    https://github.com/adafruit/ArduinoCore-samd/blob/master/variants/metro_m4/variant.cpp
 
 ## Address Cross-Check Only (not a source of truth)

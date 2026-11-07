@@ -14,18 +14,22 @@ rustup target add thumbv7em-none-eabi
 cargo build -p firmware-atsamd51-demo --release --target thumbv7em-none-eabi
 ```
 
-## 3) Run deterministic UART smoke
+## 3) Run the committed onboarding smoke
 
 ```bash
-cargo run -q -p labwired-cli -- test \
-  --script examples/metro-m4/uart-smoke.yaml \
-  --output-dir out/metro-m4/uart-smoke \
-  --no-uart-stdout
+scripts/onboarding_smoke.sh \
+  --target-id metro-m4 \
+  --crate firmware-atsamd51-demo \
+  --target thumbv7em-none-eabi \
+  --script examples/metro-m4/onboarding-smoke.yaml \
+  --system configs/systems/metro-m4.yaml \
+  --out-dir examples/metro-m4/evidence
 ```
 
 Pass criteria:
 1. exit code is `0`
-2. UART contains `OK`
+2. UART contains `METRO_M4_OK`
+3. `porta:16` records at least one GPIO edge
 
 ## 4) Run firmware survival gate
 

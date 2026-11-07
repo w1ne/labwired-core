@@ -1,0 +1,44 @@
+# Narrow Seeed Studio XIAO ESP32-C3 profile for the D4/D5 BME280 path.
+# It declares only the GPIO matrix, UART0 console, I2C0 sensor bus and memory
+# used by the executable smoke. Other C3/XIAO blocks stay outside this claim.
+name: "esp32c3-xiao-bme280-smoke"
+arch: "riscv"
+core: "rv32imc"
+registers_count: 31
+cpu_hz: 160_000_000
+
+flash:
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  base: 0x3FC80000
+  size: "400KB"
+
+pins:
+  D4: { gpio: "gpio", bit: 6, functions: [{ type: i2c, peripheral: "i2c0", role: sda }] }
+  D5: { gpio: "gpio", bit: 7, functions: [{ type: i2c, peripheral: "i2c0", role: scl }] }
+  D6: { gpio: "gpio", bit: 21, functions: [{ type: uart, peripheral: "uart0", role: tx }] }
+  D7: { gpio: "gpio", bit: 20, functions: [{ type: uart, peripheral: "uart0", role: rx }] }
+
+peripherals:
+  - id: "uart0"
+    type: "esp32c3_uart"
+    irq: 21
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32c3/uart0.yaml"
+
+  - id: "gpio"
+    type: "esp32c3_gpio"
+    base_address: 0x60004000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/gpio.yaml"
+
+  - id: "i2c0"
+    type: "esp32c3_i2c"
+    base_address: 0x60013000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/i2c0.yaml"

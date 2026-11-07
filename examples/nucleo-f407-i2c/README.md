@@ -8,6 +8,13 @@ polling — against two real-silicon I²C devices attached via the
 - **AHT20** @ `0x38` — command-stream protocol with BUSY-poll
 - **BMP280** @ `0x76` — register-bank chip-ID read (expect `0x58`)
 
+The separate `tmp117-system.yaml` and `tmp117-smoke.yaml` add an **Adafruit
+TMP117 STEMMA QT breakout** to the same NUCLEO-F407 I²C1 setup. Its focused
+firmware reads the TMP117 device-ID and temperature registers, prints a marker
+only when both match the configured TMP117 model, and raises LD2 on that pass.
+See [`TMP117-VALIDATION.md`](TMP117-VALIDATION.md) for current vendor status,
+scope, limitations, and committed run evidence.
+
 This is the hardware-oracle anchor for the LabWired STM32 I²C lane.
 F407 silicon is on the bench; F401 will follow as a yaml delta once
 the lane is silicon-verified.

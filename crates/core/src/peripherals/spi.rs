@@ -1310,6 +1310,12 @@ pub enum SpiPadMap {
     /// by default; a FIFO-layout part would otherwise get the L4 table, so an
     /// F7 (FIFO SPI, F4 pinout) names this one.
     Stm32F4,
+    /// WCH CH32V003 map — CH32V003 datasheet V1.7 pin table and RM
+    /// "Alternate function remapping" (AFIO_PCFR1.SPI1_RM = 0, the reset
+    /// default): SPI1 SCK on PC5 and MOSI on PC6. F1-style ports, so like
+    /// the F1 table there is no AF nibble, and MISO (PC7, an input on
+    /// silicon) and NSS (PC1) are not routed. The SPI1 remap is not modeled.
+    Ch32v003,
 }
 
 impl FromStr for SpiPadMap {
@@ -1325,9 +1331,10 @@ impl FromStr for SpiPadMap {
             "stm32g4" | "g4" => Ok(Self::Stm32G4),
             "stm32wb" | "wb" => Ok(Self::Stm32Wb),
             "stm32l0" | "l0" => Ok(Self::Stm32L0),
+            "ch32v003" => Ok(Self::Ch32v003),
             "none" => Ok(Self::None),
             other => Err(anyhow::anyhow!(
-                "unsupported SPI pad_map '{other}'; supported: stm32h5, stm32wba, stm32u5, stm32g0, stm32f4, stm32g4, stm32wb, stm32l0, none"
+                "unsupported SPI pad_map '{other}'; supported: stm32h5, stm32wba, stm32u5, stm32g0, stm32f4, stm32g4, stm32wb, stm32l0, ch32v003, none"
             )),
         }
     }
@@ -2609,7 +2616,15 @@ impl Spi {
                         self.tx_queue.push_back(value);
                     }
                     if self.frame.is_none() {
+                        // On the event-scheduler path the bus synced the
+                        // engine to this write's cycle (`sync_to`), so the
+                        // frame's first edge carries it. The legacy walk
+                        // never anchors, and its edges stay unstamped.
+                        if crate::cycle_clock::event_scheduler_enabled() {
+                            self.stm32_set_stamp(Some(self.anchor_tick));
+                        }
                         self.stm32_start_next_frame();
+                        self.stm32_set_stamp(None);
                     }
                 }
             }
@@ -3530,15 +3545,32 @@ impl Spi {
                 (master_rx, Some(halves))
             }
             // ── Default: byte-level ──────────────────────────────────────────
+            // A frame wider than 8 bits (CR1.DFF, or CR2.DS > 7 on a FIFO
+            // port) is two bytes on the wire to a byte-level device, in shift
+            // order: high byte first when MSB-first (the reset default), low
+            // byte first when LSBFIRST. Handing the device only the low byte
+            // dropped every MAX7219 address byte from ch32fun's 16-bit
+            // `SPI_write_16` driver.
             _ => {
                 let miso = if !self.attached_devices.is_empty() {
-                    let mosi_byte = (mosi & 0xFF) as u8;
-                    // Last device wins; 0x00 is a valid MISO byte (MAX31855 LSB).
-                    let mut miso_byte = 0u8;
-                    for dev in &mut self.attached_devices {
-                        miso_byte = dev.transfer(mosi_byte);
+                    let (hi, lo) = ((mosi >> 8) as u8, (mosi & 0xFF) as u8);
+                    let wire: &[u8] = match (t.bits > 8, t.lsb_first) {
+                        (false, _) => &[lo],
+                        (true, false) => &[hi, lo],
+                        (true, true) => &[lo, hi],
+                    };
+                    let mut answer = [0u8; 2];
+                    for (slot, &mosi_byte) in answer.iter_mut().zip(wire) {
+                        // Last device wins; 0x00 is a valid MISO byte (MAX31855 LSB).
+                        for dev in &mut self.attached_devices {
+                            *slot = dev.transfer(mosi_byte);
+                        }
                     }
-                    miso_byte as u16
+                    match (t.bits > 8, t.lsb_first) {
+                        (false, _) => u16::from(answer[0]),
+                        (true, false) => u16::from_be_bytes(answer),
+                        (true, true) => u16::from_le_bytes(answer),
+                    }
                 } else if self.loopback {
                     mosi
                 } else {
@@ -3925,6 +3957,26 @@ impl crate::Peripheral for Spi {
 
     fn wire_lines(&self) -> Option<&PadLines> {
         self.lines.as_ref().map(|levels| &**levels.pad_lines())
+    }
+
+    /// The classic/FIFO STM32 request lines as LEVELS, for a DMA channel
+    /// that comes up after the request rose: TX is CR2.TXDMAEN while SPE
+    /// and TXE are set, RX is CR2.RXDMAEN while RXNE is set. Unlike
+    /// [`Self::stm32_dma_due`] this ignores the "already raised" latch: a
+    /// request raised into a channel with nothing to move (CNDTR = 0) is
+    /// still standing. ch32fun's WS2812 driver sets TXDMAEN, then arms its
+    /// channel with CNTR = 0 and starts each frame by writing CNTR.
+    fn dma_request_level(&self, line: u32) -> bool {
+        let SpiRegs::Stm32(r) = &self.regs else {
+            return false;
+        };
+        match line {
+            crate::DMA_SIGNAL_TX => {
+                r.cr2 & CR2_TXDMAEN != 0 && r.cr1 & (1 << 6) != 0 && self.stm32_txe()
+            }
+            crate::DMA_SIGNAL_RX => r.cr2 & CR2_RXDMAEN != 0 && self.stm32_rxne.get(),
+            _ => false,
+        }
     }
 
     /// The nRF52 SPIM names its pads in `PSEL` (see `wire_nrf52_pads`).

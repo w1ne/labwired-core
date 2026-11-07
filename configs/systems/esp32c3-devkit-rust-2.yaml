@@ -1,0 +1,26 @@
+# Espressif ESP32-C3-DevKit-RUST-2 board slice: GPIO2 drives its WS2812B RGB
+# LED; I2C0 on GPIO10/GPIO8 reads the onboard SHTC3 sensor.
+# The ICM-42670-P, button, user LED, USB, and battery circuit are outside this
+# focused profile.
+name: "esp32c3-devkit-rust-2"
+chip: "../chips/esp32c3-devkit-rust-2-smoke.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO2"
+      num_pixels: 1
+      cpu_hz: 160_000_000
+  - id: "shtc3"
+    type: "shtc3"
+    connection: "i2c0"
+    route:
+      sda: "GPIO10"
+      scl: "GPIO8"
+    config:
+      i2c_address: 0x70
+      temperature: 24.0
+      humidity: 40.0

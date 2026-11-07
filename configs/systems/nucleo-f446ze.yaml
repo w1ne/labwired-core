@@ -1,0 +1,26 @@
+# NUCLEO-F446ZE (MB1137), with the three user LEDs and ST-LINK VCP path.
+# UM1974 maps USART3 to PD8/PD9 and the VCP by default; LD1/LD2/LD3 map to
+# PB0/PB7/PB14. The focused chip profile omits all other board functions.
+name: "nucleo-f446ze"
+chip: "../chips/stm32f446ze-nucleo-smoke.yaml"
+debug_uart: "usart3"
+external_devices: []
+board_io:
+  - id: "ld1_green"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true
+  - id: "ld2_blue"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "ld3_red"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 14
+    signal: "output"
+    active_high: true

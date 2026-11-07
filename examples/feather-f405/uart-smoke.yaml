@@ -1,5 +1,6 @@
-# LabWired - Feather-STM32F405 UART smoke test
-# Firmware: firmware-f401-demo (link-compatible reuse — see VALIDATION.md).
+# LabWired - STM32F405 USART2 peripheral-only smoke probe.
+# This compatibility test does not represent a Feather connector route; the
+# board's exposed USART3/PB10 path and D13 LED are covered by io-smoke.yaml.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-f401-demo"

@@ -1,0 +1,4442 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 5000,
+  "cycles": 11446,
+  "instructions": 5000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 5000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 5000
+    }
+  },
+  "limits": {
+    "max_steps": 5000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:15",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1107296268,
+      1082654704,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      63,
+      2,
+      1611206668,
+      32768,
+      1611206664,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1107296308,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 0,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 5000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "d878cf3b32e396e15483c5be88b7304d431e44d206ebe5ebd3e838ba5f5e6006",
+  "config": {
+    "firmware": "examples/seeed-xiao-esp32c6/../../target/riscv32imc-unknown-none-elf/release/firmware-xiao-esp32c6-gpio-smoke",
+    "system": "examples/seeed-xiao-esp32c6/../../configs/systems/seeed-xiao-esp32c6.yaml",
+    "script": "examples/seeed-xiao-esp32c6/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 1611206656,
+        "registers": [
+          {
+            "name": "BT_SELECT",
+            "offset": 0,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "BT_SEL",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OUT",
+            "offset": 4,
+            "size": 32,
+            "value": 32768,
+            "fields": [
+              {
+                "name": "DATA_ORIG",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 32768
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OUT_W1TS",
+            "offset": 8,
+            "size": 32,
+            "value": 32768,
+            "fields": [
+              {
+                "name": "OUT_W1TS",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 32768
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OUT_W1TC",
+            "offset": 12,
+            "size": 32,
+            "value": 32768,
+            "fields": [
+              {
+                "name": "OUT_W1TC",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 32768
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OUT1",
+            "offset": 16,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DATA_ORIG",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OUT1_W1TS",
+            "offset": 20,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OUT1_W1TS",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OUT1_W1TC",
+            "offset": 24,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OUT1_W1TC",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SDIO_SELECT",
+            "offset": 28,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SDIO_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE",
+            "offset": 32,
+            "size": 32,
+            "value": 32768,
+            "fields": [
+              {
+                "name": "DATA",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 32768
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE_W1TS",
+            "offset": 36,
+            "size": 32,
+            "value": 32768,
+            "fields": [
+              {
+                "name": "ENABLE_W1TS",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 32768
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE_W1TC",
+            "offset": 40,
+            "size": 32,
+            "value": 32768,
+            "fields": [
+              {
+                "name": "ENABLE_W1TC",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 32768
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE1",
+            "offset": 44,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DATA",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE1_W1TS",
+            "offset": 48,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ENABLE1_W1TS",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE1_W1TC",
+            "offset": 52,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ENABLE1_W1TC",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STRAP",
+            "offset": 56,
+            "size": 32,
+            "value": 8,
+            "fields": [
+              {
+                "name": "STRAPPING",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 8
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "IN",
+            "offset": 60,
+            "size": 32,
+            "value": 32768,
+            "fields": [
+              {
+                "name": "DATA_NEXT",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 32768
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "IN1",
+            "offset": 64,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DATA_NEXT",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 68,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "INTERRUPT",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS_W1TS",
+            "offset": 72,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STATUS_W1TS",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS_W1TC",
+            "offset": 76,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STATUS_W1TC",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS1",
+            "offset": 80,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "INTERRUPT",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS1_W1TS",
+            "offset": 84,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STATUS1_W1TS",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS1_W1TC",
+            "offset": 88,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STATUS1_W1TC",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PCPU_INT",
+            "offset": 92,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PROCPU_INT",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PCPU_NMI_INT",
+            "offset": 96,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PROCPU_NMI_INT",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CPUSDIO_INT",
+            "offset": 100,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SDIO_INT",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PCPU_INT1",
+            "offset": 104,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PROCPU_INT1",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PCPU_NMI_INT1",
+            "offset": 108,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PROCPU_NMI_INT1",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CPUSDIO_INT1",
+            "offset": 112,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SDIO_INT1",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN0",
+            "offset": 116,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN1",
+            "offset": 120,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN2",
+            "offset": 124,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN3",
+            "offset": 128,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN4",
+            "offset": 132,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN5",
+            "offset": 136,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN6",
+            "offset": 140,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN7",
+            "offset": 144,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN8",
+            "offset": 148,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN9",
+            "offset": 152,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN10",
+            "offset": 156,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN11",
+            "offset": 160,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN12",
+            "offset": 164,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN13",
+            "offset": 168,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN14",
+            "offset": 172,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN15",
+            "offset": 176,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN16",
+            "offset": 180,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN17",
+            "offset": 184,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN18",
+            "offset": 188,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN19",
+            "offset": 192,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN20",
+            "offset": 196,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN21",
+            "offset": 200,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN22",
+            "offset": 204,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN23",
+            "offset": 208,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN24",
+            "offset": 212,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN25",
+            "offset": 216,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN26",
+            "offset": 220,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN27",
+            "offset": 224,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN28",
+            "offset": 228,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN29",
+            "offset": 232,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN30",
+            "offset": 236,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN31",
+            "offset": 240,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN32",
+            "offset": 244,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN33",
+            "offset": 248,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN34",
+            "offset": 252,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS_NEXT",
+            "offset": 332,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STATUS_INTERRUPT_NEXT",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS_NEXT1",
+            "offset": 336,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STATUS_INTERRUPT_NEXT1",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC0-127_IN_SEL_CFG",
+            "offset": 340,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  5,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC0_OUT_SEL_CFG",
+            "offset": 1364,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC1_OUT_SEL_CFG",
+            "offset": 1368,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC2_OUT_SEL_CFG",
+            "offset": 1372,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC3_OUT_SEL_CFG",
+            "offset": 1376,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC4_OUT_SEL_CFG",
+            "offset": 1380,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC5_OUT_SEL_CFG",
+            "offset": 1384,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC6_OUT_SEL_CFG",
+            "offset": 1388,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC7_OUT_SEL_CFG",
+            "offset": 1392,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC8_OUT_SEL_CFG",
+            "offset": 1396,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC9_OUT_SEL_CFG",
+            "offset": 1400,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC10_OUT_SEL_CFG",
+            "offset": 1404,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC11_OUT_SEL_CFG",
+            "offset": 1408,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC12_OUT_SEL_CFG",
+            "offset": 1412,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC13_OUT_SEL_CFG",
+            "offset": 1416,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC14_OUT_SEL_CFG",
+            "offset": 1420,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC15_OUT_SEL_CFG",
+            "offset": 1424,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC16_OUT_SEL_CFG",
+            "offset": 1428,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC17_OUT_SEL_CFG",
+            "offset": 1432,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC18_OUT_SEL_CFG",
+            "offset": 1436,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC19_OUT_SEL_CFG",
+            "offset": 1440,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC20_OUT_SEL_CFG",
+            "offset": 1444,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC21_OUT_SEL_CFG",
+            "offset": 1448,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC22_OUT_SEL_CFG",
+            "offset": 1452,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC23_OUT_SEL_CFG",
+            "offset": 1456,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC24_OUT_SEL_CFG",
+            "offset": 1460,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC25_OUT_SEL_CFG",
+            "offset": 1464,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC26_OUT_SEL_CFG",
+            "offset": 1468,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC27_OUT_SEL_CFG",
+            "offset": 1472,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC28_OUT_SEL_CFG",
+            "offset": 1476,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC29_OUT_SEL_CFG",
+            "offset": 1480,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CLOCK_GATE",
+            "offset": 1580,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CLK_EN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 1788,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DATE",
+                "bits": [
+                  27,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "spimem0_flash",
+        "kind": "native",
+        "base": 1610620928,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spimem1_flash",
+        "kind": "native",
+        "base": 1610625024,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_irom_xip",
+        "kind": "native",
+        "base": 1107296256,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 5000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio",
+        "pin": 15,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 10,
+            "value": 1
+          },
+          {
+            "cycle": 13,
+            "value": 0
+          },
+          {
+            "cycle": 465,
+            "value": 1
+          },
+          {
+            "cycle": 917,
+            "value": 0
+          },
+          {
+            "cycle": 1369,
+            "value": 1
+          },
+          {
+            "cycle": 1821,
+            "value": 0
+          },
+          {
+            "cycle": 2273,
+            "value": 1
+          },
+          {
+            "cycle": 2725,
+            "value": 0
+          },
+          {
+            "cycle": 3177,
+            "value": 1
+          },
+          {
+            "cycle": 3629,
+            "value": 0
+          },
+          {
+            "cycle": 4081,
+            "value": 1
+          },
+          {
+            "cycle": 4533,
+            "value": 0
+          },
+          {
+            "cycle": 4985,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 10,
+            "state": "1"
+          },
+          {
+            "cycle": 13,
+            "state": "0"
+          },
+          {
+            "cycle": 465,
+            "state": "1"
+          },
+          {
+            "cycle": 917,
+            "state": "0"
+          },
+          {
+            "cycle": 1369,
+            "state": "1"
+          },
+          {
+            "cycle": 1821,
+            "state": "0"
+          },
+          {
+            "cycle": 2273,
+            "state": "1"
+          },
+          {
+            "cycle": 2725,
+            "state": "0"
+          },
+          {
+            "cycle": 3177,
+            "state": "1"
+          },
+          {
+            "cycle": 3629,
+            "state": "0"
+          },
+          {
+            "cycle": 4081,
+            "state": "1"
+          },
+          {
+            "cycle": 4533,
+            "state": "0"
+          },
+          {
+            "cycle": 4985,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 13
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio",
+      "number": 15,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 78,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 78,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 4194304,
+    "ram_total_bytes": 524288,
+    "flash_used_pct": 0.0,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 11446,
+    "instructions": 5000,
+    "steps_executed": 5000,
+    "memory_reads": 1423,
+    "memory_writes": 718,
+    "peripheral_accesses": 14,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1107296308,
+        "count": 19,
+        "symbol": "main"
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+peripheral: IO_MUX GPIO6/GPIO10/GPIO27
+version: 0.2.0
+registers:
+  - id: GPIO6
+    address_offset: 0x18
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x1800
+    fields:
+      - name: FUN_IE
+        bit_range: [9, 9]
+      - name: FUN_DRV
+        bit_range: [10, 11]
+      - name: MCU_SEL
+        bit_range: [12, 14]
+  - id: GPIO10
+    address_offset: 0x28
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x1800
+    fields:
+      - name: FUN_IE
+        bit_range: [9, 9]
+      - name: FUN_DRV
+        bit_range: [10, 11]
+      - name: MCU_SEL
+        bit_range: [12, 14]
+  - id: GPIO27
+    address_offset: 0x6C
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x1800
+    fields:
+      - name: FUN_IE
+        bit_range: [9, 9]
+      - name: FUN_DRV
+        bit_range: [10, 11]
+      - name: MCU_SEL
+        bit_range: [12, 14]

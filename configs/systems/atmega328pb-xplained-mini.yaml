@@ -1,0 +1,18 @@
+schema_version: "1.0"
+name: "atmega328pb-xplained-mini"
+chip: "../chips/atmega328pb.yaml"
+cpu_hz: 16_000_000
+
+# Narrow board profile: D200 user LED on PB5 and mEDBG CDC UART via USART0.
+# The mEDBG MCU/debugger, user button, QTouch pads, and other headers are omitted.
+board_io:
+  - id: "user_led_d200"
+    kind: "led"
+    peripheral: "portb"
+    pin: 5
+    signal: "output"
+    active_high: true
+connectors:
+  - type: "uart"
+    peripheral: "usart0"
+    endpoint: "host_console"

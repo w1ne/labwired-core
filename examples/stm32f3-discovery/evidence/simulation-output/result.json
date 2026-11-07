@@ -1,0 +1,322 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 2200,
+  "cycles": 2200,
+  "instructions": 2200,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2200
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2200
+    }
+  },
+  "limits": {
+    "max_steps": 2200,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioe:9",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      5,
+      1,
+      134218912,
+      0,
+      1207963648,
+      512,
+      33554432,
+      536911848,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536911848,
+      134218877,
+      134218890
+    ],
+    "pc": 134218890,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "53ef3838308c50b75c420b8b4b35f36cd50793d5459f32c86c8fbbff7b47f677",
+  "config": {
+    "firmware": "examples/stm32f3-discovery/../../target/thumbv7em-none-eabi/release/firmware-stm32f3-discovery-smoke",
+    "system": "examples/stm32f3-discovery/../../configs/systems/stm32f3-discovery.yaml",
+    "script": "examples/stm32f3-discovery/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioe",
+        "kind": "native",
+        "base": 1207963648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157296,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 2200,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioe",
+        "pin": 9,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 34,
+            "value": 1
+          },
+          {
+            "cycle": 232,
+            "value": 0
+          },
+          {
+            "cycle": 431,
+            "value": 1
+          },
+          {
+            "cycle": 629,
+            "value": 0
+          },
+          {
+            "cycle": 828,
+            "value": 1
+          },
+          {
+            "cycle": 1026,
+            "value": 0
+          },
+          {
+            "cycle": 1225,
+            "value": 1
+          },
+          {
+            "cycle": 1423,
+            "value": 0
+          },
+          {
+            "cycle": 1622,
+            "value": 1
+          },
+          {
+            "cycle": 1820,
+            "value": 0
+          },
+          {
+            "cycle": 2019,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 33,
+            "state": "0"
+          },
+          {
+            "cycle": 34,
+            "state": "1"
+          },
+          {
+            "cycle": 232,
+            "state": "0"
+          },
+          {
+            "cycle": 431,
+            "state": "1"
+          },
+          {
+            "cycle": 629,
+            "state": "0"
+          },
+          {
+            "cycle": 828,
+            "state": "1"
+          },
+          {
+            "cycle": 1026,
+            "state": "0"
+          },
+          {
+            "cycle": 1225,
+            "state": "1"
+          },
+          {
+            "cycle": 1423,
+            "state": "0"
+          },
+          {
+            "cycle": 1622,
+            "state": "1"
+          },
+          {
+            "cycle": 1820,
+            "state": "0"
+          },
+          {
+            "cycle": 2019,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 11
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioe",
+      "number": 9,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1184,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1184,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 262144,
+    "ram_total_bytes": 40960,
+    "flash_used_pct": 0.45,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 40960,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 40936,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536911872,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 40960,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 40936,
+    "heap_base": 536870912,
+    "heap_top": 536911872
+  },
+  "metrics": {
+    "cycles": 2200,
+    "instructions": 2200,
+    "steps_executed": 2200,
+    "memory_reads": 85,
+    "memory_writes": 28,
+    "peripheral_accesses": 15,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134218890,
+        "count": 8,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      }
+    ]
+  }
+}

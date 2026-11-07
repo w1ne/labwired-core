@@ -19,6 +19,9 @@ Arduino `LED_BUILTIN`).
 > evidence, and [`../../docs/boards/stm32u575.md`](../../docs/boards/stm32u575.md)
 > for the model/honesty table.
 
+The NUCLEO-U575ZI-Q onboarding record, live vendor check, and committed smoke
+evidence are in [`ONBOARDING.md`](ONBOARDING.md).
+
 The browser demo is available at
 [app.labwired.com/?lab=nucleo-u575-star-catcher&run=1](https://app.labwired.com/?lab=nucleo-u575-star-catcher&run=1).
 It opens the curated OLED game and starts its stock ELF in the Playground

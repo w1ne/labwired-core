@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 16968,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 16.968
+  },
+  "targets": [
+    {
+      "target_id": "esp32c3-lcdkit",
+      "status": "pass",
+      "crate": "firmware-esp32c3-lcdkit-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32c3-lcdkit/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32c3-lcdkit.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T01:19:09Z",
+      "finished_at_utc": "2026-11-06T01:19:25Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16968,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.987,
+        "build_firmware": 0.24,
+        "run_smoke": 0.699
+      },
+      "stages_ms": {
+        "build_cli": 15987,
+        "build_firmware": 240,
+        "run_smoke": 699
+      },
+      "_artifact_path": "examples/esp32c3-lcdkit/evidence"
+    }
+  ]
+}

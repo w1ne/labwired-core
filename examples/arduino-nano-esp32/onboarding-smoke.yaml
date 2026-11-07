@@ -1,0 +1,18 @@
+# Arduino Nano ESP32: toggle all three active-low RGB LED GPIO channels.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-arduino-nano-esp32-smoke"
+  system: "../../configs/systems/arduino-nano-esp32.yaml"
+limits:
+  max_steps: 1000
+assertions:
+  - gpio_edges:
+      pin: "gpio:46"
+      min_edges: 2
+  - gpio_edges:
+      pin: "gpio:0"
+      min_edges: 2
+  - gpio_edges:
+      pin: "gpio:45"
+      min_edges: 2
+  - expected_stop_reason: max_steps

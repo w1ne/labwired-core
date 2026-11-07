@@ -1,0 +1,12 @@
+# Waveshare ESP32-C3-Zero (SKU 25452), scoped to its onboard WS2812 RGB LED.
+name: "waveshare-esp32c3-zero"
+chip: "../chips/esp32c3-waveshare-c3-zero-smoke.yaml"
+cpu_hz: 160_000_000
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO10"
+      num_pixels: 1
+      cpu_hz: 160_000_000

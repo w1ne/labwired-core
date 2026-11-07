@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 15619,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 15.619
+  },
+  "targets": [
+    {
+      "target_id": "nucleo-g474re",
+      "status": "pass",
+      "crate": "firmware-nucleo_g474re-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo_g474re/uart-smoke.yaml",
+      "system": "configs/systems/nucleo_g474re.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T10:47:41Z",
+      "finished_at_utc": "2026-11-03T10:47:57Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15619,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.771,
+        "build_firmware": 0.025,
+        "run_smoke": 0.812
+      },
+      "stages_ms": {
+        "build_cli": 14771,
+        "build_firmware": 25,
+        "run_smoke": 812
+      },
+      "_artifact_path": "examples/nucleo_g474re/evidence"
+    }
+  ]
+}

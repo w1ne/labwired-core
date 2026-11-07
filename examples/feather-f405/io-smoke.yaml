@@ -2,13 +2,14 @@
 #
 # Build: cargo build -p firmware-feather-f405-demo --release --target thumbv7em-none-eabi
 #
-# The D13 user LED (PC1, active high) blinks and a heartbeat line goes out on USART2.
+# The D13 user LED (PC1, active high) blinks and a heartbeat goes out on the
+# board's exposed USART3 TX pin (PB10).
 # The heartbeat reports the state READ BACK from the GPIO ODR register, so
 # `uart_ordered` asserts the pad really changed level, in order.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-feather-f405-demo"
-  system: "./system.yaml"
+  system: "../../configs/systems/feather-f405.yaml"
 limits:
   max_steps: 4000000
 assertions:
@@ -18,4 +19,7 @@ assertions:
       - "hb=1 d13=off"
       - "hb=2 d13=on"
       - "hb=3 d13=off"
+  - gpio_edges:
+      pin: "gpioc:1"
+      min_edges: 8
   - expected_stop_reason: max_steps

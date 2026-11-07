@@ -1,0 +1,24 @@
+# Narrow board profile for the Adafruit ESP32-S3 TFT Feather (#5483).
+# It covers the built-in ST7789 over SPI2, its power/reset/backlight GPIOs,
+# and UART0 TX. Flash, PSRAM, Wi-Fi/BLE, and STEMMA QT peripherals are omitted.
+name: "adafruit-esp32-s3-tft-feather"
+chip: "../chips/esp32s3.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "tft"
+    type: "st7789-170x320"
+    connection: "spi2_s3"
+    config:
+      cs_pin: "GPIO7"
+      dc_pin: "GPIO39"
+      power_pin: "GPIO21"
+      reset_pin: "GPIO40"
+      backlight_pin: "GPIO45"
+      # The module's ST7789 RAM is 240x320. With MADCTL MV|MY (0xA0),
+      # Adafruit's rotation-1 driver addresses columns 52..291 and rows
+      # 40..174; mapped back to fixed RAM these are x=40..174, y=28..267.
+      col_offset: 40
+      row_offset: 28
+      cols: 135
+      rows: 240

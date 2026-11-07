@@ -32,6 +32,22 @@ cargo run -q -p labwired-cli -- \
 # -> U545-HAL OK / BLINK 0 LD2=1 B1=0
 ```
 
+The source-built onboarding smoke uses a narrow U545 profile and checks both
+USART1 output and LD2 transitions:
+
+```bash
+scripts/onboarding_smoke.sh \
+  --target-id nucleo-u545re \
+  --crate firmware-nucleo-u545re-smoke \
+  --target thumbv8m.main-none-eabi \
+  --script examples/nucleo-u545re/onboarding-smoke.yaml \
+  --system configs/systems/nucleo-u545re-smoke.yaml \
+  --out-dir examples/nucleo-u545re/evidence
+```
+
+The checked-in build and simulation output are in `evidence/`; the live ST
+availability receipt is `evidence/vendor-status.md`.
+
 ## Files
 
 - `system.yaml` - example system manifest (chip + LD2 + B1)
@@ -45,3 +61,4 @@ cargo run -q -p labwired-cli -- \
 
 - Chip: [`configs/chips/stm32u545.yaml`](../../configs/chips/stm32u545.yaml)
 - Board system: [`configs/systems/nucleo-u545re.yaml`](../../configs/systems/nucleo-u545re.yaml)
+- Narrow onboarding system: [`configs/systems/nucleo-u545re-smoke.yaml`](../../configs/systems/nucleo-u545re-smoke.yaml)

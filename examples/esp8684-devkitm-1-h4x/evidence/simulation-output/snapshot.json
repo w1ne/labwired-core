@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1107297202,
+      1070464928,
+      1070204928,
+      0,
+      2684317695,
+      1107297014,
+      0,
+      256,
+      0,
+      0,
+      256,
+      1,
+      1610629160,
+      0,
+      4294938623,
+      1610649600,
+      128,
+      1070464944,
+      3,
+      3,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1107297212,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 1107296568,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 250000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 250000,
+  "cycles": 500536,
+  "instructions": 250000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 250000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 250000
+    }
+  },
+  "limits": {
+    "max_steps": 250000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "7110b7af7424e94cc279a3a5d2c1e8a05cea51faac84f53e3112698eaf100367",
+  "config": {
+    "firmware": "examples/esp8684-devkitm-1-h4x/../../target/riscv32imc-unknown-none-elf/release/firmware-esp8684-devkitm1-h4x-smoke",
+    "system": "examples/esp8684-devkitm-1-h4x/../../configs/systems/esp8684-devkitm-1-h4x.yaml",
+    "script": "examples/esp8684-devkitm-1-h4x/onboarding-smoke.yaml"
+  }
+}

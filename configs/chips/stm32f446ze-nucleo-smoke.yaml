@@ -1,0 +1,61 @@
+# Focused STM32F446ZET6 profile for the NUCLEO-F446ZE board smoke.
+# Only the reset-clock RCC, GPIOB/GPIOD, and USART3 are exposed. Other F446
+# peripherals are omitted and remain unsupported in this profile.
+#
+# Sources: ST DS10693 (STM32F446xC/E memory and Cortex-M4), RM0390 (F446 RCC,
+# GPIO, and USART3), and UM1974 (NUCLEO-F446ZE user LEDs and USART3 VCP).
+
+name: "stm32f446ze-nucleo-smoke"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 150
+# Firmware stays on the reset HSI clock.
+cpu_hz: 16_000_000
+
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+
+pins:
+  PB0: { gpio: "gpiob", bit: 0, functions: [{ type: gpio, peripheral: gpiob }] }
+  PB7: { gpio: "gpiob", bit: 7, functions: [{ type: gpio, peripheral: gpiob }] }
+  PB14: { gpio: "gpiob", bit: 14, functions: [{ type: gpio, peripheral: gpiob }] }
+  PD8: { gpio: "gpiod", bit: 8, functions: [{ type: uart, peripheral: usart3, role: tx, af: 7 }] }
+  PD9: { gpio: "gpiod", bit: 9, functions: [{ type: uart, peripheral: usart3, role: rx, af: 7 }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40020400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 1 }
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x40020C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 3 }
+
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      # F446 USART uses the classic SR/DR register map.
+      cr3_mask: 0xFFF
+    clock: { reg: "apb1enr", bit: 18 }

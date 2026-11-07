@@ -1,0 +1,8 @@
+# Espressif ESP32-DevKitC-32E / ESP32-WROOM-32E narrow GPIO + UART0 console smoke.
+# GPIO23 is observed on J3 pin 2. UART0 is captured by the simulator console;
+# the board's USB-to-UART bridge and UART pad waveforms are omitted.
+name: "esp32-devkitc-32e-gpio-smoke"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+debug_uart: "uart0"
+external_devices: []
+board_io: []

@@ -1,0 +1,4 @@
+2026-11-06T01:19:25.560390Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32c3-lcdkit-smoke.yaml
+2026-11-06T01:19:25.650010Z  INFO labwired_loader: ELF Entry Point: 0x42000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  3/3 checks · onboarding-smoke · 1000000 steps · 0.17s

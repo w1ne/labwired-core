@@ -6,13 +6,14 @@
 //
 // ── Architectural separation ────────────────────────────────────────────────
 // RCC is modelled as one struct PER CHIP FAMILY (F1 / F4 / V2 / L4 / L0, and
-// the later H5/H7/G4 additions), unified by the `Rcc` enum. Each family struct
-// owns ONLY the registers that family actually has — so e.g. the L0-only
-// CRRCR/IOPENR registers physically cannot exist on an F4 or L4 instance, and a
-// change to one family's model cannot leak into another. `V2Rcc` is the one
-// deliberate exception: WB, WBA and U5 share enough of the V2 register file to
-// be one struct, with the family deltas — WB's enable-block placement, U5's
-// remapped clock tree, WBA's PLL1CFGR ready status — selected by
+// the later H5/H7/G4/C0/C5/U0/U3 additions), unified by the `Rcc` enum. Each
+// family struct owns ONLY the registers that family actually has — so e.g. the
+// L0-only CRRCR/IOPENR registers physically cannot exist on an F4 or L4
+// instance, and a change to one family's model cannot leak into another.
+// `V2Rcc` is the one deliberate exception: WB, WBA and U5 share enough of the
+// V2 register file to be one struct, with family-specific deltas: WB's
+// enable-block placement, U5's remapped clock tree, and WBA's PLL1CFGR ready
+// status are selected by
 // fixed-configuration flags each set only by its own constructor and pinned by
 // its own tests. The chip yaml's `profile` selects the variant via
 // `RccRegisterLayout`; the `Peripheral` impl dispatches to the active family.
@@ -59,8 +60,8 @@ pub enum RccRegisterLayout {
     /// L4/G4-shaped enable block — AHB1ENR@0x48, AHB2ENR@0x4C, AHB3ENR@0x50,
     /// APB1ENR1@0x58, APB1ENR2@0x5C, APB2ENR@0x60. Offsets verified against
     /// ST's CMSIS `stm32l552xx.h` RCC_TypeDef. Distinct from [`Self::Stm32L4`]
-    /// because L4 has no modeled AHB1ENR/APB1ENR2/AHB3ENR, and LPUART1 (the
-    /// NUCLEO-L552ZE-Q console) is gated on APB1ENR2 bit 0. The part boots on
+    /// because L5 also has AHB1ENR/AHB3ENR and a different clock-tree profile.
+    /// The part boots on
     /// MSI range 6 (4 MHz), CR reset 0x0000_0063. NOT silicon-verified.
     Stm32L5,
     /// STM32L0 family (RM0367). Verified on NUCLEO-L073RZ over SWD.
@@ -117,6 +118,21 @@ pub enum RccRegisterLayout {
     /// silicon-pinned AHBENR mask would discard — so the enable registers are
     /// stored unmasked, like an un-pinned F4 part.
     Stm32F0,
+    /// STM32C0 onboarding subset (RM0490 Rev 5). Currently only
+    /// RCC_IOPENR@0x34 is exposed for the NUCLEO-C071RB GPIO smoke.
+    Stm32C0,
+    /// STM32C5 onboarding subset (RM0522 Rev 1). Currently only
+    /// RCC_AHB2ENR@0x8C bit 0 (GPIOAEN) is modeled for the NUCLEO-C5A3ZG
+    /// GPIO smoke; the C5 clock tree and other RCC registers are out of scope.
+    Stm32C5,
+    /// STM32U0 onboarding subset (RM0503 Rev 4). Currently only
+    /// RCC_IOPENR@0x4C bit 0 (GPIOAEN) is modeled for the NUCLEO-U083RC GPIO
+    /// smoke; the U0 clock tree and other RCC registers are out of scope.
+    Stm32U0,
+    /// STM32U3 onboarding subset (RM0487 Rev 1). Currently only
+    /// RCC_AHB2ENR1@0x8C bit 0 (GPIOAEN) is modeled for the NUCLEO-U3C5ZI-Q
+    /// GPIO smoke; the U3 clock tree and other RCC registers are out of scope.
+    Stm32U3,
 }
 
 impl FromStr for RccRegisterLayout {
@@ -136,11 +152,15 @@ impl FromStr for RccRegisterLayout {
             "stm32g4" | "g4" => Ok(Self::Stm32G4),
             "stm32wb" | "wb" => Ok(Self::Stm32Wb),
             "stm32wba" | "wba" => Ok(Self::Stm32Wba),
-            "wch" => Ok(Self::Wch),
+            "wch" | "ch32v003" => Ok(Self::Wch),
             "stm32g0" | "g0" => Ok(Self::Stm32G0),
             "stm32f0" | "f0" => Ok(Self::Stm32F0),
+            "stm32c0" | "c0" => Ok(Self::Stm32C0),
+            "stm32c5" | "c5" => Ok(Self::Stm32C5),
+            "stm32u0" | "u0" => Ok(Self::Stm32U0),
+            "stm32u3" | "u3" => Ok(Self::Stm32U3),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32f0",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32f0, stm32c0, stm32c5, stm32u0, stm32u3",
                 value
             )),
         }
@@ -1815,16 +1835,18 @@ impl RccModel for H7Rcc {
 #[derive(Debug, Default, serde::Serialize)]
 pub struct L4Rcc {
     cr: u32,
-    cfgr: u32,     // 0x08
-    pllcfgr: u32,  // 0x0C
-    ahbenr: u32,   // AHB2ENR 0x4C (GPIO ports)
-    apb1enr: u32,  // APB1ENR1 0x58
-    apb2enr: u32,  // 0x60
-    ahbrstr: u32,  // AHB2RSTR 0x2C
-    apb1rstr: u32, // APB1RSTR1 0x38
-    apb2rstr: u32, // 0x40
-    bdcr: u32,     // 0x90 — LSE/RTC backup domain control
-    csr: u32,      // 0x94 — LSION bit0 → LSIRDY bit1
+    cfgr: u32,      // 0x08
+    pllcfgr: u32,   // 0x0C
+    ahbenr: u32,    // AHB2ENR 0x4C (GPIO ports)
+    apb1enr: u32,   // APB1ENR1 0x58
+    apb1enr2: u32,  // APB1ENR2 0x5C (LPUART1EN bit 0)
+    apb2enr: u32,   // 0x60
+    ahbrstr: u32,   // AHB2RSTR 0x2C
+    apb1rstr: u32,  // APB1RSTR1 0x38
+    apb1rstr2: u32, // APB1RSTR2 0x3C
+    apb2rstr: u32,  // 0x40
+    bdcr: u32,      // 0x90 — LSE/RTC backup domain control
+    csr: u32,       // 0x94 — LSION bit0 → LSIRDY bit1
 }
 
 impl L4Rcc {
@@ -1901,9 +1923,11 @@ impl RccModel for L4Rcc {
             0x0C => self.pllcfgr,
             0x2C => self.ahbrstr,
             0x38 => self.apb1rstr,
+            0x3C => self.apb1rstr2,
             0x40 => self.apb2rstr,
             0x4C => self.ahbenr,
             0x58 => self.apb1enr,
+            0x5C => self.apb1enr2,
             0x60 => self.apb2enr,
             0x90 => self.bdcr,
             0x94 => self.csr,
@@ -1939,9 +1963,11 @@ impl RccModel for L4Rcc {
             }
             0x2C => self.ahbrstr = value,
             0x38 => self.apb1rstr = value,
+            0x3C => self.apb1rstr2 = value,
             0x40 => self.apb2rstr = value,
             0x4C => self.ahbenr = value,
             0x58 => self.apb1enr = value,
+            0x5C => self.apb1enr2 = value,
             0x60 => self.apb2enr = value,
             // BDCR: LSEON (bit0) → LSERDY (bit1); rest is RTC/backup storage.
             0x90 => {
@@ -2593,6 +2619,162 @@ impl RccModel for G0Rcc {
     }
 }
 
+// ── STM32C0 ────────────────────────────────────────────────────────────────
+// NUCLEO-C071RB onboarding currently needs only the GPIOA clock gate. RM0490
+// Rev 5 §6.4.12 gives RCC_IOPENR at offset 0x34, reset 0, with GPIOAEN at bit 0.
+// Keep this profile deliberately small: the C0 clock tree and other RCC
+// registers are outside this smoke model.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct C0Rcc {
+    iopenr: u32,
+}
+
+impl RccModel for C0Rcc {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x34 => self.iopenr,
+            _ => {
+                crate::census_reg!("rcc:C0Rcc", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x34 => self.iopenr = value,
+            _ => crate::census_reg!("rcc:C0Rcc", offset, "write"),
+        }
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+// ── STM32C5 ────────────────────────────────────────────────────────────────
+// NUCLEO-C5A3ZG GPIO smoke subset. RM0522 Rev 1 defines RCC_AHB2ENR at
+// offset 0x8C with GPIOAEN at bit 0. The broader RCC clock tree and other
+// enables are deliberately not modeled by this onboarding profile.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct C5Rcc {
+    ahb2enr: u32,
+}
+
+impl RccModel for C5Rcc {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x8C => self.ahb2enr,
+            _ => {
+                crate::census_reg!("rcc:C5Rcc", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // Only GPIOA is exposed by this smoke profile. Keep other enable
+            // bits clear so an unsupported C5 peripheral cannot appear active.
+            0x8C => self.ahb2enr = value & 1,
+            _ => crate::census_reg!("rcc:C5Rcc", offset, "write"),
+        }
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+// ── STM32U0 ────────────────────────────────────────────────────────────────
+// NUCLEO-U083RC GPIO smoke subset. RM0503 Rev 4 §5.4.13 gives
+// RCC_IOPENR@0x4C, reset 0, with GPIOAEN at bit 0. The GPIO clock register is
+// at a different offset from the similar G0/C0 block; keep this family-specific
+// so a G0 profile cannot silently put the gate on the wrong register.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct U0Rcc {
+    iopenr: u32,
+}
+
+impl RccModel for U0Rcc {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x4C => self.iopenr,
+            _ => {
+                crate::census_reg!("rcc:U0Rcc", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // This board smoke exposes GPIOA only; other U0 I/O clock gates are
+            // outside the profile and stay disabled.
+            0x4C => self.iopenr = value & 1,
+            _ => crate::census_reg!("rcc:U0Rcc", offset, "write"),
+        }
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+// ── STM32U3 ────────────────────────────────────────────────────────────────
+// NUCLEO-U3C5ZI-Q GPIO smoke subset. RM0487 Rev 1 §10.5.21 defines
+// RCC_AHB2ENR1@0x8C, reset 0x40000000, with GPIOAEN at bit 0. Only GPIOA's
+// clock gate is modeled here; the U3 clock tree and other enable bits are
+// outside this onboarding profile.
+#[derive(Debug, serde::Serialize)]
+pub struct U3Rcc {
+    ahb2enr1: u32,
+}
+
+impl Default for U3Rcc {
+    fn default() -> Self {
+        Self {
+            ahb2enr1: 1 << 30, // SRAM2EN reset value from RM0487 §10.5.21.
+        }
+    }
+}
+
+impl RccModel for U3Rcc {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x8C => self.ahb2enr1,
+            _ => {
+                crate::census_reg!("rcc:U3Rcc", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // Preserve the documented SRAM2EN reset state and expose GPIOAEN;
+            // all other gates are outside the NUCLEO-U3C5ZI-Q smoke profile.
+            0x8C => self.ahb2enr1 = (1 << 30) | (value & 1),
+            _ => crate::census_reg!("rcc:U3Rcc", offset, "write"),
+        }
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+/// APB2PCENR gates of the CH32V003 blocks this engine models: AFIO bit 0,
+/// GPIOA bit 2, GPIOC bit 4, GPIOD bit 5, ADC1 bit 9, TIM1 bit 11, SPI1 bit
+/// 12, USART1 bit 14 (ch32fun's `RCC_APB2Periph_*`). A gate for a block with
+/// no model reads back 0, so firmware cannot believe it clocked hardware that
+/// is not there. Add the bit when the block gets a model.
+const WCH_APB2PCENR_MODELED: u32 =
+    (1 << 0) | (1 << 2) | (1 << 4) | (1 << 5) | (1 << 9) | (1 << 11) | (1 << 12) | (1 << 14);
+/// APB1PCENR gates of the modeled blocks: TIM2 bit 0, I2C1 bit 21
+/// (`RCC_APB1Periph_TIM2` 0x0000_0001, `RCC_APB1Periph_I2C1` 0x0020_0000).
+const WCH_APB1PCENR_MODELED: u32 = (1 << 0) | (1 << 21);
+
 // ── WCH CH32V003 ────────────────────────────────────────────────────────────
 
 /// WCH's CH32V003 clock tree.
@@ -2613,10 +2795,19 @@ impl RccModel for G0Rcc {
 /// Not verified from those sources: `LSI_HZ` (128 kHz) and the 4–25 MHz HSE
 /// range accepted by [`WchRcc::set_hse_frequency`]. This is a register model,
 /// not silicon validation.
+///
+/// CTLR resets to 0x83 (HSION|HSIRDY, HSITRIM = 0x10); HSICAL reads 0, a
+/// per-device factory value. RCC_INTR (0x08) keeps only the ready-interrupt
+/// enables; its flag-clear bits are write-only and no ready interrupt is
+/// raised, so the flags read 0. Without a fitted HSE (`set_hse_frequency`)
+/// HSEON never yields HSERDY, so firmware that selects the HSE waits rather
+/// than running on a clock the board does not declare. The CFGR0 dividers
+/// other than HPRE, MCO and the clock security system are storage only.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct WchRcc {
     ctlr: u32,
     cfgr0: u32,
+    intr: u32,
     ahbpcenr: u32,
     apb2pcenr: u32,
     apb1pcenr: u32,
@@ -2632,6 +2823,7 @@ impl WchRcc {
     // Offsets and control bits: ch32v00x.h `RCC_TypeDef` / `RCC_*` defines.
     const CTLR: u64 = 0x00;
     const CFGR0: u64 = 0x04;
+    const INTR: u64 = 0x08;
     const AHBPCENR: u64 = 0x14;
     const APB2PCENR: u64 = 0x18;
     const APB1PCENR: u64 = 0x1C;
@@ -2642,11 +2834,18 @@ impl WchRcc {
     const PLLON: u32 = 1 << 24;
     const PLLRDY: u32 = 1 << 25;
     const PLLSRC_HSE: u32 = 1 << 16;
+    /// HSITRIM reset value 0x10 in CTLR[7:3].
+    const HSITRIM_RESET: u32 = 0x10 << 3;
+    /// HSION, HSITRIM[7:3], HSEON, HSEBYP, CSSON, PLLON.
+    const CTLR_WRITABLE: u32 = 0x010D_00F9;
+    /// LSIRDYIE, HSIRDYIE, HSERDYIE, PLLRDYIE.
+    const INTR_WRITABLE: u32 = 0x0000_1D00;
 
     pub fn new() -> Self {
         let mut this = Self {
-            ctlr: Self::HSION,
+            ctlr: Self::HSION | Self::HSITRIM_RESET,
             cfgr0: 0,
+            intr: 0,
             ahbpcenr: 0,
             apb2pcenr: 0,
             apb1pcenr: 0,
@@ -2759,6 +2958,7 @@ impl WchRcc {
         match offset {
             Self::CTLR => self.ctlr,
             Self::CFGR0 => self.cfgr0,
+            Self::INTR => self.intr,
             Self::AHBPCENR => self.ahbpcenr,
             Self::APB2PCENR => self.apb2pcenr,
             Self::APB1PCENR => self.apb1pcenr,
@@ -2780,15 +2980,16 @@ impl RccModel for WchRcc {
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            Self::CTLR => self.ctlr = value,
+            Self::CTLR => self.ctlr = value & Self::CTLR_WRITABLE,
             Self::CFGR0 => {
                 // SWS is read-only; the requested SW field is retained and
                 // status changes only after the selected clock is ready.
                 self.cfgr0 = (value & !(0x3 << 2)) | (self.cfgr0 & (0x3 << 2));
             }
+            Self::INTR => self.intr = value & Self::INTR_WRITABLE,
             Self::AHBPCENR => self.ahbpcenr = value,
-            Self::APB2PCENR => self.apb2pcenr = value,
-            Self::APB1PCENR => self.apb1pcenr = value,
+            Self::APB2PCENR => self.apb2pcenr = value & WCH_APB2PCENR_MODELED,
+            Self::APB1PCENR => self.apb1pcenr = value & WCH_APB1PCENR_MODELED,
             _ => {
                 crate::census_reg!("rcc:WchRcc", offset, "write");
             }
@@ -2818,6 +3019,10 @@ pub enum Rcc {
     Stm32G4(G4Rcc),
     Stm32G0(G0Rcc),
     Stm32F0(F0Rcc),
+    Stm32C0(C0Rcc),
+    Stm32C5(C5Rcc),
+    Stm32U0(U0Rcc),
+    Stm32U3(U3Rcc),
     Wch(WchRcc),
 }
 
@@ -2845,12 +3050,21 @@ impl Rcc {
             RccRegisterLayout::Stm32G4 => Self::Stm32G4(G4Rcc::new()),
             RccRegisterLayout::Stm32G0 => Self::Stm32G0(G0Rcc::new()),
             RccRegisterLayout::Stm32F0 => Self::Stm32F0(F0Rcc::new()),
+            RccRegisterLayout::Stm32C0 => Self::Stm32C0(C0Rcc::default()),
+            RccRegisterLayout::Stm32C5 => Self::Stm32C5(C5Rcc::default()),
+            RccRegisterLayout::Stm32U0 => Self::Stm32U0(U0Rcc::default()),
+            RccRegisterLayout::Stm32U3 => Self::Stm32U3(U3Rcc::default()),
             RccRegisterLayout::Wch => Self::Wch(WchRcc::new()),
             // Same V2 model, RM0434 enable/reset placement.
             RccRegisterLayout::Stm32Wb => Self::Stm32V2(V2Rcc::new_wb()),
             // Same V2 model, RM0493 PLL1RCLKPRE→PLL1RCLKPRERDY status.
             RccRegisterLayout::Stm32Wba => Self::Stm32V2(V2Rcc::new_wba()),
         }
+    }
+
+    /// Whether this instance is the WCH CH32V003 clock tree.
+    pub fn is_ch32v003(&self) -> bool {
+        matches!(self, Self::Wch(_))
     }
 
     /// Board option: an external HSE oscillator is fitted. Only the U5/V2
@@ -2926,8 +3140,8 @@ impl Rcc {
         match self {
             Self::Wch(_) => match r.as_str() {
                 "ahbpcenr" | "ahbenr" => Some(WchRcc::AHBPCENR),
-                "apb2pcenr" => Some(WchRcc::APB2PCENR),
-                "apb1pcenr" => Some(WchRcc::APB1PCENR),
+                "apb2pcenr" | "apb2enr" => Some(WchRcc::APB2PCENR),
+                "apb1pcenr" | "apb1enr" => Some(WchRcc::APB1PCENR),
                 _ => None,
             },
             // F1: AHBENR@0x14, APB2ENR@0x18, APB1ENR@0x1C (RM0008 §7.3).
@@ -2955,10 +3169,11 @@ impl Rcc {
                 "apb2enr" => Some(0x44),
                 _ => None,
             },
-            // L4: AHB2ENR@0x4C, APB1ENR1@0x58, APB2ENR@0x60 (RM0351 §6.4).
+            // L4: AHB2ENR@0x4C, APB1ENR1/2@0x58/0x5C, APB2ENR@0x60 (RM0394 §7.4).
             Self::Stm32L4(_) => match r.as_str() {
                 "ahbenr" | "ahb2enr" => Some(0x4C),
                 "apb1enr" | "apb1enr1" => Some(0x58),
+                "apb1enr2" => Some(0x5C),
                 "apb2enr" => Some(0x60),
                 _ => None,
             },
@@ -3039,6 +3254,27 @@ impl Rcc {
                 "csr" => Some(0x60),
                 _ => None,
             },
+            // C0 smoke profile: only IOPENR is currently modeled (RM0490
+            // Rev 5 §6.4.12); unlike G0 it deliberately has no clock-tree map.
+            Self::Stm32C0(_) => match r.as_str() {
+                "iopenr" => Some(0x34),
+                _ => None,
+            },
+            // C5 GPIO smoke subset: only AHB2ENR is modeled (RM0522 Rev 1).
+            Self::Stm32C5(_) => match r.as_str() {
+                "ahb2enr" => Some(0x8C),
+                _ => None,
+            },
+            // U0 GPIO smoke subset (RM0503 Rev 4 §5.4.13).
+            Self::Stm32U0(_) => match r.as_str() {
+                "iopenr" => Some(0x4C),
+                _ => None,
+            },
+            // U3 GPIO smoke subset: AHB2ENR1@0x8C (RM0487 Rev 1 §10.5.21).
+            Self::Stm32U3(_) => match r.as_str() {
+                "ahb2enr" | "ahb2enr1" => Some(0x8C),
+                _ => None,
+            },
             // WB (RM0434, 0x4C/0x58/0x60) and WBA (RM0493, H5-style
             // 0x8C/0x9C/0xA4): the six shared slots, read off the instance's
             // own map. `cfgr1` is WBA RCC_CFGR1@0x1C (WB has RCC_CIFR there
@@ -3117,6 +3353,10 @@ impl Rcc {
             Self::Stm32G4(r) => r,
             Self::Stm32G0(r) => r,
             Self::Stm32F0(r) => r,
+            Self::Stm32C0(r) => r,
+            Self::Stm32C5(r) => r,
+            Self::Stm32U0(r) => r,
+            Self::Stm32U3(r) => r,
             Self::Wch(r) => r,
         }
     }
@@ -3134,6 +3374,10 @@ impl Rcc {
             Self::Stm32G4(r) => r,
             Self::Stm32G0(r) => r,
             Self::Stm32F0(r) => r,
+            Self::Stm32C0(r) => r,
+            Self::Stm32C5(r) => r,
+            Self::Stm32U0(r) => r,
+            Self::Stm32U3(r) => r,
             Self::Wch(r) => r,
         }
     }
@@ -4200,6 +4444,17 @@ mod tests {
         );
     }
 
+    /// RM0394 RCC_APB1ENR2 exposes the LPUART1 clock gate on STM32L452.
+    #[test]
+    fn test_rcc_l4_apb1enr2_clock_gate() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32L4);
+        assert_eq!(rcc.rcc_reg_offset("apb1enr2"), Some(0x5C));
+        rcc.write_u32(0x5C, 1).unwrap(); // APB1ENR2.LPUART1EN
+        assert_eq!(rcc.read_u32(0x5C).unwrap(), 1);
+        rcc.write_u32(0x3C, 1).unwrap(); // APB1RSTR2 register storage
+        assert_eq!(rcc.read_u32(0x3C).unwrap(), 1);
+    }
+
     #[test]
     fn test_rcc_l0_layout_and_clock_switch() {
         // Verified against NUCLEO-L073RZ silicon (SWD).
@@ -4316,6 +4571,133 @@ mod tests {
         assert_eq!(rcc.read_u32(0x5C).unwrap() & 0x3, 0x3, "G0 LSERDY");
     }
 
+    /// U0's GPIO clock gate is at IOPENR@0x4C (RM0503 Rev 4 §5.4.13),
+    /// distinct from G0/C0 IOPENR@0x34 and L0 IOPENR@0x2C.
+    #[test]
+    fn test_rcc_u0_gpio_clock_gate_offset_and_scope() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32U0);
+        assert_eq!(
+            "stm32u0".parse::<RccRegisterLayout>().unwrap(),
+            RccRegisterLayout::Stm32U0
+        );
+        assert_eq!(rcc.rcc_reg_offset("iopenr"), Some(0x4C));
+        assert_eq!(rcc.rcc_reg_offset("ahbenr"), None);
+        assert_eq!(rcc.read_u32(0x4C).unwrap(), 0, "GPIO clocks start disabled");
+
+        // The board smoke exposes only GPIOA, so other port enables are masked.
+        rcc.write_u32(0x4C, 0x3F).unwrap();
+        assert_eq!(rcc.read_u32(0x4C).unwrap(), 1, "only GPIOAEN is in profile");
+        assert_eq!(
+            rcc.read_u32(0x34).unwrap(),
+            0,
+            "must not alias the G0/C0 slot"
+        );
+        assert_eq!(rcc.read_u32(0x2C).unwrap(), 0, "must not alias the L0 slot");
+    }
+
+    /// U3's GPIOA gate is AHB2ENR1@0x8C (RM0487 Rev 1 §10.5.21), with
+    /// SRAM2EN set at reset. The narrow board profile exposes only GPIOAEN.
+    #[test]
+    fn test_rcc_u3_gpio_clock_gate_offset_and_scope() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32U3);
+        assert_eq!(
+            "stm32u3".parse::<RccRegisterLayout>().unwrap(),
+            RccRegisterLayout::Stm32U3
+        );
+        assert_eq!(rcc.rcc_reg_offset("ahb2enr"), Some(0x8C));
+        assert_eq!(rcc.rcc_reg_offset("ahb2enr1"), Some(0x8C));
+        assert_eq!(rcc.rcc_reg_offset("apb1enr"), None);
+        assert_eq!(
+            rcc.read_u32(0x8C).unwrap(),
+            1 << 30,
+            "U3 AHB2ENR1 reset SRAM2EN"
+        );
+
+        // Other AHB2 gates are outside this profile; GPIOAEN is live.
+        rcc.write_u32(0x8C, u32::MAX).unwrap();
+        assert_eq!(rcc.read_u32(0x8C).unwrap(), (1 << 30) | 1);
+        assert_eq!(rcc.read_u32(0x4C).unwrap(), 0, "must not alias U5 AHB2ENR");
+    }
+
+    /// WCH's focused APB2PCENR/APB1PCENR gates include AFIO, GPIOA, GPIOC,
+    /// GPIOD, ADC1, TIM1 (APB2 bit 11), SPI1 (APB2 bit 12), USART1, TIM2
+    /// (APB1 bit 0) and I2C1 (APB1 bit 21, not bit 1). The narrow
+    /// profile must not inherit unrelated STM32F1 gates.
+    #[test]
+    fn ch32v003_models_only_the_smoked_gpio_adc_tim_spi_usart_and_i2c_clock_gates() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Wch);
+        assert_eq!(
+            "ch32v003".parse::<RccRegisterLayout>().unwrap(),
+            RccRegisterLayout::Wch
+        );
+        assert_eq!(rcc.read_u32(0x18).unwrap(), 0);
+        assert_eq!(rcc.read_u32(0x1C).unwrap(), 0);
+        assert_eq!(rcc.rcc_reg_offset("apb2pcenr"), Some(0x18));
+        assert_eq!(rcc.rcc_reg_offset("apb1pcenr"), Some(0x1C));
+        assert_eq!(rcc.rcc_reg_offset("cr"), None);
+
+        rcc.write_u32(0x18, u32::MAX).unwrap();
+        rcc.write_u32(0x1C, u32::MAX).unwrap();
+        assert_eq!(
+            rcc.read_u32(0x18).unwrap(),
+            (1 << 0)
+                | (1 << 2)
+                | (1 << 4)
+                | (1 << 5)
+                | (1 << 9)
+                | (1 << 11)
+                | (1 << 12)
+                | (1 << 14)
+        );
+        assert_eq!(rcc.read_u32(0x1C).unwrap(), (1 << 0) | (1 << 21));
+    }
+
+    /// WCH `SystemInit` + `SetSysClockTo_48MHZ_HSI` (openwch/ch32v003 EVT):
+    /// PLLSRC = HSI×2, PLLON, wait PLLRDY, SW = PLL, wait SWS = PLL. SWS must
+    /// not follow SW before the PLL locks, and the unmodeled HSE never locks.
+    #[test]
+    fn ch32v003_wch_sdk_48mhz_hsi_pll_handshake() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Wch);
+        assert_eq!(
+            rcc.read_u32(0x00).unwrap(),
+            0x83,
+            "HSION|HSIRDY, HSITRIM 0x10"
+        );
+        assert_eq!(rcc.read_u32(0x04).unwrap(), 0);
+
+        // SystemInit's reset-to-HSI sequence.
+        let ctlr = rcc.read_u32(0x00).unwrap();
+        rcc.write_u32(0x00, ctlr | 1).unwrap();
+        let cfgr0 = rcc.read_u32(0x04).unwrap();
+        rcc.write_u32(0x04, cfgr0 & 0xFCFF_0000).unwrap();
+        let ctlr = rcc.read_u32(0x00).unwrap();
+        rcc.write_u32(0x00, ctlr & 0xFEF6_FFFF).unwrap();
+        rcc.write_u32(0x08, 0x009F_0000).unwrap();
+        assert_eq!(rcc.read_u32(0x08).unwrap(), 0, "clear bits are write-only");
+
+        // Selecting the PLL before it runs leaves SWS on HSI.
+        rcc.write_u32(0x04, 0b10).unwrap();
+        assert_eq!(rcc.read_u32(0x04).unwrap() & 0xC, 0);
+        rcc.write_u32(0x04, 0).unwrap();
+
+        let ctlr = rcc.read_u32(0x00).unwrap();
+        rcc.write_u32(0x00, ctlr | (1 << 24)).unwrap();
+        assert_ne!(rcc.read_u32(0x00).unwrap() & (1 << 25), 0, "PLLRDY");
+        let cfgr0 = rcc.read_u32(0x04).unwrap();
+        rcc.write_u32(0x04, (cfgr0 & !3) | 0b10).unwrap();
+        assert_eq!(rcc.read_u32(0x04).unwrap() & 0xC, 0x8, "SWS = PLL");
+
+        // PLLSRC = HSE: the PLL loses its (unmodeled) source.
+        let cfgr0 = rcc.read_u32(0x04).unwrap();
+        rcc.write_u32(0x04, cfgr0 | (1 << 16)).unwrap();
+        assert_eq!(rcc.read_u32(0x00).unwrap() & (1 << 25), 0);
+        // HSEON never reports HSERDY, so SW = HSE never switches.
+        rcc.write_u32(0x00, 0x83 | (1 << 16)).unwrap();
+        assert_eq!(rcc.read_u32(0x00).unwrap() & (1 << 17), 0);
+        rcc.write_u32(0x04, 0b01).unwrap();
+        assert_ne!(rcc.read_u32(0x04).unwrap() & 0xC, 0x4);
+    }
+
     /// The F030 clock bring-up STM32Cube and generated programs run (RM0360
     /// §6.2.3 / §6.4): PLLSRC = HSI/2, PLLMUL ×12, PLLON, wait PLLRDY, SW =
     /// PLL, wait SWS = PLL. PLLRDY follows PLLON only, and SWS follows SW only
@@ -4409,12 +4791,10 @@ mod tests {
         );
     }
 
-    /// The L5 is NOT an L4 alias: the NUCLEO-L552ZE-Q console is LPUART1,
-    /// gated on APB1ENR2 bit 0 — a register the L4 model does not have. The
-    /// reset clock is MSI range 6 (CR 0x63), and GPIO lives in AHB2ENR@0x4C
-    /// while DMA/CRC live in AHB1ENR@0x48. If the L5 shared the L4 layout, the
-    /// LPUART clock enable would vanish into an unmapped offset and the console
-    /// would stay silent.
+    /// The L5 is NOT an L4 alias: both place APB1ENR2 at 0x5C, but L5 also has
+    /// AHB1ENR/AHB3ENR and a different clock-tree profile. This protects the
+    /// NUCLEO-L552ZE-Q LPUART1 gate at APB1ENR2 bit 0 and its separate DMA/CRC
+    /// clock block at AHB1ENR@0x48.
     #[test]
     fn test_rcc_l5_map_and_msi_reset() {
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32L5);

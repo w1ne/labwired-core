@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="12" failures="0" errors="0" time="10.483382">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxCycles"/>
+    <property name="firmware_hash" value="030f2bb950a327c9d17b582eeaa42722a5cad9e975f76c5c0f721d6d93f76a9a"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="10.483382">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: peripheral_log: debug_printf.terminal contains &quot;UP&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: peripheral_log: debug_printf.terminal contains &quot;capture 1 24993&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: peripheral_log: debug_printf.terminal contains &quot;capture 0 25993&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: peripheral_log: debug_printf.terminal contains &quot;capture 1 21957&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: peripheral_log: debug_printf.terminal contains &quot;capture 0 24457&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: peripheral_log: debug_printf.terminal contains &quot;capture&quot; x4" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: memory_value: @0x40012c28=0x2f" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: memory_value: @0x40012c18=0x201" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: memory_value: @0x40012c20=0x31" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: memory_value: @0x40012c0c=0x6" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: memory_value: @0x40012c00=0x1" time="0.000000">
+  </testcase>
+</testsuite>

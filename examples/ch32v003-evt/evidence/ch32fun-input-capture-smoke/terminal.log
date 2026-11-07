@@ -1,0 +1,16 @@
+# The whole debug-printf terminal of the ch32fun-input-capture-smoke run, 5
+# lines. The test CLI has no terminal dump, so it was read back with one probe
+# assertion that cannot match. The run used the committed smoke plus:
+#   - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "__terminal_dump_probe__" }
+# and the failure message lists every line, because the log holds no more
+# than the CLI's five-line tail (crates/cli/src/lib.rs, TAIL = 5):
+#   has 0 line(s) with "__terminal_dump_probe__", need 1 (5 line(s) in the log); last line(s): UP | capture 1 24993 | capture 0 25993 | capture 1 21957 | capture 0 24457
+#
+# One line per capture, and no "badtrigger" or "OF0"/"OF1". Fall minus rise:
+# 25993 - 24993 = 1000 us (48,000-cycle pulse) and 24457 - 21957 = 2500 us
+# (120,000-cycle pulse).
+UP
+capture 1 24993
+capture 0 25993
+capture 1 21957
+capture 0 24457

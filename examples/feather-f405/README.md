@@ -1,40 +1,40 @@
-# Feather-STM32F405 Onboarding Example
+# Adafruit Feather STM32F405 Express
 
-Run all commands from `core/`.
+This board profile boots firmware on the active STM32F405RG and exercises the
+Feather's red D13 LED (PC1) and its exposed USART3 TX pin (D1/TX, PB10). The
+smoke configures USART3 at 115200 baud, toggles D13, reads its output state
+back, and sends the observed state over the UART.
 
-## Purpose
+## Run the smoke
 
-This example provides deterministic bring-up for a Feather-class STM32F405RG
-board (Cortex-M4F, 1 MB flash, 192 KB SRAM — 128 KB main declared) using the
-F4 shared peripheral profiles:
-1. `rcc`
-2. `gpio`
-3. `uart`
-4. `systick`
-
-## Quick Run
+From the repository root:
 
 ```bash
-cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
-cargo run -q -p labwired-cli -- test --script examples/feather-f405/uart-smoke.yaml --output-dir out/feather-f405/uart-smoke --no-uart-stdout
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id feather-f405 \
+  --crate firmware-feather-f405-demo \
+  --target thumbv7em-none-eabi \
+  --script examples/feather-f405/io-smoke.yaml \
+  --system configs/systems/feather-f405.yaml \
+  --out-dir examples/feather-f405/evidence
 ```
 
-Expected result:
-1. smoke test passes
-2. UART contains `OK`
+The run builds the firmware and CLI, then checks the UART marker and ordered
+LED-state heartbeat. The committed build, run, and simulation artifacts live
+in [`evidence/`](evidence/); the current vendor check is in
+[`evidence/vendor-status.md`](evidence/vendor-status.md).
+The command clears `RUSTC_WRAPPER` because this workspace's configured
+`sccache` executable is missing.
 
-## Firmware reuse note
+## Model boundary
 
-The smoke firmware is the existing `firmware-f401-demo` crate, reused
-unchanged: same Cortex-M4F core, same flash base (`0x08000000`), same SRAM
-base (`0x20000000`), same USART2/PA5/PC13 mapping. The F405 descriptor is a
-strict superset for everything this firmware touches. See `VALIDATION.md`
-for what would invalidate the reuse.
+The board system exposes the D13 red LED on PC1 and the USART3 TX/RX header
+pins PB10/PB11. The descriptor has no PC13 user button: the board guide and
+schematic show no such button. The smoke's UART output is the on-board USART3
+pin, not the USB-C connector's USB serial path.
 
-## Files
-
-1. `system.yaml`: local board mapping for simulation runs.
-2. `uart-smoke.yaml`: deterministic UART smoke assertion.
-3. `io-smoke.yaml`: strict onboarding smoke path.
-4. `REQUIRED_DOCS.md`: source-grounding references.
-5. `EXTERNAL_COMPONENTS.md`: external component declaration.
+The board also includes a NeoPixel, 2 MB SPI flash, microSD/SDIO, USB, and
+battery charging. Those board-level devices and paths are not modeled by this
+profile. The MCU descriptor contains additional peripheral instances, but
+this smoke claims only the exercised GPIO and USART3 behavior. No physical
+Feather was attached for this simulator run.

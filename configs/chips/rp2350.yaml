@@ -203,6 +203,14 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/rp2350/sio.yaml"
+  # IO_BANK0 pad-function mux, whose GPIO0_STATUS register is at 0x40028000
+  # in the RP2350 SVD. Reuse the shared RP2040 selector model for the Pico 2
+  # smoke's GP25=SIO route. PADS_BANK0 electrical controls and GPIO STATUS
+  # observation are outside this profile.
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40028000
+    size: "4KB"
   # Cortex-M33 SCS ACTLR (0xE000E008), a plain register: pico-sdk's
   # spinlock_set_extexclall() sets EXTEXCLALL during runtime init.
   - id: "actlr"

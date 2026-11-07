@@ -1,0 +1,12 @@
+# NUCLEO-H755ZI-Q: boot the M7 firmware and toggle green user LED LD1 on PB0.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-h755zi-q-smoke"
+  system: "../../configs/systems/nucleo-h755zi-q.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - gpio_edges:
+      pin: "gpiob:0"
+      min_edges: 16
+  - expected_stop_reason: max_steps

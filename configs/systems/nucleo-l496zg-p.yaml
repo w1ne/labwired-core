@@ -1,0 +1,12 @@
+# NUCLEO-L496ZG-P (MB1312), scoped to red user LED LD3 only.
+# ST-LINK/VCP, USB, other LEDs/buttons, headers, and SMPS behavior are omitted.
+name: "nucleo-l496zg-p"
+chip: "../chips/stm32l496zg-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_red_ld3"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 14
+    signal: "output"
+    active_high: true

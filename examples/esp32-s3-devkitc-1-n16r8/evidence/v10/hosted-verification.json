@@ -1,0 +1,63 @@
+{
+  "checked_at_utc": "2026-11-06",
+  "service": "labwired_verify",
+  "status": "failed",
+  "request": {
+    "board": "esp32-s3-devkitc-1-n16r8",
+    "language": "arduino",
+    "entryPath": "src/main.ino",
+    "source_file": "../../firmware/arduino-v10/main.ino",
+    "source_sha256": "744d921744453c9cf25f2fcd892099bd41d7c04178b00f1168ef355ebf9300bf",
+    "diagram": {
+      "parts": ["esp32-s3-devkitc-1-n16r8", "neopixel"],
+      "wires": ["GPIO48-DIN", "3V3-VCC", "GND-GND"]
+    },
+    "oracle": {
+      "serial": "ESP32_S3_DEVKITC1_V10_RMT_OK",
+      "display": {"painted": true, "min_ink_bytes": 3}
+    },
+    "max_steps": 20000000
+  },
+  "run_status": "pass",
+  "stop_reason": "max_steps",
+  "oracle_results": [
+    {
+      "kind": "serial",
+      "passed": true,
+      "detail": "serial contains ESP32_S3_DEVKITC1_V10_RMT_OK"
+    },
+    {
+      "kind": "display",
+      "passed": false,
+      "detail": "display NOT proven on framebuffer (refresh_gen=n/a vs 1, ink=0 vs 3)"
+    }
+  ],
+  "observed_rgb_led": {
+    "id": "rgb_led",
+    "device_type": "neopixel",
+    "data_pin": 48,
+    "format": "ws2812_grb",
+    "pixels_decoded": 1,
+    "lit_pixels": 0,
+    "bytes": [0, 0, 0]
+  },
+  "arduino_library_probe": {
+    "status": "failed",
+    "library": "adafruit/Adafruit NeoPixel",
+    "serial_marker_passed": true,
+    "display_clause_passed": false,
+    "observed_rgb_led": {
+      "pixels_decoded": 0,
+      "lit_pixels": 0,
+      "bytes": []
+    }
+  },
+  "gaps": [
+    {
+      "code": "approximation",
+      "scope": "model",
+      "detail": "No power net drives the MCU; VDD is assumed to be an ideal rail, so power-on and brown-out reset are not simulated."
+    }
+  ],
+  "interpretation": "The UART marker after RMT TX_END passed. The hosted verifier decoded one black pixel for the direct-register sketch; a separate Adafruit NeoPixel library probe decoded no pixels. Neither is a hosted LED verification pass. The local repository smoke separately passes its non-black-pixel assertion."
+}

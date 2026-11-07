@@ -1,0 +1,24 @@
+# LabWired - NUCLEO-F072RB system manifest
+#
+# Board wiring per ST UM1724 / MB1136:
+#   - LD2 user LED on PA5, active high.
+#   - B1 user button on PC13, active low.
+#   - USART2 PA2 (TX) / PA3 (RX) connects to the on-board ST-LINK V2-1 VCP.
+# The board profile claims only this GPIO and UART smoke surface.
+name: "nucleo-f072rb"
+chip: "../chips/stm32f072-nucleo-smoke.yaml"
+debug_uart: "usart2"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false

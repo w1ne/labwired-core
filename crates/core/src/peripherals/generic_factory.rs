@@ -115,6 +115,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c3_gdma",
     "esp32c3_gpio",
     "esp32c3_io_mux",
+    // ESP8684/C2 exposes only the register-compatible direct GPIO + IO_MUX
+    // subset used by the DevKitM-1 H4X onboard LED smoke.
+    "esp32c2_gpio",
+    "esp32c2_io_mux",
     "esp32c3_apb_saradc",
     "esp32c3_ledc",
     "esp32c3_rmt",
@@ -132,6 +136,27 @@ pub const MODEL_TYPES: &[&str] = &[
     // would resolve them to the STM32 maps.
     "esp32c6_uart",
     "esp32c6_gpio",
+    // The C61 GPIO8 direct-output slice is built by the Espressif family
+    // factory; keep it canonical so the generic `gpio` heuristic cannot map
+    // it onto the STM32 placeholder before that factory runs.
+    "esp32c61_gpio",
+    "esp32c61_io_mux",
+    // C5 uses the same modern UART register map, with its own interrupt ids
+    // and fixed PLL_F80M source clock for the onboarding profile.
+    "esp32c5_uart",
+    "esp32c5_pcr",
+    "esp32c5_gpio",
+    "esp32c5_io_mux",
+    "esp32p4_gpio",
+    // P4 IO MUX and the RMT TX models are built by the Espressif family
+    // factories; canonical so the fuzzy fallbacks never coerce them first.
+    "esp32p4_io_mux",
+    "esp32_rmt",
+    "esp32c6_rmt",
+    // H2's narrowly reused GPIO output model is built by the Espressif family
+    // factory. Keep its name canonical so the generic `gpio` fallback cannot
+    // replace it with a register-layout placeholder before that factory runs.
+    "esp32h2_gpio",
     // C6-only behavioral blocks: PCR (clock/reset, full SVD register map) and
     // GDMA (3 channels, C6 register layout). The fuzzy `contains("dma")`
     // fallback would otherwise coerce `esp32c6_gdma` onto the STM32 DMA
@@ -261,6 +286,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32s3_usb_otg",
     "esp32s3_usb_serial_jtag",
     "esp32s3_wifi_mac",
+    // ESP32-S2's narrow GPIO/UART smoke models share the corresponding S3 heads.
+    "esp32s2_gpio",
+    "esp32s2_uart",
     // nRF52 behavioral models the factory builds but this table never named.
     // Alias spellings are deliberately NOT here -- `canonical_peripheral_type`
     // maps those to their canonical output, and listing an alias INPUT would
@@ -389,6 +417,16 @@ pub const MODEL_TYPES: &[&str] = &[
     // type or the fuzzy `contains("timer")` fallback would coerce it onto the
     // STM32 timer map.
     "litex_timer",
+    // WCH QingKe V2 STK (CH32V003 SysTick at 0xE000F000). Listed so the fuzzy
+    // fallbacks never coerce it onto the Cortex-M `systick` map, whose
+    // CSR/RVR/CVR layout and down-counting semantics differ.
+    "qingke_v2_systick",
+    // WCH QingKe V2 PFIC (CH32V003 interrupt controller at 0xE000E000). Its
+    // banks sit at NVIC offsets but number interrupts from 0, not 16.
+    "qingke_pfic",
+    // WCH-LinkE debug printf channel (DMDATA0/1 at 0xE00000F4), the default
+    // ch32fun console. Listed so no fuzzy fallback claims it.
+    "wch_debug_printf",
     // LiteX Control-and-Status (LED/switch/button CSR block).
     "litex_controlandstatus",
     // Microchip Mi-V reference-design peripherals. MUST be listed: without
@@ -1170,7 +1208,16 @@ pub fn try_build(
         "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
         "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
         "rtc_v3" => Box::new(crate::peripherals::rtc_v3::RtcV3::new()),
-        "iwdg" => Box::new(crate::peripherals::iwdg::Iwdg::new()),
+        "iwdg" => {
+            // `config: { lsi_hz: N }` turns on the counting watchdog that
+            // resets the core on time-out; without it the IWDG only latches
+            // its registers (see the model's header).
+            let iwdg = crate::peripherals::iwdg::Iwdg::new();
+            match p_cfg.config.get("lsi_hz").and_then(|v| v.as_u64()) {
+                Some(hz) if hz > 0 => Box::new(iwdg.with_lsi_hz(hz)),
+                _ => Box::new(iwdg),
+            }
+        }
         "wwdg" => Box::new(crate::peripherals::wwdg::Wwdg::new()),
         "dac" => Box::new(crate::peripherals::dac::Dac::new()),
         "lptim" => Box::new(crate::peripherals::lptim::Lptim::new()),
@@ -1203,7 +1250,18 @@ pub fn try_build(
                 layout, line_mask,
             ))
         }
-        "afio" => Box::new(crate::peripherals::afio::Afio::new()),
+        "afio" => {
+            use crate::peripherals::afio::{Afio, AfioLayout};
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                None | Some("stm32f1") => AfioLayout::Stm32F1,
+                Some("ch32v003") => AfioLayout::Ch32v003,
+                Some(other) => anyhow::bail!(
+                    "afio `{}`: unsupported profile `{other}`; supported: stm32f1, ch32v003",
+                    p_cfg.id
+                ),
+            };
+            Box::new(Afio::new_with_layout(layout))
+        }
         // Channel-based DMA (F1/L0/L4/G0). `config: { requests: { spi1_tx: 3,
         // spi1_rx: [2, 1] } }` hard-wires a peripheral request to a channel
         // (F1), or — `[channel, selector]` — to a channel while its L4
@@ -1212,6 +1270,7 @@ pub fn try_build(
             let mut dma = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
                 None | Some("legacy") => crate::peripherals::dma::Dma1::new(),
                 Some("stm32g0") => crate::peripherals::dma::Dma1::new_stm32g0(),
+                Some("ch32v003") => crate::peripherals::dma::Dma1::new_ch32v003(),
                 Some(profile) => {
                     anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
                 }
@@ -1760,6 +1819,12 @@ pub fn try_build(
         // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
         // load/reload/en/update_value/value plus the zero-event manager.
         "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
+        // WCH QingKe V2 STK: 32-bit up-counter CTLR/SR/CNT/CMP (CH32V003).
+        "qingke_v2_systick" => Box::new(crate::peripherals::qingke_systick::QingkeV2Systick::new()),
+        // WCH QingKe V2 PFIC; `configure_riscv` shares its state with the core.
+        "qingke_pfic" => Box::new(crate::peripherals::qingke_pfic::QingkePfic::new()),
+        // WCH-LinkE debug printf channel, probe attached (`minichlink -T`).
+        "wch_debug_printf" => Box::new(crate::peripherals::wch_debug_printf::WchDebugPrintf::new()),
         "litex_controlandstatus" => {
             let active_low = p_cfg
                 .config

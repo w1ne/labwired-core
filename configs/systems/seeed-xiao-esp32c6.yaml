@@ -1,0 +1,15 @@
+# Seeed Studio XIAO ESP32-C6: onboard yellow USER LED, GPIO15, active-low.
+# This profile exposes only the real GPIO path used by the smoke. It omits the
+# C6 LP core, wireless, UART/USB, ADC, battery charger, RF switch, and other
+# board-level functions.
+
+name: "seeed-xiao-esp32c6"
+chip: "../chips/esp32c6-xiao-gpio-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 15
+    signal: "output"
+    active_high: false

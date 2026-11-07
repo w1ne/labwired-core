@@ -1,0 +1,24 @@
+{
+  "part": "max17048",
+  "model_status": "deterministic register snapshot",
+  "address_7bit": "0x36",
+  "tested_registers": {
+    "VCELL_0x02": {
+      "default_input": "3.85 V",
+      "scale": "12800 counts/V",
+      "expected_word": "0xC080"
+    },
+    "SOC_0x04": {
+      "default_input": "72.5 %",
+      "scale": "256 counts/%",
+      "expected_word": "0x4880"
+    }
+  },
+  "omitted_behavior": [
+    "ModelGauge estimation",
+    "battery insertion debounce",
+    "hibernate and sleep state",
+    "alerts and voltage history",
+    "timing and dynamic reset behavior"
+  ]
+}

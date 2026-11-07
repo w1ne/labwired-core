@@ -15,7 +15,6 @@ const SMOKE_LESS_ALLOWLIST: &[&str] = &[
     "stm32f401cdu6", // BlackPill variant; shared smoke with stm32f401 pending
     "stm32f401", // only example is the cosim-spice-rc analog lab; dedicated NUCLEO-F401RE smoke pending — see #1202
     "stm32g474re", // STM32G4 peripheral models in progress
-    "stm32l476", // L476 smoke added per survival tests, io-smoke.yaml pending
     "stm32wb55", // BLE peripheral not yet modelled
     "esp32",     // Classic ESP32 Xtensa; separate e2e lane
     "nrf52840",  // io-smoke pruned with its example by #300; restore pending — see #311

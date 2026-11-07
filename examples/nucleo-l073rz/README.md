@@ -10,6 +10,17 @@
 > [`VALIDATION.md`](VALIDATION.md) for the full evidence and fidelity limits,
 > and [`REQUIRED_DOCS.md`](REQUIRED_DOCS.md) for the sources.
 
+ST's live listing marked the board **Active / Product is in volume production**
+on 2026-11-03; ST's online store listed it **In Stock**. See the
+[`vendor status receipt`](evidence/vendor-status.md) and captured
+[`onboarding smoke evidence`](evidence/).
+
+A separate hosted LabWired oracle check model-verifies USART2 output and PA5
+high using the committed [`oracle sketch`](oracle-smoke.ino) and
+[`verification receipt`](evidence/labwired-verify.json). The receipt records
+the power-model limit: the MCU ran from an assumed ideal VDD rail, so power-on
+and brown-out reset behavior was not exercised.
+
 ## Quick start
 
 ```bash
@@ -85,8 +96,9 @@ captures these L0-specific facts that an L4 copy-paste would get wrong:
 See [`docs/boards/nucleo-l073rz.md`](../../docs/boards/nucleo-l073rz.md) for
 the full fidelity table. In short: core + SysTick + GPIO + USART (smoke
 path) are exercised; RCC/I2C/SPI/ADC/timers are present as register models
-reused from the L4 family and are **not** L0-tuned; USB/LCD/COMP/crypto are
-stubs.
+with varying L0 fidelity and are not all diffed against silicon. USB FS and
+LCD are explicit zero-answering stubs. SYSCFG has an L0 register model;
+COMP1/2 only retain control-register state and have no analog comparison model.
 
 ## Hardware setup (real board)
 

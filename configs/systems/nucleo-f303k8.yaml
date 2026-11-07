@@ -1,0 +1,15 @@
+# NUCLEO-F303K8 system profile.
+# The default solder bridges connect USART2 TX on PA2 to the ST-LINK VCP;
+# the on-board green LD3 user LED is connected to PB3 (D13).
+# Only these board paths are claimed by the smoke.
+name: nucleo-f303k8
+chip: "../chips/stm32f303k8-nucleo-smoke.yaml"
+debug_uart: usart2
+external_devices: []
+board_io:
+  - id: led_ld3
+    kind: led
+    peripheral: gpiob
+    pin: 3
+    signal: output
+    active_high: true

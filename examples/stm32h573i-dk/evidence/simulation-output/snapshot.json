@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1107435544,
+      512,
+      33554432,
+      0,
+      0,
+      0,
+      0,
+      537526256,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537526256,
+      134220045,
+      134220032
+    ],
+    "pc": 134220032,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 5000,
+  "cycles": 5000,
+  "instructions": 5000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 5000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 5000
+    }
+  },
+  "limits": {
+    "max_steps": 5000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "30f4011485ed0e15e40c23bdbfdfceb0b8913115ef22aa8202bc9aca0f6ebfe9",
+  "config": {
+    "firmware": "examples/stm32h573i-dk/../../target/thumbv8m.main-none-eabi/release/firmware-stm32h573i-dk-smoke",
+    "system": "examples/stm32h573i-dk/../../configs/systems/stm32h573i-dk-smoke.yaml",
+    "script": "examples/stm32h573i-dk/onboarding-smoke.yaml"
+  }
+}

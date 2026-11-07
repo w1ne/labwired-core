@@ -490,13 +490,44 @@ static BME280_METADATA: KitMetadata = KitMetadata {
     ),
     transport: Transport::I2c,
     category: Category::I2c,
-    config_keys: std::borrow::Cow::Borrowed(&[ConfigKey {
-        name: std::borrow::Cow::Borrowed("i2c_address"),
-        ty: ConfigType::Int,
-        doc: std::borrow::Cow::Borrowed(
-            "7-bit slave address. Defaults to 0x76; 0x77 selects the SDO=VDDIO variant.",
-        ),
-    }]),
+    config_keys: std::borrow::Cow::Borrowed(&[
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("i2c_address"),
+            ty: ConfigType::Int,
+            doc: std::borrow::Cow::Borrowed(
+                "7-bit slave address. Defaults to 0x76; 0x77 selects the SDO=VDDIO variant.",
+            ),
+        },
+        crate::peripherals::components::supply::POWERED_CONFIG_KEY,
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("supply_domain"),
+            ty: ConfigType::Str,
+            doc: std::borrow::Cow::Borrowed(
+                "Optional pre-registered external power domain; starts off until its board supply is enabled.",
+            ),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("supply_min_v"),
+            ty: ConfigType::Float,
+            doc: std::borrow::Cow::Borrowed(
+                "Functional supply threshold, matching the system's registered domain.",
+            ),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("supply_control_pin"),
+            ty: ConfigType::Str,
+            doc: std::borrow::Cow::Borrowed(
+                "Board GPIO that switches this external power domain, formatted GPIO<n>.",
+            ),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("supply_on_v"),
+            ty: ConfigType::Float,
+            doc: std::borrow::Cow::Borrowed(
+                "Functional voltage used when the board supply-control GPIO is high.",
+            ),
+        },
+    ]),
     labs: std::borrow::Cow::Borrowed(&[LabRef {
         board_id: std::borrow::Cow::Borrowed("bme280-weather-lab"),
         chip: std::borrow::Cow::Borrowed("stm32f103"),

@@ -31,6 +31,14 @@ flash:
 ram:
   base: 0x20000000
   size: "128KB"
+
+# Pin functions exercised by the Adafruit Feather STM32F405 Express profile.
+# PB10/PB11 are the board's TX/RX header pins (USART3, AF7); PC1 drives D13.
+pins:
+  PB10: { gpio: gpiob, bit: 10, functions: [{ type: uart, peripheral: usart3, role: tx, af: 7 }] }
+  PB11: { gpio: gpiob, bit: 11, functions: [{ type: uart, peripheral: usart3, role: rx, af: 7 }] }
+  PC1: { gpio: gpioc, bit: 1, functions: [{ type: gpio, peripheral: gpioc }] }
+
 peripherals:
   - id: "rcc"
     type: "rcc"
@@ -77,6 +85,17 @@ peripherals:
     irq: 38
     config:
       debug_schema: "../peripherals/stm32f405/usart2.yaml"
+  # Adafruit Feather STM32F405 Express exposes USART3 on PB10 (TX) / PB11 (RX).
+  # RM0090: USART3EN is RCC_APB1ENR bit 18; AF7 is the GPIO alternate function.
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      debug_schema: "../peripherals/stm32f405/usart3.yaml"
+      cr3_mask: 0xFFF
+    clock: { reg: "apb1enr", bit: 18 }
   - id: "i2c1"
     type: "i2c"
     base_address: 0x40005400

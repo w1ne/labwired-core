@@ -1,0 +1,4 @@
+2026-11-05T06:23:57.343058Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32h2-devkitm-1-n4s-smoke.yaml
+2026-11-05T06:23:57.419693Z  INFO labwired_loader: ELF Entry Point: 0x42000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  3/3 checks · io-smoke · 200000 steps · 0.03s

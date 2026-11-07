@@ -429,6 +429,11 @@ pub struct SystemBus {
     /// HashMap; explicit downstream HashMap assignments must migrate.
     pub debug_schemas: std::collections::BTreeMap<String, Vec<crate::inspect::RegisterSchema>>,
     pub nvic: Option<Arc<NvicState>>,
+    /// The QingKe V2 PFIC (WCH CH32V003), when the chip has one. A level
+    /// source's own `irq:` line drives its request level here
+    /// ([`Self::reconcile_line_level`]) instead of latching a pend, so the
+    /// request drops with the flag, as it does on silicon.
+    pub qingke_pfic: Option<Arc<crate::peripherals::qingke_pfic::QingkePficState>>,
     pub observers: Vec<Arc<dyn crate::SimulationObserver>>,
     pub config: crate::SimulationConfig,
     /// The clock this system's core runs at, in Hz: the manifest's `cpu_hz:`

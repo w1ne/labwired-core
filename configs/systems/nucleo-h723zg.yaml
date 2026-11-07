@@ -1,0 +1,13 @@
+# NUCLEO-H723ZG (MB1364) smoke profile.
+# Only active-high LD1 on PB0 and the default USART3 VCP (PD8/PD9) are modeled.
+name: "nucleo-h723zg"
+chip: "../chips/stm32h723zg-nucleo-smoke.yaml"
+debug_uart: "usart3"
+external_devices: []
+board_io:
+  - id: "led_ld1"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true

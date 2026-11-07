@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 18130,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 18.13
+  },
+  "targets": [
+    {
+      "target_id": "stm32f0-discovery",
+      "status": "pass",
+      "crate": "firmware-stm32f0-discovery-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/stm32f0-discovery/onboarding-smoke.yaml",
+      "system": "configs/systems/stm32f0-discovery.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T22:08:58Z",
+      "finished_at_utc": "2026-11-04T22:09:16Z",
+      "elapsed_seconds": 19,
+      "elapsed_ms": 18130,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 17.272,
+        "build_firmware": 0.573,
+        "run_smoke": 0.274
+      },
+      "stages_ms": {
+        "build_cli": 17272,
+        "build_firmware": 573,
+        "run_smoke": 274
+      },
+      "_artifact_path": "examples/stm32f0-discovery/evidence"
+    }
+  ]
+}

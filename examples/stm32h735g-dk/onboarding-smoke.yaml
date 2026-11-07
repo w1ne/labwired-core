@@ -1,0 +1,16 @@
+# STM32H735G-DK: USART3 ST-LINK VCP output and both active-low user LEDs.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32h735g-dk-smoke"
+  system: "../../configs/systems/stm32h735g-dk.yaml"
+limits:
+  max_steps: 16000
+assertions:
+  - uart_contains: "STM32H735G_DK_OK"
+  - gpio_edges:
+      pin: "gpioc:3"
+      min_edges: 16
+  - gpio_edges:
+      pin: "gpioc:2"
+      min_edges: 16
+  - expected_stop_reason: max_steps

@@ -1,0 +1,280 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 800000,
+  "cycles": 800000,
+  "instructions": 800000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 800000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 800000
+    }
+  },
+  "limits": {
+    "max_steps": 800000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "port1:11",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1074004000,
+      2048,
+      10,
+      0,
+      0,
+      0,
+      0,
+      536903664,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536903664,
+      1223,
+      1212
+    ],
+    "pc": 1212,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "edbc8027969e12ed5e257be107d722236dec73e6dba5283f6900dbcc512a1b53",
+  "config": {
+    "firmware": "examples/arduino-uno-r4-minima/../../target/thumbv7em-none-eabi/release/firmware-ra4m1-demo",
+    "system": "examples/arduino-uno-r4-minima/../../configs/systems/arduino-uno-r4-minima.yaml",
+    "script": "examples/arduino-uno-r4-minima/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "ra_sysc",
+        "kind": "native",
+        "base": 1073864704,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port1",
+        "kind": "native",
+        "base": 1074004000,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port3",
+        "kind": "native",
+        "base": 1074004064,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfs",
+        "kind": "native",
+        "base": 1074006016,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sci2",
+        "kind": "native",
+        "base": 1074200640,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usbfs",
+        "kind": "native",
+        "base": 1074331648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 800000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "port1",
+        "pin": 11,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 42,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 33,
+            "state": "0"
+          },
+          {
+            "cycle": 42,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 1
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "port1",
+      "number": 11,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1228,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1228,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 262144,
+    "ram_total_bytes": 32768,
+    "flash_used_pct": 0.47,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 32768,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 32752,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536903680,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 32768,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 32752,
+    "heap_base": 536870912,
+    "heap_top": 536903680
+  },
+  "metrics": {
+    "cycles": 800000,
+    "instructions": 800000,
+    "steps_executed": 800000,
+    "memory_reads": 59,
+    "memory_writes": 6,
+    "peripheral_accesses": 8,
+    "exceptions": 0
+  }
+}

@@ -1,0 +1,7 @@
+2026-11-06T05:26:08.214430Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/rp2350-pico2-w-bme280-smoke.yaml
+2026-11-06T05:26:08.295287Z  INFO labwired_loader: ELF Entry Point: 0x10000801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-06T05:26:08.298111Z  INFO labwired_cli::execute: core parked with no wake source at cycle 309511; ending at max_steps
+labwired-cli test: idle_ff skipped 309022 of 309511 device cycles (489 interpreted)
+PASS  4/4 checks · onboarding-smoke · 300000 steps · 0.00s

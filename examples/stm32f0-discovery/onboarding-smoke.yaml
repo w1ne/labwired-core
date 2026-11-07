@@ -1,0 +1,12 @@
+# STM32F0DISCOVERY: toggle its green user LED LD3 through GPIOC pin 9.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f0-discovery-smoke"
+  system: "../../configs/systems/stm32f0-discovery.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - gpio_edges:
+      pin: "gpioc:9"
+      min_edges: 8
+  - expected_stop_reason: max_steps

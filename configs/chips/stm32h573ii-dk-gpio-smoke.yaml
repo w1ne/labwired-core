@@ -1,0 +1,46 @@
+# Focused STM32H573IIK3Q profile for the STM32H573I-DK green LD1 smoke.
+# Only main flash, SRAM, H5 RCC, GPIOI, and SysTick are mapped. TrustZone
+# attribution, LCD, Wi-Fi, USB, Ethernet, audio, external memories, and the
+# remaining MCU peripherals are outside this profile.
+#
+# Sources: ST STM32H573II product page and DS14251 (memory/core limits),
+# RM0481 Rev 2 (H5 RCC/GPIO map), and UM3143 Rev 2 (MB1677: LD1 active-low on
+# PI9). No zero-answering peripheral stubs are declared.
+name: "stm32h573iik3q-dk-gpio-smoke"
+arch: "arm"
+core: "cortex-m33"
+registers_count: 220
+cpu_hz: 250_000_000
+
+flash:
+  base: 0x08000000
+  size: "2MiB"
+ram:
+  # The H573 has 640 KiB SRAM. The smoke uses the main SRAM1 address range.
+  base: 0x20000000
+  size: "640KiB"
+
+pins:
+  PI9: { gpio: "gpioi", bit: 9, functions: [{ type: gpio, peripheral: gpioi }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x44020C00
+    size: "1KB"
+    config:
+      profile: "h5"
+
+  - id: "gpioi"
+    type: "gpio"
+    base_address: 0x42022000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    # RM0481 RCC_AHB2ENR1.GPIOIEN, bit 8.
+    clock: { reg: "ahb2enr", bit: 8 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"

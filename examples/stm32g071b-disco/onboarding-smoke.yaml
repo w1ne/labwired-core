@@ -1,0 +1,11 @@
+# NUCLEO-independent STM32G071B-DISCO board VCP smoke.
+# USART3 PB8/PB9 is the selected ST-LINK virtual COM route.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32g071b-disco-smoke"
+  system: "../../configs/systems/stm32g071b-disco.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "STM32G071B_DISCO_OK"
+  - expected_stop_reason: max_steps

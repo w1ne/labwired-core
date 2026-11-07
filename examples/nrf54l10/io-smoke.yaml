@@ -1,0 +1,13 @@
+# nRF54L10 target profile on the nRF54L15-DK: UARTE20 VCOM plus active-high LED0.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/nrf54l10-smoke.elf"
+  system: "../../configs/systems/nrf54l10-on-nrf54l15-dk.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "nRF54L10 boot OK"
+  - gpio_edges:
+      pin: "gpio2:9"
+      min_edges: 16
+  - expected_stop_reason: max_steps

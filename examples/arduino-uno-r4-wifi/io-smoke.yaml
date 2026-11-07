@@ -1,0 +1,13 @@
+# Arduino UNO R4 WiFi: SCI2 console output and repeated D13/P102 GPIO transitions.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-uno-r4-wifi-smoke"
+  system: "../../configs/systems/arduino-uno-r4-wifi.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "UNO_R4_WIFI_OK"
+  - gpio_edges:
+      pin: "port1:2"
+      min_edges: 8
+  - expected_stop_reason: max_steps

@@ -1,0 +1,75 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      255,
+      0,
+      32,
+      0,
+      0,
+      0,
+      0,
+      0,
+      36,
+      3,
+      0,
+      0,
+      251,
+      8,
+      18,
+      1
+    ],
+    "pc": 100,
+    "sp": 2299,
+    "sreg": 1
+  },
+  "steps_executed": 250000,
+  "cycles": 416633,
+  "instructions": 250000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 250000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 250000
+    }
+  },
+  "limits": {
+    "max_steps": 250000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "36924e98b77c3c1a98acaa77fe9b4e3d6d2504a0c59a2e71575ec7a9f1923aaf",
+  "config": {
+    "firmware": "examples/atmega328pb-xplained-mini/../../tests/fixtures/avr/atmega328pb-xplained-mini.elf",
+    "system": "examples/atmega328pb-xplained-mini/../../configs/systems/atmega328pb-xplained-mini.yaml",
+    "script": "examples/atmega328pb-xplained-mini/onboarding-smoke.yaml"
+  }
+}

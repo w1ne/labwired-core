@@ -1,19 +1,20 @@
 # LabWired - Waveshare RP2350-Zero
 #
 # USB-C is the RP2350 native USB (no UART bridge). Twin console is UART0
-# (GP0/GP1 on the header), not USB CDC. Onboard WS2812 is GP16; this YAML
-# uses a board_io LED stand-in on that pad (same pattern as esp32s3-zero
-# GPIO48). Not Pico 2 GP25.
+# (GP0/GP1 on the header), not USB CDC. The onboard WS2812 DIN is GP16 and is
+# decoded from the SIO GPIO waveform. Other board functions are outside this
+# narrow profile.
 #
 # Sources: pico-sdk boards/waveshare_rp2350_zero.h (PICO_DEFAULT_WS2812_PIN 16);
 # Waveshare RP2350_Zero.pdf (DIN = GPIO16).
 name: "rp2350-zero"
-chip: "../chips/rp2350.yaml"
-external_devices: []
-board_io:
-  - id: "led_gp16"
-    kind: "led"
-    peripheral: "sio"
-    pin: 16
-    signal: "output"
-    active_high: true
+chip: "../chips/rp2350-zero-smoke.yaml"
+cpu_hz: 150_000_000
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO16"
+      num_pixels: 1
+      cpu_hz: 150_000_000

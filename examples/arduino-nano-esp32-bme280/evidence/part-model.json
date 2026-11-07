@@ -1,0 +1,31 @@
+{
+  "checked_at_utc": "2026-11-06",
+  "board": {
+    "part": "arduino-nano-esp32",
+    "chip": "esp32s3",
+    "outcome": "MODEL_ONLY",
+    "assurance": "modelled",
+    "pins": {
+      "A4 / GPIO11": ["i2c0.sda"],
+      "A5 / GPIO12": ["i2c0.scl"],
+      "GPIO43": ["uart0.tx"],
+      "GPIO44": ["uart0.rx"]
+    },
+    "caveat": "Board pin mapping follows Arduino documentation; this is a simulator profile, not a physical-board capture."
+  },
+  "sensor": {
+    "part": "adafruit-2652",
+    "catalog_type": "bme280",
+    "outcome": "MODEL_ONLY",
+    "assurance": "modelled",
+    "i2c_address": "0x77",
+    "pins": {
+      "VCC": ["power"],
+      "GND": ["power"],
+      "SDA": ["i2c.sda"],
+      "SCL": ["i2c.scl"],
+      "SDO": ["address select: high selects 0x77"]
+    },
+    "caveat": "The component model describes the LabWired twin, not a datasheet or manufacturer's claim."
+  }
+}

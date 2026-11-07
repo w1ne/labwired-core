@@ -1,0 +1,12 @@
+# XIAO nRF54L15 Sense: boot the Cortex-M33 image and toggle the active-low user LED on P2.00.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-xiao-nrf54l15-smoke"
+  system: "../../configs/systems/xiao-nrf54l15-sense.yaml"
+limits:
+  max_steps: 5000
+assertions:
+  - gpio_edges:
+      pin: "gpio2:0"
+      min_edges: 16
+  - expected_stop_reason: max_steps

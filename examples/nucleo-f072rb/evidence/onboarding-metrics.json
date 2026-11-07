@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-f072rb",
+  "status": "pass",
+  "crate": "firmware-nucleo-f072rb-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/nucleo-f072rb/io-smoke.yaml",
+  "system": "configs/systems/nucleo-f072rb.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T12:09:50Z",
+  "finished_at_utc": "2026-11-03T12:09:51Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 828,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.264,
+    "build_firmware": 0.298,
+    "run_smoke": 0.256
+  },
+  "stages_ms": {
+    "build_cli": 264,
+    "build_firmware": 298,
+    "run_smoke": 256
+  }
+}

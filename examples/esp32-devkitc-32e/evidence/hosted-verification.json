@@ -1,0 +1,52 @@
+{
+  "checked_at_utc": "2026-11-05",
+  "service": "LabWired hosted twin",
+  "tool": "labwired_pcb_labwired_verify",
+  "request": {
+    "board": "esp32",
+    "target": "esp32",
+    "entryPath": "src/main.ino",
+    "language": "arduino",
+    "diagram": {
+      "version": 1,
+      "board": "esp32",
+      "parts": [
+        {
+          "id": "mcu",
+          "type": "esp32"
+        }
+      ],
+      "wires": []
+    },
+    "source": "#include <Arduino.h>\n#include <driver/gpio.h>\n\nnamespace {\nconstexpr gpio_num_t kHeaderPin = GPIO_NUM_23;\n}\n\nvoid setup() {\n  Serial.begin(115200);\n  Serial.println(\"ESP32_DEVKITC32E_UART0_OK\");\n\n  gpio_reset_pin(kHeaderPin);\n  gpio_set_direction(kHeaderPin, GPIO_MODE_OUTPUT);\n  gpio_set_level(kHeaderPin, 0);\n}\n\nvoid loop() {\n  static bool output_high = false;\n  output_high = !output_high;\n  gpio_set_level(kHeaderPin, output_high ? 1 : 0);\n}\n",
+    "oracle": {
+      "serial": [
+        {
+          "contains": "ESP32_DEVKITC32E_UART0_OK"
+        }
+      ],
+      "gpio": [
+        {
+          "pin": "GPIO23",
+          "state": "toggled"
+        }
+      ]
+    },
+    "max_steps": 20000000
+  },
+  "result": {
+    "error": "SERIAL_NOT_OBSERVABLE",
+    "status": "unsupported",
+    "proven": false,
+    "board": "esp32",
+    "detail": "Board \"esp32\" runs via the arduino-esp32 snapshot profile, which stubs HardwareSerial::write / uartWrite. A serial oracle can never pass here \u2014 the twin only proves itself by panel paint (display oracle), GPIO/register clauses, or by rebuilding on esp32-c3-supermini / esp32-s3-zero where ROM boot captures UART0. Do not wait for no_paint; change the oracle or the board.",
+    "gaps": [
+      {
+        "code": "unsupported_clause",
+        "scope": "model",
+        "detail": "classic ESP32 profile does not capture Serial"
+      }
+    ]
+  },
+  "call_summary": "summary: labwired_verify NOT ok | error=SERIAL_NOT_OBSERVABLE | prove=unsupported"
+}

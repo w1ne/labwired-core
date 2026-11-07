@@ -1,0 +1,13 @@
+# NUCLEO-F410RB: capture the ST-LINK VCP banner and exercise LD2 on PA5.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-f410rb-smoke"
+  system: "../../configs/systems/nucleo-f410rb.yaml"
+limits:
+  max_steps: 1000
+assertions:
+  - uart_contains: "NUCLEO_F410RB_OK LD2=PA5 USART2=PA2/PA3"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

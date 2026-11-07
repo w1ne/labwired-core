@@ -1,0 +1,13 @@
+# GPIO-only system profile for ST NUCLEO-U3C5ZI-Q (MB2222).
+# Only onboard green user LED LD1 on PA5 is claimed.
+schema_version: "1.0"
+name: "nucleo-u3c5zi-q-smoke"
+chip: "../chips/stm32u3c5zi-q-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld1"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

@@ -779,9 +779,19 @@ impl PeripheralKit for DeclarativeLedStripKit {
             }
             LedStripWire::NrzGpio => {
                 let label = ctx.config_str("data_pin").unwrap_or("GPIO48").to_string();
-                let pin = ctx.parse_gpio_pin(&label).ok_or_else(|| {
+                // A port pad ("PC6" -> gpioc bit 6) on an STM32-style port,
+                // where the strip hears what a peripheral drives onto the pad
+                // (an SPI MOSI), else an ESP GPIO number. Port first: the ESP
+                // parser reads the trailing digits of "PC6" as GPIO6.
+                let port_pad = crate::bus::SystemBus::parse_stm32_pin(&label)
+                    .filter(|(port, _)| ctx.bus.find_peripheral_index_by_name(port).is_some());
+                let pin = match &port_pad {
+                    Some((_, bit)) => Some(*bit),
+                    None => ctx.parse_gpio_pin(&label),
+                }
+                .ok_or_else(|| {
                     anyhow::anyhow!(
-                        "{} '{}' data_pin '{}' could not be parsed to an ESP GPIO (0..=48)",
+                        "{} '{}' data_pin '{}' is neither an ESP GPIO (0..=48) nor a port pad (PC6)",
                         self.descriptor.r#type,
                         ctx.device_id(),
                         label
@@ -799,9 +809,28 @@ impl PeripheralKit for DeclarativeLedStripKit {
                     .unwrap_or(160_000_000);
                 dev.set_cpu_hz(cpu_hz);
                 let strip = std::sync::Arc::new(dev);
-                // Classic ESP32 + S3 GPIO observers (the same choke motors and
-                // the parallel TFT use).
-                ctx.install_gpio_observer(strip.clone());
+                match port_pad {
+                    Some((port, _)) => {
+                        if !crate::bus::SystemBus::install_port_gpio_observer(
+                            ctx.bus,
+                            &port,
+                            strip.clone(),
+                        ) {
+                            anyhow::bail!(
+                                "{} '{}' data_pin '{}': no GPIO port '{}' on this chip",
+                                self.descriptor.r#type,
+                                ctx.device_id(),
+                                label,
+                                port
+                            );
+                        }
+                    }
+                    // Classic ESP32 + S3 GPIO observers (the same choke
+                    // motors and the parallel TFT use).
+                    None => {
+                        ctx.install_gpio_observer(strip.clone());
+                    }
+                }
                 ctx.bus.observe_device(strip);
                 Ok(())
             }

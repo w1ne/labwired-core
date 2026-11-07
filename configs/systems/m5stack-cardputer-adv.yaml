@@ -1,0 +1,23 @@
+# Narrow M5Stack Cardputer-Adv (SKU K132-ADV) board profile.
+# It claims only the onboard ST7789V2 path exercised by the firmware smoke.
+name: "m5stack-cardputer-adv"
+chip: "../chips/esp32s3-cardputer-adv-smoke.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "display"
+    type: "st7789-170x320"
+    connection: "spi3_s3"
+    config:
+      cs_pin: "GPIO37"
+      dc_pin: "GPIO34"
+      reset_pin: "GPIO33"
+      backlight_pin: "GPIO38"
+      # ST7789 RAM is 240x320. M5GFX's official Cardputer-Adv panel data gives
+      # a 135x240 visible window at x=52, y=40. Keep that crop in controller
+      # RAM orientation; MADCTL=0xA0 maps firmware's landscape address window
+      # into this fixed glass window.
+      col_offset: 52
+      row_offset: 40
+      cols: 135
+      rows: 240

@@ -13,6 +13,8 @@
 //! Sources:
 //!   * ST DS5792 Rev 7 / DocID15060 — STM32F103x4/x6 low-density, Table 2,
 //!     Table 5 and ordering Table 58.
+//!   * ST DS5319 Rev 20 — STM32F103x8/xB medium-density, Tables 2, 5 and 36
+//!     plus ordering information.
 //!   * ST DS9716 Rev 11 — STM32F401xB/xC, Table 2 and section 8.
 //!   * ST DS10086 Rev 5 — STM32F401xD/xE, Table 2 and section 8.
 //!   * ST DS8626 Rev 12 — STM32F405xx/STM32F407xx, Table 2 and section 7.

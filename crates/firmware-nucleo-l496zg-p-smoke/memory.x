@@ -1,0 +1,6 @@
+/* STM32L496ZGT6P: 1 MiB flash and 320 KiB contiguous SRAM window. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x08000000, LENGTH = 1024K
+  RAM   : ORIGIN = 0x20000000, LENGTH = 320K
+}

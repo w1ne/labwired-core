@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="8" failures="0" errors="0" time="50.113953">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxCycles"/>
+    <property name="firmware_hash" value="2f294131907c1919566d15b7473ab785b54902a221c1efdcfec9c7f39fe7a122"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="50.113953">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: peripheral_log: debug_printf.terminal contains &quot;systick_irq example&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: peripheral_log: debug_printf.terminal contains &quot;initializing systick...done.&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: peripheral_log: debug_printf.terminal contains &quot;Beginning Loop...&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: peripheral_log: debug_printf.terminal contains &quot;Milliseconds taken:\t500&quot; x2" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0xe00000f4=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: gpio_edges: gpiod:0 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: gpio_edges: gpioc:0 &gt;= 4 edges" time="0.000000">
+  </testcase>
+</testsuite>

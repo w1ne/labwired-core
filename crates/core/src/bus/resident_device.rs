@@ -16,6 +16,26 @@
 
 use super::SystemBus;
 
+/// Convert a GPIO output-register `(address, bit)` pair into the physical pad
+/// number expected by `Peripheral::read_gpio_pad*`. ESP32-S3 splits GPIO0–31
+/// and GPIO32–48 into OUT and OUT1 registers, while its pin APIs use absolute
+/// pad numbers.
+fn physical_gpio_pad(bus: &SystemBus, addr: u64, bit: u8) -> Option<u8> {
+    let idx = bus.find_peripheral_index(addr)?;
+    let peripheral = &bus.peripherals[idx];
+    let offset = addr.checked_sub(peripheral.base)?;
+    if peripheral
+        .dev
+        .as_any()
+        .is_some_and(|dev| dev.is::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>())
+        && offset == 0x10
+    {
+        bit.checked_add(32)
+    } else {
+        Some(bit)
+    }
+}
+
 /// The ONLY thing a [`BusResidentDevice`] is handed while it drives its pins:
 /// three pad operations over `(address, bit)`, and nothing else.
 ///
@@ -128,19 +148,21 @@ impl DevicePins for SystemBus {
 
     fn pad_bit(&self, addr: u64, bit: u8) -> Option<bool> {
         let idx = self.find_peripheral_index(addr)?;
+        let pad = physical_gpio_pad(self, addr, bit)?;
         self.peripherals[idx]
             .dev
-            .read_gpio_pad(bit)
+            .read_gpio_pad(pad)
             .or_else(|| self.output_bit(addr, bit))
     }
 
     fn known_pad_bit(&self, addr: u64, bit: u8) -> Option<bool> {
         let idx = self.find_peripheral_index(addr)?;
+        let pad = physical_gpio_pad(self, addr, bit)?;
         let port = &self.peripherals[idx].dev;
-        if port.read_gpio_pad_drive(bit) != Some(crate::logic_capture::PadDrive::Driven) {
+        if port.read_gpio_pad_drive(pad) != Some(crate::logic_capture::PadDrive::Driven) {
             return None;
         }
-        port.read_gpio_pad(bit)
+        port.read_gpio_pad(pad)
     }
 
     fn peripheral_tick_interval(&self) -> u64 {

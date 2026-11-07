@@ -1,0 +1,14 @@
+# NUCLEO-F410RB (MB1136) board-facing smoke profile.
+# ST UM1724 maps user LED LD2 to PA5 and routes the default ST-LINK VCP
+# through USART2 on PA2/PA3. The descriptor claims only those working paths.
+name: "nucleo-f410rb"
+chip: "../chips/stm32f410rb-nucleo-smoke.yaml"
+debug_uart: "usart2"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

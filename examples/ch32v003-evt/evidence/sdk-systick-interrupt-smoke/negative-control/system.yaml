@@ -1,0 +1,4 @@
+# Negative control system; see chip.yaml.
+name: ch32v003evt-pfic-storage-control
+chip: chip.yaml
+external_devices: []

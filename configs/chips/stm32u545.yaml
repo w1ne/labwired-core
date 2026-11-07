@@ -540,3 +540,10 @@ peripherals:
     type: "nvic"
     base_address: 0xE000E100
     size: "1KB"
+
+# NUCLEO-U545RE-Q Arduino D14/D15 route I2C1 to PB7/SDA and PB6/SCL.
+# The silicon I2C1 controller is modeled above; keep the board's actual pads
+# available to pin-level co-simulation as well as the attached-device bus.
+pin_map:
+  PB6: { gpio: gpiob, bit: 6, functions: [{ type: i2c, peripheral: i2c1, role: scl }] }
+  PB7: { gpio: gpiob, bit: 7, functions: [{ type: i2c, peripheral: i2c1, role: sda }] }

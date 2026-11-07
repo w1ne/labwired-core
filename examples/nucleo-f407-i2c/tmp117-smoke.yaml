@@ -1,0 +1,13 @@
+# NUCLEO-F407 reading the TMP117 identity and temperature registers over I2C1.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/nucleo-f407-tmp117"
+  system: "./tmp117-system.yaml"
+limits:
+  max_steps: 300000
+assertions:
+  - uart_contains: "TMP117_ID=0x0117 TEMP_RAW=0x0C80 OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 1
+  - expected_stop_reason: max_steps

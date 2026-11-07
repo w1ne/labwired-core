@@ -236,7 +236,7 @@ fn no_elf_rom_boot_chip(
 /// The ELF arm only ever used `firmware_bytes` for symbol/diagnostic context;
 /// here `execute_test_loop` gets an empty slice and those diagnostics degrade
 /// gracefully, exactly as on the C3 ELF-less path.
-fn esp32s3_rom_boot_flash_size(system: &labwired_config::ResolvedSystem) -> u32 {
+fn esp32s3_declared_flash_size(system: &labwired_config::ResolvedSystem) -> u32 {
     system
         .chip()
         .ok()
@@ -305,7 +305,7 @@ fn run_s3_rom_boot_no_elf(
         // has the resolved chip descriptor, so use its physical capacity just
         // like `labwired run` and the Wasm constructor do. Falling back to the
         // 4 MiB default makes the ROM reject every N8/N16 image before app_main.
-        flash_size: esp32s3_rom_boot_flash_size(system),
+        flash_size: esp32s3_declared_flash_size(system),
         // Core clock from the same resolved descriptor: `cpu_hz:` in the chip
         // YAML is the one home for it, and it is what the SYSTIMER divides the
         // CPU cycle stream by to keep `esp_timer` time.
@@ -1250,7 +1250,7 @@ pub(crate) fn run_test(
             // machine. `--rom-boot` on an S3 chip takes the real-ROM path;
             // classic ESP32 stays on the legacy fast-boot (its rom-boot is a
             // separate task).
-            let is_esp32s3 = {
+            let resolved_xtensa_chip = {
                 let chip_dir = sys_path
                     .parent()
                     .unwrap_or_else(|| std::path::Path::new("."));
@@ -1259,9 +1259,14 @@ pub(crate) fn run_test(
                     chip_dir,
                     &crate::plugin_chip_yaml(plugins),
                 )
-                .map(|c| c.is_esp32s3())
-                .unwrap_or(false)
+                .ok()
             };
+            let is_esp32s3 = resolved_xtensa_chip
+                .as_ref()
+                .is_some_and(|chip| chip.is_esp32s3());
+            let is_esp32s2 = resolved_xtensa_chip
+                .as_ref()
+                .is_some_and(|chip| chip.is_esp32s2());
 
             let mut machine = if is_esp32s3 {
                 // ── ESP32-S3 (LX7): S3 memmap + XIP, NOT classic ESP32 map ──
@@ -1378,7 +1383,21 @@ pub(crate) fn run_test(
                     if factory_layout {
                         std::env::set_var("LABWIRED_ESP32S3_MMU_XIP", "1");
                     }
-                    let opts = Esp32s3Opts::default();
+                    // The fast-boot S3 bank must match the selected board's
+                    // flash capacity. The generic 4 MiB default truncates
+                    // Cardputer-Adv (8 MiB) and larger S3 modules.
+                    let opts = resolved_system
+                        .as_ref()
+                        .map(|system| {
+                            let mut opts = system
+                                .chip()
+                                .ok()
+                                .map(|chip| Esp32s3Opts::for_chip(&chip))
+                                .unwrap_or_default();
+                            opts.flash_size = esp32s3_declared_flash_size(system);
+                            opts
+                        })
+                        .unwrap_or_default();
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
                     if _fast.is_none() {
                         std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
@@ -1522,7 +1541,7 @@ pub(crate) fn run_test(
                     // aborts. Seed the descriptor with the configured flash size.
                     labwired_core::boot::esp32s3::seed_esp32s3_rom_flashchip(
                         &mut bus,
-                        4 * 1024 * 1024,
+                        opts.flash_size,
                     );
                     // Arduino dual-core: `system_early_init` calls
                     // `ets_set_appcpu_boot_addr(call_start_cpu1)` then spins on
@@ -1589,6 +1608,86 @@ pub(crate) fn run_test(
                     );
                     machine
                 }
+            } else if is_esp32s2 {
+                // Narrow ESP32-S2 profile: build the board exactly from its
+                // chip/system descriptors, then enter the freestanding ELF at
+                // its linked address. This S2 profile intentionally does not
+                // borrow the classic ESP32 LX6 peripheral bank or S3 ROM path.
+                if args.rom_boot {
+                    let msg = "ESP32-S2 DevKitM-1 smoke profile supports ELF fast boot only; ROM boot is not modelled"
+                        .to_string();
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                let mut bus = match labwired_core::system::builder::build_system_bus_with_plugins(
+                    resolved_system.as_ref(),
+                    plugins,
+                ) {
+                    Ok(bus) => bus,
+                    Err(e) => {
+                        let msg = format!("{e:#}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                };
+                bus.bit_band_enabled = false;
+                bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+                let mut cpu = labwired_core::cpu::XtensaLx7::new();
+                if let Err(e) = cpu.reset(&mut bus) {
+                    let msg = format!("ESP32-S2 CPU reset: {e}");
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                let mut machine = labwired_core::Machine::new(cpu, bus);
+                if let Err(e) = machine.load_firmware(&program) {
+                    return handle_load_error(
+                        &args,
+                        &metrics,
+                        &resolved_limits,
+                        &firmware_bytes,
+                        &uart_tx,
+                        &rtt_tx,
+                        &itm_tx,
+                        &machine.cpu,
+                        &firmware_path,
+                        system_path.as_ref(),
+                        e,
+                    );
+                }
+                machine.cpu.set_pc(program.entry_point as u32);
+                machine.cpu.set_sp(0x3FFF_FFF0);
+                crate::log_ts::set_hz(machine.bus.cpu_hz);
+                apply_run_speed_opts(&mut machine);
+                machine.add_observer(metrics.clone());
+                eprintln!(
+                    "labwired-cli test: ESP32-S2 descriptor fast-boot entry=0x{:08x}",
+                    program.entry_point
+                );
+                machine
             } else {
                 let (mut esp_bus, pro_cpu, app_cpu) =
                     match labwired_core::system::builder::build_esp32_system_from_manifest_with_plugins(
@@ -2924,9 +3023,9 @@ mod esp32s3_rom_boot_tests {
     fn elf_less_s3_uses_the_descriptor_flash_capacity() {
         let system = labwired_config::ResolvedSystem::from_builtin_chip("esp32s3")
             .expect("built-in ESP32-S3 descriptor");
-        assert_eq!(esp32s3_rom_boot_flash_size(&system), 16 * 1024 * 1024);
+        assert_eq!(esp32s3_declared_flash_size(&system), 16 * 1024 * 1024);
         assert_ne!(
-            esp32s3_rom_boot_flash_size(&system),
+            esp32s3_declared_flash_size(&system),
             labwired_core::system::xtensa::Esp32s3Opts::default().flash_size,
             "the hosted ELF-less path must not collapse every S3 module to 4 MiB",
         );

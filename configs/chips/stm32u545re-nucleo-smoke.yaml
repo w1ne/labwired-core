@@ -1,0 +1,47 @@
+# Narrow NUCLEO-U545RE-Q smoke model: GPIOA (LD2) and USART1 (ST-LINK VCP).
+# Board wiring: ST UM3062 and STM32U5 Nucleo BSP map LD2 to PA5 and COM1 to
+# USART1 PA9/PA10 (AF7). Other board and MCU peripherals are intentionally
+# outside this onboarding profile.
+name: "stm32u545re-nucleo-smoke"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 160_000_000
+
+flash:
+  base: 0x08000000
+  size: "512KiB"
+ram:
+  base: 0x20000000
+  size: "256KiB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x46020C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/rcc.yaml"
+      profile: "stm32v2"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/gpioa.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xABFFFFFF
+      reset_seccfgr: 0x0000FFFF
+      reset_ospeedr: 0x0C000000
+      reset_pupdr: 0x64000000
+    clock: { reg: "ahb2enr", bit: 0 }
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 61
+    config:
+      debug_schema: "../peripherals/stm32u575/usart1.yaml"
+      profile: "stm32v2"
+      full_featured: true
+      u5_features: true
+    clock: { reg: "apb2enr", bit: 14 }

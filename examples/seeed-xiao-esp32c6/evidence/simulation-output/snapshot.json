@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1107296268,
+      1082654704,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      63,
+      2,
+      1611206668,
+      32768,
+      1611206664,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1107296308,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 0,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 5000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 5000,
+  "cycles": 11446,
+  "instructions": 5000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 5000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 5000
+    }
+  },
+  "limits": {
+    "max_steps": 5000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "d878cf3b32e396e15483c5be88b7304d431e44d206ebe5ebd3e838ba5f5e6006",
+  "config": {
+    "firmware": "examples/seeed-xiao-esp32c6/../../target/riscv32imc-unknown-none-elf/release/firmware-xiao-esp32c6-gpio-smoke",
+    "system": "examples/seeed-xiao-esp32c6/../../configs/systems/seeed-xiao-esp32c6.yaml",
+    "script": "examples/seeed-xiao-esp32c6/onboarding-smoke.yaml"
+  }
+}

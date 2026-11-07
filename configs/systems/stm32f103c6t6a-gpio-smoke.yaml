@@ -1,0 +1,12 @@
+# Exact STM32F103C6T6A bare-part smoke fixture.
+# PC13 drives an external LED wired to 3.3 V through a resistor, so it is active-low.
+name: "stm32f103c6t6a-gpio-smoke"
+chip: "../chips/stm32f103c6t6a-gpio-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "external_led_pc13"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false

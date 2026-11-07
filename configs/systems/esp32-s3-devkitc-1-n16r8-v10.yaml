@@ -1,0 +1,14 @@
+# ESP32-S3-DevKitC-1 v1.0 N16R8. The onboard WS2812 RGB LED is on GPIO48;
+# v1.1 moves it to GPIO38 and uses a separate system profile.
+name: "esp32-s3-devkitc-1-n16r8-v10"
+chip: "../chips/esp32s3-devkitc-1-n16r8-v10-smoke.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO48"
+      num_pixels: 1
+      cpu_hz: 240_000_000

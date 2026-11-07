@@ -1,0 +1,11 @@
+# NUCLEO-F411RE + Adafruit BME280: probe the modeled sensor over I2C1.
+schema_version: "1.0"
+inputs:
+  firmware: "./.pio/build/nucleo_f411re/firmware.elf"
+  system: "../../configs/systems/nucleo-f411re-bme280.yaml"
+limits:
+  max_steps: 40000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "BME280_OK"
+  - uart_contains: "T=25.00C P=1013.25hPa H=50.00%RH"

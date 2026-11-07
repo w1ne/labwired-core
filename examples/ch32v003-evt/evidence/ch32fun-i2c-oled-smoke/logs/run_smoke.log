@@ -1,0 +1,4 @@
+[2m2026-11-06T21:28:20.061733Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+[2m2026-11-06T21:28:20.141175Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  12/12 checks · ch32fun-i2c-oled-smoke · 130000000 steps · 83.32s

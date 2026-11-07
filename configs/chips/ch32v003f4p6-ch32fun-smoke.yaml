@@ -1,0 +1,290 @@
+# Narrow CH32V003F4P6 profile for unmodified ch32fun (cnlohr/ch32fun)
+# examples: the pfic-smoke profile (HSI/PLL handshake, FLASH_ACTLR, QingKe V2
+# SysTick and PFIC, USART1 TX on PD5) with GPIOA/GPIOC added, because
+# ch32fun's funGpioInitAll() clocks all three ports, and the WCH-LinkE debug
+# printf channel that ch32fun uses as its default console, ADC1 (the
+# STM32F1 ADC block at 10 bits) for ch32fun's adc_polled, and I2C1 on its
+# default pins (PC1 SDA, PC2 SCL) for ch32fun's i2c_oled, and TIM2 with its
+# channel outputs on the reset-mapped pads (PD4/PD3/PC0/PD7) for ch32fun's
+# tim2_pwm, and EXTI with its AFIO_EXTICR port select for ch32fun's
+# exti_pin_change_isr, and SPI1 (PC5 SCK, PC6 MOSI, PC7 MISO) for ch32fun's
+# spi_max7219, and DMA1 with USART1 TX on channel 4 for ch32fun's
+# uart_tx_dma and SPI1 TX on channel 3 for ch32fun's ws2812bdemo, and TIM1
+# with its complementary outputs for ch32fun's tim1_pwm, and the IWDG
+# (counting from LSI, resetting the core on time-out) for ch32fun's iwdg.
+#
+# Sources:
+# - ch32fun ch32v003hw.h (register map, DMDATA0/DMDATA1/sentinel at
+#   0xE00000F4..0xE00000FF), ch32fun.c (SystemInit: HSI x2 PLL to 48 MHz,
+#   SysTick CTLR = 5 free-running at HCLK; _write/putchar debug printf)
+# - minichlink DefaultPollTerminal (the probe side of the debug printf)
+# - CH32V003 reference manual, RCC/GPIO/STK/PFIC/ADC chapters
+#
+# ADC1 models software-started single conversions of the regular channel in
+# RSQR3, the RSTCAL/CAL handshakes, EOC, and 10-bit codes against a 3.3 V
+# reference. Not modeled on it: sample time (SAMPTR), the injected group,
+# scan/discontinuous mode, external triggers, the analog watchdog, DMA, the
+# internal V_REFINT/V_CAL channels (IN8/IN9) and calibration offsets.
+#
+# I2C1 reuses the engine's STM32F1-shaped master event/register subset (same
+# CTLR1/CTLR2/OADDR1/DATAR/STAR1/STAR2/CKCFGR offsets and SB/ADDR/TXE/BTF/
+# BUSY/MSL/TRA flags as ch32fun's ch32v003hw.h). CKCFGR is stored, not
+# turned into bus timing. Not modeled on it: the RCC_APB1PRSTR peripheral
+# reset (writes are dropped, so a reset does not clear I2C1 state), the
+# AFIO I2C1 remaps, slave mode, PEC, SMBus, the error/event interrupts and
+# DMA.
+#
+# TIM2 reuses the engine's STM32F1 general-purpose timer (same CTLR1/
+# CHCTLRx/CCER/CNT/PSC/ATRLR/CHxCVR offsets and PWM mode 1/2 as ch32fun's
+# ch32v003hw.h), counting at HCLK (APB1 is undivided after SystemInit). The
+# channel outputs drive their default pads while CCxE is set and the pad is
+# in alternate-function output mode. Not modeled on TIM2: the AFIO PCFR1
+# TIM2 remaps (PCFR1 is storage only, so a remapped pad does not move), the
+# RCC_APB1PRSTR reset (dropped, as for I2C1), PD7's NRST option byte (the
+# pad is treated as GPIO), encoder/slave modes, DMA and TIM2 interrupts.
+#
+# TIM1 is the engine's advanced-control timer (`advanced: true`: the F1
+# general-purpose block plus RCR/BDTR, same offsets as ch32fun's
+# ch32v003hw.h), counting at HCLK. Its outputs drive the PCFR1.TIM1_RM = 00
+# pads while the pad is an alternate-function output: T1CH1..4 on PD2, PA1,
+# PC3, PC4 and the complementary T1CH1N..3N on PD0, PA2, PD1. BDTR.MOE gates
+# them all. With MOE set, CCxE alone gives OCx = OCxREF, CCxNE alone gives
+# OCxN = OCxREF, and both give OCx/!OCxREF with each rising edge delayed by
+# the DTG dead time in tDTS (CK_INT x CTLR1.CKD) units; CCxP/CCxNP invert and
+# OSSR drives the disabled half of a pair at its inactive level. With MOE
+# clear, OSSI holds enabled outputs at CTLR2.OISx/OISxN. Not modeled on TIM1:
+# the break input (BKIN on PC2) and BDTR.AOE/LOCK, center-aligned and down
+# counting, the repetition counter as an update divider, encoder/slave
+# modes, DMA, the BRK/UP/TRG_COM interrupts (34..36), and the RCC_APB2PRSTR
+# reset (dropped).
+#
+# Input capture on TIM1 and TIM2: a channel pad that is a digital input
+# feeds that channel's TIy while AFIO_PCFR1 selects the pad's mapping (the
+# same table as the outputs; TIM2 at TIM2_RM = 00 only), and CCxS/CCxP/
+# ICxPSC/ICxF pick the edge as on the F1 timer. TIM1's capture/compare
+# flags & DMAINTENR request PFIC 37 (TIM1_CC) as a level that a CHxCVR read
+# or an INTFR write drops. TIM2 has no PFIC line here, so its captures can
+# only be polled.
+#
+# EXTI keeps the F1 register file (INTENR/EVENR/RTENR/FTENR/SWIEVR/INTFR)
+# over its ten lines. A rising or falling edge on a pad whose port
+# AFIO_EXTICR selects for lines 0..7 latches INTFR when RTENR/FTENR asks for
+# it, and INTFR & INTENR drives PFIC interrupt 20 (EXTI7_0) as a level until
+# the handler clears INTFR. Not modeled on EXTI: event mode (EVENR wakes
+# nothing, as sleep is not modeled), the PVD (line 8) and AWU (line 9)
+# sources and their interrupts 17/21, and the input filter/synchroniser
+# latency (the flag is set on the same cycle as the pad edge).
+#
+# SPI1 reuses the engine's STM32F1 SPI (same CTLR1/CTLR2/STATR/DATAR/
+# CRCR/RCRCR/TCRCR offsets and CTLR1.DFF 8/16-bit frames as ch32fun's
+# ch32v003hw.h), master mode with a software chip select on a GPIO. A
+# 16-bit frame goes out MSB first, clocked at the CTLR1.BR prescaler. With
+# `pad_map: ch32v003` SCK and MOSI are driven on PC5/PC6 while CFGLR selects
+# the alternate function, each edge at its bit-engine cycle (the WS2812
+# strip in ch32fun's ws2812bdemo decodes PC6). CTLR2.TXDMAEN/RXDMAEN raise
+# DMA1 requests as levels. Not modeled on SPI1: HSCR, the AFIO PCFR1 SPI1
+# remap, MISO/NSS pads, hardware NSS, slave mode, CRC and the SPI1
+# interrupt.
+#
+# DMA1 is the STM32F1 seven-channel block at the same INTFR/INTFCR/CFGRx/
+# CNTRx/PADDRx/MADDRx offsets as ch32fun's ch32v003hw.h, on the `ch32v003`
+# DMA profile: an item's count, pointers and flags commit after its bus copy
+# succeeds, CIRC reloads CNTR and the pointers, and each channel's
+# TC/HT/TE & TCIE/HTIE/TEIE is a level on PFIC interrupt 21 + N
+# (DMA1_Channel1_IRQn = 22 .. DMA1_Channel7_IRQn = 28) until INTFCR clears
+# it. CFGR/CNTR/PADDR/MADDR stay writable while EN=1 (the G0 lock does not
+# apply), and a CNTR store on an enabled channel re-arms it from PADDR/
+# MADDR with that count as the HT/TC/CIRC reference, as ch32fun's WS2812
+# driver relies on. Routed requests, from the fixed CH32V003 mapping: SPI1
+# TX on channel 3 and USART1 TX (CTLR3.DMAT) on channel 4. Not modeled on
+# DMA1: the other request lines (ADC1 ch1, SPI1 RX ch2, USART1 RX ch5,
+# I2C1, TIM1/TIM2), bus arbitration timing against the CPU (an item takes
+# no CPU cycles), and RCC_AHBPCENR's SRAM/flash enables.
+#
+# Not modeled: debug-printf input from the host, a detached probe, the rest
+# of the RISC-V debug module, OPA, the
+# window watchdog (WWDG), the RCC_RSTSCKR reset flags (a watchdog reset is
+# not recorded there), the IWDG hardware-watchdog option byte and its
+# PVU/RVU busy flags, sleep/standby, the HSE, the option bytes, and
+# everything listed
+# as not modeled in ch32v003f4p6-pfic-smoke.yaml.
+name: ch32v003f4p6-ch32fun-smoke
+arch: riscv
+core: qingke-v2a
+registers_count: 16
+# SYSCLK after ch32fun's SystemInit (HSI x2 PLL, FUNCONF_USE_PLL default).
+cpu_hz: 48_000_000
+
+flash:
+  base: 0x08000000
+  size: 16KB
+ram:
+  base: 0x20000000
+  size: 2KB
+
+pins:
+  PC0: { gpio: gpioc, bit: 0, functions: [{ type: timer, peripheral: tim2, channel: 3 }] }
+  PC1: { gpio: gpioc, bit: 1, functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
+  PC2: { gpio: gpioc, bit: 2, functions: [{ type: i2c, peripheral: i2c1, role: scl }] }
+  PC3: { gpio: gpioc, bit: 3, functions: [{ type: timer, peripheral: tim1, channel: 3 }] }
+  PC4: { gpio: gpioc, bit: 4, functions: [{ type: timer, peripheral: tim1, channel: 4 }] }
+  PC5: { gpio: gpioc, bit: 5, functions: [{ type: spi, peripheral: spi1, role: sck }] }
+  PC6: { gpio: gpioc, bit: 6, functions: [{ type: spi, peripheral: spi1, role: mosi }] }
+  PC7: { gpio: gpioc, bit: 7, functions: [{ type: spi, peripheral: spi1, role: miso }] }
+  PD0: { gpio: gpiod, bit: 0 }
+  PD2: { gpio: gpiod, bit: 2, functions: [{ type: timer, peripheral: tim1, channel: 1 }] }
+  PD3: { gpio: gpiod, bit: 3, functions: [{ type: timer, peripheral: tim2, channel: 2 }] }
+  PD4: { gpio: gpiod, bit: 4, functions: [{ type: timer, peripheral: tim2, channel: 1 }] }
+  PD5: { gpio: gpiod, bit: 5 }
+  PD6: { gpio: gpiod, bit: 6 }
+  PD7: { gpio: gpiod, bit: 7, functions: [{ type: timer, peripheral: tim2, channel: 4 }] }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 32B
+    config:
+      profile: ch32v003
+
+  - id: flash_ctrl
+    type: flash
+    base_address: 0x40022000
+    size: 4B
+    config:
+      profile: stm32f1
+
+  # funGpioInitAll() sets AFIOEN with the port clocks; PCFR1 is storage only,
+  # EXTICR (0x08) selects the port of EXTI lines 0..7.
+  - id: afio
+    type: afio
+    base_address: 0x40010000
+    size: 12B
+    clock: { reg: apb2enr, bit: 0 }
+    config:
+      profile: ch32v003
+
+  # EXTI has no RCC enable bit of its own on the CH32V003.
+  - id: exti
+    type: exti
+    base_address: 0x40010400
+    size: 24B
+    config:
+      profile: ch32v003
+
+  # IWDG (CTLR/PSCR/RLDR/STATR, the STM32 KR/PR/RLR/SR layout) clocked by
+  # the 128 kHz LSI; it has no RCC enable bit. Counting mode: started by
+  # 0xCCCC it resets the core when the 12-bit counter runs out.
+  - id: iwdg
+    type: iwdg
+    base_address: 0x40003000
+    size: 16B
+    config:
+      lsi_hz: 128000
+
+  # WCH-LinkE attached and polling like `minichlink -T`.
+  - id: debug_printf
+    type: wch_debug_printf
+    base_address: 0xE00000F4
+    size: 12B
+
+  - id: pfic
+    type: qingke_pfic
+    base_address: 0xE000E000
+    size: 4KB
+
+  - id: stk
+    type: qingke_v2_systick
+    base_address: 0xE000F000
+    size: 20B
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x40010800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 2 }
+    config:
+      profile: ch32v003
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x40011000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 4 }
+    config:
+      profile: ch32v003
+
+  - id: gpiod
+    type: gpio
+    base_address: 0x40011400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 5 }
+    config:
+      profile: ch32v003
+
+  # DMA1 at 0x40020000; RCC_AHBPCENR.DMA1EN is bit 0 (ch32v003hw.h).
+  - id: dma1
+    type: dma
+    base_address: 0x40020000
+    size: 1KB
+    clock: { reg: ahbpcenr, bit: 0 }
+    config:
+      profile: ch32v003
+      # Fixed request mapping, CH32V003 RM DMA1 request table.
+      requests:
+        spi1_tx: 3
+        usart1_tx: 4
+
+  - id: usart1
+    type: uart
+    base_address: 0x40013800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 14 }
+    config:
+      profile: stm32f1
+      pad_map: ch32v003
+
+  - id: adc1
+    type: adc
+    base_address: 0x40012400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 9 }
+    config:
+      profile: ch32v003
+
+  - id: i2c1
+    type: i2c
+    base_address: 0x40005400
+    size: 1KB
+    clock: { reg: apb1pcenr, bit: 21 }
+    config:
+      profile: stm32f1
+
+  # TIM1 at 0x40012C00; RCC_APB2PCENR.TIM1EN is bit 11 (ch32v003hw.h).
+  # irq 37 is TIM1_CC_IRQn (ch32fun ch32v003hw.h): the capture/compare flags
+  # & DMAINTENR raise it as a PFIC level. The BRK/UP/TRG_COM lines (34..36)
+  # are not routed.
+  - id: tim1
+    type: timer
+    base_address: 0x40012C00
+    size: 1KB
+    irq: 37
+    clock: { reg: apb2enr, bit: 11 }
+    config:
+      advanced: true
+
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: 1KB
+    clock: { reg: apb1pcenr, bit: 0 }
+
+  # SPI1 at 0x40013000; RCC_APB2PCENR.SPI1EN is bit 12 (ch32v003hw.h).
+  - id: spi1
+    type: spi
+    base_address: 0x40013000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 12 }
+    config:
+      # PC5 SCK / PC6 MOSI, AFIO_PCFR1.SPI1_RM = 0 (see SpiPadMap::Ch32v003).
+      pad_map: ch32v003

@@ -853,6 +853,11 @@ pub struct Uart {
     /// console (unit tests, every other layout).
     #[serde(skip)]
     tx_console_af: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// The CH32V003's USART1_TX default pad differs from the STM32F1 table.
+    /// Enabled only by the narrow CH32V003 descriptor that has a sourced
+    /// PD5 route; it reuses the F1 USART register map, not the F1 pin map.
+    #[serde(skip)]
+    ch32v003_pad_map: bool,
     #[serde(skip)]
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     #[serde(skip)]
@@ -1116,6 +1121,7 @@ impl Uart {
             enable_value: 0,
             route_gate: None,
             tx_console_af: None,
+            ch32v003_pad_map: false,
             sink: None,
             rx_buf: Arc::new(Mutex::new(VecDeque::new())),
             echo_stdout: !matches!(layout, UartRegisterLayout::Avr),
@@ -1189,6 +1195,18 @@ impl Uart {
     pub fn set_full_featured(mut self, yes: bool) -> Self {
         self.full_featured = yes;
         self
+    }
+
+    /// Select the CH32V003 USART1 default TX pad route (PD5). The caller must
+    /// use this only with the STM32F1-shaped USART layout and a sourced
+    /// CH32V003 GPIO descriptor.
+    pub fn set_ch32v003_pad_map(mut self) -> Self {
+        self.ch32v003_pad_map = true;
+        self
+    }
+
+    pub(crate) fn uses_ch32v003_pad_map(&self) -> bool {
+        self.ch32v003_pad_map
     }
 
     /// Mark this instance as an STM32 LPUART on the V2 register map.
@@ -2698,6 +2716,31 @@ impl crate::Peripheral for Uart {
     /// (RA), or interrupt vectors the bus pends as-is (RX).
     fn explicit_irqs_are_link_events(&self) -> bool {
         self.sci_b_irq.is_some() && !self.sci_irq_vectors
+    }
+
+    /// STM32-shaped USARTs (F1/CH32 and V2): the TX request is CR3.DMAT
+    /// while TXE (status bit 7) is set; the RX request is CR3.DMAR while a
+    /// received character waits. Other layouts keep the edge-only requests.
+    fn dma_request_level(&self, line: u32) -> bool {
+        if !matches!(
+            self.layout,
+            UartRegisterLayout::Stm32F1 | UartRegisterLayout::Stm32V2
+        ) {
+            return false;
+        }
+        match line {
+            crate::DMA_SIGNAL_TX => {
+                self.cr3 & (1 << 7) != 0
+                    && self
+                        .read(self.status_offset())
+                        .is_ok_and(|sr| sr & 0x80 != 0)
+            }
+            crate::DMA_SIGNAL_RX => {
+                self.cr3 & self.layout.dmar_mask() != 0
+                    && self.rx_buf.lock().is_ok_and(|g| !g.is_empty())
+            }
+            _ => false,
+        }
     }
 
     /// Phase 2B.3b (issue #192): the shared `Uart` is migrated to the event

@@ -1,0 +1,75 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      2,
+      0,
+      2,
+      0,
+      2,
+      0,
+      0,
+      89,
+      0,
+      0,
+      0,
+      200,
+      0,
+      0,
+      0,
+      12,
+      0,
+      192,
+      0
+    ],
+    "pc": 1664,
+    "sp": 8697,
+    "sreg": 149
+  },
+  "steps_executed": 3000000,
+  "cycles": 4648910,
+  "instructions": 2999717,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 3000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 3000000
+    }
+  },
+  "limits": {
+    "max_steps": 3000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "f354c61c155742944df0c9df0e548dbe0ae8c3058a0efb03c1df7192f7eeef5a",
+  "config": {
+    "firmware": "examples/arduino-mega-2560-io/../../tests/fixtures/avr/arduino-mega-2560-io.elf",
+    "system": "examples/arduino-mega-2560-io/./system.yaml",
+    "script": "examples/arduino-mega-2560-io/io-smoke.yaml"
+  }
+}

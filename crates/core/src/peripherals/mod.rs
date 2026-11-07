@@ -30,7 +30,9 @@ pub mod dwt;
 pub mod efr32;
 pub mod esp32;
 pub mod esp32c3;
+pub mod esp32c5;
 pub mod esp32c6;
+pub mod esp32p4;
 pub mod esp32s3;
 pub(crate) mod esp_gdma;
 pub mod esp_gpio_net;
@@ -95,6 +97,8 @@ pub mod pic32_timer;
 pub mod pic32_uart;
 pub mod pio;
 pub mod pwr;
+pub mod qingke_pfic;
+pub mod qingke_systick;
 pub mod quadspi;
 pub mod ra_adc12;
 pub mod ra_agt;
@@ -144,6 +148,7 @@ pub mod uart_waveform;
 pub mod usb_otg;
 pub mod virtual_ble;
 pub mod wave_plan;
+pub mod wch_debug_printf;
 pub mod wwdg;
 
 /// Record one CAN/CAN-FD frame into the machine's ONE bus trace.

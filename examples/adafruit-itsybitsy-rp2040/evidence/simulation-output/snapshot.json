@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      0,
+      26,
+      5,
+      0,
+      17,
+      3489660944,
+      0,
+      537141224,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537141216,
+      268436039,
+      268436034
+    ],
+    "pc": 268436034,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 268435712,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "6bd59993321e7189513c99efc1f99c8bec9a46dccb6999c72179687da718770a",
+  "config": {
+    "firmware": "examples/adafruit-itsybitsy-rp2040/../../target/thumbv6m-none-eabi/release/firmware-itsybitsy-rp2040-smoke",
+    "system": "examples/adafruit-itsybitsy-rp2040/../../configs/systems/adafruit-itsybitsy-rp2040.yaml",
+    "script": "examples/adafruit-itsybitsy-rp2040/io-smoke.yaml"
+  }
+}

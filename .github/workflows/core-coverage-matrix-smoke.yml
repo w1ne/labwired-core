@@ -19,6 +19,7 @@ on:
       - "examples/**"
       - "crates/core/**"
       - "crates/cli/**"
+      - "crates/firmware-xiao-esp32c3-smoke/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-coverage-matrix-smoke.yml"
   workflow_dispatch:
@@ -64,7 +65,28 @@ jobs:
             profile: release
             profile_dir: release
             script: examples/nucleo-f103rb/io-smoke.yaml
-            system: examples/nucleo-f103rb/system.yaml
+            system: configs/systems/nucleo-f103rb.yaml
+          - id: stm32f103c8-bluepill
+            target: thumbv7m-none-eabi
+            crate: firmware-stm32f103c8-bluepill-smoke
+            profile: release
+            profile_dir: release
+            script: examples/stm32f103c8-bluepill/io-smoke.yaml
+            system: configs/systems/stm32f103c8-bluepill.yaml
+          - id: stm32f103c6t6a-gpio-smoke
+            target: thumbv7m-none-eabi
+            crate: firmware-stm32f103c6-gpio-smoke
+            profile: release
+            profile_dir: release
+            script: examples/stm32f103c6t6a-gpio-smoke/io-smoke.yaml
+            system: configs/systems/stm32f103c6t6a-gpio-smoke.yaml
+          - id: stm32f103r8t6-gpio-smoke
+            target: thumbv7m-none-eabi
+            crate: firmware-stm32f103r8-gpio-smoke
+            profile: release
+            profile_dir: release
+            script: examples/stm32f103r8t6-gpio-smoke/io-smoke.yaml
+            system: configs/systems/stm32f103r8t6-gpio-smoke.yaml
           # NTC lab: its io-smoke asserts the ADC CONVERSION (boot reading =
           # divider midpoint, later reading rises after the 80 C stimulus). It
           # ran in no workflow, so the firmware's F2/F4 SWSTART (bit 30) on an
@@ -120,11 +142,18 @@ jobs:
             system: examples/arduino-uno-r4-minima/system.yaml
           - id: teensy-41
             target: thumbv7em-none-eabi
-            crate: firmware-imxrt1064-demo
+            crate: firmware-teensy4-smoke
             profile: release
             profile_dir: release
-            script: examples/teensy-41/uart-smoke.yaml
-            system: examples/teensy-41/system.yaml
+            script: examples/teensy-41/onboarding-smoke.yaml
+            system: configs/systems/teensy-41.yaml
+          - id: teensy-40
+            target: thumbv7em-none-eabi
+            crate: firmware-teensy4-smoke
+            profile: release
+            profile_dir: release
+            script: examples/teensy-40/onboarding-smoke.yaml
+            system: configs/systems/teensy-40.yaml
           - id: stm32f7-discovery
             target: thumbv7em-none-eabi
             crate: firmware-stm32f746-demo
@@ -142,8 +171,31 @@ jobs:
             crate: firmware-esp32c6-demo
             profile: release
             profile_dir: release
-            script: examples/esp32c6-devkitc/uart-smoke.yaml
-            system: examples/esp32c6-devkitc/system.yaml
+            script: examples/esp32c6-devkitc/io-smoke.yaml
+            system: configs/systems/esp32c6-devkitc.yaml
+          - id: esp32c5-devkitc
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32c5-devkitc-smoke
+            profile: release
+            profile_dir: release
+            script: examples/esp32c5-devkitc/onboarding-smoke.yaml
+            system: configs/systems/esp32c5-devkitc.yaml
+          - id: esp32c61-devkitc
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32c61-devkitc-smoke
+            profile: release
+            profile_dir: release
+            script: examples/esp32c61-devkitc/onboarding-smoke.yaml
+            system: configs/systems/esp32c61-devkitc.yaml
+          # XIAO ESP32-C3: the standalone GPIO profile tests its documented D10
+          # header pin without claiming the C3's other board/chip peripherals.
+          - id: seeed-xiao-esp32c3
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-xiao-esp32c3-smoke
+            profile: release
+            profile_dir: release
+            script: examples/seeed-xiao-esp32c3/onboarding-smoke.yaml
+            system: configs/systems/seeed-xiao-esp32c3.yaml
           # nRF52833 / micro:bit v2 — nRF52-family UART smoke on its own board.
           # Same firmware as tests/fixtures/microbit-v2-smoke.elf, rebuilt here.
           - id: microbit-v2
@@ -172,6 +224,15 @@ jobs:
             profile_dir: release
             script: examples/nucleo-g071rb/uart-smoke.yaml
             system: examples/nucleo-g071rb/system.yaml
+          # STM32G0B1RE / NUCLEO-G0B1RE — the same USART2 VCP/LD4 smoke on
+          # the G0B1 chip slice, which includes its board-connected USART2.
+          - id: nucleo-g0b1re
+            target: thumbv6m-none-eabi
+            crate: firmware-stm32g0-demo
+            profile: release
+            profile_dir: release
+            script: examples/nucleo-g0b1re/io-smoke.yaml
+            system: configs/systems/nucleo-g0b1re.yaml
           # The H735 telematics lab — the Cortex-M7 cell, and the only one here
           # whose script asserts PIXELS rather than a UART transcript.
           #

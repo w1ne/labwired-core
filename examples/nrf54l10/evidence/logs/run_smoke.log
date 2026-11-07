@@ -1,0 +1,6 @@
+2026-11-04T12:17:26.614483Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/nrf54l10.yaml
+2026-11-04T12:17:26.615998Z  INFO labwired_loader: ELF Entry Point: 0x801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 198700 of 200000 device cycles (1300 interpreted)
+PASS  3/3 checks · onboarding-smoke · 200000 steps · 0.00s

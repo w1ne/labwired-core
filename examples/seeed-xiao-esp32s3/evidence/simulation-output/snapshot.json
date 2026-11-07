@@ -1,0 +1,61 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      0,
+      1070464960,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1070464960,
+      31,
+      2097152,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1077379136,
+    "ps": 262144,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "steps_executed": 5000,
+  "cycles": 5000,
+  "instructions": 5000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 5000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 5000
+    }
+  },
+  "limits": {
+    "max_steps": 5000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "3665fc93b4177336911d70297bd00bc78552b5a9f05f4d451a7f1df3d35a6833",
+  "config": {
+    "firmware": "examples/seeed-xiao-esp32s3/../../target/xtensa-esp32s3-none-elf/release/firmware-seeed-xiao-esp32s3-gpio-smoke",
+    "system": "examples/seeed-xiao-esp32s3/../../configs/systems/seeed-xiao-esp32s3.yaml",
+    "script": "examples/seeed-xiao-esp32s3/onboarding-smoke.yaml"
+  }
+}

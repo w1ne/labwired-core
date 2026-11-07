@@ -146,6 +146,25 @@ struct DmaObservation {
 /// deleting the walk. Both modes now charge zero, so the walk-on reference and
 /// the scheduler path agree cycle-for-cycle (the same normalization B1/B2/B3
 /// applied to SysTick / TIMx).
+/// Which family's DMA1 semantics a [`Dma1`] follows.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum DmaProfile {
+    #[default]
+    Legacy,
+    Stm32g0,
+    Ch32v003,
+}
+
+impl DmaProfile {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Legacy => "legacy",
+            Self::Stm32g0 => "stm32g0",
+            Self::Ch32v003 => "ch32v003",
+        }
+    }
+}
+
 #[derive(Debug, Default, serde::Serialize)]
 pub struct Dma1 {
     isr: u32,
@@ -190,6 +209,28 @@ pub struct Dma1 {
     /// G0 count/flags commit only after the bus reports a successful copy.
     #[serde(skip)]
     g0_pending: Option<usize>,
+    /// RM0444: a channel's configuration (CCR mode bits, CNDTR, CPAR, CMAR)
+    /// is read-only while EN=1. Set by the G0 profile only. The CH32V003
+    /// keeps the commit-after-copy and level-interrupt semantics but not
+    /// this lock: ch32fun's WS2812 SPI driver clears CFGR.CIRC on an
+    /// enabled channel to let the last lap run out, and that is the
+    /// community driver for the part.
+    #[serde(skip)]
+    locks_config_while_enabled: bool,
+    /// CH32V003 only: the QingKe PFIC the channel interrupts are LEVEL
+    /// sources of (`DMA1_ChannelN_IRQn` = 21 + N in ch32fun's
+    /// ch32v003hw.h). When attached, the channel levels go straight to the
+    /// PFIC and nothing is pended through the NVIC path.
+    #[serde(skip)]
+    pfic: Option<std::sync::Arc<crate::peripherals::qingke_pfic::QingkePficState>>,
+    /// The chip yaml `profile`, reported by the snapshot and the transfer
+    /// observation.
+    #[serde(skip)]
+    profile: DmaProfile,
+    /// Peripheral-paced channels enabled since the bus last asked
+    /// ([`Peripheral::take_enabled_dma_channels`]), bit `n - 1` = channel n.
+    #[serde(skip)]
+    newly_enabled: u8,
     observations: [DmaObservation; 7],
 }
 
@@ -203,13 +244,46 @@ impl Dma1 {
     pub fn new_stm32g0() -> Self {
         Self {
             g0_channel_irqs: Some([9, 10, 10, 11, 11, 11, 11]),
+            locks_config_while_enabled: true,
+            profile: DmaProfile::Stm32g0,
             ..Self::default()
+        }
+    }
+
+    /// CH32V003 DMA1 (the STM32F1 7-channel block at the same offsets, per
+    /// ch32fun's ch32v003hw.h): circular reload, commit-after-copy flags and
+    /// one PFIC interrupt per channel, 22..28. Configuration stays writable
+    /// while a channel is enabled.
+    pub fn new_ch32v003() -> Self {
+        Self {
+            g0_channel_irqs: Some([22, 23, 24, 25, 26, 27, 28]),
+            profile: DmaProfile::Ch32v003,
+            ..Self::default()
+        }
+    }
+
+    /// Drive the PFIC's DMA channel levels from ISR & CCR. No-op until a
+    /// PFIC is attached.
+    fn publish_pfic(&self) {
+        if let Some(pfic) = &self.pfic {
+            for (irq, high) in self.g0_irq_levels() {
+                pfic.set_level(irq, high);
+            }
+        }
+    }
+
+    /// The NVIC-path pends for this slot: none when the levels go to a PFIC.
+    fn nvic_pending_irqs(&self) -> Vec<u32> {
+        if self.pfic.is_some() {
+            Vec::new()
+        } else {
+            self.g0_pending_irqs()
         }
     }
 
     /// Observed successful MMIO/memory copies, indexed by channel 1..7.
     pub fn transfer_observation(&self) -> serde_json::Value {
-        serde_json::json!({"profile": if self.g0_channel_irqs.is_some() {"stm32g0"} else {"legacy"}, "channels": self.observations})
+        serde_json::json!({"profile": self.profile.name(), "channels": self.observations})
     }
 
     fn g0_irq_levels(&self) -> Vec<(u32, bool)> {
@@ -282,13 +356,14 @@ impl Dma1 {
 
     fn tick_channels_once(&mut self) -> PeripheralTickResult {
         let (req, irq) = self.run_slot();
+        self.publish_pfic();
         PeripheralTickResult {
             irq: irq && self.g0_channel_irqs.is_none(),
             // B4 tick-cost normalization: charge zero in every state so the
             // walk-on reference and scheduler path agree cycle-for-cycle.
             cycles: 0,
             dma_requests: req.map(|r| vec![r]),
-            explicit_irqs: self.g0_channel_irqs.map(|_| self.g0_pending_irqs()),
+            explicit_irqs: self.g0_channel_irqs.map(|_| self.nvic_pending_irqs()),
             ..Default::default()
         }
     }
@@ -337,6 +412,11 @@ impl Dma1 {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        self.write_reg_inner(offset, value);
+        self.publish_pfic();
+    }
+
+    fn write_reg_inner(&mut self, offset: u64, value: u32) {
         match offset {
             0x00 => {} // ISR is read-only; ignore writes (and avoid underflow)
             0x04 => {
@@ -373,7 +453,7 @@ impl Dma1 {
                             // MSIZE=0b11 encoding clamps on silicon — a value
                             // detail beyond this flat mask.
                             let value =
-                                if self.g0_channel_irqs.is_some() && old_en && value & 1 != 0 {
+                                if self.locks_config_while_enabled && old_en && value & 1 != 0 {
                                     // Configuration fields are locked while EN=1;
                                     // interrupt enables remain writable.
                                     (self.channels[chan_idx].ccr & !0xf) | (value & 0xf)
@@ -394,6 +474,10 @@ impl Dma1 {
                                 // "the DMA controller performs a transfer on
                                 // a request from a peripheral").
                                 chan.active = (value >> 14) & 1 != 0;
+                                if !chan.active {
+                                    self.newly_enabled |= 1 << chan_idx;
+                                }
+                                let chan = &mut self.channels[chan_idx];
                                 chan.cpar_ptr = chan.cpar;
                                 chan.cmar_ptr = chan.cmar;
                                 chan.cndtr_initial = chan.cndtr;
@@ -403,8 +487,35 @@ impl Dma1 {
                             }
                         }
                         0x04 | 0x08 | 0x0c
-                            if self.g0_channel_irqs.is_some()
+                            if self.locks_config_while_enabled
                                 && self.channels[chan_idx].ccr & 1 != 0 => {}
+                        0x04 if self.profile == DmaProfile::Ch32v003
+                            && self.channels[chan_idx].ccr & 1 != 0 =>
+                        {
+                            // CH32V003: a CNTR store on an enabled channel
+                            // re-arms it from the programmed addresses, as
+                            // EN 0->1 does. ch32fun's WS2812 driver depends
+                            // on it: it enables channel 3 once with CNTR = 0
+                            // and starts every frame by storing CNTR (and
+                            // MADDR) with EN left set, after the previous
+                            // frame ran out at the end of the buffer.
+                            let chan = &mut self.channels[chan_idx];
+                            chan.cndtr = value & 0xFFFF;
+                            chan.cndtr_initial = chan.cndtr;
+                            chan.cpar_ptr = chan.cpar;
+                            chan.cmar_ptr = chan.cmar;
+                            chan.requests = 0;
+                            if chan.ccr & (1 << 14) != 0 {
+                                chan.active = chan.cndtr > 0;
+                            } else {
+                                chan.active = false;
+                                if chan.cndtr > 0 {
+                                    // A standing peripheral request is
+                                    // served now (bus request-level poll).
+                                    self.newly_enabled |= 1 << chan_idx;
+                                }
+                            }
+                        }
                         0x04 => self.channels[chan_idx].cndtr = value & 0xFFFF,
                         0x08 => self.channels[chan_idx].cpar = value,
                         0x0C => self.channels[chan_idx].cmar = value,
@@ -585,6 +696,24 @@ impl Peripheral for Dma1 {
         }
     }
 
+    fn take_enabled_dma_channels(&mut self) -> u8 {
+        std::mem::take(&mut self.newly_enabled)
+    }
+
+    fn dma_requests_on_channel(&self, channel: u32, out: &mut Vec<String>) {
+        let mut routes = Vec::new();
+        for (request, ch, _) in &self.routes {
+            if *ch != channel {
+                continue;
+            }
+            routes.clear();
+            self.dma_route_request(request, &mut routes);
+            if routes.iter().any(|r| r.channel == channel) {
+                out.push(request.clone());
+            }
+        }
+    }
+
     fn dma_request(&mut self, request_id: u32) {
         // request_id usually corresponds to the channel (1-7) or a mapping
         let chan_idx = (request_id.saturating_sub(1)) as usize;
@@ -681,9 +810,10 @@ impl Peripheral for Dma1 {
         // else ends the chain; the next enable / request re-arms it.
         let reschedule = self.has_work();
         self.arbiter_live = reschedule;
+        self.publish_pfic();
         crate::sched::EventResult {
             raise_own_irq: irq && self.g0_channel_irqs.is_none(),
-            explicit_irqs: self.g0_pending_irqs(),
+            explicit_irqs: self.nvic_pending_irqs(),
             reschedule_delay: reschedule.then_some(1),
             dma_requests: req.into_iter().collect(),
             ..Default::default()
@@ -705,6 +835,7 @@ impl Peripheral for Dma1 {
         let teie = chan.ccr & CCR_TEIE != 0;
         self.isr |= (1 << (i * 4 + 3)) | (1 << (i * 4));
         self.irq_deferred |= teie;
+        self.publish_pfic();
     }
 
     fn dma_transfer_complete(&mut self, item: &DmaRequest) -> bool {
@@ -741,11 +872,26 @@ impl Peripheral for Dma1 {
                 chan.active = false;
             }
         }
-        self.irq_deferred |= !self.g0_pending_irqs().is_empty();
+        self.irq_deferred |= !self.nvic_pending_irqs().is_empty();
+        self.publish_pfic();
         true
     }
 
+    fn attach_qingke_pfic(
+        &mut self,
+        pfic: std::sync::Arc<crate::peripherals::qingke_pfic::QingkePficState>,
+    ) {
+        // Only the CH32V003 profile's channel lines are PFIC numbers.
+        if self.profile == DmaProfile::Ch32v003 {
+            self.pfic = Some(pfic);
+            self.publish_pfic();
+        }
+    }
+
     fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
+        if self.pfic.is_some() {
+            return;
+        }
         for (irq, high) in self.g0_irq_levels() {
             report(irq, high);
         }
@@ -766,6 +912,8 @@ impl Peripheral for Dma1 {
             self.arbiter_live = false;
             self.g0_pending = None;
             self.observations = Default::default();
+            self.newly_enabled = 0;
+            self.publish_pfic();
         }
     }
 
@@ -782,8 +930,8 @@ impl Peripheral for Dma1 {
 
     fn snapshot(&self) -> serde_json::Value {
         let mut value = serde_json::to_value(self).unwrap_or(serde_json::Value::Null);
-        if self.g0_channel_irqs.is_some() {
-            value["profile"] = serde_json::json!("stm32g0");
+        if self.profile != DmaProfile::Legacy {
+            value["profile"] = serde_json::json!(self.profile.name());
         }
         value
     }

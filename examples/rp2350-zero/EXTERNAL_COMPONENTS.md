@@ -6,7 +6,7 @@ Onboard parts (not extra modules):
 
 | Part | Pad | Twin |
 |------|-----|------|
-| WS2812 RGB | GP16 (DIN) | `board_io` LED stand-in `led_gp16` on SIO pin 16. Not a NeoPixel kit. Timing/PIO of the real WS2812 is unproven here. |
+| WS2812 RGB | GP16 (DIN) | NeoPixel kit attached to SIO GPIO16; the smoke decodes a real GRB frame from GPIO edge timing. PIO output is not modeled by this smoke. |
 | ME6217C33M5G LDO | 3V3 rail | Power is digital in the twin — not SPICE. |
 | 12 MHz crystal | XIN/XOUT | Clock tree via `rp2350` clkrst profile. |
 | 4 MB NOR flash | QSPI | XIP load of the ELF; not a flash programmer model. |

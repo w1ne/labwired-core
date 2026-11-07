@@ -1,0 +1,12 @@
+# STM32F429I-DISC1: boot and toggle the active-high green user LED LD3 on PG13.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f429i-disc1-smoke"
+  system: "../../configs/systems/stm32f429i-disc1.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - gpio_edges:
+      pin: "gpiog:13"
+      min_edges: 16
+  - expected_stop_reason: max_steps

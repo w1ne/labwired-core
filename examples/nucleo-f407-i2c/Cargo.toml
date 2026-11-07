@@ -2,7 +2,7 @@
 name = "nucleo-f407-i2c"
 version = "0.1.0"
 edition = "2021"
-description = "STM32F407 I²C onboarding firmware — AHT20 + BMP280 over I²C1"
+description = "STM32F407 I²C onboarding firmware — AHT20, BMP280, TMP117, LIS2DUX12"
 
 [dependencies]
 cortex-m = "0.7"
@@ -11,5 +11,17 @@ panic-halt = "0.2"
 
 [[bin]]
 name = "nucleo-f407-i2c"
+test = false
+bench = false
+
+[[bin]]
+name = "nucleo-f407-tmp117"
+path = "src/tmp117.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "nucleo-f407-lis2dux12"
+path = "src/lis2dux12.rs"
 test = false
 bench = false

@@ -1,0 +1,37 @@
+# Narrow STM32U031R8 profile for NUCLEO-U031R8's user LED GPIO smoke.
+# Only the reset-clock RCC GPIOA gate and GPIOA are mapped. USART2/VCP, USB,
+# ST-LINK behavior, buttons, and all other MCU peripherals are outside scope.
+# Sources: ST DS14581, RM0503, UM3256 Rev 2, MB1932-U031R8-B01 schematic.
+name: "stm32u031r8-nucleo-gpio-smoke"
+arch: "arm"
+core: "cortex-m0+"
+# RM0503 reset clock: MSI at its reset range is the 4 MHz SYSCLK.
+cpu_hz: 4_000_000
+
+flash:
+  base: 0x08000000
+  size: "64KB"
+ram:
+  base: 0x20000000
+  size: "12KB"
+
+# UM3256: default SB12 connection maps LD4 / Arduino D13 to PA5.
+pins:
+  PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    # RM0503 §5.4.13: RCC_IOPENR is at offset 0x4C on STM32U0.
+    size: "80B"
+    config:
+      profile: "stm32u0"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x50000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "iopenr", bit: 0 }

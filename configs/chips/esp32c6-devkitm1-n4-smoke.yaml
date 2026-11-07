@@ -1,0 +1,66 @@
+# Narrow ESP32-C6-DevKitM-1-N4 HP-core profile. It models the memory map,
+# UART0 console capture, GPIO8 output matrix, and RMT TX channel 0 used by the
+# board's WS2812B RGB LED. The LP core, radios, USB, and other peripherals are
+# intentionally not declared.
+name: "esp32c6-devkitm1-n4-smoke"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 160_000_000
+
+flash:
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  base: 0x40800000
+  size: "512KB"
+memory_regions:
+  - name: "rom"
+    base: 0x40000000
+    size: "320KB"
+    image_env: "LABWIRED_ESP32C6_ROM"
+  - name: "lp_sram"
+    base: 0x50000000
+    size: "16KB"
+
+pins:
+  GPIO8: { gpio: "gpio", bit: 8, functions: [{ type: gpio, peripheral: gpio }] }
+  GPIO16: { gpio: "gpio", bit: 16, functions: [{ type: uart, peripheral: "uart0", role: tx }] }
+  GPIO17: { gpio: "gpio", bit: 17, functions: [{ type: uart, peripheral: "uart0", role: rx }] }
+
+peripherals:
+  - id: "uart0"
+    type: "esp32c6_uart"
+    irq: 43
+    base_address: 0x60000000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
+    config:
+      echo_stdout: true
+      debug_schema: "../peripherals/esp32c6/uart0.yaml"
+  - id: "gpio"
+    type: "esp32c6_gpio"
+    base_address: 0x60091000
+    size: "3840"
+    config:
+      debug_schema: "../peripherals/esp32c6/gpio.yaml"
+  - id: "rmt"
+    type: "esp32c6_rmt"
+    irq: 49
+    base_address: 0x60006000
+    size: "2KB"
+    clock: { controller: "pcr", reg: "RMT_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c3/rmt.yaml"
+  - id: "io_mux"
+    type: "declarative"
+    base_address: 0x60090000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32c6/io_mux.yaml"
+  - id: "pcr"
+    type: "esp32c6_pcr"
+    base_address: 0x60096000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c6/pcr.yaml"

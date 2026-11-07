@@ -1,0 +1,14 @@
+# Adafruit PyBadge onboarding smoke: boot behind the UF2 bootloader, transmit
+# on the modeled Feather UART, and exercise the on-board D13 GPIO LED.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-atsamd51-pybadge-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "porta:23"
+      min_edges: 4
+  - expected_stop_reason: max_steps

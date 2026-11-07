@@ -1,6 +1,7 @@
 # Required Documents — NUCLEO-L552ZE-Q
 
-Authoritative sources used by this example (retrieved 2026-10-29):
+Authoritative sources used by this example (retrieved 2026-10-29, with live
+vendor lifecycle/orderability rechecked 2026-11-04):
 
 | Doc | Title | Used for |
 | :--- | :--- | :--- |
@@ -9,6 +10,8 @@ Authoritative sources used by this example (retrieved 2026-10-29):
 | RM0438 | STM32L552xx/L562xx reference manual | RCC chapter (AHB1ENR/AHB2ENR/AHB3ENR/APB1ENR1/APB1ENR2/APB2ENR, MSI/PLL handshakes), PWR chapter (PWR_CR2.IOSV — VDDIO2 isolation for PG[15:2]), GPIO, LPUART/USART, SPI, I2C, timers, DMA. Cited by chapter/register name and cross-checked against CMSIS `stm32l552xx.h` |
 | ST CMSIS `stm32l552xx.h` | Device header | RCC/PWR/FLASH/EXTI register offsets used by the `stm32l5` RCC profile |
 | Zephyr `nucleo_l552ze_q` board dts | Board support documentation | Cross-check of the default pin mapping (LPUART1 PG7/PG8 AF8, LEDs PC7/PB7/PA9, button PC13) |
+| [ST NUCLEO-L552ZE-Q product listing](https://estore.st.com/en/products/evaluation-tools/product-evaluation-tools/mcu-mpu-eval-tools/stm32-mcu-mpu-eval-tools/stm32-nucleo-boards/nucleo-l552ze-q.html) | Live board marketing status and purchase availability; recorded in [`evidence/vendor-status.md`](evidence/vendor-status.md) |
+| [ST STM32L552ZE product page](https://www.st.com/en/microcontrollers-microprocessors/stm32l552ze.html) | Live lifecycle status for the exact STM32L552ZET6Q MCU used on the board |
 
 The chip descriptor (`configs/chips/stm32l552.yaml`) carries the same values
 transcribed with its own citations; this package does not restate them.

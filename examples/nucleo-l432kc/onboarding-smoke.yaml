@@ -1,0 +1,13 @@
+# NUCLEO-L432KC: default USART2 VCP TX output and repeated LD3/PB3 GPIO edges.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-l432kc-smoke"
+  system: "../../configs/systems/nucleo-l432kc.yaml"
+limits:
+  max_steps: 1000
+assertions:
+  - uart_contains: "NUCLEO_L432KC_OK"
+  - gpio_edges:
+      pin: "gpiob:3"
+      min_edges: 8
+  - expected_stop_reason: max_steps

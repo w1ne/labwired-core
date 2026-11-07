@@ -1,0 +1,36 @@
+# Seeed Studio XIAO RP2040 board-bound smoke profile.
+#
+# This focused descriptor models only the IO_BANK0/SIO path used by the
+# onboard red, green and blue LEDs. It does not claim USB, UART, I2C, SPI,
+# ADC, PWM or the full set of board header pins.
+name: "rp2040-xiao-smoke"
+arch: "arm"
+core: "cortex-m0+"
+registers_count: 240
+cpu_hz: 125_000_000
+flash:
+  base: 0x10000000
+  size: "2048KB"
+ram:
+  base: 0x20000000
+  size: "264KB"
+pins:
+  GP16: { gpio: "sio", bit: 16 }
+  GP17: { gpio: "sio", bit: 17 }
+  GP25: { gpio: "sio", bit: 25 }
+# LabWired starts directly at the application vector; RP2040 boot2 is not run.
+reset_vector_offset: 0x100
+peripherals:
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40014000
+    size: "4KB"
+    irq: 13
+    config:
+      debug_schema: "../peripherals/rp2040/io_bank0.yaml"
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/sio.yaml"

@@ -1,0 +1,10 @@
+[package]
+name = "nucleo-f767zi-lsm6dsox-smoke"
+version = "0.1.0"
+edition = "2021"
+description = "NUCLEO-F767ZI I2C smoke for the ST LSM6DSOX accelerometer"
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"

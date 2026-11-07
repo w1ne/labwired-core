@@ -1,0 +1,12 @@
+# NUCLEO-F207ZG: boot STM32F207ZGT6 and toggle the default green LD1 on PB0.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-nucleo-f207zg-smoke"
+  system: "../../configs/systems/nucleo-f207zg-smoke.yaml"
+limits:
+  max_steps: 10000
+assertions:
+  - gpio_edges:
+      pin: "gpiob:0"
+      min_edges: 16
+  - expected_stop_reason: max_steps

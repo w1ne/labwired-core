@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="1.264728">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="44f92f479d54ce6cf6a6987cbcae339f85504603dc101285912f9ee5f91c72bd"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="1.264728">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: nRF5340 DK ready" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;hb=0 led1=on&quot;, &quot;hb=1 led1=off&quot;, &quot;hb=2 led2=on&quot;, &quot;hb=3 led2=off&quot;, &quot;hb=4 led3=on&quot;, &quot;hb=5 led3=off&quot;, &quot;hb=6…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

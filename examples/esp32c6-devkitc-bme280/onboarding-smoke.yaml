@@ -1,0 +1,11 @@
+# ESP32-C6-DevKitC-1-N8 + Adafruit BME280: I2C0 ID and temperature reads.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c6-bme280-smoke"
+  system: "../../configs/systems/esp32c6-devkitc-bme280.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "BME280_ID=0x60"
+  - uart_contains: "BME280_TEMP_RAW=0x082DC0"
+  - expected_stop_reason: max_steps

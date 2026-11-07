@@ -1,0 +1,14 @@
+# LabWired - NUCLEO-F439ZI system manifest
+#
+# UM1974 / MB1137 maps the blue user LED LD2 to PB7; the smoke profile models
+# only this output path, reset-clock GPIOB enable, and SysTick.
+name: nucleo-f439zi
+chip: "../chips/stm32f439zi-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: led_ld2
+    kind: led
+    peripheral: gpiob
+    pin: 7
+    signal: output
+    active_high: true

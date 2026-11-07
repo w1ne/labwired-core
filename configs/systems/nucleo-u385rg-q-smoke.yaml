@@ -1,0 +1,13 @@
+# GPIO-only profile for ST NUCLEO-U385RG-Q (MB1841).
+# Only the active-high user LED LD2 on PA5 is claimed.
+schema_version: "1.0"
+name: "nucleo-u385rg-q-smoke"
+chip: "../chips/stm32u385rg-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

@@ -1,0 +1,13 @@
+# NUCLEO-C092RC smoke profile. Only LD1 on PA5 is attached; the second user
+# LED, buttons, VCP, CAN-FD interface and remaining MCU peripherals are outside
+# this tested board path.
+name: nucleo-c092rc
+chip: ../chips/stm32c092rc-nucleo-smoke.yaml
+external_devices: []
+board_io:
+  - id: led_ld1
+    kind: led
+    peripheral: gpioa
+    pin: 5
+    signal: output
+    active_high: true

@@ -1,0 +1,13 @@
+# NUCLEO-L010RB (MB1136) smoke profile.
+# Only the active-high user LED LD2 on PA5 is attached; the button, VCP, and
+# other board connections are outside this descriptor.
+name: "nucleo-l010rb"
+chip: "../chips/stm32l010rb-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

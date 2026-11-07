@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.009634">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="a2d81d249d517d204c2fbc605b91b362d44dc79c07b5882c84ce97fb6fb7d2e1"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.009634">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: BME280_ID=0x60" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: BME280_TEMP_RAW=0x082DC0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: PICO2_BME280_SMOKE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: sio:25 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -1,0 +1,13 @@
+# NUCLEO-H723ZG: capture USART3 VCP output and LD1 GPIO transitions.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-h723zg-smoke"
+  system: "../../configs/systems/nucleo-h723zg.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - uart_contains: "NUCLEO_H723ZG_OK LD1=PB0 USART3=PD8"
+  - gpio_edges:
+      pin: "gpiob:0"
+      min_edges: 16
+  - expected_stop_reason: max_steps

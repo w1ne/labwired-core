@@ -1,0 +1,14 @@
+# Boot RV32IMAC firmware on the CH32V203C8T6, assert USART1 TX text on PA9,
+# and observe repeated edges on the PB2 blue user LED.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/ch32v203c8t6-bluepill-plus-smoke.elf"
+  system: "../../configs/systems/weact-bluepill-plus-ch32v203-smoke.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "CH32V203_BLUEPILL_PLUS_OK"
+  - gpio_edges:
+      pin: "gpiob:2"
+      min_edges: 8
+  - expected_stop_reason: max_steps

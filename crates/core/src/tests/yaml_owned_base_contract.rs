@@ -211,6 +211,21 @@ const HARDCODED_BASE_ALLOWLIST: &[(&str, &str, &str)] = &[
          UART0_BASE above.",
     ),
     (
+        "peripherals/esp32c5/uart.rs",
+        "UART0_BASE",
+        "OWN BASE (esp32c5.yaml: uart0). Same role as the esp32c3 UART0_BASE \
+         entry: `default_source_id` uses it only as the lookup key for the \
+         default interrupt-matrix source when the descriptor names no `irq:`; \
+         it is never used as an address.",
+    ),
+    (
+        "peripherals/esp32c5/uart.rs",
+        "UART1_BASE",
+        "OWN BASE (UART1 at 0x6000_1000 in the ESP32-C5 TRM; esp32c5.yaml \
+         declares only uart0 today). Same interrupt-source lookup key as \
+         UART0_BASE above.",
+    ),
+    (
         "peripherals/esp32/dport.rs",
         "BASE",
         "OWN BASE (esp32.yaml: dport). Classic-ESP32 registration constant. \
@@ -374,6 +389,18 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
          the registration order — which is exactly what makes GPIOn_CTRL.FUNCSEL \
          reach a model that acts on it instead of being absorbed as inert \
          storage.",
+    ),
+    (
+        "rp2350.yaml",
+        "clk_rst",
+        "io_bank0",
+        "Same shape as rp2040.yaml above. `clk_rst` is one 320 KB catch-all \
+         (0x4001_0000..0x4006_0000) for CLOCKS/RESETS/PSM/XOSC/PLL_SYS/PLL_USB, \
+         and the RP2350 IO_BANK0 sits inside it at 0x4002_8000. XOSC and both \
+         PLLs live above io_bank0 in that span, so narrowing clk_rst would cut \
+         off registers pico-sdk's pll_init polls. Greatest-start-wins routing \
+         gives io_bank0 its 4 KB regardless of registration order, which is what \
+         lets the Pico 2 GP25 FUNCSEL write reach the selector model.",
     ),
     (
         "esp32.yaml",

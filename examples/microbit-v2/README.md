@@ -1,22 +1,47 @@
 # micro:bit v2 Onboarding Example
 
-Run all commands from `core/`.
+Run all commands from the repository root.
 
 ## Purpose
 
 This example provides deterministic bring-up for the BBC micro:bit v2
 (Nordic nRF52833) using the minimal supported subset:
 
-1. `uart0` — UARTE0 EasyDMA console bridged to the interface MCU (TX = P0.06)
+1. `uart0` — UARTE0 EasyDMA TX to the simulated host-console sink
 2. `gpio0` / `gpio1` — buttons A (P0.14) and B (P0.23) are declared as inputs
 3. `clock` — HFCLK/LFCLK behavioural model
 
 The example and production system attach the row/column-multiplexed 5x5 LED
-matrix. Radio/BLE stacks, USB protocols, speaker and microphone are not qualified.
+matrix model. This UART smoke does not exercise it. Radio/BLE stacks, USB
+protocols, speaker and microphone are not qualified.
+
+## Onboarding smoke scope
+
+The committed onboarding smoke boots the nRF52833 firmware and asserts the
+`OK` bytes emitted by UARTE0. The simulator's host-console connector stands in
+for the interface-MCU/USB serial bridge; it does not model or verify that
+physical bridge. It uses the focused
+[`microbit-v2-uart-smoke` system](../../configs/systems/microbit-v2-uart-smoke.yaml),
+which declares only UARTE0 and its GPIO pad banks. This smoke does not exercise the LED matrix, buttons, motion
+sensor, microphone, speaker, USB programming, or radio. The board's live vendor
+availability check is recorded in [`evidence/vendor-status.md`](evidence/vendor-status.md).
+
+Reproduce the committed onboarding record from the repository root:
+
+```bash
+./scripts/onboarding_smoke.sh \
+  --target-id microbit-v2 \
+  --crate firmware-nrf52833-demo \
+  --target thumbv7em-none-eabi \
+  --script examples/microbit-v2/onboarding-smoke.yaml \
+  --system configs/systems/microbit-v2-uart-smoke.yaml \
+  --out-dir examples/microbit-v2/evidence
+```
 
 **SIM-DERIVED.** Not silicon-verified. No executing-fidelity differential
-exists for this part yet; the smoke proves the UARTE EasyDMA console path
-end-to-end; the distinct source-built board guest below qualifies display and
+exists for this part yet. The smoke proves UARTE EasyDMA output reaches the
+simulator's host-console sink; it does not prove the physical interface MCU or
+USB bridge. The distinct source-built board guest below qualifies display and
 button behavior, not on-board sensor protocols or electrical timing.
 
 ## Executable display and button proof

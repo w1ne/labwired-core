@@ -1,6 +1,6 @@
-# STM32WB55 (dual-core: Cortex-M4 app core + Cortex-M0+ CPU2)
+# STM32WB55RG (dual-core: Cortex-M4 app core + Cortex-M0+ CPU2)
 
-512 KiB flash, 256 KiB RAM. This profile models the Cortex-M4 application
+1 MiB flash, 256 KiB RAM. This profile models the Cortex-M4 application
 core side of the register map (RM0434), including the `stm32wb`-specific RCC
 enable/reset layout, which sits at different offsets than the `stm32v2`
 profile used by other STM32 parts on this simulator (see the comment in

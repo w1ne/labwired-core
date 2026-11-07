@@ -1,0 +1,34 @@
+$ target/debug/labwired test --script examples/ch32v003-evt/ch32fun-iwdg-smoke.yaml --output-dir /tmp/iwdgrun --no-uart-stdout --watch-gpio gpiod:0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  4/4 checks · ch32fun-iwdg-smoke · 540000000 steps · 401.40s
+$ gzip -9 -n -c /tmp/iwdgrun/result.json > iwdg-capture.json.gz
+$ python3 -I examples/ch32v003-evt/check-iwdg.py examples/ch32v003-evt/evidence/ch32fun-iwdg-smoke/iwdg-capture.json.gz
+PD0: initial 0, 24 level changes
+           94 cycles      0.002 ms  -> 1
+     72000100 cycles   1500.002 ms  -> 0
+    120000122 cycles   2500.003 ms  -> 1
+    264000131 cycles   5500.003 ms  -> 0
+    264000139 cycles   5500.003 ms  -> 1
+    276000149 cycles   5750.003 ms  -> 0
+    288000156 cycles   6000.003 ms  -> 1
+    300000163 cycles   6250.003 ms  -> 0
+    312000173 cycles   6500.004 ms  -> 1
+    324000180 cycles   6750.004 ms  -> 0
+    336000190 cycles   7000.004 ms  -> 1
+    348000203 cycles   7250.004 ms  -> 0
+    360000213 cycles   7500.004 ms  -> 1
+    372000220 cycles   7750.005 ms  -> 0
+    384000230 cycles   8000.005 ms  -> 1
+    396000243 cycles   8250.005 ms  -> 0
+    408000253 cycles   8500.005 ms  -> 1
+    420000260 cycles   8750.005 ms  -> 0
+    432000270 cycles   9000.006 ms  -> 1
+    444000283 cycles   9250.006 ms  -> 0
+    456000293 cycles   9500.006 ms  -> 1
+    460560119 cycles   9595.002 ms  -> 0
+    460560213 cycles   9595.004 ms  -> 1
+    532560219 cycles  11095.005 ms  -> 0
+blink train: 17 edges after the feed, last at 9500.006 ms
+reset at 9595.002 ms released PD0 (GPIO back to input)
+feed at 5500.003 ms, watchdog deadline 9595.003 ms, second boot on at 9595.004 ms (+4095.002 ms after the feed)
+PASS

@@ -14,3 +14,7 @@ cargo run -q -p labwired-cli -- test --script examples/nucleo-u5a5zj/io-smoke.ya
 The shared demo firmware is used only for its USART1 `OK` smoke. Crypto
 register-level operations are covered by `crates/core/tests/stm32u5_exec_oracle.rs`.
 The model is simulator-validated; no physical U5A5 board test is claimed.
+
+The onboarding smoke additionally checks the USART1 VCP banner and GPIO
+transitions on all three board LEDs. See [`onboarding-smoke.yaml`](onboarding-smoke.yaml)
+and the dated [live vendor status](evidence/vendor-status.md).

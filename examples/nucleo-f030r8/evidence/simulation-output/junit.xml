@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.005337">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="7c792a2da83ba94fad242426aa4c3ef05c153cf52b3aec49aec095e3647a4d6b"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.005337">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NUCLEO_F030R8_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpioa:5 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -1,0 +1,493 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 5000,
+  "cycles": 5000,
+  "instructions": 5000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 5000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 5000
+    }
+  },
+  "limits": {
+    "max_steps": 5000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio2:0",
+          "min_edges": 16
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1342505992,
+      1,
+      2328,
+      0,
+      0,
+      0,
+      0,
+      537133040,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537133040,
+      2321,
+      2310
+    ],
+    "pc": 2310,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "a2a8c05c5cf5cbadcced6331b003b9595bb704e371e6fa0ac2ced39e94ff30c1",
+  "config": {
+    "firmware": "examples/xiao-nrf54l15/../../target/thumbv8m.main-none-eabi/release/firmware-xiao-nrf54l15-smoke",
+    "system": "examples/xiao-nrf54l15/./system.yaml",
+    "script": "examples/xiao-nrf54l15/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "gpio0",
+        "kind": "native",
+        "base": 1343266816,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio1",
+        "kind": "native",
+        "base": 1343062528,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio2",
+        "kind": "native",
+        "base": 1342505984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "user_key",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 5000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio2",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 28,
+            "value": 1
+          },
+          {
+            "cycle": 30,
+            "value": 0
+          },
+          {
+            "cycle": 32,
+            "value": 1
+          },
+          {
+            "cycle": 34,
+            "value": 0
+          },
+          {
+            "cycle": 36,
+            "value": 1
+          },
+          {
+            "cycle": 38,
+            "value": 0
+          },
+          {
+            "cycle": 40,
+            "value": 1
+          },
+          {
+            "cycle": 42,
+            "value": 0
+          },
+          {
+            "cycle": 44,
+            "value": 1
+          },
+          {
+            "cycle": 46,
+            "value": 0
+          },
+          {
+            "cycle": 48,
+            "value": 1
+          },
+          {
+            "cycle": 50,
+            "value": 0
+          },
+          {
+            "cycle": 52,
+            "value": 1
+          },
+          {
+            "cycle": 54,
+            "value": 0
+          },
+          {
+            "cycle": 56,
+            "value": 1
+          },
+          {
+            "cycle": 58,
+            "value": 0
+          },
+          {
+            "cycle": 60,
+            "value": 1
+          },
+          {
+            "cycle": 62,
+            "value": 0
+          },
+          {
+            "cycle": 64,
+            "value": 1
+          },
+          {
+            "cycle": 66,
+            "value": 0
+          },
+          {
+            "cycle": 68,
+            "value": 1
+          },
+          {
+            "cycle": 70,
+            "value": 0
+          },
+          {
+            "cycle": 72,
+            "value": 1
+          },
+          {
+            "cycle": 74,
+            "value": 0
+          },
+          {
+            "cycle": 76,
+            "value": 1
+          },
+          {
+            "cycle": 78,
+            "value": 0
+          },
+          {
+            "cycle": 80,
+            "value": 1
+          },
+          {
+            "cycle": 82,
+            "value": 0
+          },
+          {
+            "cycle": 84,
+            "value": 1
+          },
+          {
+            "cycle": 86,
+            "value": 0
+          },
+          {
+            "cycle": 88,
+            "value": 1
+          },
+          {
+            "cycle": 90,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 24,
+            "state": "0"
+          },
+          {
+            "cycle": 28,
+            "state": "1"
+          },
+          {
+            "cycle": 30,
+            "state": "0"
+          },
+          {
+            "cycle": 32,
+            "state": "1"
+          },
+          {
+            "cycle": 34,
+            "state": "0"
+          },
+          {
+            "cycle": 36,
+            "state": "1"
+          },
+          {
+            "cycle": 38,
+            "state": "0"
+          },
+          {
+            "cycle": 40,
+            "state": "1"
+          },
+          {
+            "cycle": 42,
+            "state": "0"
+          },
+          {
+            "cycle": 44,
+            "state": "1"
+          },
+          {
+            "cycle": 46,
+            "state": "0"
+          },
+          {
+            "cycle": 48,
+            "state": "1"
+          },
+          {
+            "cycle": 50,
+            "state": "0"
+          },
+          {
+            "cycle": 52,
+            "state": "1"
+          },
+          {
+            "cycle": 54,
+            "state": "0"
+          },
+          {
+            "cycle": 56,
+            "state": "1"
+          },
+          {
+            "cycle": 58,
+            "state": "0"
+          },
+          {
+            "cycle": 60,
+            "state": "1"
+          },
+          {
+            "cycle": 62,
+            "state": "0"
+          },
+          {
+            "cycle": 64,
+            "state": "1"
+          },
+          {
+            "cycle": 66,
+            "state": "0"
+          },
+          {
+            "cycle": 68,
+            "state": "1"
+          },
+          {
+            "cycle": 70,
+            "state": "0"
+          },
+          {
+            "cycle": 72,
+            "state": "1"
+          },
+          {
+            "cycle": 74,
+            "state": "0"
+          },
+          {
+            "cycle": 76,
+            "state": "1"
+          },
+          {
+            "cycle": 78,
+            "state": "0"
+          },
+          {
+            "cycle": 80,
+            "state": "1"
+          },
+          {
+            "cycle": 82,
+            "state": "0"
+          },
+          {
+            "cycle": 84,
+            "state": "1"
+          },
+          {
+            "cycle": 86,
+            "state": "0"
+          },
+          {
+            "cycle": 88,
+            "state": "1"
+          },
+          {
+            "cycle": 90,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 32
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio2",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2328,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 2328,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1560576,
+    "ram_total_bytes": 262144,
+    "flash_used_pct": 0.15,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 262144,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 262128,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537133056,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 262144,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 262128,
+    "heap_base": 536870912,
+    "heap_top": 537133056
+  },
+  "metrics": {
+    "cycles": 5000,
+    "instructions": 5000,
+    "steps_executed": 5000,
+    "memory_reads": 124,
+    "memory_writes": 6,
+    "peripheral_accesses": 35,
+    "exceptions": 0
+  }
+}

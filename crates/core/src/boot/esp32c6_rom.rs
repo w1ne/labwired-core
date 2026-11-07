@@ -78,9 +78,12 @@ pub fn app_stack_top() -> u32 {
     APP_SRAM_END & !0xF
 }
 
-/// True when `chip` is an ESP32-C6 (name match, same style as `is_esp32c3`).
+/// True when `chip` is an ESP32-C6 (or a named C6 board profile).
 pub fn is_esp32c6(chip: &ChipDescriptor) -> bool {
-    chip.name.to_ascii_lowercase().contains("esp32c6")
+    chip.name
+        .to_ascii_lowercase()
+        .strip_prefix("esp32c6")
+        .is_some_and(|suffix| suffix.is_empty() || suffix.starts_with(['-', '_']))
 }
 
 /// Seed `partitions` (or the default Arduino 4 MiB table) at flash offset
@@ -357,6 +360,10 @@ mod tests {
         let mut chip = ChipDescriptor::from_file(repo_root().join("configs/chips/esp32c6.yaml"))
             .expect("load esp32c6.yaml");
         assert!(is_esp32c6(&chip));
+        chip.name = "esp32c6-xiao-gpio-smoke".into();
+        assert!(is_esp32c6(&chip));
+        chip.name = "esp32c61".into();
+        assert!(!is_esp32c6(&chip));
         chip.name = "esp32c3".into();
         assert!(!is_esp32c6(&chip));
     }

@@ -1,0 +1,20 @@
+# NEGATIVE CONTROL: expected to FAIL (see chip.yaml).
+# SysTick, masking and software interrupts through the QingKe V2 PFIC (build
+# with build-sdk-interrupt-examples.sh). Each marker prints only after the
+# interrupt it names ran; the PD0 edges come from the SysTick ISR alone.
+schema_version: "1.0"
+inputs:
+  firmware: "../../../../../target/wch-sdk/ch32v003f4p6-pfic-smoke.elf"
+  system: "system.yaml"
+limits:
+  max_steps: 3000000
+assertions:
+  - uart_contains: "SystemClk:24000000"
+  - uart_contains: "CH32V003_SYSTICK_IRQ_OK"
+  - uart_contains: "CH32V003_IRQ_MASK_OK"
+  - uart_contains: "CH32V003_SW_IPSR_OK"
+  - uart_contains: "CH32V003_SW_SWIE_OK hits=2"
+  - gpio_edges:
+      pin: "gpiod:0"
+      min_edges: 4
+  - expected_stop_reason: max_steps

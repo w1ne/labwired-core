@@ -1,0 +1,10 @@
+# NUCLEO-F411RE: read MCP9808 identity and ambient-temperature registers over I2C1.
+schema_version: "1.0"
+inputs:
+  firmware: "./.pio/build/nucleo_f411re/firmware.elf"
+  system: "../../configs/systems/nucleo-f411re-mcp9808.yaml"
+limits:
+  max_steps: 10000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "MCP9808_OK id=54 dev=400 temp_x16="

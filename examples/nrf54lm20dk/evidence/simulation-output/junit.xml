@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.002620">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="872652978415e22d4180ded8dbd7ee862013cd628f805eb9cd6e0c86a16532a9"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.002620">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NRF54LM20DK_LED_SMOKE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpio1:22 &gt;= 16 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -1,0 +1,61 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      0,
+      1070464960,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1070464960,
+      27426,
+      39999,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1070464896
+    ],
+    "pc": 1077379154,
+    "ps": 262144,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "26774b3d01b222c009f8b0219216c83dd1440473755c9abcb29099e53d4c0ce9",
+  "config": {
+    "firmware": "examples/m5stack-atoms3-lite/../../target/xtensa-esp32s3-none-elf/release/firmware-m5stack-atoms3-lite-smoke",
+    "system": "examples/m5stack-atoms3-lite/../../configs/systems/m5stack-atoms3-lite.yaml",
+    "script": "examples/m5stack-atoms3-lite/onboarding-smoke.yaml"
+  }
+}

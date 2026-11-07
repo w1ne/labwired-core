@@ -1,0 +1,45 @@
+# Narrow STM32F439ZIT6 profile for the NUCLEO-F439ZI board smoke.
+#
+# The profile maps the reset-clock RCC slice, GPIOB, and SysTick only. The
+# smoke uses the AHB1 GPIOB clock gate and PB7. Other STM32F439 peripherals
+# are intentionally absent and remain unsupported in this profile.
+# The 192 KiB main SRAM region is mapped. The separate 64 KiB CCM and 4 KiB
+# backup SRAM are omitted because this firmware does not use them.
+# Sources: ST DS9484, RM0090, PM0214, and UM1974 / MB1137.
+name: stm32f439zi-nucleo-smoke
+arch: arm
+core: cortex-m4
+cpu_hz: 16000000
+
+flash:
+  base: 0x08000000
+  size: 2048KB
+ram:
+  base: 0x20000000
+  size: 192KB
+
+# The board's blue LD2 user LED is connected to PB7.
+pins:
+  PB7: { gpio: gpiob, bit: 7 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40023800
+    # Include RCC registers only through AHB1ENR at offset 0x30.
+    size: "52"
+    config:
+      profile: stm32f4
+
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+
+  - id: gpiob
+    type: gpio
+    base_address: 0x40020400
+    # Include GPIOB registers only through BSRR at offset 0x18.
+    size: "32"
+    clock: { reg: ahb1enr, bit: 1 }
+    config:
+      profile: stm32v2

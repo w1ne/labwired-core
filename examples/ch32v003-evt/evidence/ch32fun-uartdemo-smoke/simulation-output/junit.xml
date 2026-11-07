@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="18.364323">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxCycles"/>
+    <property name="firmware_hash" value="9475ba3038c435ef1ded9ebbbf3751522e57ef41792e6b00c43f7aa844e646be"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="18.364323">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;Count: 0\n&quot;, &quot;Count: 1\n&quot;, &quot;Count: 2\n&quot;, &quot;Count: 3\n&quot;]" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpiod:0 &gt;= 8 edges" time="0.000000">
+  </testcase>
+</testsuite>

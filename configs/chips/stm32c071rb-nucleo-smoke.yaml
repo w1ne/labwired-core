@@ -1,0 +1,43 @@
+# STM32C071RB smoke profile for the NUCLEO-C071RB.
+#
+# This profile models only the path exercised by the smoke: reset-clock boot,
+# RCC_IOPENR GPIOA clock enable, and GPIOA output on PA5. The C0 RCC profile is
+# deliberately limited to IOPENR; all other C0 peripherals and RCC registers
+# remain outside the model.
+#
+# Sources: ST DS14693 (STM32C071x8/xB memory and Cortex-M0+); RM0490 Rev 5
+# §6.2.6 (48 MHz HSISYS selected after reset), §6.4.12 (IOPENR at 0x34,
+# GPIOAEN bit 0); UM3353 Rev 2 (NUCLEO-C071RB LD1 on PA5, SB1 default ON).
+
+name: stm32c071rb-nucleo-smoke
+arch: arm
+core: cortex-m0+
+cpu_hz: 48000000
+
+flash:
+  base: 0x08000000
+  size: 128KB
+ram:
+  base: 0x20000000
+  size: 24KB
+
+pins:
+  PA5: { gpio: gpioa, bit: 5 }
+
+peripherals:
+  # Only IOPENR@0x34 is implemented. The 0x38-byte window bounds the profile
+  # so other C0 RCC offsets fault instead of being answered by a broad model.
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 56B
+    config:
+      profile: stm32c0
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x50000000
+    size: 1KB
+    config:
+      profile: stm32v2
+    clock: { reg: iopenr, bit: 0 }

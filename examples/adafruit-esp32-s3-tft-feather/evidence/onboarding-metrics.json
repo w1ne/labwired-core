@@ -1,0 +1,29 @@
+{
+  "target_id": "adafruit-esp32-s3-tft-feather",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/adafruit-esp32-s3-tft-feather/onboarding-smoke.yaml",
+  "system": "configs/systems/adafruit-esp32-s3-tft-feather.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T08:43:29Z",
+  "finished_at_utc": "2026-11-05T08:43:33Z",
+  "elapsed_seconds": 4,
+  "elapsed_ms": 3545,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 1.76,
+    "build_firmware": 0.996,
+    "run_smoke": 0.75
+  },
+  "stages_ms": {
+    "build_cli": 1760,
+    "build_firmware": 996,
+    "run_smoke": 750
+  },
+  "firmware_build_script": "examples/adafruit-esp32-s3-tft-feather/ci/build-firmware.sh"
+}

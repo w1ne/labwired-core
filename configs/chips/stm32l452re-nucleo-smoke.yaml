@@ -1,0 +1,68 @@
+# Narrow STM32L452RE profile for the NUCLEO-L452RE-P board-connected smoke.
+# The only exposed chip paths are RCC, GPIOA/GPIOB, SysTick and LPUART1.
+# LPUART1 is the default ST-LINK VCP on PA2/PA3 (AF8); LD4 is PB13.
+#
+# Sources:
+# - ST DS11912, STM32L452xx datasheet: Cortex-M4, 512 KiB flash, 160 KiB SRAM,
+#   LPUART1 PA2/PA3 alternate function 8.
+# - ST RM0394, STM32L41/42/43/44/45/46 reference manual: RCC, GPIO and LPUART.
+# - ST UM2206, §§6.9-6.10: default LPUART1 VCP on PA2/PA3 and LD4 on PB13.
+
+name: "stm32l452re-nucleo-smoke"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 80_000_000
+
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "160KB"
+
+pins:
+  PA2: { gpio: "gpioa", bit: 2, functions: [{ type: uart, peripheral: lpuart1, role: tx }] }
+  PA3: { gpio: "gpioa", bit: 3, functions: [{ type: uart, peripheral: lpuart1, role: rx }] }
+  PB13: { gpio: "gpiob", bit: 13, functions: [{ type: gpio, peripheral: gpiob }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/rcc.yaml"
+      profile: "stm32l4"
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpioa.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x48000400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpiob.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 1 }
+
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x40008000
+    size: "1KB"
+    irq: 70
+    config:
+      debug_schema: "../peripherals/stm32l476/lpuart1.yaml"
+      profile: "stm32v2"
+    clock: { reg: "apb1enr2", bit: 0 }

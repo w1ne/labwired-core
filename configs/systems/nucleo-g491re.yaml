@@ -1,0 +1,13 @@
+# NUCLEO-G491RE (STM32G491RET6), focused on the default LPUART1 VCP and LD2.
+# ST UM2505 identifies the VCP on PA2/PA3 and active-high user LED on PA5.
+name: "nucleo-g491re"
+chip: "../chips/stm32g491re-nucleo-smoke.yaml"
+debug_uart: "lpuart1"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

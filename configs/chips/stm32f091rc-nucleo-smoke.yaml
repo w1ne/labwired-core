@@ -1,0 +1,54 @@
+# Narrow STM32F091RCT6 model for the NUCLEO-F091RC board smoke.
+# Only reset-clock RCC, SysTick, GPIOA and USART2 are declared. The smoke uses
+# PA5/LD2 and USART2 on PA2/PA3; all other MCU blocks remain unsupported.
+# Sources: ST DS026284 (STM32F091xB/xC), RM0091, and UM1724 / MB1136.
+name: stm32f091rc-nucleo-smoke
+arch: arm
+core: cortex-m0
+# The firmware leaves the STM32F091's reset HSI clock at 8 MHz.
+cpu_hz: 8000000
+
+flash:
+  base: 0x08000000
+  size: 256KB
+ram:
+  base: 0x20000000
+  size: 32KB
+
+# Only the board's VCP and LD2 pads used by this smoke are exposed.
+pins:
+  PA2: { gpio: gpioa, bit: 2 }
+  PA3: { gpio: gpioa, bit: 3 }
+  PA5: { gpio: gpioa, bit: 5 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 1KB
+    config:
+      profile: stm32f0
+
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x48000000
+    size: 1KB
+    clock: { reg: ahbenr, bit: 17 }
+    config:
+      profile: stm32v2
+      # Preserve reset AF mode and pull-ups for SWD on PA13/PA14.
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x24000000
+
+  - id: usart2
+    type: uart
+    base_address: 0x40004400
+    size: 1KB
+    irq: 28
+    clock: { reg: apb1enr, bit: 17 }
+    config:
+      profile: stm32v2

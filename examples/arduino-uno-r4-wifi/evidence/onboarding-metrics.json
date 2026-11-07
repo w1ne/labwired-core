@@ -1,0 +1,28 @@
+{
+  "target_id": "arduino-uno-r4-wifi",
+  "status": "pass",
+  "crate": "firmware-uno-r4-wifi-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/arduino-uno-r4-wifi/io-smoke.yaml",
+  "system": "configs/systems/arduino-uno-r4-wifi.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T21:33:18Z",
+  "finished_at_utc": "2026-11-03T21:33:32Z",
+  "elapsed_seconds": 15,
+  "elapsed_ms": 14662,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 14.081,
+    "build_firmware": 0.311,
+    "run_smoke": 0.26
+  },
+  "stages_ms": {
+    "build_cli": 14081,
+    "build_firmware": 311,
+    "run_smoke": 260
+  }
+}

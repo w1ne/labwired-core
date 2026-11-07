@@ -34,7 +34,7 @@ peripheral models, or close to none.
 
 | Candidate | Board it unlocks | Reuses | Notes |
 |-----------|------------------|--------|-------|
-| **nRF54L05 / L10** | — | nRF54L15 / LM20A onboarded; siblings differ in memory size | The cheapest remaining add on this list. SVDs already fetched for the family. |
+| **nRF54L05** | — | nRF54L15 / L10 / LM20A onboarded; siblings differ in memory size | The cheapest remaining add on this list. SVDs already fetched for the family. |
 | **STM32F446** | NUCLEO-F446RE | F4 family (F401/F407/F411 shipped) | Popular F4 SKU; same RCC layout. |
 | STM32H723 / H725 / H730 | NUCLEO-H723ZG | H7 family (H735 shipped, RM0468) | Same RCC layout; H735 work carries over directly. |
 | STM32L432 / L452 | NUCLEO-L432KC, Feather STM32L4 | L4 family (L476 silicon-verified) | |
@@ -63,7 +63,6 @@ conventions, new interrupt model, new SVD quirks.
 | **CC2538 / CC26xx** | Zigbee/Thread dev kits | Cortex-M3 / M4F | Opens **TI**, the last large vendor absent from the engine, without paying for a new ISA. |
 | PSoC 6 / XMC | CY8CKIT-062, XMC dev kits | M4 + M0+ | Opens **Infineon**. |
 | RA8M1 | Renesas EK-RA8M1 | Cortex-M85 | New core (Helium/MVE), but the RA family model from RA4M1 carries over. |
-| MIMXRT1062 | Teensy 4.0 | M7 | The exact RT1062 part (the onboarded `imxrt1064` is the RT1064-class cousin); mostly config + fixture. |
 
 ## Explicitly out of scope
 
@@ -75,7 +74,7 @@ conventions, new interrupt model, new SVD quirks.
 
 ## Suggested order
 
-1. **nRF54L05 / L10** — Tier A, siblings of an onboarded part; cheapest remaining
+1. **nRF54L05** — Tier A, sibling of an onboarded part; cheapest remaining
    add, and it extends a family already silicon-verified on its bigger siblings.
 2. **STM32F446** — Tier A, popular board, no new models.
 3. **ESP32-H2** — Tier B, rides the C6 work that just landed.

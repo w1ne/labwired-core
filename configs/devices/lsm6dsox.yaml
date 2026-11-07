@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: MIT
+# ST LSM6DSOX I2C accelerometer slice; SDO/SA0 is tied low (address 0x6A).
+# Register map: ST datasheet DS12814 Rev 4, §§8–9. Accelerometer sensitivity
+# uses the datasheet's typical 0.061 mg/LSB at ±2 g and corresponding full scales.
+#
+# This is deliberately a partial model: it covers WHO_AM_I, CTRL1_XL, the
+# accelerometer data-ready bit, and signed XYZ accelerometer outputs. It does
+# not claim gyro, temperature, FIFO, embedded-function, interrupt, I3C, SPI,
+# electrical, or ODR-dependent timing behavior. Auto-increment is always on in
+# this slice; firmware leaves CTRL3_C.IF_INC at its reset-enabled value.
+type: lsm6dsox
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x6A
+    auto_increment: true
+    pointer_mask: 0x7F
+    unmapped_byte: 0x00
+    registers:
+      - { name: WHO_AM_I,   addr: 0x0F, width: 1, endian: le, access: r,  reset: 0x6C }
+      - { name: CTRL1_XL,   addr: 0x10, width: 1, endian: le, access: rw, reset: 0x00 }
+      # STATUS_REG.XLDA is overlaid by the fixed-rate data_ready rule below.
+      - { name: STATUS_REG, addr: 0x1E, width: 1, endian: le, access: r,  reset: 0x00 }
+      - { name: ACC_X, addr: 0x28, width: 2, endian: le, access: r, signed: true, source: x, zero_unless: { register: CTRL1_XL, mask: 0xF0 }, scale_from: { register: CTRL1_XL, mask: 0x03, shift: 2, map: { 0: 16393.4426, 1: 2049.1803, 2: 8196.7213, 3: 4098.3607 } } }
+      - { name: ACC_Y, addr: 0x2A, width: 2, endian: le, access: r, signed: true, source: y, zero_unless: { register: CTRL1_XL, mask: 0xF0 }, scale_from: { register: CTRL1_XL, mask: 0x03, shift: 2, map: { 0: 16393.4426, 1: 2049.1803, 2: 8196.7213, 3: 4098.3607 } } }
+      - { name: ACC_Z, addr: 0x2C, width: 2, endian: le, access: r, signed: true, source: z, zero_unless: { register: CTRL1_XL, mask: 0xF0 }, scale_from: { register: CTRL1_XL, mask: 0x03, shift: 2, map: { 0: 16393.4426, 1: 2049.1803, 2: 8196.7213, 3: 4098.3607 } } }
+
+    # CTRL1_XL ODR=416 Hz in the smoke; cadence is fixed to that one setting.
+    data_ready:
+      - name: accelerometer
+        start_register: CTRL1_XL
+        start_mask: 0xF0
+        ready_register: STATUS_REG
+        ready_mask: 0x01
+        conversion_us: 2404
+        clear_on_read: [ACC_X, ACC_Y, ACC_Z]
+
+metadata:
+  label: "ST LSM6DSOX accelerometer slice"
+  summary: "ST LSM6DSOX I2C identity and accelerometer XYZ path (partial model)."
+  detail: "Models WHO_AM_I=0x6C, CTRL1_XL read/write, a fixed 416 Hz XLDA approximation when ODR is nonzero, and signed little-endian accelerometer XYZ scaled by CTRL1_XL full scale. I2C address defaults to 0x6A with SDO/SA0 low. Gyroscope, temperature, FIFO, interrupt and embedded functions, SPI/I3C, dynamic IF_INC, electrical behavior, and other ODR timings are not modeled."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit address. Defaults to 0x6A with SDO/SA0 low; use 0x6B when high."
+  inputs:
+    - { key: x, label: "X acceleration", unit: "g", min: -16.0, max: 16.0, default: 0.061 }
+    - { key: y, label: "Y acceleration", unit: "g", min: -16.0, max: 16.0, default: -0.122 }
+    - { key: z, label: "Z acceleration", unit: "g", min: -16.0, max: 16.0, default: 0.244 }

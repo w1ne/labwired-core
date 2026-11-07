@@ -965,7 +965,7 @@ const CHIPS: &[ChipConf] = &[
         name: "imxrt1064",
         yaml: "configs/chips/imxrt1064.yaml",
         reset_oracle: None,
-        behavior_gate: Some("firmware_survival::test_imxrt1064_teensy41_smoke_survival"),
+        behavior_gate: Some("firmware_survival::test_imxrt1064_lpuart_regression_fixture_survival"),
     },
     ChipConf {
         name: "stm32f746",

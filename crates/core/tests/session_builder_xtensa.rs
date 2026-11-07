@@ -136,7 +136,7 @@ fn esp32s3_flash_image_rom_boot_reaches_the_partition_table_without_an_elf() {
 
 #[test]
 fn esp32_classic_fixture_runs_the_tier1_classes_on_two_cores() {
-    let (chip, manifest) = common::system("configs/systems/esp32-wroom-32.yaml");
+    let (chip, manifest) = common::system("configs/systems/esp32-wroom-32-tier1.yaml");
     let fw = common::committed("tests/fixtures/tier1/esp32.elf");
     let blobs = BlobMap::new();
     let mut s = open(

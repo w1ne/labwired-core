@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      602,
+      536872948,
+      536872984,
+      0,
+      8,
+      8,
+      0,
+      536870912,
+      0,
+      17,
+      4305,
+      1,
+      14,
+      15,
+      3758157824,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 638,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 638,
+    "mcause": 2147483660,
+    "mtval": 0,
+    "mtime": 49999997,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 50000000,
+  "cycles": 100025518,
+  "instructions": 50000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 50000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 50000000
+    }
+  },
+  "limits": {
+    "max_steps": 50000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "6e7cb64edb583240c055d0ad365d6667622e1fa316e2015586d69a5c2e1e51da",
+  "config": {
+    "firmware": "examples/ch32v003-evt/../../target/wch-sdk/ch32v003f4p6-wch-sdk-systick-interrupt.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-pfic-smoke.yaml",
+    "script": "examples/ch32v003-evt/sdk-systick-interrupt-smoke.yaml"
+  }
+}

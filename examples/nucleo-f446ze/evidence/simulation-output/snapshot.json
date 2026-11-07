@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      171,
+      10,
+      119,
+      0,
+      1073873944,
+      1082195968,
+      16513,
+      537001968,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537001968,
+      134218401,
+      134217750
+    ],
+    "pc": 134217750,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 20000,
+  "cycles": 20000,
+  "instructions": 20000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 20000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 20000
+    }
+  },
+  "limits": {
+    "max_steps": 20000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "af2e2fc68a824ed88a59dd74f1dc077a3b822310bf8ff3d5f17d314200a1ad9c",
+  "config": {
+    "firmware": "examples/nucleo-f446ze/../../target/thumbv7em-none-eabi/release/firmware-nucleo-f446ze-smoke",
+    "system": "examples/nucleo-f446ze/../../configs/systems/nucleo-f446ze.yaml",
+    "script": "examples/nucleo-f446ze/onboarding-smoke.yaml"
+  }
+}

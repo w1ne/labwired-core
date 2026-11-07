@@ -91,7 +91,21 @@ struct PadTapState {
     tap: Option<LogicTap>,
     /// Watch channels per line, indexed like [`PadLines::names`].
     channels: Vec<Vec<u32>>,
+    /// GPIO observers on the pads this wire drives right now: `(owner,
+    /// line, pad, observer)`. `owner` names the routing table that
+    /// registered the entry, so one port re-syncing leaves another port's
+    /// entries alone (the [`PadLines::merge_tap`] hazard, on the observer
+    /// side).
+    observers: Vec<PadObserver>,
 }
+
+/// One observer registration: see [`PadTapState::observers`].
+type PadObserver = (
+    u64,
+    usize,
+    u8,
+    std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+);
 
 /// Live levels of one peripheral's wire, readable by a GPIO model for the pads
 /// its routing points here.
@@ -149,6 +163,7 @@ impl PadLines {
             tap: Mutex::new(PadTapState {
                 tap: None,
                 channels: vec![Vec::new(); names.len()],
+                observers: Vec::new(),
             }),
         }
     }
@@ -376,6 +391,16 @@ impl PadLines {
     fn report_with(&self, changed: &[(usize, bool)], at: Option<u64>, with_drive: bool) {
         let at = at.or_else(|| self.stamp());
         let state = self.tap.lock().unwrap();
+        // GPIO observers hear the WIRE level on the pad, at the cycle the
+        // edge happened. An edge with no known cycle is not reported: a
+        // made-up time would turn a pulse-width decoder's bits into noise.
+        if let (false, Some(cycle)) = (state.observers.is_empty(), at) {
+            for &(line, level) in changed {
+                for (_, _, pad, observer) in state.observers.iter().filter(|o| o.1 == line) {
+                    observer.on_pin_change(*pad, !level, level, cycle);
+                }
+            }
+        }
         let Some(tap) = &state.tap else {
             return;
         };
@@ -468,6 +493,27 @@ impl PadLines {
         }
         let any = state.channels.iter().any(|c| !c.is_empty());
         state.tap = if any { tap } else { None };
+    }
+
+    /// Replace the GPIO observers `owner` registered on this wire with
+    /// `add`, `(line, pad, observer)` each. The GPIO port calls this when its
+    /// routing changes, so an observer hears this wire only while the pad
+    /// selects it.
+    pub fn set_observers(
+        &self,
+        owner: u64,
+        add: Vec<(
+            usize,
+            u8,
+            std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+        )>,
+    ) {
+        let mut state = self.tap.lock().unwrap();
+        state.observers.retain(|o| o.0 != owner);
+        state.observers.extend(
+            add.into_iter()
+                .map(|(line, pad, obs)| (owner, line, pad, obs)),
+        );
     }
 
     /// The installed tap's provisional "now", or `None` when nothing is

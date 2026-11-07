@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-l476rg",
+  "status": "pass",
+  "crate": "firmware-l476-demo",
+  "target_triple": "thumbv7em-none-eabihf",
+  "script": "examples/nucleo-l476rg/io-smoke.yaml",
+  "system": "configs/systems/nucleo-l476rg.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T16:18:41Z",
+  "finished_at_utc": "2026-11-03T16:18:42Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 941,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.286,
+    "build_firmware": 0.147,
+    "run_smoke": 0.496
+  },
+  "stages_ms": {
+    "build_cli": 286,
+    "build_firmware": 147,
+    "run_smoke": 496
+  }
+}

@@ -1,0 +1,20 @@
+# Raspberry Pi Pico 2 with an external BME280 on I2C0.
+# The profile claims only its exercised UART, I2C sensor route, and user LED.
+name: "pico2-bme280"
+chip: "../chips/rp2350-pico2-bme280-smoke.yaml"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_gp25"
+    kind: "led"
+    peripheral: "sio"
+    pin: 25
+    signal: "output"
+    active_high: true

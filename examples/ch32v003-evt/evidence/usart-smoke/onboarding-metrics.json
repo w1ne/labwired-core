@@ -1,0 +1,29 @@
+{
+  "target_id": "ch32v003f4p6-usart",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/ch32v003-evt/usart-smoke.yaml",
+  "system": "configs/systems/ch32v003evt-usart-smoke.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T11:09:24Z",
+  "finished_at_utc": "2026-11-05T11:09:25Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 692,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.308,
+    "build_firmware": 0.07,
+    "run_smoke": 0.302
+  },
+  "stages_ms": {
+    "build_cli": 308,
+    "build_firmware": 70,
+    "run_smoke": 302
+  },
+  "firmware_build_script": "examples/ch32v003-evt/build-usart-firmware.sh"
+}

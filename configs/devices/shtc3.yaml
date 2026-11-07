@@ -1,0 +1,55 @@
+# Sensirion SHTC3 temperature + humidity sensor — declarative I2C command
+# device. The measurement response is temperature then humidity, with each
+# 16-bit word followed by the SHTC3 CRC-8 (poly 0x31, init 0xFF).
+#
+# Datasheet: Sensirion SHTC3, v4 (December 2022), §§5.1–5.11:
+# https://sensirion.com/media/documents/643F9C8E/63A5A436/Datasheet_SHTC3.pdf
+# I2C address 0x70; wake-up 0x3517; low-power, no-stretch, T-first measurement
+# 0x609C; normal-mode maximum conversion time 12.1 ms and low-power maximum
+# 0.8 ms. Conversion formulas: T = -45 + 175*ST/65536, RH = 100*SRH/65536.
+#
+# The sensor powers up idle. Firmware may issue the wake-up command before a
+# measurement; sleep and software reset commands are accepted. This model does
+# not emulate internal sleep state, reset timing, clock stretching, or sensor
+# noise. The measurement response is held until the datasheet's maximum time
+# for the selected mode has elapsed.
+type: shtc3
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x70
+    crc8: { poly: 0x31, init: 0xFF }
+    commands:
+      - { name: wake_up, code: 0x3517 }
+      - name: measure_normal_t_first
+        code: 0x7CA2
+        delay_us: 12100
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.49142857142857, offset: 16852.114285714286, clamp_min: 0, clamp_max: 65535 } }
+          - { source: humidity, width: 2, encode: { scale: 655.36, clamp_min: 0, clamp_max: 65535 } }
+      - name: measure_low_power_t_first
+        code: 0x609C
+        delay_us: 800
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.49142857142857, offset: 16852.114285714286, clamp_min: 0, clamp_max: 65535 } }
+          - { source: humidity, width: 2, encode: { scale: 655.36, clamp_min: 0, clamp_max: 65535 } }
+      - name: read_id
+        code: 0xEFC8
+        response:
+          - { const: 0x0807, width: 2 }
+      - { name: sleep, code: 0xB098 }
+      - { name: software_reset, code: 0x805D }
+
+metadata:
+  label: "Sensirion SHTC3"
+  summary: "Low-power temperature and humidity sensor over I2C."
+  detail: "Sensirion SHTC3 at fixed 7-bit address 0x70. Wake-up is 0x3517; low-power temperature-first measurement is 0x609C and returns after at most 0.8 ms; normal-mode temperature-first measurement is 0x7CA2 and returns after at most 12.1 ms. Each 16-bit big-endian measurement word is followed by CRC-8 (poly 0x31, init 0xFF). Sleep, software reset and ID-read commands are modeled. Internal power state, clock stretching and measurement noise are not modeled."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "Fixed 7-bit I2C address; the SHTC3 uses 0x70."
+  inputs:
+    - { key: temperature, label: "Temperature", unit: "°C", min: -40, max: 125, default: 22 }
+    - { key: humidity, label: "Relative humidity", unit: "%", min: 0, max: 100, default: 45 }

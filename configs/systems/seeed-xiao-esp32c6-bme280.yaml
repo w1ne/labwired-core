@@ -1,0 +1,16 @@
+# Seeed XIAO ESP32-C6 plus a BME280 on the documented D4/D5 I2C pins.
+# This smoke profile claims UART0 and I2C0 only; radio, USB, LP core, ADC, and
+# other XIAO board paths remain outside the profile.
+name: "seeed-xiao-esp32c6-bme280"
+chip: "../chips/esp32c6-xiao-bme280-smoke.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO22"
+      scl: "GPIO23"
+    config:
+      i2c_address: 0x77

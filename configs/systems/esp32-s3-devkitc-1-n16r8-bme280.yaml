@@ -1,0 +1,15 @@
+# ESP32-S3-DevKitC-1 v1.1 N16R8 plus an Adafruit BME280 STEMMA QT breakout.
+# GPIO8/9 route I2C0 SDA/SCL; the board's USB bridge and radio are out of scope.
+name: "esp32-s3-devkitc-1-n16r8-bme280"
+chip: "../chips/esp32s3-devkitc-1-n16r8-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO8"
+      scl: "GPIO9"
+    config:
+      i2c_address: 0x77

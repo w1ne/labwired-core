@@ -1,0 +1,28 @@
+{
+  "target_id": "arduino-nano-rp2040-connect",
+  "status": "pass",
+  "crate": "firmware-nano-rp2040-connect-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/arduino-nano-rp2040-connect/io-smoke.yaml",
+  "system": "configs/systems/arduino-nano-rp2040-connect.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T07:57:23Z",
+  "finished_at_utc": "2026-11-06T07:57:24Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1501,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.325,
+    "build_firmware": 0.392,
+    "run_smoke": 0.741
+  },
+  "stages_ms": {
+    "build_cli": 325,
+    "build_firmware": 392,
+    "run_smoke": 741
+  }
+}

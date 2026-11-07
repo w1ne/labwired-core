@@ -1,0 +1,4 @@
+2026-11-06T14:17:49.313948Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32c3-waveshare-c3-zero-smoke.yaml
+2026-11-06T14:17:49.399384Z  INFO labwired_loader: ELF Entry Point: 0x42000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  3/3 checks · onboarding-smoke · 200000 steps · 0.03s

@@ -1,0 +1,15 @@
+# NUCLEO-L4A6ZG (MB1312): active-high user LED LD3 is connected to PB14.
+# This focused board profile exposes only that GPIO path; the VCP, buttons,
+# USB OTG, and other board/MCU peripherals are outside the smoke claim.
+
+name: "nucleo-l4a6zg"
+chip: "../chips/stm32l4a6zg-nucleo-smoke.yaml"
+cpu_hz: 4_000_000
+external_devices: []
+board_io:
+  - id: "led_ld3"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 14
+    signal: "output"
+    active_high: true

@@ -1,0 +1,12 @@
+# Feather M0 Express: boot ATSAMD21G18A firmware and toggle D13 / PA17.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-feather-m0-express-smoke"
+  system: "../../configs/systems/feather-m0-express.yaml"
+limits:
+  max_steps: 12000
+assertions:
+  - gpio_edges:
+      pin: "gpio_a:17"
+      min_edges: 16
+  - expected_stop_reason: max_steps

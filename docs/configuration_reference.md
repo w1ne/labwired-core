@@ -354,9 +354,10 @@ This is the complete `SystemManifest` surface (`crates/config/src/manifest.rs`).
 | `wifi_ap` | Opt-in per-lab virtual WiFi AP — see [WiFi AP](#wifi-ap). Absent ⇒ no AP. | see below |
 | `walk_deleted` | Per-cycle peripheral-walk deletion: absent = auto-derive, `true` = force deleted, `false` = pin on. Only consulted in `event-scheduler` builds; a legacy build always walks. | `walk_deleted: true` (`examples/nokia5110-invaders-lab/system.yaml`) |
 
-`connectors:` — nine in-tree system manifests (arduino-uno-r4-minima,
-calliope-mini-v1, metro-m4, microbit-v1, microbit-v2, nano-33-iot, pybadge,
-stm32f7-discovery, teensy-41) still carry a `connectors:` block that the engine
+`connectors:` — eleven in-tree system manifests (arduino-mega-2560,
+arduino-uno-r4-minima, arduino-uno-r4-wifi, calliope-mini-v1, metro-m4,
+microbit-v1, microbit-v2, nano-33-iot, nucleo-f103rb, pybadge,
+stm32f7-discovery) still carry a `connectors:` block that the engine
 ignores; their consoles work through the defaults meanwhile. One day core may
 parse it; today it is not a configuration surface.
 

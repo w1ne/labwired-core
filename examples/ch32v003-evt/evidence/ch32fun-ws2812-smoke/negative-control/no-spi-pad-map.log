@@ -1,0 +1,5 @@
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  3/3 checks · zz-neg · 6200000 steps · 5.63s
+$ check-ws2812.py (no pad_map)
+strip meta: {"data_pin": 6, "format": "ws2812_grb", "generation": 14695981039346656037, "h": 1, "lit_pixels": 0, "pixels_decoded": 0, "w": 191}
+FAIL: 0 LEDs decoded, the driver sends 190

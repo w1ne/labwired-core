@@ -3,8 +3,9 @@
 # Referenced by io-smoke.yaml, which runs the committed tier-1 fixture ELF and
 # asserts its TIER1 self-test transcript over USART2.
 #
-# UNVERIFIED BOARD PINOUT: LED PC13 / button PA0 are carried over from the F401
-# Black Pill. See VALIDATION.md.
+# Board IO sourced from WeAct's MiniSTM32F4x1 product literature and the
+# V3.0 schematic. The user LED is PC13 and active-low. The PA0 key is omitted
+# until its pressed logic is tested for this board revision.
 name: "stm32f411ceu6-blackpill-example"
 chip: "../../configs/chips/stm32f411ceu6.yaml"
 external_devices: []
@@ -15,9 +16,3 @@ board_io:
     pin: 13
     signal: "output"
     active_high: false
-  - id: "button_user_pa0"
-    kind: "button"
-    peripheral: "gpioa"
-    pin: 0
-    signal: "input"
-    active_high: true

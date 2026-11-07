@@ -4,11 +4,21 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use crate::peripherals::pad_lines::{LineDrive, PadLines};
 use crate::CycleClock;
 use crate::Peripheral;
 use crate::PeripheralTickResult;
 use crate::SimResult;
 use anyhow::Result;
+use std::sync::Arc;
+
+const RP2040_GPIO_COUNT: usize = 30;
+static RP2040_GPIO_NAMES: [&str; RP2040_GPIO_COUNT] = [
+    "GPIO0", "GPIO1", "GPIO2", "GPIO3", "GPIO4", "GPIO5", "GPIO6", "GPIO7", "GPIO8", "GPIO9",
+    "GPIO10", "GPIO11", "GPIO12", "GPIO13", "GPIO14", "GPIO15", "GPIO16", "GPIO17", "GPIO18",
+    "GPIO19", "GPIO20", "GPIO21", "GPIO22", "GPIO23", "GPIO24", "GPIO25", "GPIO26", "GPIO27",
+    "GPIO28", "GPIO29",
+];
 
 /// Event-token for the self-perpetuating SM step chain under `event-scheduler`.
 const EVT_SM_STEP: u32 = 1;
@@ -34,6 +44,14 @@ pub struct StateMachine {
     pub exec_ctrl: u32,
     pub shift_ctrl: u32,
     pub pin_ctrl: u32,
+
+    /// Per-state-machine PIO output latches. The block resolves overlaps in
+    /// favor of the highest-numbered state machine, independently for levels
+    /// and output enables (RP2040 datasheet §3.5.6.1).
+    pub pin_out: u32,
+    pub pin_out_mask: u32,
+    pub pin_dirs: u32,
+    pub pin_dirs_mask: u32,
 
     pub enabled: bool,
     pub stalled: bool,
@@ -74,6 +92,9 @@ pub struct Pio {
     /// owning `Machine` actually drains the event scheduler — see
     /// [`Pio::scheduler_mode`].
     clock: Option<CycleClock>,
+    /// PIO GPIO output wires, created only when this block is connected to
+    /// RP2040 IO_BANK0/SIO by the bus wiring pass.
+    pad_lines: Option<Arc<PadLines>>,
 }
 
 impl Default for Pio {
@@ -106,6 +127,86 @@ impl Pio {
             write_acc_offset: 0xFFFF_FFFF,
             chain_live: false,
             clock: None,
+            pad_lines: None,
+        }
+    }
+
+    /// Create and publish this PIO block's GPIO output wires. The GPIO pad mux
+    /// selects PIO0 or PIO1 at runtime; these lines carry the state-machine
+    /// output and direction latches to that mux.
+    pub fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+        self.pad_lines
+            .get_or_insert_with(|| {
+                let lines = Arc::new(PadLines::new(
+                    &RP2040_GPIO_NAMES,
+                    &[false; RP2040_GPIO_COUNT],
+                ));
+                for pin in 0..RP2040_GPIO_COUNT {
+                    lines.set_mode(pin, LineDrive::Input);
+                }
+                lines
+            })
+            .clone()
+    }
+
+    fn write_pin_range(sm: &mut StateMachine, base: u8, count: u8, value: u32, pindirs: bool) {
+        for source_bit in 0..count.min(32) {
+            // The PIO pin mapper wraps at GPIO31. RP2040 exposes GPIO0..29;
+            // GPIO30/31 have no package pad and therefore no published line.
+            let pin = base.wrapping_add(source_bit) & 0x1f;
+            if pin as usize >= RP2040_GPIO_COUNT {
+                continue;
+            }
+            let mask = 1u32 << pin;
+            let high = value & (1u32 << source_bit) != 0;
+            if pindirs {
+                sm.pin_dirs_mask |= mask;
+                if high {
+                    sm.pin_dirs |= mask;
+                } else {
+                    sm.pin_dirs &= !mask;
+                }
+            } else {
+                sm.pin_out_mask |= mask;
+                if high {
+                    sm.pin_out |= mask;
+                } else {
+                    sm.pin_out &= !mask;
+                }
+            }
+        }
+    }
+
+    fn publish_pin_outputs(&self) {
+        let Some(lines) = &self.pad_lines else {
+            return;
+        };
+        for pin in 0..RP2040_GPIO_COUNT {
+            let mask = 1u32 << pin;
+            let mut level = false;
+            let mut output_enable = false;
+            let mut level_written = false;
+            let mut direction_written = false;
+            // Later assignments implement the documented highest-SM-wins
+            // arbitration. Level and direction are resolved separately.
+            for sm in &self.sm {
+                if sm.pin_out_mask & mask != 0 {
+                    level = sm.pin_out & mask != 0;
+                    level_written = true;
+                }
+                if sm.pin_dirs_mask & mask != 0 {
+                    output_enable = sm.pin_dirs & mask != 0;
+                    direction_written = true;
+                }
+            }
+            let mode = if direction_written && output_enable {
+                LineDrive::PushPull
+            } else {
+                LineDrive::Input
+            };
+            // A direction-only write enables the reset-low output latch.
+            let level = level_written && level;
+            lines.drive_line(pin, mode, level);
         }
     }
 
@@ -218,6 +319,7 @@ impl Pio {
                         4 => sm.exec_ctrl,
                         8 => sm.shift_ctrl,
                         12 => sm.pc as u32,
+                        20 => sm.pin_ctrl,
                         _ => {
                             crate::census_reg!("pio:Pio", reg_off, "read");
                             0
@@ -273,6 +375,7 @@ impl Pio {
                         4 => self.sm[sm_idx].exec_ctrl = value,
                         8 => self.sm[sm_idx].shift_ctrl = value,
                         12 => self.sm[sm_idx].pc = (value & 0x1F) as u8,
+                        20 => self.sm[sm_idx].pin_ctrl = value,
                         _ => {
                             crate::census_reg!("pio:Pio", reg_off, "write");
                         }
@@ -287,6 +390,14 @@ impl Pio {
 }
 
 impl Peripheral for Pio {
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
@@ -458,6 +569,20 @@ impl Peripheral for Pio {
                         match dest {
                             1 => sm.x = val,
                             2 => sm.y = val,
+                            0 | 4 => {
+                                let pin_ctrl = sm.pin_ctrl;
+                                // OUT PINS and OUT PINDIRS share OUT_BASE and
+                                // OUT_COUNT. SET has a separate pin range.
+                                let base = (pin_ctrl & 0x1F) as u8;
+                                let mapped_count = ((pin_ctrl >> 20) & 0x3F) as u8;
+                                Self::write_pin_range(
+                                    &mut sm,
+                                    base,
+                                    (count as u8).min(mapped_count),
+                                    val,
+                                    dest == 4,
+                                );
+                            }
                             5 => {
                                 sm.pc = (val & 0x1F) as u8;
                                 pc_overridden = true;
@@ -542,6 +667,18 @@ impl Peripheral for Pio {
                     match dest {
                         1 => sm.x = data as u32,
                         2 => sm.y = data as u32,
+                        0 | 4 => {
+                            let pin_ctrl = sm.pin_ctrl;
+                            let base = ((pin_ctrl >> 5) & 0x1F) as u8;
+                            let count = ((pin_ctrl >> 26) & 0x0F) as u8;
+                            Self::write_pin_range(
+                                &mut sm,
+                                base,
+                                count.min(5),
+                                data as u32,
+                                dest == 4,
+                            );
+                        }
                         _ => {}
                     }
                 }
@@ -576,6 +713,8 @@ impl Peripheral for Pio {
                 self.fstat |= 1 << i;
             }
         }
+
+        self.publish_pin_outputs();
 
         PeripheralTickResult {
             irq: false,
@@ -632,6 +771,14 @@ impl Peripheral for Pio {
             reschedule_delay: active.then_some(1),
             ..Default::default()
         }
+    }
+
+    fn line_names(&self) -> &'static [&'static str] {
+        &RP2040_GPIO_NAMES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.pad_lines.as_deref()
     }
 }
 
@@ -703,6 +850,26 @@ mod tests {
 
         pio.tick(); // Execute JMP 0
         assert_eq!(pio.sm[0].pc, 0);
+    }
+
+    #[test]
+    fn set_pins_and_pindirs_drive_routed_gpio_lines() {
+        let mut pio = Pio::new();
+        let lines = pio.pad_lines_arc();
+        let pin_ctrl = (1 << 26) | (25 << 5); // SET_COUNT=1, SET_BASE=25
+        pio.write_reg(0x0DC, pin_ctrl); // SM0_PINCTRL
+        pio.instruction_mem[0] = 0xE081; // SET PINDIRS, 1
+        pio.instruction_mem[1] = 0xE001; // SET PINS, 1
+        pio.instruction_mem[2] = 0xE000; // SET PINS, 0
+        pio.write_reg(0, 1); // CTRL: enable SM0
+
+        pio.tick();
+        assert_eq!(lines.mode(25), LineDrive::PushPull);
+        assert!(!lines.level(25));
+        pio.tick();
+        assert!(lines.level(25));
+        pio.tick();
+        assert!(!lines.level(25));
     }
 
     #[test]

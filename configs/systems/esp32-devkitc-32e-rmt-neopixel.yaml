@@ -1,0 +1,20 @@
+# ESP32-DevKitC-32E classic RMT channels 0/1 TX to separate WS2812 pixels.
+name: "esp32-devkitc-32e-rmt-neopixel"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "rgb_led0"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO23"
+      num_pixels: 1
+      cpu_hz: 240000000
+  - id: "rgb_led1"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO18"
+      num_pixels: 1
+      cpu_hz: 240000000

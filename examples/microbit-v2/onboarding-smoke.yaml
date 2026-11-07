@@ -1,0 +1,12 @@
+# BBC micro:bit v2: boot nRF52833 and exercise UARTE0 TX through the
+# board's host-console bridge abstraction. This does not verify the physical
+# interface MCU, USB CDC, LED matrix, microphone, speaker, or motion sensor.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nrf52833-demo"
+  system: "../../configs/systems/microbit-v2-uart-smoke.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps

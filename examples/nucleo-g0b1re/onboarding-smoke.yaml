@@ -1,0 +1,13 @@
+# NUCLEO-G0B1RE: USART2 output and repeated LD4 GPIOA/PA5 transitions.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nucleo-g0b1re-smoke"
+  system: "../../configs/systems/nucleo-g0b1re-smoke.yaml"
+limits:
+  max_steps: 1000
+assertions:
+  - uart_contains: "NUCLEO_G0B1RE_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

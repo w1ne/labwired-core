@@ -1,0 +1,92 @@
+# Narrow CH32V003F4P6 profile for the WCH-CH32V003EVT clock bring-up and
+# SysTick delay smokes: the HSI x2 PLL switch, FLASH_ACTLR latency, the QingKe
+# V2 SysTick (STK) and INTSYSCR CSR, PD0 GPIO, and USART1 TX on PD5. It runs
+# both a register-level replica of the SDK sequences and WCH's unmodified
+# GPIO_Toggle example.
+#
+# Sources:
+# - WCH openwch/ch32v003 EVT SDK: system_ch32v00x.c (SystemInit,
+#   SetSysClockTo_48MHZ_HSI), debug.c (Delay_Init/Delay_Us/Delay_Ms),
+#   core_riscv.h (SysTick_Type at 0xE000F000: CTLR, SR, CNT, CMP)
+# - cnlohr/ch32v003fun ch32fun.c (SystemInit PLL wait, DelaySysTick)
+#
+# Not modeled here: the HSE (HSEON never reports HSERDY; the EVT schematic
+# marks the Y1 links R4/R5 NC, so on the default fit the SDK's HSE attempt
+# times out and stays on HSI as it does here), PFIC interrupts
+# (SysTick STIE/SWIE are stored, never delivered), clock dividers as a change
+# to execution speed, flash programming, and every block not listed below.
+name: ch32v003f4p6-systick-smoke
+arch: riscv
+core: qingke-v2a
+registers_count: 16
+# SYSCLK after the firmware's HSI x2 PLL switch.
+cpu_hz: 48_000_000
+
+flash:
+  base: 0x08000000
+  size: 16KB
+ram:
+  base: 0x20000000
+  size: 2KB
+
+# WCH's DBGMCU_GetCHIPID() reads the factory chip-ID word at 0x1FFFF7C4,
+# inside the vendor-programmed system area that ends at 0x1FFFF7FF (boot
+# code, chip ID, flash-size and unique-ID words). None of it is modeled: the
+# window reads zero, so the SDK example prints ChipID:00000000 rather than a
+# plausible-looking fake.
+memory_regions:
+  - { name: "system_area", base: 0x1FFFF400, size: 1KB }
+
+pins:
+  PD0: { gpio: gpiod, bit: 0 }
+  PD5: { gpio: gpiod, bit: 5 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    # CTLR, CFGR0, INTR through APB1PCENR (0x1C); later registers excluded.
+    size: 32B
+    config:
+      profile: ch32v003
+
+  # FLASH_ACTLR LATENCY[1:0] at offset 0 shares the STM32F1 FLASH_ACR layout.
+  # SystemInit only writes the wait-state field; programming is not claimed.
+  - id: flash_ctrl
+    type: flash
+    base_address: 0x40022000
+    size: 4B
+    config:
+      profile: stm32f1
+
+  # WCH's SetSysClockTo_48MHz_HSE enables AFIOEN and sets PCFR1 bit 15
+  # (PA1/PA2 to the oscillator) before trying the HSE. PCFR1 at offset 4 is
+  # register storage here; its remap bits have no pad effect, so a firmware
+  # that remaps USART1 gets no TX output rather than output on the wrong pad.
+  - id: afio
+    type: afio
+    base_address: 0x40010000
+    size: 8B
+    clock: { reg: apb2enr, bit: 0 }
+
+  - id: stk
+    type: qingke_v2_systick
+    base_address: 0xE000F000
+    size: 20B
+
+  - id: gpiod
+    type: gpio
+    base_address: 0x40011400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 5 }
+    config:
+      profile: ch32v003
+
+  - id: usart1
+    type: uart
+    base_address: 0x40013800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 14 }
+    config:
+      profile: stm32f1
+      pad_map: ch32v003

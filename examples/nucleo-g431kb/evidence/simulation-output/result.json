@@ -1,0 +1,204 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 1000,
+  "cycles": 1000,
+  "instructions": 1000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1000
+    }
+  },
+  "limits": {
+    "max_steps": 1000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "NUCLEO_G431KB_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073759260,
+      10,
+      119,
+      0,
+      0,
+      0,
+      0,
+      536903672,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536903672,
+      134217745,
+      134218332
+    ],
+    "pc": 134218332,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "00d0c692b35c999f7622ae3a4f92e06321a95293fe6b300ef9e7205b354d389f",
+  "config": {
+    "firmware": "examples/nucleo-g431kb/../../target/thumbv7em-none-eabi/release/firmware-nucleo-g431kb-smoke",
+    "system": "examples/nucleo-g431kb/../../configs/systems/nucleo-g431kb-smoke.yaml",
+    "script": "examples/nucleo-g431kb/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1207959552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NUCLEO_G431KB_OK",
+        "cycle_lo": 0,
+        "cycle": 1000,
+        "end_cycle": 1000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 606,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 606,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 131072,
+    "ram_total_bytes": 32768,
+    "flash_used_pct": 0.46,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 32768,
+    "main_stack_high_water_bytes": 8,
+    "main_stack_free_min_bytes": 32760,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536903680,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 32768,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 32760,
+    "heap_base": 536870912,
+    "heap_top": 536903680
+  },
+  "metrics": {
+    "cycles": 1000,
+    "instructions": 1000,
+    "steps_executed": 1000,
+    "memory_reads": 128,
+    "memory_writes": 2,
+    "peripheral_accesses": 44,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134218332,
+        "count": 3,
+        "symbol": "firmware_nucleo_g431kb_smoke::main"
+      }
+    ]
+  }
+}

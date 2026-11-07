@@ -1,0 +1,14 @@
+# LabWired - NUCLEO-C031C6 board profile.
+# Board wiring per ST UM2953 Rev 2: LD4 user LED is active high on PA5.
+# Only the tested user-LED path is declared; button, VCP, and USB are omitted.
+
+name: nucleo-c031c6
+chip: ../chips/stm32c031c6-nucleo-smoke.yaml
+external_devices: []
+board_io:
+  - id: led_ld4
+    kind: led
+    peripheral: gpioa
+    pin: 5
+    signal: output
+    active_high: true

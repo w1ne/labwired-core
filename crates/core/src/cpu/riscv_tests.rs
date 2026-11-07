@@ -89,6 +89,203 @@ fn standard_rv32_rejects_esp32c3_rom_ustatus_clear() {
 }
 
 #[test]
+fn rv32e_traps_when_a_standard_instruction_names_x16() {
+    let mut bus = SystemBus::new();
+    // ADDI x16, x0, 1. RV32E has only x0..x15, so x16 is reserved.
+    const ADDI_X16: u32 = 0x0010_0813;
+    bus.flash.data = ADDI_X16.to_le_bytes().to_vec();
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::Rv32e);
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    let mut machine = Machine::new(cpu, bus);
+
+    machine.step().unwrap();
+
+    assert_eq!(machine.cpu.mcause, 2, "x16 must trap as illegal");
+    assert_eq!(machine.cpu.mtval, 0);
+    assert_eq!(machine.cpu.pc, 0x100);
+}
+
+#[test]
+fn rv32e_traps_when_a_compressed_instruction_names_x16() {
+    let mut bus = SystemBus::new();
+    // C.ADDI x16, 1 (little endian 0x0805). Keep a full fetch word available.
+    bus.flash.data = vec![0x05, 0x08, 0x00, 0x00];
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::Rv32e);
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    let mut machine = Machine::new(cpu, bus);
+
+    machine.step().unwrap();
+
+    assert_eq!(machine.cpu.mcause, 2, "compressed x16 must trap as illegal");
+    assert_eq!(machine.cpu.mtval, 0);
+    assert_eq!(machine.cpu.pc, 0x100);
+}
+
+/// WCH's `startup_ch32v00x.S` writes INTSYSCR (`csrw 0x804, t0` with t0 = 3)
+/// before `SystemInit`. The QingKe V2 profile accepts it; a generic RV32E core
+/// has no such CSR and traps.
+#[test]
+fn qingke_v2_accepts_intsyscr_and_keeps_the_rv32e_register_limit() {
+    // csrrw x0, 0x804, x5
+    const CSRW_INTSYSCR: u32 = 0x8042_9073;
+    // ADDI x16, x0, 1
+    const ADDI_X16: u32 = 0x0010_0813;
+    let mut bus = SystemBus::new();
+    bus.flash.data = [CSRW_INTSYSCR, ADDI_X16]
+        .iter()
+        .flat_map(|w| w.to_le_bytes())
+        .collect();
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::QingkeV2);
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    cpu.x[5] = 3;
+    let mut machine = Machine::new(cpu, bus);
+
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.pc, 4, "INTSYSCR write retires");
+    assert_eq!(machine.cpu.mcause, 0);
+
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.mcause, 2, "x16 is still reserved on QingKe V2");
+    assert_eq!(machine.cpu.pc, 0x100);
+
+    let mut bus = SystemBus::new();
+    bus.flash.data = CSRW_INTSYSCR.to_le_bytes().to_vec();
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::Rv32e);
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    let mut machine = Machine::new(cpu, bus);
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.mcause, 2, "generic RV32E has no INTSYSCR");
+    assert_eq!(machine.cpu.mtval, CSRW_INTSYSCR);
+}
+
+/// A QingKe V2 core with a PFIC: flash at 0 holds an address vector table
+/// (mtvec = 0 | 3, as WCH startup and `ch32v003fun` set it), a NOP sled at
+/// 0x100, and handlers at 0x200 (`li a1, 7; mret`) and 0x300.
+fn qingke_machine_with_pfic() -> (
+    Machine<RiscV>,
+    Arc<crate::peripherals::qingke_pfic::QingkePficState>,
+) {
+    const NOP: u32 = 0x0000_0013;
+    const LI_A1_7: u32 = 0x0070_0593;
+    const MRET: u32 = 0x3020_0073;
+    let mut image = vec![0u32; 0x400 / 4];
+    image[3] = 0x300; // HardFault
+    image[5] = 0x300; // Ecall-M
+    image[12] = 0x200; // SysTick
+    for word in &mut image[0x100 / 4..0x140 / 4] {
+        *word = NOP;
+    }
+    image[0x200 / 4] = LI_A1_7;
+    image[0x204 / 4] = MRET;
+    image[0x300 / 4] = NOP;
+    let mut bus = SystemBus::new();
+    bus.flash.data = image.iter().flat_map(|w| w.to_le_bytes()).collect();
+    let pfic = Arc::new(crate::peripherals::qingke_pfic::QingkePficState::default());
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::QingkeV2);
+    cpu.attach_qingke_pfic(pfic.clone());
+    cpu.pc = 0x100;
+    cpu.mtvec = 3;
+    cpu.mstatus = 1 << 3;
+    (Machine::new(cpu, bus), pfic)
+}
+
+/// The CH32V003 SYSTICK_Interrupt flow: an enabled level request is taken at
+/// the next boundary through slot 12, HPE saves the caller-saved registers
+/// the handler clobbers, and `mret` restores them and retires the interrupt.
+#[test]
+fn qingke_pfic_interrupt_vectors_through_address_table_with_hpe() {
+    let (mut machine, pfic) = qingke_machine_with_pfic();
+    machine.cpu.qingke_intsyscr = 0b11;
+    machine.cpu.x[11] = 1;
+    pfic.set_level(12, true);
+
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.pc, 0x104, "not enabled in IENR: not taken");
+
+    pfic.enabled[0].store(1 << 12, std::sync::atomic::Ordering::SeqCst);
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.pc, 0x200, "slot 12 holds the handler address");
+    assert_eq!(machine.cpu.mcause, 0x8000_000C);
+    assert_eq!(machine.cpu.mepc, 0x108, "resume after the retired NOP");
+    assert_eq!(
+        machine.cpu.mstatus & (1 << 3),
+        0,
+        "MIE cleared in the handler"
+    );
+    assert_eq!(
+        pfic.active[0].load(std::sync::atomic::Ordering::SeqCst),
+        1 << 12
+    );
+
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.x[11], 7, "handler clobbers a1");
+    pfic.set_level(12, false); // the handler's SysTick->SR = 0
+
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.pc, 0x108);
+    assert_eq!(machine.cpu.x[11], 1, "HPE restored a1 on mret");
+    assert_ne!(machine.cpu.mstatus & (1 << 3), 0, "MIE back on");
+    assert_eq!(pfic.active[0].load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert_eq!(pfic.next_interrupt(), None);
+}
+
+#[test]
+fn qingke_without_hwstken_leaves_registers_to_the_handler() {
+    let (mut machine, pfic) = qingke_machine_with_pfic();
+    machine.cpu.x[11] = 1;
+    pfic.enabled[0].store(1 << 12, std::sync::atomic::Ordering::SeqCst);
+    pfic.pend(12);
+    for _ in 0..3 {
+        machine.step().unwrap();
+    }
+    assert_eq!(machine.cpu.pc, 0x104);
+    assert_eq!(machine.cpu.x[11], 7, "no HPE: the clobber survives mret");
+    assert_eq!(pfic.next_interrupt(), None, "a latched pend is taken once");
+}
+
+#[test]
+fn qingke_masks_interrupts_while_mie_is_clear_and_routes_ecall_to_slot_5() {
+    let (mut machine, pfic) = qingke_machine_with_pfic();
+    machine.cpu.mstatus = 0;
+    pfic.enabled[0].store(1 << 12, std::sync::atomic::Ordering::SeqCst);
+    pfic.pend(12);
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.pc, 0x104, "MIE clear: still pending");
+    assert_eq!(pfic.next_interrupt(), Some(12));
+
+    // ECALL from M-mode vectors through slot 5, not the reset jump at 0.
+    machine.cpu.pc = 0x100;
+    let ecall: u32 = 0x0000_0073;
+    machine.bus.flash.data[0x100..0x104].copy_from_slice(&ecall.to_le_bytes());
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.mcause, 11);
+    assert_eq!(machine.cpu.pc, 0x300);
+}
+
+#[test]
+fn qingke_vtf_channel_bypasses_the_vector_table() {
+    let (mut machine, pfic) = qingke_machine_with_pfic();
+    pfic.enabled[0].store(1 << 12, std::sync::atomic::Ordering::SeqCst);
+    pfic.vtf_id.store(12, std::sync::atomic::Ordering::SeqCst);
+    pfic.vtf_addr[0].store(0x300 | 1, std::sync::atomic::Ordering::SeqCst);
+    pfic.pend(12);
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.pc, 0x300);
+}
+
+#[test]
+fn qingke_set_exception_pending_latches_the_pfic_number() {
+    let (mut machine, pfic) = qingke_machine_with_pfic();
+    machine.cpu.set_exception_pending(32); // USART1
+    assert_eq!(pfic.pending[1].load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert_eq!(machine.cpu.mip, 0, "not the generic MEIP line");
+}
+
+#[test]
 fn esp32c3_accepts_exact_rom_init_csrs_before_mtvec_initialization() {
     const ROM_PC: u32 = 0x4000_1ea4;
     let mut bus = SystemBus::new();
@@ -1863,6 +2060,16 @@ fn riscv_profile_is_selected_from_the_chip_descriptor() {
         RiscVCoreProfile::for_chip(&chip("arty-litex-vexriscv", Some("rv32im"))),
         RiscVCoreProfile::StandardRv32,
         "a generic rv32 core runs the standard profile"
+    );
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("ch32v003", Some("rv32ec"))),
+        RiscVCoreProfile::Rv32e,
+        "RV32E core strings select the 16-register profile"
+    );
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("ch32v003f4p6", Some("qingke-v2a"))),
+        RiscVCoreProfile::QingkeV2,
+        "the QingKe V2A core string selects the WCH vendor profile"
     );
     assert_eq!(
         RiscVCoreProfile::for_chip(&chip("mystery-riscv", None)),

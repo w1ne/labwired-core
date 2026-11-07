@@ -1,0 +1,6 @@
+2026-11-03T11:47:02.593947Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/stm32g070rb-smoke.yaml
+2026-11-03T11:47:02.595556Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 199828 of 1000000 device cycles (800172 interpreted)
+PASS  3/3 checks · io-smoke · 1000000 steps · 0.12s

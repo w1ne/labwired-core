@@ -1,0 +1,36 @@
+# Adafruit Feather RP2040 board-bound smoke profile.
+#
+# RP2040 with the board's 8 MiB external QSPI flash and 264 KiB SRAM. This is
+# intentionally a narrow model: the smoke uses IO_BANK0 to route GP13 to SIO,
+# then SIO drives the built-in D13 red LED. Other RP2040 peripherals and the
+# Feather's NeoPixel, battery charger, USB boot/CDC and STEMMA QT connector are
+# outside this profile.
+name: "rp2040-feather-smoke"
+arch: "arm"
+core: "cortex-m0+"
+registers_count: 240
+cpu_hz: 125_000_000
+flash:
+  base: 0x10000000
+  size: "8192KB"
+ram:
+  base: 0x20000000
+  size: "264KB"
+pins:
+  GP13: { gpio: "sio", bit: 13 }
+# RP2040's 256-byte second-stage bootloader precedes the application vector table.
+reset_vector_offset: 0x100
+peripherals:
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40014000
+    size: "4KB"
+    irq: 13
+    config:
+      debug_schema: "../peripherals/rp2040/io_bank0.yaml"
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/sio.yaml"

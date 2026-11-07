@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="20.741816">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="6e7cb64edb583240c055d0ad365d6667622e1fa316e2015586d69a5c2e1e51da"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="20.741816">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: SystemClk:24000000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0xe000f004=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

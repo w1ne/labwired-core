@@ -4,7 +4,8 @@
 //! Adafruit Feather STM32F405 Express demo firmware: a running light over the board's user LED(s) plus a
 //! heartbeat line on the console USART, in bare registers (no HAL).
 //!
-//! The user LED is D13 = PC1 (active high). The console is USART2 on PA2 at 115200 8N1 from the 16 MHz HSI: the USART instance the chip model validates.
+//! The user LED is D13 = PC1 (active high). The board exposes USART3 TX on PB10;
+//! this smoke configures AF7 and sends 115200 8N1 from the 16 MHz HSI.
 //!
 //! Each beat lights ONE LED, prints `hb=<n> <led>=on`, then switches it off and
 //! prints `... =off`. The state in the printed line is READ BACK from the GPIO
@@ -15,20 +16,20 @@ use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-// RCC (F4): AHB1ENR gates the GPIO ports, APB1ENR gates USART2.
+// RCC (F4): AHB1ENR gates GPIO, APB1ENR gates USART3.
 const RCC: u32 = 0x4002_3800;
 const RCC_AHB1ENR: u32 = RCC + 0x30;
 const RCC_APB1ENR: u32 = RCC + 0x40;
 
-// USART2 (F4 classic block: SR/DR, so the "ISR/TDR" names below map to SR/DR).
-// PA2 = TX (AF7), the ST-LINK virtual COM port pin.
-const USART2: u32 = 0x4000_4400;
-const USART_ISR: *const u32 = USART2 as *const u32; // SR
-const USART_TDR: *mut u32 = (USART2 + 0x04) as *mut u32; // DR
-const USART_BRR: *mut u32 = (USART2 + 0x08) as *mut u32;
-const USART_CR1: *mut u32 = (USART2 + 0x0C) as *mut u32;
+// USART3 (F4 classic block: SR/DR, so the "ISR/TDR" names below map to SR/DR).
+// PB10 = TX (AF7), exposed as Feather D1/TX.
+const USART3: u32 = 0x4000_4800;
+const USART_ISR: *const u32 = USART3 as *const u32; // SR
+const USART_TDR: *mut u32 = (USART3 + 0x04) as *mut u32; // DR
+const USART_BRR: *mut u32 = (USART3 + 0x08) as *mut u32;
+const USART_CR1: *mut u32 = (USART3 + 0x0C) as *mut u32;
 const TXE: u32 = 1 << 7;
-const GPIOA: u32 = 0x4002_0000;
+const GPIOB: u32 = 0x4002_0400;
 const GPIOC: u32 = 0x4002_0800;
 
 /// GPIO register offsets (STM32 GPIO v2 block: MODER/ODR/BSRR).
@@ -113,10 +114,10 @@ fn delay() {
 
 #[entry]
 fn main() -> ! {
-    // GPIOA (USART2 pins) and the LED port, then USART2.
-    reg_rmw(RCC_AHB1ENR, 0, (1 << 0) | (1 << 2));
-    reg_rmw(RCC_APB1ENR, 0, 1 << 17);
-    pin_af(GPIOA, 2, 7);
+    // GPIOB (USART3 TX) and GPIOC (D13), then USART3.
+    reg_rmw(RCC_AHB1ENR, 0, (1 << 1) | (1 << 2));
+    reg_rmw(RCC_APB1ENR, 0, 1 << 18);
+    pin_af(GPIOB, 10, 7);
     unsafe {
         // HSI = 16 MHz: USARTDIV 8.6875 -> mantissa 8, fraction 11 -> 0x8B.
         write_volatile(USART_BRR, 0x8B);

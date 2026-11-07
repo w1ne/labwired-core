@@ -1,36 +1,27 @@
-# Teensy 4.1 Onboarding Example
+# Teensy 4.1 D13 LED smoke
 
-Run all commands from `core/`.
+This focused profile boots a Cortex-M7 image on the modeled MIMXRT1062 path,
+ungates CCM's GPIO2 clock, and toggles the onboard D13 LED through GPIO2_IO03.
+The system exposes only CCM and GPIO2. The image runs from a small DTCM slice;
+the board's external flash/XIP path is not modeled.
 
-## Purpose
+PJRC maps D13 to GPIO_B0_03, and NXP's SVD states that the pad's reset mux
+selects ALT5/GPIO2_IO03. The simulator profile maps D13 directly to GPIO2_IO03
+and omits IOMUXC, so the smoke does not validate that silicon pad route. It
+does not claim UART: the older LPUART6 regression fixture captures the
+peripheral stream directly and does not model IOMUXC routing.
 
-This example provides deterministic bring-up for Teensy 4.1 using the minimal supported subset:
-1. `ccm` (`imx_ccm` — CCGR ungating)
-2. `iomuxc` (`imx_iomuxc` sticky stub)
-3. `gpio2` (`imxrt` — DR / GDIR / DR_TOGGLE)
-4. `lpuart6` (`nxp_lpuart` — Teensy Serial1)
-5. `systick`
-6. `flexspi` stub only (no XIP)
-
-Teensy 4.1 silicon is **MIMXRT1062**; the chip yaml is the **RT1064-class** cousin (GPIO/LPUART/CCM class). Do not claim 4MB SiP flash or FlexSPI XIP — SRAM/DTCM linked only.
-
-**SIM-DERIVED.** Not silicon-verified.
-
-## Quick Run
+Run the committed smoke from the repository root:
 
 ```bash
-cargo build -p firmware-imxrt1064-demo --release --target thumbv7em-none-eabi
-cargo run -q -p labwired-cli -- test --script examples/teensy-41/uart-smoke.yaml --output-dir out/teensy-41/uart-smoke --no-uart-stdout
+scripts/onboarding_smoke.sh \
+  --target-id teensy-41 \
+  --crate firmware-teensy4-smoke \
+  --target thumbv7em-none-eabi \
+  --script examples/teensy-41/onboarding-smoke.yaml \
+  --system configs/systems/teensy-41.yaml \
+  --out-dir examples/teensy-41/evidence
 ```
 
-Expected result:
-1. smoke test passes
-2. UART contains `OK`
-
-## Files
-
-1. `system.yaml`: local board mapping for simulation runs.
-2. `uart-smoke.yaml`: deterministic UART smoke assertion.
-3. `REQUIRED_DOCS.md`: source-grounding references (IMXRT1060RM, PJRC pinout).
-4. `EXTERNAL_COMPONENTS.md`: external component declaration.
-5. `VALIDATION.md`: reproducible validation/audit commands.
+The smoke must observe at least eight D13 GPIO transitions before the step
+limit. Build and simulator artifacts are committed under `evidence/`.

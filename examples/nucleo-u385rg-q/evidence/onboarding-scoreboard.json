@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 17499,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 17.499
+  },
+  "targets": [
+    {
+      "target_id": "nucleo-u385rg-q",
+      "status": "pass",
+      "crate": "firmware-nucleo-u385rg-q-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-u385rg-q/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-u385rg-q-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T19:20:11Z",
+      "finished_at_utc": "2026-11-04T19:20:28Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17499,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.759,
+        "build_firmware": 0.457,
+        "run_smoke": 0.274
+      },
+      "stages_ms": {
+        "build_cli": 16759,
+        "build_firmware": 457,
+        "run_smoke": 274
+      },
+      "_artifact_path": "examples/nucleo-u385rg-q/evidence"
+    }
+  ]
+}

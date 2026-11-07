@@ -1,0 +1,35 @@
+# Narrow Waveshare ESP32-C3-Zero profile for its onboard WS2812 on GPIO10.
+# Only the C3 memory map, GPIO output, and IO_MUX register window used by the
+# pixel smoke are declared. Radio, USB, UART, and other peripherals are out of
+# scope for this board profile.
+name: "esp32c3-waveshare-c3-zero-smoke"
+arch: "riscv"
+core: "rv32imc"
+registers_count: 31
+cpu_hz: 160_000_000
+
+flash:
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  base: 0x3FC80000
+  size: "400KB"
+
+pins:
+  GPIO10: { gpio: "gpio", bit: 10, functions: [{ type: gpio, peripheral: "gpio" }] }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32c3_gpio"
+    base_address: 0x60004000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/gpio.yaml"
+
+  - id: "io_mux"
+    type: "esp32c3_io_mux"
+    base_address: 0x60009000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/io_mux.yaml"
+      path: "../peripherals/esp32c3/io_mux.yaml"

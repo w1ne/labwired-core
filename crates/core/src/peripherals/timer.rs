@@ -202,8 +202,66 @@ struct PendingInputEdge {
     accept: u64,
 }
 
-/// Line names of a timer's channel-output wire, in channel order.
-pub const TIMER_OUTPUT_LINES: &[&str] = &["CH1", "CH2", "CH3", "CH4"];
+/// Line names of a timer's channel-output wire: OC1..OC4 in channel order,
+/// then the advanced-control timers' complementary OC1N..OC3N (a TIM2-class
+/// timer never drives those three).
+pub const TIMER_OUTPUT_LINES: &[&str] = &["CH1", "CH2", "CH3", "CH4", "CH1N", "CH2N", "CH3N"];
+
+/// Capture/compare channels per timer.
+const TIMER_CHANNELS: usize = 4;
+
+/// Wire line of channel `ch`'s complementary output `OCxN`; CH4 has none.
+pub const fn complementary_line(ch: usize) -> Option<usize> {
+    if ch < 3 {
+        Some(TIMER_CHANNELS + ch)
+    } else {
+        None
+    }
+}
+
+/// BDTR bits (RM0008 §14.4.18).
+const BDTR_MOE: u32 = 1 << 15;
+const BDTR_OSSR: u32 = 1 << 11;
+const BDTR_OSSI: u32 = 1 << 10;
+
+/// One output's active level over time, before polarity: a constant, or a
+/// pulse `[hpoint, hpoint + duty)` repeating every `period` time units.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OcWave {
+    Const(bool),
+    Pulse(u64, u64, u64),
+}
+
+impl OcWave {
+    fn scaled(self, k: u64) -> Self {
+        match self {
+            OcWave::Pulse(h, d, p) => OcWave::Pulse(h * k, d * k, p * k),
+            c => c,
+        }
+    }
+
+    fn inverted(self) -> Self {
+        match self {
+            OcWave::Const(level) => OcWave::Const(!level),
+            OcWave::Pulse(h, d, p) => OcWave::Pulse((h + d) % p, p - d.min(p), p),
+        }
+    }
+
+    /// Every rising edge `dead` units later; a pulse no longer than that
+    /// disappears. A flat 0 % / 100 % waveform has no edge to delay.
+    fn delayed(self, dead: u64) -> Self {
+        match self {
+            OcWave::Pulse(h, d, p) if dead > 0 && d > 0 && d < p => {
+                if d > dead {
+                    OcWave::Pulse((h + dead) % p, d - dead, p)
+                } else {
+                    OcWave::Const(false)
+                }
+            }
+            w => w,
+        }
+    }
+}
 
 /// The channel outputs OC1..OC4 as a waveform in engine cycles.
 ///
@@ -487,105 +545,208 @@ impl Timer {
         self.wave.pads.advance_to(now);
         let lines = self.wave.pads.lines_arc();
         let mut running = false;
-        for ch in 0..TIMER_OUTPUT_LINES.len() {
-            let (drive, drives) = self.channel_output_drive(ch, now);
-            running |= matches!(drive, LedcDrive::Pwm { .. });
-            self.wave.pads.set_drive(ch, drive, now);
-            lines.set_mode(
-                ch,
-                if drives {
-                    LineDrive::PushPull
-                } else {
-                    LineDrive::Input
-                },
-            );
+        for ch in 0..TIMER_CHANNELS {
+            let [main, complementary] = self.channel_output_drives(ch, now);
+            let comp_line = complementary_line(ch);
+            for (line, (drive, drives)) in [(Some(ch), main), (comp_line, complementary)] {
+                let Some(line) = line else { continue };
+                running |= matches!(drive, LedcDrive::Pwm { .. });
+                self.wave.pads.set_drive(line, drive, now);
+                lines.set_mode(
+                    line,
+                    if drives {
+                        LineDrive::PushPull
+                    } else {
+                        LineDrive::Input
+                    },
+                );
+            }
         }
         self.wave.running = running;
     }
 
-    /// What channel `ch` (0-based) puts on its `OCx` output, and whether the
-    /// timer drives the pad at all.
+    /// What channel `ch` (0-based) puts on its `OCx` output and, on an
+    /// advanced-control timer's CH1..CH3, on its complementary `OCxN`
+    /// output, each with whether the timer drives that pad at all.
     ///
     /// RM0008 Rev 21 §15.4.7 (TIMx_CCMR1 `OCxM`) and §15.4.9 (TIMx_CCER) for
-    /// TIM2-5, §14.4.7 / §14.4.9 / §14.4.18 (BDTR) for TIM1:
+    /// TIM2-5, §14.4.7 / §14.4.9 / §14.4.18 (BDTR) and Table 83 for TIM1:
     ///
     /// * `CCxS != 00` — the channel is an input; nothing driven.
-    /// * `CCxE = 0` — output off; the timer does not drive the pad.
+    /// * `CCxE = 0` (and `CCxNE = 0`) — output off; the timer does not drive
+    ///   the pad.
     /// * TIM1 with `BDTR.MOE = 0` — outputs off, unless `OSSI = 1` holds an
-    ///   enabled channel at its idle level `CR2.OISx`.
-    /// * `OCxM` = 110 PWM mode 1: active while `CNT < CCRx`; 111 PWM mode 2:
-    ///   inactive while `CNT < CCRx`; 011 toggle on `CNT == CCRx`; 100 / 101
-    ///   forced inactive / active. `CCxP = 1` inverts (active low).
+    ///   enabled output at its idle level `CR2.OISx` / `OISxN`.
+    /// * `OCxM` = 110 PWM mode 1: `OCxREF` active while `CNT < CCRx`; 111 PWM
+    ///   mode 2: inactive while `CNT < CCRx`; 011 toggle on `CNT == CCRx`;
+    ///   100 / 101 forced inactive / active. `CCxP` / `CCxNP = 1` inverts
+    ///   (active low).
     /// * 000 frozen and the one-shot 001 / 010 match modes hold the present
     ///   level (the one-shot set/clear on match is not modelled).
+    /// * TIM1, `MOE = 1` (Table 83): `CCxE` alone gives `OCx = OCxREF`;
+    ///   `CCxNE` alone gives `OCxN = OCxREF` (not inverted); both give
+    ///   `OCx = OCxREF` and `OCxN = !OCxREF`, each rising edge delayed by the
+    ///   `BDTR.DTG` dead time in `tDTS` (CK_INT x `CR1.CKD`) units, a pulse
+    ///   shorter than the dead time vanishing. With `OSSR = 1` the disabled
+    ///   one of a pair is driven at its inactive level instead of released.
     ///
     /// Edge-aligned up-counting only, like the counter model itself; CMS /
-    /// DIR, dead time and the complementary `OCxN` outputs are not generated.
-    fn channel_output_drive(&self, ch: usize, now: u64) -> (LedcDrive, bool) {
+    /// DIR, the break input and OCxM's one-shot match modes are not modelled.
+    fn channel_output_drives(&self, ch: usize, now: u64) -> [(LedcDrive, bool); 2] {
         let held = self.wave.pads.level(ch);
+        let comp_line = complementary_line(ch).filter(|_| self.advanced);
+        let held_n = comp_line.is_some_and(|l| self.wave.pads.level(l));
+        let off = [
+            (LedcDrive::Level(held), false),
+            (LedcDrive::Level(held_n), false),
+        ];
         if self.basic || self.ccs(ch) != 0 {
-            return (LedcDrive::Level(held), false);
+            return off;
         }
         let nibble = self.ccer >> (ch * 4);
         let enabled = nibble & 1 != 0;
         let active_low = nibble & 2 != 0;
-        if self.advanced && self.bdtr & (1 << 15) == 0 {
-            if enabled && self.bdtr & (1 << 10) != 0 {
-                let ois = (self.cr2 >> (8 + 2 * ch)) & 1 != 0;
-                return (LedcDrive::Level(ois), true);
+        let n_enabled = comp_line.is_some() && nibble & 4 != 0;
+        let n_active_low = comp_line.is_some() && nibble & 8 != 0;
+        if self.advanced && self.bdtr & BDTR_MOE == 0 {
+            if self.bdtr & BDTR_OSSI == 0 {
+                return off;
             }
-            return (LedcDrive::Level(held), false);
+            let ois = (self.cr2 >> (8 + 2 * ch)) & 1 != 0;
+            let ois_n = (self.cr2 >> (9 + 2 * ch)) & 1 != 0;
+            return [
+                if enabled {
+                    (LedcDrive::Level(ois), true)
+                } else {
+                    off[0]
+                },
+                if n_enabled {
+                    (LedcDrive::Level(ois_n), true)
+                } else {
+                    off[1]
+                },
+            ];
         }
-        if !enabled {
-            return (LedcDrive::Level(held), false);
+        if !enabled && !n_enabled {
+            return off;
         }
         let mask = self.cnt_mask();
         let period = u64::from(self.arr & mask) + 1;
         let ccr = u64::from(self.ccr_value(ch) & mask);
-        // (hpoint, duty, waveform period) of OCxREF, before polarity.
-        let (hpoint, duty, wave_period) = match (self.ic_lane(ch) >> 4) & 0x7 {
-            0b100 => return (LedcDrive::Level(active_low), true),
-            0b101 => return (LedcDrive::Level(!active_low), true),
-            0b110 => (0, ccr.min(period), period),
-            0b111 => (ccr.min(period), period - ccr.min(period), period),
-            0b011 if ccr < period => (ccr, period, 2 * period),
-            _ => return (LedcDrive::Level(held), true),
+        // OCxREF as (hpoint, duty, waveform period) in counts, or a constant.
+        let reference = match (self.ic_lane(ch) >> 4) & 0x7 {
+            0b100 => OcWave::Const(false),
+            0b101 => OcWave::Const(true),
+            0b110 => OcWave::Pulse(0, ccr.min(period), period),
+            0b111 => OcWave::Pulse(ccr.min(period), period - ccr.min(period), period),
+            0b011 if ccr < period => OcWave::Pulse(ccr, period, 2 * period),
+            _ => {
+                // Frozen / one-shot match modes hold whatever each output
+                // shows now.
+                return [
+                    if enabled {
+                        (LedcDrive::Level(held), true)
+                    } else {
+                        off[0]
+                    },
+                    if n_enabled {
+                        (LedcDrive::Level(held_n), true)
+                    } else {
+                        off[1]
+                    },
+                ];
+            }
         };
-        let (hpoint, duty) = if active_low {
-            ((hpoint + duty) % wave_period, wave_period - duty)
+        let div = u64::from(self.psc) + 1;
+        // Dead time only separates a complementary pair; in CK_INT cycles.
+        let dead = if enabled && n_enabled {
+            let ckd = match (self.cr1 >> 8) & 0x3 {
+                0b01 => 2,
+                0b10 => 4,
+                _ => 1,
+            };
+            u64::from(decode_dead_time_ticks((self.bdtr & 0xff) as u8)) * ckd
         } else {
-            (hpoint, duty)
+            0
         };
+        // With a dead time the waveform is laid out in CK_INT cycles rather
+        // than counts, so a delay that is not a whole count stays exact.
+        let scale = if dead > 0 { div } else { 1 };
+        let reference = reference.scaled(scale);
         // Phase: count index 0 is the cycle CNT last read 0 with an empty
         // prescaler, so the waveform lines up with the counter firmware reads.
-        let div = u64::from(self.psc) + 1;
         let elapsed =
             (u64::from(self.cnt.get()) % period) * div + u64::from(self.psc_cnt.get()).min(div - 1);
-        let timer = LedcTimebase {
+        let origin = now.saturating_sub(elapsed);
+        let timebase = |wave_period: u64| LedcTimebase {
             period: wave_period,
-            num: u128::from(div),
+            num: u128::from(div / scale),
             den: 1,
-            origin: now.saturating_sub(elapsed),
+            origin,
         };
-        let mut drive = LedcDrive::Pwm {
-            timer,
-            hpoint,
-            duty,
+        let reference = match reference {
+            OcWave::Pulse(hpoint, duty, wave_period) if wave_period != period * scale => {
+                // Toggle mode: the output's present level, not the counter
+                // alone, says which half of the double period this is.
+                let held_ref = if enabled {
+                    held != active_low
+                } else {
+                    held_n != n_active_low
+                };
+                let drive = LedcDrive::Pwm {
+                    timer: timebase(wave_period),
+                    hpoint,
+                    duty,
+                };
+                if drive.level_at(now) != held_ref {
+                    OcWave::Pulse((hpoint + period * scale) % wave_period, duty, wave_period)
+                } else {
+                    reference
+                }
+            }
+            _ => reference,
         };
-        if wave_period != period && drive.level_at(now) != held {
-            // Toggle mode: the output's present level, not the counter alone,
-            // says which half of the double period this is.
-            drive = LedcDrive::Pwm {
-                timer,
-                hpoint: (hpoint + period) % wave_period,
-                duty,
+        let (main_active, n_active) = if enabled && n_enabled {
+            (reference.delayed(dead), reference.inverted().delayed(dead))
+        } else {
+            // A lone CCxNE output follows OCxREF itself (Table 83).
+            (reference, reference)
+        };
+        let stopped = (self.cr1 & 1) == 0 || self.counter_frozen();
+        let to_drive = |active: OcWave, low: bool| {
+            let drive = match if low { active.inverted() } else { active } {
+                OcWave::Const(level) => LedcDrive::Level(level),
+                OcWave::Pulse(hpoint, duty, wave_period) => LedcDrive::Pwm {
+                    timer: timebase(wave_period),
+                    hpoint,
+                    duty,
+                },
             };
-        }
-        if (self.cr1 & 1) == 0 || self.counter_frozen() {
-            // A stopped counter holds its compare result.
-            return (LedcDrive::Level(drive.level_at(now)), true);
-        }
-        (drive, true)
+            if stopped {
+                // A stopped counter holds its compare result.
+                LedcDrive::Level(drive.level_at(now))
+            } else {
+                drive
+            }
+        };
+        // OSSR = 1: the disabled half of a pair sits at its inactive level.
+        let ossr = self.advanced && self.bdtr & BDTR_OSSR != 0;
+        [
+            if enabled {
+                (to_drive(main_active, active_low), true)
+            } else if ossr && n_enabled {
+                (LedcDrive::Level(active_low), true)
+            } else {
+                off[0]
+            },
+            if n_enabled {
+                (to_drive(n_active, n_active_low), true)
+            } else if ossr && enabled && comp_line.is_some() {
+                (LedcDrive::Level(n_active_low), true)
+            } else {
+                off[1]
+            },
+        ]
     }
 
     /// IRQ-level / counter-freeze predicate: the legacy `tick()` returns the
@@ -1698,7 +1859,9 @@ impl crate::Peripheral for Timer {
 
 #[cfg(test)]
 mod tests {
-    use super::{Timer, TimerChannelOutputMode};
+    use super::{
+        complementary_line, Timer, TimerChannelOutputMode, BDTR_MOE, BDTR_OSSI, BDTR_OSSR,
+    };
     use crate::Peripheral;
 
     #[test]
@@ -1992,6 +2155,123 @@ mod tests {
         t.write_u32(0x20, 0b01).unwrap();
         assert_eq!(lines.mode(0), LineDrive::PushPull);
         assert!(lines.level(0), "OC1M=101 forced active");
+    }
+
+    /// A walk-driven TIM1-class timer with its output wire armed: PSC =
+    /// `psc`, ARR = 9, channel 1 in PWM mode 1 at CCR1 = `ccr1`, CCER =
+    /// `ccer`, BDTR = `bdtr`.
+    fn advanced_output_timer(psc: u32, ccr1: u32, ccer: u32, bdtr: u32) -> Timer {
+        let mut t = Timer::new_with_layout(16, true);
+        t.output_lines_arc();
+        t.write_u32(0x28, psc).unwrap();
+        t.write_u32(0x2C, 9).unwrap();
+        t.write_u32(0x34, ccr1).unwrap();
+        t.write_u32(0x18, 0b110 << 4).unwrap();
+        t.write_u32(0x20, ccer).unwrap();
+        t.write_u32(0x44, bdtr).unwrap();
+        t.write_u32(0x00, 1).unwrap();
+        t
+    }
+
+    /// (OC1, OC1N) sampled once per tick for `n` ticks.
+    fn sample_pair(t: &mut Timer, n: usize) -> Vec<(bool, bool)> {
+        let n_line = complementary_line(0).unwrap();
+        (0..n)
+            .map(|_| {
+                t.tick();
+                (t.output_level(0), t.output_level(n_line))
+            })
+            .collect()
+    }
+
+    /// RM0008 Table 83, MOE = 1: CC1E|CC1NE gives OC1 = OC1REF and OC1N =
+    /// !OC1REF; with no dead time they are exact complements.
+    #[test]
+    fn complementary_pair_without_dead_time_is_an_exact_inverse() {
+        let mut t = advanced_output_timer(0, 3, 0b0101, BDTR_MOE);
+        sample_pair(&mut t, 10);
+        let s = sample_pair(&mut t, 100);
+        assert!(s.iter().all(|&(p, n)| p != n), "{s:?}");
+        assert_eq!(s.iter().filter(|&&(p, _)| p).count(), 30);
+    }
+
+    /// CC1NE alone gives OC1N = OC1REF, not its inverse; CC1NP inverts it.
+    /// This is what ch32fun's tim1_pwm relies on for PD0.
+    #[test]
+    fn lone_ccxne_output_follows_ocxref() {
+        let mut t = advanced_output_timer(0, 3, 0b0100, BDTR_MOE);
+        sample_pair(&mut t, 10);
+        let high = sample_pair(&mut t, 100).iter().filter(|&&(_, n)| n).count();
+        assert_eq!(high, 30, "OC1N = OC1REF, active for CNT < 3");
+        let mut inv = advanced_output_timer(0, 3, 0b1100, BDTR_MOE);
+        sample_pair(&mut inv, 10);
+        let high = sample_pair(&mut inv, 100)
+            .iter()
+            .filter(|&&(_, n)| n)
+            .count();
+        assert_eq!(high, 70, "CC1NP inverts");
+        let lines = inv.output_lines_arc();
+        use crate::peripherals::pad_lines::LineDrive;
+        assert_eq!(lines.mode(0), LineDrive::Input, "OSSR = 0 releases OC1");
+    }
+
+    /// DTG delays each rising edge by DT tDTS; with PSC = 1 (two cycles per
+    /// count) a 3-cycle dead time is not a whole count. Period 20 cycles,
+    /// OC1REF active for 6 (CCR1 = 3): OC1 is high 6 - 3 = 3 cycles, OC1N
+    /// 14 - 3 = 11, and both are low for the 3 + 3 dead-time cycles.
+    #[test]
+    fn dead_time_delays_both_rising_edges_in_ck_int_cycles() {
+        let mut t = advanced_output_timer(1, 3, 0b0101, BDTR_MOE | 3);
+        sample_pair(&mut t, 40);
+        let s = sample_pair(&mut t, 200);
+        assert!(s.iter().all(|&(p, n)| !(p && n)), "never both active");
+        assert_eq!(s.iter().filter(|&&(p, _)| p).count(), 30);
+        assert_eq!(s.iter().filter(|&&(_, n)| n).count(), 110);
+        assert_eq!(s.iter().filter(|&&(p, n)| !p && !n).count(), 60);
+        // CKD = 10 doubles tDTS twice: 12 cycles swallow OC1's 6-cycle pulse.
+        let mut t = advanced_output_timer(1, 3, 0b0101, BDTR_MOE | 3);
+        t.write_u32(0x00, 1 | (0b10 << 8)).unwrap();
+        sample_pair(&mut t, 40);
+        let s = sample_pair(&mut t, 200);
+        assert!(s.iter().all(|&(p, _)| !p), "pulse shorter than DT vanishes");
+        assert_eq!(s.iter().filter(|&&(_, n)| n).count(), 20 * (14 - 12) / 2);
+    }
+
+    /// MOE = 0: OSSI = 0 releases both pads; OSSI = 1 holds each enabled
+    /// output at CR2.OIS1 / OIS1N. MOE = 1 with OSSR = 1 drives the disabled
+    /// half of a pair at its inactive level (CC1P = 0 → low).
+    #[test]
+    fn idle_and_off_state_levels() {
+        use crate::peripherals::pad_lines::LineDrive;
+        let n_line = complementary_line(0).unwrap();
+        let mut t = advanced_output_timer(0, 3, 0b0101, 0);
+        let lines = t.output_lines_arc();
+        assert_eq!(lines.mode(0), LineDrive::Input);
+        assert_eq!(lines.mode(n_line), LineDrive::Input);
+        t.write_u32(0x04, 0b10 << 8).unwrap(); // OIS1 = 0, OIS1N = 1
+        t.write_u32(0x44, BDTR_OSSI).unwrap();
+        assert_eq!(lines.mode(0), LineDrive::PushPull);
+        assert_eq!((t.output_level(0), t.output_level(n_line)), (false, true));
+        let mut t = advanced_output_timer(0, 3, 0b0100, BDTR_MOE | BDTR_OSSR);
+        let lines = t.output_lines_arc();
+        assert_eq!(lines.mode(0), LineDrive::PushPull);
+        sample_pair(&mut t, 10);
+        assert!(sample_pair(&mut t, 30).iter().all(|&(p, _)| !p));
+    }
+
+    /// A general-purpose timer has no OCxN: CCER bit 2 does not stick and
+    /// the complementary lines stay released.
+    #[test]
+    fn general_purpose_timer_never_drives_complementary_lines() {
+        use crate::peripherals::pad_lines::LineDrive;
+        let mut t = output_timer(0b110, 3, 0b0101);
+        let lines = t.output_lines_arc();
+        for ch in 0..3 {
+            assert_eq!(
+                lines.mode(complementary_line(ch).unwrap()),
+                LineDrive::Input
+            );
+        }
     }
 
     #[test]

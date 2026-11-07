@@ -112,6 +112,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/sht31.yaml"),
     ),
     (
+        &["shtc3"],
+        include_str!("../../../configs/devices/shtc3.yaml"),
+    ),
+    (
         &["adxl345_spi"],
         include_str!("../../../configs/devices/adxl345_spi.yaml"),
     ),
@@ -130,6 +134,14 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["lsm303agr_mag"],
         include_str!("../../../configs/devices/lsm303agr_mag.yaml"),
+    ),
+    (
+        &["lis2dux12"],
+        include_str!("../../../configs/devices/lis2dux12.yaml"),
+    ),
+    (
+        &["lsm6dsox"],
+        include_str!("../../../configs/devices/lsm6dsox.yaml"),
     ),
     (
         &["pybadge_buttons"],
@@ -222,6 +234,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["ina219"],
         include_str!("../../../configs/devices/ina219.yaml"),
+    ),
+    (
+        &["max17048"],
+        include_str!("../../../configs/devices/max17048.yaml"),
     ),
     (
         &["ads1115"],

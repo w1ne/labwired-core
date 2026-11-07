@@ -14,6 +14,14 @@ ram:
   base: 0x20000000
   size: "128KB"
 
+# Board-facing pads used by the NUCLEO-G474RE smoke (ST UM2505): the default
+# STLINK-V3E VCP is LPUART1 on PA2/PA3, LD2 is PA5, and B1 is PC13.
+pins:
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA3: { gpio: "gpioa", bit: 3 }
+  PA5: { gpio: "gpioa", bit: 5 }
+  PC13: { gpio: "gpioc", bit: 13 }
+
 peripherals:
   - id: "rcc"
     type: "rcc"
@@ -25,6 +33,7 @@ peripherals:
     type: "gpio"
     base_address: 0x48000000
     size: "1KB"
+    clock: { reg: "ahb2enr", bit: 0 }
     config:
       debug_schema: "../peripherals/stm32g474re/gpioa.yaml"
       profile: "stm32v2"
@@ -39,6 +48,7 @@ peripherals:
     type: "gpio"
     base_address: 0x48000800
     size: "1KB"
+    clock: { reg: "ahb2enr", bit: 2 }
     config:
       debug_schema: "../peripherals/stm32g474re/gpioc.yaml"
       profile: "stm32v2"
@@ -72,6 +82,7 @@ peripherals:
     type: "uart"
     base_address: 0x40008000
     irq: 91
+    clock: { reg: "apb1enr2", bit: 0 }
     config:
       debug_schema: "../peripherals/stm32g474re/lpuart1.yaml"
       profile: "stm32v2"

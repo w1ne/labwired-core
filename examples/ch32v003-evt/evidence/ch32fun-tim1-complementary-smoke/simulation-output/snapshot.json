@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      546,
+      536872948,
+      536871932,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3758157824,
+      2520029,
+      120000,
+      16,
+      2499997,
+      1073818624,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 824,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 540,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 19999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 20000000,
+  "cycles": 53333408,
+  "instructions": 20000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 20000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 20000000
+    }
+  },
+  "limits": {
+    "max_steps": 40000000,
+    "max_cycles": 20000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "9a27d50f42e8698480c6a0f7c5a80fb368ad10989506a35a743ae1adcdd47a08",
+  "config": {
+    "firmware": "examples/ch32v003-evt/ch32fun/tim1_pwm_complementary_outputs.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-ch32fun-tim1-complementary-smoke.yaml",
+    "script": "examples/ch32v003-evt/ch32fun-tim1-complementary-smoke.yaml"
+  }
+}

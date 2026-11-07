@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-f091rc",
+  "status": "pass",
+  "crate": "firmware-nucleo-f091rc-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/nucleo-f091rc/io-smoke.yaml",
+  "system": "configs/systems/nucleo-f091rc.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T20:59:57Z",
+  "finished_at_utc": "2026-11-03T21:00:13Z",
+  "elapsed_seconds": 16,
+  "elapsed_ms": 15741,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 14.938,
+    "build_firmware": 0.534,
+    "run_smoke": 0.257
+  },
+  "stages_ms": {
+    "build_cli": 14938,
+    "build_firmware": 534,
+    "run_smoke": 257
+  }
+}

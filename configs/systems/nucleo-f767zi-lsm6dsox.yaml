@@ -1,0 +1,18 @@
+# NUCLEO-F767ZI customer design with an externally wired ST LSM6DSOX.
+# The chip pin map records I2C1 on PB8/PB9 (D15/D14); SDO/SA0 is grounded so
+# the sensor answers at 0x6A. The smoke exercises only the accelerometer path.
+name: "nucleo-f767zi-lsm6dsox"
+chip: "../chips/stm32f767.yaml"
+external_devices:
+  - id: "lsm6dsox"
+    type: "lsm6dsox"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x6A
+board_io:
+  - id: "led1_pb0"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true

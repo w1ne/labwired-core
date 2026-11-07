@@ -1,0 +1,518 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 130000000,
+  "cycles": 346693646,
+  "instructions": 130000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 130000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 130000000
+    }
+  },
+  "limits": {
+    "max_steps": 200000000,
+    "max_cycles": 130000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "i2c_oled example",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "initializing i2c oled...done.",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "buffer fill with binary",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "pixel plots",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "oled",
+          "x": 0,
+          "y": 0,
+          "min_ink": 0.062,
+          "max_ink": 0.063
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "oled",
+          "x": 0,
+          "y": 0,
+          "w": 4,
+          "h": 1,
+          "min_ink": 1.0
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "oled",
+          "x": 0,
+          "y": 31,
+          "w": 4,
+          "h": 1,
+          "min_ink": 1.0
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "oled",
+          "x": 124,
+          "y": 31,
+          "w": 4,
+          "h": 1,
+          "min_ink": 1.0
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "oled",
+          "x": 124,
+          "y": 0,
+          "w": 4,
+          "h": 1,
+          "min_ink": 1.0
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "oled",
+          "x": 0,
+          "y": 8,
+          "w": 16,
+          "h": 16,
+          "min_ink": 0.0,
+          "max_ink": 0.0
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "oled",
+          "x": 60,
+          "y": 15,
+          "w": 8,
+          "h": 2,
+          "min_ink": 1.0
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "oled",
+          "x": 60,
+          "y": 0,
+          "w": 8,
+          "h": 15,
+          "min_ink": 0.0,
+          "max_ink": 0.0
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      3274,
+      536872916,
+      536871932,
+      0,
+      130,
+      4294967295,
+      13,
+      128,
+      31,
+      25207118,
+      4294967295,
+      458884,
+      100000,
+      3758157824,
+      4286010126,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 516,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 3008,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 129999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "b2e05c6cb1e955df36a630eb956ec00acfc2fa2fc4e4eef95836bc294f7d34d4",
+  "config": {
+    "firmware": "examples/ch32v003-evt/ch32fun/i2c_oled.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-ch32fun-i2c-oled-smoke.yaml",
+    "script": "examples/ch32v003-evt/ch32fun-i2c-oled-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "debug_printf",
+        "kind": "native",
+        "base": 3758096628,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfic",
+        "kind": "native",
+        "base": 3758153728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1073816576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "i2c",
+        "base": 1073763328,
+        "registers": [],
+        "artifacts": [
+          {
+            "kind": "framebuffer",
+            "id": "i2c@0x3c",
+            "meta": {
+              "device_id": "oled",
+              "format": "ssd1306_page",
+              "frames_seen": [
+                {
+                  "generation": 9052592289448545061,
+                  "ink_bytes": 0,
+                  "sha256": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560",
+                  "t_us": 200394
+                },
+                {
+                  "generation": 10678815456970688805,
+                  "ink_bytes": 510,
+                  "sha256": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+                  "t_us": 200791
+                },
+                {
+                  "generation": 282505694150222789,
+                  "ink_bytes": 256,
+                  "sha256": "0f22907431fb653519b54a82dc133843ae4986f557beefe259f4a87681945d99",
+                  "t_us": 2201194
+                }
+              ],
+              "generation": 282505694150222789,
+              "generation_history": [
+                9052592289448545061,
+                10678815456970688805,
+                282505694150222789
+              ],
+              "h": 32,
+              "ink_bytes": 256,
+              "lit_pixels": 256,
+              "powered": true,
+              "supply_generation": null,
+              "w": 128
+            }
+          }
+        ]
+      }
+    ],
+    "devices": [
+      {
+        "id": "oled",
+        "device_type": "oled-ssd1306-128x32",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c1",
+          "address": 60
+        },
+        "artifacts": [
+          {
+            "kind": "framebuffer",
+            "id": "oled",
+            "meta": {
+              "device_id": "oled",
+              "format": "ssd1306_page",
+              "frames_seen": [
+                {
+                  "generation": 9052592289448545061,
+                  "ink_bytes": 0,
+                  "sha256": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560",
+                  "t_us": 200394
+                },
+                {
+                  "generation": 10678815456970688805,
+                  "ink_bytes": 510,
+                  "sha256": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+                  "t_us": 200791
+                },
+                {
+                  "generation": 282505694150222789,
+                  "ink_bytes": 256,
+                  "sha256": "0f22907431fb653519b54a82dc133843ae4986f557beefe259f4a87681945d99",
+                  "t_us": 2201194
+                }
+              ],
+              "generation": 282505694150222789,
+              "generation_history": [
+                9052592289448545061,
+                10678815456970688805,
+                282505694150222789
+              ],
+              "h": 32,
+              "ink_bytes": 256,
+              "lit_pixels": 256,
+              "powered": true,
+              "supply_generation": null,
+              "w": 128
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (48000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 6792,
+    "data_bytes": 0,
+    "bss_bytes": 512,
+    "flash_used_bytes": 6792,
+    "ram_static_bytes": 512,
+    "flash_total_bytes": 16384,
+    "ram_total_bytes": 2048,
+    "flash_used_pct": 41.46,
+    "ram_static_pct": 25.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 346693646,
+    "instructions": 130000000,
+    "steps_executed": 130000000,
+    "memory_reads": 130005191,
+    "memory_writes": 5623,
+    "peripheral_accesses": 43319141,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 516,
+        "count": 169219
+      },
+      {
+        "pc": 520,
+        "count": 169218
+      },
+      {
+        "pc": 518,
+        "count": 169180
+      },
+      {
+        "pc": 2588,
+        "count": 78
+      },
+      {
+        "pc": 1522,
+        "count": 39
+      },
+      {
+        "pc": 2582,
+        "count": 39
+      },
+      {
+        "pc": 2788,
+        "count": 39
+      }
+    ]
+  }
+}

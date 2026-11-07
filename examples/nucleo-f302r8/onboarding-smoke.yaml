@@ -1,0 +1,13 @@
+# NUCLEO-F302R8: USART2 VCP output and repeated LD2 GPIOA/PA5 transitions.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-f302r8-smoke"
+  system: "../../configs/systems/nucleo-f302r8.yaml"
+limits:
+  max_steps: 2200
+assertions:
+  - uart_contains: "NUCLEO_F302R8_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

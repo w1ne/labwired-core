@@ -1,0 +1,13 @@
+# Espressif ESP32-C3-LCDkit board profile, narrowed to its included GC9A01 LCD.
+name: "esp32c3-lcdkit"
+chip: "../chips/esp32c3-lcdkit-smoke.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+
+external_devices:
+  - id: "lcd"
+    type: "gc9a01"
+    connection: "spi2"
+    config:
+      cs_pin: "GPIO7"
+      dc_pin: "GPIO2"

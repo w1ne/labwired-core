@@ -1,0 +1,26 @@
+$ target/debug/labwired test --script examples/ch32v003-evt/ch32fun-tim1-pwm-smoke.yaml --output-dir /tmp/tim1pwm --no-uart-stdout --watch-gpio gpiod:0 --watch-gpio gpioc:4
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  9/9 checks · ch32fun-tim1-pwm-smoke · 37000000 steps · 24.64s
+$ gzip -9 -n -c /tmp/tim1pwm/result.json > pwm-capture.json.gz
+$ python3 -I examples/ch32v003-evt/check-tim1-pwm.py examples/ch32v003-evt/evidence/ch32fun-tim1-pwm-smoke/pwm-capture.json.gz
+window: cycles 32686020..36999876 (16851 whole periods of 256 cycles)
+  CH1N low 116/256  CH4 low 244/256  for 783 periods
+  CH1N low 117/256  CH4 low 245/256  for 937 periods
+  CH1N low 118/256  CH4 low 246/256  for 938 periods
+  CH1N low 119/256  CH4 low 247/256  for 937 periods
+  CH1N low 120/256  CH4 low 248/256  for 938 periods
+  CH1N low 121/256  CH4 low 249/256  for 937 periods
+  CH1N low 122/256  CH4 low 250/256  for 938 periods
+  CH1N low 123/256  CH4 low 251/256  for 937 periods
+  CH1N low 124/256  CH4 low 252/256  for 938 periods
+  CH1N low 125/256  CH4 low 253/256  for 938 periods
+  CH1N low 126/256  CH4 low 254/256  for 937 periods
+  CH1N low 127/256  CH4 low 255/256  for 938 periods
+  CH1N low 128/256  CH4 low   0/256  for 937 periods
+  CH1N low 129/256  CH4 low   1/256  for 938 periods
+  CH1N low 130/256  CH4 low   2/256  for 937 periods
+  CH1N low 131/256  CH4 low   3/256  for 938 periods
+  CH1N low 132/256  CH4 low   4/256  for 937 periods
+  CH1N low 133/256  CH4 low   5/256  for 938 periods
+  CH1N low 134/256  CH4 low   6/256  for 130 periods
+PASS: 16851 periods, 19 duty values, CH1N low = OC1REF high = count, CH4 low = (count + 128) & 255, steps of +1 every ~937.5 periods (Delay_Ms(5)); 9 step(s) where CH4 took the new count one period after CH1N

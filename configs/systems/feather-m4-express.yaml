@@ -1,0 +1,14 @@
+# Narrow Adafruit Feather M4 Express profile.
+# D13/LED_BUILTIN is the on-board red LED on SAMD51 PA23. Only its GPIO path is
+# claimed; USB, QSPI flash, the NeoPixel, UART, charging and other MCU features
+# are outside this profile.
+name: "feather-m4-express"
+chip: "../chips/atsamd51j19a-feather-m4-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_d13"
+    kind: "led"
+    peripheral: "porta"
+    pin: 23
+    signal: "output"
+    active_high: true

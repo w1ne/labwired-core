@@ -572,10 +572,9 @@ impl SystemBus {
     /// A declaration that STATES an address (or chip-select) must match it.
     /// Only a declaration that states none falls back to "the one remaining
     /// candidate", which is the case where the manifest deliberately left the
-    /// address to the model's own default. Without that split, the
-    /// classic-ESP32 board BMP280 at 0x76 — real, on the bus, and declared by
-    /// nobody — was handed the `mux` declaration's name purely for being found
-    /// first, which is a fabricated identity.
+    /// address to the model's own default. An undeclared model must never be
+    /// handed another device's name merely for being found first; that would be
+    /// a fabricated identity.
     fn match_addressed_decl(
         decls: &[super::ExternalDeviceDecl],
         effective: &[(usize, String, Option<u8>)],

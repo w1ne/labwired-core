@@ -1,0 +1,8 @@
+   text	   data	    bss	    dec	    hex	filename
+    708	      0	      0	    708	    2c4	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/blink.elf
+   text	   data	    bss	    dec	    hex	filename
+   1700	      0	      4	   1704	    6a8	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/uartdemo.elf
+   text	   data	    bss	    dec	    hex	filename
+   2332	      0	      4	   2336	    920	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/systick_irq.elf
+   text	   data	    bss	    dec	    hex	filename
+   2176	      0	      0	   2176	    880	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/adc_polled.elf

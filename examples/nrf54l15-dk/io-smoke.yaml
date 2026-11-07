@@ -7,7 +7,7 @@
 schema_version: "1.0"
 inputs:
   firmware: "../../tests/fixtures/nrf54l15-smoke.elf"
-  system: "./system.yaml"
+  system: "../../configs/systems/nrf54l15dk.yaml"
 limits:
   max_steps: 200000
 assertions:
@@ -17,4 +17,8 @@ assertions:
   - uart_contains: "core=cortex-m33 rram=1524K ram=256K"
   # UARTE20 and GPIO2 register bases match the MDK/SVD map (not nRF52).
   - uart_contains: "uarte20@0x500C6000 gpio2@0x50050400"
+  # LED0 is P2.09 on the DK; catch a bad port base or pin map at the board pad.
+  - gpio_edges:
+      pin: "gpio2:9"
+      min_edges: 1
   - expected_stop_reason: max_steps

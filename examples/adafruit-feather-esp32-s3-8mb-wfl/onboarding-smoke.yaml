@@ -1,0 +1,13 @@
+# Adafruit ESP32-S3 Feather #5885: read the onboard MAX17048's VCELL and SOC.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-adafruit-feather-esp32-s3-8mb-wfl-smoke"
+  system: "../../configs/systems/adafruit-feather-esp32-s3-8mb-wfl.yaml"
+limits:
+  # Let UART0 drain the complete marker at the default baud before stopping.
+  max_steps: 3000000
+assertions:
+  - uart_contains: "MAX17048_VCELL=0xC080"
+  - uart_contains: "MAX17048_SOC=0x4880"
+  - uart_contains: "ADAFRUIT_FEATHER_ESP32S3_MAX17048_OK"
+  - expected_stop_reason: max_steps

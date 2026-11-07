@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 2866,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 2.866
+  },
+  "targets": [
+    {
+      "target_id": "nucleo-l552ze-q",
+      "status": "pass",
+      "crate": "firmware-l552ze-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-l552ze-q/io-smoke.yaml",
+      "system": "examples/nucleo-l552ze-q/system.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T01:58:01Z",
+      "finished_at_utc": "2026-11-04T01:58:04Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2866,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.361,
+        "build_firmware": 0.506,
+        "run_smoke": 1.986
+      },
+      "stages_ms": {
+        "build_cli": 361,
+        "build_firmware": 506,
+        "run_smoke": 1986
+      },
+      "_artifact_path": "examples/nucleo-l552ze-q/evidence"
+    }
+  ]
+}

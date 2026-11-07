@@ -1,0 +1,138 @@
+{
+ "command": "labwired test --script examples/ch32v003-evt/ch32fun-exti-smoke.yaml --watch-gpio gpioc:1 --watch-gpio gpiod:3",
+ "status": "pass",
+ "stimuli": [
+  {
+   "channel": "pressed",
+   "component": "button_pd3",
+   "value": 1.0,
+   "trigger": {
+    "after_cycles": {
+     "cycles": 200000
+    }
+   },
+   "outcome": "applied",
+   "at_cycle": 200000
+  },
+  {
+   "channel": "pressed",
+   "component": "button_pd3",
+   "value": 0.0,
+   "trigger": {
+    "after_cycles": {
+     "cycles": 400000
+    }
+   },
+   "outcome": "applied",
+   "at_cycle": 400000
+  },
+  {
+   "channel": "pressed",
+   "component": "button_pd3",
+   "value": 1.0,
+   "trigger": {
+    "after_cycles": {
+     "cycles": 600000
+    }
+   },
+   "outcome": "applied",
+   "at_cycle": 600000
+  }
+ ],
+ "logic_edges": {
+  "dropped": 0,
+  "now_cycle": 800000,
+  "channels": [
+   {
+    "ch": 0,
+    "channel": "CH0",
+    "peripheral": "gpioc",
+    "pin": 1,
+    "initial": 0,
+    "transitions": [
+     {
+      "cycle": 200007,
+      "value": 1
+     },
+     {
+      "cycle": 200009,
+      "value": 0
+     },
+     {
+      "cycle": 600007,
+      "value": 1
+     },
+     {
+      "cycle": 600009,
+      "value": 0
+     }
+    ],
+    "gaps": [],
+    "initial_state": "z",
+    "states": [
+     {
+      "cycle": 80,
+      "state": "0"
+     },
+     {
+      "cycle": 200007,
+      "state": "1"
+     },
+     {
+      "cycle": 200009,
+      "state": "0"
+     },
+     {
+      "cycle": 600007,
+      "state": "1"
+     },
+     {
+      "cycle": 600009,
+      "state": "0"
+     }
+    ],
+    "mode": "output",
+    "edge_count": 4
+   },
+   {
+    "ch": 1,
+    "channel": "CH1",
+    "peripheral": "gpiod",
+    "pin": 3,
+    "initial": 0,
+    "transitions": [
+     {
+      "cycle": 200001,
+      "value": 1
+     },
+     {
+      "cycle": 400001,
+      "value": 0
+     },
+     {
+      "cycle": 600001,
+      "value": 1
+     }
+    ],
+    "gaps": [],
+    "initial_state": "0",
+    "states": [
+     {
+      "cycle": 200001,
+      "state": "1"
+     },
+     {
+      "cycle": 400001,
+      "state": "0"
+     },
+     {
+      "cycle": 600001,
+      "state": "1"
+     }
+    ],
+    "mode": "input",
+    "edge_count": 3
+   }
+  ]
+ }
+}

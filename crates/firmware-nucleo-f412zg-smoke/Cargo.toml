@@ -1,0 +1,15 @@
+[package]
+name = "firmware-nucleo-f412zg-smoke"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-nucleo-f412zg-smoke"
+path = "src/main.rs"
+test = false
+bench = false

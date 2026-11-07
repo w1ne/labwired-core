@@ -1,0 +1,14 @@
+# Espressif ESP32-C6-DevKitM-1-N4. The focused profile models UART0 capture
+# and the onboard WS2812B RGB LED on GPIO8 through RMT channel 0.
+name: "esp32c6-devkitm1-n4"
+chip: "../chips/esp32c6-devkitm1-n4-smoke.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO8"
+      num_pixels: 1
+      cpu_hz: 160_000_000

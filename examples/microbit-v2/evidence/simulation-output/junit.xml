@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.006339">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="a91893c60ed9a30717f2ee1bf5147932524ec05260a1b11f863989155ccda655"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.006339">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

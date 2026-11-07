@@ -1,0 +1,63 @@
+# Narrow STM32F303K8T6 slice for NUCLEO-F303K8 onboarding.
+# This profile claims only reset-clock gates, GPIOA/GPIOB, SysTick and USART2.
+# RCC clock-tree switching, CCM SRAM, ADCs, timers, DMA, USB, and the other
+# peripherals are outside this smoke. The 12 KiB main SRAM bank is mapped;
+# the separate 4 KiB CCM bank is deliberately omitted.
+# Sources: ST DS9866, RM0316, PM0214 and UM1956 / MB1180.
+name: stm32f303k8-nucleo-smoke
+arch: arm
+core: cortex-m4
+cpu_hz: 8000000
+
+flash:
+  base: 0x08000000
+  size: 64KB
+ram:
+  base: 0x20000000
+  size: 12KB
+
+# USART2 TX reaches the board's default ST-LINK VCP on PA2; LD3 is PB3.
+pins:
+  PA2: { gpio: gpioa, bit: 2 }
+  PA15: { gpio: gpioa, bit: 15 }
+  PB3: { gpio: gpiob, bit: 3 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 32
+    config:
+      # The smoke uses only AHBENR/APB1ENR gate bits, whose offsets and bits
+      # match the narrow stm32f0 profile. Other RCC behavior is not claimed.
+      profile: stm32f0
+
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x48000000
+    size: 1KB
+    clock: { reg: ahbenr, bit: 17 }
+    config:
+      profile: stm32v2
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x24000000
+
+  - id: gpiob
+    type: gpio
+    base_address: 0x48000400
+    size: 1KB
+    clock: { reg: ahbenr, bit: 18 }
+    config:
+      profile: stm32v2
+
+  - id: usart2
+    type: uart
+    base_address: 0x40004400
+    size: 1KB
+    clock: { reg: apb1enr, bit: 17 }
+    config:
+      profile: stm32v2

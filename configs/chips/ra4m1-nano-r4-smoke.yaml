@@ -1,0 +1,25 @@
+# Narrow Arduino Nano R4 profile (RA4M1) for its active-high LED_BUILTIN.
+# It declares only the GPIO port used by the smoke; serial, USB, I2C, SPI,
+# timers, ADC, DAC, CAN, and the RGB LED are outside this profile.
+name: "r7fa4m1ab"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 48_000_000
+flash:
+  base: 0x00000000
+  size: "256KB"
+ram:
+  base: 0x20000000
+  size: "32KB"
+pins:
+  # ArduinoCore-renesas NANOR4 variant: Arduino LED_BUILTIN is pin 22 / P204.
+  P204: { gpio: port2, bit: 4, functions: [{ type: gpio, peripheral: port2 }] }
+peripherals:
+  # RA4M1 PORT2 @ 0x4004_0040 (R01UH0887 §19).
+  - id: "port2"
+    type: "gpio"
+    base_address: 0x40040040
+    size: "32B"
+    config:
+      profile: "ra_port"
+      swapped_half_aliases: true

@@ -1,0 +1,17 @@
+[package]
+name = "firmware-feather-m4-express-smoke"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+build = "build.rs"
+
+[dependencies]
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-feather-m4-express-smoke"
+path = "src/main.rs"
+test = false
+bench = false

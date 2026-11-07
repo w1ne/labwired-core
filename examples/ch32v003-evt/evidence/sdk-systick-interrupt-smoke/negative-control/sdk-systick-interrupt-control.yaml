@@ -1,0 +1,23 @@
+# NEGATIVE CONTROL: expected to FAIL (see chip.yaml).
+# Run WCH's unmodified SYSTICK_Interrupt example (build it with
+# build-sdk-interrupt-examples.sh). It enables SysTick_IRQn in the PFIC and
+# arms a 1 s auto-reload compare (CTLR = 0xF, CMP = SystemCoreClock - 1 at
+# 24 MHz); its handler only writes SysTick->SR = 0.
+#
+# The handler has no visible output, so the check is STK_SR itself: CNTIF
+# latches at every compare, and only the handler clears it. 50M steps cover
+# two compare periods; without interrupt delivery SR ends at 1 (see
+# evidence/sdk-systick-interrupt-smoke/negative-control/).
+schema_version: "1.0"
+inputs:
+  firmware: "../../../../../target/wch-sdk/ch32v003f4p6-wch-sdk-systick-interrupt.elf"
+  system: "system.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - uart_contains: "SystemClk:24000000"
+  - memory_value:
+      address: 0xE000F004
+      expected_value: 0
+      mask: 1
+  - expected_stop_reason: max_steps

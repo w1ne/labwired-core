@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1476527128,
+      1073741824,
+      0,
+      53,
+      3221225472,
+      0,
+      0,
+      537001968,
+      0,
+      0,
+      0,
+      0,
+      134219280,
+      537001968,
+      1476530200,
+      134219262
+    ],
+    "pc": 134219262,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 20000,
+  "cycles": 20000,
+  "instructions": 20000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 20000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 20000
+    }
+  },
+  "limits": {
+    "max_steps": 20000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "233b14269184a1a82ecc1f8b50511cb1eb967b97e4c2f2e808933dec50e50305",
+  "config": {
+    "firmware": "examples/nucleo-h753zi/../../target/thumbv7em-none-eabi/release/firmware-nucleo-h753zi-smoke",
+    "system": "examples/nucleo-h753zi/../../configs/systems/nucleo-h753zi.yaml",
+    "script": "examples/nucleo-h753zi/onboarding-smoke.yaml"
+  }
+}

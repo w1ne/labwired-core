@@ -1,0 +1,670 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 90000000,
+  "cycles": 240000042,
+  "instructions": 90000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 90000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 90000000
+    }
+  },
+  "limits": {
+    "max_steps": 100000000,
+    "max_cycles": 90000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiod:0",
+          "min_edges": 7
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiod:4",
+          "min_edges": 7
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiod:6",
+          "min_edges": 7
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioc:0",
+          "min_edges": 7
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      546,
+      536872948,
+      536871932,
+      0,
+      16,
+      1,
+      0,
+      0,
+      0,
+      1073811456,
+      12000016,
+      11249997,
+      1500000,
+      3758157824,
+      1073812480,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 698,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 540,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 89999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "5e5a25692bb4881cb0dd890eb90eeb8a7da2eac8840e216658b5ae594fb0eb9f",
+  "config": {
+    "firmware": "examples/ch32v003-evt/ch32fun/blink.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-ch32fun-smoke.yaml",
+    "script": "examples/ch32v003-evt/ch32fun-blink-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "debug_printf",
+        "kind": "native",
+        "base": 3758096628,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfic",
+        "kind": "native",
+        "base": 3758153728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 90000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpiod",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 95,
+            "value": 1
+          },
+          {
+            "cycle": 12000100,
+            "value": 0
+          },
+          {
+            "cycle": 24000106,
+            "value": 1
+          },
+          {
+            "cycle": 36000114,
+            "value": 0
+          },
+          {
+            "cycle": 48000123,
+            "value": 1
+          },
+          {
+            "cycle": 60000131,
+            "value": 0
+          },
+          {
+            "cycle": 72000140,
+            "value": 1
+          },
+          {
+            "cycle": 84000148,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 73,
+            "state": "0"
+          },
+          {
+            "cycle": 95,
+            "state": "1"
+          },
+          {
+            "cycle": 12000100,
+            "state": "0"
+          },
+          {
+            "cycle": 24000106,
+            "state": "1"
+          },
+          {
+            "cycle": 36000114,
+            "state": "0"
+          },
+          {
+            "cycle": 48000123,
+            "state": "1"
+          },
+          {
+            "cycle": 60000131,
+            "state": "0"
+          },
+          {
+            "cycle": 72000140,
+            "state": "1"
+          },
+          {
+            "cycle": 84000148,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 8
+      },
+      {
+        "ch": 1,
+        "channel": "CH1",
+        "peripheral": "gpiod",
+        "pin": 4,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 96,
+            "value": 1
+          },
+          {
+            "cycle": 12000102,
+            "value": 0
+          },
+          {
+            "cycle": 24000107,
+            "value": 1
+          },
+          {
+            "cycle": 36000116,
+            "value": 0
+          },
+          {
+            "cycle": 48000124,
+            "value": 1
+          },
+          {
+            "cycle": 60000133,
+            "value": 0
+          },
+          {
+            "cycle": 72000141,
+            "value": 1
+          },
+          {
+            "cycle": 84000150,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 80,
+            "state": "0"
+          },
+          {
+            "cycle": 96,
+            "state": "1"
+          },
+          {
+            "cycle": 12000102,
+            "state": "0"
+          },
+          {
+            "cycle": 24000107,
+            "state": "1"
+          },
+          {
+            "cycle": 36000116,
+            "state": "0"
+          },
+          {
+            "cycle": 48000124,
+            "state": "1"
+          },
+          {
+            "cycle": 60000133,
+            "state": "0"
+          },
+          {
+            "cycle": 72000141,
+            "state": "1"
+          },
+          {
+            "cycle": 84000150,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 8
+      },
+      {
+        "ch": 2,
+        "channel": "CH2",
+        "peripheral": "gpiod",
+        "pin": 6,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 98,
+            "value": 1
+          },
+          {
+            "cycle": 12000104,
+            "value": 0
+          },
+          {
+            "cycle": 24000109,
+            "value": 1
+          },
+          {
+            "cycle": 36000118,
+            "value": 0
+          },
+          {
+            "cycle": 48000126,
+            "value": 1
+          },
+          {
+            "cycle": 60000135,
+            "value": 0
+          },
+          {
+            "cycle": 72000143,
+            "value": 1
+          },
+          {
+            "cycle": 84000152,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 87,
+            "state": "0"
+          },
+          {
+            "cycle": 98,
+            "state": "1"
+          },
+          {
+            "cycle": 12000104,
+            "state": "0"
+          },
+          {
+            "cycle": 24000109,
+            "state": "1"
+          },
+          {
+            "cycle": 36000118,
+            "state": "0"
+          },
+          {
+            "cycle": 48000126,
+            "state": "1"
+          },
+          {
+            "cycle": 60000135,
+            "state": "0"
+          },
+          {
+            "cycle": 72000143,
+            "state": "1"
+          },
+          {
+            "cycle": 84000152,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 8
+      },
+      {
+        "ch": 3,
+        "channel": "CH3",
+        "peripheral": "gpioc",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 99,
+            "value": 1
+          },
+          {
+            "cycle": 12000105,
+            "value": 0
+          },
+          {
+            "cycle": 24000110,
+            "value": 1
+          },
+          {
+            "cycle": 36000119,
+            "value": 0
+          },
+          {
+            "cycle": 48000127,
+            "value": 1
+          },
+          {
+            "cycle": 60000136,
+            "value": 0
+          },
+          {
+            "cycle": 72000144,
+            "value": 1
+          },
+          {
+            "cycle": 84000153,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 91,
+            "state": "0"
+          },
+          {
+            "cycle": 99,
+            "state": "1"
+          },
+          {
+            "cycle": 12000105,
+            "state": "0"
+          },
+          {
+            "cycle": 24000110,
+            "state": "1"
+          },
+          {
+            "cycle": 36000119,
+            "state": "0"
+          },
+          {
+            "cycle": 48000127,
+            "state": "1"
+          },
+          {
+            "cycle": 60000136,
+            "state": "0"
+          },
+          {
+            "cycle": 72000144,
+            "state": "1"
+          },
+          {
+            "cycle": 84000153,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 8
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpiod",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    },
+    {
+      "pin": "CH1",
+      "peripheral": "gpiod",
+      "number": 4,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    },
+    {
+      "pin": "CH2",
+      "peripheral": "gpiod",
+      "number": 6,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    },
+    {
+      "pin": "CH3",
+      "peripheral": "gpioc",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 708,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 708,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 16384,
+    "ram_total_bytes": 2048,
+    "flash_used_pct": 4.32,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 240000042,
+    "instructions": 90000000,
+    "steps_executed": 90000000,
+    "memory_reads": 90000000,
+    "memory_writes": 1,
+    "peripheral_accesses": 30000008,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 666,
+        "count": 62500
+      },
+      {
+        "pc": 668,
+        "count": 62500
+      },
+      {
+        "pc": 670,
+        "count": 62500
+      },
+      {
+        "pc": 700,
+        "count": 54688
+      },
+      {
+        "pc": 696,
+        "count": 54687
+      },
+      {
+        "pc": 698,
+        "count": 54687
+      }
+    ]
+  }
+}

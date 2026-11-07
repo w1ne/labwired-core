@@ -1,0 +1,21 @@
+# LabWired - NUCLEO-F446RE system manifest
+# Board wiring per ST UM1724 (MB1136 Nucleo-64): USART2 PA2/PA3 to the
+# on-board ST-LINK V2-1 Virtual COM Port, LD2 on PA5, B1 on PC13.
+# The chip descriptor intentionally exposes only the tested smoke profile.
+
+name: "nucleo-f446re"
+chip: "../chips/stm32f446re-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false

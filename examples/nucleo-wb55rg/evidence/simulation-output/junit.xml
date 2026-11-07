@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="1.256664">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="3c23397435af65437c73bb57ac6a42824838306ed1c761073c9b5ed8e9879483"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="1.256664">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NUCLEO-WB55RG ready" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;hb=0 ld1=on&quot;, &quot;hb=1 ld1=off&quot;, &quot;hb=2 ld2=on&quot;, &quot;hb=3 ld2=off&quot;]" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpiob:5 &gt;= 2 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpiob:0 &gt;= 2 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: gpio_edges: gpiob:1 &gt;= 2 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

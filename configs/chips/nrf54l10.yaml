@@ -1,0 +1,40 @@
+# Focused nRF54L10 application-core model, exercised on the nRF54L15-DK
+# configured for Nordic's nRF54L10 emulation target.
+#
+# Memory geometry follows Nordic's nRF54L10 devicetree: 1012 KiB application
+# RRAM at 0x00000000 and 192 KiB SRAM at 0x20000000. `flash` is the config
+# schema's executable-memory region; this part uses RRAM, not flash.
+#
+# This profile models only the two real peripheral paths used by the smoke:
+# GPIO P2 (DK LED0, P2.09) and UARTE20 (DK VCOM, TX P1.04 / RX P1.05). Other
+# nRF54L10 blocks are omitted; this profile makes no radio, security, ADC, TWI,
+# SPI, NFC, or coprocessor claim and declares no zero-answering stub windows.
+
+name: "nrf54l10"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 128_000_000
+
+flash:
+  base: 0x00000000
+  size: "1012KB"
+ram:
+  base: 0x20000000
+  size: "192KB"
+
+pins:
+  P2_09: { gpio: "gpio2", bit: 9 }
+
+peripherals:
+  - id: "uart20"
+    type: "nrf54l_uarte"
+    base_address: 0x500C6000
+    size: "4KB"
+    irq: 198
+  - id: "gpio2"
+    type: "gpio"
+    base_address: 0x50050400
+    size: 768
+    config:
+      profile: "nrf54l"
+      num_pins: 11

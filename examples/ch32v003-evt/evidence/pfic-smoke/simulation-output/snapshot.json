@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1088,
+      536872932,
+      536872984,
+      0,
+      1,
+      0,
+      0,
+      536870912,
+      536870912,
+      28,
+      4882,
+      1,
+      25,
+      536872916,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1088,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 1088,
+    "mcause": 2147483660,
+    "mtval": 0,
+    "mtime": 2999880,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 3000000,
+  "cycles": 6223744,
+  "instructions": 3000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 3000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 3000000
+    }
+  },
+  "limits": {
+    "max_steps": 3000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "088c09a72b21dddb7a443a37c0dca0090a78842d04dff5eb3c0ccec7c89c3b22",
+  "config": {
+    "firmware": "examples/ch32v003-evt/../../target/wch-sdk/ch32v003f4p6-pfic-smoke.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-pfic-smoke.yaml",
+    "script": "examples/ch32v003-evt/pfic-smoke.yaml"
+  }
+}

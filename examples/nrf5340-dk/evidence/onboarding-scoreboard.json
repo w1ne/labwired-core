@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 2109,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 2.109
+  },
+  "targets": [
+    {
+      "target_id": "nrf5340dk",
+      "status": "pass",
+      "crate": "firmware-nrf5340-dk-demo",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nrf5340-dk/io-smoke.yaml",
+      "system": "configs/systems/nrf5340dk.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T06:42:37Z",
+      "finished_at_utc": "2026-11-04T06:42:39Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2109,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.321,
+        "build_firmware": 0.207,
+        "run_smoke": 1.569
+      },
+      "stages_ms": {
+        "build_cli": 321,
+        "build_firmware": 207,
+        "run_smoke": 1569
+      },
+      "_artifact_path": "examples/nrf5340-dk/evidence"
+    }
+  ]
+}

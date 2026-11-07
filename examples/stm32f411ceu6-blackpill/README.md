@@ -21,12 +21,34 @@ sourcing of its base, IRQ and clock-gate bit.
 **Sim-derived, not silicon-verified.** No F411 part was on a bench for this
 onboarding. Every register value came from ST's CMSIS header
 (`stm32f411xe.h`) and the vendored `tests/fixtures/real_world/stm32f411.svd`.
-Two things are explicitly *not* established — see `VALIDATION.md`:
+The board LED pinout is supported by WeAct/LaskaKit documentation, but has not
+been measured on physical hardware. The broader chip profile still contains
+stubbed blocks; the board LED smoke uses a separate narrow profile with only
+RCC and GPIOC. See `VALIDATION.md`.
+
+Remaining unverified details:
 
 1. the DBGMCU IDCODE (no value is shipped; `dbg` is a stub), and
-2. the Black Pill LED/button pinout (carried over from the F401 Black Pill).
+2. the exact F411 silicon register values and electrical behavior.
 
 ## Quick Run
+
+Run the board-level PC13 LED smoke, using the focused RCC/GPIOC profile:
+
+```bash
+scripts/onboarding_smoke.sh \
+  --target-id stm32f411ceu6-blackpill-led-smoke \
+  --crate firmware-stm32f411-blackpill-smoke \
+  --target thumbv7em-none-eabi \
+  --script examples/stm32f411ceu6-blackpill/led-onboarding-smoke.yaml \
+  --system configs/systems/stm32f411ceu6-blackpill-led-smoke.yaml \
+  --out-dir examples/stm32f411ceu6-blackpill/evidence/led-smoke
+```
+
+The committed log and simulator output are under `evidence/led-smoke/`.
+The hosted oracle record is `evidence/labwired-verification.md`.
+
+The existing broad-chip self-test remains available:
 
 ```bash
 cargo run -q -p labwired-cli -- test \
@@ -45,7 +67,8 @@ Expected result:
 
 ## Files
 
-1. `system.yaml`: local board mapping for simulation runs.
-2. `io-smoke.yaml`: strict-onboarding smoke — runs the committed tier-1 fixture
-   blob and asserts its TIER1 self-test transcript.
-3. `VALIDATION.md`: reproducible validation commands and the honest scope.
+1. `system.yaml` and `io-smoke.yaml`: broad F411 model self-test fixture.
+2. `configs/systems/stm32f411ceu6-blackpill-led-smoke.yaml` and its chip profile:
+   the board-level smoke scope, limited to PC13 LED output.
+3. `led-onboarding-smoke.yaml`: firmware smoke script for the board LED.
+4. `VALIDATION.md`: source record, reproducible commands and scope limits.

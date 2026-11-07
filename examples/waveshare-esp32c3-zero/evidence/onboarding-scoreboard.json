@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 18623,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 18.623
+  },
+  "targets": [
+    {
+      "target_id": "waveshare-esp32c3-zero",
+      "status": "pass",
+      "crate": "firmware-esp32c3-waveshare-c3-zero-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/waveshare-esp32c3-zero/onboarding-smoke.yaml",
+      "system": "configs/systems/waveshare-esp32c3-zero.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T14:17:30Z",
+      "finished_at_utc": "2026-11-06T14:17:49Z",
+      "elapsed_seconds": 19,
+      "elapsed_ms": 18623,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 17.486,
+        "build_firmware": 0.586,
+        "run_smoke": 0.508
+      },
+      "stages_ms": {
+        "build_cli": 17486,
+        "build_firmware": 586,
+        "run_smoke": 508
+      },
+      "_artifact_path": "examples/waveshare-esp32c3-zero/evidence"
+    }
+  ]
+}

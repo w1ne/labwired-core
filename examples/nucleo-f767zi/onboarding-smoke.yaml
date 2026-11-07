@@ -1,0 +1,22 @@
+# LabWired — NUCLEO-F767ZI source-built onboarding smoke
+#
+# The fixture is compiled by core-onboarding-smoke.yml before this script runs.
+# Keep tier1-smoke.yaml pointed at the committed ELF for the coverage workflow.
+schema_version: "1.0"
+inputs:
+  firmware: "../tier1-fixture/stm32f767/target/thumbv7em-none-eabi/release/tier1-fixture-stm32f767"
+  system: "../../configs/systems/nucleo-f767zi.yaml"
+limits:
+  max_steps: 6000000
+assertions:
+  - uart_contains: "TIER1 uart PASS"
+  - uart_contains: "TIER1 clock PASS"
+  - uart_contains: "TIER1 gpio PASS"
+  - uart_contains: "TIER1 timer PASS"
+  - uart_contains: "TIER1 i2c PASS"
+  - uart_contains: "TIER1 spi PASS"
+  - uart_contains: "TIER1 adc PASS"
+  - uart_contains: "TIER1 wdt PASS"
+  - uart_contains: "TIER1 rtc PASS"
+  - uart_contains: "TIER1 done"
+  - expected_stop_reason: max_steps

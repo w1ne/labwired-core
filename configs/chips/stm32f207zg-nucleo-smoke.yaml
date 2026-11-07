@@ -1,0 +1,39 @@
+# Narrow STM32F207ZGT6 profile for the NUCLEO-F207ZG LD1 smoke.
+# Only the CPU memory map, F2 RCC clock gate, and GPIOB are declared.
+# USB, Ethernet, ST-LINK/VCP, buttons, and other peripherals remain out of scope.
+# Sources: ST DS6329, RM0033 Rev 9, and NUCLEO-144 UM1974 Rev 11.
+name: "stm32f207zgt6-nucleo-smoke"
+arch: "arm"
+core: "cortex-m3"
+# F2 boots from HSI at 16 MHz; the smoke does not reconfigure the clock tree.
+cpu_hz: 16_000_000
+
+flash:
+  base: 0x08000000
+  size: "1024KB"
+ram:
+  base: 0x20000000
+  # RM0033: SRAM1 (112 KB) and SRAM2 (16 KB) occupy one contiguous range.
+  size: "128KB"
+
+# UM1974: LD1 is on PB0 in the default SB120=ON, SB119=OFF configuration.
+pins:
+  PB0: { gpio: "gpiob", bit: 0, functions: [{ type: gpio, peripheral: gpiob }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/rcc.yaml"
+      profile: "stm32f4"
+
+  - id: "gpiob"
+    type: "stm32f4_gpio"
+    base_address: 0x40020400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/gpiob.yaml"
+    # RM0033 RCC_AHB1ENR.GPIOBEN, bit 1.
+    clock: { reg: "ahb1enr", bit: 1 }

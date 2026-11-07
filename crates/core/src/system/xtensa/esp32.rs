@@ -60,6 +60,10 @@ pub fn attach_esp32_external_devices(
     // `i2c0@0x70` entries instead of by the ids the author wrote.
     bus.record_external_devices(manifest);
 
+    // Register board-controlled supply rails before attaching I2C devices
+    // whose shared SupplyGate reads those domains.
+    install_gpio_supply_controls(bus, manifest)?;
+
     // Devices wired behind an I²C bus switch are attached as part of that
     // switch by `build_i2c_tree`, never straight onto a controller.
     let mux_children = crate::peripherals::components::i2c_mux_child_ids(manifest);
@@ -123,6 +127,66 @@ pub fn attach_esp32_external_devices(
     Ok(())
 }
 
+fn install_gpio_supply_controls(
+    bus: &mut SystemBus,
+    manifest: &labwired_config::SystemManifest,
+) -> anyhow::Result<()> {
+    let mut controls = std::collections::BTreeMap::<String, (u8, f64, f64)>::new();
+    for ext in &manifest.external_devices {
+        let Some(pin_value) = ext.config.get("supply_control_pin") else {
+            continue;
+        };
+        let pin_label = pin_value
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("{}: supply_control_pin must be GPIO<n>", ext.id))?;
+        let pin = pin_label
+            .strip_prefix("GPIO")
+            .and_then(|suffix| suffix.parse::<u8>().ok())
+            .ok_or_else(|| {
+                anyhow::anyhow!("{}: invalid supply_control_pin '{pin_label}'", ext.id)
+            })?;
+        let domain = ext
+            .config
+            .get("supply_domain")
+            .and_then(serde_yaml::Value::as_str)
+            .filter(|name| !name.is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!("{}: supply_control_pin requires supply_domain", ext.id)
+            })?;
+        let number = |key: &str| {
+            ext.config.get(key).and_then(|value| {
+                value
+                    .as_f64()
+                    .or_else(|| value.as_i64().map(|i| i as f64))
+                    .or_else(|| value.as_u64().map(|u| u as f64))
+            })
+        };
+        let min_v = number("supply_min_v").ok_or_else(|| {
+            anyhow::anyhow!("{}: supply_control_pin requires supply_min_v", ext.id)
+        })?;
+        let on_voltage_v = number("supply_on_v").ok_or_else(|| {
+            anyhow::anyhow!("{}: supply_control_pin requires supply_on_v", ext.id)
+        })?;
+        if let Some(previous) = controls.insert(domain.to_owned(), (pin, min_v, on_voltage_v)) {
+            anyhow::ensure!(
+                previous == (pin, min_v, on_voltage_v),
+                "external devices sharing supply domain '{domain}' must use the same GPIO and voltage"
+            );
+        }
+    }
+
+    for (domain, (pin, min_v, on_voltage_v)) in controls {
+        crate::peripherals::components::supply_domain::install_gpio_supply_control(
+            bus,
+            &domain,
+            pin,
+            min_v,
+            on_voltage_v,
+        )?;
+    }
+    Ok(())
+}
+
 /// Register a minimum-viable ESP32 (classic, Xtensa LX6) memory map on
 /// `bus` and return the CPU.  Reuses `XtensaLx7` for the CPU — LX6 is a
 /// near-subset of LX7 for the instructions a demo firmware uses (base
@@ -130,19 +194,12 @@ pub fn attach_esp32_external_devices(
 /// firmware that hits LX7-extension opcodes would need a proper LX6
 /// CPU type; the on-the-line demo doesn't.
 ///
-/// What's wired:
-///   * IRAM (SRAM0, instruction view) at 0x4008_0000
-///   * DRAM (SRAM2, data view)        at 0x3FFB_0000
-///   * Flash XIP (I-cache)            at 0x400D_0000
-///   * Flash XIP (D-cache alias)      at 0x3F40_0000
-///   * ROM0 (Espressif boot ROM)      at 0x4000_0000
-///   * UART0 (STM32F1-style layout)   at 0x3FF4_0000
-///
-/// What's NOT wired (silicon has these but they're out of scope for
-/// the hello-world / survival-test slice):
-///   * Wi-Fi MAC, Bluetooth controller, RTC, eFuse, GPIO matrix,
-///     SPI0/SPI1/SPI2/SPI3, I²C0/I²C1, TIMG0/TIMG1, second LX6 core,
-///     ULP coprocessor, hardware crypto.
+/// The base memory windows are IRAM, DRAM, flash XIP, and the Espressif boot
+/// ROM. The modeled peripheral table below also registers GPIO and its matrix,
+/// UART0/1/2, SPI0/1/2/3, I2C0/1, timer groups, and other implemented blocks.
+/// Wi-Fi radio/baseband, Bluetooth controller, and the ULP coprocessor remain
+/// outside this firmware model. A second LX6 can be attached by callers that
+/// construct a dual-core machine.
 ///
 /// UART0/1/2 use the real ESP32 register layout (`peripherals::esp32::uart`):
 /// TX/RX FIFO at offset 0x00, STATUS FIFO counts at `[7:0]`/`[23:16]`, the full
@@ -575,24 +632,11 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     register_esp32_peripherals(bus);
 
     // I2C0 (I2C_EXT0, TRM §11) at 0x3FF5_3000 — real command-list engine
-    // (`peripherals::esp32::i2c::Esp32I2c`). Built directly (not via the table
-    // loop) so a board-level I2C slave is attached: a BMP280 at 0x76, the
-    // canonical register-pointer device, lets firmware drive a full
-    // write-pointer / repeated-start / read transaction and read back genuine
-    // device data (CHIP_ID 0x58). Source 49 = ETS_I2C_EXT0_INTR_SOURCE.
+    // (`peripherals::esp32::i2c::Esp32I2c`). Board-level I2C slaves are
+    // attached only from the system manifest below, so a bare ESP32 board
+    // does not acquire a phantom sensor. Source 49 = ETS_I2C_EXT0_INTR_SOURCE.
     let i2c0 = crate::peripherals::esp32::i2c::Esp32I2c::new();
     bus.add_peripheral("i2c0", 0x3FF5_3000, 0x1000, None, Box::new(i2c0));
-    // Register first, then attach through the single bus choke point so the
-    // slave is wrapped into the shared bus trace (universal logic analyzer).
-    bus.attach_i2c_slave(
-        "i2c0",
-        crate::peripherals::components::build_i2c_device(
-            "bmp280",
-            &std::collections::HashMap::new(),
-        )
-        .expect("the bmp280 descriptor is embedded"),
-    )
-    .expect("i2c0 just registered as Esp32I2c");
     // Bind I2C0's SCL/SDA wire to the classic GPIO output matrix, so a pad the
     // firmware routes to I2CEXT0_SCL/SDA (signals 29/30) carries the real
     // waveform for `read_gpio_pad` and the in-engine logic analyzer. Must come
@@ -677,7 +721,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
 
     // Catch-all stubs for the rest of the APB peripheral block
     // (0x3FF4A000–0x3FF6FFFF). ESP32 packs ~30 peripherals here
-    // (SAR ADC, I2S0/1, BB, UART1/2, I2C0/1, MCPWM, PCNT, RMT,
+    // (SAR ADC, I2S0/1, BB, UART1/2, I2C0/1, MCPWM, PCNT,
     // LEDC, etc). Most are touched briefly during esp-idf init; round-
     // trip stubs satisfy the access pattern even without modeling
     // any specific peripheral semantics.
@@ -699,7 +743,6 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         ("i2s1", 0x3FF6_D000),
         // pwm0 (0x3FF5_E000) is now the real MCPWM0 model registered above.
         ("ledc2", 0x3FF6_8000),
-        ("rmt", 0x3FF5_6000),
         ("pcnt", 0x3FF5_7000),
     ] {
         bus.add_peripheral(
@@ -939,6 +982,7 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     ("dport",    "esp32_dport",    0x3FF0_0000, 0x1000, None),
     ("sha",      "esp32_sha",      0x3FF0_3000, 0x0100, None),
     ("rtc_cntl", "esp32_rtc_cntl", 0x3FF4_8000, 0x0200, None),
+    ("rmt", "esp32_rmt", 0x3FF5_6000, 0x1000, Some(47)),
     ("timg0",    "esp32_timg",     0x3FF5_F000, 0x1000, None),
     ("timg1",    "esp32_timg",     0x3FF6_0000, 0x1000, None),
     ("efuse",    "esp32_efuse",    0x3FF5_A000, 0x1000, None),

@@ -1,0 +1,62 @@
+# Narrow STM32F303RET6 slice for NUCLEO-F303RE onboarding.
+#
+# Only the reset-clock enable registers, GPIOA, SysTick, and USART2 used by
+# this smoke are declared. The RCC window reaches APB1ENR. This firmware only
+# uses its AHBENR/APB1ENR gates; F3 clock-switching behavior, ADCs, timers, DMA,
+# USB, and other peripherals are outside this profile.
+# The 64 KiB main SRAM region is mapped; the separate 16 KiB CCM region is
+# intentionally omitted because this firmware does not use it.
+# Sources: ST DS10362, RM0316, PM0214, and UM1724 / MB1136.
+name: stm32f303re-nucleo-smoke
+arch: arm
+core: cortex-m4
+cpu_hz: 8000000
+
+flash:
+  base: 0x08000000
+  size: 512KB
+ram:
+  base: 0x20000000
+  size: 64KB
+
+# Pads used by the board's ST-LINK VCP and LD2 user LED.
+pins:
+  PA2: { gpio: gpioa, bit: 2 }
+  PA3: { gpio: gpioa, bit: 3 }
+  PA5: { gpio: gpioa, bit: 5 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    # This smoke uses AHBENR@0x14 and APB1ENR@0x1C only. The model's F0
+    # register profile has the same offsets/clock-gate bits for this slice.
+    # Earlier registers in this window use F0 semantics and are not claimed
+    # as F3 clock-tree coverage; later RCC registers are outside the window.
+    size: "32"
+    config:
+      profile: stm32f0
+
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x48000000
+    size: 1KB
+    clock: { reg: ahbenr, bit: 17 }
+    config:
+      profile: stm32v2
+      # Preserve the reset AF mode and pull-ups on SWD PA13/PA14.
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x24000000
+
+  - id: usart2
+    type: uart
+    base_address: 0x40004400
+    size: 1KB
+    clock: { reg: apb1enr, bit: 17 }
+    config:
+      # STM32F3 USART register layout: ISR/TDR generation.
+      profile: stm32v2

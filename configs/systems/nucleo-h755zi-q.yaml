@@ -1,0 +1,12 @@
+# NUCLEO-H755ZI-Q, scoped to the Cortex-M7 and green user LED LD1 on PB0.
+# The M4 core, other LEDs/buttons, ST-LINK, Ethernet, USB, and SMPS are omitted.
+name: "nucleo-h755zi-q"
+chip: "../chips/stm32h755zi-nucleo-m7-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_green_ld1"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true

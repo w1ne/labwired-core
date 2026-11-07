@@ -1,0 +1,6 @@
+# Raspberry Pi Pico 2 W, narrowly scoped to RP2350 GP0 header GPIO.
+# CYW43439 Wi-Fi/Bluetooth, USB, and the wireless-controlled onboard LED are omitted.
+name: "raspberry-pi-pico-2-w"
+chip: "../chips/rp2350-pico2-w-smoke.yaml"
+external_devices: []
+board_io: []

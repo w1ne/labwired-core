@@ -1,0 +1,16 @@
+# WCH CH32V003 evaluation board running ch32fun's i2c_oled, unmodified: a
+# 0.91" 128x32 SSD1306 OLED module at 0x3C on I2C1 (PC1 SDA, PC2 SCL), and a
+# WCH-LinkE on SWIO for the debug-printf console. The OLED module is the test
+# connection the example drives, not a factory-installed part on the board.
+name: ch32v003evt-ch32fun-i2c-oled-smoke
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+external_devices:
+  - id: oled
+    type: oled-ssd1306-128x32
+    connection: i2c1
+    route:
+      sda: PC1
+      scl: PC2
+    config:
+      i2c_address: 0x3C
+board_io: []

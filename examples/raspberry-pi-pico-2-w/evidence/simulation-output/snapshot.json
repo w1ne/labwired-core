@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073905668,
+      5,
+      268437652,
+      0,
+      3489660948,
+      1,
+      11,
+      537403376,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537403376,
+      268437627,
+      268437626
+    ],
+    "pc": 268437626,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "d3990ba0a0e170302c8e3ede3387e259063a2298dccdbc9dc3fd6d4980cef5ec",
+  "config": {
+    "firmware": "examples/raspberry-pi-pico-2-w/../../target/thumbv8m.main-none-eabi/release/firmware-pico2-w-smoke",
+    "system": "examples/raspberry-pi-pico-2-w/../../configs/systems/raspberry-pi-pico-2-w.yaml",
+    "script": "examples/raspberry-pi-pico-2-w/io-smoke.yaml"
+  }
+}

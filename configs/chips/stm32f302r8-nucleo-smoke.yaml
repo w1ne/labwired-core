@@ -1,0 +1,67 @@
+# Focused STM32F302R8T6 model slice for NUCLEO-F302R8.
+# It covers only reset-clock RCC gates, GPIOA, SysTick, and USART2 used by
+# the board LED and ST-LINK VCP. PLL/clock switching, ADC,
+# timers, DMA, USB, and the rest of the F302 peripheral set are omitted.
+# Sources: ST DS9896, RM0365, PM0214, and UM1724 / MB1136.
+name: stm32f302r8-nucleo-smoke
+arch: arm
+core: cortex-m4
+# STM32F302 starts from its internal 8 MHz HSI after reset; the smoke does not
+# switch the clock tree.
+cpu_hz: 8000000
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.35
+  vih: 0.65
+
+package: LQFP64
+pin_count: 64
+gpio_pin_count: 51
+variant: x8
+orderable_suffixes: [T6, T7]
+
+flash:
+  base: 0x08000000
+  size: 64KB
+ram:
+  base: 0x20000000
+  size: 16KB
+
+# Only the Nucleo VCP and LD2 board pins are exposed by this slice.
+pins:
+  PA2: { gpio: gpioa, bit: 2 }
+  PA3: { gpio: gpioa, bit: 3 }
+  PA5: { gpio: gpioa, bit: 5 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    # The smoke writes only AHBENR@0x14 and APB1ENR@0x1C. Their offsets and
+    # GPIO/USART2 enable bits match the model's STM32F0 slice; no F3 PLL or
+    # clock-tree behavior is claimed by this descriptor.
+    size: 32
+    config:
+      profile: stm32f0
+
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x48000000
+    size: 1KB
+    clock: { reg: ahbenr, bit: 17 }
+    config:
+      profile: stm32v2
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x24000000
+
+  - id: usart2
+    type: uart
+    base_address: 0x40004400
+    size: 1KB
+    clock: { reg: apb1enr, bit: 17 }
+    config:
+      profile: stm32v2

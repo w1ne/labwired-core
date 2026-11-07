@@ -1,0 +1,86 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded autocfg v1.5.0
+  Downloaded arrayvec v0.7.6
+  Downloaded crypto-common v0.1.7
+  Downloaded clap_derive v4.6.1
+  Downloaded aho-corasick v1.1.4
+  Downloaded bitflags v2.11.1
+  Downloaded anyhow v1.0.102
+  Downloaded clap v4.6.1
+  Downloaded bumpalo v3.20.2
+  Downloaded cc v1.2.62
+  Downloaded clap_builder v4.6.0
+  Downloaded either v1.15.0
+  Downloaded displaydoc v0.2.5
+  Downloaded generic-array v0.14.7
+  Downloaded human-size v0.4.3
+  Downloaded libc v0.2.186
+  Downloaded log v0.4.29
+  Downloaded memmap2 v0.9.10
+  Downloaded memchr v2.8.0
+  Downloaded pastey v0.2.2
+  Downloaded quote v1.0.45
+  Downloaded proc-macro2 v1.0.106
+  Downloaded regex-automata v0.4.14
+  Downloaded regex v1.12.3
+  Downloaded regex-syntax v0.8.10
+  Downloaded rustls-pki-types v1.14.1
+  Downloaded rustc-demangle v0.1.27
+  Downloaded rustls v0.23.40
+  Downloaded serde v1.0.228
+  Downloaded serde_core v1.0.228
+  Downloaded serde_derive v1.0.228
+  Downloaded serde_json v1.0.149
+  Downloaded sha1 v0.10.6
+  Downloaded shlex v1.3.0
+  Downloaded simd-adler32 v0.3.9
+  Downloaded smallvec v1.15.1
+  Downloaded syn v2.0.117
+  Downloaded thread_local v1.1.9
+  Downloaded typenum v1.20.0
+  Downloaded wat v1.250.0
+  Downloaded wasm-encoder v0.250.0
+  Downloaded webpki-roots v1.0.7
+  Downloaded wast v250.0.0
+  Downloaded wasmparser v0.250.0
+  Downloaded yoke v0.8.2
+  Downloaded zeroize v1.8.2
+  Downloaded zmij v1.0.21
+   Compiling labwired-config v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/config)
+   Compiling labwired-core v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/core)
+   Compiling svd-ingestor v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/svd-ingestor)
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+  --> crates/core/src/peripherals/armv7/mod.rs:19:10
+   |
+19 |         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+   |          ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+19 -         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+19 +         .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+   |
+
+   Compiling labwired-loader v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/loader)
+   Compiling labwired-gdbstub v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/gdbstub)
+   Compiling labwired-fuzz v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/labwired-fuzz)
+   Compiling labwired-cli v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/cli)
+warning: `labwired-core` (lib) generated 1 warning (run `cargo fix --lib -p labwired-core` to apply 1 suggestion)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 18.50s

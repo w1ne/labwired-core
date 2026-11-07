@@ -1,0 +1,21 @@
+# ESP32-S3-DevKitC-1 v1.0 N16R8 with its GPIO48 RGB LED and an SG90-class
+# servo signal on J1 pin 4 / GPIO4. The servo uses an independent 5 V supply;
+# share ground with the board.
+name: "esp32-s3-devkitc-1-n16r8-v10-servo"
+chip: "../chips/esp32s3-devkitc-1-n16r8-v10-smoke.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO48"
+      num_pixels: 1
+      cpu_hz: 240_000_000
+  - id: "servo"
+    type: "servo"
+    connection: "gpio"
+    config:
+      signal_pin: "GPIO4"
+      model: "sg90"

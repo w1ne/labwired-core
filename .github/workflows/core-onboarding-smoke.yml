@@ -15,10 +15,207 @@ on:
       - main
     paths:
       - "configs/chips/**"
+      - "configs/devices/lis2dux12.yaml"
       - "configs/systems/**"
       - "examples/**"
+      - "crates/firmware-f401-demo/**"
+      - "crates/firmware-feather-f405-demo/**"
+      - "crates/firmware-f446-demo/**"
+      - "crates/firmware-f4-discovery-smoke/**"
+      - "crates/firmware-stm32g0-demo/**"
+      - "crates/firmware-esp32c6-demo/**"
+      - "crates/firmware-esp32c6-devkitm1-n4-smoke/**"
+      - "crates/firmware-esp32c61-devkitc-smoke/**"
+      - "crates/firmware-xiao-esp32c3-smoke/**"
+      - "crates/firmware-esp32c3-lcdkit-smoke/**"
+      - "scripts/build-esp32-devkitc-32e-bme280.sh"
+      - "crates/firmware-nucleo-f070rb-smoke/**"
+      - "crates/firmware-nucleo-f072rb-smoke/**"
+      - "crates/firmware-nucleo-f091rc-smoke/**"
+      - "crates/firmware-nucleo-f302r8-smoke/**"
+      - "crates/firmware-nucleo-f303re-smoke/**"
+      - "crates/firmware-stm32f3-discovery-smoke/**"
+      - "crates/firmware-stm32f3348-disco-smoke/**"
+      - "crates/firmware-stm32f429i-disc1-smoke/**"
+      - "crates/firmware-nucleo-f722ze-smoke/**"
+      - "crates/firmware-nucleo-f334r8-smoke/**"
+      - "crates/firmware-nucleo-f303k8-smoke/**"
+      - "crates/firmware-nucleo-f030r8-smoke/**"
+      - "crates/firmware-stm32f0-discovery-smoke/**"
+      - "crates/firmware-nucleo-l011k4-smoke/**"
+      - "crates/firmware-nucleo-l031k6-smoke/**"
+      - "crates/firmware-nucleo-u083rc-smoke/**"
+      - "crates/firmware-nucleo-u031r8-smoke/**"
+      - "crates/firmware-nrf52840-dk-smoke/**"
+      - "crates/firmware-nrf52833-demo/**"
+      - "configs/chips/nrf52840-dk-led-smoke.yaml"
+      - "configs/chips/stm32u031r8-nucleo-smoke.yaml"
+      - "configs/systems/nucleo-u031r8.yaml"
+      - "examples/nucleo-u031r8/**"
+      - "configs/systems/nrf52840-dk-led-smoke.yaml"
+      - "examples/nrf52840-dk/**"
+      - "crates/firmware-nrf54l10-smoke/**"
+      - "crates/firmware-nrf54lm20dk-smoke/**"
+      - "configs/chips/nrf54l10.yaml"
+      - "configs/systems/nrf54l10-on-nrf54l15-dk.yaml"
+      - "examples/nrf54l10/**"
+      - "configs/chips/nrf54lm20a-dk-led-smoke.yaml"
+      - "configs/systems/nrf54lm20dk-led-smoke.yaml"
+      - "examples/nrf54lm20dk/**"
+      - "examples/nucleo-f411re-bme280/**"
+      - "configs/chips/stm32f411re-nucleo-bme280-smoke.yaml"
+      - "configs/systems/nucleo-f411re-bme280.yaml"
+      - "scripts/build_nucleo_f411re_bme280_smoke.sh"
+      - "examples/nucleo-f411re-mcp9808/**"
+      - "configs/systems/nucleo-f411re-mcp9808.yaml"
+      - "scripts/build_nucleo_f411re_mcp9808_smoke.sh"
+      - "crates/firmware-nucleo-f103rb-smoke/**"
+      - "crates/firmware-nucleo-f207zg-smoke/**"
+      - "crates/firmware-nucleo-f411re-smoke/**"
+      - "crates/firmware-stm32f411-blackpill-smoke/**"
+      - "configs/chips/stm32f411ceu6-blackpill-led-smoke.yaml"
+      - "configs/systems/stm32f411ceu6-blackpill-led-smoke.yaml"
+      - "examples/stm32f411ceu6-blackpill/**"
+      - "crates/firmware-nucleo-f413zh-smoke/**"
+      - "crates/firmware-nucleo-f410rb-smoke/**"
+      - "crates/firmware-nucleo-f439zi-smoke/**"
+      - "crates/firmware-nucleo-g071rb-smoke/**"
+      - "crates/firmware-stm32g071b-disco-smoke/**"
+      - "crates/firmware-nucleo-g0b1re-smoke/**"
+      - "crates/firmware-nucleo-g431kb-smoke/**"
+      - "crates/firmware-nucleo-g431rb-smoke/**"
+      - "crates/firmware-nucleo-g491re-smoke/**"
+      - "crates/firmware-nucleo-l432kc-smoke/**"
+      - "configs/chips/stm32l432kc-nucleo-smoke.yaml"
+      - "configs/systems/nucleo-l432kc.yaml"
+      - "examples/nucleo-l432kc/**"
+      - "crates/firmware-nucleo-l4a6zg-smoke/**"
+      - "crates/firmware-nucleo-l496zg-p-smoke/**"
+      - "configs/chips/stm32l4a6zg-nucleo-smoke.yaml"
+      - "configs/systems/nucleo-l4a6zg.yaml"
+      - "examples/nucleo-l4a6zg/**"
+      - "crates/firmware-nucleo-l452re-p-smoke/**"
+      - "crates/firmware-nucleo-wb55rg-demo/**"
+      - "crates/firmware-nucleo-wba55cg-smoke/**"
+      - "crates/firmware-nucleo-wba25ce1-smoke/**"
+      - "crates/firmware-nucleo-h503rb-smoke/**"
+      - "crates/firmware-nucleo-h533re-smoke/**"
+      - "crates/firmware-stm32h573i-dk-smoke/**"
+      - "crates/firmware-nucleo-c5a3zg-smoke/**"
+      - "crates/firmware-nucleo-c542rc-smoke/**"
+      - "crates/firmware-nucleo-u3c5zi-q-smoke/**"
+      - "crates/firmware-nucleo-u385rg-q-smoke/**"
+      - "crates/firmware-nucleo-h723zg-smoke/**"
+      - "crates/firmware-nucleo-h753zi-smoke/**"
+      - "crates/firmware-nucleo-h755zi-q-smoke/**"
+      - "crates/firmware-nucleo-h7a3zi-q-smoke/**"
+      - "crates/firmware-stm32h735g-dk-smoke/**"
+      - "crates/firmware-nucleo-c071rb-smoke/**"
+      - "crates/firmware-nucleo-c051c8-smoke/**"
+      - "crates/firmware-nucleo-c092rc-smoke/**"
+      - "crates/firmware-teensy4-smoke/**"
+      - "crates/firmware-uno-r4-wifi-smoke/**"
+      - "crates/firmware-xiao-nrf54l15-smoke/**"
+      - "examples/nrf54l15-dk/**"
+      - "configs/chips/nrf54l15.yaml"
+      - "configs/systems/nrf54l15dk.yaml"
+      - "tests/fixtures/nrf54l15-smoke.elf"
+      - "configs/chips/stm32wba55cg-nucleo-smoke.yaml"
+      - "configs/chips/stm32wba25ceu7-nucleo-smoke.yaml"
+      - "configs/chips/stm32h503rb-nucleo-smoke.yaml"
+      - "configs/chips/stm32h533re-nucleo-gpio-smoke.yaml"
+      - "configs/chips/stm32c5a3zg-nucleo-gpio-smoke.yaml"
+      - "configs/chips/stm32c071rb-nucleo-smoke.yaml"
+      - "configs/chips/stm32c092rc-nucleo-smoke.yaml"
+      - "configs/systems/nucleo-wba55cg-smoke.yaml"
+      - "configs/systems/nucleo-wba25ce1-smoke.yaml"
+      - "configs/systems/nucleo-h503rb.yaml"
+      - "configs/systems/nucleo-h533re.yaml"
+      - "configs/chips/stm32h755zi-nucleo-m7-smoke.yaml"
+      - "configs/systems/nucleo-h755zi-q.yaml"
+      - "configs/chips/stm32f334c8-f3348-disco-smoke.yaml"
+      - "configs/systems/stm32f3348-disco.yaml"
+      - "configs/chips/stm32f429zi-f429i-disc1-smoke.yaml"
+      - "configs/systems/stm32f429i-disc1.yaml"
+      - "examples/stm32f429i-disc1/**"
+      - "configs/chips/stm32f722ze-nucleo-smoke.yaml"
+      - "configs/systems/nucleo-f722ze.yaml"
+      - "examples/nucleo-f722ze/**"
+      - "configs/systems/stm32h573i-dk-smoke.yaml"
+      - "configs/chips/stm32h573ii-dk-gpio-smoke.yaml"
+      - "configs/systems/nucleo-c5a3zg.yaml"
+      - "configs/systems/nucleo-c542rc-smoke.yaml"
+      - "configs/chips/stm32c542rc-nucleo-smoke.yaml"
+      - "configs/systems/nucleo-u3c5zi-q-smoke.yaml"
+      - "configs/chips/stm32u3c5zi-q-nucleo-smoke.yaml"
+      - "configs/systems/nucleo-u385rg-q-smoke.yaml"
+      - "configs/chips/stm32u385rg-nucleo-smoke.yaml"
+      - "configs/systems/nucleo-c071rb.yaml"
+      - "configs/systems/nucleo-c092rc.yaml"
+      - "configs/chips/r7fa4m1ab-uno-r4-wifi-smoke.yaml"
+      - "configs/systems/arduino-uno-r4-wifi.yaml"
+      - "examples/arduino-uno-r4-wifi/**"
+      - "examples/nucleo-wba55cg/**"
+      - "examples/nucleo-wba25ce1/**"
+      - "examples/nucleo-h503rb/**"
+      - "examples/nucleo-h533re/**"
+      - "examples/nucleo-h755zi-q/**"
+      - "examples/stm32h573i-dk/**"
+      - "examples/nucleo-c5a3zg/**"
+      - "examples/nucleo-c542rc/**"
+      - "examples/nucleo-u3c5zi-q/**"
+      - "examples/nucleo-u385rg-q/**"
+      - "examples/nucleo-c071rb/**"
+      - "examples/nucleo-c092rc/**"
+      - "configs/chips/ch32v003f4p6-usart-smoke.yaml"
+      - "configs/systems/ch32v003evt-usart-smoke.yaml"
+      - "examples/ch32v003-evt/**"
+      - "crates/firmware-l073-demo/**"
+      - "crates/firmware-rp2040-demo/**"
+      - "crates/firmware-feather-rp2040-smoke/**"
+      - "crates/firmware-itsybitsy-rp2040-smoke/**"
+      - "crates/firmware-feather-m4-express-smoke/**"
+      - "crates/firmware-feather-m0-express-smoke/**"
+      - "configs/chips/atsamd21g18a-feather-m0-express-smoke.yaml"
+      - "configs/systems/feather-m0-express.yaml"
+      - "examples/feather-m0-express/**"
+      - "configs/chips/rp2040-itsybitsy-smoke.yaml"
+      - "configs/systems/adafruit-itsybitsy-rp2040.yaml"
+      - "examples/adafruit-itsybitsy-rp2040/**"
+      - "crates/firmware-pico-w-smoke/**"
+      - "crates/firmware-pico-w-bme280-smoke/**"
+      - "crates/firmware-xiao-rp2040-smoke/**"
+      - "crates/firmware-nano-rp2040-connect-smoke/**"
+      - "crates/firmware-pico2-demo/**"
+      - "crates/firmware-pico2-bme280-smoke/**"
+      - "crates/firmware-pico2-w-bme280-smoke/**"
+      - "configs/chips/rp2350-pico2-w-bme280-smoke.yaml"
+      - "configs/systems/raspberry-pi-pico-2-w-bme280.yaml"
+      - "examples/raspberry-pi-pico-2-w-bme280/**"
+      - "configs/chips/rp2040-pico-w-bme280-smoke.yaml"
+      - "configs/systems/raspberry-pi-pico-w-bme280.yaml"
+      - "examples/raspberry-pi-pico-w-bme280/**"
+      - "crates/firmware-pico2-w-smoke/**"
+      - "crates/firmware-xiao-rp2350-smoke/**"
+      - "crates/firmware-adafruit-feather-rp2350-smoke/**"
+      - "examples/adafruit-feather-esp32-v2/**"
+      - "scripts/build-adafruit-feather-esp32-v2-smoke.sh"
+      - "scripts/build-adafruit-feather-esp32-v2-bme280.sh"
       - "crates/core/**"
+      - "configs/peripherals/stm32f405/**"
       - "crates/firmware-stm32u575-demo/**"
+      - "crates/firmware-nucleo-u545re-smoke/**"
+      - "configs/chips/stm32u545.yaml"
+      - "configs/systems/nucleo-u545re-bme280.yaml"
+      - "examples/nucleo-u545re-bme280/**"
+      - "scripts/build_nucleo_u545re_bme280_smoke.sh"
+      - "crates/firmware-atsamd51-demo/**"
+      - "crates/firmware-atsamd51-pybadge-demo/**"
+      - "crates/firmware-mkr-wifi-1010-smoke/**"
+      - "configs/chips/atsamd21g18a-mkr-wifi-1010-smoke.yaml"
+      - "configs/systems/arduino-mkr-wifi-1010.yaml"
+      - "examples/arduino-mkr-wifi-1010/**"
+      - "crates/firmware-l552ze-smoke/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -38,6 +235,448 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - id: nucleo-c051c8
+            crate: firmware-nucleo-c051c8-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-c051c8/onboarding-smoke.yaml
+            system: configs/systems/nucleo-c051c8.yaml
+          - id: esp32-s3-devkitc-1-n16r8
+            firmware_build_script: examples/esp32-s3-devkitc-1-n16r8/ci/build-firmware.sh
+            script: examples/esp32-s3-devkitc-1-n16r8/onboarding-smoke.yaml
+            system: configs/systems/esp32-s3-devkitc-1-n16r8.yaml
+          - id: arduino-nano-esp32-bme280
+            firmware_build_script: examples/arduino-nano-esp32-bme280/ci/build-firmware.sh
+            script: examples/arduino-nano-esp32-bme280/onboarding-smoke.yaml
+            system: configs/systems/arduino-nano-esp32-bme280.yaml
+          - id: adafruit-esp32-s3-tft-feather
+            firmware_build_script: examples/adafruit-esp32-s3-tft-feather/ci/build-firmware.sh
+            script: examples/adafruit-esp32-s3-tft-feather/onboarding-smoke.yaml
+            system: configs/systems/adafruit-esp32-s3-tft-feather.yaml
+          - id: seeed-xiao-esp32s3
+            firmware_build_script: examples/seeed-xiao-esp32s3/ci/build-firmware.sh
+            script: examples/seeed-xiao-esp32s3/onboarding-smoke.yaml
+            system: configs/systems/seeed-xiao-esp32s3.yaml
+          - id: nucleo-f302r8
+            crate: firmware-nucleo-f302r8-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f302r8/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f302r8.yaml
+          - id: nucleo-f303k8
+            crate: firmware-nucleo-f303k8-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f303k8/io-smoke.yaml
+            system: configs/systems/nucleo-f303k8.yaml
+          - id: nucleo-f303re
+            crate: firmware-nucleo-f303re-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f303re/io-smoke.yaml
+            system: configs/systems/nucleo-f303re.yaml
+          - id: stm32f3-discovery
+            crate: firmware-stm32f3-discovery-smoke
+            target: thumbv7em-none-eabi
+            script: examples/stm32f3-discovery/io-smoke.yaml
+            system: configs/systems/stm32f3-discovery.yaml
+          - id: stm32f3348-disco
+            crate: firmware-stm32f3348-disco-smoke
+            target: thumbv7em-none-eabi
+            script: examples/stm32f3348-disco/onboarding-smoke.yaml
+            system: configs/systems/stm32f3348-disco.yaml
+          - id: stm32f429i-disc1
+            crate: firmware-stm32f429i-disc1-smoke
+            target: thumbv7em-none-eabi
+            script: examples/stm32f429i-disc1/onboarding-smoke.yaml
+            system: configs/systems/stm32f429i-disc1.yaml
+          - id: nucleo-f722ze
+            crate: firmware-nucleo-f722ze-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f722ze/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f722ze.yaml
+          - id: nucleo-f334r8
+            crate: firmware-nucleo-f334r8-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f334r8/io-smoke.yaml
+            system: configs/systems/nucleo-f334r8.yaml
+          - id: nucleo-f030r8
+            crate: firmware-nucleo-f030r8-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-f030r8/io-smoke.yaml
+            system: configs/systems/nucleo-f030r8.yaml
+          - id: stm32f0-discovery
+            crate: firmware-stm32f0-discovery-smoke
+            target: thumbv6m-none-eabi
+            script: examples/stm32f0-discovery/onboarding-smoke.yaml
+            system: configs/systems/stm32f0-discovery.yaml
+          - id: nucleo-l011k4
+            crate: firmware-nucleo-l011k4-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-l011k4/onboarding-smoke.yaml
+            system: configs/systems/nucleo-l011k4.yaml
+          - id: nucleo-l031k6
+            crate: firmware-nucleo-l031k6-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-l031k6/onboarding-smoke.yaml
+            system: configs/systems/nucleo-l031k6.yaml
+          - id: nucleo-u083rc
+            crate: firmware-nucleo-u083rc-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-u083rc/onboarding-smoke.yaml
+            system: configs/systems/nucleo-u083rc.yaml
+          - id: nucleo-u031r8
+            crate: firmware-nucleo-u031r8-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-u031r8/onboarding-smoke.yaml
+            system: configs/systems/nucleo-u031r8.yaml
+          - id: nrf52840-dk
+            crate: firmware-nrf52840-dk-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nrf52840-dk/onboarding-smoke.yaml
+            system: configs/systems/nrf52840-dk-led-smoke.yaml
+          - id: microbit-v2
+            crate: firmware-nrf52833-demo
+            target: thumbv7em-none-eabi
+            script: examples/microbit-v2/onboarding-smoke.yaml
+            system: configs/systems/microbit-v2-uart-smoke.yaml
+          - id: nrf54l10-on-nrf54l15-dk
+            crate: firmware-nrf54l10-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nrf54l10/onboarding-smoke.yaml
+            system: configs/systems/nrf54l10-on-nrf54l15-dk.yaml
+          - id: nrf54lm20dk-led-smoke
+            crate: firmware-nrf54lm20dk-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nrf54lm20dk/onboarding-smoke.yaml
+            system: configs/systems/nrf54lm20dk-led-smoke.yaml
+          - id: nrf54l15-dk
+            firmware_build_script: examples/nrf54l15-dk/ci/build-firmware.sh
+            script: examples/nrf54l15-dk/io-smoke.yaml
+            system: configs/systems/nrf54l15dk.yaml
+          - id: nucleo-wb55rg
+            crate: firmware-nucleo-wb55rg-demo
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-wb55rg/io-smoke.yaml
+            system: configs/systems/mb1355c.yaml
+          - id: esp32c6-devkitc
+            crate: firmware-esp32c6-demo
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c6-devkitc/io-smoke.yaml
+            system: configs/systems/esp32c6-devkitc.yaml
+          - id: esp32c6-devkitm1-n4
+            crate: firmware-esp32c6-devkitm1-n4-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c6-devkitm1-n4/onboarding-smoke.yaml
+            system: configs/systems/esp32c6-devkitm1-n4.yaml
+          - id: esp32c5-devkitc
+            crate: firmware-esp32c5-devkitc-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c5-devkitc/onboarding-smoke.yaml
+            system: configs/systems/esp32c5-devkitc.yaml
+          - id: esp32c61-devkitc
+            crate: firmware-esp32c61-devkitc-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c61-devkitc/onboarding-smoke.yaml
+            system: configs/systems/esp32c61-devkitc.yaml
+          - id: ch32v003f4p6-usart
+            firmware_build_script: examples/ch32v003-evt/build-usart-firmware.sh
+            script: examples/ch32v003-evt/usart-smoke.yaml
+            system: configs/systems/ch32v003evt-usart-smoke.yaml
+          - id: ch32v003f4p6-gpio
+            firmware_build_script: examples/ch32v003-evt/build-firmware.sh
+            script: examples/ch32v003-evt/onboarding-smoke.yaml
+            system: configs/systems/ch32v003evt-gpio-smoke.yaml
+          - id: seeed-xiao-esp32c3
+            crate: firmware-xiao-esp32c3-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/seeed-xiao-esp32c3/onboarding-smoke.yaml
+            system: configs/systems/seeed-xiao-esp32c3.yaml
+          - id: esp32c3-lcdkit
+            crate: firmware-esp32c3-lcdkit-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c3-lcdkit/onboarding-smoke.yaml
+            system: configs/systems/esp32c3-lcdkit.yaml
+          - id: arduino-uno-r4-minima
+            crate: firmware-ra4m1-demo
+            target: thumbv7em-none-eabi
+            script: examples/arduino-uno-r4-minima/io-smoke.yaml
+            system: configs/systems/arduino-uno-r4-minima.yaml
+          - id: arduino-uno-r4-wifi
+            crate: firmware-uno-r4-wifi-smoke
+            target: thumbv7em-none-eabi
+            script: examples/arduino-uno-r4-wifi/io-smoke.yaml
+            system: configs/systems/arduino-uno-r4-wifi.yaml
+          - id: nucleo-f072rb
+            crate: firmware-nucleo-f072rb-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-f072rb/io-smoke.yaml
+            system: configs/systems/nucleo-f072rb.yaml
+          - id: nucleo-f070rb
+            crate: firmware-nucleo-f070rb-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-f070rb/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f070rb.yaml
+          - id: nucleo-f091rc
+            crate: firmware-nucleo-f091rc-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-f091rc/io-smoke.yaml
+            system: configs/systems/nucleo-f091rc.yaml
+          - id: nucleo-f103rb
+            crate: firmware-nucleo-f103rb-smoke
+            target: thumbv7m-none-eabi
+            script: examples/nucleo-f103rb/io-smoke.yaml
+            system: configs/systems/nucleo-f103rb.yaml
+          - id: stm32f103c8-bluepill
+            crate: firmware-stm32f103c8-bluepill-smoke
+            target: thumbv7m-none-eabi
+            script: examples/stm32f103c8-bluepill/io-smoke.yaml
+            system: configs/systems/stm32f103c8-bluepill.yaml
+          - id: stm32f103c6t6a-gpio-smoke
+            crate: firmware-stm32f103c6-gpio-smoke
+            target: thumbv7m-none-eabi
+            script: examples/stm32f103c6t6a-gpio-smoke/io-smoke.yaml
+            system: configs/systems/stm32f103c6t6a-gpio-smoke.yaml
+          - id: stm32f103r8t6-gpio-smoke
+            crate: firmware-stm32f103r8-gpio-smoke
+            target: thumbv7m-none-eabi
+            script: examples/stm32f103r8t6-gpio-smoke/io-smoke.yaml
+            system: configs/systems/stm32f103r8t6-gpio-smoke.yaml
+          - id: nucleo-f411re
+            crate: firmware-nucleo-f411re-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f411re/io-smoke.yaml
+            system: configs/systems/nucleo-f411re.yaml
+          - id: stm32f411ceu6-blackpill-led-smoke
+            crate: firmware-stm32f411-blackpill-smoke
+            target: thumbv7em-none-eabi
+            script: examples/stm32f411ceu6-blackpill/led-onboarding-smoke.yaml
+            system: configs/systems/stm32f411ceu6-blackpill-led-smoke.yaml
+          - id: nucleo-f411re-bme280
+            crate: examples/nucleo-f411re-bme280
+            target: ""
+            firmware_build_script: scripts/build_nucleo_f411re_bme280_smoke.sh
+            script: examples/nucleo-f411re-bme280/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f411re-bme280.yaml
+          - id: nucleo-f411re-mcp9808
+            crate: examples/nucleo-f411re-mcp9808
+            target: ""
+            firmware_build_script: scripts/build_nucleo_f411re_mcp9808_smoke.sh
+            script: examples/nucleo-f411re-mcp9808/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f411re-mcp9808.yaml
+          - id: nucleo-f413zh
+            crate: firmware-nucleo-f413zh-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f413zh/io-smoke.yaml
+            system: configs/systems/nucleo-f413zh.yaml
+          - id: nucleo-f410rb
+            crate: firmware-nucleo-f410rb-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f410rb/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f410rb.yaml
+          - id: nucleo-f439zi
+            crate: firmware-nucleo-f439zi-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f439zi/io-smoke.yaml
+            system: configs/systems/nucleo-f439zi.yaml
+          - id: feather-f405
+            crate: firmware-feather-f405-demo
+            target: thumbv7em-none-eabi
+            script: examples/feather-f405/io-smoke.yaml
+            system: configs/systems/feather-f405.yaml
+          - id: lis2dux12-nucleo-f407
+            crate: nucleo-f407-i2c
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f407-lis2dux12/onboarding-smoke.yaml
+            system: examples/nucleo-f407-lis2dux12/system.yaml
+          - id: nucleo-g071rb
+            crate: firmware-nucleo-g071rb-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-g071rb/onboarding-smoke.yaml
+            system: configs/systems/nucleo-g071rb-smoke.yaml
+          - id: stm32g071b-disco
+            crate: firmware-stm32g071b-disco-smoke
+            target: thumbv6m-none-eabi
+            script: examples/stm32g071b-disco/onboarding-smoke.yaml
+            system: configs/systems/stm32g071b-disco.yaml
+          - id: nucleo-g0b1re
+            crate: firmware-nucleo-g0b1re-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-g0b1re/onboarding-smoke.yaml
+            system: configs/systems/nucleo-g0b1re-smoke.yaml
+          - id: nucleo-g431kb
+            crate: firmware-nucleo-g431kb-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-g431kb/onboarding-smoke.yaml
+            system: configs/systems/nucleo-g431kb-smoke.yaml
+          - id: nucleo-g431rb
+            crate: firmware-nucleo-g431rb-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-g431rb/onboarding-smoke.yaml
+            system: configs/systems/nucleo-g431rb.yaml
+          - id: nucleo-g491re
+            crate: firmware-nucleo-g491re-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-g491re/onboarding-smoke.yaml
+            system: configs/systems/nucleo-g491re.yaml
+          - id: nucleo-l452re-p
+            crate: firmware-nucleo-l452re-p-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-l452re-p/onboarding-smoke.yaml
+            system: configs/systems/nucleo-l452re-p-smoke.yaml
+          - id: nucleo-l432kc
+            crate: firmware-nucleo-l432kc-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-l432kc/onboarding-smoke.yaml
+            system: configs/systems/nucleo-l432kc.yaml
+          - id: nucleo-l4a6zg
+            crate: firmware-nucleo-l4a6zg-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-l4a6zg/onboarding-smoke.yaml
+            system: configs/systems/nucleo-l4a6zg.yaml
+          - id: nucleo-l496zg-p
+            crate: firmware-nucleo-l496zg-p-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-l496zg-p/onboarding-smoke.yaml
+            system: configs/systems/nucleo-l496zg-p.yaml
+          - id: nucleo-wba55cg
+            crate: firmware-nucleo-wba55cg-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-wba55cg/onboarding-smoke.yaml
+            system: configs/systems/nucleo-wba55cg-smoke.yaml
+          - id: nucleo-wba25ce1
+            crate: firmware-nucleo-wba25ce1-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-wba25ce1/onboarding-smoke.yaml
+            system: configs/systems/nucleo-wba25ce1-smoke.yaml
+          - id: nucleo-h503rb
+            crate: firmware-nucleo-h503rb-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-h503rb/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h503rb.yaml
+          - id: nucleo-h533re
+            crate: firmware-nucleo-h533re-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-h533re/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h533re.yaml
+          - id: stm32h573i-dk
+            crate: firmware-stm32h573i-dk-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/stm32h573i-dk/onboarding-smoke.yaml
+            system: configs/systems/stm32h573i-dk-smoke.yaml
+          - id: nucleo-c5a3zg
+            crate: firmware-nucleo-c5a3zg-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-c5a3zg/onboarding-smoke.yaml
+            system: configs/systems/nucleo-c5a3zg.yaml
+          - id: nucleo-c542rc
+            crate: firmware-nucleo-c542rc-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-c542rc/onboarding-smoke.yaml
+            system: configs/systems/nucleo-c542rc-smoke.yaml
+          - id: nucleo-u3c5zi-q
+            crate: firmware-nucleo-u3c5zi-q-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-u3c5zi-q/onboarding-smoke.yaml
+            system: configs/systems/nucleo-u3c5zi-q-smoke.yaml
+          - id: nucleo-u385rg-q
+            crate: firmware-nucleo-u385rg-q-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-u385rg-q/onboarding-smoke.yaml
+            system: configs/systems/nucleo-u385rg-q-smoke.yaml
+          - id: nucleo-h723zg
+            crate: firmware-nucleo-h723zg-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-h723zg/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h723zg.yaml
+          - id: nucleo-h753zi
+            crate: firmware-nucleo-h753zi-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-h753zi/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h753zi.yaml
+          - id: nucleo-h755zi-q
+            crate: firmware-nucleo-h755zi-q-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-h755zi-q/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h755zi-q.yaml
+          - id: nucleo-h7a3zi-q
+            crate: firmware-nucleo-h7a3zi-q-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-h7a3zi-q/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h7a3zi-q.yaml
+          - id: stm32h735g-dk
+            crate: firmware-stm32h735g-dk-smoke
+            target: thumbv7em-none-eabi
+            script: examples/stm32h735g-dk/onboarding-smoke.yaml
+            system: configs/systems/stm32h735g-dk.yaml
+          - id: nucleo-c071rb
+            crate: firmware-nucleo-c071rb-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-c071rb/onboarding-smoke.yaml
+            system: configs/systems/nucleo-c071rb.yaml
+          - id: nucleo-c092rc
+            crate: firmware-nucleo-c092rc-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-c092rc/onboarding-smoke.yaml
+            system: configs/systems/nucleo-c092rc.yaml
+          - id: teensy-40
+            crate: firmware-teensy4-smoke
+            target: thumbv7em-none-eabi
+            script: examples/teensy-40/onboarding-smoke.yaml
+            system: configs/systems/teensy-40.yaml
+          - id: teensy-41
+            crate: firmware-teensy4-smoke
+            target: thumbv7em-none-eabi
+            script: examples/teensy-41/onboarding-smoke.yaml
+            system: configs/systems/teensy-41.yaml
+          - id: xiao-nrf54l15
+            crate: firmware-xiao-nrf54l15-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/xiao-nrf54l15/io-smoke.yaml
+            system: configs/systems/xiao-nrf54l15.yaml
+          - id: xiao-nrf54l15-sense
+            crate: firmware-xiao-nrf54l15-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/xiao-nrf54l15-sense/onboarding-smoke.yaml
+            system: configs/systems/xiao-nrf54l15-sense.yaml
+          - id: nucleo-l073rz
+            crate: firmware-l073-demo
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-l073rz/io-smoke.yaml
+            system: examples/nucleo-l073rz/system.yaml
+          - id: nucleo-f401re
+            crate: firmware-f401-demo
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f401re/io-smoke.yaml
+            system: configs/systems/nucleo-f401re.yaml
+          - id: nucleo-f446re
+            crate: firmware-f446-demo
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f446re/io-smoke.yaml
+            system: configs/systems/nucleo-f446re.yaml
+          - id: stm32f4-discovery
+            crate: firmware-f4-discovery-smoke
+            target: thumbv7em-none-eabi
+            script: examples/stm32f4-discovery/io-smoke.yaml
+            system: configs/systems/stm32f4-discovery.yaml
+          - id: nucleo-f767zi
+            crate: tier1-fixture-stm32f767
+            firmware_build_dir: examples/tier1-fixture/stm32f767
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f767zi/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f767zi.yaml
+          - id: nucleo-f767zi-lsm6dsox
+            crate: nucleo-f767zi-lsm6dsox-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f767zi-lsm6dsox/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f767zi-lsm6dsox.yaml
+          - id: nucleo-g070rb
+            crate: firmware-stm32g0-demo
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-g070rb/io-smoke.yaml
+            system: configs/systems/nucleo-g070rb.yaml
+          - id: nucleo-g474re
+            crate: firmware-nucleo_g474re-demo
+            firmware_build_dir: examples/nucleo_g474re/board_firmware
+            target: thumbv7em-none-eabi
+            script: examples/nucleo_g474re/uart-smoke.yaml
+            system: configs/systems/nucleo_g474re.yaml
           - id: stm32f401cdu6
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi
@@ -53,6 +692,17 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-u575zi/io-smoke.yaml
             system: configs/systems/nucleo-u575zi.yaml
+          - id: nucleo-u545re
+            crate: firmware-nucleo-u545re-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-u545re/onboarding-smoke.yaml
+            system: configs/systems/nucleo-u545re-smoke.yaml
+          - id: nucleo-u545re-bme280
+            crate: firmware-nucleo-u545re-smoke
+            target: thumbv8m.main-none-eabi
+            firmware_build_script: scripts/build_nucleo_u545re_bme280_smoke.sh
+            script: examples/nucleo-u545re-bme280/onboarding-smoke.yaml
+            system: configs/systems/nucleo-u545re-bme280.yaml
           # U5A5 uses the shared U575 demo only for its common Cortex-M33 boot
           # and USART1 `OK` path. Its PKA/HASH/SAES operation coverage remains
           # in the U5A5 SystemBus oracle, not in this board bring-up smoke.
@@ -71,6 +721,133 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/rp2040-pio/io-smoke.yaml
             system: examples/rp2040-pio/system.yaml
+          - id: pico2
+            crate: firmware-pico2-demo
+            firmware_build_dir: crates/firmware-pico2-demo
+            target: thumbv8m.main-none-eabi
+            script: examples/pico2/io-smoke.yaml
+            system: configs/systems/pico2.yaml
+          - id: pico2-bme280
+            crate: firmware-pico2-bme280-smoke
+            firmware_build_dir: crates/firmware-pico2-bme280-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/pico2-bme280/onboarding-smoke.yaml
+            system: configs/systems/pico2-bme280.yaml
+          - id: raspberry-pi-pico-2-w-bme280
+            crate: firmware-pico2-w-bme280-smoke
+            firmware_build_dir: crates/firmware-pico2-w-bme280-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/raspberry-pi-pico-2-w-bme280/onboarding-smoke.yaml
+            system: configs/systems/raspberry-pi-pico-2-w-bme280.yaml
+          - id: raspberry-pi-pico-2-w
+            crate: firmware-pico2-w-smoke
+            firmware_build_dir: crates/firmware-pico2-w-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/raspberry-pi-pico-2-w/io-smoke.yaml
+            system: configs/systems/raspberry-pi-pico-2-w.yaml
+          - id: seeed-xiao-rp2350
+            crate: firmware-xiao-rp2350-smoke
+            firmware_build_dir: crates/firmware-xiao-rp2350-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/seeed-xiao-rp2350/io-smoke.yaml
+            system: configs/systems/seeed-xiao-rp2350.yaml
+          - id: adafruit-feather-rp2350
+            crate: firmware-adafruit-feather-rp2350-smoke
+            firmware_build_dir: crates/firmware-adafruit-feather-rp2350-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/adafruit-feather-rp2350/io-smoke.yaml
+            system: configs/systems/adafruit-feather-rp2350.yaml
+          - id: pico
+            crate: firmware-rp2040-demo
+            target: thumbv6m-none-eabi
+            script: examples/pico/io-smoke.yaml
+            system: configs/systems/rp2040-pico.yaml
+          - id: adafruit-feather-rp2040
+            crate: firmware-feather-rp2040-smoke
+            target: thumbv6m-none-eabi
+            script: examples/adafruit-feather-rp2040/io-smoke.yaml
+            system: configs/systems/adafruit-feather-rp2040.yaml
+          - id: adafruit-itsybitsy-rp2040
+            crate: firmware-itsybitsy-rp2040-smoke
+            target: thumbv6m-none-eabi
+            script: examples/adafruit-itsybitsy-rp2040/io-smoke.yaml
+            system: configs/systems/adafruit-itsybitsy-rp2040.yaml
+          - id: feather-m4-express
+            crate: firmware-feather-m4-express-smoke
+            target: thumbv7em-none-eabi
+            script: examples/feather-m4-express/io-smoke.yaml
+            system: configs/systems/feather-m4-express.yaml
+          - id: feather-m0-express
+            crate: firmware-feather-m0-express-smoke
+            target: thumbv6m-none-eabi
+            script: examples/feather-m0-express/io-smoke.yaml
+            system: configs/systems/feather-m0-express.yaml
+          - id: raspberry-pi-pico-w
+            crate: firmware-pico-w-smoke
+            target: thumbv6m-none-eabi
+            script: examples/raspberry-pi-pico-w/io-smoke.yaml
+            system: configs/systems/raspberry-pi-pico-w.yaml
+          - id: raspberry-pi-pico-w-bme280
+            crate: firmware-pico-w-bme280-smoke
+            target: thumbv6m-none-eabi
+            script: examples/raspberry-pi-pico-w-bme280/onboarding-smoke.yaml
+            system: configs/systems/raspberry-pi-pico-w-bme280.yaml
+          - id: arduino-nano-rp2040-connect
+            crate: firmware-nano-rp2040-connect-smoke
+            target: thumbv6m-none-eabi
+            script: examples/arduino-nano-rp2040-connect/io-smoke.yaml
+            system: configs/systems/arduino-nano-rp2040-connect.yaml
+          - id: seeed-xiao-rp2040
+            crate: firmware-xiao-rp2040-smoke
+            target: thumbv6m-none-eabi
+            script: examples/seeed-xiao-rp2040/io-smoke.yaml
+            system: configs/systems/seeed-xiao-rp2040.yaml
+          - id: metro-m4
+            crate: firmware-atsamd51-demo
+            target: thumbv7em-none-eabi
+            script: examples/metro-m4/onboarding-smoke.yaml
+            system: configs/systems/metro-m4.yaml
+          - id: adafruit-pybadge
+            crate: firmware-atsamd51-pybadge-demo
+            target: thumbv7em-none-eabi
+            script: examples/pybadge/onboarding-smoke.yaml
+            system: examples/pybadge/system.yaml
+          - id: arduino-mkr-wifi-1010
+            crate: firmware-mkr-wifi-1010-smoke
+            target: thumbv6m-none-eabi
+            script: examples/arduino-mkr-wifi-1010/io-smoke.yaml
+            system: configs/systems/arduino-mkr-wifi-1010.yaml
+          - id: nucleo-l476rg
+            crate: firmware-l476-demo
+            target: thumbv7em-none-eabihf
+            script: examples/nucleo-l476rg/io-smoke.yaml
+            system: configs/systems/nucleo-l476rg.yaml
+          - id: nucleo-l552ze-q
+            crate: firmware-l552ze-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-l552ze-q/io-smoke.yaml
+            system: examples/nucleo-l552ze-q/system.yaml
+          - id: adafruit-feather-esp32-v2
+            firmware_build_script: scripts/build-adafruit-feather-esp32-v2-smoke.sh
+            script: examples/adafruit-feather-esp32-v2/io-smoke.yaml
+            system: configs/systems/adafruit-feather-esp32-v2.yaml
+          - id: adafruit-feather-esp32-v2-bme280
+            firmware_build_script: scripts/build-adafruit-feather-esp32-v2-bme280.sh
+            script: examples/adafruit-feather-esp32-v2/bme280-smoke.yaml
+            system: configs/systems/adafruit-feather-esp32-v2-bme280.yaml
+          - id: esp32-devkitc-32e-bme280
+            firmware_build_script: scripts/build-esp32-devkitc-32e-bme280.sh
+            script: examples/esp32-devkitc-32e/bme280-smoke.yaml
+            system: configs/systems/esp32-devkitc-32e-bme280.yaml
+          - id: esp32-devkitc-32e-rmt-neopixel
+            firmware_build_script: scripts/build-esp32-devkitc-32e-rmt-smoke.sh
+            script: examples/esp32-devkitc-32e/rmt-smoke.yaml
+            system: configs/systems/esp32-devkitc-32e-rmt-neopixel.yaml
+          - id: nucleo-f207zg
+            crate: firmware-nucleo-f207zg-smoke
+            target: thumbv7m-none-eabi
+            script: examples/nucleo-f207zg/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f207zg-smoke.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +855,23 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32imc-unknown-none-elf
+
+      - name: Set up Python for PlatformIO targets
+        if: matrix.firmware_build_script != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        if: matrix.firmware_build_script != ''
+        run: python -m pip install platformio
+
+      - name: Install ARM embedded GCC for nRF54L15 DK
+        if: matrix.id == 'nrf54l15-dk'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y gcc-arm-none-eabi
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -96,6 +889,8 @@ jobs:
             --target "${{ matrix.target }}" \
             --script "${{ matrix.script }}" \
             --system "${{ matrix.system }}" \
+            --firmware-build-dir "${{ matrix.firmware_build_dir }}" \
+            --firmware-build-script "${{ matrix.firmware_build_script }}" \
             --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
             --threshold-seconds 3600
 

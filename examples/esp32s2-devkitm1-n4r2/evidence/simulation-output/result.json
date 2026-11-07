@@ -1,0 +1,1298 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 1000000,
+  "cycles": 1000000,
+  "instructions": 1000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1000000
+    }
+  },
+  "limits": {
+    "max_steps": 1000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "ESP32_S2_DEVKITM1_N4R2_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:18",
+          "min_edges": 48
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "rgb_led",
+          "x": 0,
+          "y": 0,
+          "min_ink": 1.0,
+          "colour": "0xF800",
+          "min_colour_pixels": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "xtensa_lx7",
+    "registers": [
+      0,
+      1073741776,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1074267470,
+      1610612736,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1074266223,
+    "ps": 31,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "firmware_hash": "420f66948fc1852c437584ae85365690e73f325b8f0c45d8b7a718956138bbc4",
+  "config": {
+    "firmware": "examples/esp32s2-devkitm1-n4r2/../../target/esp32s2-devkitm1-n4r2/firmware.elf",
+    "system": "examples/esp32s2-devkitm1-n4r2/../../configs/systems/esp32s2-devkitm1-n4r2.yaml",
+    "script": "examples/esp32s2-devkitm1-n4r2/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1610612736,
+        "registers": [
+          {
+            "name": "FIFO",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ST",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ENA",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLKDIV",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RX_FILT",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CONF0",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CONF1",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "LOWPULSE",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "HIGHPULSE",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RXD_CNT",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FLOW_CONF",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SLEEP_CONF",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SWFC_CONF0",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SWFC_CONF1",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TXBRK_CONF",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDLE_CONF",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RS485_CONF",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_PRECNT",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_POSTCNT",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_GAPTOUT",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_CHAR",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_CONF",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_TX_STATUS",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_RX_STATUS",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FSM_STATUS",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "POSPULSE",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "NEGPULSE",
+            "offset": 116,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLK_CONF",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ID",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 1610629120,
+        "registers": [
+          {
+            "name": "BT_SELECT",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OUT",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OUT_W1TS",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "OUT_W1TC",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "OUT1",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OUT1_W1TS",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "OUT1_W1TC",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "ENABLE",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE_W1TS",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "ENABLE_W1TC",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "ENABLE1",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE1_W1TS",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "ENABLE1_W1TC",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "STRAP",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "IN",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "IN1",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "STATUS",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS_W1TS",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "STATUS_W1TC",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "STATUS1",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS1_W1TS",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "STATUS1_W1TC",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "PCPU_INT",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "PCPU_NMI_INT",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "PCPU_INT1",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "PCPU_NMI_INT1",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "PIN0",
+            "offset": 116,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN1",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN2",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN3",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN4",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN5",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN6",
+            "offset": 140,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN7",
+            "offset": 144,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN8",
+            "offset": 148,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN9",
+            "offset": 152,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN10",
+            "offset": 156,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN11",
+            "offset": 160,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN12",
+            "offset": 164,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN13",
+            "offset": 168,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN14",
+            "offset": 172,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN15",
+            "offset": 176,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN16",
+            "offset": 180,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN17",
+            "offset": 184,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN18",
+            "offset": 188,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN19",
+            "offset": 192,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN20",
+            "offset": 196,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PIN21",
+            "offset": 200,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLOCK_GATE",
+            "offset": 1580,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "REG_DATE",
+            "offset": 1788,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "rgb_led",
+        "device_type": "neopixel",
+        "declared": true,
+        "attachment": {
+          "transport": "gpio",
+          "bus": "gpio"
+        },
+        "artifacts": [
+          {
+            "kind": "framebuffer",
+            "id": "rgb_led",
+            "meta": {
+              "data_pin": 18,
+              "format": "ws2812_grb",
+              "generation": 15475485528314852384,
+              "h": 1,
+              "lit_pixels": 1,
+              "pixels_decoded": 1,
+              "w": 1
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 1000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio",
+        "pin": 18,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 22,
+            "value": 1
+          },
+          {
+            "cycle": 96,
+            "value": 0
+          },
+          {
+            "cycle": 321,
+            "value": 1
+          },
+          {
+            "cycle": 395,
+            "value": 0
+          },
+          {
+            "cycle": 620,
+            "value": 1
+          },
+          {
+            "cycle": 694,
+            "value": 0
+          },
+          {
+            "cycle": 919,
+            "value": 1
+          },
+          {
+            "cycle": 993,
+            "value": 0
+          },
+          {
+            "cycle": 1218,
+            "value": 1
+          },
+          {
+            "cycle": 1292,
+            "value": 0
+          },
+          {
+            "cycle": 1517,
+            "value": 1
+          },
+          {
+            "cycle": 1591,
+            "value": 0
+          },
+          {
+            "cycle": 1816,
+            "value": 1
+          },
+          {
+            "cycle": 1890,
+            "value": 0
+          },
+          {
+            "cycle": 2115,
+            "value": 1
+          },
+          {
+            "cycle": 2189,
+            "value": 0
+          },
+          {
+            "cycle": 2423,
+            "value": 1
+          },
+          {
+            "cycle": 2596,
+            "value": 0
+          },
+          {
+            "cycle": 2722,
+            "value": 1
+          },
+          {
+            "cycle": 2895,
+            "value": 0
+          },
+          {
+            "cycle": 3021,
+            "value": 1
+          },
+          {
+            "cycle": 3194,
+            "value": 0
+          },
+          {
+            "cycle": 3320,
+            "value": 1
+          },
+          {
+            "cycle": 3493,
+            "value": 0
+          },
+          {
+            "cycle": 3619,
+            "value": 1
+          },
+          {
+            "cycle": 3792,
+            "value": 0
+          },
+          {
+            "cycle": 3918,
+            "value": 1
+          },
+          {
+            "cycle": 4091,
+            "value": 0
+          },
+          {
+            "cycle": 4217,
+            "value": 1
+          },
+          {
+            "cycle": 4390,
+            "value": 0
+          },
+          {
+            "cycle": 4516,
+            "value": 1
+          },
+          {
+            "cycle": 4689,
+            "value": 0
+          },
+          {
+            "cycle": 4824,
+            "value": 1
+          },
+          {
+            "cycle": 4898,
+            "value": 0
+          },
+          {
+            "cycle": 5123,
+            "value": 1
+          },
+          {
+            "cycle": 5197,
+            "value": 0
+          },
+          {
+            "cycle": 5422,
+            "value": 1
+          },
+          {
+            "cycle": 5496,
+            "value": 0
+          },
+          {
+            "cycle": 5721,
+            "value": 1
+          },
+          {
+            "cycle": 5795,
+            "value": 0
+          },
+          {
+            "cycle": 6020,
+            "value": 1
+          },
+          {
+            "cycle": 6094,
+            "value": 0
+          },
+          {
+            "cycle": 6319,
+            "value": 1
+          },
+          {
+            "cycle": 6393,
+            "value": 0
+          },
+          {
+            "cycle": 6618,
+            "value": 1
+          },
+          {
+            "cycle": 6692,
+            "value": 0
+          },
+          {
+            "cycle": 6917,
+            "value": 1
+          },
+          {
+            "cycle": 6991,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 10,
+            "state": "0"
+          },
+          {
+            "cycle": 22,
+            "state": "1"
+          },
+          {
+            "cycle": 96,
+            "state": "0"
+          },
+          {
+            "cycle": 321,
+            "state": "1"
+          },
+          {
+            "cycle": 395,
+            "state": "0"
+          },
+          {
+            "cycle": 620,
+            "state": "1"
+          },
+          {
+            "cycle": 694,
+            "state": "0"
+          },
+          {
+            "cycle": 919,
+            "state": "1"
+          },
+          {
+            "cycle": 993,
+            "state": "0"
+          },
+          {
+            "cycle": 1218,
+            "state": "1"
+          },
+          {
+            "cycle": 1292,
+            "state": "0"
+          },
+          {
+            "cycle": 1517,
+            "state": "1"
+          },
+          {
+            "cycle": 1591,
+            "state": "0"
+          },
+          {
+            "cycle": 1816,
+            "state": "1"
+          },
+          {
+            "cycle": 1890,
+            "state": "0"
+          },
+          {
+            "cycle": 2115,
+            "state": "1"
+          },
+          {
+            "cycle": 2189,
+            "state": "0"
+          },
+          {
+            "cycle": 2423,
+            "state": "1"
+          },
+          {
+            "cycle": 2596,
+            "state": "0"
+          },
+          {
+            "cycle": 2722,
+            "state": "1"
+          },
+          {
+            "cycle": 2895,
+            "state": "0"
+          },
+          {
+            "cycle": 3021,
+            "state": "1"
+          },
+          {
+            "cycle": 3194,
+            "state": "0"
+          },
+          {
+            "cycle": 3320,
+            "state": "1"
+          },
+          {
+            "cycle": 3493,
+            "state": "0"
+          },
+          {
+            "cycle": 3619,
+            "state": "1"
+          },
+          {
+            "cycle": 3792,
+            "state": "0"
+          },
+          {
+            "cycle": 3918,
+            "state": "1"
+          },
+          {
+            "cycle": 4091,
+            "state": "0"
+          },
+          {
+            "cycle": 4217,
+            "state": "1"
+          },
+          {
+            "cycle": 4390,
+            "state": "0"
+          },
+          {
+            "cycle": 4516,
+            "state": "1"
+          },
+          {
+            "cycle": 4689,
+            "state": "0"
+          },
+          {
+            "cycle": 4824,
+            "state": "1"
+          },
+          {
+            "cycle": 4898,
+            "state": "0"
+          },
+          {
+            "cycle": 5123,
+            "state": "1"
+          },
+          {
+            "cycle": 5197,
+            "state": "0"
+          },
+          {
+            "cycle": 5422,
+            "state": "1"
+          },
+          {
+            "cycle": 5496,
+            "state": "0"
+          },
+          {
+            "cycle": 5721,
+            "state": "1"
+          },
+          {
+            "cycle": 5795,
+            "state": "0"
+          },
+          {
+            "cycle": 6020,
+            "state": "1"
+          },
+          {
+            "cycle": 6094,
+            "state": "0"
+          },
+          {
+            "cycle": 6319,
+            "state": "1"
+          },
+          {
+            "cycle": 6393,
+            "state": "0"
+          },
+          {
+            "cycle": 6618,
+            "state": "1"
+          },
+          {
+            "cycle": 6692,
+            "state": "0"
+          },
+          {
+            "cycle": 6917,
+            "state": "1"
+          },
+          {
+            "cycle": 6991,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 48
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio",
+      "number": 18,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "ESP32_S2_DEVKITM1_N4R2_OK",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 580000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1359,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1359,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 4194304,
+    "ram_total_bytes": 327680,
+    "flash_used_pct": 0.03,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 1000000,
+    "instructions": 1000000,
+    "steps_executed": 1000000,
+    "memory_reads": 1014750,
+    "memory_writes": 0,
+    "peripheral_accesses": 77,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1074266223,
+        "count": 3789
+      },
+      {
+        "pc": 1074266193,
+        "count": 39
+      },
+      {
+        "pc": 1074266195,
+        "count": 39
+      },
+      {
+        "pc": 1074266197,
+        "count": 39
+      }
+    ]
+  }
+}

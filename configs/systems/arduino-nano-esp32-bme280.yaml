@@ -1,0 +1,16 @@
+# Arduino Nano ESP32 plus an Adafruit BME280 on the documented A4/A5 I2C path.
+# A4/SDA is GPIO11; A5/SCL is GPIO12. USB, radios, PSRAM, ADC, timers and SPI
+# remain outside this profile.
+name: "arduino-nano-esp32-bme280"
+chip: "../chips/esp32s3-arduino-nano-bme280-smoke.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO11"
+      scl: "GPIO12"
+    config:
+      i2c_address: 0x77

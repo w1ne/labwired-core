@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073823876,
+      5,
+      5,
+      4294967269,
+      64,
+      33751040,
+      0,
+      537141224,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537141216,
+      268436051,
+      268436070
+    ],
+    "pc": 268436070,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 268435712,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 1000000,
+  "cycles": 1000000,
+  "instructions": 1000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1000000
+    }
+  },
+  "limits": {
+    "max_steps": 1000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "09afbdb953ff53c57e573b3829dbe3df386d468143a978c7807c449a4c9ffc6d",
+  "config": {
+    "firmware": "examples/seeed-xiao-rp2040/../../target/thumbv6m-none-eabi/release/firmware-xiao-rp2040-smoke",
+    "system": "examples/seeed-xiao-rp2040/../../configs/systems/seeed-xiao-rp2040.yaml",
+    "script": "examples/seeed-xiao-rp2040/io-smoke.yaml"
+  }
+}

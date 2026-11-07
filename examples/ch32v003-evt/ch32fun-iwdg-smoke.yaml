@@ -1,0 +1,31 @@
+# ch32fun examples/iwdg, unmodified (build-ch32fun-examples.sh). At 48 MHz:
+# PD0/PD4/PC0 on for Delay_Ms(1500), off for 1000 ms, then the IWDG starts
+# (PSCR /128, RLDR 0xFFF: 4095 counts of 1 ms at the 128 kHz LSI), on for
+# 3000 ms, one feed at ~5.5 s, then 250 ms blinks with no further feed. At
+# ~9.6 s the watchdog resets the chip and the sequence starts again with a
+# 1.5 s on. 540,000,000 cycles (11.25 s) hold the first boot, the reset and
+# the second boot's 1.5 s on pulse, and stop before it reaches iwdg_setup
+# again (~12.1 s).
+#
+# The gpio_edges floor alone cannot tell a reset from a blink, so the timing
+# is decoded by check-iwdg.py from a run with --watch-gpio gpiod:0, committed
+# as evidence/ch32fun-iwdg-smoke/iwdg-capture.json.gz with the decoder's
+# output in iwdg-check.log: the second 1.5 s on pulse, at the watchdog
+# deadline, only exists if the IWDG counted down and rebooted the core.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/iwdg.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-iwdg-smoke.yaml"
+limits:
+  max_cycles: 540000000
+  max_steps: 600000000
+  wall_time_ms: 900000
+assertions:
+  # First boot: 4 edges to the feed, ~16 blink edges before the reset,
+  # then the second boot's on and off edges.
+  - gpio_edges: { pin: "gpiod:0", min_edges: 21 }
+  - gpio_edges: { pin: "gpiod:4", min_edges: 21 }
+  - gpio_edges: { pin: "gpioc:0", min_edges: 21 }
+  # The second boot restarted the watchdog's power-on state: PSCR is back
+  # at 0, where it stays until the firmware reaches iwdg_setup again.
+  - memory_value: { address: 0x40003004, size: 16, expected_value: 0 }

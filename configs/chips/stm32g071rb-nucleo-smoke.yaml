@@ -1,0 +1,55 @@
+# Narrow NUCLEO-G071RB profile for the board-connected UART/LED smoke.
+#
+# The only exposed peripherals are RCC, GPIOA and USART2. USART2 is connected
+# to the on-board ST-LINK VCP on PA2/PA3; LD4 is GPIOA/PA5. Other chip blocks
+# and the user button are intentionally absent from this smoke profile.
+#
+# Sources:
+# - ST DS12232, STM32G071x8/xB datasheet: memory, core, and peripheral limits.
+#   https://www.st.com/resource/en/datasheet/stm32g071rb.pdf
+# - ST RM0444, STM32G0x1 reference manual: RCC/GPIO/USART register maps.
+# - ST UM2324, STM32 Nucleo-64 boards with STM32G07xRB MCUs: board wiring.
+#   https://www.st.com/resource/en/user_manual/dm00452640-stm32-nucleo-64-boards-with-stm32g07xrb-mcus-stmicroelectronics.pdf
+
+name: "stm32g071rb-nucleo-smoke"
+arch: "arm"
+core: "cortex-m0+"
+# The smoke keeps the reset HSI clock at 16 MHz; it does not configure PLL.
+cpu_hz: 16_000_000
+
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "36KB"
+
+pins:
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA3: { gpio: "gpioa", bit: 3 }
+  PA5: { gpio: "gpioa", bit: 5 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32g0"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x50000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "iopenr", bit: 0 }
+
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 28
+    config:
+      profile: "stm32v2"
+    clock: { reg: "apbenr1", bit: 17 }

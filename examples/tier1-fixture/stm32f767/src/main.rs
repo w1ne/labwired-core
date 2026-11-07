@@ -15,7 +15,7 @@
 //! Validates the simulator's chip model peripheral-by-peripheral with RAW
 //! REGISTER accesses against the peripherals wired by
 //! `configs/chips/stm32f767.yaml`, reporting one line per peripheral class
-//! over USART2 using the TIER1 protocol:
+//! over the board's USART3 ST-LINK VCP using the TIER1 protocol:
 //!
 //! ```text
 //! TIER1 <class> PASS
@@ -23,8 +23,8 @@
 //! TIER1 done
 //! ```
 //!
-//! The `uart` class is implicit: receiving `TIER1 done` over the UART is
-//! itself the proof of a working UART path, so no `uart` line is printed.
+//! The `uart` class checks USART3 clocking, PD8/PD9 alternate-function setup,
+//! and transmitter enable before later results use the same UART path.
 //!
 //! `dma` and `irq` are NOT reported: the F767 yaml declares no DMA/NVIC-class
 //! peripheral id. The F4 DMA is a stream controller, but the only modelled DMA
@@ -49,8 +49,11 @@ use tier1_fixture_common::{rd32, spin, wr32, Console};
 
 // ── Wired peripherals (configs/chips/stm32f767.yaml) ──────────────────────
 const RCC_BASE: u32 = 0x4002_3800; // type rcc, profile stm32f4
-const GPIOA_BASE: u32 = 0x4002_0000; // type stm32f4_gpio → stm32v2 layout
-const UART2_BASE: u32 = 0x4000_4400; // `uart2` in this descriptor; same 0x4000_4400 block
+const GPIOB_BASE: u32 = 0x4002_0400; // Nucleo user LED LD1 is PB0
+const GPIOD_BASE: u32 = 0x4002_0C00; // USART3 VCP pins PD8/PD9
+const USART3_BASE: u32 = 0x4000_4800; // Nucleo-F767ZI ST-LINK VCP
+const USART3_BRR: u32 = USART3_BASE + 0x08;
+const USART3_CR1: u32 = USART3_BASE + 0x0C;
 const TIM2_BASE: u32 = 0x4000_0000; // type timer, 32-bit (width: 32)
 const I2C1_BASE: u32 = 0x4000_5400; // type i2c, stm32f1 layout (default)
 const SPI1_BASE: u32 = 0x4001_3000; // type spi, stm32 classic (cr1_mask 0xEFFF)
@@ -58,12 +61,32 @@ const ADC1_BASE: u32 = 0x4001_2000; // type adc, stm32f1 layout (default)
 const IWDG_BASE: u32 = 0x4000_3000; // type iwdg (LSI-clocked, ungated)
 const RTC_BASE: u32 = 0x4000_2800; // type rtc, L4-style calendar (ungated)
 
-// USART2, stm32f1 layout: SR @ 0x00 (TXE = bit 7), DR @ 0x04.
+// USART3, stm32f1 layout: SR @ 0x00 (TXE = bit 7), DR @ 0x04.
 // Read the full SR word and bit-test TXE: a sign-bit test on a byte
 // load compiles to LDRSB reg-offset, which the simulator's 16-bit
 // Thumb decoder does not implement (decoder/arm.rs only matches
 // even-op 0101-family encodings).
-const CONSOLE: Console = Console::new(UART2_BASE, UART2_BASE + 0x04, 1 << 7);
+const CONSOLE: Console = Console::new(USART3_BASE, USART3_BASE + 0x04, 1 << 7);
+
+/// Route the console onto the board's ST-LINK VCP (USART3 on PD8/PD9).
+fn init_console() {
+    wr32(RCC_BASE + 0x30, rd32(RCC_BASE + 0x30) | (1 << 3)); // AHB1ENR.GPIODEN
+    wr32(RCC_BASE + 0x40, rd32(RCC_BASE + 0x40) | (1 << 18)); // APB1ENR.USART3EN
+
+    let moder = rd32(GPIOD_BASE);
+    wr32(
+        GPIOD_BASE,
+        (moder & !((0x3 << 16) | (0x3 << 18))) | (0x2 << 16) | (0x2 << 18),
+    ); // PD8/PD9 alternate function
+    let afrh = rd32(GPIOD_BASE + 0x24);
+    wr32(
+        GPIOD_BASE + 0x24,
+        (afrh & !0xFF) | 0x77,
+    ); // AF7 = USART3 on PD8/PD9
+
+    wr32(USART3_BRR, 0x0683); // 9600 baud at the 16 MHz reset clock
+    wr32(USART3_CR1, (1 << 3) | 1); // UE | TE
+}
 
 // ── Checks ──────────────────────────────────────────────────────────────────
 
@@ -92,6 +115,11 @@ fn check_clock() -> Result<(), &'static [u8]> {
     if (rd32(RCC_BASE + 0x08) >> 2) & 0x3 != 0x1 {
         return Err(b"clock-sws");
     }
+    // Return to the 16 MHz HSI used to configure USART3 at 9600 baud.
+    wr32(RCC_BASE + 0x08, 0x0); // SW=00 = HSI
+    if (rd32(RCC_BASE + 0x08) >> 2) & 0x3 != 0x0 {
+        return Err(b"clock-sws-restore");
+    }
     // AHB1ENR round-trip: GPIOA/B/C/D enables.
     wr32(RCC_BASE + 0x30, 0xF);
     if rd32(RCC_BASE + 0x30) != 0xF {
@@ -100,18 +128,37 @@ fn check_clock() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
-/// gpio: stm32v2 port (yaml type `stm32f4_gpio`). PA5 to output via MODER,
-/// set via BSRR, observe ODR, clear via BRR.
+/// gpio: drive the board's user LED LD1 (PB0) through the stm32v2 GPIO model.
 fn check_gpio() -> Result<(), &'static [u8]> {
-    let moder = rd32(GPIOA_BASE);
-    wr32(GPIOA_BASE, (moder & !(0x3 << 10)) | (0x1 << 10)); // PA5 output
-    wr32(GPIOA_BASE + 0x18, 1 << 5); // BSRR set
-    if rd32(GPIOA_BASE + 0x14) & (1 << 5) == 0 {
+    let moder = rd32(GPIOB_BASE);
+    wr32(GPIOB_BASE, (moder & !0x3) | 0x1); // PB0 output
+    wr32(GPIOB_BASE + 0x18, 1); // BSRR set
+    if rd32(GPIOB_BASE + 0x14) & 1 == 0 {
         return Err(b"gpio-set");
     }
-    wr32(GPIOA_BASE + 0x28, 1 << 5); // BRR clear
-    if rd32(GPIOA_BASE + 0x14) & (1 << 5) != 0 {
+    wr32(GPIOB_BASE + 0x28, 1); // BRR clear
+    if rd32(GPIOB_BASE + 0x14) & 1 != 0 {
         return Err(b"gpio-clear");
+    }
+    Ok(())
+}
+
+/// uart: confirm the console setup reaches the board's USART3 VCP pins.
+fn check_uart() -> Result<(), &'static [u8]> {
+    if rd32(RCC_BASE + 0x30) & (1 << 3) == 0 {
+        return Err(b"uart-gpiod-clock");
+    }
+    if rd32(RCC_BASE + 0x40) & (1 << 18) == 0 {
+        return Err(b"uart-usart3-clock");
+    }
+    if rd32(GPIOD_BASE) & ((0x3 << 16) | (0x3 << 18)) != ((0x2 << 16) | (0x2 << 18)) {
+        return Err(b"uart-pd8-pd9-mode");
+    }
+    if rd32(GPIOD_BASE + 0x24) & 0xFF != 0x77 {
+        return Err(b"uart-pd8-pd9-af");
+    }
+    if rd32(USART3_CR1) & 0x9 != 0x9 {
+        return Err(b"uart-enable");
     }
     Ok(())
 }
@@ -313,6 +360,8 @@ fn check_rtc() -> Result<(), &'static [u8]> {
 
 #[entry]
 fn main() -> ! {
+    init_console();
+    CONSOLE.report(b"uart", check_uart());
     CONSOLE.report(b"clock", check_clock());
     CONSOLE.report(b"gpio", check_gpio());
     CONSOLE.report(b"timer", check_timer());

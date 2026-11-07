@@ -359,9 +359,9 @@ impl<'a> AttachCtx<'a> {
     }
 
     /// Subscribe `observer` to GPIO edge notifications on the bus GPIO block
-    /// (classic ESP32 + ESP32-S3 today). Kits use this instead of a hand arm
-    /// in `from_config` so bit-bang devices share one attach path. Returns
-    /// whether the bus has a GPIO block that reports edges this way.
+    /// (ESP32-family GPIO or RP2040/RP2350 SIO). Kits use this instead of a
+    /// hand arm in `from_config` so bit-bang devices share one attach path.
+    /// Returns whether the bus has a GPIO block that reports edges this way.
     pub fn install_gpio_observer<T>(&mut self, observer: std::sync::Arc<T>) -> bool
     where
         T: crate::peripherals::device::GpioObserver + 'static,

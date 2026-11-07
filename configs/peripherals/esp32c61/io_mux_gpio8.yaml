@@ -1,0 +1,16 @@
+peripheral: IO_MUX GPIO8
+version: 0.1.0
+registers:
+  - id: GPIO8
+    address_offset: 0x20
+    size: 32
+    access: READ_WRITE
+    # C61 IO_MUX GPIO pads reset with FUN_DRV=2 and MCU_SEL=1.
+    reset_value: 0x1800
+    fields:
+      - name: FUN_IE
+        bit_range: [9, 9]
+      - name: FUN_DRV
+        bit_range: [10, 11]
+      - name: MCU_SEL
+        bit_range: [12, 14]

@@ -1,0 +1,36 @@
+# Focused nRF54LM20A emulation profile for the nRF54LM20 DK LED0 smoke.
+# Nordic's DK carries the nRF54LM20B and supports the nRF54LM20A as an
+# emulated target. This profile maps only application RRAM/SRAM, UARTE20
+# (the DK's VCOM), and GPIO P1 (LED0 at P1.22). Radio, PMIC, debugger,
+# external flash, and all other blocks are outside this smoke.
+#
+# Memory and peripheral addresses follow Nordic's nRF54LM20A application-core
+# devicetree and MDK SVD, cross-checked in configs/chips/nrf54lm20a.yaml.
+name: "nrf54lm20a-dk-led-smoke"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 128_000_000
+
+flash:
+  base: 0x00000000
+  size: "2036KB"
+ram:
+  base: 0x20000000
+  size: "511KB"
+
+pins:
+  P1_22: { gpio: "gpio1", bit: 22 }
+
+peripherals:
+  - id: "uart20"
+    type: "nrf54l_uarte"
+    base_address: 0x500C6000
+    size: "4KB"
+    irq: 198
+  - id: "gpio1"
+    type: "gpio"
+    base_address: 0x500D8200
+    size: 768
+    config:
+      profile: "nrf54l"
+      num_pins: 32

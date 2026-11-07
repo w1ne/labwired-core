@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 16081,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 16.081
+  },
+  "targets": [
+    {
+      "target_id": "feather-m0-express",
+      "status": "pass",
+      "crate": "firmware-feather-m0-express-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/feather-m0-express/io-smoke.yaml",
+      "system": "configs/systems/feather-m0-express.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T12:36:00Z",
+      "finished_at_utc": "2026-11-04T12:36:16Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16081,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.234,
+        "build_firmware": 0.526,
+        "run_smoke": 0.31
+      },
+      "stages_ms": {
+        "build_cli": 15234,
+        "build_firmware": 526,
+        "run_smoke": 310
+      },
+      "_artifact_path": "examples/feather-m0-express/evidence"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+2026-11-03T21:33:32.979740Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/r7fa4m1ab-uno-r4-wifi-smoke.yaml
+2026-11-03T21:33:32.981150Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 798480 of 800000 device cycles (1520 interpreted)
+PASS  3/3 checks · io-smoke · 800000 steps · 0.00s

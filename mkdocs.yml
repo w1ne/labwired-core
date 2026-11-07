@@ -121,7 +121,9 @@ nav:
   - Boards:
     - Arduino Uno R3: boards/arduino-uno.md
     - ESP32-C3: boards/esp32c3.md
+    - ESP32-C3-DevKitM-1 N4X: boards/esp32c3-devkitm1-n4x.md
     - ESP32-C6: boards/esp32c6-devkitc.md
+    - ESP32-C5-DevKitC-1: boards/esp32c5-devkitc.md
     - ESP32-S3: boards/esp32s3.md
     - nRF52840: boards/nrf52840.md
     - micro:bit V1: boards/microbit-v1.md
@@ -135,9 +137,17 @@ nav:
     - STM32F405: boards/stm32f405.md
     - STM32F407: boards/stm32f407.md
     - STM32F411: boards/stm32f411.md
+    - STM32F3DISCOVERY: boards/stm32f3-discovery.md
+    - STM32F3348-DISCO: boards/stm32f3348-disco.md
+    - STM32F429I-DISC1: boards/stm32f429i-disc1.md
+    - STM32F0DISCOVERY: boards/stm32f0-discovery.md
     - STM32F767: boards/stm32f767.md
     - NUCLEO-L476RG: boards/nucleo-l476rg.md
+    - NUCLEO-L496ZG-P: boards/nucleo-l496zg-p.md
+    - NUCLEO-H755ZI-Q: boards/nucleo-h755zi-q.md
     - NUCLEO-L073RZ: boards/nucleo-l073rz.md
+    - NUCLEO-F411RE: boards/nucleo-f411re.md
+    - NUCLEO-G070RB: boards/nucleo-g070rb.md
     - NUCLEO-G071RB: boards/nucleo-g071rb.md
     - STM32G0B1RE: boards/stm32g0b1re.md
     - STM32H563: boards/stm32h563.md
@@ -200,6 +210,8 @@ nav:
     - MCP3008: parts/mcp3008.md
     - ADS1256: parts/ads1256.md
     - BMI160: parts/bmi160.md
+    - LIS2DUX12: parts/lis2dux12.md
+    - LSM6DSOX: parts/lsm6dsox.md
     - BMM150: parts/bmm150.md
     - VEML6075: parts/veml6075.md
     - HT16K33: parts/ht16k33.md

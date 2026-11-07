@@ -1,0 +1,27 @@
+Processing nucleo_f411re (platform: ststm32@20.0.0; board: nucleo_f411re; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/ststm32/nucleo_f411re.html
+PLATFORM: ST STM32 (20.0.0) > ST Nucleo F411RE
+HARDWARE: STM32F411RET6 100MHz, 128KB RAM, 512KB Flash
+DEBUG: Current (stlink) On-board (stlink) External (blackmagic, cmsis-dap, jlink)
+PACKAGES:
+ - framework-arduinoststm32 @ 4.30000.0 (3.0.0)
+ - framework-cmsis @ 2.60300.0 (6.3.0)
+ - framework-cmsis-dsp @ 1.16.2
+ - toolchain-gccarmnoneeabi @ 1.120301.0 (12.3.1)
+Converting main.ino
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 18 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Adafruit BME280 Library @ 2.3.0
+|-- Wire @ 1.0.0
+Building in release mode
+Compiling .pio/build/nucleo_f411re/src/main.ino.cpp.o
+Checking size .pio/build/nucleo_f411re/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [          ]   1.2% (used 1604 bytes from 131072 bytes)
+Flash: [=         ]   5.4% (used 28360 bytes from 524288 bytes)
+========================= [SUCCESS] Took 2.02 seconds =========================

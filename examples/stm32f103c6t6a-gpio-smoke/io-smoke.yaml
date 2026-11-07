@@ -1,0 +1,12 @@
+# STM32F103C6T6A: toggle an external active-low LED on PC13.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32f103c6-gpio-smoke"
+  system: "../../configs/systems/stm32f103c6t6a-gpio-smoke.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "gpioc:13"
+      min_edges: 4
+  - expected_stop_reason: max_steps

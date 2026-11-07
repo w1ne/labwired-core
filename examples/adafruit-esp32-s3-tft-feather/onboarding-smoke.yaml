@@ -1,0 +1,21 @@
+# Adafruit ESP32-S3 TFT Feather #5483: boot S3 firmware, initialize the
+# onboard ST7789 through SPI2, paint an 8x8 red patch, and report on UART0.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-adafruit-esp32-s3-tft-feather-smoke"
+  system: "../../configs/systems/adafruit-esp32-s3-tft-feather.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "ADAFRUIT_ESP32S3_TFT_FEATHER_ST7789_OK"
+  - display_region:
+      id: "tft"
+      x: 0
+      y: 232
+      w: 8
+      h: 8
+      min_ink: 1.0
+      lit: true
+      colour: "0xF800"
+      min_colour_pixels: 64
+  - expected_stop_reason: max_steps

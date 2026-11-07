@@ -1,5 +1,12 @@
 # Required Source Documents (Feather-STM32F405)
 
+## Board wiring and current availability
+
+1. Adafruit [Feather STM32F405 Express product page](https://www.adafruit.com/product/4382): current board listing and MCU/board features.
+2. Adafruit [Feather STM32F405 pinout guide](https://learn.adafruit.com/adafruit-stm32f405-feather-express/pinouts): D13 is PC1; D1/TX and D0/RX are USART3 on PB10/PB11; integrated devices and board pin functions.
+3. Adafruit [board schematic](https://cdn-shop.adafruit.com/product-files/4382/4382-schematic.pdf): board-level wiring.
+4. ST [STM32F405RG product page](https://www.st.com/en/microcontrollers-microprocessors/stm32f405rg.html): current MCU lifecycle and orderable package variants. The live check is recorded in [`evidence/vendor-status.md`](evidence/vendor-status.md).
+
 ## MCU Reference Manual + Datasheet
 
 1. RM0090 — STM32F405/407/415/417 reference manual (shared F4 IP; the F405

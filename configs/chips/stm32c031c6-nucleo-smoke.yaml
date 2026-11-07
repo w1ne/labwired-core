@@ -1,0 +1,42 @@
+# Narrow STM32C031C6 profile for the NUCLEO-C031C6 smoke.
+#
+# This models only reset-clock boot, RCC_IOPENR GPIOA clock enable, and GPIOA
+# output on PA5. Other C0 registers, peripherals, and board connections remain
+# outside this profile.
+#
+# Sources: ST DS13867 (STM32C031x4/x6 memory and Cortex-M0+), RM0490 Rev 5
+# (C0 RCC_IOPENR at 0x34 and GPIOAEN bit 0; reset HSISYS is HSI48 / 4),
+# and UM2953 Rev 2 (MB1717 board wiring: LD4 user LED on PA5).
+
+name: stm32c031c6-nucleo-smoke
+arch: arm
+core: cortex-m0+
+cpu_hz: 12000000
+
+flash:
+  base: 0x08000000
+  size: 32KB
+ram:
+  base: 0x20000000
+  size: 12KB
+
+pins:
+  PA5: { gpio: gpioa, bit: 5 }
+
+peripherals:
+  # Only IOPENR@0x34 is implemented. Bound the window so other C0 RCC
+  # offsets fault instead of receiving answers from a wider model.
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 56B
+    config:
+      profile: stm32c0
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x50000000
+    size: 1KB
+    config:
+      profile: stm32v2
+    clock: { reg: iopenr, bit: 0 }

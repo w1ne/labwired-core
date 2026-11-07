@@ -1,0 +1,27 @@
+Processing nucleo_l476rg (platform: ststm32@20.0.0; board: nucleo_l476rg; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/ststm32/nucleo_l476rg.html
+PLATFORM: ST STM32 (20.0.0) > ST Nucleo L476RG
+HARDWARE: STM32L476RGT6 80MHz, 96KB RAM, 1MB Flash
+DEBUG: Current (stlink) On-board (stlink) External (blackmagic, cmsis-dap, jlink)
+PACKAGES: 
+ - framework-arduinoststm32 @ 4.30000.0 (3.0.0) 
+ - framework-cmsis @ 2.60300.0 (6.3.0) 
+ - framework-cmsis-dsp @ 1.16.2 
+ - toolchain-gccarmnoneeabi @ 1.120301.0 (12.3.1)
+Converting main.ino
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 18 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Adafruit BME280 Library @ 2.3.0
+|-- Wire @ 1.0.0
+Building in release mode
+Compiling .pio/build/nucleo_l476rg/src/main.ino.cpp.o
+Checking size .pio/build/nucleo_l476rg/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [          ]   1.9% (used 1824 bytes from 98304 bytes)
+Flash: [          ]   3.5% (used 36196 bytes from 1048576 bytes)
+========================= [SUCCESS] Took 2.10 seconds =========================

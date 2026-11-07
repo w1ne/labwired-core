@@ -1,35 +1,67 @@
 # Waveshare RP2350-Zero
 
-Run all commands from `core/`.
+Run commands from the repository root.
+
+**Demand rank:** item 2 in the demand-ordered list is RP2040/RP2350. The 2025
+survey reports RP2040 at rank 5 (12%); it does not give RP2350 a separate
+percentage. Waveshare's RP2350-Zero gives users a low-cost RP2350A board with
+an onboard WS2812 on GP16. Current vendor status is recorded in
+[`evidence/vendor-status.md`](evidence/vendor-status.md).
 
 ## Purpose
 
 Deterministic bring-up for the **Waveshare RP2350-Zero** (RP2350A, USB-C,
-castellated, 4 MB flash, WS2812 on **GP16**). Same chip descriptor as Pico 2;
-different carrier. Twin console is UART0. The USB-C cable is native USB CDC
-on the bench and is **not** modeled.
+castellated, 4 MB flash, WS2812 on **GP16**). Twin console is UART0. The board
+profile uses a narrow RP2350 descriptor with UART0, IO_BANK0 and SIO models;
+its onboard LED uses the WS2812 pixel decoder on the actual GPIO waveform. The
+USB-C cable is native USB CDC on the bench and is **not** modeled.
 
 ## Twin vs this USB cable
 
 | | Twin | USB-C cable |
 |---|---|---|
 | Console | UART0 DR (`0x40070000`) | CDC (this desk: `/dev/cu.usbmodem11201`) |
-| LED | SIO `board_io` on GP16 (WS2812 stand-in) | WS2812 DIN GP16 |
+| LED | WS2812 decoder on SIO GP16 | WS2812 DIN GP16 |
 | Load | ELF at XIP `0x10000000` | UF2: hold BOOT, tap RUN, copy `.uf2` |
 
 ## Quick run (twin)
 
 ```bash
-rustup target add thumbv8m.main-none-eabi   # once
-RUSTFLAGS="-C link-arg=-Tlink.x" cargo build -p firmware-rp2350-demo \
-  --release --target thumbv8m.main-none-eabi
-cargo run -q -p labwired-cli -- test \
+scripts/onboarding_smoke.sh \
+  --target-id rp2350-zero \
+  --crate firmware-rp2350-zero-ws2812-smoke \
+  --target thumbv8m.main-none-eabi \
   --script examples/rp2350-zero/uart-smoke.yaml \
-  --output-dir out/rp2350-zero/uart-smoke \
-  --no-uart-stdout
+  --system configs/systems/rp2350-zero.yaml \
+  --out-dir examples/rp2350-zero/evidence \
+  --firmware-build-dir crates/firmware-rp2350-zero-ws2812-smoke
 ```
 
-Expected: exit 0, UART contains `RP2350_SMOKE_OK`.
+Expected: exit 0, UART contains `RP2350_SMOKE_OK`, GPIO16 has at least 48
+edges, and the attached pixel displays red.
+
+## Copy-paste Arduino example
+
+Install the Adafruit NeoPixel library, select **Waveshare RP2350-Zero** in the
+Earle Philhower Arduino-Pico core, and upload:
+
+```cpp
+#include <Adafruit_NeoPixel.h>
+
+Adafruit_NeoPixel led(1, 16, NEO_GRB + NEO_KHZ800);
+
+void setup() {
+  led.begin();
+  led.setPixelColor(0, led.Color(255, 0, 0));
+  led.show();
+}
+
+void loop() {}
+```
+
+The simulator smoke uses bare-metal Rust direct GPIO writes to generate the
+same red pixel frame. It verifies the modeled waveform path; it does not
+compile or verify the Arduino core or its PIO driver.
 
 ## Bench (UF2)
 
@@ -39,9 +71,9 @@ Expected: exit 0, UART contains `RP2350_SMOKE_OK`.
 
 ## Files
 
-1. `system.yaml` — GP16 LED stand-in via SIO.
-2. `uart-smoke.yaml` — UART oracle (not CDC).
-3. `REQUIRED_DOCS.md` — schematic, pico-sdk header, live USB id.
+1. `system.yaml` — narrow RP2350 profile and WS2812 device on GP16.
+2. `uart-smoke.yaml` — UART, GPIO-edge, and decoded-pixel oracles (not CDC).
+3. `REQUIRED_DOCS.md` — schematic, pico-sdk header, USB details.
 4. `EXTERNAL_COMPONENTS.md` — onboard WS2812 / no extra parts.
 5. `VALIDATION.md` — smoke + audit + honesty notes.
 6. `images/` — authored pinout and board illustration (schematic/wiki silk). Desk photographs are slice 2.

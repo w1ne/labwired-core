@@ -1,0 +1,15 @@
+nRF52 DK ready
+hb=0 led1=on
+hb=1 led1=off
+hb=2 led2=on
+hb=3 led2=off
+hb=4 led3=on
+hb=5 led3=off
+hb=6 led4=on
+hb=7 led4=off
+hb=8 led1=on
+hb=9 led1=off
+hb=10 led2=on
+hb=11 led2=off
+hb=12 led3=on
+hb=13 led3=off

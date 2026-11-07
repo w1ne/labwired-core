@@ -1,0 +1,9 @@
+# Adafruit Feather nRF52840 Express (PID 4062).
+# Feather D0/TX is P0.25 and D1/RX is P0.24 in Adafruit's official variant.
+# This profile exposes only the UARTE0 TX path on D0/P0.25; USB, radio, LEDs,
+# QSPI flash, battery charging, and the remaining GPIO/peripheral estate are
+# outside this smoke profile.
+name: "adafruit-feather-nrf52840-express"
+chip: "../chips/nrf52840-feather-uart-smoke.yaml"
+external_devices: []
+board_io: []

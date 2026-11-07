@@ -1,0 +1,10 @@
+# NUCLEO-G431KB: USART2 VCP output over the board's default PA2/PA3 route.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-g431kb-smoke"
+  system: "../../configs/systems/nucleo-g431kb-smoke.yaml"
+limits:
+  max_steps: 1000
+assertions:
+  - uart_contains: "NUCLEO_G431KB_OK"
+  - expected_stop_reason: max_steps
