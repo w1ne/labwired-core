@@ -64,7 +64,11 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         "PL061 TRM DDI0190B §3.3.1 GPIODATA (SWRU319C Table 9-2)",
     ),
     ("nrf52840_gpio", 0x510, "nRF52840 PS §6.9.2 IN"),
-    ("sam4s_pio", 0x3C, "SAM4S DS §31.7 PIO_PDSR"),
+    (
+        "sam4s_pio",
+        0x3C,
+        "SAM4S DS §31.7 PIO_PDSR; AT91RM9200 DS 1768 PIO_PDSR",
+    ),
     ("miv_coregpio", 0x90, "CoreGPIO handbook InputRegister"),
     (
         "efr32s2_gpioport",
@@ -132,13 +136,13 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 172;
+const COVERED: usize = 173;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 70;
+const SILICON_REGISTER: usize = 71;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 73;
+const NO_ANALOG_ENDPOINT: usize = 72;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()

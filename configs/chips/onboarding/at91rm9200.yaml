@@ -33,3 +33,34 @@ peripherals:
   type: pythonperipheral
   bus: sysbus
   base_address: 4294966320
+# PIO controllers A-D. Renode's at91rm9200 platform leaves PIO out, so the
+# import carried none. PIOA..PIOD sit at 0xFFFFF400 + 0x200 * n (AT91RM9200
+# datasheet 1768 Table 8-1; Linux at91rm9200.dtsi gpio@fffff400..fffffa00).
+# The RM9200 PIO is the block the SAM4S PIO grew from: PER/PDR/PSR @0x00..0x08,
+# OER/ODR/OSR @0x10..0x18, SODR/CODR/ODSR @0x30..0x38, PIO_PDSR @0x3C,
+# PUDR/PUER/PUSR @0x60..0x68 (Linux pinctrl-at91.h), so they run on
+# `sam4s_pio`. Not modelled: pull-ups reset ENABLED on the RM9200 (PIO_PUSR
+# resets 0) but disabled on the SAM4S model, so an unconnected pad reads 0
+# here where silicon reads 1; PIO_ASR/PIO_BSR @0x70/0x74 are write-1-to-select
+# with status in PIO_ABSR @0x78 on the RM9200, where the model stores 0x70/0x74
+# as the SAM4S ABCDSR words; PMC_PCER gating of the PIO input path.
+- id: pioA
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 0xFFFFF400
+  size: 512B
+- id: pioB
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 0xFFFFF600
+  size: 512B
+- id: pioC
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 0xFFFFF800
+  size: 512B
+- id: pioD
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 0xFFFFFA00
+  size: 512B
