@@ -175,6 +175,23 @@ pub struct DevicePinPad {
     pub bit: u8,
 }
 
+/// One direct wire from an external device's named `outputs:` role to a GPIO
+/// observer control input on another external device.
+///
+/// This is the device-to-device counterpart of [`DevicePinPad`]. It carries no
+/// MCU pad and therefore does not invent a hidden GPIO merely to connect, for
+/// example, a PCF8574 output to a TB6612 direction input. The source device
+/// still queues `(device_id, role, level)` through its ordinary bus controller;
+/// the bus fans that transition out to every matching sink at the same cycle.
+#[derive(Debug)]
+pub struct DeviceOutputObserverBinding {
+    pub source_device_id: String,
+    pub source_role: String,
+    pub observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    pub observer_pin: u8,
+    pub previous_level: bool,
+}
+
 /// A stimulus device resident directly on the [`SystemBus`] that drives GPIO
 /// input-register pins once per peripheral tick and exposes one SimInput
 /// channels. Declarative GPIO devices and simple contacts share this contract.

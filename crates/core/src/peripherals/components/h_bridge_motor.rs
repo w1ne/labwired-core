@@ -154,6 +154,93 @@ use crate::peripherals::kit::{
 };
 use std::sync::Arc;
 
+const DEVICE_OUTPUT_PREFIX: &str = "device-output://";
+
+#[derive(Debug, Clone)]
+enum BridgeControlSource {
+    Gpio(u8),
+    DeviceOutput {
+        device_id: String,
+        role: String,
+        virtual_pin: u8,
+    },
+}
+
+impl BridgeControlSource {
+    fn observer_pin(&self) -> u8 {
+        match self {
+            Self::Gpio(pin) => *pin,
+            Self::DeviceOutput { virtual_pin, .. } => *virtual_pin,
+        }
+    }
+}
+
+fn parse_device_output_ref(label: &str) -> Option<(String, String)> {
+    let rest = label.strip_prefix(DEVICE_OUTPUT_PREFIX)?;
+    let (device_id, role) = rest.rsplit_once('/')?;
+    if device_id.is_empty() || role.is_empty() {
+        return None;
+    }
+    Some((device_id.to_string(), role.to_string()))
+}
+
+fn bridge_control_source(
+    ctx: &AttachCtx<'_>,
+    keys: &[&str],
+    default: Option<&str>,
+    virtual_pin: u8,
+) -> anyhow::Result<Option<BridgeControlSource>> {
+    let label = keys.iter().find_map(|key| ctx.config_str(key)).or(default);
+    let Some(label) = label else {
+        return Ok(None);
+    };
+    if let Some((device_id, role)) = parse_device_output_ref(label) {
+        return Ok(Some(BridgeControlSource::DeviceOutput {
+            device_id,
+            role,
+            virtual_pin,
+        }));
+    }
+    let pin = ctx.parse_gpio_pin(label).ok_or_else(|| {
+        anyhow::anyhow!(
+            "{} '{}': control '{}' is neither a GPIO pad nor a {}<device>/<role> reference",
+            ctx.device_type(),
+            ctx.device_id(),
+            label,
+            DEVICE_OUTPUT_PREFIX,
+        )
+    })?;
+    Ok(Some(BridgeControlSource::Gpio(pin)))
+}
+
+fn bind_bridge_sources(
+    ctx: &mut AttachCtx<'_>,
+    motor: &Arc<HBridgeMotor>,
+    sources: &[&BridgeControlSource],
+) {
+    if sources
+        .iter()
+        .any(|source| matches!(source, BridgeControlSource::Gpio(_)))
+    {
+        ctx.install_gpio_observer(motor.clone());
+    }
+    for source in sources {
+        if let BridgeControlSource::DeviceOutput {
+            device_id,
+            role,
+            virtual_pin,
+        } = source
+        {
+            ctx.bind_device_output_observer(
+                device_id.clone(),
+                role.clone(),
+                motor.clone(),
+                *virtual_pin,
+            );
+        }
+    }
+}
+
 /// Dual H-bridge motor kit (L298N / TB6612 / L293D-class).
 pub struct HBridgeMotorKit;
 pub static H_BRIDGE_MOTOR_KIT: HBridgeMotorKit = HBridgeMotorKit;
@@ -233,23 +320,43 @@ impl PeripheralKit for HBridgeMotorKit {
             return attach_ibt2(ctx);
         }
 
-        let in1 = ctx
-            .config_gpio_pin("in1_pin", "AIN1", "GPIO16")
-            .or_else(|_| ctx.config_gpio_pin("ain1_pin", "IN1", "GPIO16"))?;
-        let in2 = ctx
-            .config_gpio_pin("in2_pin", "AIN2", "GPIO17")
-            .or_else(|_| ctx.config_gpio_pin("ain2_pin", "IN2", "GPIO17"))?;
-        let en = ctx
-            .config_str("en_pin")
-            .or_else(|| ctx.config_str("ENA"))
-            .or_else(|| ctx.config_str("pwma_pin"))
-            .or_else(|| ctx.config_str("PWMA"))
-            .and_then(|l| ctx.parse_gpio_pin(l));
+        // Virtual observer pins are intentionally outside every ESP32 GPIO
+        // range. They identify direct device-output controls inside each motor
+        // object only; no MCU register or pad is allocated.
+        const DIRECT_IN1: u8 = 240;
+        const DIRECT_IN2: u8 = 241;
+        const DIRECT_EN: u8 = 242;
+
+        let in1 = bridge_control_source(
+            ctx,
+            &["in1_pin", "AIN1", "ain1_pin", "IN1"],
+            Some("GPIO16"),
+            DIRECT_IN1,
+        )?
+        .expect("required bridge input has a default");
+        let in2 = bridge_control_source(
+            ctx,
+            &["in2_pin", "AIN2", "ain2_pin", "IN2"],
+            Some("GPIO17"),
+            DIRECT_IN2,
+        )?
+        .expect("required bridge input has a default");
+        let en =
+            bridge_control_source(ctx, &["en_pin", "ENA", "pwma_pin", "PWMA"], None, DIRECT_EN)?;
         let motor = Arc::new(
-            HBridgeMotor::new(format!("{}-a", ctx.device_id()), in1, in2, en)
-                .with_declared_id(ctx.device_id().to_string()),
+            HBridgeMotor::new(
+                format!("{}-a", ctx.device_id()),
+                in1.observer_pin(),
+                in2.observer_pin(),
+                en.as_ref().map(BridgeControlSource::observer_pin),
+            )
+            .with_declared_id(ctx.device_id().to_string()),
         );
-        ctx.install_gpio_observer(motor.clone());
+        let mut channel_a_sources = vec![&in1, &in2];
+        if let Some(en) = en.as_ref() {
+            channel_a_sources.push(en);
+        }
+        bind_bridge_sources(ctx, &motor, &channel_a_sources);
         ctx.bus.observe_device(motor);
 
         let has_b = ctx.ext.config.contains_key("in3_pin")
@@ -257,25 +364,41 @@ impl PeripheralKit for HBridgeMotorKit {
             || ctx.ext.config.contains_key("bin1_pin")
             || ctx.ext.config.contains_key("BIN1");
         if has_b {
-            if let (Ok(b1), Ok(b2)) = (
-                ctx.config_gpio_pin("in3_pin", "BIN1", "GPIO18")
-                    .or_else(|_| ctx.config_gpio_pin("bin1_pin", "IN3", "GPIO18")),
-                ctx.config_gpio_pin("in4_pin", "BIN2", "GPIO19")
-                    .or_else(|_| ctx.config_gpio_pin("bin2_pin", "IN4", "GPIO19")),
-            ) {
-                let enb = ctx
-                    .config_str("enb_pin")
-                    .or_else(|| ctx.config_str("ENB"))
-                    .or_else(|| ctx.config_str("pwmb_pin"))
-                    .or_else(|| ctx.config_str("PWMB"))
-                    .and_then(|l| ctx.parse_gpio_pin(l));
-                let motor_b = Arc::new(
-                    HBridgeMotor::new(format!("{}-b", ctx.device_id()), b1, b2, enb)
-                        .with_declared_id(ctx.device_id().to_string()),
-                );
-                ctx.install_gpio_observer(motor_b.clone());
-                ctx.bus.observe_device(motor_b);
+            let in3 = bridge_control_source(
+                ctx,
+                &["in3_pin", "BIN1", "bin1_pin", "IN3"],
+                Some("GPIO18"),
+                DIRECT_IN1,
+            )?
+            .expect("required bridge input has a default");
+            let in4 = bridge_control_source(
+                ctx,
+                &["in4_pin", "BIN2", "bin2_pin", "IN4"],
+                Some("GPIO19"),
+                DIRECT_IN2,
+            )?
+            .expect("required bridge input has a default");
+            let enb = bridge_control_source(
+                ctx,
+                &["enb_pin", "ENB", "pwmb_pin", "PWMB"],
+                None,
+                DIRECT_EN,
+            )?;
+            let motor_b = Arc::new(
+                HBridgeMotor::new(
+                    format!("{}-b", ctx.device_id()),
+                    in3.observer_pin(),
+                    in4.observer_pin(),
+                    enb.as_ref().map(BridgeControlSource::observer_pin),
+                )
+                .with_declared_id(ctx.device_id().to_string()),
+            );
+            let mut channel_b_sources = vec![&in3, &in4];
+            if let Some(enb) = enb.as_ref() {
+                channel_b_sources.push(enb);
             }
+            bind_bridge_sources(ctx, &motor_b, &channel_b_sources);
+            ctx.bus.observe_device(motor_b);
         }
         Ok(())
     }
