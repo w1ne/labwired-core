@@ -568,9 +568,18 @@ fn every_shipped_descriptor_is_ratcheted() {
         "stm32f103r4h",
         "stm32f103r6",
         "stm32f103r6h",
+        "stm32f103r8",
         "stm32f103rb",
         "stm32f103t4",
         "stm32f103t6",
+        // STM32G431RB (demand-ordered onboarding; JetBrains State of Embedded
+        // 2025 "other STM32" 13%, the industrial/motor-control pick). A core
+        // chip descriptor, not a Playground board in bundled-configs.ts; its
+        // G4 behaviour is shared with stm32g474re. It has a TIER1 raw-register
+        // self-test but no bundled catalog board and no silicon differential.
+        // Promote when a NUCLEO-G431RB catalog board and a bench differential
+        // exist.
+        "stm32g431rb",
         "stm32f401cb",
         "stm32f401cc",
         "stm32f401cd",
@@ -814,6 +823,16 @@ fn every_shipped_descriptor_is_ratcheted() {
         // bundled-configs.ts catalog board. Same bar as the maker-five above:
         // promote when the catalog lands AND a differential exists.
         "esp32c6",
+        // First WCH part (CH32V003F4P6, QingKe RV32EC). L1: chip descriptor +
+        // system manifest + example with an io-smoke executed by the coverage
+        // matrix, a committed compiled-RV32E fixture and a chip-conformance
+        // behaviour gate that asserts PC0 edges. It carries no bundled-configs.ts
+        // catalog board, no silicon oracle (no CH32V003 has been diffed over
+        // SDI) and no executing-fidelity differential of its own. The slice
+        // models RCC and GPIO A/C/D only (no PFIC) — USART/I2C/SPI/ADC are not
+        // modelled, so there is no bus to diff yet. Promote when the catalog
+        // board, a bus model and a differential all exist.
+        "ch32v003f4p6",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

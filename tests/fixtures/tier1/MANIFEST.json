@@ -8,8 +8,8 @@
     "source_rev": "f866a78d7594e4d939b9bd67c8b712b14bafe06a"
   },
   "esp32c6.elf": {
-    "sha256": "b080caf69b9a3476712ff341c7118ed1dc07b2206c932bb9cb0189348f8a9778",
-    "source_rev": "305632e073f7bb8701f6c65a592cef1ecc420300"
+    "sha256": "4206164efa5d4f3ce0cbb9c7d94b0f1f4e5d7299d13184448af3aa36894c7f79",
+    "source_rev": "9fc88b277aed71218465d44b163d20860c3430ca"
   },
   "esp32s3-arduino-flash.bin": {
     "sha256": "2664b7ba3bc27303cd5e48f028ea1b176a68c749230b42e0780a94710948e7c5",
@@ -66,6 +66,10 @@
   "stm32g071.elf": {
     "sha256": "706e1f6cbc37c7d81885cbe785f6962123a710597eba2c39fc4e7bd3c225e92e",
     "source_rev": "a1c9ec61e7f4308a4fc1b371324feffe98b3ea22"
+  },
+  "stm32g431rb.elf": {
+    "sha256": "f81414b4fa4fc17950224f4943994c92c27dd14f8551c4063a6f9d8da4fa905c",
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32g474re.elf": {
     "sha256": "1a854cbf4b3ec27f60683bb10595e9806d2b5ad69cd87d515f0a0800ea0bd6d9",

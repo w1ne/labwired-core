@@ -2338,6 +2338,12 @@ impl SystemBus {
             (1, 'a', 9, LINE_TX, "USART1_TX"),
             (2, 'a', 2, LINE_TX, "USART2_TX"),
         ];
+        // WCH CH32V003: USART1 default (no-remap) TX is PD5. Source: WCH
+        // `Debug/debug.c` `USART_Printf_Init`, `DEBUG_UART1_NoRemap` branch
+        // (GPIOD pin 5, GPIO_Mode_AF_PP). Same F1-style CFGLR, so no AF nibble.
+        // The remap pads need AFIO_PCFR1, which nothing decodes, so they are
+        // left unbound.
+        const WCH: &[(u8, char, u8, usize, &str)] = &[(1, 'd', 5, LINE_TX, "USART1_TX")];
 
         for instance in 1u8..=3 {
             // Chip configs name these both ways — `uart2` on the L4/F1 configs,
@@ -2389,8 +2395,13 @@ impl SystemBus {
                             }
                         }
                     }
-                    GpioRegisterLayout::Stm32F1 => {
-                        for &(inst, p, pin, line, func) in F1 {
+                    GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch => {
+                        let table = if gpio_layout == GpioRegisterLayout::Wch {
+                            WCH
+                        } else {
+                            F1
+                        };
+                        for &(inst, p, pin, line, func) in table {
                             if inst == instance && p == port {
                                 plan.push((port, pin, None, line, func));
                             }
@@ -2402,8 +2413,8 @@ impl SystemBus {
             if plan.is_empty() {
                 continue;
             }
-            // F1 rows carry no AF nibble (`None`). That is the only layout
-            // whose console sink follows the pad: V2 keeps the permissive
+            // F1 (and WCH) rows carry no AF nibble (`None`). That is the only
+            // layout whose console sink follows the pad: V2 keeps the permissive
             // byte sink the existing smokes transmit through.
             let console_gate = plan
                 .iter()

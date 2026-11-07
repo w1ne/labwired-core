@@ -24,7 +24,8 @@ Each chip's Tier-1 fixture is **real firmware** that drives these peripheral cla
 | `stm32f401` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 |  |  | **12** |
 | `stm32f407` | 🟢 | 🟢 | 🟢 | 🟢 | 🟠 | 🟠 | 🟢 | 🟢 | 🟢 | 🟠 | 🟢 | 🟢 |  |  | **9** |
 | `stm32f411` | 🟢 | 🟢 | 🟢 | 🟢 | 🟠 | · | 🟢 | 🟢 | 🟢 | · | 🟢 | 🟢 |  |  | **9** |
-| `stm32g071` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 |  |  | **12** |
+| `stm32g071` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🔴 | 🟢 | 🟢 | 🟢 | 🟢 |  |  | **11** |
+| `stm32g431rb` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 |  |  | **12** |
 | `stm32g474re` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 |  |  | **12** |
 | `stm32h563` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 |  | **13** |
 | `stm32h735` | 🟢 | 🟢 | 🟢 | 🟢 | · | 🟢 | 🟢 | 🟢 | 🟠 | 🟢 | 🟢 | · |  |  | **9** |
@@ -33,7 +34,7 @@ Each chip's Tier-1 fixture is **real firmware** that drives these peripheral cla
 | `stm32wb55` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 |  |  | **12** |
 | `stm32wba52` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | · | 🟢 | 🟢 | 🟢 |  |  | **11** |
 
-> **212 rubric cells are driven by real firmware** across 20 chips; 11 are modeled-but-unrecorded (see below). Most chips drive 9–13 of the common peripheral classes — the STM32 family included.
+> **223 rubric cells are driven by real firmware** across 21 chips; 11 are modeled-but-unrecorded (see below). Most chips drive 9–13 of the common peripheral classes — the STM32 family included.
 
 **Unrecorded rubric cells (modeled, fixture does not drive them):** `esp32`/rtc, `esp32c3`/clock, `esp32c3`/dma, `esp32s3`/spi, `esp32s3`/adc, `rp2040`/dma, `stm32f407`/dma, `stm32f407`/irq, `stm32f407`/pwm, `stm32f411`/dma, `stm32h735`/adc.
 
@@ -132,6 +133,10 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `UDS bootloader/ECU (0x10/0x27/0x34/0x36/0x37/0x85/0x28 — example firmware, not gated)`
 
+### `ch32v003f4p6`
+
+_No tier-1 fixture or hosted model-verification gate. A compiled RV32E/ILP32E bare-metal C fixture executes from flash, configures WCH RCC/GPIOC, and toggles PC0 in the local simulator; the matching CLI smoke and core integration test require two GPIO edges. A second, RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX; its CLI smoke and integration test assert the exact string, and a negative control asserts silence when the USART1 clock gate is not set. This is local simulator evidence, not hosted model_verified or hardware confirmation._
+
 ### `nrf5340`
 
 _No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). Nine peripheral blocks are benign boot stubs._
@@ -226,6 +231,10 @@ _Exact low-density x4/x6 geometry slice for stm32f103r6; it reuses the shared me
 ### `stm32f103r6h`
 
 _Exact low-density x4/x6 geometry slice for stm32f103r6h; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103r8`
+
+_Exact STM32F103R8 LQFP64 model (medium-density x8: 64 KiB flash, 20 KiB SRAM, 51 GPIOs, 16 ADC channels). Same die and peripheral map as the public stm32f103 (C8) engine, so firmware-exercise rubric claims stay on the STM32F103 family row. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`, and the exact part is executed by the `stm32-exact-catalog` arm-spin cell in core-coverage-matrix-smoke.yml._
 
 ### `stm32f103rb`
 
@@ -406,6 +415,10 @@ _No tier-1 target. This is the narrow IO-Link customer firmware descriptor: the 
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `SYSCFG` (configs/chips/stm32g0b1re.yaml (type: syscfg); crates/core/src/peripherals/generic_factory.rs (syscfg arm)) — CLOSABLE: StubPeripheral returns zero except a canned H7-style CCCSR readiness bit at 0x20, and drops writes. This is not a G0 SYSCFG behavioral model. GPIO source selection is modeled in the separate G0 EXTI-owned EXTICR registers, not through this stub.
+
+### `stm32g431rb`
+
+_All 12 declared rubric classes are driven by its committed tier-1 fixture (tests/fixtures/tier1/stm32g431rb.elf, sha256 in tests/fixtures/tier1/MANIFEST.json; fast_boot target, USART2 console), asserted by the `stm32g431rb` cell in core-coverage-matrix-smoke.yml and nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step. Same RM0440 G4 peripheral map as stm32g474re, so the beyond-rubric blocks (PWR/CRC/DBGMCU, driven there by vendor firmware) are shared with the G474 row; no G4-specific firmware drives them for the G431 die and no G431 bench capture exists, so REV_ID stays a visible placeholder rather than a claimed value._
 
 ### `stm32g474re`
 
