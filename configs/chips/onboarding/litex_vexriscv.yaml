@@ -2,8 +2,8 @@
 #
 # The generated import called this an ARM platform and omitted the LiteX UART
 # and timer while advertising MMCM and Ethernet blocks that LabWired does not
-# model. Keep only the supported RV32IM, memory, UART, timer, and explicit SPI
-# stub used by the smoke. The full model rationale and sources are in
+# model. Keep only the supported RV32IM, memory, UART, timer, and the SPI-flash
+# controller the smoke exercises. The full model rationale and sources are in
 # configs/chips/litex-vexriscv.yaml.
 
 name: "litex_vexriscv"
@@ -27,8 +27,9 @@ peripherals:
     base_address: 0x60002800
     size: "2KB"
     irq: 1
-  # Declared gap, not a modeled flash controller. Reads answer zeros.
+  # LiteX SPI-flash bitbang CSRs + MT25Q READ ID / status responder. Array
+  # reads, program and erase are not modelled.
   - id: "spi_flash_ctrl"
-    type: "stub"
+    type: "litex_spi_flash"
     base_address: 0x60005000
     size: "2KB"

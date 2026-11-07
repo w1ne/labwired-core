@@ -4,8 +4,9 @@
 #
 # The firmware boots from the SoC's SRAM and prints over the LiteX UART. It
 # runs the modelled LiteX timer as a one-shot (`timer=running` → `timer=zero`,
-# which only appears if the countdown reached zero), reads back a declared-stub
-# window (`spi=00000000`), and its heartbeat's `txfull=` field is READ BACK
+# which only appears if the countdown reached zero), bitbangs the SPI flash's
+# READ ID and status through the LiteX SPI-flash controller
+# (`spi id=20bb19 sr=00 wel=02`), and its heartbeat's `txfull=` field is READ BACK
 # from the UART CSR after the TX-ready poll.
 schema_version: "1.0"
 inputs:
@@ -17,7 +18,7 @@ assertions:
   - uart_contains: "LITEX VEXRISCV SMOKE"
   - uart_ordered:
       - "cpu=rv32im uart=litex"
-      - "spi=00000000"
+      - "spi id=20bb19 sr=00 wel=02"
       - "timer=running"
       - "timer=zero"
       - "hb=0 txfull=00000000"

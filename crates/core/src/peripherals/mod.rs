@@ -78,6 +78,7 @@ pub mod jpeg_baseline;
 pub mod kinetis_rnga;
 pub mod kit;
 pub mod litex_control_status;
+pub mod litex_spi_flash;
 pub mod litex_timer;
 pub mod lpc;
 pub mod lptim;

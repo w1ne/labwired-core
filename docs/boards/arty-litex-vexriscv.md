@@ -42,7 +42,7 @@ This is an **L1 (smoke)** target on the `litex-vexriscv` SoC family: boot, the U
 | LiteX UART | `0x6000_1800` | modelled — `rxtx` @ +0x00, `txfull` @ +0x04 |
 | LiteX timer | `0x6000_2800` | modelled — countdown + zero-event status/pending |
 | Control-and-Status (CAS) | `0x6000_6800` | modelled — `Leds` @0x00 (R/W), `Switches` @0x04, `ButtonsStatus` @0x08, `ButtonsPending` @0x0C (W1C), `ButtonsEnabled` @0x10 |
-| LiteX SPI-flash controller | `0x6000_5000` | `type: stub` — answers zeros |
+| LiteX SPI-flash controller | `0x6000_5000` | modelled — bitbang/miso/bitbang_en CSRs + MT25Q READ ID, READ STATUS, WREN/WRDI; array read/program/erase not modelled |
 | LiteX Ethernet MAC | `0x6000_7800` | `type: stub` |
 | LiteX MMCM | `0xE000_4800` | `type: stub` |
 

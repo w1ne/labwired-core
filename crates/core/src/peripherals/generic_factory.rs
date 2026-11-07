@@ -391,6 +391,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "litex_timer",
     // LiteX Control-and-Status (LED/switch/button CSR block).
     "litex_controlandstatus",
+    // LiteX SPI-flash bitbang controller with its MT25Q responder.
+    "litex_spi_flash",
     // Microchip Mi-V reference-design peripherals. MUST be listed: without
     // membership the fuzzy fallbacks would coerce `miv_coregpio` onto the
     // STM32 GPIO map (it was doing exactly that for the staged descriptors)
@@ -1771,6 +1773,9 @@ pub fn try_build(
                     .with_buttons_active_low(active_low),
             )
         }
+        // LiteX SPI-flash bitbang CSRs + Micron MT25Q ID/status responder
+        // (Renode `LiteX_SPI_Flash` + `Micron_MT25Q`).
+        "litex_spi_flash" => Box::new(crate::peripherals::litex_spi_flash::LitexSpiFlash::new()),
         // Microchip Mi-V reference-design peripherals.
         "miv_coregpio" => Box::new(crate::peripherals::miv::MivCoreGpio::new()),
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),

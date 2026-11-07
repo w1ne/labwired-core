@@ -1,37 +1,33 @@
 {
   "target_id": "litex_vexriscv",
-  "status": "pass",
+  "status": "fail",
   "measurement_mode": "smoke",
-  "run_attempted": true,
-  "booted": true,
-  "boot_evidence": {
-    "result_path": "simulation-output/result.json",
-    "instructions": 4000000,
-    "stop_reason": "max_steps"
-  },
-  "smoke_passed": true,
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
   "crate": "firmware-litex-vexriscv-smoke",
   "target_triple": "riscv32im-unknown-none-elf",
   "script": "examples/renode-onboarding/litex_vexriscv-smoke.yaml",
   "system": "configs/systems/onboarding/litex_vexriscv.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:48:31Z",
-  "finished_at_utc": "2026-11-05T14:48:34Z",
-  "elapsed_seconds": 3,
-  "elapsed_ms": 2357,
-  "failure_stage": "",
-  "first_error_signature": "",
-  "failure_hint": "",
+  "started_at_utc": "2026-11-07T00:01:25Z",
+  "finished_at_utc": "2026-11-07T00:03:50Z",
+  "elapsed_seconds": 146,
+  "elapsed_ms": 145427,
+  "failure_stage": "build_cli",
+  "first_error_signature": "   Compiling thiserror-impl v1.0.69",
+  "failure_hint": "Fix host toolchain first: run `rustup show` and ensure CLI dependencies build on this runner.",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.295,
-    "build_firmware": 0.461,
-    "run_smoke": 1.591
+    "build_cli": 145.415,
+    "build_firmware": null,
+    "run_smoke": null
   },
   "stages_ms": {
-    "build_cli": 295,
-    "build_firmware": 461,
-    "run_smoke": 1591
+    "build_cli": 145415,
+    "build_firmware": null,
+    "run_smoke": null
   }
 }

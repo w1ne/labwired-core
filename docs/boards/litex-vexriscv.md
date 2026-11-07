@@ -2,7 +2,7 @@
 
 The LiteX **VexRiscv** soft-core SoC: a 32-bit RISC-V CPU (`rv32im_zicsr_zifencei` — no compressed, no atomic extension) in a LiteX SoC, as built for FPGA carrier boards such as the Digilent Arty A7. LabWired's target runs a bare-metal ELF from the SoC's integrated SRAM and captures the LiteX UART console.
 
-This is an **L1 (smoke)** target: boot, the UART byte path and the timer one-shot are proven by a committed smoke fixture and an `io-smoke.yaml`. The CPU, memory map, UART and the LiteX countdown timer are modelled; everything else is *declared, not faked* — unmodelled CSR windows are `type: stub` and answer zeros, and the smoke prints one of those readbacks (`spi=00000000`) so the omission is visible on the wire. No silicon capture exists: **SIM-DERIVED**, no executing-fidelity differential yet.
+This is an **L1 (smoke)** target: boot, the UART byte path and the timer one-shot are proven by a committed smoke fixture and an `io-smoke.yaml`. The CPU, memory map, UART and the LiteX countdown timer are modelled, as is the SPI-flash bitbang controller with an MT25Q READ ID / status responder (the smoke prints `spi id=20bb19 sr=00 wel=02`); everything else is *declared, not faked* — unmodelled CSR windows are `type: stub` and answer zeros. No silicon capture exists: **SIM-DERIVED**, no executing-fidelity differential yet.
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:
@@ -41,7 +41,7 @@ This is an **L1 (smoke)** target: boot, the UART byte path and the timer one-sho
 |-------|---------|-------|
 | LiteX UART | `0x6000_1800` | modelled — `rxtx` @ +0x00, `txfull` @ +0x04 (polled console path) |
 | LiteX timer | `0x6000_2800` | modelled — 32-bit countdown (`load`/`reload`/`en`/`update_value`/`value`) + zero-event `ev_status`/`ev_pending`/`ev_enable` |
-| LiteX SPI-flash controller | `0x6000_5000` | `type: stub` — answers zeros |
+| LiteX SPI-flash controller | `0x6000_5000` | modelled — bitbang/miso/bitbang_en CSRs + MT25Q READ ID, READ STATUS, WREN/WRDI; array read/program/erase not modelled |
 | LiteX Ethernet MAC | `0x6000_7800` | `type: stub` |
 | LiteX MMCM | `0xE000_4800` | `type: stub` |
 

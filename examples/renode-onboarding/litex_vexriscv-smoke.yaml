@@ -9,7 +9,7 @@ assertions:
   - uart_contains: "LITEX VEXRISCV SMOKE"
   - uart_ordered:
       - "cpu=rv32im uart=litex"
-      - "spi=00000000"
+      - "spi id=20bb19 sr=00 wel=02"
       - "timer=running"
       - "timer=zero"
       - "hb=0 txfull=00000000"
