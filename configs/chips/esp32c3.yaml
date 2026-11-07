@@ -238,12 +238,16 @@ peripherals:
     base_address: 0x6001D000
     config:
       path: "../peripherals/esp32c3/bb.yaml"
-  # TWAI / CAN controller
+  # TWAI / CAN controller. Same SJA1000-style TWAI IP and register map as the
+  # ESP32-S3 (both at DR_REG_TWAI_BASE 0x6002B000; offsets match this chip's
+  # SVD-derived twai0.yaml 1:1), so the S3 behavioural model is reused.
+  # irq 25 = ETS_TWAI_INTR_SOURCE on the C3 (esp-idf
+  # components/soc/esp32c3/include/soc/periph_defs.h; the S3 value is 37).
   - id: "twai0"
-    type: "declarative"
+    type: "esp32s3_twai"
     base_address: 0x6002B000
-    config:
-      path: "../peripherals/esp32c3/twai0.yaml"
+    size: "4KB"
+    irq: 25
   # I2S
   - id: "i2s0"
     type: "declarative"

@@ -32,10 +32,7 @@ boards:
     led_watch: "rmt:0"
     led_min_edges: 2
     family: esp32
-    notes: "Arduino-ESP32-C3 RISC-V"
-    sketches_skip: [L8_can]
-    sketches_skip_reason:
-      L8_can: "TWAI0 declarative-only (no self-RX model for matrix L8)"
+    notes: "Arduino-ESP32-C3 RISC-V; L8 TWAI self-RX (S3 TWAI model, C3 source 25)"
 
   - id: esp32s3
     chip: esp32s3

@@ -2676,7 +2676,16 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 1b66043f16a4f5b4aa270889ae766e40e74e7fa94dfdf2995d27ed0ce91342e0
+    # 2026-11-07 (Arduino matrix L8): `twai0` moved from the declarative
+    # twai0.yaml to the behavioural `esp32s3_twai` model (same TWAI IP, same
+    # base 0x6002B000, register offsets identical to the C3 SVD descriptor),
+    # with irq 25 = the C3's ETS_TWAI_INTR_SOURCE. NOTHING THIS CAPTURE PINS
+    # MOVED: esp32c3_reset_conformance asserts no TWAI0 register. Both live
+    # captures read the TWAI window clock-gated (every word 0x002def7e /
+    # 0x0008FE10, a floating bus), so there is no silicon TWAI reset value to
+    # pin yet. A TWAI capture needs SYSTEM_PERIP_CLK_EN0.TWAI_CLK_EN set and
+    # TWAI_RST cleared first. This is an ACK, NOT A CAPTURE.
+    drift_ack_digest: 8f321c93c4cfcd9b3b28053a722e543b47a5dbf1465b288da5e9c484c32bc352
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2692,6 +2701,8 @@ boards:
       # this entry a change to the C3's real UART layout could not trip drift.
       - crates/core/src/peripherals/esp_uart.rs
       - crates/core/src/peripherals/esp_systimer.rs
+      # Shared TWAI model: `twai0` is `type: "esp32s3_twai"` since 2026-11-07.
+      - crates/core/src/peripherals/esp32s3/twai.rs
       # RISC-V core: listed at the top of this models list (cpu/riscv.rs +
       # decoder/riscv.rs) so the digest sees the core, not only peripherals.
       - configs/chips/esp32c3.yaml

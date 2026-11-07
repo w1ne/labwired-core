@@ -25,7 +25,7 @@ This is the product bar beyond unit tests and UART-only CI fixtures.
 | Chip | Arduino matrix | Zephyr matrix | L3 I2C kit | Notes |
 |------|----------------|---------------|------------|-------|
 | esp32 | ✅ L0–L4 | ❌ no ESP Zephyr path yet | ✅ Arduino | L4 SPI MISO from kits; FreeRTOS dual-core |
-| esp32c3 | ✅ L0–L4 | ❌ | ✅ Arduino | L4 SPI green; RISC-V FreeRTOS |
+| esp32c3 | ✅ L0–L8 (9 pass / 0 skip) | ❌ | ✅ Arduino | L4 SPI green; RISC-V FreeRTOS; L8 TWAI self-RX on the shared S3 TWAI model (C3 source 25) |
 | esp32s3 | ✅ L0–L4 | ❌ | ✅ Arduino | L4 via spi2_s3 Esp32s3Spi; dual-core |
 | nrf52832 | ✅ L0–L4 | ✅ | ✅ Arduino; Zephyr system+i2c0 | L4 legacy SPI; TWIM overlay Zephyr L3 |
 | nrf52840 | ✅ L0–L4 | ✅ | ✅ both | L4 legacy SPI; Zephyr L3 green |
