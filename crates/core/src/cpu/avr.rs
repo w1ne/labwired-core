@@ -106,6 +106,21 @@ pub const SRAM_START: u16 = 0x0100;
 /// ADC is ADC0..7 on PA0..PA7 with MUX5:0 in ADMUX bits 5:0, so ADLAR moves to
 /// ADCSRB bit 4 (see [`Avr::tiny_x4_adc_input`]). Timers, USI and the
 /// watchdog are stored only and no interrupt is taken.
+///
+/// The ATmega128 (avr-libc `iom128.h`) keeps the classic I/O-space layout for
+/// ports A..D (PINx/DDRx/PORTx at 0x30, 0x33, 0x36, 0x39), ADCL/ADCH
+/// 0x24/0x25, ADCSRA 0x26, ADMUX 0x27 (no ADCSRB), SP/SREG 0x5D..0x5F and
+/// SFIOR.PUD (bit 2) at 0x40, RAMPZ at 0x5B. Port E is PINE/DDRE/PORTE
+/// 0x21..0x23 and port G PING/DDRG/PORTG 0x63..0x65 in the extended I/O space
+/// (0x60..0xFF, stored), while port F is split: PINF is 0x20, DDRF/PORTF are
+/// 0x61/0x62. Its bus mirror is therefore remapped to [`MEGA128_PORTF_MIRROR`].
+/// SRAM is 0x100..0x10FF and flash 128 KB, the map avr-gcc links for (the
+/// ATmega103-compatibility fuse, which moves SRAM to 0x60, is taken as
+/// unprogrammed). The ADC is ADC0..7 on PF0..PF7 with MUX4:0: 0x1E is the
+/// 1.23 V bandgap, 0x1F GND, the differential/gain codes 0x08..0x1D read 0;
+/// REFS = 11 is the internal 2.56 V (ATmega128 datasheet 2467X §23.8.1,
+/// Tables 96/97). As on the classic cores, timers, USARTs, SPI and TWI are
+/// stored only and no interrupt is taken.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
     #[default]
@@ -126,6 +141,7 @@ pub enum AvrModel {
     Attiny24,
     Attiny44,
     Attiny84,
+    Atmega128,
 }
 
 impl AvrModel {
@@ -142,7 +158,9 @@ impl AvrModel {
     /// the 64/256/644/1284/2564RFR2 have other memory sizes). attiny25/45/85
     /// select the ATtiny x5 I/O-space cores and attiny24/44/84 (with their
     /// `a` variants) the ATtiny x4 cores (exact name: the ATtiny261/461/861,
-    /// 13 and 2313 are other maps). Other names default to the ATmega328P.
+    /// 13 and 2313 are other maps). atmega128/atmega128a select the ATmega128
+    /// core (exact name: atmega1280, atmega1281, atmega1284 and atmega128rfa1
+    /// are other maps). Other names default to the ATmega328P.
     pub fn from_chip_name(name: &str) -> Self {
         let n = name.to_ascii_lowercase();
         let part = n.rsplit(['-', '_', ' ']).next().unwrap_or(&n);
@@ -167,6 +185,7 @@ impl AvrModel {
             "attiny24" | "attiny24a" => return AvrModel::Attiny24,
             "attiny44" | "attiny44a" => return AvrModel::Attiny44,
             "attiny84" | "attiny84a" => return AvrModel::Attiny84,
+            "atmega128" | "atmega128a" => return AvrModel::Atmega128,
             _ => {}
         }
         if n.contains("1280") || n.contains("1281") {
@@ -188,7 +207,7 @@ impl AvrModel {
             AvrModel::Atmega164 => 16 * 1024,
             AvrModel::Atmega324 => 32 * 1024,
             AvrModel::Atmega644 => 64 * 1024,
-            AvrModel::Atmega1284 | AvrModel::Atmega128Rf => 128 * 1024,
+            AvrModel::Atmega1284 | AvrModel::Atmega128Rf | AvrModel::Atmega128 => 128 * 1024,
             AvrModel::Attiny25 | AvrModel::Attiny24 => 2 * 1024,
             AvrModel::Attiny45 | AvrModel::Attiny44 => 4 * 1024,
             AvrModel::Attiny85 | AvrModel::Attiny84 => 8 * 1024,
@@ -200,7 +219,8 @@ impl AvrModel {
             | AvrModel::Atmega164
             | AvrModel::Atmega324
             | AvrModel::Atmega644
-            | AvrModel::Atmega1284 => SRAM_START,
+            | AvrModel::Atmega1284
+            | AvrModel::Atmega128 => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 | AvrModel::Atmega128Rf => 0x0200,
             AvrModel::Atmega8
             | AvrModel::Atmega16
@@ -221,7 +241,7 @@ impl AvrModel {
             AvrModel::Atmega32 => 0x085F,
             AvrModel::Atmega164 => 0x04FF,
             AvrModel::Atmega324 => 0x08FF,
-            AvrModel::Atmega644 => 0x10FF,
+            AvrModel::Atmega644 | AvrModel::Atmega128 => 0x10FF,
             AvrModel::Atmega1284 => 0x40FF,
             AvrModel::Atmega128Rf => 0x41FF,
             AvrModel::Attiny25 | AvrModel::Attiny24 => 0x00DF,
@@ -250,10 +270,16 @@ impl AvrModel {
             AvrModel::Attiny24 | AvrModel::Attiny44 | AvrModel::Attiny84
         )
     }
-    /// Every peripheral in the 64-byte I/O space and SRAM from 0x60: the
-    /// classic ATmega8/16/32, the ATtiny25/45/85 and the ATtiny24/44/84.
+    /// The ATmega128 map (see [`AvrModel`]).
+    pub fn is_mega128(self) -> bool {
+        self == AvrModel::Atmega128
+    }
+    /// The ADC and ports in the 64-byte I/O space, no 328P register at its
+    /// 328P address: the classic ATmega8/16/32, the ATtiny25/45/85 and
+    /// 24/44/84 (SRAM from 0x60) and the ATmega128 (extended I/O 0x60..0xFF,
+    /// SRAM from 0x100).
     pub fn is_io_space(self) -> bool {
-        self.is_classic() || self.is_tiny_x5() || self.is_tiny_x4()
+        self.is_classic() || self.is_tiny_x5() || self.is_tiny_x4() || self.is_mega128()
     }
     /// The ATmega164/324/644/1284 port-A map (see [`AvrModel`]).
     pub fn is_xx4(self) -> bool {
@@ -276,9 +302,10 @@ impl AvrModel {
             | AvrModel::Atmega324
             | AvrModel::Atmega644
             | AvrModel::Atmega1284 => AVR_ADC_INPUT_BASE,
-            AvrModel::Atmega1281 | AvrModel::Atmega2560 | AvrModel::Atmega128Rf => {
-                AVR_MEGA_ADC_INPUT_BASE
-            }
+            AvrModel::Atmega1281
+            | AvrModel::Atmega2560
+            | AvrModel::Atmega128Rf
+            | AvrModel::Atmega128 => AVR_MEGA_ADC_INPUT_BASE,
             AvrModel::Atmega8
             | AvrModel::Atmega16
             | AvrModel::Atmega32
@@ -516,6 +543,16 @@ pub const AVR_MEGA_ADC_INPUT_BASE: u64 = 0x0001_0200;
 pub const AVR_CLASSIC_ADC_INPUT_BASE: u64 = 0x0001_0060;
 /// Classic ATmega8/16/32 PINx data addresses, ports D, C, B, A.
 pub const CLASSIC_PIN_ADDRS: [u16; 4] = [0x30, 0x33, 0x36, 0x39];
+/// ATmega128 bus mirror of port F (PINF, DDRF, PORTF at +0, +1, +2): PINF
+/// (0x20) and DDRF/PORTF (0x61/0x62) are not adjacent, and 0x1_0021 is PINE.
+/// Past the 0x00..0xFF data I/O, so no other register mirror lands on it.
+pub const MEGA128_PORTF_MIRROR: u64 = 0x0001_0100;
+/// ATmega128 PINx data addresses, ports F, E, D, C, B, A, G.
+pub const MEGA128_PIN_ADDRS: [u16; 7] = [0x20, 0x21, 0x30, 0x33, 0x36, 0x39, 0x63];
+/// ATmega128 `SFIOR` (I/O 0x20); PUD is bit 2, as on the classic parts.
+const MEGA128_SFIOR: u16 = 0x0040;
+/// ATmega128 bandgap mux input (2467X Table 133, V_BG typ).
+const MEGA128_BANDGAP_MV: u32 = 1230;
 /// Classic `SFIOR` (I/O 0x30) and its pull-up-disable bit.
 const CLASSIC_SFIOR: u16 = 0x0050;
 const CLASSIC_SFIOR_PUD: u8 = 1 << 2;
@@ -785,6 +822,7 @@ impl Avr {
             AvrModel::Atmega128Rf => MEGA2560_PIN_ADDRS[..7].contains(&addr),
             AvrModel::Atmega8 => CLASSIC_PIN_ADDRS[..3].contains(&addr),
             AvrModel::Atmega16 | AvrModel::Atmega32 => CLASSIC_PIN_ADDRS.contains(&addr),
+            AvrModel::Atmega128 => MEGA128_PIN_ADDRS.contains(&addr),
             AvrModel::Attiny25 | AvrModel::Attiny45 | AvrModel::Attiny85 => addr == 0x36,
             AvrModel::Attiny24 | AvrModel::Attiny44 | AvrModel::Attiny84 => {
                 matches!(addr, 0x36 | 0x39)
@@ -807,12 +845,41 @@ impl Avr {
             AvrModel::Atmega128Rf => (0x20..=0x34).contains(&addr),
             AvrModel::Atmega8 => (0x30..=0x38).contains(&addr),
             AvrModel::Atmega16 | AvrModel::Atmega32 => (0x30..=0x3B).contains(&addr),
+            AvrModel::Atmega128 => {
+                (0x20..=0x23).contains(&addr)
+                    || (0x30..=0x3B).contains(&addr)
+                    || (0x61..=0x65).contains(&addr)
+            }
             AvrModel::Attiny25 | AvrModel::Attiny45 | AvrModel::Attiny85 => {
                 (0x36..=0x38).contains(&addr)
             }
             AvrModel::Attiny24 | AvrModel::Attiny44 | AvrModel::Attiny84 => {
                 (0x36..=0x3B).contains(&addr)
             }
+        }
+    }
+
+    /// DDRx and PORTx of the port whose PINx is `pin`: the next two addresses,
+    /// except the ATmega128's port F (PINF 0x20, DDRF 0x61, PORTF 0x62).
+    #[inline]
+    fn ddr_port_of(&self, pin: u16) -> (u16, u16) {
+        if self.model.is_mega128() && pin == 0x20 {
+            (0x61, 0x62)
+        } else {
+            (pin + 1, pin + 2)
+        }
+    }
+
+    /// Bus address mirroring the port register at data address `addr`:
+    /// `AVR_IO_MIRROR_BASE + addr`, except the ATmega128's port F, which is
+    /// gathered at [`MEGA128_PORTF_MIRROR`] so the `avr_gpio` window sees
+    /// PINF/DDRF/PORTF at +0/+1/+2.
+    #[inline]
+    fn port_mirror_addr(&self, addr: u16) -> u64 {
+        match addr {
+            0x20 if self.model.is_mega128() => MEGA128_PORTF_MIRROR,
+            0x61 | 0x62 if self.model.is_mega128() => MEGA128_PORTF_MIRROR + u64::from(addr - 0x60),
+            _ => AVR_IO_MIRROR_BASE + u64::from(addr),
         }
     }
 
@@ -928,13 +995,14 @@ impl Avr {
             // PORTC 0x26, PORTD 0x29), mirrored to the same offsets in the
             // high window by `data_write`.
             a if self.is_pin_reg(a) => {
-                let ddr = self.io[(addr + 1 - 0x20) as usize];
-                let port = self.io[(addr + 2 - 0x20) as usize];
+                let (ddr_addr, port_addr) = self.ddr_port_of(a);
+                let ddr = self.io[(ddr_addr - 0x20) as usize];
+                let port = self.io[(port_addr - 0x20) as usize];
                 // Propagated, not discarded: a chip yaml that maps no window
                 // for this port has no input state for this register at all,
                 // and a swallowed error would answer with a fabricated low — a
                 // released button reading as pressed forever, green.
-                let external = bus.read_u8(AVR_IO_MIRROR_BASE + u64::from(addr))?;
+                let external = bus.read_u8(self.port_mirror_addr(addr))?;
                 Ok((port & ddr) | (external & !ddr))
             }
             a if self.model.is_io_space() => self.classic_io_read(a),
@@ -1301,8 +1369,8 @@ impl Avr {
         }
     }
 
-    /// The classic ATmega8/16/32 I/O space and SRAM (see [`AvrModel`]).
-    /// PINx is composed by the shared arm in [`Self::data_read`].
+    /// The I/O-space cores' I/O, the ATmega128's extended I/O, and SRAM (see
+    /// [`AvrModel`]). PINx is composed by the shared arm in [`Self::data_read`].
     fn classic_io_read(&self, addr: u16) -> SimResult<u8> {
         match addr {
             0x0024 => Ok(self.adcl),
@@ -1313,6 +1381,7 @@ impl Avr {
             0x005E => Ok((self.sp >> 8) as u8),
             0x005F => Ok(self.sreg),
             0x0020..=0x005F => Ok(self.io[(addr - 0x20) as usize]),
+            0x0060..=0x00FF if self.model.is_mega128() => Ok(self.io[(addr - 0x20) as usize]),
             a if (self.sram_start..=self.ramend).contains(&a) => {
                 Ok(self.sram[(a - self.sram_start) as usize])
             }
@@ -1334,11 +1403,17 @@ impl Avr {
                 self.io[(addr - 0x20) as usize] = value;
                 if self.is_port_reg(addr) {
                     // Best-effort mirror, as on the 328P: IN/OUT must not fail.
-                    let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + addr as u64, value);
+                    let _mirror = bus.write_u8(self.port_mirror_addr(addr), value);
                 } else if let Some(pud) = self.io_space_pud(addr) {
                     if (old ^ value) & pud != 0 {
                         bus.set_pull_ups_disabled(value & pud != 0);
                     }
+                }
+            }
+            0x0060..=0x00FF if self.model.is_mega128() => {
+                self.io[(addr - 0x20) as usize] = value;
+                if self.is_port_reg(addr) {
+                    let _mirror = bus.write_u8(self.port_mirror_addr(addr), value);
                 }
             }
             a if (self.sram_start..=self.ramend).contains(&a) => {
@@ -1351,11 +1426,13 @@ impl Avr {
     }
 
     /// The pull-up-disable bit when `addr` is the register holding it:
-    /// SFIOR.PUD (bit 2) on the classic parts, MCUCR.PUD (bit 6, data 0x55)
-    /// on the ATtiny25/45/85 and 24/44/84.
+    /// SFIOR.PUD (bit 2) on the classic parts (SFIOR 0x50) and the ATmega128
+    /// (SFIOR 0x40), MCUCR.PUD (bit 6, data 0x55) on the ATtiny25/45/85 and
+    /// 24/44/84.
     fn io_space_pud(&self, addr: u16) -> Option<u8> {
         match addr {
             CLASSIC_SFIOR if self.model.is_classic() => Some(CLASSIC_SFIOR_PUD),
+            MEGA128_SFIOR if self.model.is_mega128() => Some(CLASSIC_SFIOR_PUD),
             TINY_X5_MCUCR if self.model.is_tiny_x5() || self.model.is_tiny_x4() => {
                 Some(TINY_X5_MCUCR_PUD)
             }
@@ -1393,17 +1470,20 @@ impl Avr {
         Ok(())
     }
 
-    /// Classic ATmega8/16/32 ADMUX: the input millivolts (`None` = an
-    /// unmodelled code, read as 0 V) and the reference.
+    /// Classic ATmega8/16/32 and ATmega128 ADMUX: the input millivolts (an
+    /// unmodelled code reads 0 V) and the reference.
     ///
     /// ATmega8: MUX3:0, 0..7 single-ended, 0x0E the 1.30 V bandgap, 0x0F GND.
-    /// ATmega16/32: MUX4:0, 0..7 single-ended, 0x08..0x1D differential/gain
-    /// (not modelled), 0x1E the 1.22 V bandgap, 0x1F GND.
+    /// ATmega16/32/128: MUX4:0, 0..7 single-ended, 0x08..0x1D differential/gain
+    /// (not modelled), 0x1E the bandgap (1.22 V on the 16/32, 1.23 V on the
+    /// 128), 0x1F GND.
     /// REFS = 11 is the internal 2.56 V; 00 (AREF) is taken as 5 V AVcc, as on
     /// the 328P, because AREF is not a modelled pin.
     fn classic_adc_input(&self, bus: &dyn Bus) -> SimResult<(u32, u32)> {
         let (mux, bandgap_code, bandgap_mv) = if self.model == AvrModel::Atmega8 {
             (self.admux & 0x0F, 0x0E, MEGA8_BANDGAP_MV)
+        } else if self.model.is_mega128() {
+            (self.admux & 0x1F, 0x1E, MEGA128_BANDGAP_MV)
         } else {
             (self.admux & 0x1F, 0x1E, MEGA16_BANDGAP_MV)
         };
@@ -1557,7 +1637,7 @@ impl Avr {
     /// 0x00..0x07 are ADC0..7, 0x20..0x27 are ADC8..15 (Arduino A8..A15),
     /// 0x1E is the 1.1 V bandgap. Differential/gain codes read 0.
     fn adc_convert(&self, bus: &dyn Bus) -> SimResult<u16> {
-        if self.model.is_classic() {
+        if self.model.is_classic() || self.model.is_mega128() {
             let (input_mv, reference_mv) = self.classic_adc_input(bus)?;
             return Ok((input_mv * 1024 / reference_mv).min(1023) as u16);
         }
@@ -3709,6 +3789,87 @@ mod tests {
             .unwrap();
         cpu.data_write(CLASSIC_SFIOR, 0, &mut bus).unwrap();
         assert_eq!(bus.pud, [true, false]);
+    }
+
+    // ---- ATmega128 (AvrModel::is_mega128) ----
+
+    #[test]
+    fn mega128_core_needs_the_exact_part_name_and_has_the_iom128_map() {
+        for name in ["simavr-atmega128", "atmega128a"] {
+            assert_eq!(AvrModel::from_chip_name(name), AvrModel::Atmega128);
+        }
+        for (name, model) in [
+            ("atmega1280", AvrModel::Atmega1281),
+            ("atmega1281", AvrModel::Atmega1281),
+            ("atmega1284p", AvrModel::Atmega1284),
+            ("atmega128rfa1", AvrModel::Atmega128Rf),
+        ] {
+            assert_eq!(AvrModel::from_chip_name(name), model, "{name}");
+        }
+        let model = AvrModel::Atmega128;
+        assert!(model.is_io_space() && !model.is_classic());
+        assert_eq!(model.flash_size(), 128 * 1024);
+        assert_eq!((model.sram_start(), model.ramend()), (0x0100, 0x10FF));
+
+        let mut cpu = Avr::new_model(model);
+        let mut bus = MockBus::new();
+        // Port F is split: PINF 0x20, DDRF 0x61, PORTF 0x62, gathered on the
+        // bus at MEGA128_PORTF_MIRROR, not at 0x1_0061 (0x1_0021 is PINE).
+        cpu.data_write(0x61, 0x0F, &mut bus).unwrap();
+        cpu.data_write(0x62, 0x05, &mut bus).unwrap();
+        assert_eq!(bus.mem[&(MEGA128_PORTF_MIRROR + 1)], 0x0F);
+        assert_eq!(bus.mem[&(MEGA128_PORTF_MIRROR + 2)], 0x05);
+        assert!(!bus.mem.contains_key(&(AVR_IO_MIRROR_BASE + 0x61)));
+        bus.mem.insert(MEGA128_PORTF_MIRROR, 0xA0);
+        assert_eq!(cpu.data_read(0x20, &bus).unwrap(), 0xA5);
+        // Port E (0x21..0x23) and port G (0x63..0x65) are contiguous.
+        cpu.data_write(0x22, 0x01, &mut bus).unwrap();
+        cpu.data_write(0x23, 0x01, &mut bus).unwrap();
+        bus.mem.insert(AVR_IO_MIRROR_BASE + 0x21, 0x80);
+        assert_eq!(cpu.data_read(0x21, &bus).unwrap(), 0x81);
+        cpu.data_write(0x64, 0x1F, &mut bus).unwrap();
+        assert_eq!(bus.mem[&(AVR_IO_MIRROR_BASE + 0x64)], 0x1F);
+        // Extended I/O is stored (TWBR 0x70), not mirrored and not SRAM.
+        cpu.data_write(0x70, 0x48, &mut bus).unwrap();
+        assert_eq!(cpu.data_read(0x70, &bus).unwrap(), 0x48);
+        assert!(!bus.mem.contains_key(&(AVR_IO_MIRROR_BASE + 0x70)));
+        assert_eq!(cpu.sram[0], 0);
+        cpu.data_write(0x100, 0x5A, &mut bus).unwrap();
+        assert_eq!(cpu.sram[0], 0x5A);
+        assert!(cpu.data_read(0x1100, &bus).is_err(), "past RAMEND");
+        // SFIOR.PUD is bit 2 at 0x40 here, not at the ATmega16/32's 0x50.
+        assert_eq!(cpu.io_space_pud(MEGA128_SFIOR), Some(CLASSIC_SFIOR_PUD));
+        assert_eq!(cpu.io_space_pud(CLASSIC_SFIOR), None);
+    }
+
+    #[test]
+    fn mega128_adc_converts_port_f_against_its_references() {
+        let mut cpu = Avr::new_model(AvrModel::Atmega128);
+        let mut bus = MockBus::new();
+        // ADC7 (PF7) holds 2000 mV in the window at 0x1_0200.
+        let base = AVR_MEGA_ADC_INPUT_BASE + 7 * 2;
+        bus.mem.insert(base, (2000u16 & 0xFF) as u8);
+        bus.mem.insert(base + 1, (2000u16 >> 8) as u8);
+        // OUT ADMUX(0x07),R16 with REFS0|MUX7; OUT ADCSRA(0x06),R17 = ADEN|ADSC.
+        cpu.load_words(0, &[0xE407, 0xB907, 0xEC10, 0xB916]);
+        step_n(&mut cpu, &mut bus, 4);
+        assert_eq!(u16::from(cpu.adch) << 8 | u16::from(cpu.adcl), 409);
+        // REFS = 11 is the internal 2.56 V.
+        cpu.data_write(0x27, 0xC7, &mut bus).unwrap();
+        cpu.data_write(0x26, 0xC0, &mut bus).unwrap();
+        assert_eq!(u16::from(cpu.adch) << 8 | u16::from(cpu.adcl), 800);
+        // MUX 0x1E is the 1.23 V bandgap; 0x1F is GND and 0x09 differential.
+        cpu.data_write(0x27, 0x5E, &mut bus).unwrap();
+        cpu.data_write(0x26, 0xC0, &mut bus).unwrap();
+        assert_eq!(
+            u16::from(cpu.adch) << 8 | u16::from(cpu.adcl),
+            (1230 * 1024 / 5000) as u16
+        );
+        for mux in [0x1F, 0x09] {
+            cpu.data_write(0x27, 0x40 | mux, &mut bus).unwrap();
+            cpu.data_write(0x26, 0xC0, &mut bus).unwrap();
+            assert_eq!(u16::from(cpu.adch) << 8 | u16::from(cpu.adcl), 0);
+        }
     }
 
     // ---- ATtiny25/45/85 (AvrModel::is_tiny_x5) ----

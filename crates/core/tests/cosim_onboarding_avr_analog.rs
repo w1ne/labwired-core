@@ -30,7 +30,10 @@
 //! (ADC0..7 on PA0..PA7, MUX5:0 in ADMUX); there it checks REFS = 10 selecting
 //! the internal 1.1 V, the MUX 0x21 bandgap, MUX 0x20 AGND, and that firmware
 //! setting ADLAR in ADCSRB bit 4 (ADMUX bit 5 is MUX5 there) gets a
-//! left-adjusted result. Every result is read back with LDS ADCL/ADCH.
+//! left-adjusted result. The ATmega128 runs on its own I/O-space core (ADC0..7
+//! on PF0..PF7, whose PINF and DDRF/PORTF are not adjacent); there it checks
+//! the internal 2.56 V reference and the MUX 0x1E 1.23 V bandgap. Every result
+//! is read back with LDS ADCL/ADCH.
 //!
 //! For each covered part the generic Beta NTC divider and the unrelated
 //! Shockley diode route through the descriptor's `analog_pins`, to the lowest
@@ -56,6 +59,7 @@ use std::path::{Path, PathBuf};
 
 /// Covered simavr profiles, the core they run on, and the two pads.
 const COVERED: &[(&str, AvrModel, &str, &str)] = &[
+    ("simavr-atmega128", AvrModel::Atmega128, "pf0", "pf7"),
     ("simavr-atmega1280", AvrModel::Atmega1281, "pf0", "pk7"),
     ("simavr-atmega1281", AvrModel::Atmega1281, "pf0", "pf7"),
     ("simavr-atmega1284p", AvrModel::Atmega1284, "pa0", "pa7"),
@@ -84,7 +88,6 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
 /// 2.0.0). Covering one has to move it into [`COVERED`].
 const UNCOVERED: &[(&str, &str)] = &[
     ("simavr-at90usb162", "no ADC"),
-    ("simavr-atmega128", "ADMUX at 0x27, the 328P core's DDRC"),
     ("simavr-atmega169p", "LCD-controller part, no 169P core"),
     (
         "simavr-atmega16m1",
@@ -538,7 +541,7 @@ fn assert_avr_converts_generic_analog(
             "{board}: MUX 0x04 is differential"
         );
     }
-    if core.is_classic() {
+    if core.is_classic() || core.is_mega128() {
         // REFS = 11 is the classic parts' internal 2.56 V, not the 328P's 1.1 V.
         let mv = (expected_diode_v * 1000.0).round() as u32;
         assert_eq!(
@@ -546,9 +549,12 @@ fn assert_avr_converts_generic_analog(
             (mv * 1024 / 2560) as u16,
             "{board}: the diode converts against the internal 2.56 V reference"
         );
-        // The bandgap input: 1.30 V on MUX 0x0E (ATmega8), 1.22 V on 0x1E (16/32).
+        // The bandgap input: 1.30 V on MUX 0x0E (ATmega8), 1.22 V on 0x1E
+        // (16/32), 1.23 V on 0x1E (128).
         let (code, bandgap_mv) = if core == AvrModel::Atmega8 {
             (0x0E, 1300)
+        } else if core.is_mega128() {
+            (0x1E, 1230)
         } else {
             (0x1E, 1220)
         };
