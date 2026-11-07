@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="116.040889">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="6a555a67cb9649376e257019bbd8ab3556dd0f1fb6831f4392c5d1c356f6dfdb"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="116.040889">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: gpio_edges: gpioa:0 &gt;= 6 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpioa:2 &gt;= 6 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpioa:4 &gt;= 6 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpioa:7 &gt;= 6 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x40021004=0x3c000a" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x40023800=0x10" time="0.000000">
+  </testcase>
+</testsuite>

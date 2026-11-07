@@ -1,0 +1,137 @@
+# Narrow CH32V203C8T6 profile for unmodified ch32fun (cnlohr/ch32fun) CH32V20x
+# examples (examples/weact-bluepill-plus-ch32v203/build-ch32fun-examples.sh):
+# the QingKe V4B core with its PFIC and 64-bit SysTick, the HSI x18 PLL
+# handshake ch32fun's SystemInit runs, EXTI on all sixteen GPIO lines, and
+# the WCH-LinkE debug printf channel ch32fun uses as its default console.
+#
+# QingKe V4B (RV32IMAC), 64 KB flash, 20 KB SRAM, LQFP48. Register blocks:
+# ch32fun ch32v20xhw.h and ch32-rs/ch32-data (systick_rv4, extend_v3,
+# chips/CH32V203C8T6: core `qingke-v4b`). The RCC, flash interface, AFIO and
+# GPIO registers used here share the STM32F1 offsets and bits, so the F1
+# models serve them. The RCC's PLLMUL field value 0b1111 means x18 on the
+# CH32V20x (x16 on the F1); the model does not derive SYSCLK from it, and
+# cpu_hz states the 144 MHz ch32fun configures.
+#
+# Not modeled here: USART/SPI/I2C/timers/ADC/DMA/USB/CAN/RTC (the narrow
+# ch32v203c8t6-smoke profile carries USART1 TX), PFIC interrupt nesting and
+# the V4 priority grouping, the VTF table beyond the V2 channels, HSE,
+# low-power modes, and physical-board parity.
+name: ch32v203c8t6-ch32fun-smoke
+arch: riscv
+core: qingke-v4b
+registers_count: 32
+# SYSCLK after ch32fun's SystemInit: HSI 8 MHz undivided (EXTEN_CTR
+# PLL_HSI_PRE) x18.
+cpu_hz: 144_000_000
+
+flash:
+  base: 0x08000000
+  size: 64KB
+ram:
+  base: 0x20000000
+  size: 20KB
+# ch32fun links at 0; the CH32V20x aliases its flash there for reset fetch.
+flash_boot_alias: true
+
+package: LQFP48
+pin_count: 48
+
+# The pads the three smokes drive or read. PD0 is OSC_IN on this package; the
+# debugprintfdemo still toggles it (and PC0, which LQFP48 does not bond), and
+# that smoke asserts only the printed text.
+pins:
+  PA0: { gpio: gpioa, bit: 0 }
+  PA1: { gpio: gpioa, bit: 1 }
+  PA2: { gpio: gpioa, bit: 2 }
+  PA4: { gpio: gpioa, bit: 4 }
+  PA7: { gpio: gpioa, bit: 7 }
+  PA10: { gpio: gpioa, bit: 10 }
+  PB2: { gpio: gpiob, bit: 2 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 1KB
+    config:
+      profile: stm32f1
+
+  - id: flash_ctrl
+    type: flash
+    base_address: 0x40022000
+    size: 4B
+    config:
+      profile: stm32f1
+
+  # EXTEND at 0x40023800: storage only; SystemInit sets PLL_HSI_PRE.
+  - id: exten
+    type: declarative
+    base_address: 0x40023800
+    size: 4B
+    config:
+      path: "../peripherals/ch32v20x/exten.yaml"
+
+  # funGpioInitAll() clocks AFIO with the ports; EXTICR1..4 at 0x08..0x14
+  # select the EXTI line ports, F1 layout.
+  - id: afio
+    type: afio
+    base_address: 0x40010000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 0 }
+
+  # Lines 0..4 -> PFIC 22..26, 9..5 -> 39, 15..10 -> 56, as level requests.
+  - id: exti
+    type: exti
+    base_address: 0x40010400
+    size: 24B
+    config:
+      profile: ch32v20x
+
+  # WCH-LinkE attached and polling like `minichlink -T`; DMDATA0/1 and the
+  # attach sentinel sit at 0xE0000380 on the V4 (ch32v20xhw.h).
+  - id: debug_printf
+    type: wch_debug_printf
+    base_address: 0xE0000380
+    size: 12B
+
+  - id: pfic
+    type: qingke_pfic
+    base_address: 0xE000E000
+    size: 4KB
+
+  - id: stk
+    type: qingke_v4_systick
+    base_address: 0xE000F000
+    size: 24B
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x40010800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 2 }
+    config:
+      profile: stm32f1
+
+  - id: gpiob
+    type: gpio
+    base_address: 0x40010C00
+    size: 1KB
+    clock: { reg: apb2enr, bit: 3 }
+    config:
+      profile: stm32f1
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x40011000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 4 }
+    config:
+      profile: stm32f1
+
+  - id: gpiod
+    type: gpio
+    base_address: 0x40011400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 5 }
+    config:
+      profile: stm32f1

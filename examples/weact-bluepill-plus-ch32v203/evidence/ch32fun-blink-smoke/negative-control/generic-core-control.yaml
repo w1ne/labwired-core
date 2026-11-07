@@ -1,0 +1,23 @@
+# NEGATIVE CONTROL for ch32fun-blink-smoke (see chip.yaml): expected FAIL.
+# ch32fun examples_v20x/blink, unmodified (build-ch32fun-examples.sh). Four
+# pins toggle together every Delay_Ms(250) at 144 MHz: DelaySysTick waits
+# 4,500,000 HCLK/8 counts of the 64-bit QingKe V4 SysTick, 36,000,000 cycles
+# per edge, so 200,000,000 cycles hold 6 edges on each pin (the committed run
+# measured 36,000,014..16 cycles between edges).
+schema_version: "1.0"
+inputs:
+  firmware: "../../../ch32fun/blink.elf"
+  system: "system.yaml"
+limits:
+  max_cycles: 20000000
+  max_steps: 20000000
+  wall_time_ms: 600000
+assertions:
+  - gpio_edges: { pin: "gpioa:0", min_edges: 1 }
+  - gpio_edges: { pin: "gpioa:2", min_edges: 1 }
+  - gpio_edges: { pin: "gpioa:4", min_edges: 1 }
+  - gpio_edges: { pin: "gpioa:7", min_edges: 1 }
+  # The PLL configuration SystemInit leaves: SW = PLL reported in SWS,
+  # PLLMUL 0b1111 (x18 on the CH32V20x), PLL_HSI_PRE set.
+  - memory_value: { address: 0x40021004, size: 32, mask: 0x003C000F, expected_value: 0x003C000A }
+  - memory_value: { address: 0x40023800, size: 32, mask: 0x10, expected_value: 0x10 }

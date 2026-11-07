@@ -70,3 +70,53 @@ cargo run -q -p labwired-cli -- test \
 
 Evidence: [`evidence/`](evidence/) (run log, UART transcript, result JSON,
 availability receipt).
+
+## Unmodified ch32fun on the QingKe V4 profile
+
+A second chip profile, [`ch32v203c8t6-ch32fun-smoke`](../../configs/chips/ch32v203c8t6-ch32fun-smoke.yaml),
+runs [ch32fun](https://github.com/cnlohr/ch32fun) (MIT) CH32V20x examples
+built with ch32fun's own compile and link lines and with no source changes
+([`build-ch32fun-examples.sh`](build-ch32fun-examples.sh)). The ELFs are
+committed in [`ch32fun/`](ch32fun/).
+
+It adds what those examples need and the narrow profile above lacks:
+
+- **The QingKe V4 core profile** (`core: qingke-v4b`, the name ch32-rs/ch32-data
+  uses). It accepts the CORECFGR CSR (0xBC0) that ch32fun's startup writes,
+  and it takes PFIC interrupts through the mtvec mode-3 address table, using
+  the QingKe V2 trap path. A generic RV32 core traps on that CSR at reset.
+- **The QingKe V4 SysTick** (`qingke_v4_systick`). It has a 64-bit CNT and CMP,
+  counts up or down (MODE), and supports INIT. ch32fun's `DelaySysTick` polls
+  the 64-bit counter.
+- **The HSI ×18 PLL handshake and EXTEN_CTR.PLL_HSI_PRE** that ch32fun's
+  SystemInit performs. The model states the resulting 144 MHz as `cpu_hz`; it
+  does not derive it.
+- **EXTI on the PFIC** (`profile: ch32v20x`). The sixteen GPIO lines drive
+  PFIC 22..26, 39 and 56 as level requests, and AFIO_EXTICR1..4 select the port.
+- **The WCH-LinkE debug printf channel** at 0xE0000380.
+
+| Smoke | ch32fun example | What it proves | Result |
+| --- | --- | --- | --- |
+| [`ch32fun-blink-smoke.yaml`](ch32fun-blink-smoke.yaml) | `examples_v20x/blink` | PA0/PA2/PA4/PA7 edges 36,000,015 cycles apart, i.e. 250.0001 ms at 144 MHz; RCC CFGR0 SWS=PLL, PLLMUL ×18 | 6/6 |
+| [`ch32fun-exti-blink-smoke.yaml`](ch32fun-exti-blink-smoke.yaml) | `examples_v20x/exti_blink` | each rising PA1 edge enters EXTI1_IRQHandler (PFIC 23), which toggles PA10 ~30 cycles later; the release does nothing | 9/9 |
+| [`ch32fun-debugprintf-smoke.yaml`](ch32fun-debugprintf-smoke.yaml) | `examples_v20x/debugprintfdemo` | `+0`, `-1[`, … `-5[` on the debug-printf terminal; the probe took every request | 5/5 |
+
+Negative controls (committed with their logs):
+- `evidence/ch32fun-blink-smoke/negative-control/`: with `core: rv32imac`,
+  the core traps (mcause 2) on `csrw 0xbc0` at 0x1cc in `handle_reset`, and
+  no pad toggles (0/6).
+- `evidence/ch32fun-exti-blink-smoke/negative-control/`: with the EXTI on the
+  STM32F1 profile, INTFR latches but no PFIC request is raised, and PA10
+  never toggles (7/9).
+
+```bash
+examples/weact-bluepill-plus-ch32v203/build-ch32fun-examples.sh   # optional: ELFs are committed
+cargo run -q -p labwired-cli -- test \
+  --script examples/weact-bluepill-plus-ch32v203/ch32fun-exti-blink-smoke.yaml
+```
+
+**Not modelled in this profile:** USART/SPI/I2C/timers/ADC/DMA/USB/CAN/RTC,
+PFIC nesting and V4 priority grouping, HSE, low-power modes, host-to-target
+debug input, and physical-board parity. The PD0/PC0 toggles in
+debugprintfdemo are not asserted: on LQFP48, PD0 is OSC_IN and PC0 is not
+bonded.

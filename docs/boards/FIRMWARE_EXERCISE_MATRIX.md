@@ -970,6 +970,10 @@ _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in th
 
 _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
 
+### `ch32v203c8t6-ch32fun-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
 ### `esp32-devkitc-32e-gpio-smoke`
 
 _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._

@@ -162,6 +162,56 @@ fn qingke_v2_accepts_intsyscr_and_keeps_the_rv32e_register_limit() {
     assert_eq!(machine.cpu.mtval, CSRW_INTSYSCR);
 }
 
+/// QingKe V4 (CH32V20x): ch32fun's and WCH's startup write CORECFGR
+/// (0xBC0) and INTSYSCR, and the full RV32I register file is available.
+#[test]
+fn qingke_v4_accepts_corecfgr_and_intsyscr_with_all_32_registers() {
+    // li a3, 31; csrw 0xbc0, a3 (ch32fun handle_reset)
+    const LI_A3_31: u32 = 0x01F0_0693;
+    const CSRW_CORECFGR: u32 = 0xBC06_9073;
+    // csrrw x0, 0x804, x5
+    const CSRW_INTSYSCR: u32 = 0x8042_9073;
+    // csrrs x7, 0xbc0, x0
+    const CSRR_CORECFGR: u32 = 0xBC00_23F3;
+    // ADDI x16, x0, 1
+    const ADDI_X16: u32 = 0x0010_0813;
+    let program = [
+        LI_A3_31,
+        CSRW_CORECFGR,
+        CSRW_INTSYSCR,
+        CSRR_CORECFGR,
+        ADDI_X16,
+    ];
+    let mut bus = SystemBus::new();
+    bus.flash.data = program.iter().flat_map(|w| w.to_le_bytes()).collect();
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::QingkeV4);
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    cpu.x[5] = 3;
+    let mut machine = Machine::new(cpu, bus);
+    for _ in 0..program.len() {
+        machine.step().unwrap();
+    }
+    assert_eq!(machine.cpu.mcause, 0, "no instruction trapped");
+    assert_eq!(machine.cpu.pc, 4 * program.len() as u32);
+    assert_eq!(machine.cpu.x[7], 31, "CORECFGR reads back");
+    assert_eq!(machine.cpu.x[16], 1, "x16 exists on V4");
+
+    // CORECFGR is a V4 CSR, not a V2 one.
+    let mut bus = SystemBus::new();
+    bus.flash.data = [LI_A3_31, CSRW_CORECFGR]
+        .iter()
+        .flat_map(|w| w.to_le_bytes())
+        .collect();
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::QingkeV2);
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    let mut machine = Machine::new(cpu, bus);
+    machine.step().unwrap();
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.mcause, 2, "QingKe V2 has no CORECFGR");
+}
+
 /// A QingKe V2 core with a PFIC: flash at 0 holds an address vector table
 /// (mtvec = 0 | 3, as WCH startup and `ch32v003fun` set it), a NOP sled at
 /// 0x100, and handlers at 0x200 (`li a1, 7; mret`) and 0x300.
@@ -2118,6 +2168,11 @@ fn riscv_profile_is_selected_from_the_chip_descriptor() {
         RiscVCoreProfile::for_chip(&chip("ch32v003f4p6", Some("qingke-v2a"))),
         RiscVCoreProfile::QingkeV2,
         "the QingKe V2A core string selects the WCH vendor profile"
+    );
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("ch32v203c8t6", Some("qingke-v4b"))),
+        RiscVCoreProfile::QingkeV4,
+        "the QingKe V4B core string selects the WCH V4 profile"
     );
     assert_eq!(
         RiscVCoreProfile::for_chip(&chip("mystery-riscv", None)),

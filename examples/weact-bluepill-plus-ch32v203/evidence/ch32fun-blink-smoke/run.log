@@ -1,0 +1,4 @@
+2026-11-07T19:31:52.706965Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/ch32v203c8t6-ch32fun-smoke.yaml
+2026-11-07T19:31:52.709044Z  INFO labwired_loader: ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  6/6 checks · ch32fun-blink-smoke · 200000000 steps · 116.04s

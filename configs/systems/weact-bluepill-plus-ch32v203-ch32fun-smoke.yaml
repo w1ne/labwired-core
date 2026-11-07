@@ -1,0 +1,14 @@
+# WeAct Studio BluePill-Plus-CH32 (CH32V203C8T6) running unmodified ch32fun
+# CH32V20x examples, with a WCH-LinkE on SWDIO for the debug-printf console.
+# The LEDs on PA0/PA2/PA4/PA7 are the test connections ch32fun's blink drives,
+# not factory parts; the board's own blue LED (PB2) is declared but unused by
+# these examples.
+name: weact-bluepill-plus-ch32v203-ch32fun-smoke
+chip: ../chips/ch32v203c8t6-ch32fun-smoke.yaml
+external_devices: []
+board_io:
+  - { id: blue_led, kind: led, peripheral: gpiob, pin: 2, signal: output, active_high: true }
+  - { id: external_led_pa0, kind: led, peripheral: gpioa, pin: 0, signal: output, active_high: true }
+  - { id: external_led_pa2, kind: led, peripheral: gpioa, pin: 2, signal: output, active_high: true }
+  - { id: external_led_pa4, kind: led, peripheral: gpioa, pin: 4, signal: output, active_high: true }
+  - { id: external_led_pa7, kind: led, peripheral: gpioa, pin: 7, signal: output, active_high: true }

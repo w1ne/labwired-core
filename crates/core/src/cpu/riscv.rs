@@ -45,6 +45,12 @@ pub enum RiscVCoreProfile {
     /// `"WCH-Interrupt-fast"` handlers rely on. INESTEN is stored, but
     /// nesting is not modeled: a pending interrupt waits for `mret`.
     QingkeV2,
+    /// WCH QingKe V4 (CH32V20x/V30x, RV32IMAC): the full register file, the
+    /// same INTSYSCR and PFIC trap entry as V2, and the vendor core
+    /// configuration CSR CORECFGR (0xBC0) that WCH's startup and ch32fun
+    /// write before `main` (stored; it tunes the pipeline and has no
+    /// architectural effect here).
+    QingkeV4,
 }
 
 impl RiscVCoreProfile {
@@ -73,13 +79,22 @@ impl RiscVCoreProfile {
         }
         match core.as_str() {
             c if c.starts_with("qingke-v2") => Self::QingkeV2,
+            c if c.starts_with("qingke-v4") => Self::QingkeV4,
             c if c.starts_with("rv32") => Self::StandardRv32,
             _ => Self::Esp32C3,
         }
     }
 
     fn has_standard_rv32_counters(self) -> bool {
-        matches!(self, Self::StandardRv32 | Self::Rv32e | Self::QingkeV2)
+        matches!(
+            self,
+            Self::StandardRv32 | Self::Rv32e | Self::QingkeV2 | Self::QingkeV4
+        )
+    }
+
+    /// A WCH QingKe core: INTSYSCR and the PFIC trap entry.
+    fn is_qingke(self) -> bool {
+        matches!(self, Self::QingkeV2 | Self::QingkeV4)
     }
 
     /// RV32E register file: only x0..x15 exist.
@@ -212,6 +227,8 @@ pub struct RiscV {
     qingke_pfic: Option<Arc<crate::peripherals::qingke_pfic::QingkePficState>>,
     /// INTSYSCR (CSR 0x804) HWSTKEN and INESTEN bits.
     qingke_intsyscr: u32,
+    /// QingKe V4 CORECFGR (CSR 0xBC0), stored only.
+    qingke_corecfgr: u32,
     /// One frame per QingKe trap not yet returned from, innermost last.
     qingke_frames: Vec<QingkeTrapFrame>,
     /// Vector-table slot whose stored handler address becomes the PC once
@@ -305,7 +322,7 @@ impl RiscV {
         &mut self,
         pfic: Arc<crate::peripherals::qingke_pfic::QingkePficState>,
     ) {
-        if self.core_profile == RiscVCoreProfile::QingkeV2 {
+        if self.core_profile.is_qingke() {
             self.qingke_pfic = Some(pfic);
         }
     }
@@ -398,6 +415,7 @@ impl RiscV {
             waiting_for_interrupt: false,
             qingke_pfic: None,
             qingke_intsyscr: 0,
+            qingke_corecfgr: 0,
             qingke_frames: Vec::new(),
             qingke_vector_slot: None,
             decode_cache: Box::new([None; 4096]),
@@ -983,7 +1001,8 @@ impl RiscV {
             }
             0xC80 if self.core_profile.has_standard_rv32_counters() => (self.mtime >> 32) as u32,
             // QingKe INTSYSCR: see `RiscVCoreProfile::QingkeV2`.
-            0x804 if self.core_profile == RiscVCoreProfile::QingkeV2 => self.qingke_intsyscr,
+            0x804 if self.core_profile.is_qingke() => self.qingke_intsyscr,
+            0xBC0 if self.core_profile == RiscVCoreProfile::QingkeV4 => self.qingke_corecfgr,
             _ => return None,
         })
     }
@@ -1012,9 +1031,8 @@ impl RiscV {
             // See read_csr: accept PMA cfg/addr writes as no-ops.
             0xBC0..=0xBDF if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
-            0x804 if self.core_profile == RiscVCoreProfile::QingkeV2 => {
-                self.qingke_intsyscr = val & 0b11
-            }
+            0x804 if self.core_profile.is_qingke() => self.qingke_intsyscr = val & 0b11,
+            0xBC0 if self.core_profile == RiscVCoreProfile::QingkeV4 => self.qingke_corecfgr = val,
             _ => return false,
         }
         true
@@ -1073,7 +1091,7 @@ impl RiscV {
         self.mstatus |= 0b11 << 11; // MPP <- M-mode
                                     // tcontrol: mpte <- mte, mte <- 0, so no trigger fires in the handler.
         self.triggers.on_trap_entry();
-        if self.core_profile == RiscVCoreProfile::QingkeV2 {
+        if self.core_profile.is_qingke() {
             self.qingke_trap_entry(cause);
         }
     }
@@ -1647,7 +1665,7 @@ impl RiscV {
                 self.mstatus |= mpie << 3; // MIE <- MPIE
                 self.mstatus |= 1 << 7; // MPIE <- 1
                 self.triggers.on_mret();
-                if self.core_profile == RiscVCoreProfile::QingkeV2 {
+                if self.core_profile.is_qingke() {
                     self.qingke_trap_return();
                 }
                 return Ok(());
@@ -2077,6 +2095,7 @@ impl Cpu for RiscV {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
         self.pc = 0;
         self.qingke_intsyscr = 0;
+        self.qingke_corecfgr = 0;
         self.qingke_frames.clear();
         self.qingke_vector_slot = None;
         self.invalidate_fetch_window();

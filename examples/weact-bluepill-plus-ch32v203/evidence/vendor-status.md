@@ -22,3 +22,12 @@ Checked live on 2026-11-06 UTC.
   client. WCH does not publish an "Active"/"NRND" label for its parts (see the
   CH32V003 receipt), so this receipt claims reseller stock, not a formal WCH
   lifecycle classification.
+
+## Re-check 2026-11-07 (ch32fun profile round)
+
+- Robosap's WeAct CH32V203C8T6 board listing: "₹311.52 incl. GST", "Status:18
+  in stock", "Add to cart" present.
+- MuseLab nanoCH32V203 on Tindie (also CH32V203C8T6): $3.00, "nanoCH32V203
+  Development Board [89 in stock]".
+- LCSC's search page did not render results for an HTTP client, so it is not
+  cited.

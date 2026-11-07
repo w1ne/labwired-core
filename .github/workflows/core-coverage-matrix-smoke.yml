@@ -564,6 +564,15 @@ jobs:
           - id: ch32v003f4p6-blink
             script: examples/ch32v003f4p6/io-smoke.yaml
             system: examples/ch32v003f4p6/system.yaml
+          # WCH CH32V203C8T6 (QingKe V4B) — ch32fun's exti_blink, unmodified,
+          # from a committed MIT ELF (examples/weact-bluepill-plus-ch32v203/
+          # build-ch32fun-examples.sh). It passes only if the core takes the
+          # V4 profile (ch32fun's startup writes CORECFGR 0xBC0, which a
+          # generic RV32 core traps) and the EXTI drives PFIC interrupt 23:
+          # PA10 toggles once per rising PA1 edge, from the handler only.
+          - id: ch32v203c8t6-ch32fun-exti
+            script: examples/weact-bluepill-plus-ch32v203/ch32fun-exti-blink-smoke.yaml
+            system: configs/systems/weact-bluepill-plus-ch32v203-ch32fun-exti-smoke.yaml
 
     steps:
       - uses: actions/checkout@v4
