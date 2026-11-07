@@ -32,10 +32,8 @@ pub enum RiscVCoreProfile {
     Esp32C3,
     /// Baseline RV32 profile used by generic RISC-V targets.
     StandardRv32,
-    /// RV32E profile: the base integer ISA has only x0..x15. Reserved
-    /// instructions that name x16..x31 trap as illegal instead of using the
-    /// simulator's wider backing register array.
-    StandardRv32E,
+    /// RV32E profile: the integer register file contains x0..x15 only.
+    Rv32e,
     /// WCH QingKe V2 (CH32V00x): the RV32EC profile plus the vendor
     /// interrupt-system CSR INTSYSCR (0x804) that WCH's startup code and
     /// `ch32v003fun` write before `main`, and the QingKe trap entry: with a
@@ -56,39 +54,124 @@ impl RiscVCoreProfile {
     /// and the ESP32-C3's vendor CSR set. An `esp32*` chip keeps the vendor profile —
     /// the C3 is the part whose ROM and performance-counter block the engine
     /// models, and the C6 shares that register surface today. Any other chip
-    /// that declares a generic `rv32*` core (e.g. `core: "rv32im"` on a
+    /// that declares a generic non-E `rv32*` core (e.g. `core: "rv32im"` on a
     /// VexRiscv SoC) runs the standard profile. A chip with no `core:` keeps
     /// the historical ESP32-C3 default, so descriptors written before this
     /// selection existed behave exactly as they did.
     pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Self {
+        let core = chip
+            .core
+            .as_deref()
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+        if matches!(core.as_str(), "rv32e" | "rv32ec" | "rv32emc" | "rv32em") {
+            return Self::Rv32e;
+        }
         if chip.name.to_ascii_lowercase().contains("esp32") {
             return Self::Esp32C3;
         }
-        match chip.core.as_deref() {
-            Some(core) if core.trim().to_ascii_lowercase().starts_with("qingke-v2") => {
-                Self::QingkeV2
-            }
-            Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32e") => {
-                Self::StandardRv32E
-            }
-            Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32") => {
-                Self::StandardRv32
-            }
+        match core.as_str() {
+            c if c.starts_with("qingke-v2") => Self::QingkeV2,
+            c if c.starts_with("rv32") => Self::StandardRv32,
             _ => Self::Esp32C3,
         }
     }
 
     fn has_standard_rv32_counters(self) -> bool {
-        matches!(
-            self,
-            Self::StandardRv32 | Self::StandardRv32E | Self::QingkeV2
-        )
+        matches!(self, Self::StandardRv32 | Self::Rv32e | Self::QingkeV2)
     }
 
     /// RV32E register file: only x0..x15 exist.
     fn is_rv32e(self) -> bool {
-        matches!(self, Self::StandardRv32E | Self::QingkeV2)
+        matches!(self, Self::Rv32e | Self::QingkeV2)
     }
+}
+
+/// Architectural integer-register operands used by an instruction. The
+/// implicit stack-pointer operands in the compressed formats are x2, which is
+/// legal in RV32E; compressed prime-register formats are already decoded to
+/// x8..x15 by `decode_rv32`.
+fn rv32e_reg_operands(instruction: &Instruction) -> [Option<u8>; 3] {
+    use Instruction::*;
+    match *instruction {
+        Lui { rd, .. } | Auipc { rd, .. } | Jal { rd, .. } => [Some(rd), None, None],
+        Jalr { rd, rs1, .. } => [Some(rd), Some(rs1), None],
+        Beq { rs1, rs2, .. }
+        | Bne { rs1, rs2, .. }
+        | Blt { rs1, rs2, .. }
+        | Bge { rs1, rs2, .. }
+        | Bltu { rs1, rs2, .. }
+        | Bgeu { rs1, rs2, .. }
+        | Sb { rs1, rs2, .. }
+        | Sh { rs1, rs2, .. }
+        | Sw { rs1, rs2, .. } => [Some(rs1), Some(rs2), None],
+        Lb { rd, rs1, .. }
+        | Lh { rd, rs1, .. }
+        | Lw { rd, rs1, .. }
+        | Lbu { rd, rs1, .. }
+        | Lhu { rd, rs1, .. }
+        | Addi { rd, rs1, .. }
+        | Slti { rd, rs1, .. }
+        | Sltiu { rd, rs1, .. }
+        | Xori { rd, rs1, .. }
+        | Ori { rd, rs1, .. }
+        | Andi { rd, rs1, .. }
+        | Slli { rd, rs1, .. }
+        | Srli { rd, rs1, .. }
+        | Srai { rd, rs1, .. }
+        | Csrrw { rd, rs1, .. }
+        | Csrrs { rd, rs1, .. }
+        | Csrrc { rd, rs1, .. }
+        | LrW { rd, rs1 } => [Some(rd), Some(rs1), None],
+        Add { rd, rs1, rs2 }
+        | Sub { rd, rs1, rs2 }
+        | Sll { rd, rs1, rs2 }
+        | Slt { rd, rs1, rs2 }
+        | Sltu { rd, rs1, rs2 }
+        | Xor { rd, rs1, rs2 }
+        | Srl { rd, rs1, rs2 }
+        | Sra { rd, rs1, rs2 }
+        | Or { rd, rs1, rs2 }
+        | And { rd, rs1, rs2 }
+        | Mul { rd, rs1, rs2 }
+        | Mulh { rd, rs1, rs2 }
+        | Mulhsu { rd, rs1, rs2 }
+        | Mulhu { rd, rs1, rs2 }
+        | Div { rd, rs1, rs2 }
+        | Divu { rd, rs1, rs2 }
+        | Rem { rd, rs1, rs2 }
+        | Remu { rd, rs1, rs2 }
+        | ScW { rd, rs1, rs2 }
+        | AmoSwapW { rd, rs1, rs2 }
+        | AmoAddW { rd, rs1, rs2 }
+        | AmoXorW { rd, rs1, rs2 }
+        | AmoOrW { rd, rs1, rs2 }
+        | AmoAndW { rd, rs1, rs2 }
+        | AmoMinW { rd, rs1, rs2 }
+        | AmoMaxW { rd, rs1, rs2 }
+        | AmoMinuW { rd, rs1, rs2 }
+        | AmoMaxuW { rd, rs1, rs2 } => [Some(rd), Some(rs1), Some(rs2)],
+        Csrrwi { rd, .. } | Csrrsi { rd, .. } | Csrrci { rd, .. } => [Some(rd), None, None],
+        CAddi { rd, .. } | CLi { rd, .. } | CSli { rd, .. } => [Some(rd), None, None],
+        CLw { rd, rs1, .. } => [Some(rd), Some(rs1), None],
+        CSw { rs2, rs1, .. } => [Some(rs1), Some(rs2), None],
+        CJr { rs1 } | CJalr { rs1 } | CBeqz { rs1, .. } | CBnez { rs1, .. } => {
+            [Some(rs1), None, None]
+        }
+        CMv { rd, rs2 } => [Some(rd), Some(rs2), None],
+        CAddi16sp { .. } => [Some(2), None, None],
+        CAddi4spn { rd, .. } | CLwsp { rd, .. } => [Some(rd), Some(2), None],
+        CSwsp { rs2, .. } => [Some(2), Some(rs2), None],
+        Fence | Ecall | Ebreak | Mret | Wfi | CJ { .. } | Unknown(_) => [None, None, None],
+    }
+}
+
+fn rv32e_uses_high_register(instruction: &Instruction) -> bool {
+    rv32e_reg_operands(instruction)
+        .into_iter()
+        .flatten()
+        .any(|register| register >= 16)
 }
 
 #[derive(Debug)]
@@ -208,67 +291,6 @@ const FETCH_WINDOW_BYTES: usize = 256;
 /// blocked, so the raised interrupt is taken at the next instruction boundary
 /// instead of the core executing bytes the hardware never delivered.
 const NOP_OPCODE: u32 = 0x0000_0013;
-
-/// RV32E reserves standard instructions that name an integer register above
-/// x15. This check runs on the encoded instruction so immediate bits are not
-/// mistaken for register operands. The compressed encodings that use compact
-/// registers are already limited to x8..x15 by construction.
-fn rv32e_uses_reserved_register(opcode: u32, inst_len: u32) -> bool {
-    let above_x15 = |reg: u32| reg > 15;
-    if inst_len == 2 {
-        let insn = opcode as u16 as u32;
-        let quadrant = insn & 0x3;
-        let funct3 = (insn >> 13) & 0x7;
-        let rd_rs1 = (insn >> 7) & 0x1f;
-        let rs2 = (insn >> 2) & 0x1f;
-        return match quadrant {
-            // C.ADDI4SPN, C.LW, and C.SW use x8..x15 encoded in three bits.
-            0 => false,
-            1 => match funct3 {
-                0 | 2 => above_x15(rd_rs1),            // C.ADDI / C.LI
-                3 if rd_rs1 != 2 => above_x15(rd_rs1), // C.LUI
-                _ => false,
-            },
-            2 => match funct3 {
-                0 | 2 => above_x15(rd_rs1), // C.SLLI / C.LWSP
-                4 => {
-                    let bit12 = (insn >> 12) & 1;
-                    if bit12 == 0 {
-                        if rs2 == 0 {
-                            above_x15(rd_rs1) // C.JR
-                        } else {
-                            above_x15(rd_rs1) || above_x15(rs2) // C.MV
-                        }
-                    } else if rs2 == 0 {
-                        rd_rs1 != 0 && above_x15(rd_rs1) // C.JALR (x0 encoding is EBREAK)
-                    } else {
-                        above_x15(rd_rs1) || above_x15(rs2) // C.ADD
-                    }
-                }
-                6 => above_x15(rs2), // C.SWSP
-                _ => false,
-            },
-            _ => false,
-        };
-    }
-
-    let rd = (opcode >> 7) & 0x1f;
-    let rs1 = (opcode >> 15) & 0x1f;
-    let rs2 = (opcode >> 20) & 0x1f;
-    match opcode & 0x7f {
-        0x37 | 0x17 | 0x6f => above_x15(rd), // LUI / AUIPC / JAL
-        0x67 | 0x03 => above_x15(rd) || above_x15(rs1), // JALR / LOAD
-        0x13 => above_x15(rd) || above_x15(rs1), // OP-IMM (rs2 bits are immediate)
-        0x23 | 0x63 => above_x15(rs1) || above_x15(rs2), // STORE / BRANCH
-        0x33 | 0x2f => above_x15(rd) || above_x15(rs1) || above_x15(rs2), // OP / AMO
-        0x73 => match (opcode >> 12) & 0x7 {
-            0 => false,                           // ECALL / EBREAK / MRET / WFI
-            5..=7 => above_x15(rd),               // CSR immediate forms: rs1 is a zimm field
-            _ => above_x15(rd) || above_x15(rs1), // CSR register forms
-        },
-        _ => false,
-    }
-}
 
 impl Default for RiscV {
     fn default() -> Self {
@@ -1370,11 +1392,11 @@ impl RiscV {
             inst_len
         );
 
-        // QingKe V2A is RV32EC: the standard register file ends at x15.
-        // The CPU uses a 32-entry backing array for shared RV32 code, so
-        // enforce the architectural limit at the instruction boundary.
-        if self.core_profile.is_rv32e() && rv32e_uses_reserved_register(opcode, inst_len) {
-            self.mtval = opcode;
+        // RV32E reserves every integer register field above x15. Check all
+        // operands before trigger handling or instruction execution so an
+        // illegal register use cannot perform a partial memory/CSR effect.
+        if self.core_profile.is_rv32e() && rv32e_uses_high_register(&instruction) {
+            self.mtval = 0;
             self.handle_trap(2, self.pc);
             return Ok(());
         }
@@ -2434,3 +2456,11 @@ impl Cpu for RiscV {
 #[cfg(test)]
 #[path = "riscv_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "riscv_rv32e_tests.rs"]
+mod rv32e_tests;
+
+#[cfg(test)]
+#[path = "riscv_ch32v003_tests.rs"]
+mod ch32v003_tests;

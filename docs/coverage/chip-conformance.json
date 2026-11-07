@@ -796,5 +796,12 @@
     "level": 1,
     "name": "pic24f16ka102",
     "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v003f4p6",
+    "reg_match": 0
   }
 ]
