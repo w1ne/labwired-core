@@ -247,51 +247,58 @@ impl GenericPeripheral {
         true
     }
 
-    fn gpio_reg_offset(&self, id: &str) -> Option<usize> {
+    /// A `GPIO` descriptor's `IN` / `OUT` / `ENABLE` register: its byte
+    /// offset and width in bits. Pin k is bit k, so the width bounds the pins.
+    /// Byte- and halfword-wide ports (MSP430 `PxIN` / `PxOUT` / `PxDIR`,
+    /// SLAU049 §9.2) are as valid as 32-bit ones.
+    fn gpio_reg(&self, id: &str) -> Option<(usize, u8)> {
         if !self.descriptor.peripheral.eq_ignore_ascii_case("GPIO") {
             return None;
         }
         self.descriptor
             .registers
             .iter()
-            .find(|r| r.id == id && r.size == 32)
-            .map(|r| r.address_offset as usize)
+            .find(|r| r.id == id && matches!(r.size, 8 | 16 | 32))
+            .map(|r| (r.address_offset as usize, r.size))
+    }
+
+    /// Bit `pin` of a GPIO register; `None` past the register's width.
+    fn gpio_bit(&self, id: &str, pin: u8) -> Option<bool> {
+        let (offset, width) = self.gpio_reg(id)?;
+        if pin >= width {
+            return None;
+        }
+        let value = self.read_register_storage(offset, width)?;
+        Some(value & (1u32 << pin) != 0)
     }
 
     /// Whether the descriptor's `ENABLE` register has the output driver of
     /// `pin` on. `None` when the descriptor has no `ENABLE` register (or the
     /// pin is out of range), i.e. the direction is not derivable.
     fn gpio_pad_driven(&self, pin: u8) -> Option<bool> {
-        if pin >= 32 {
-            return None;
-        }
-        let offset = self.gpio_reg_offset("ENABLE")?;
-        let value = self.read_register_storage_u32(offset)?;
-        Some(value & (1u32 << pin) != 0)
+        self.gpio_bit("ENABLE", pin)
     }
 
-    fn read_register_storage_u32(&self, offset: usize) -> Option<u32> {
+    /// Little-endian `width`-bit register at `offset` in the backing store.
+    fn read_register_storage(&self, offset: usize, width: u8) -> Option<u32> {
         let data = self.data.borrow();
-        if offset + 3 >= data.len() {
-            return None;
-        }
+        let bytes = data.get(offset..offset + usize::from(width / 8))?;
         Some(
-            (data[offset] as u32)
-                | ((data[offset + 1] as u32) << 8)
-                | ((data[offset + 2] as u32) << 16)
-                | ((data[offset + 3] as u32) << 24),
+            bytes
+                .iter()
+                .rev()
+                .fold(0u32, |word, &b| (word << 8) | u32::from(b)),
         )
     }
 
-    fn write_register_storage_u32(&self, offset: usize, value: u32) -> bool {
+    fn write_register_storage(&self, offset: usize, width: u8, value: u32) -> bool {
         let mut data = self.data.borrow_mut();
-        if offset + 3 >= data.len() {
+        let Some(bytes) = data.get_mut(offset..offset + usize::from(width / 8)) else {
             return false;
+        };
+        for (i, b) in bytes.iter_mut().enumerate() {
+            *b = (value >> (8 * i)) as u8;
         }
-        data[offset] = (value & 0xFF) as u8;
-        data[offset + 1] = ((value >> 8) & 0xFF) as u8;
-        data[offset + 2] = ((value >> 16) & 0xFF) as u8;
-        data[offset + 3] = ((value >> 24) & 0xFF) as u8;
         true
     }
 
@@ -433,11 +440,7 @@ impl GenericPeripheral {
 /// reports none.
 impl PinPort for GenericPeripheral {
     fn pin_count(&self) -> u8 {
-        if self.gpio_reg_offset("IN").is_some() {
-            32
-        } else {
-            0
-        }
+        self.gpio_reg("IN").map_or(0, |(_, width)| width)
     }
 
     /// `ENABLE` set: driving its `OUT` bit; clear: released. Without an
@@ -451,7 +454,7 @@ impl PinPort for GenericPeripheral {
     }
 
     fn external(&self, pin: u8) -> External {
-        if pin < 32 && self.ext_mask & (1 << pin) != 0 {
+        if pin < self.pin_count() && self.ext_mask & (1 << pin) != 0 {
             match self.read_gpio_input(pin) {
                 Some(level) => External::Level(level),
                 None => External::Released,
@@ -463,11 +466,11 @@ impl PinPort for GenericPeripheral {
 
     /// A level is stored in the `IN` register; releasing leaves it there.
     fn set_external(&mut self, pin: u8, ext: External) -> Option<InputChange> {
-        if pin >= 32 {
+        let (offset, width) = self.gpio_reg("IN")?;
+        if pin >= width {
             return None;
         }
-        let offset = self.gpio_reg_offset("IN")?;
-        let mut value = self.read_register_storage_u32(offset)?;
+        let mut value = self.read_register_storage(offset, width)?;
         let before = value & (1u32 << pin) != 0;
         match ext {
             External::Level(level) => {
@@ -476,7 +479,7 @@ impl PinPort for GenericPeripheral {
                 } else {
                     value &= !(1u32 << pin);
                 }
-                if !self.write_register_storage_u32(offset, value) {
+                if !self.write_register_storage(offset, width, value) {
                     return None;
                 }
                 self.ext_mask |= 1 << pin;
@@ -772,21 +775,11 @@ impl Peripheral for GenericPeripheral {
     }
 
     fn read_gpio_input(&self, pin: u8) -> Option<bool> {
-        if pin >= 32 {
-            return None;
-        }
-        let offset = self.gpio_reg_offset("IN")?;
-        let value = self.read_register_storage_u32(offset)?;
-        Some((value & (1u32 << pin)) != 0)
+        self.gpio_bit("IN", pin)
     }
 
     fn read_gpio_output(&self, pin: u8) -> Option<bool> {
-        if pin >= 32 {
-            return None;
-        }
-        let offset = self.gpio_reg_offset("OUT")?;
-        let value = self.read_register_storage_u32(offset)?;
-        Some((value & (1u32 << pin)) != 0)
+        self.gpio_bit("OUT", pin)
     }
 
     fn gpio_routing(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {
@@ -802,11 +795,11 @@ impl Peripheral for GenericPeripheral {
     /// A `GPIO` descriptor with an `IN` register owns pads; every other
     /// declarative peripheral owns none.
     fn pins(&self) -> Option<&dyn PinPort> {
-        self.gpio_reg_offset("IN").map(|_| self as &dyn PinPort)
+        self.gpio_reg("IN").map(|_| self as &dyn PinPort)
     }
 
     fn pins_mut(&mut self) -> Option<&mut dyn PinPort> {
-        self.gpio_reg_offset("IN")?;
+        self.gpio_reg("IN")?;
         Some(self)
     }
 
@@ -1277,5 +1270,39 @@ mod tests {
         assert_eq!(p.read_gpio_pad(3), None);
         assert_eq!(p.read_gpio_pad_drive(3), None);
         assert!(p.gpio_routing(3).is_none());
+    }
+
+    /// A byte-wide port packed IN / OUT / DIR on consecutive bytes (MSP430
+    /// P1IN @0x20, P1OUT @0x21, P1DIR @0x22): eight pads, and an outside level
+    /// lands in the IN byte without touching the OUT byte beside it.
+    #[test]
+    fn declarative_byte_wide_gpio_keeps_pins_inside_their_byte() {
+        let reg = |id: &str, off: u64| RegisterDescriptor {
+            id: id.to_string(),
+            address_offset: off,
+            size: 8,
+            access: Access::ReadWrite,
+            reset_value: 0,
+            fields: vec![],
+            side_effects: None,
+        };
+        let mut p = GenericPeripheral::new(PeripheralDescriptor {
+            peripheral: "GPIO".to_string(),
+            version: "1.0".to_string(),
+            registers: vec![reg("IN", 0), reg("OUT", 1), reg("ENABLE", 2)],
+            interrupts: None,
+            timing: None,
+        });
+        assert_eq!(p.pin_count(), 8);
+        p.write(1, 0x81).unwrap(); // OUT
+        assert!(p.set_gpio_input(7, true));
+        assert!(!p.set_gpio_input(8, true), "no pin 8 on a byte port");
+        assert_eq!(p.read(0).unwrap(), 0x80, "IN carries pin 7");
+        assert_eq!(p.read(1).unwrap(), 0x81, "OUT is untouched");
+        assert_eq!(p.read_gpio_input(7), Some(true));
+        assert_eq!(p.read_gpio_input(8), None);
+        assert_eq!(p.read_gpio_pad(0), Some(false), "released pad 0 shows IN");
+        p.write(2, 0x01).unwrap(); // DIR: pin 0 driven
+        assert_eq!(p.read_gpio_pad(0), Some(true), "driven pad shows OUT bit 0");
     }
 }

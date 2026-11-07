@@ -1,0 +1,55 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# MSP430 16-bit port pair (PA = P1:P2, PB = P3:P4, ...): PxIN / PxOUT / PxDIR
+# as halfwords at +0x00 / +0x02 / +0x04, the odd port in the low byte.
+# MSP430x5xx (SLAU208Q §12.4): PA at 0x0200, PB 0x0220, PC 0x0240, PD 0x0260,
+# PE 0x0280, PF 0x02A0 (MSP430F543x DS SLAS612 Table "Peripherals"). The same
+# halfword layout is the x2xx port pair P7:P8 at 0x38 (P7IN 0x38, P8IN 0x39,
+# P7OUT 0x3A, P8OUT 0x3B, P7DIR 0x3C, P8DIR 0x3D; SLAU144J §8.2,
+# MSP430F2619 DS SLAS541). Pin k of P(2n-1) is bit k, pin k of P(2n) bit 8+k.
+#
+# Runs on the declarative GPIO path (IN / OUT / ENABLE) at halfword width;
+# a byte load of PxIN reads its half.
+# Not modelled: PxREN, PxDS, PxSEL and the interrupt registers (PxIV, PxIES,
+# PxIE, PxIFG).
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: IN
+  address_offset: 0
+  size: 16
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PxIN
+    bit_range:
+    - 15
+    - 0
+    description: PxIN, the input level of each pin whatever its direction
+  side_effects: null
+- id: OUT
+  address_offset: 2
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PxOUT
+    bit_range:
+    - 15
+    - 0
+    description: PxOUT, the level a pin drives when PxDIR makes it an output
+  side_effects: null
+- id: ENABLE
+  address_offset: 4
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PxDIR
+    bit_range:
+    - 15
+    - 0
+    description: PxDIR, 1 makes the pin an output (reset 0, all inputs)
+  side_effects: null

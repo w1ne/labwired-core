@@ -9,10 +9,65 @@ arch: unknown
 flash:
   base: 12544
   size: 92KB
+# The MSP430 has no Cortex-M boot alias: 0x0000..0x01FF is the peripheral
+# file (SFRs, byte and word peripherals), so flash must not mirror there.
+flash_boot_alias: false
 ram:
   base: 4352
   size: 8KB
-peripherals: []
+# Digital I/O P1..P6: byte ports PxIN/PxOUT/PxDIR (SLAU144J §8.2), on
+# configs/peripherals/msp430/port8.yaml; P7:P8 is the halfword pair at 0x38
+# (SLAS541), on port16.yaml.
+peripherals:
+- id: p1
+  type: declarative
+  bus: sysbus
+  base_address: 32
+  size: 3B
+  config:
+    path: ../../peripherals/msp430/port8.yaml
+- id: p2
+  type: declarative
+  bus: sysbus
+  base_address: 40
+  size: 3B
+  config:
+    path: ../../peripherals/msp430/port8.yaml
+- id: p3
+  type: declarative
+  bus: sysbus
+  base_address: 24
+  size: 3B
+  config:
+    path: ../../peripherals/msp430/port8.yaml
+- id: p4
+  type: declarative
+  bus: sysbus
+  base_address: 28
+  size: 3B
+  config:
+    path: ../../peripherals/msp430/port8.yaml
+- id: p5
+  type: declarative
+  bus: sysbus
+  base_address: 48
+  size: 3B
+  config:
+    path: ../../peripherals/msp430/port8.yaml
+- id: p6
+  type: declarative
+  bus: sysbus
+  base_address: 52
+  size: 3B
+  config:
+    path: ../../peripherals/msp430/port8.yaml
+- id: p78
+  type: declarative
+  bus: sysbus
+  base_address: 56
+  size: 6B
+  config:
+    path: ../../peripherals/msp430/port16.yaml
 provenance:
   source: mspsim
   repo: https://github.com/contiki-ng/mspsim

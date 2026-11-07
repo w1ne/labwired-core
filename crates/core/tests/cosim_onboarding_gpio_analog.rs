@@ -78,6 +78,17 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x30,
         "Linux gpio-tegra.c GPIO_IN (GPIO_REG + 0x30)",
     ),
+    // Byte and halfword ports; see [`load_input`] for the load width.
+    (
+        "declarative/msp430/port8.yaml",
+        0x00,
+        "SLAU049F §9.2 / SLAU144J §8.2 PxIN",
+    ),
+    (
+        "declarative/msp430/port16.yaml",
+        0x00,
+        "SLAU208Q §12.4 PAIN",
+    ),
     (
         "sam4s_pio",
         0x3C,
@@ -106,6 +117,19 @@ fn input_bit(kind: &str, pin: u8) -> u32 {
         "s32k3_siul2" => 1 << (31 - u32::from(pin)),
         _ => 1 << pin,
     }
+}
+
+/// Firmware load of the input register at the width its firmware uses. The
+/// MSP430 ports are byte (`mov.b &P1IN`) and halfword (`mov &PAIN`)
+/// registers, and the byte after P1IN is P1OUT, so a word load would read
+/// past the port. Every other map here is word-wide.
+fn load_input(bus: &SystemBus, kind: &str, register: u64) -> u32 {
+    match kind {
+        "declarative/msp430/port8.yaml" => bus.read_u8(register).map(u32::from),
+        "declarative/msp430/port16.yaml" => bus.read_u16(register).map(u32::from),
+        _ => bus.read_u32(register),
+    }
+    .expect("load the port input register")
 }
 
 /// Placeholder IDR offset: GPIO types LabWired does not model yet run on the
@@ -205,16 +229,21 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
         0x6000_D030,
         "tegra30.dtsi gpio@6000d000 + gpio-tegra.c GPIO_IN",
     ),
+    ("mspsim-msp430f149", "p1", 0x20, "SLAS272 P1IN"),
+    ("mspsim-msp430f1611", "p1", 0x20, "SLAS368 P1IN"),
+    ("mspsim-msp430f2617", "p1", 0x20, "SLAS541 P1IN"),
+    ("msp430f2619", "p1", 0x20, "SLAS541 P1IN"),
+    ("mspsim-msp430f5437", "pa", 0x200, "SLAS612 PAIN (P1IN)"),
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 184;
+const COVERED: usize = 189;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 78;
+const SILICON_REGISTER: usize = 83;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 61;
+const NO_ANALOG_ENDPOINT: usize = 56;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -488,9 +517,7 @@ fn assert_port_routes_generic_analog(
             "{tag}: diode pin reads low below VIL"
         );
 
-        let word = bus
-            .read_u32(register)
-            .expect("load the port input register");
+        let word = load_input(&bus, &kind, register);
         register_tracked &= (word & ntc_bit != 0) == expected_ntc_level && word & diode_bit == 0;
     }
     if unreached {
