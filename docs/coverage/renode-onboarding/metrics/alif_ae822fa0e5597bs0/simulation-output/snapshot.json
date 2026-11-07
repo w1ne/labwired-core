@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      18,
-      3,
-      17,
+      2716336159,
+      537919472,
+      0,
+      0,
+      1224835072,
+      1224863744,
+      5,
+      31,
       0,
       0,
       0,
       0,
       0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      537919488,
-      4294967295,
-      18
+      537919232,
+      207,
+      216
     ],
-    "pc": 18,
-    "xpsr": 16777216,
+    "pc": 216,
+    "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "76cde251de6223e5e577762fa7411fdbe654fc6663c81a8a5d4cdd3013164b6f",
+  "firmware_hash": "3c8cc8fd7e71942bea846d148496eb3c49102c408834c79dc0e0455ffafaa34c",
   "config": {
     "firmware": "examples/renode-onboarding/../../tests/fixtures/alif-e8-m55-cpu-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/alif_ae822fa0e5597bs0.yaml",

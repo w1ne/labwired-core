@@ -1681,8 +1681,9 @@ jobs:
             prebuilt_firmware: tests/fixtures/colibri-vf61-cortex-m4-smoke.elf
             script: examples/renode-onboarding/vybrid-cortex-m4-smoke.yaml
             system: configs/systems/onboarding/vybrid.yaml
-          # One Cortex-M55-HP and local ITCM/DTCM only. The integer smoke does
-          # not claim Helium, other cores, peripherals, or the boot flow.
+          # One Cortex-M55 with local ITCM/DTCM: polled UART0 TX, LCR/DLAB
+          # divisor latches on UART0 and UART7, LSR idle. No IRQs, GPIO, I2C,
+          # CAN, Helium, other cores, or boot flow.
           - id: alif_ae822fa0e5597bs0
             prebuilt_firmware: tests/fixtures/alif-e8-m55-cpu-smoke.elf
             script: examples/renode-onboarding/alif-e8-m55-cpu-smoke.yaml

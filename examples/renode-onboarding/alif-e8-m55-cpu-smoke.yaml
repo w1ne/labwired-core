@@ -1,5 +1,7 @@
-# CPU-only Cortex-M55 integer smoke against the imported Alif E8 system.
-# The profile has one M55-HP and its local memories; it performs no MMIO.
+# Cortex-M55 UART smoke against the imported Alif E8 system.
+# Firmware: examples/renode-onboarding/alif-e8-m55-cpu-smoke.S (built by
+# scripts/build_alif_e8_m55_cpu_smoke.sh). UART0 LCR/DLAB/DLL/DLM readback,
+# LSR idle flags, a separate UART7 divisor, and polled UART0 TX behind LSR.THRE.
 schema_version: "1.0"
 inputs:
   firmware: "../../tests/fixtures/alif-e8-m55-cpu-smoke.elf"
@@ -7,4 +9,10 @@ inputs:
 limits:
   max_steps: 100000
 assertions:
+  - uart_contains: "ALIF E8 M55 SMOKE"
+  - uart_ordered:
+      - "uart0 dl=021b"
+      - "uart7 dll=05"
+      - "pass=1f"
+  - memory_value: {address: 0x200FFFF0, expected_value: 0xA1E8001F}
   - expected_stop_reason: max_steps

@@ -1,6 +1,18 @@
-# Bounded one-core profile of the Alif Ensemble E8. This maps the M55-HP's
-# local ITCM and DTCM only; A32/M55-HE cores, peripherals, and Helium are not
-# represented by this profile.
+# Bounded one-core profile of the Alif Ensemble E8. This maps one M55 core's
+# local ITCM and DTCM, plus the UARTs that Renode's
+# platforms/cpus/alif_ae822fa0e5597bs0.repl maps (that file models the
+# RTSS-HE core):
+#   - UART0-7 at 0x49018000 + n*0x1000: Renode `UART.NS16550` with
+#     `wideRegisters: true`, i.e. a Synopsys DW_apb_uart, a 16550 with a
+#     4-byte register stride. They use the `dw_apb_uart` profile (THR/RBR@0x00,
+#     IER@0x04, LCR@0x0C, LSR@0x14, DLL/DLM behind LCR.DLAB). Polled only: no
+#     irq is declared, so the NVIC 124..131 lines are not claimed. FIFOs, baud
+#     timing and DMA are not claimed either.
+# These Renode blocks are not mapped, because LabWired has no model for them:
+# the DesignWare APB GPIO ports (gpio0-14, lpgpio), the DesignWare I2C0-3,
+# CAST CAN-FD, sram0/sram1 and MRAM. The tagged clock and pinctrl windows are
+# not mapped either. The A32 cores, the second M55, and Helium are also not
+# represented.
 name: alif_ae822fa0e5597bs0
 arch: arm
 core: cortex-m55
@@ -12,4 +24,12 @@ flash:
 ram:
   base: 536870912
   size: 1048576B
-peripherals: []
+peripherals:
+  - { id: uart0, type: uart, base_address: 0x49018000, size: 4KB, config: { profile: dw_apb_uart } }
+  - { id: uart1, type: uart, base_address: 0x49019000, size: 4KB, config: { profile: dw_apb_uart } }
+  - { id: uart2, type: uart, base_address: 0x4901A000, size: 4KB, config: { profile: dw_apb_uart } }
+  - { id: uart3, type: uart, base_address: 0x4901B000, size: 4KB, config: { profile: dw_apb_uart } }
+  - { id: uart4, type: uart, base_address: 0x4901C000, size: 4KB, config: { profile: dw_apb_uart } }
+  - { id: uart5, type: uart, base_address: 0x4901D000, size: 4KB, config: { profile: dw_apb_uart } }
+  - { id: uart6, type: uart, base_address: 0x4901E000, size: 4KB, config: { profile: dw_apb_uart } }
+  - { id: uart7, type: uart, base_address: 0x4901F000, size: 4KB, config: { profile: dw_apb_uart } }

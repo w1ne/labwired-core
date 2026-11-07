@@ -9,8 +9,8 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `4/224`
-- pass_observable_assertions: `183/224`
-- pass_stop_reason_only: `41/224`
+- pass_observable_assertions: `184/224`
+- pass_stop_reason_only: `40/224`
 - pass_depth_unknown: `0/224`
 - median_elapsed_ms: `1195`
 - median_elapsed_seconds: `1.195`
@@ -24,7 +24,7 @@
 | `A2_CV32E40P` | `pass` | `True` | `yes` | `yes` | `91017` | `91.017` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `a20` | `pass` | `True` | `yes` | `yes` | `270406` | `270.406` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `acrn_x86_64` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 1: `hpet:hpet` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no x86-64 CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
-| `alif_ae822fa0e5597bs0` | `pass` | `True` | `yes` | `yes` | `7479` | `7.479` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `alif_ae822fa0e5597bs0` | `pass` | `True` | `yes` | `yes` | `9943` | `9.943` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `ambiq-apollo4` | `pass` | `True` | `yes` | `yes` | `5634` | `5.634` | `True` | `observable` | 1: `sync_read:stub` | `n/a` | n/a | n/a |
 | `andes_ae350_n25` | `pass` | `True` | `yes` | `yes` | `1074` | `1.074` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `arduino_101-shield` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 7: `led:led`, `button:button`, `lm74:ti_lm74`, `spi0:stub`, `spi1:stub`, `pwm:stub`, `scss:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no IA-32 (Intel Quark) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |

@@ -8,8 +8,8 @@
     "pass": 224,
     "fail": 0,
     "pass_loading_zero_answering_windows": 4,
-    "pass_observable_assertions": 183,
-    "pass_stop_reason_only": 41,
+    "pass_observable_assertions": 184,
+    "pass_stop_reason_only": 40,
     "pass_depth_unknown": 0,
     "median_elapsed_ms": 1195,
     "median_elapsed_seconds": 1.195,
@@ -164,32 +164,35 @@
       "script": "examples/renode-onboarding/alif-e8-m55-cpu-smoke.yaml",
       "system": "configs/systems/onboarding/alif_ae822fa0e5597bs0.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T23:51:22Z",
-      "finished_at_utc": "2026-11-05T23:51:29Z",
-      "elapsed_seconds": 8,
-      "elapsed_ms": 7479,
+      "started_at_utc": "2026-11-07T09:28:21Z",
+      "finished_at_utc": "2026-11-07T09:28:31Z",
+      "elapsed_seconds": 10,
+      "elapsed_ms": 9943,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 7.201,
+        "build_cli": 9.618,
         "build_firmware": null,
-        "run_smoke": 0.27
+        "run_smoke": 0.316
       },
       "stages_ms": {
-        "build_cli": 7201,
+        "build_cli": 9618,
         "build_firmware": null,
-        "run_smoke": 270
+        "run_smoke": 316
       },
       "prebuilt_firmware": "tests/fixtures/alif-e8-m55-cpu-smoke.elf",
       "_artifact_path": "alif_ae822fa0e5597bs0",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "memory_value",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "ambiq-apollo4",
