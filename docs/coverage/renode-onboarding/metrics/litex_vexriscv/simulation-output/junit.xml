@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="1.299545">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="1.333930">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="b6d76b7677093d8d09542c678bd4f496770a19c99cda401d78e347c9878fed4f"/>
+    <property name="firmware_hash" value="691cb349d83267ef3e4b4d44452abe37a311cada1076a71caaf18e909503ea5b"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.299545">
+  <testcase classname="labwired" name="run" time="1.333930">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: LITEX VEXRISCV SMOKE" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=rv32im uart=litex&quot;, &quot;spi=00000000&quot;, &quot;timer=running&quot;, &quot;timer=zero&quot;, &quot;hb=0 txfull=00000000&quot;, &quot;hb=1 tx…" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=rv32im uart=litex&quot;, &quot;spi id=20bb19 sr=00 wel=02&quot;, &quot;timer=running&quot;, &quot;timer=zero&quot;, &quot;hb=0 txfull=00000…" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>

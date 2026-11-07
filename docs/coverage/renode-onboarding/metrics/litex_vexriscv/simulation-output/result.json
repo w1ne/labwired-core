@@ -38,7 +38,7 @@
       "assertion": {
         "uart_ordered": [
           "cpu=rv32im uart=litex",
-          "spi=00000000",
+          "spi id=20bb19 sr=00 wel=02",
           "timer=running",
           "timer=zero",
           "hb=0 txfull=00000000",
@@ -60,16 +60,16 @@
     "type": "risc_v",
     "registers": [
       0,
-      268439296,
+      268440968,
       268697456,
       268634112,
       0,
       999424,
       1125900288,
       8192,
-      1610620928,
       3,
-      300325,
+      1610620928,
+      300495,
       0,
       0,
       274878464,
@@ -128,7 +128,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "b6d76b7677093d8d09542c678bd4f496770a19c99cda401d78e347c9878fed4f",
+  "firmware_hash": "691cb349d83267ef3e4b4d44452abe37a311cada1076a71caaf18e909503ea5b",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_vexriscv.yaml",
@@ -184,7 +184,7 @@
         "end_cycle": 10000
       },
       {
-        "text": "spi=00000000",
+        "text": "spi id=20bb19 sr=00 wel=02",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -230,14 +230,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 4008,
+    "text_bytes": 5680,
     "data_bytes": 0,
     "bss_bytes": 65536,
-    "flash_used_bytes": 4008,
+    "flash_used_bytes": 5680,
     "ram_static_bytes": 65536,
     "flash_total_bytes": 33554432,
     "ram_total_bytes": 262144,
-    "flash_used_pct": 0.01,
+    "flash_used_pct": 0.02,
     "ram_static_pct": 25.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -255,7 +255,7 @@
     "steps_executed": 4000000,
     "memory_reads": 4000004,
     "memory_writes": 47,
-    "peripheral_accesses": 33654,
+    "peripheral_accesses": 34001,
     "exceptions": 0,
     "pc_samples": [
       {
@@ -274,17 +274,17 @@
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 268437844,
+        "pc": 268439516,
         "count": 156,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 268437848,
+        "pc": 268439520,
         "count": 117,
         "symbol": "firmware_litex_vexriscv_smoke::timer_one_shot"
       },
       {
-        "pc": 268437852,
+        "pc": 268439524,
         "count": 117,
         "symbol": "firmware_litex_vexriscv_smoke::timer_one_shot"
       }

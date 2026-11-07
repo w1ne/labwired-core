@@ -7,7 +7,7 @@
     "not_run": 21,
     "pass": 224,
     "fail": 0,
-    "pass_loading_zero_answering_windows": 6,
+    "pass_loading_zero_answering_windows": 5,
     "median_elapsed_ms": 1223,
     "median_elapsed_seconds": 1.223,
     "threshold_seconds": 3600,
@@ -3427,29 +3427,27 @@
       "script": "examples/renode-onboarding/litex_vexriscv-smoke.yaml",
       "system": "configs/systems/onboarding/litex_vexriscv.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:48:31Z",
-      "finished_at_utc": "2026-11-05T14:48:34Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2357,
+      "started_at_utc": "2026-11-07T00:12:37Z",
+      "finished_at_utc": "2026-11-07T00:14:15Z",
+      "elapsed_seconds": 98,
+      "elapsed_ms": 97794,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.295,
-        "build_firmware": 0.461,
-        "run_smoke": 1.591
+        "build_cli": 93.916,
+        "build_firmware": 2.228,
+        "run_smoke": 1.639
       },
       "stages_ms": {
-        "build_cli": 295,
-        "build_firmware": 461,
-        "run_smoke": 1591
+        "build_cli": 93916,
+        "build_firmware": 2228,
+        "run_smoke": 1639
       },
       "_artifact_path": "litex_vexriscv",
-      "zero_answering_windows": [
-        "spi_flash_ctrl:stub"
-      ]
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_vexriscv_linux",

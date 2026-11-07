@@ -8,7 +8,7 @@
 - not_run: `21`
 - pass: `224`
 - fail: `0`
-- pass_loading_zero_answering_windows: `6/224`
+- pass_loading_zero_answering_windows: `5/224`
 - median_elapsed_ms: `1223`
 - median_elapsed_seconds: `1.223`
 - threshold_seconds: `3600`
@@ -104,7 +104,7 @@
 | `litex_nexys_video_vexriscv_linux` | `pass` | `True` | `yes` | `yes` | `2269` | `2.269` | `True` | 0 | `n/a` | n/a | n/a |
 | `litex_picorv32` | `pass` | `True` | `yes` | `yes` | `2265` | `2.265` | `True` | 0 | `n/a` | n/a | n/a |
 | `litex_tock` | `pass` | `True` | `yes` | `yes` | `1077` | `1.077` | `True` | 0 | `n/a` | n/a | n/a |
-| `litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `2357` | `2.357` | `True` | 1: `spi_flash_ctrl:stub` | `n/a` | n/a | n/a |
+| `litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `97794` | `97.794` | `True` | 0 | `n/a` | n/a | n/a |
 | `litex_vexriscv_linux` | `pass` | `True` | `yes` | `yes` | `2316` | `2.316` | `True` | 0 | `n/a` | n/a | n/a |
 | `litex_vexriscv_micropython` | `pass` | `True` | `yes` | `yes` | `2405` | `2.405` | `True` | 0 | `n/a` | n/a | n/a |
 | `litex_vexriscv_smp` | `pass` | `True` | `yes` | `yes` | `1051` | `1.051` | `True` | 0 | `n/a` | n/a | n/a |

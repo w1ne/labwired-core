@@ -4,16 +4,16 @@
     "type": "risc_v",
     "registers": [
       0,
-      268439296,
+      268440968,
       268697456,
       268634112,
       0,
       999424,
       1125900288,
       8192,
-      1610620928,
       3,
-      300325,
+      1610620928,
+      300495,
       0,
       0,
       274878464,
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "b6d76b7677093d8d09542c678bd4f496770a19c99cda401d78e347c9878fed4f",
+  "firmware_hash": "691cb349d83267ef3e4b4d44452abe37a311cada1076a71caaf18e909503ea5b",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_vexriscv.yaml",
