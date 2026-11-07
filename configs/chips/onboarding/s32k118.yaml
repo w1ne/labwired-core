@@ -54,3 +54,46 @@ peripherals:
   renode_type: s32k_scg
   bus: sysbus
   base_address: 1074151424
+# GPIO ports PTA-PTE. Renode's S32K118 platform leaves GPIO out, so the import
+# carried none. GPIO_BASE_PTRS in the S32K118 device header puts PTA..PTE at
+# 0x400FF000 + 0x40 * n, with the Kinetis register set: PDOR/PSOR/PCOR/PTOR at
+# +0x00..+0x0C, PDIR +0x10, PDDR +0x14 (S32K1xx RM rev 14, ch. 12). The same
+# map as the promoted configs/chips/mk64f12.yaml, so these ports run on
+# `profile: kinetis`. PIDR (+0x18) is not modelled; its reset value (0) leaves
+# every input enabled. The PORT block (PCRn MUX/pulls) is not declared, so a
+# pin reads PDIR whatever its MUX, where silicon reads 0 until MUX = GPIO.
+- id: pta
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF000
+  size: 64B
+  config:
+    profile: kinetis
+- id: ptb
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF040
+  size: 64B
+  config:
+    profile: kinetis
+- id: ptc
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF080
+  size: 64B
+  config:
+    profile: kinetis
+- id: ptd
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF0C0
+  size: 64B
+  config:
+    profile: kinetis
+- id: pte
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF100
+  size: 64B
+  config:
+    profile: kinetis

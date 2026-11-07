@@ -33,3 +33,23 @@ peripherals:
   type: pythonperipheral
   bus: sysbus
   base_address: 1073745984
+# PORT groups PA and PB, the two a 48-pin SAMD51G brings out. Renode's
+# platform leaves PORT out, so the import carried none. PORT is 0x41008000
+# (ATSAMD51G19A.h) with one PortGroup per 0x80: DIR +0x00, OUT +0x10, IN +0x20,
+# CTRL +0x24, PMUX +0x30, PINCFG +0x40 (SAM D5x/E5x DS60001507, ch. 32). Each
+# group is its own window, as in the promoted configs/chips/atsamd51.yaml, on
+# `profile: sam_port`. MCLK/GCLK are not modelled here, so PORT has no gate.
+- id: porta
+  type: gpio
+  bus: sysbus
+  base_address: 0x41008000
+  size: 128B
+  config:
+    profile: sam_port
+- id: portb
+  type: gpio
+  bus: sysbus
+  base_address: 0x41008080
+  size: 128B
+  config:
+    profile: sam_port

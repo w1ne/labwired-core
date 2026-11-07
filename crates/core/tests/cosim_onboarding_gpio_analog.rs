@@ -35,10 +35,13 @@ const NTC_PIN: u8 = 0;
 const DIODE_PIN: u8 = 1;
 
 /// GPIO types whose LabWired model serves the silicon register map, with the
-/// input register's offset in that map and its source.
+/// input register's offset in that map and its source. The vendor-neutral
+/// `gpio` type is keyed by its layout, as `gpio/<config.profile>`.
 const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
     ("stm32f1gpioport", 0x08, "RM0008 §9.2.3 GPIOx_IDR"),
-    ("gpio", 0x10, "RM0368 §8.4.5 GPIOx_IDR (profile stm32v2)"),
+    ("gpio/stm32v2", 0x10, "RM0368 §8.4.5 GPIOx_IDR"),
+    ("gpio/kinetis", 0x10, "S32K1xx RM rev 14 §12.3 GPIOx_PDIR"),
+    ("gpio/sam_port", 0x20, "SAM D5x/E5x DS60001507 §32.7 IN"),
     ("imxrt_gpio", 0x08, "IMXRT1060RM §12.5 GPIO_PSR"),
     ("nrf52840_gpio", 0x510, "nRF52840 PS §6.9.2 IN"),
     ("sam4s_pio", 0x3C, "SAM4S DS §31.7 PIO_PDSR"),
@@ -98,12 +101,12 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 161;
+const COVERED: usize = 163;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 59;
+const SILICON_REGISTER: usize = 61;
 /// Profiles whose descriptor declares no GPIO input and no convertible ADC:
 /// nothing analog can reach them yet.
-const NO_ANALOG_ENDPOINT: usize = 84;
+const NO_ANALOG_ENDPOINT: usize = 82;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -185,7 +188,11 @@ fn input_register(chip: &ChipDescriptor, port: &str, base: u64) -> (u64, bool) {
         .iter()
         .find(|p| p.id == port)
         .expect("port comes from the descriptor");
-    let kind = cfg.r#type.to_ascii_lowercase();
+    let mut kind = cfg.r#type.to_ascii_lowercase();
+    if kind == "gpio" {
+        let profile = cfg.config.get("profile").and_then(|v| v.as_str());
+        kind = format!("gpio/{}", profile.expect("a `gpio` port names its layout"));
+    }
     // A window based part-way into its block (Nordic ports at OUT) says so.
     let window = cfg
         .config
@@ -251,6 +258,21 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
         bus.write_u32(base + 0x04, model)
             .expect("Series-2 GPIO_P_MODEL INPUT");
     }
+    if kind.as_deref() == Some("gpio") && profile_of(chip, port) == Some("sam_port") {
+        // ASF/Arduino pinMode(INPUT) sets PINCFGn.INEN (bit 1); PINCFG is
+        // one byte per pin from +0x40, so pins 0 and 1 share the first word.
+        let pincfg = (0x02 << (8 * NTC_PIN)) | (0x02 << (8 * DIODE_PIN));
+        bus.write_u32(base + 0x40, pincfg)
+            .expect("SAM PORT PINCFG.INEN");
+    }
+}
+
+fn profile_of<'a>(chip: &'a ChipDescriptor, port: &str) -> Option<&'a str> {
+    chip.peripherals
+        .iter()
+        .find(|p| p.id == port)
+        .and_then(|p| p.config.get("profile"))
+        .and_then(|v| v.as_str())
 }
 
 struct Outcome {
