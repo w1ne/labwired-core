@@ -268,11 +268,7 @@ impl Cc2538Ssi {
             // CPSDVSR must be even, 2..254: bit 0 reads back 0.
             CPSR => self.cpsr = value & 0xFE,
             IM => self.im = value & IM_MASK,
-            ICR => {
-                if value & INT_ROR != 0 {
-                    self.overrun = false;
-                }
-            }
+            ICR if value & INT_ROR != 0 => self.overrun = false,
             DMACTL => self.dmactl = value & 0x3,
             CC => self.cc = value & 0x1,
             _ => {}
