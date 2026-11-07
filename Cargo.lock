@@ -1523,6 +1523,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-f401-lowram-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-f401cdu6-blackpill-demo"
 version = "0.25.0"
 dependencies = [
@@ -2279,6 +2287,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-samd21-lowram-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-semihost-smoke"
 version = "0.1.0"
 dependencies = [
@@ -2352,6 +2369,14 @@ dependencies = [
 
 [[package]]
 name = "firmware-stm32f072b-disco-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-stm32f103-lowdensity-smoke"
 version = "0.1.0"
 dependencies = [
  "cortex-m-rt",

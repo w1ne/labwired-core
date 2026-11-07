@@ -1,0 +1,17 @@
+# STM32F401RC boots the F401 low-RAM smoke image on its own exact descriptor:
+# the reset vector runs, USART2 prints "OK", and PA5 toggles.
+# The NUCLEO-F401RE banner (firmware-f401-demo) hard-codes SP 0x2001_8000,
+# past the end of this part's 64 KB SRAM; it passed only because it never
+# touches the stack. This image calls out-of-line helpers from SP 0x2001_0000.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-f401-lowram-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 4
+  - expected_stop_reason: max_steps
