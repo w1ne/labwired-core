@@ -171,6 +171,20 @@ fn f401_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
     const SWSTART: u32 = 1 << 30;
     const EOC: u32 = 1 << 1;
 
+    // This helper freezes the CPU and advances the peripheral directly. Pin
+    // the ADC to its legacy-walk reference; scheduler-enabled ADC conversions
+    // are drained by Machine, which this bare-bus harness deliberately omits.
+    let adc_idx = bus
+        .find_peripheral_index_by_name("adc1")
+        .expect("F401 declares adc1");
+    bus.peripherals[adc_idx]
+        .dev
+        .as_any_mut()
+        .expect("adc1 downcasts")
+        .downcast_mut::<labwired_core::peripherals::adc::Adc>()
+        .expect("adc1 is an Adc")
+        .force_legacy_walk();
+
     // Firmware must enable the APB2 clock before ADC MMIO reaches the block.
     let apb2enr = bus.read_u32(RCC_BASE + 0x44).expect("read APB2ENR");
     bus.write_u32(RCC_BASE + 0x44, apb2enr | ADC1EN)
@@ -182,7 +196,7 @@ fn f401_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
     bus.write_u32(ADC1_BASE + 0x08, ADON | SWSTART)
         .expect("software-start ADC1 conversion");
     for _ in 0..15 {
-        bus.tick_peripherals_fully();
+        bus.tick_peripherals_fully_forced();
     }
     let status = bus.read_u32(ADC1_BASE).expect("read ADC1 SR");
     assert_ne!(status & EOC, 0, "ADC1 conversion completes with EOC set");
