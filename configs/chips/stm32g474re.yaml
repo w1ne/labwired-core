@@ -19,15 +19,15 @@ ram:
 # for the H5) serves its message RAM at window offset +0x800. A window wide
 # enough to reach 0x4000A400 would claim every unmodelled APB1 block in
 # between (I2C3, LPTIM1, I2C4, UCPD1), so this same-backing mirror routes
-# SRAMCAN onto the model's RAM instead. It covers only the FDCAN1 section
-# (0x350, HAL SRAMCAN_SIZE): the model's RAM above 0x40007000 is shadowed by
-# PWR (the bus routes an address to the window with the greatest start), so
-# the FDCAN2 section would not land in the model. FDCAN2/FDCAN3 sections are
-# not mapped.
+# SRAMCAN onto the model's RAM instead. The mirror is 1 KiB (0x4000A400-
+# 0x4000A800 onto 0x40006C00-0x40007000): the FDCAN1 section (0x350, HAL
+# SRAMCAN_SIZE) plus the head of the FDCAN2 section. fdcan1's window stops at
+# PWR (0x40007000), so the rest of FDCAN2's section has no backing.
+# FDCAN2/FDCAN3 sections are not mapped.
 memory_regions:
   - name: "sramcan"
     base: 0x4000A400
-    size: 0x350
+    size: "1KB"
     alias_of: 0x40006C00
 
 peripherals:
@@ -114,7 +114,9 @@ peripherals:
   - id: "fdcan1"
     type: "fdcan"
     base_address: 0x40006400
-    size: "4KB"
+    # 3 KiB: registers + message RAM at +0x800, ending where PWR (0x40007000)
+    # begins. A 4 KiB window collides with PWR.
+    size: "3KB"
     irq: 21  # FDCAN1_IT0 (SVD); IT1 = 22 via ILS not modeled
     # RCC_APB1ENR1.FDCANEN (bit 25, CMSIS RCC_APB1ENR1_FDCANEN_Pos) gates all
     # three instances.
