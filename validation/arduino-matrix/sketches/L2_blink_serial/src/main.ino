@@ -17,6 +17,11 @@
 void setup() {
   pinMode(LW_LED, OUTPUT);
   Serial.begin(115200);
+#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
+  // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
+  // the host opens the port (DTR), on silicon and on the twin alike.
+  while (!Serial) delay(1);
+#endif
   // Short delays: matrix stops on first LW_L2_OK; long wall time was almost
   // entirely delay() spin, not model work. 1 ms still exercises digitalWrite
   // + millis/SysTick scheduling without 40+ ms of empty wait per loop.
