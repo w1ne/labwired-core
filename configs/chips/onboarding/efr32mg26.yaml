@@ -6,6 +6,7 @@
 
 name: efr32mg26
 arch: arm
+core: cortex-m33
 flash:
   base: 134217728
   size: 3268608B
@@ -17,3 +18,29 @@ peripherals:
   type: pythonperipheral
   bus: sysbus
   base_address: 1342799912
+# Series-2 GPIO ports A-D (EFR32MG26). GPIO_S_BASE = 0x4003C000; GPIO_TypeDef
+# opens with IPVERSION + RESERVED0[11], so P[0..3] (GPIO_PORT_TypeDef, 0x30
+# each: CTRL/MODEL/MODEH/DOUT/DIN at +0x00/+0x04/+0x0C/+0x10/+0x14) start at
+# block +0x30 (efr32mg26_gpio.h, simplicity_sdk sisdk-2025.6). Same layout as the
+# promoted configs/chips/efr32mg26.yaml. No CMU is modelled here, so the
+# ports carry no clock gate.
+- id: gpioa
+  type: efr32s2_gpioport
+  bus: sysbus
+  base_address: 0x4003c030
+  size: 48B
+- id: gpiob
+  type: efr32s2_gpioport
+  bus: sysbus
+  base_address: 0x4003c060
+  size: 48B
+- id: gpioc
+  type: efr32s2_gpioport
+  bus: sysbus
+  base_address: 0x4003c090
+  size: 48B
+- id: gpiod
+  type: efr32s2_gpioport
+  bus: sysbus
+  base_address: 0x4003c0c0
+  size: 48B

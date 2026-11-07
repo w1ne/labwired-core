@@ -43,6 +43,11 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
     ("nrf52840_gpio", 0x510, "nRF52840 PS §6.9.2 IN"),
     ("sam4s_pio", 0x3C, "SAM4S DS §31.7 PIO_PDSR"),
     ("miv_coregpio", 0x90, "CoreGPIO handbook InputRegister"),
+    (
+        "efr32s2_gpioport",
+        0x14,
+        "efr32mg24_gpio_port.h / efr32bg22_gpio_port.h GPIO_P_DIN",
+    ),
     // The AVR CPU answers an IN/LDS of PINx with this mirror's input bits.
     (
         "avr_gpio",
@@ -93,12 +98,12 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 151;
+const COVERED: usize = 161;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 49;
+const SILICON_REGISTER: usize = 59;
 /// Profiles whose descriptor declares no GPIO input and no convertible ADC:
 /// nothing analog can reach them yet.
-const NO_ANALOG_ENDPOINT: usize = 94;
+const NO_ANALOG_ENDPOINT: usize = 84;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -238,6 +243,13 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
             bus.write_u32(base + 4 * u64::from(pin), 1 << 1)
                 .expect("CoreGPIO CONFIG_X.INREG");
         }
+    }
+    if kind.as_deref() == Some("efr32s2_gpioport") {
+        // Series 2 resets every pin DISABLED; emlib's GPIO_PinModeSet writes
+        // the pin's MODEL nibble to INPUT (_GPIO_P_MODEL_MODE0_INPUT = 1).
+        let model = (1 << (4 * NTC_PIN)) | (1 << (4 * DIODE_PIN));
+        bus.write_u32(base + 0x04, model)
+            .expect("Series-2 GPIO_P_MODEL INPUT");
     }
 }
 
