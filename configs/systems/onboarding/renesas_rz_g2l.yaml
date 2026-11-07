@@ -6,3 +6,4 @@
 
 name: renesas_rz_g2l
 chip: ../../chips/onboarding/renesas_rz_g2l.yaml
+debug_uart: scif2

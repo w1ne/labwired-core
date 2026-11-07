@@ -1,7 +1,7 @@
 name: renesas_rz_g2l
 description: 'Renesas RZ/G2L MPU with dual Cortex-A55 and a Cortex-M33. The current
-  LabWired onboarding profile covers only bounded Cortex-M33 integer execution and
-  its local code/data SRAM windows.'
+  LabWired onboarding profile covers the Cortex-M33 code/data SRAM windows and polled
+  SCIF0-4 (SCIFA) serial ports; no interrupts or other peripherals.'
 family: Renesas RZ/G2L
 url: https://www.renesas.com/products/microcontrollers-microprocessors/rz-mpus/rzg2l-general-purpose-microprocessors-dual-core-arm-cortex-a55-12-ghz-cpus-and-3d-graphics-video-codec-engine
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -10,16 +10,21 @@ verified: false
 system: systems/onboarding/renesas_rz_g2l.yaml
 validation:
   method: renode-onboarding-focused-smoke
-  reason: cortex-m33-cpu-only; whole_platform_not_verified
+  reason: cortex-m33-sram-scif-polled; whole_platform_not_verified
   checks:
     system_manifest: true
     chip_descriptor: true
     cortex_m33_integer_smoke: true
+    scif2_polled_tx: true
+    scifa_register_readback: true
+    scifa_tx_gated_on_te: true
+    interrupts: false
+    gpio: false
     whole_platform: false
     cortex_a55: false
-    peripherals: false
+    other_peripherals: false
     reset_vector_boot: false
-  timestamp_utc: '2026-11-06T01:00:53Z'
+  timestamp_utc: '2026-11-07T10:00:00+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/renesas_rz_g2l.md
 provenance:

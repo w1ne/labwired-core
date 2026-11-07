@@ -1785,7 +1785,12 @@ boards:
     # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
     # main's CH32V003 riscv/gpio/rcc slices, incl. #1714 USART1). No new model change; digest
     # recomputed for the merged tree. ACK, NOT A CAPTURE.
-    drift_ack_digest: 21d1ea36440a721e24db500d9c589053cdcfb59ac7f0e8a3cb4bb8555693cceb
+    # 2026-11-07: lane/renode-coverage added a `Scifa` arm to uart.rs (Renesas
+    # RZ/G2L SCIFA register block, gated on its own layout) and a `scif` type
+    # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
+    # captured window is touched. Reviewed model-drift acknowledgment, NOT a
+    # new silicon capture; live re-capture remains pending.
+    drift_ack_digest: 46ff50ae5453ec46164693ed3e0e5d684233fc4834134c56c0e0964866888997
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3989,7 +3994,12 @@ boards:
     # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
     # main's CH32V003 riscv/gpio/rcc slices, incl. #1714 USART1). No new model change; digest
     # recomputed for the merged tree. ACK, NOT A CAPTURE.
-    drift_ack_digest: f7d3c99d53b70ffc268f5934096567d9df456ad207d05937cccb53604172810e
+    # 2026-11-07: lane/renode-coverage added a `Scifa` arm to uart.rs (Renesas
+    # RZ/G2L SCIFA register block, gated on its own layout) and a `scif` type
+    # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
+    # captured window is touched. Reviewed model-drift acknowledgment, NOT a
+    # new silicon capture; live re-capture remains pending.
+    drift_ack_digest: 83b0c45d91b0a25184997abdb4672c1ae1739e63a2b869e73f5e82519a988231
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5112,7 +5122,12 @@ boards:
     # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
     # main's CH32V003 riscv/gpio/rcc slices, incl. #1714 USART1). No new model change; digest
     # recomputed for the merged tree. ACK, NOT A CAPTURE.
-    drift_ack_digest: 099b06b1eed883cb74a96bab46eedbbeede0bc8ff7c88060f2da04cef32be783
+    # 2026-11-07: lane/renode-coverage added a `Scifa` arm to uart.rs (Renesas
+    # RZ/G2L SCIFA register block, gated on its own layout) and a `scif` type
+    # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
+    # captured window is touched. Reviewed model-drift acknowledgment, NOT a
+    # new silicon capture; live re-capture remains pending.
+    drift_ack_digest: 56c102db072398f872fd84b8ff4ff52fdb39120c3a61eebb61b0d5df8108bf1d
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6226,7 +6241,12 @@ boards:
     # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
     # main's CH32V003 riscv/gpio/rcc slices, incl. #1714 USART1). No new model change; digest
     # recomputed for the merged tree. ACK, NOT A CAPTURE.
-    drift_ack_digest: 8918ed89d32034b61e4d514b8c500c24c5a6c8573f994d98e04a48d0543a1298
+    # 2026-11-07: lane/renode-coverage added a `Scifa` arm to uart.rs (Renesas
+    # RZ/G2L SCIFA register block, gated on its own layout) and a `scif` type
+    # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
+    # captured window is touched. Reviewed model-drift acknowledgment, NOT a
+    # new silicon capture; live re-capture remains pending.
+    drift_ack_digest: 615440e7faf82912ce9ae97e95b1f610f11d4c63a847e2ccadfa85b5ad85d04f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7373,7 +7393,12 @@ boards:
     # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
     # main's CH32V003 riscv/gpio/rcc slices, incl. #1714 USART1). No new model change; digest
     # recomputed for the merged tree. ACK, NOT A CAPTURE.
-    drift_ack_digest: 71d5b43af4203048b1f8c810fd4c0f90dfc87a83ed70369db7eac8bb81fdd95c
+    # 2026-11-07: lane/renode-coverage added a `Scifa` arm to uart.rs (Renesas
+    # RZ/G2L SCIFA register block, gated on its own layout) and a `scif` type
+    # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
+    # captured window is touched. Reviewed model-drift acknowledgment, NOT a
+    # new silicon capture; live re-capture remains pending.
+    drift_ack_digest: a88fbd44c25ad15776881e0772c26b00f2b4cdf35ea143af229a4c672f78f19d
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the

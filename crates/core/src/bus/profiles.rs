@@ -341,6 +341,10 @@ impl SystemBus {
             // Renesas SCI_B (RA8 series: renesasra8m1_sci, sci_b). Must
             // precede the classic `sci` arm.
             SciB
+        } else if has("scif") {
+            // Renesas SCIFA (RenesasRZG_SCIFA). Must precede the classic
+            // `sci` arm.
+            Scifa
         } else if has("sci") {
             // Renesas SCI (renesas_sci, renesasraXmY_sci).
             Sci

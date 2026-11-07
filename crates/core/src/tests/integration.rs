@@ -954,6 +954,7 @@ pub mod integration_tests {
             ("leuart", L::Leuart),
             ("renesas_sci", L::Sci),
             ("renesasra6m5_sci", L::Sci),
+            ("renesasrzg_scifa", L::Scifa),
             ("renesasda14_uart", L::DwApbUart),
             ("gaislerapbuart", L::Gaisler),
             ("npcx_uart", L::Npcx),

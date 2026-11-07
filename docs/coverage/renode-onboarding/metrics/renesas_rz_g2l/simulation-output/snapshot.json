@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      18,
-      3,
-      17,
-      18,
-      3,
-      17,
+      639631423,
+      537001968,
+      7967,
+      537001728,
+      1074053120,
+      1074051072,
+      26,
+      63,
       0,
       0,
       0,
       0,
       0,
-      0,
-      0,
-      537001984,
-      4294967295,
-      65546
+      537001728,
+      65705,
+      65714
     ],
-    "pc": 65546,
-    "xpsr": 16777216,
+    "pc": 65714,
+    "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "449d2e646d98ecc34ce4fc096e6fbf023fc3a7ce550a6787909fb3b329d89f23",
+  "firmware_hash": "e86ee01842ec69bf1f13c52317862ca135e810901563179662a965f0e2c57692",
   "config": {
     "firmware": "examples/renode-onboarding/../../tests/fixtures/rzg2l-cm33-cpu-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas_rz_g2l.yaml",

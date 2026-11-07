@@ -30,6 +30,33 @@
   "assertions": [
     {
       "assertion": {
+        "uart_regex": "^RZ/G2L M33 SCIFA SMOKE\n"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "scif2 brr=1a",
+          "scif2 scr=0030",
+          "pass=3f"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 537001968,
+          "expected_value": 639631423,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -38,25 +65,25 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      18,
-      3,
-      17,
-      18,
-      3,
-      17,
+      639631423,
+      537001968,
+      7967,
+      537001728,
+      1074053120,
+      1074051072,
+      26,
+      63,
       0,
       0,
       0,
       0,
       0,
-      0,
-      0,
-      537001984,
-      4294967295,
-      65546
+      537001728,
+      65705,
+      65714
     ],
-    "pc": 65546,
-    "xpsr": 16777216,
+    "pc": 65714,
+    "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -68,7 +95,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "449d2e646d98ecc34ce4fc096e6fbf023fc3a7ce550a6787909fb3b329d89f23",
+  "firmware_hash": "e86ee01842ec69bf1f13c52317862ca135e810901563179662a965f0e2c57692",
   "config": {
     "firmware": "examples/renode-onboarding/../../tests/fixtures/rzg2l-cm33-cpu-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas_rz_g2l.yaml",
@@ -76,6 +103,41 @@
   },
   "inspect": {
     "peripherals": [
+      {
+        "name": "scif0",
+        "kind": "native",
+        "base": 1074051072,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scif1",
+        "kind": "native",
+        "base": 1074052096,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scif2",
+        "kind": "native",
+        "base": 1074053120,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scif3",
+        "kind": "native",
+        "base": 1074054144,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scif4",
+        "kind": "native",
+        "base": 1074055168,
+        "registers": [],
+        "artifacts": []
+      },
       {
         "name": "scb",
         "kind": "native",
@@ -130,12 +192,41 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "RZ/G2L M33 SCIFA SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "scif2 brr=1a",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "scif2 scr=0030",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "pass=3f",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 32,
+    "text_bytes": 338,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 32,
+    "flash_used_bytes": 338,
     "ram_static_bytes": 0,
     "flash_total_bytes": 0,
     "ram_total_bytes": 65536,
@@ -155,22 +246,14 @@
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 50012,
-    "memory_writes": 49998,
-    "peripheral_accesses": 0,
+    "memory_reads": 204,
+    "memory_writes": 18,
+    "peripheral_accesses": 133,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 65546,
-        "count": 156
-      },
-      {
-        "pc": 65550,
-        "count": 117
-      },
-      {
-        "pc": 65556,
-        "count": 117
+        "pc": 65714,
+        "count": 390
       }
     ]
   }
