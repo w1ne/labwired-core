@@ -180,6 +180,15 @@ pub trait Bus {
         0
     }
 
+    /// Sync parking-SPI chip-selects from live GPIO (active-low). Default: no-op.
+    /// AVR soft-SPI / GPIO-CS calls this after every PORT mirror write.
+    fn sync_parking_spi_cs(&mut self) {}
+
+    /// True when any parking SPI device currently reports [`SpiDevice::is_selected`].
+    fn parking_spi_any_selected(&self) -> bool {
+        false
+    }
+
     /// Is an instruction fetch at `pc` permitted by a memory-protection unit
     /// the bus models? Called by the core only when its 256-byte fetch window
     /// does not already cover `pc`, i.e. once per window refill. That is exact
