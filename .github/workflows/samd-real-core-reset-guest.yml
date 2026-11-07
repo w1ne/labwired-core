@@ -30,7 +30,7 @@ jobs:
           ref: 12d4759af0bf2b29726cfd79c487474a282cc5b0
           path: owned-reset-source
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: Swatinem/rust-cache@v2
       - name: Build the reset caller image
         run: |

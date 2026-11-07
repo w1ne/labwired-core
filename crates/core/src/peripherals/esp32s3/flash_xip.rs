@@ -888,8 +888,8 @@ impl Peripheral for Esp32s3MmuTable {
                 table.len()
             )));
         }
-        for (i, chunk) in bytes.chunks_exact(4).enumerate() {
-            table[i] = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        for (i, chunk) in bytes.as_chunks::<4>().0.iter().enumerate() {
+            table[i] = u32::from_le_bytes(*chunk);
         }
         drop(table);
         // Invalidate every XIP window's page-translation cache.

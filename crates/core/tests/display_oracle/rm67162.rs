@@ -419,7 +419,7 @@ impl SpiDevice for Rm67162 {
         let painted = fb.iter().filter(|&&b| b != 0x00).count();
         let (w, h) = self.logical_dimensions();
         let mut counts: std::collections::HashMap<u16, usize> = std::collections::HashMap::new();
-        for px in fb.chunks_exact(2) {
+        for px in fb.as_chunks::<2>().0 {
             let v = u16::from_be_bytes([px[0], px[1]]);
             if v != 0 {
                 *counts.entry(v).or_default() += 1;

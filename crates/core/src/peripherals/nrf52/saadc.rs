@@ -485,8 +485,10 @@ mod tests {
             s.tick_with_bus(&mut bus);
         }
         bus.read_slice(0x2000_0000, count as usize * 2)
-            .chunks_exact(2)
-            .map(|b| i16::from_le_bytes([b[0], b[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| i16::from_le_bytes(*b))
             .collect()
     }
 

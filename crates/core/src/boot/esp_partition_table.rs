@@ -263,7 +263,7 @@ mod tests {
     /// the encoder. A mirror of the writer would pass no matter what it wrote.
     fn decode(blob: &[u8]) -> Vec<(u8, u8, u32, u32, String)> {
         let mut out = Vec::new();
-        for chunk in blob.chunks_exact(32) {
+        for chunk in blob.as_chunks::<32>().0 {
             let magic = u16::from_le_bytes([chunk[0], chunk[1]]);
             if magic != 0x50AA {
                 break;

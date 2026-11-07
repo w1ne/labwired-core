@@ -10,12 +10,12 @@ blocking SPI and I2C master drivers against an STM32G071 over gpio nets:
 | `spi_master` | `../firmware/esp32c3-esp-hal-spi-master.elf` | `env-spi-esp32c3.yaml` with this firmware |
 | `i2c_master` | `../firmware/esp32c3-esp-hal-i2c-master.elf` | `env-i2c-esp32c3.yaml` with this firmware |
 
-Built offline with the workspace's pinned stable toolchain (1.95.0) for
+Built offline with the workspace's pinned stable toolchain (1.99.1) for
 `riscv32imc-unknown-none-elf` (no `build-std`, no `esp` toolchain):
 
 ```sh
 cd examples/gpio-net-buses/esp32c3-esp-hal
-cargo +1.95.0 build --release --offline
+cargo +1.99.1 build --release --offline
 for b in spi_master i2c_master; do
     llvm-objcopy --strip-all target/riscv32imc-unknown-none-elf/release/$b \
         ../firmware/esp32c3-esp-hal-${b//_/-}.elf

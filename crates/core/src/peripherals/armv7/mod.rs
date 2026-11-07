@@ -16,7 +16,7 @@ use std::sync::{
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 fn unique_id() -> u64 {
     NEXT_ID
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
         .expect("ARM bus identity space exhausted")
 }
 #[derive(Debug)]

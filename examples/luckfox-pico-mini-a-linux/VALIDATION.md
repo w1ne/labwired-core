@@ -39,10 +39,10 @@ Focused tests:
 
 ```sh
 python3 -m unittest discover -s scripts/tests -p test_prepare_rv1103_linux.py
-CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 cargo +1.95.0 test -p labwired-core --test rv1103_linux_loader
-CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux cargo +1.95.0 test -p labwired-core --test rv1103_linux_loader -- --ignored
-CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux cargo +1.95.0 test -p labwired-core --features qemu-arm-system,event-scheduler --test rv1103_linux_loader -- --include-ignored
-CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_DEV_OPT_LEVEL=0 CARGO_PROFILE_DEV_PANIC=unwind LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux cargo +1.95.0 test -p labwired-cli --features qemu-arm-system --test rv1103_linux_cli -- --include-ignored
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 cargo +1.99.1 test -p labwired-core --test rv1103_linux_loader
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux cargo +1.99.1 test -p labwired-core --test rv1103_linux_loader -- --ignored
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux cargo +1.99.1 test -p labwired-core --features qemu-arm-system,event-scheduler --test rv1103_linux_loader -- --include-ignored
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_DEV_OPT_LEVEL=0 CARGO_PROFILE_DEV_PANIC=unwind LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux cargo +1.99.1 test -p labwired-cli --features qemu-arm-system --test rv1103_linux_cli -- --include-ignored
 ```
 
 `dtc` and `fdtput` are required by the compiled-DTB fixture tests. The explicitly ignored pinned-artifact test requires a fresh prepared directory; without the feature it proves backend refusal preserves every nonzero RAM byte, and with the feature it checks native entry register readback and loaded RAM. Neither proves that Linux has booted. Native CLI integration also builds an executable, so its command explicitly overrides the development profile to panic unwind; the native containment guard remains mandatory. The bounded native CLI test executes 32 real zImage instructions and must return a failure receipt without userspace acceptance.

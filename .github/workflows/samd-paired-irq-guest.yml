@@ -24,7 +24,7 @@ jobs:
           ref: 3c66f0d27c865192a2b22217e71c1f88f2b3fe91
           path: owned-paired-source
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: Swatinem/rust-cache@v2
       - name: Build five source-bound authored controls
         run: |

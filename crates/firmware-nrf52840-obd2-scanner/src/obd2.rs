@@ -250,8 +250,8 @@ pub fn decode_dtcs(frame: &CanFrame) -> Result<DtcList, Error> {
         dtcs: [EMPTY_DTC; 3],
         count: 0,
     };
-    for pair in payload[1..].chunks_exact(2) {
-        let raw = u16::from_be_bytes([pair[0], pair[1]]);
+    for pair in payload[1..].as_chunks::<2>().0 {
+        let raw = u16::from_be_bytes(*pair);
         if raw != 0 {
             result.dtcs[usize::from(result.count)] = Dtc::from_raw(raw);
             result.count += 1;

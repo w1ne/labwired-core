@@ -19,5 +19,6 @@ fn main() -> ! {
         core::ptr::write_volatile(UART_TX_PTR, b'\n');
     }
 
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

@@ -602,8 +602,8 @@ impl crate::inspect::DeviceEvidence for Ili9341Parallel {
         // a landscape MADCTL reports 320×240 and the bytes match the stride.
         let (w, h) = self.logical_dimensions();
         let mut counts: std::collections::HashMap<u16, usize> = std::collections::HashMap::new();
-        for px in fb.chunks_exact(2) {
-            let v = u16::from_be_bytes([px[0], px[1]]);
+        for px in fb.as_chunks::<2>().0 {
+            let v = u16::from_be_bytes(*px);
             if v != 0 {
                 *counts.entry(v).or_default() += 1;
             }

@@ -75,16 +75,12 @@ fn saes_level_irq_tracks_the_register_mask_and_status_on_writes() {
         0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17,
         0x2a,
     ];
-    for (index, word) in key.chunks_exact(4).enumerate() {
-        bus.write_u32(
-            SAES + 0x10 + index as u64 * 4,
-            u32::from_le_bytes(word.try_into().unwrap()),
-        )
-        .unwrap();
-    }
-    for word in block.chunks_exact(4) {
-        bus.write_u32(SAES + 8, u32::from_le_bytes(word.try_into().unwrap()))
+    for (index, word) in key.as_chunks::<4>().0.iter().enumerate() {
+        bus.write_u32(SAES + 0x10 + index as u64 * 4, u32::from_le_bytes(*word))
             .unwrap();
+    }
+    for word in block.as_chunks::<4>().0 {
+        bus.write_u32(SAES + 8, u32::from_le_bytes(*word)).unwrap();
     }
 
     assert_eq!(

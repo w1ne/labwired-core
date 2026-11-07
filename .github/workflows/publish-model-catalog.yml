@@ -36,7 +36,7 @@ jobs:
       - name: Resolve checked-out main commit
         run: echo "CORE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Test bundle builder
         run: python3 scripts/ci/test_model_catalog_bundle.py

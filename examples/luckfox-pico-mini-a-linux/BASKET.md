@@ -8,7 +8,7 @@ There are 890 actual 100 ms plant steps, SOC 0.8 → 0.792586514519413, 2,138,31
 
 ## Clean preparation and local build
 
-Use Ubuntu 24.04 and exact `gcc-arm-none-eabi=15:13.2.rel1-2`, `device-tree-compiler=1.7.0-2build1`, Node 22.22.0 and Rust 1.95.0. The helper checks its exact compiler first version line; moving tool versions must fail rather than change pins.
+Use Ubuntu 24.04 and exact `gcc-arm-none-eabi=15:13.2.rel1-2`, `device-tree-compiler=1.7.0-2build1`, Node 22.22.0 and Rust 1.99.1. The helper checks its exact compiler first version line; moving tool versions must fail rather than change pins.
 
 ```bash
 python3 scripts/prepare-rv1103-linux.py --cache /path/to/fresh-cache --output /path/to/fresh-base

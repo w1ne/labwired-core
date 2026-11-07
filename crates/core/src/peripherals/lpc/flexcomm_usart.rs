@@ -589,7 +589,7 @@ mod tests {
             .unwrap()
             .lock()
             .unwrap()
-            .extend([b'a', b'b']);
+            .extend(*b"ab");
         let s = u.read_u32(FIFOSTAT).unwrap();
         assert_ne!(s & FIFOSTAT_RXNOTEMPTY, 0);
         assert_eq!((s >> 16) & 0x1F, 2);

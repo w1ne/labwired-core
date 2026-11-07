@@ -154,11 +154,11 @@ require_literal "$dockerfile" 'COPY dist/${TARGETARCH}/labwired' 'Dockerfile.ci 
 # picked up ubuntu-24.04's glibc and debian:bookworm-slim refused to start it
 # ("version `GLIBC_2.39' not found"). Both halves are asserted: the container
 # that sets the floor, and the check that the floor actually held.
-release_container="$(grep -oE 'rust:1\.95-bullseye' "$workflow" | head -1)"
+release_container="$(grep -oE 'rust:1\.99-bullseye' "$workflow" | head -1)"
 if [[ -z "$release_container" ]]; then
-  fail 'release workflow pins a build container (expected: rust:1.95-bullseye)'
+  fail 'release workflow pins a build container (expected: rust:1.99-bullseye)'
 fi
-require_block_literal "$ci_runner_image_block" 'rust:1.95-bullseye' 'ci-runner-image builds in the same container core-release.yml uses, so the glibc floor matches'
+require_block_literal "$ci_runner_image_block" 'rust:1.99-bullseye' 'ci-runner-image builds in the same container core-release.yml uses, so the glibc floor matches'
 require_block_literal "$ci_runner_image_block" 'GLIBC_' 'ci-runner-image asserts the glibc floor of what it staged'
 
 require_literal "$workflow" 'tags:' 'release workflow declares a tag trigger'
@@ -187,7 +187,7 @@ require_literal "$workflow" 'name: labwired-${{ matrix.platform }}' 'archive art
 # installed fine and then died with `GLIBC_2.39 not found` on Debian 12 and
 # Ubuntu 22.04. Both are pinned here because a build-host bump is exactly the
 # kind of change that quietly removes them.
-require_literal "$workflow" 'container: rust:1.95-bullseye' 'Linux archives are built against an old glibc, not the runner default'
+require_literal "$workflow" 'container: rust:1.99-bullseye' 'Linux archives are built against an old glibc, not the runner default'
 require_literal "$workflow" 'glibc_max: GLIBC_2.31' 'the Linux glibc floor is declared'
 require_literal "$workflow" 'name: Assert glibc floor' 'the declared glibc floor is asserted on the built binary'
 smoke_block=$(job_block linux-smoke)
