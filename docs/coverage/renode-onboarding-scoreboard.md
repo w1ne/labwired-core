@@ -9,11 +9,11 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `4/224`
-- pass_observable_assertions: `185/224`
-- pass_stop_reason_only: `39/224`
+- pass_observable_assertions: `186/224`
+- pass_stop_reason_only: `38/224`
 - pass_depth_unknown: `0/224`
-- median_elapsed_ms: `1195`
-- median_elapsed_seconds: `1.195`
+- median_elapsed_ms: `1179`
+- median_elapsed_seconds: `1.179`
 - threshold_seconds: `3600`
 - threshold_met: `224/224`
 
@@ -31,7 +31,7 @@
 | `arduino_nano_33_ble` | `pass` | `True` | `yes` | `yes` | `2450` | `2.45` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `arduino_uno_r4_minima` | `pass` | `True` | `yes` | `yes` | `119052` | `119.052` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `arty_litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `3557` | `3.557` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `arvsom` | `pass` | `True` | `yes` | `yes` | `8226` | `8.226` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `arvsom` | `pass` | `True` | `yes` | `yes` | `897` | `0.897` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `at91rm9200` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 4: `uart0:atmel91debugunit`, `ckgrPllar:pythonperipheral`, `ckgrPllbr:pythonperipheral`, `pmcMkcr:pythonperipheral` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | arm920t has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
 | `atsamd21j17d-aft` | `pass` | `True` | `yes` | `yes` | `1530` | `1.53` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `atsamd51g19a` | `pass` | `True` | `yes` | `yes` | `1028` | `1.028` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

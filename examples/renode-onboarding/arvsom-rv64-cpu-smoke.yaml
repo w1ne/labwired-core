@@ -6,4 +6,6 @@ inputs:
 limits:
   max_steps: 100000
 assertions:
+  - memory_value: {address: 0x80700000, expected_value: 0x00000003}
+  - memory_value: {address: 0x80700004, expected_value: 0x00000005}
   - expected_stop_reason: max_steps

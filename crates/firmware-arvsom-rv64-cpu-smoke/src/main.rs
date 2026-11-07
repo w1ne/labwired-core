@@ -13,7 +13,7 @@
 use panic_halt as _;
 use riscv_rt::entry;
 
-static mut RESULT: u64 = 0;
+const RESULT_ADDRESS: usize = 0x8070_0000;
 
 #[inline(never)]
 fn multiply(left: u64, right: u64) -> u64 {
@@ -32,12 +32,15 @@ fn multiply(left: u64, right: u64) -> u64 {
 
 #[entry]
 fn main() -> ! {
-    let mut sequence = 1u64;
+    // This product exercises RV64 multiplication with nonzero high halves.
+    // Keep the result in a fixed word inside the narrowed 8 MiB RAM window so
+    // the onboarding smoke can observe the executed instruction.
+    let product = multiply(0x0000_0001_0000_0001, 0x0000_0002_0000_0003);
+    unsafe {
+        core::ptr::write_volatile(RESULT_ADDRESS as *mut u32, product as u32);
+        core::ptr::write_volatile((RESULT_ADDRESS + 4) as *mut u32, (product >> 32) as u32);
+    }
     loop {
-        sequence = sequence.wrapping_add(1);
-        let product = multiply(sequence, sequence.wrapping_add(16));
-        unsafe {
-            core::ptr::write_volatile(core::ptr::addr_of_mut!(RESULT), product ^ sequence);
-        }
+        unsafe { core::arch::asm!("nop", options(nomem, nostack, preserves_flags)) };
     }
 }
