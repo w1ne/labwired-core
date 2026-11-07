@@ -1807,7 +1807,11 @@ boards:
     # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
     # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
     # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
-    drift_ack_digest: f36ca0e3deaa6d9325a478fec8274ea8790226d853abca7f291c9598bf9955ca
+    # 2026-11-07: merge of origin/main a1f43b6de (#1688 SPICE-detail analog
+    # models) into lane/renode-coverage, on top of this lane's AVR-only
+    # ATtiny2313/4313 port mirror (cpu/avr.rs, exec/bitops.rs). Both sides were
+    # already acked or touch no captured model; digest recomputed for the
+    # merged tree. ACK, NOT A CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2404,6 +2408,10 @@ boards:
     # USART layout (new enum arm, FT9001-only control-register store and
     # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
     # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
+    # 2026-11-03 (ADC analog pin resolution): adc.rs now resolves routed channel voltage and
+    # VREF+ and holds them at acquisition. This intentionally adds MNA-driven ADC input
+    # behavior outside the existing register-oracle capture scope. Andrii accepted the
+    # renewal after the live `--ignored` diff on this date; this is not a replacement capture.
     # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
     # three files on this board's watch list. Each change is provably
     # behaviour-preserving for THIS part, so no re-capture is owed:
@@ -2446,7 +2454,6 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -2454,6 +2461,12 @@ boards:
     # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
     # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
     # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
+    # 2026-11-07 (batch/analog-spice, #1688): SPICE-detail analog models
+    # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
+    # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
+    drift_ack_digest: e70abcbac67ba3a43eb7668dc2c8196007873e8292b2dda27ca14f5754b806ef
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4026,7 +4039,11 @@ boards:
     # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
     # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
     # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
-    drift_ack_digest: d5242e1c3c51fa59b9f309922814d0bef05cc3edd86b3c6d717464df4bc5e298
+    # 2026-11-07: merge of origin/main a1f43b6de (#1688 SPICE-detail analog
+    # models) into lane/renode-coverage, on top of this lane's AVR-only
+    # ATtiny2313/4313 port mirror (cpu/avr.rs, exec/bitops.rs). Both sides were
+    # already acked or touch no captured model; digest recomputed for the
+    # merged tree. ACK, NOT A CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4611,6 +4628,10 @@ boards:
     # USART layout (new enum arm, FT9001-only control-register store and
     # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
     # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
+    # 2026-11-03 (ADC analog pin resolution): adc.rs now resolves routed channel voltage and
+    # VREF+ and holds them at acquisition. This intentionally adds MNA-driven ADC input
+    # behavior outside the existing register-oracle capture scope. Andrii accepted the
+    # renewal after the live `--ignored` diff on this date; this is not a replacement capture.
     # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
     # three files on this board's watch list. Each change is provably
     # behaviour-preserving for THIS part, so no re-capture is owed:
@@ -4653,7 +4674,6 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -4661,6 +4681,12 @@ boards:
     # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
     # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
     # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
+    # 2026-11-07 (batch/analog-spice, #1688): SPICE-detail analog models
+    # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
+    # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
+    drift_ack_digest: b9122ea912bd0e0126644ae46a6d8aeacf5dfeac5612ff3c6fbfc5b8c17f2692
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6293,7 +6319,11 @@ boards:
     # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
     # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
     # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
-    drift_ack_digest: 13ceca3f3aaa98fe1123c1553aa29529aff8c27a77a598e7264290f3bc94d830
+    # 2026-11-07: merge of origin/main a1f43b6de (#1688 SPICE-detail analog
+    # models) into lane/renode-coverage, on top of this lane's AVR-only
+    # ATtiny2313/4313 port mirror (cpu/avr.rs, exec/bitops.rs). Both sides were
+    # already acked or touch no captured model; digest recomputed for the
+    # merged tree. ACK, NOT A CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6881,6 +6911,10 @@ boards:
     # USART layout (new enum arm, FT9001-only control-register store and
     # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
     # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
+    # 2026-11-03 (ADC analog pin resolution): adc.rs now resolves routed channel voltage and
+    # VREF+ and holds them at acquisition. This intentionally adds MNA-driven ADC input
+    # behavior outside the existing register-oracle capture scope. Andrii accepted the
+    # renewal after the live `--ignored` diff on this date; this is not a replacement capture.
     # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
     # three files on this board's watch list. Each change is provably
     # behaviour-preserving for THIS part, so no re-capture is owed:
@@ -6923,7 +6957,6 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -6931,6 +6964,12 @@ boards:
     # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
     # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
     # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
+    # 2026-11-07 (batch/analog-spice, #1688): SPICE-detail analog models
+    # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
+    # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
+    drift_ack_digest: ce66df284af2bcb9cd6bddcdfb76c1cbd0208df6517fc0335ef726524a9b6c7b
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
