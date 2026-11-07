@@ -21,6 +21,7 @@ block's `DAXICTRL` with `DAXIREADY`).
 | GPIO push-pull output via `WTS`/`WTC` strobes + `RD` read-back | smoke-tested | `led=led0 on rd=0 lit=1` … (one strobe per change; the lit mask proves no other LED moved) |
 | GPIO `WT` latch contents | smoke-tested | `wt0=1 wt2=1 wt3=1`: each LED bank's latch holds exactly its LED bit |
 | Button inputs on the PULLCFG pull-up (`INPEN`, `RD`) | smoke-tested | `btn0=1 btn1=1`; unit tests cover INPEN/RDZERO gating and an external press |
+| Generic Beta NTC and Shockley diode netlists to ADC SE0/SE1 | end-to-end co-sim tested | `cosim_apollo4_analog::apollo4p_evb_ntc_and_diode_netlists_reach_adc_slots_and_scan_fifo`; sweeps the NTC at −10/25/80 °C, checks the independent divider and diode load-line voltages, routed millivolts, 12-bit FIFO codes, slot metadata and undriven SE2 |
 | Tristate (`EN`/`ENS`/`ENC`) and open-drain output modes | unit-tested | `tristate_drives_only_when_enabled_and_open_drain_only_low` |
 | Non-GPIO `FNCSEL` (UART0 on GPIO60/47) | **executed, not routed** | stored; the GPIO block does not drive such a pin, the console model does not depend on it |
 | GPIO interrupts | **not modelled** | `INTnSTAT` changes only by software `SET`/`CLR` |
@@ -37,7 +38,15 @@ block's `DAXICTRL` with `DAXIREADY`).
 | Instruction support for the Zephyr image | audited | `unsupported_instruction_audit.sh`: 3,000,000 steps, 0 unsupported |
 | Rest of the boot ROM, secure bootloader, OTP/INFO | **not modelled** | fast boot at `reset_vector_offset 0x18000` |
 | Cache / DAXI buffering | **not modelled** | memory is coherent; actions complete at once |
-| CLKGEN, MCUCTRL, RSTGEN, IOM0-7, MSPI0-2, ADC, timers, STIMER, RTC, WDT, security, crypto, GPU/display, SDIO, USB, audio | declared stubs | `configs/chips/amap42kp.yaml` |
+| CLKGEN, MCUCTRL, RSTGEN, IOM0-7, MSPI0-2, timers, STIMER, RTC, WDT, security, crypto, GPU/display, SDIO, USB, audio | declared stubs | `configs/chips/amap42kp.yaml` |
+| ADC DMA, comparator, timer-trigger/repeating modes, low-power clock behavior and pad-to-channel routing | not modelled | `apollo4_adc` supports explicit routed external channel inputs and software-triggered single scans only |
+
+## Analog co-simulation evidence (verified 2026-11-05)
+
+```bash
+cargo test -p labwired-core --test cosim_apollo4_analog -- --nocapture
+# 1 passed: apollo4p_evb_ntc_and_diode_netlists_reach_adc_slots_and_scan_fifo
+```
 
 ## Commands and evidence (verified 2026-10-30)
 

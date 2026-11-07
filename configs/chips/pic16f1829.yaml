@@ -38,4 +38,18 @@ flash:
 ram:
   base: 0x000000
   size: "1024"
-peripherals: []
+# Simulation-only analog co-simulation endpoints. The PIC16 CPU keeps PORTA
+# SFRs internally and does not yet accept external pin levels; these inputs
+# therefore exercise generic device solving and threshold routing, not
+# firmware-visible GPIO or the PIC ADC. Thresholds are fixture assumptions.
+io_voltage_v: 5.0
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+peripherals:
+  - id: "analog_inputs"
+    type: "input_pin_bank"
+    base_address: 0x00001000
+    size: "2B"
+    config:
+      pin_count: 2

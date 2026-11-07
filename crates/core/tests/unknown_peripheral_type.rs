@@ -18,6 +18,7 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::known_stubs::KNOWN_STUBBED_PERIPHERAL_TYPES;
 use labwired_core::bus::SystemBus;
+use labwired_core::system::mips::Pic32GpioPlugin;
 use labwired_core::Bus;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -43,6 +44,14 @@ fn manifest_for(chip_path: &str) -> SystemManifest {
         debug_uart: None,
         wifi_ap: None,
     }
+}
+
+/// Load with the built-in MIPS plugin that owns the shipped PIC32MZ PORTB
+/// declaration. The unknown-type audit must include that real in-tree model
+/// while continuing to reject every unclaimed peripheral type.
+fn load_bus(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<SystemBus> {
+    let pic32_gpio = Pic32GpioPlugin;
+    SystemBus::from_config_with_plugins(chip, manifest, &[&pic32_gpio])
 }
 
 /// A minimal, self-contained chip that wires exactly one peripheral of
@@ -74,7 +83,7 @@ peripherals:
 #[test]
 fn a_peripheral_type_this_engine_does_not_implement_fails_the_load() {
     let chip = one_peripheral_chip("acme_widget_9000");
-    let Err(err) = SystemBus::from_config(&chip, &manifest_for("configs/chips/acme.yaml")) else {
+    let Err(err) = load_bus(&chip, &manifest_for("configs/chips/acme.yaml")) else {
         panic!("an unimplemented peripheral type must not produce a bus");
     };
     let msg = format!("{err:#}");
@@ -102,7 +111,7 @@ fn a_peripheral_type_this_engine_does_not_implement_fails_the_load() {
 #[test]
 fn an_unimplemented_type_never_yields_a_bus_that_answers_zeros() {
     let chip = one_peripheral_chip("acme_widget_9000");
-    match SystemBus::from_config(&chip, &manifest_for("configs/chips/acme.yaml")) {
+    match load_bus(&chip, &manifest_for("configs/chips/acme.yaml")) {
         Err(_) => {}
         Ok(bus) => panic!(
             "load succeeded for an unimplemented peripheral type; a read at its base \
@@ -120,7 +129,7 @@ fn an_unimplemented_type_never_yields_a_bus_that_answers_zeros() {
 #[test]
 fn an_explicitly_declared_stub_still_loads() {
     let chip = one_peripheral_chip("stub");
-    let bus = SystemBus::from_config(&chip, &manifest_for("configs/chips/probe.yaml"))
+    let bus = load_bus(&chip, &manifest_for("configs/chips/probe.yaml"))
         .expect("an explicit `type: stub` is a declaration, not an omission");
     assert_eq!(
         bus.read_u32(0x4000_0000).ok(),
@@ -193,7 +202,7 @@ fn no_shipped_config_is_rejected_by_the_unknown_type_guard() {
         let Ok(chip) = ChipDescriptor::from_file(&path) else {
             continue; // pre-existing parse failure, not this guard's doing
         };
-        if let Err(e) = SystemBus::from_config(&chip, &manifest_for(&abs)) {
+        if let Err(e) = load_bus(&chip, &manifest_for(&abs)) {
             let msg = format!("{e:#}");
             if msg.contains("unknown peripheral type") {
                 broken.push(format!("{}: {msg}", path.display()));
@@ -213,7 +222,7 @@ fn no_shipped_config_is_rejected_by_the_unknown_type_guard() {
         let Ok(chip) = ChipDescriptor::from_file(&anchored) else {
             continue;
         };
-        if let Err(e) = SystemBus::from_config(&chip, &manifest) {
+        if let Err(e) = load_bus(&chip, &manifest) {
             let msg = format!("{e:#}");
             if msg.contains("unknown peripheral type") {
                 broken.push(format!("{}: {msg}", path.display()));

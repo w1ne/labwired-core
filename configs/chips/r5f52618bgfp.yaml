@@ -32,8 +32,10 @@
 # ICU vector number. The core starts at the fixed reset vector 0xFFFFFFFC.
 #
 # NOT modelled in this slice:
-# - PORT/MPC (pin direction/output/input, PmnPFS): declared stub, so the
-#   EK-RX261 LEDs and switch are not reachable; SCI6 needs no pad routing.
+# - PORT/MPC register behavior (pin direction/output/input, PmnPFS). The
+#   `port` window exposes only two input_pin_bank co-simulation endpoints;
+#   they are not firmware GPIO access, and the EK-RX261 LEDs and switch remain
+#   unreachable. SCI6 needs no pad routing.
 # - SCI6 ERI6 (receive errors) is never requested; RXI6/TXI6/TEI6 are, as
 #   ICU vectors (`rxi_vector`). Every request is an edge into IRn.
 # - DTC, BSC, the reset/LVD status block at 0x0008C280: declared stubs.
@@ -50,6 +52,13 @@ name: "r5f52618bgfp"
 arch: "rx"
 core: "rxv3"
 cpu_hz: 64_000_000
+# Simulation-only voltage thresholds for the input_pin_bank endpoints below.
+# They let analog co-simulation exercise thresholded digital inputs; they are
+# assumptions for the twin, not RX261 electrical specifications.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.35
+  vih: 0.65
 # RAM sits at 0x0; the RX has no Cortex-M style flash mirror there.
 flash_boot_alias: false
 flash:
@@ -117,11 +126,15 @@ peripherals:
       vectors: [30, 31]
       clock_hz: 64000000
       pclkb_hz: 32000000
-  # PORT0-J (PDR/PODR/PIDR/PMR/ODR/PCR/DSCR), MPC PmnPFS/PWPR.
+  # PORT0-J / MPC registers remain unmodelled. This input-only endpoint bank
+  # exposes two simulation channels for co-simulation; it does not claim RX
+  # register behavior or firmware-visible GPIO access.
   - id: "port"
-    type: "stub"
+    type: "input_pin_bank"
     base_address: 0x0008C000
     size: "640B"
+    config:
+      pin_count: 2
   # Reset status (RSTSR0/2), LVD, FWEPROR (part of the SYSTEM struct).
   - id: "system_rst"
     type: "stub"

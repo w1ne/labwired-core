@@ -5,7 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 #
 # STM32F746NG — Arm Cortex-M7, STM32F7 Discovery (32F746GDISCOVERY).
-# Closest templates: stm32f401.yaml (F4-class RCC/GPIO/USART) + stm32h735.yaml
+# Closest templates: stm32f401.yaml (F4-class RCC/GPIO/USART/ADC) + stm32h735.yaml
 # (Cortex-M7 DTCM primary RAM + extra SRAM regions).
 #
 # Source references:
@@ -17,10 +17,11 @@
 # behaviour below are reference-manual-derived, not silicon-pinned. Catalog
 # copy must not claim silicon-verified.
 #
-# Peripheral models reused (no new GPIO/UART/RCC family types):
+# Peripheral models reused (no new RCC/GPIO/UART/ADC model types):
 #   - rcc   profile stm32f4   @ 0x40023800 (same AHB1/APB enable layout as F4)
 #   - gpio  profile stm32v2   @ 0x40020000… (MODER/BSRR — F7 shared IP)
 #   - uart  profile stm32v2   USART1 @ 0x40011000 (ISR/RDR/TDR)
+#   - adc   profile stm32f4   ADC1 @ 0x40012000 (F4/F7 regular conversion layout)
 #
 # Stubbed (MMIO window only; no model): LTDC, ETH, DMA2D, USB OTG FS, QUADSPI.
 # Known omissions: FMC/SDRAM, SAI, SDMMC, DCMI, RNG, full GPIOJ/K — unmapped
@@ -147,6 +148,17 @@ peripherals:
       profile: "stm32v2"
     # USART1EN — RCC_APB2ENR bit 4.
     clock: { reg: "apb2enr", bit: 4 }
+  # ADC1 — 12-bit SAR ADC (RM0385), RCC_APB2ENR.ADC1EN bit 8.
+  # The shared F4-profile model covers the regular single-conversion path.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012000
+    size: "1KB"
+    irq: 18
+    clock: { reg: "apb2enr", bit: 8 }
+    config:
+      debug_schema: "../peripherals/stm32f767/adc1.yaml"
+      profile: "stm32f4"
   # --- stubs (SIM-DERIVED windows; no behavioural model) ---
   - id: "ltdc"
     type: "stub"
@@ -168,3 +180,9 @@ peripherals:
     type: "stub"
     base_address: 0xA0001000
     size: "1KB"
+
+# External ADC1 pads on the STM32F746NG (DS10916 / RM0385). The current board
+# proof uses PA0/ADC123_IN0 and PA1/ADC123_IN1; unlisted pads are not routed.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }

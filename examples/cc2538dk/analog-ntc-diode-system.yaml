@@ -1,0 +1,39 @@
+# Synthetic generic analog netlists driving two CC2538 GPIO inputs through
+# the chip descriptor's voltage thresholds. This does not exercise the SoC
+# ADC, which remains a declared stub.
+name: "cc2538dk-analog"
+chip: "../../configs/chips/cc2538sf53.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.gpio_in.gpioc.4"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.0
+        Rpull vcc sense 10k
+        Rntc sense 0 10k beta=3950 tnom=25 temp=25
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.0
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.gpio_in.gpioc.5"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.0
+        Rlim supply sense 10Meg
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 3.0

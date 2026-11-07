@@ -20,6 +20,7 @@ there is no S32K388 bench part, and no Renode parity claim is made.
 | SIUL2 `PGPDO11`/`PGPDI11` (bit-reversed, halfword-swapped) | smoke-tested | `pgpdo11=4000` … `7380`; the whole-port read proves no other pin moved |
 | SIUL2 `MPGPDO11` masked write | smoke-tested | `mpgpdo pgpdo11=0380` (only PTF17–19 cleared). The mask/data bit order follows PGPDO by analogy and is not confirmed on silicon |
 | SIUL2 register layout and edge cases (reserved MSCRs, `DISR0` W1C, read-only `MIDR`, node reset) | unit-tested | `s32k3_siul2::tests` (7 tests) |
+| Generic analog-to-GPIO route on ADC_POT0/PTA11 and ADC_POT1/PTA17 | co-sim tested | `cosim_s32k388_analog::s32k388_evb_ntc_and_diode_netlists_reach_pta11_pta17_siul2_inputs`; Beta NTC and Shockley diode voltages are solved and routed to SIUL2 GPDI. Test-only threshold ratios; no ADC/BCTU conversion claim |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | SIUL2 input mux (`IMCR`), `INV`, open drain, drive/slew | **not modelled** | `IMCR` is stored only |
@@ -89,3 +90,14 @@ python3 scripts/perf/board_perf.py --boards s32k388
 - The staged `configs/chips/onboarding/nxp-s32k388.yaml` /
   `nxp-s32k388evb.yaml` descriptors (a generic UART fixture, 256 KiB of RAM,
   no SIUL2 model) are kept and marked superseded.
+
+## Analog pad routing (verified 2026-11-06)
+
+```bash
+cargo test -p labwired-core --test cosim_s32k388_analog -- --nocapture
+# 1 passed: generic NTC and Shockley diode netlists route to PTA11/PTA17 GPDI
+```
+
+This uses explicit test-only GPIO thresholds and checks SIUL2's GPDI register.
+It does not claim S32K388 silicon threshold values, ADC/BCTU conversion, or a
+model of the EVB's physical potentiometers.

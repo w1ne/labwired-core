@@ -56,7 +56,7 @@
 use super::device;
 use super::netlist::{
     AnalogError, BjtModel, Circuit, DiodeModel, MosChannelChargeModel, Mosfet, NodeRef,
-    POWER_SINK_VMIN,
+    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
 };
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
@@ -91,8 +91,8 @@ struct BjtChargeOp {
     dq: [[f64; 2]; 2],
 }
 
-fn bjt_charge_op(vbe: f64, vbc: f64, model: BjtModel) -> BjtChargeOp {
-    let transit = device::bjt_transit_charge(vbe, vbc, model);
+fn bjt_charge_op(vbe: f64, vbc: f64, model: BjtModel, thermal_voltage: f64) -> BjtChargeOp {
+    let transit = device::bjt_transit_charge_at_thermal_voltage(vbe, vbc, model, thermal_voltage);
     let (qbe, cbe) =
         device::junction_depletion_charge(vbe, model.cje, model.vje, model.mje, model.fc);
     let (qbc, cbc) =
@@ -124,13 +124,13 @@ fn mos_channel_capacitance_halves(
     vbd: f64,
     vbs: f64,
 ) -> [f64; 3] {
-    if mosfet.model.channel_charge_model != MosChannelChargeModel::Meyer {
+    if mosfet.operating_model.channel_charge_model != MosChannelChargeModel::Meyer {
         return [0.0; 3];
     }
-    let Some(tox) = mosfet.model.tox else {
+    let Some(tox) = mosfet.operating_model.tox else {
         return [0.0; 3];
     };
-    let sign = mosfet.model.polarity.sign();
+    let sign = mosfet.operating_model.polarity.sign();
     let reversed = vds < 0.0;
     let (vgs_eff, vds_eff, vbs_eff) = if reversed {
         (vgs - vds, -vds, vbd)
@@ -142,9 +142,9 @@ fn mos_channel_capacitance_halves(
         vgs_eff,
         vds_eff,
         vbs_eff,
-        sign * mosfet.model.vto,
-        mosfet.model.gamma,
-        mosfet.model.phi,
+        sign * mosfet.operating_model.vto,
+        mosfet.operating_model.gamma,
+        mosfet.operating_model.phi,
         cox,
     );
     if reversed {
@@ -153,25 +153,86 @@ fn mos_channel_capacitance_halves(
     caps
 }
 
-fn diode_model_op(voltage: f64, model: DiodeModel, breakdown: Option<f64>) -> device::DiodeOp {
-    let mut op = match breakdown {
-        None => device::diode_op(voltage, model.is, model.n),
-        Some(xbv) => device::diode_op_breakdown(
+fn diode_temperature_parameters(
+    model: DiodeModel,
+    temperature_celsius: Option<f64>,
+) -> (f64, f64, f64) {
+    let Some(temperature_celsius) = temperature_celsius else {
+        return (model.is, model.isr, device::THERMAL_VOLTAGE);
+    };
+    let temperature_kelvin = temperature_celsius + 273.15;
+    let nominal_kelvin = model.tnom_celsius + 273.15;
+    let is = device::diode_saturation_current_at_temperature(
+        model.is,
+        model.n,
+        model.eg,
+        model.xti,
+        nominal_kelvin,
+        temperature_kelvin,
+    );
+    let isr = device::diode_saturation_current_at_temperature(
+        model.isr,
+        model.nr,
+        model.eg,
+        model.xti,
+        nominal_kelvin,
+        temperature_kelvin,
+    );
+    (
+        is,
+        isr,
+        device::thermal_voltage_at_temperature(temperature_kelvin),
+    )
+}
+
+fn diode_model_op(
+    voltage: f64,
+    model: DiodeModel,
+    breakdown: Option<f64>,
+    temperature_celsius: Option<f64>,
+) -> device::DiodeOp {
+    let (is, isr, thermal_voltage) = diode_temperature_parameters(model, temperature_celsius);
+    let mut op = match (breakdown, temperature_celsius) {
+        (None, None) => device::diode_op(voltage, model.is, model.n),
+        (Some(xbv), None) => device::diode_op_breakdown(
             voltage,
             model.is,
             model.n,
             xbv,
             model.nbv.unwrap_or(model.n),
         ),
+        (None, Some(_)) => {
+            device::diode_op_at_thermal_voltage(voltage, is, model.n, thermal_voltage)
+        }
+        (Some(xbv), Some(_)) => device::diode_op_breakdown_at_thermal_voltage(
+            voltage,
+            is,
+            model.n,
+            xbv,
+            model.nbv.unwrap_or(model.n),
+            thermal_voltage,
+        ),
     };
-    let recombination =
-        device::diode_recombination_op(voltage, model.isr, model.nr, model.n, model.vj, model.m);
+    let recombination = match temperature_celsius {
+        None => {
+            device::diode_recombination_op(voltage, model.isr, model.nr, model.n, model.vj, model.m)
+        }
+        Some(_) => device::diode_recombination_op_at_thermal_voltage(
+            voltage,
+            isr,
+            model.nr,
+            model.n,
+            model.vj,
+            model.m,
+            thermal_voltage,
+        ),
+    };
 
     // ngspice's IK/IKR high-injection correction applies to the junction
     // current (including recombination) but leaves GMIN outside the clamp.
     // Preserve the old arithmetic exactly when the selected knee is omitted,
     // or when the current is too small for the correction to apply.
-    let forward = voltage >= -3.0 * model.n * device::THERMAL_VOLTAGE;
+    let forward = voltage >= -3.0 * model.n * thermal_voltage;
     let knee = if forward { model.ik } else { model.ikr };
     let junction_current = op.id + recombination.id - device::GMIN * voltage;
     let active_current = if forward {
@@ -343,6 +404,10 @@ pub struct Solver {
     /// Each power sink's linearisation point: `(v(p) − v(n), v(op) − v(on),
     /// i(control))`.
     sink_point: Vec<[f64; 3]>,
+    /// Drive-to-output voltage for each op-amp output current limiter.
+    output_limit_point: Vec<f64>,
+    /// Input-referred error for each slew-limited op-amp gain stage.
+    slew_limit_point: Vec<f64>,
     /// The linearisation points at the start of the step in progress, for a
     /// retry with a cut step; see [`Solver::advance`].
     saved_diode_vj: Vec<f64>,
@@ -356,6 +421,8 @@ pub struct Solver {
     saved_jfet_vgd: Vec<f64>,
     saved_jfet_vds: Vec<f64>,
     saved_sink_point: Vec<[f64; 3]>,
+    saved_output_limit_point: Vec<f64>,
+    saved_slew_limit_point: Vec<f64>,
     /// Conductance from every node to ground, siemens; nonzero only inside
     /// [`Solver::gmin_stepping`].
     node_shunt: f64,
@@ -428,6 +495,8 @@ impl Solver {
         let mosfets = circuit.mosfets.len();
         let jfets = circuit.jfets.len();
         let sinks = circuit.power_sinks.len();
+        let output_limits = circuit.output_current_limits.len();
+        let slew_limits = circuit.slew_limited_vccs.len();
 
         let mut solver = Self {
             circuit,
@@ -475,6 +544,8 @@ impl Solver {
             jfet_q: vec![[0.0; 2]; jfets],
             jfet_i: vec![[0.0; 2]; jfets],
             sink_point: vec![[0.0; 3]; sinks],
+            output_limit_point: vec![0.0; output_limits],
+            slew_limit_point: vec![0.0; slew_limits],
             saved_diode_vj: vec![0.0; diodes],
             saved_bjt_vbe: vec![0.0; bjts],
             saved_bjt_vbc: vec![0.0; bjts],
@@ -486,6 +557,8 @@ impl Solver {
             saved_jfet_vgd: vec![0.0; jfets],
             saved_jfet_vds: vec![0.0; jfets],
             saved_sink_point: vec![[0.0; 3]; sinks],
+            saved_output_limit_point: vec![0.0; output_limits],
+            saved_slew_limit_point: vec![0.0; slew_limits],
             node_shunt: 0.0,
             limiter_clamped: false,
             nonlinear,
@@ -542,6 +615,15 @@ impl Solver {
         })
     }
 
+    /// Index of a named resistor whose resistance depends on external temperature.
+    pub fn temperature_dependent_resistor_index(&self, name: &str) -> Option<usize> {
+        let key = name.trim().to_ascii_lowercase();
+        self.circuit.resistors.iter().position(|resistor| {
+            (resistor.ntc.is_some() || resistor.temperature_coefficients.is_some())
+                && resistor.name.to_ascii_lowercase() == key
+        })
+    }
+
     /// Set an NTC's external temperature input in Celsius. A changed value
     /// invalidates the linear stamp so its resistance is rebuilt next step.
     /// Returns false for a non-NTC element, an invalid temperature or a model
@@ -563,6 +645,50 @@ impl Solver {
         }
         if resistor.ntc != Some(ntc) {
             resistor.ntc = Some(ntc);
+            self.cached_stamp = None;
+            self.restart = true;
+            self.settled = false;
+        }
+        true
+    }
+
+    /// Set an NTC or temperature-coefficient resistor's external temperature.
+    /// A changed value invalidates the linear stamp so its resistance is
+    /// rebuilt on the next step. Returns false for a fixed resistor, an invalid
+    /// temperature, or a model whose resulting resistance is not finite and
+    /// positive.
+    pub fn set_resistor_temperature(&mut self, index: usize, celsius: f64) -> bool {
+        if !celsius.is_finite() || celsius <= -273.15 {
+            return false;
+        }
+        let Some(resistor) = self.circuit.resistors.get_mut(index) else {
+            return false;
+        };
+        let (ntc, temperature_coefficients) =
+            match (resistor.ntc, resistor.temperature_coefficients) {
+                (Some(mut ntc), None) => {
+                    ntc.temperature_celsius = celsius;
+                    (Some(ntc), None)
+                }
+                (None, Some(mut model)) => {
+                    model.temperature_celsius = celsius;
+                    (None, Some(model))
+                }
+                // Parsing rejects a resistor that has both temperature laws.
+                // Treat a fixed resistor (or an invalid hand-built circuit) as
+                // non-routable.
+                _ => return false,
+            };
+        let resistance = ntc
+            .map(|model| model.resistance_ohms(resistor.ohms))
+            .or_else(|| temperature_coefficients.map(|model| model.resistance_ohms(resistor.ohms)))
+            .unwrap_or(f64::NAN);
+        if !resistance.is_finite() || resistance <= 0.0 {
+            return false;
+        }
+        if resistor.ntc != ntc || resistor.temperature_coefficients != temperature_coefficients {
+            resistor.ntc = ntc;
+            resistor.temperature_coefficients = temperature_coefficients;
             self.cached_stamp = None;
             self.restart = true;
             self.settled = false;
@@ -776,13 +902,19 @@ impl Solver {
         }
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
-            if diode_charge_active(diode.model) {
+            let charge_model = diode.operating_model;
+            if diode_charge_active(charge_model) {
                 self.diode_vj[index] = node_diff(&self.node_v, diode.junction_anode, diode.cathode);
-                let op = diode_model_op(self.diode_vj[index], diode.model, diode.breakdown);
-                self.diode_q[index] = diode_charge_op(self.diode_vj[index], diode.model, op).0;
+                let op = diode_model_op(
+                    self.diode_vj[index],
+                    diode.model,
+                    diode.breakdown,
+                    diode.temperature_celsius,
+                );
+                self.diode_q[index] = diode_charge_op(self.diode_vj[index], charge_model, op).0;
                 self.diode_i[index] = 0.0;
-                if diode.model.vp > 0.0 && diode.model.tt > 0.0 {
-                    self.diode_recovery_state[index] = -diode.model.tt * op.id;
+                if charge_model.vp > 0.0 && charge_model.tt > 0.0 {
+                    self.diode_recovery_state[index] = -charge_model.tt * op.id;
                     self.diode_recovery_rate[index] = 0.0;
                 }
             }
@@ -792,13 +924,12 @@ impl Solver {
             let sign = bjt.model.polarity.sign();
             let vbe = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_e);
             let vbc = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_c);
-            let model = bjt.model;
-            self.bjt_q[index] = bjt_charge_op(vbe, vbc, model).q;
+            self.bjt_q[index] = bjt_charge_op(vbe, vbc, bjt.operating_model, bjt.thermal_voltage).q;
             self.bjt_i[index] = [0.0; 2];
         }
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
-            let sign = mosfet.model.polarity.sign();
+            let sign = mosfet.operating_model.polarity.sign();
             let voltages = [
                 sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d),
                 sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s),
@@ -820,7 +951,7 @@ impl Solver {
                 core::array::from_fn(|junction| capacitances[junction] * voltages[junction]);
             self.mos_overlap_i[index] = [0.0; 3];
 
-            let sign = mosfet.model.polarity.sign();
+            let sign = mosfet.operating_model.polarity.sign();
             let channel_caps = mos_channel_capacitance_halves(
                 mosfet,
                 sign * voltages[0],
@@ -834,7 +965,7 @@ impl Solver {
             self.mos_channel_i[index] = [0.0; 3];
             self.mos_channel_cap_half[index] = channel_caps;
 
-            if mosfet.model.channel_charge_model == MosChannelChargeModel::WardDutton {
+            if mosfet.operating_model.channel_charge_model == MosChannelChargeModel::WardDutton {
                 let vgs = sign * node_diff(&self.node_v, mosfet.g, mosfet.junction_s);
                 let vds = sign * node_diff(&self.node_v, mosfet.junction_d, mosfet.junction_s);
                 let vbd = sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d);
@@ -847,7 +978,7 @@ impl Solver {
         for index in 0..self.circuit.jfets.len() {
             let jfet = &self.circuit.jfets[index];
             let sign = jfet.model.polarity.sign();
-            let model = jfet.model;
+            let model = jfet.operating_model;
             let vgs = sign * node_diff(&self.node_v, jfet.g, jfet.junction_s);
             let vgd = sign * node_diff(&self.node_v, jfet.g, jfet.junction_d);
             self.jfet_q[index] = [
@@ -936,6 +1067,10 @@ impl Solver {
         self.saved_jfet_vgd.copy_from_slice(&self.jfet_vgd);
         self.saved_jfet_vds.copy_from_slice(&self.jfet_vds);
         self.saved_sink_point.copy_from_slice(&self.sink_point);
+        self.saved_output_limit_point
+            .copy_from_slice(&self.output_limit_point);
+        self.saved_slew_limit_point
+            .copy_from_slice(&self.slew_limit_point);
     }
 
     fn restore_linearisation(&mut self) {
@@ -950,6 +1085,10 @@ impl Solver {
         self.jfet_vgd.copy_from_slice(&self.saved_jfet_vgd);
         self.jfet_vds.copy_from_slice(&self.saved_jfet_vds);
         self.sink_point.copy_from_slice(&self.saved_sink_point);
+        self.output_limit_point
+            .copy_from_slice(&self.saved_output_limit_point);
+        self.slew_limit_point
+            .copy_from_slice(&self.saved_slew_limit_point);
     }
 
     /// One step of exactly `h`, no retry.
@@ -1005,7 +1144,8 @@ impl Solver {
         }
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
-            if !diode_charge_active(diode.model) {
+            let charge_model = diode.operating_model;
+            if !diode_charge_active(charge_model) {
                 continue;
             }
             let v_new = node_diff(
@@ -1013,8 +1153,13 @@ impl Solver {
                 diode.junction_anode,
                 diode.cathode,
             );
-            let op = diode_model_op(v_new, diode.model, diode.breakdown);
-            let (q_new, _) = diode_charge_op(v_new, diode.model, op);
+            let op = diode_model_op(
+                v_new,
+                diode.model,
+                diode.breakdown,
+                diode.temperature_celsius,
+            );
+            let (q_new, _) = diode_charge_op(v_new, charge_model, op);
             let i_new = match rule {
                 Integration::BackwardEuler => (q_new - self.diode_q[index]) / h,
                 Integration::Trapezoidal => {
@@ -1028,7 +1173,8 @@ impl Solver {
         }
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
-            if diode.model.vp <= 0.0 || diode.model.tt <= 0.0 {
+            let charge_model = diode.operating_model;
+            if charge_model.vp <= 0.0 || charge_model.tt <= 0.0 {
                 continue;
             }
             let v_new = node_diff(
@@ -1036,9 +1182,14 @@ impl Solver {
                 diode.junction_anode,
                 diode.cathode,
             );
-            let op = diode_model_op(v_new, diode.model, diode.breakdown);
-            let recovery = diode_recovery_step(
+            let op = diode_model_op(
+                v_new,
                 diode.model,
+                diode.breakdown,
+                diode.temperature_celsius,
+            );
+            let recovery = diode_recovery_step(
+                charge_model,
                 op,
                 self.diode_recovery_state[index],
                 self.diode_recovery_rate[index],
@@ -1053,13 +1204,18 @@ impl Solver {
         for index in 0..self.circuit.bjts.len() {
             let bjt = &self.circuit.bjts[index];
             let sign = bjt.model.polarity.sign();
-            let model = bjt.model;
+            let model = bjt.operating_model;
             let nodes = &self.solution[..self.nodes];
             let voltages = [
                 sign * node_diff(nodes, bjt.junction_b, bjt.junction_e),
                 sign * node_diff(nodes, bjt.junction_b, bjt.junction_c),
             ];
-            let charge = bjt_charge_op(voltages[0], voltages[1], model);
+            let charge = bjt_charge_op(
+                voltages[0],
+                voltages[1],
+                bjt.operating_model,
+                bjt.thermal_voltage,
+            );
             for junction in 0..2 {
                 if !bjt_charge_active(model, junction) {
                     continue;
@@ -1081,7 +1237,7 @@ impl Solver {
         for index in 0..self.circuit.jfets.len() {
             let jfet = &self.circuit.jfets[index];
             let sign = jfet.model.polarity.sign();
-            let model = jfet.model;
+            let model = jfet.operating_model;
             let nodes = &self.solution[..self.nodes];
             let voltages = [
                 sign * node_diff(nodes, jfet.g, jfet.junction_s),
@@ -1119,12 +1275,12 @@ impl Solver {
             let nodes = &self.solution[..self.nodes];
 
             let voltages = [self.mos_vbd[index], self.mos_vbs[index]];
-            for junction in 0..2 {
+            for (junction, voltage) in voltages.iter().copied().enumerate() {
                 let drain = junction == 0;
                 if mosfet.bulk_junction_capacitances(drain) == [0.0, 0.0] {
                     continue;
                 }
-                let q_new = mosfet.bulk_junction_charge(voltages[junction], drain).0;
+                let q_new = mosfet.bulk_junction_charge(voltage, drain).0;
                 let i_new = match rule {
                     Integration::BackwardEuler => (q_new - self.mos_bulk_q[index][junction]) / h,
                     Integration::Trapezoidal => {
@@ -1144,8 +1300,9 @@ impl Solver {
                 node_diff(nodes, mosfet.g, mosfet.bulk),
             ];
             let capacitances = mosfet.overlap_capacitances();
-            for junction in 0..3 {
-                let q_new = capacitances[junction] * voltages[junction];
+            for (junction, (voltage, capacitance)) in voltages.iter().zip(capacitances).enumerate()
+            {
+                let q_new = capacitance * voltage;
                 let i_new = match rule {
                     Integration::BackwardEuler => (q_new - self.mos_overlap_q[index][junction]) / h,
                     Integration::Trapezoidal => {
@@ -1190,7 +1347,7 @@ impl Solver {
                 self.mos_channel_cap_half[index][junction] = channel_caps[junction];
             }
 
-            if mosfet.model.channel_charge_model == MosChannelChargeModel::WardDutton {
+            if mosfet.operating_model.channel_charge_model == MosChannelChargeModel::WardDutton {
                 let charge = device::mos_ward_dutton_channel_charge(
                     mosfet,
                     self.mos_vgs[index],
@@ -1291,32 +1448,15 @@ impl Solver {
             );
         }
         for bjt in &self.circuit.bjts {
-            if bjt.model.rb > 0.0 {
-                conductance(
-                    &mut self.matrix,
-                    dim,
-                    bjt.b,
-                    bjt.junction_b,
-                    1.0 / bjt.model.rb,
-                );
+            let model = bjt.operating_model;
+            if model.rb > 0.0 && !device::bjt_has_bias_dependent_base_resistance(model) {
+                conductance(&mut self.matrix, dim, bjt.b, bjt.junction_b, 1.0 / model.rb);
             }
-            if bjt.model.rc > 0.0 {
-                conductance(
-                    &mut self.matrix,
-                    dim,
-                    bjt.c,
-                    bjt.junction_c,
-                    1.0 / bjt.model.rc,
-                );
+            if model.rc > 0.0 {
+                conductance(&mut self.matrix, dim, bjt.c, bjt.junction_c, 1.0 / model.rc);
             }
-            if bjt.model.re > 0.0 {
-                conductance(
-                    &mut self.matrix,
-                    dim,
-                    bjt.e,
-                    bjt.junction_e,
-                    1.0 / bjt.model.re,
-                );
+            if model.re > 0.0 {
+                conductance(&mut self.matrix, dim, bjt.e, bjt.junction_e, 1.0 / model.re);
             }
         }
         for mosfet in &self.circuit.mosfets {
@@ -1774,17 +1914,35 @@ impl Solver {
                 diode.junction_anode,
                 diode.cathode,
             );
-            let vte = diode.model.n * device::THERMAL_VOLTAGE;
-            let critical = device::pn_critical_voltage(diode.model.is, diode.model.n);
-            let limited = match diode.breakdown {
-                None => device::pn_limit(raw, self.diode_vj[index], vte, critical),
-                Some(xbv) => device::breakdown_limit(
+            let (is, _, thermal_voltage) =
+                diode_temperature_parameters(diode.model, diode.temperature_celsius);
+            let vte = diode.model.n * thermal_voltage;
+            let critical = match diode.temperature_celsius {
+                None => device::pn_critical_voltage(diode.model.is, diode.model.n),
+                Some(_) => device::pn_critical_voltage_at_thermal_voltage(
+                    is,
+                    diode.model.n,
+                    thermal_voltage,
+                ),
+            };
+            let limited = match (diode.breakdown, diode.temperature_celsius) {
+                (None, _) => device::pn_limit(raw, self.diode_vj[index], vte, critical),
+                (Some(xbv), None) => device::breakdown_limit(
                     raw,
                     self.diode_vj[index],
                     vte,
                     critical,
                     xbv,
                     diode.model.nbv.unwrap_or(diode.model.n),
+                ),
+                (Some(xbv), Some(_)) => device::breakdown_limit_at_thermal_voltage(
+                    raw,
+                    self.diode_vj[index],
+                    vte,
+                    critical,
+                    xbv,
+                    diode.model.nbv.unwrap_or(diode.model.n),
+                    thermal_voltage,
                 ),
             };
             self.limiter_clamped |= limited != raw;
@@ -1797,10 +1955,19 @@ impl Solver {
             let nodes = &self.solution[..self.nodes];
             let raw_be = sign * node_diff(nodes, bjt.junction_b, bjt.junction_e);
             let raw_bc = sign * node_diff(nodes, bjt.junction_b, bjt.junction_c);
-            let vtf = bjt.model.nf * device::THERMAL_VOLTAGE;
-            let vtr = bjt.model.nr * device::THERMAL_VOLTAGE;
-            let crit_f = device::pn_critical_voltage(bjt.model.is, bjt.model.nf);
-            let crit_r = device::pn_critical_voltage(bjt.model.is, bjt.model.nr);
+            let model = bjt.operating_model;
+            let vtf = model.nf * bjt.thermal_voltage;
+            let vtr = model.nr * bjt.thermal_voltage;
+            let crit_f = device::pn_critical_voltage_at_thermal_voltage(
+                model.is,
+                model.nf,
+                bjt.thermal_voltage,
+            );
+            let crit_r = device::pn_critical_voltage_at_thermal_voltage(
+                model.is,
+                model.nr,
+                bjt.thermal_voltage,
+            );
             let be = device::pn_limit(raw_be, self.bjt_vbe[index], vtf, crit_f);
             let bc = device::pn_limit(raw_bc, self.bjt_vbc[index], vtr, crit_r);
             self.limiter_clamped |= be != raw_be || bc != raw_bc;
@@ -1810,7 +1977,7 @@ impl Solver {
 
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
-            let sign = mosfet.model.polarity.sign();
+            let sign = mosfet.operating_model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
             let raw_gs = sign * node_diff(nodes, mosfet.g, mosfet.junction_s);
             let raw_ds = sign * node_diff(nodes, mosfet.junction_d, mosfet.junction_s);
@@ -1842,7 +2009,8 @@ impl Solver {
             };
 
             let eff_ds = device::vds_limit(eff_ds_new, eff_ds_old);
-            let eff_gs = device::fet_limit(eff_gs_new, eff_gs_old, sign * mosfet.model.vto);
+            let eff_gs =
+                device::fet_limit(eff_gs_new, eff_gs_old, sign * mosfet.operating_model.vto);
             let (gs, ds) = if reversed_now {
                 (eff_gs - eff_ds, -eff_ds)
             } else {
@@ -1852,8 +2020,9 @@ impl Solver {
             self.mos_vgs[index] = gs;
             self.mos_vds[index] = ds;
 
-            let vte = device::THERMAL_VOLTAGE;
-            let critical = device::pn_critical_voltage(mosfet.model.is, 1.0);
+            let vte = mosfet.thermal_voltage();
+            let critical =
+                device::pn_critical_voltage_at_thermal_voltage(mosfet.operating_model.is, 1.0, vte);
             let bd = device::pn_limit(raw_bd, self.mos_vbd[index], vte, critical);
             let bs = device::pn_limit(raw_bs, self.mos_vbs[index], vte, critical);
             self.limiter_clamped |= bd != raw_bd || bs != raw_bs;
@@ -1868,19 +2037,11 @@ impl Solver {
             let raw_gs = sign * node_diff(nodes, jfet.g, jfet.junction_s);
             let raw_gd = sign * node_diff(nodes, jfet.g, jfet.junction_d);
             let raw_ds = sign * node_diff(nodes, jfet.junction_d, jfet.junction_s);
-            let critical = device::pn_critical_voltage(jfet.model.is, 1.0);
-            let gs = device::pn_limit(
-                raw_gs,
-                self.jfet_vgs[index],
-                device::THERMAL_VOLTAGE,
-                critical,
-            );
-            let gd = device::pn_limit(
-                raw_gd,
-                self.jfet_vgd[index],
-                device::THERMAL_VOLTAGE,
-                critical,
-            );
+            let vt = jfet.thermal_voltage();
+            let critical =
+                device::pn_critical_voltage_at_thermal_voltage(jfet.operating_model.is, 1.0, vt);
+            let gs = device::pn_limit(raw_gs, self.jfet_vgs[index], vt, critical);
+            let gd = device::pn_limit(raw_gd, self.jfet_vgd[index], vt, critical);
 
             // The lower-potential channel terminal is the effective source.
             // Gate junctions keep their physical terminal identities; only
@@ -1916,6 +2077,22 @@ impl Solver {
                 self.solution[self.nodes + sink.control_branch],
             ];
         }
+
+        for (index, limit) in self.circuit.output_current_limits.iter().enumerate() {
+            self.output_limit_point[index] =
+                node_diff(&self.solution[..self.nodes], limit.drive, limit.output);
+        }
+        for (index, source) in self.circuit.slew_limited_vccs.iter().enumerate() {
+            let nodes = &self.solution[..self.nodes];
+            let common_mode = 0.5
+                * (node_diff(nodes, source.input_plus, None)
+                    + node_diff(nodes, source.input_minus, None)
+                    - node_diff(nodes, source.vcc, None)
+                    - node_diff(nodes, source.vee, None));
+            self.slew_limit_point[index] = node_diff(nodes, source.input_plus, source.input_minus)
+                + source.cm_gain * common_mode
+                + source.vos;
+        }
     }
 
     /// Stamp every nonlinear device's companion model at its current
@@ -1937,24 +2114,25 @@ impl Solver {
         let rhs = &mut self.rhs;
 
         for (index, diode) in self.circuit.diodes.iter().enumerate() {
-            if diode.model.rs > 0.0 {
+            let charge_model = diode.operating_model;
+            if diode.series_resistance_ohms > 0.0 {
                 conductance(
                     matrix,
                     dim,
                     diode.anode,
                     diode.junction_anode,
-                    1.0 / diode.model.rs,
+                    1.0 / diode.series_resistance_ohms,
                 );
             }
             let vj = self.diode_vj[index];
-            let op = diode_model_op(vj, diode.model, diode.breakdown);
+            let op = diode_model_op(vj, diode.model, diode.breakdown, diode.temperature_celsius);
             let control = [(op.gd, diode.junction_anode, diode.cathode, vj)];
             stamp_linearised(matrix, rhs, dim, diode.junction_anode, op.id, &control);
             stamp_linearised(matrix, rhs, dim, diode.cathode, -op.id, &negate(&control));
 
-            if diode_charge_active(diode.model) {
+            if diode_charge_active(charge_model) {
                 if let Stamp::Transient(h, rule) = stamp {
-                    let (charge, capacitance) = diode_charge_op(vj, diode.model, op);
+                    let (charge, capacitance) = diode_charge_op(vj, charge_model, op);
                     let (geq, current) = match rule {
                         Integration::BackwardEuler => {
                             (capacitance / h, (charge - self.diode_q[index]) / h)
@@ -1984,10 +2162,10 @@ impl Solver {
                 }
             }
 
-            if diode.model.vp > 0.0 && diode.model.tt > 0.0 {
+            if charge_model.vp > 0.0 && charge_model.tt > 0.0 {
                 if let Stamp::Transient(h, rule) = stamp {
                     let recovery = diode_recovery_step(
-                        diode.model,
+                        charge_model,
                         op,
                         self.diode_recovery_state[index],
                         self.diode_recovery_rate[index],
@@ -2022,12 +2200,36 @@ impl Solver {
 
         for (index, bjt) in self.circuit.bjts.iter().enumerate() {
             let sign = bjt.model.polarity.sign();
-            let model = bjt.model;
+            let model = bjt.operating_model;
+            let operating_model = bjt.operating_model;
             let (vbe, vbc) = (self.bjt_vbe[index], self.bjt_vbc[index]);
-            let op = device::bjt_op(
-                vbe, vbc, model.is, model.bf, model.br, model.nf, model.nr, model.vaf, model.var,
-                model.ikf, model.ikr, model.ise, model.ne, model.isc, model.nc,
+            let op = device::bjt_op_with_nkf_at_thermal_voltage(
+                vbe,
+                vbc,
+                operating_model.is,
+                operating_model.bf,
+                operating_model.br,
+                operating_model.nf,
+                operating_model.nr,
+                operating_model.vaf,
+                operating_model.var,
+                operating_model.ikf,
+                operating_model.ikr,
+                operating_model.ise,
+                operating_model.ne,
+                operating_model.isc,
+                operating_model.nc,
+                operating_model.nkf,
+                bjt.thermal_voltage,
             );
+
+            // The Gummel–Poon base resistance is updated from the transistor's
+            // base current on each Newton pass, following ngspice's RBM/IRB
+            // conductance stamp. Fixed RB remains in the linear build path.
+            if device::bjt_has_bias_dependent_base_resistance(model) {
+                let resistance = device::bjt_base_resistance(model, op.ib);
+                conductance(matrix, dim, bjt.b, bjt.junction_b, 1.0 / resistance);
+            }
 
             // GMIN across both junctions. Without it a transistor that is fully
             // off leaves its base and collector tied to the rest of the circuit
@@ -2064,7 +2266,7 @@ impl Solver {
             );
 
             if let Stamp::Transient(h, rule) = stamp {
-                let charge = bjt_charge_op(vbe, vbc, model);
+                let charge = bjt_charge_op(vbe, vbc, operating_model, bjt.thermal_voltage);
                 for junction in 0..2 {
                     if !bjt_charge_active(model, junction) {
                         continue;
@@ -2115,8 +2317,8 @@ impl Solver {
         }
 
         for (index, mosfet) in self.circuit.mosfets.iter().enumerate() {
-            let sign = mosfet.model.polarity.sign();
-            let model = mosfet.model;
+            let sign = mosfet.operating_model.polarity.sign();
+            let model = mosfet.operating_model;
             let (vgs, vds) = (self.mos_vgs[index], self.mos_vds[index]);
 
             // Below Vto the channel is off, so GMIN connects drain to source.
@@ -2292,7 +2494,12 @@ impl Solver {
             // Level-1 MOSFETs have two bulk pn junctions. In NMOS coordinates
             // the bulk is the anode and drain/source are the cathodes; the
             // polarity sign reverses that orientation for PMOS.
-            let bd = device::diode_op(self.mos_vbd[index], model.is, 1.0);
+            let bd = device::diode_op_at_thermal_voltage(
+                self.mos_vbd[index],
+                model.is,
+                1.0,
+                mosfet.thermal_voltage(),
+            );
             let bd_terms = [(
                 bd.gd,
                 mosfet.bulk,
@@ -2309,7 +2516,12 @@ impl Solver {
                 &negate(&bd_terms),
             );
 
-            let bs = device::diode_op(self.mos_vbs[index], model.is, 1.0);
+            let bs = device::diode_op_at_thermal_voltage(
+                self.mos_vbs[index],
+                model.is,
+                1.0,
+                mosfet.thermal_voltage(),
+            );
             let bs_terms = [(
                 bs.gd,
                 mosfet.bulk,
@@ -2377,8 +2589,8 @@ impl Solver {
             let op = device::jfet_op_with_b(
                 vgs,
                 vds,
-                sign * jfet.model.vto,
-                jfet.model.beta,
+                sign * jfet.operating_model.vto,
+                jfet.operating_model.beta,
                 jfet.model.lambda,
                 jfet.model.b,
                 jfet.model.pb,
@@ -2403,14 +2615,17 @@ impl Solver {
                 &negate(&channel_terms),
             );
 
+            let gate_model = jfet.operating_model;
+            let gate_vt = jfet.thermal_voltage();
             for (junction, (cathode, voltage, c0)) in [
-                (jfet.junction_s, self.jfet_vgs[index], jfet.model.cgs),
-                (jfet.junction_d, self.jfet_vgd[index], jfet.model.cgd),
+                (jfet.junction_s, self.jfet_vgs[index], gate_model.cgs),
+                (jfet.junction_d, self.jfet_vgd[index], gate_model.cgd),
             ]
             .into_iter()
             .enumerate()
             {
-                let gate = device::diode_op(voltage, jfet.model.is, 1.0);
+                let gate =
+                    device::diode_op_at_thermal_voltage(voltage, gate_model.is, 1.0, gate_vt);
                 let gate_voltage = sign * voltage;
                 let gate_terms = [(gate.gd, jfet.g, cathode, gate_voltage)];
                 stamp_linearised(matrix, rhs, dim, jfet.g, sign * gate.id, &gate_terms);
@@ -2428,9 +2643,9 @@ impl Solver {
                         let (charge, capacitance) = device::junction_depletion_charge(
                             voltage,
                             c0,
-                            jfet.model.pb,
+                            gate_model.pb,
                             0.5,
-                            jfet.model.fc,
+                            gate_model.fc,
                         );
                         let (geq, current) = match rule {
                             Integration::BackwardEuler => {
@@ -2481,6 +2696,84 @@ impl Solver {
                 let equivalent = current - g_vin * vin - g_vo * vo - g_ib * ib;
                 rhs[row] -= sign * equivalent;
             }
+        }
+
+        // Op-amp output stages use a Norton current whose small-signal slope is
+        // 1/ROUT. IOLIM clips that current symmetrically; on the flat part its
+        // derivative is zero, so the output settles to the load's voltage at
+        // the limited current instead of asking the gain node to supply more.
+        for (index, limit) in self.circuit.output_current_limits.iter().enumerate() {
+            let delta = self.output_limit_point[index];
+            let unconstrained = delta / limit.rout;
+            let current = unconstrained.clamp(-limit.ilim, limit.ilim);
+            let conductance = if unconstrained.abs() < limit.ilim {
+                1.0 / limit.rout
+            } else {
+                0.0
+            };
+            let control = [(-conductance, limit.drive, limit.output, delta)];
+            stamp_linearised(matrix, rhs, dim, limit.output, -current, &control);
+        }
+
+        // A finite SR limits only the gain-node capacitor current. The Rg
+        // current is excluded so the settled open-loop gain remains AOL. The
+        // same input error carries offset and CMRR through the limiter.
+        for (index, source) in self.circuit.slew_limited_vccs.iter().enumerate() {
+            let error = self.slew_limit_point[index];
+            let nodes = &self.solution[..self.nodes];
+            let gain_voltage = node_diff(nodes, source.n, source.p);
+            let capacitor_current = source.gm * error - gain_voltage / MACRO_GAIN_RESISTANCE;
+            // Slew rate constrains dV/dt, not the operating point. At t=0 the
+            // capacitor is open, so preserve the unconstrained AOL equation.
+            let saturated =
+                !matches!(stamp, Stamp::OperatingPoint) && capacitor_current.abs() >= source.ilim;
+            let current = if matches!(stamp, Stamp::OperatingPoint) {
+                source.gm * error
+            } else {
+                gain_voltage / MACRO_GAIN_RESISTANCE
+                    + capacitor_current.clamp(-source.ilim, source.ilim)
+            };
+            let gm = if saturated { 0.0 } else { source.gm };
+            let cm_half = 0.5 * source.cm_gain;
+            let gain_node_slope = if saturated {
+                -1.0 / MACRO_GAIN_RESISTANCE
+            } else {
+                0.0
+            };
+            let control = [
+                (
+                    gm * (1.0 + cm_half),
+                    source.input_plus,
+                    None,
+                    node_diff(nodes, source.input_plus, None),
+                ),
+                (
+                    gm * (-1.0 + cm_half),
+                    source.input_minus,
+                    None,
+                    node_diff(nodes, source.input_minus, None),
+                ),
+                (
+                    -gm * cm_half,
+                    source.vcc,
+                    None,
+                    node_diff(nodes, source.vcc, None),
+                ),
+                (
+                    -gm * cm_half,
+                    source.vee,
+                    None,
+                    node_diff(nodes, source.vee, None),
+                ),
+                (
+                    gain_node_slope,
+                    source.p,
+                    source.n,
+                    node_diff(nodes, source.p, source.n),
+                ),
+            ];
+            stamp_linearised(matrix, rhs, dim, source.p, current, &control);
+            stamp_linearised(matrix, rhs, dim, source.n, -current, &negate(&control));
         }
     }
 }

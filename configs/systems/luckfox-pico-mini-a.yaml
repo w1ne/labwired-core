@@ -2,7 +2,9 @@
 # Generic declared-only system; it does not invoke the reduced Linux platform.
 # Separate optional rv1103-linux native CLI has real direct-zImage/PID1 proof
 # with MMU/GIC/timer/UART2; see examples/luckfox-pico-mini-a-linux/VALIDATION.md.
-# No reset/boot ROM, SD/BSP, GPIO, I2C or physical board acceptance; below L0.
+# No reset/boot ROM, SD/BSP, GPIO/SARADC models, or physical board acceptance;
+# below L0. The generic SystemBus descriptor has a simulation-only analog
+# input bank; it is not part of the native Linux platform or physical pin map.
 name: luckfox-pico-mini-a
 chip: ../chips/rv1103.yaml
 external_devices: []

@@ -1,0 +1,31 @@
+# Matched diode-connected level-1 NMOS pair used as threshold thermometers.
+# Both carry ~4 uA from the same bias; the 85 C instance's VTO(T)/KP(T)/PHI(T)
+# laws lower its gate-source voltage. A2/P001 and A3/P002 resolve to ADC14
+# AN001/AN002 through the chip's descriptor-backed analog pin map.
+name: "arduino-uno-r4-minima-analog-mosfet-thermometer"
+chip: "../../configs/chips/ra4m1.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_thermometer"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      bias_voltage: "ui.mos_thermo.bias_v"
+    outputs:
+      reference_gate_voltage: "board.analog.p001_volts"
+      heated_gate_voltage: "board.analog.p002_volts"
+    config:
+      netlist_text: |
+        Vbias bias 0 dc 5.0
+        Rref bias gref 1meg
+        Rhot bias ghot 1meg
+        Mref gref gref 0 0 NMOS_SENSE W=10u L=1u TEMP=25
+        Mhot ghot ghot 0 0 NMOS_SENSE W=10u L=1u TEMP=85
+        .model NMOS_SENSE NMOS(VTO=0.7 KP=50u GAMMA=0.4 PHI=0.65 LAMBDA=0 IS=1e-30 TNOM=25)
+      probes:
+        reference_gate_voltage: "v(gref)"
+        heated_gate_voltage: "v(ghot)"
+      sources:
+        bias_voltage: "Vbias"
+      vdd: 5.0

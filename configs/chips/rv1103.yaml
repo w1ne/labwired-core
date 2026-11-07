@@ -17,9 +17,10 @@ registers_count: 17
 # Vendor advertised maximum; native adapter uses one scheduling tick per
 # instruction, not measured Cortex-A7 cycle timings or DVFS.
 cpu_hz: 1_200_000_000
-# The carrier catalog records the Mini A's 3.3 V pad domain separately.
-# No silicon GPIO thresholds are transcribed here; neither pad-electrical
-# key is declared until the GPIO model and cited thresholds are onboarded.
+# The Mini A's physical SARADC pads are in a 1.8 V domain, but neither their
+# ADC nor GPIO/pinmux is modeled here. The voltage and thresholds below apply
+# only to the generic SystemBus co-simulation input bank. They are simulation
+# assumptions, not silicon limits or aliases for the SARADC pads.
 # No embedded flash is invented: Mini A boots from external MicroSD.
 # Boot ROM, storage, DDR initialization, CRU, pinmux, GPIO, DMA, I2C and
 # external modules remain absent. This descriptor establishes no board L0/L1.
@@ -27,8 +28,18 @@ flash: { base: 0, size: 0 }
 ram: { base: 0, size: "64MiB" }
 memory_regions:
   - { name: sram, base: 0xff6c0000, size: "256KiB" }
-peripherals: []
-# Explicit native basket opt-in only; generic peripherals above remain empty.
+io_voltage_v: 3.3
+gpio_input_thresholds: { vil: 0.3, vih: 0.7 }
+peripherals:
+  # Generic analog co-simulation endpoint. This is not an RV1103 register
+  # model, GPIO pad, or SARADC channel; native Linux does not instantiate it.
+  - id: cosim_inputs
+    type: input_pin_bank
+    base_address: 0xF0000000
+    size: 4KiB
+    config: { pin_count: 2 }
+# Explicit native basket opt-in; these devices are separate from the generic
+# SystemBus co-simulation input bank above.
 # Register windows / SPI IDs match the reviewed reduced basket DT.
 native_basket_peripherals:
   - { id: i2c3, type: rk3x_i2c, base_address: 0xff460000, size: 4KiB, irq: 53 }

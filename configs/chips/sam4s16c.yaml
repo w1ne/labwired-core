@@ -41,10 +41,14 @@ flash_boot_alias: false
 
 pins:
   # Board-relevant pads (SAM4S Xplained: LED on PC10, button on PA5, UART0
-  # console on PA9/PA10 — the UART0 pins used by the Renode board).
+  # console on PA9/PA10 — the UART0 pins used by the Renode board). EXT1
+  # analog inputs are PA17 (AD[0]) and PA18 (AD[1]) per the SAM4S Xplained Pro
+  # User Guide.
   PA5: { gpio: "pioA", bit: 5 }
   PA9: { gpio: "pioA", bit: 9 }
   PA10: { gpio: "pioA", bit: 10 }
+  PA17: { gpio: "pioA", bit: 17 }
+  PA18: { gpio: "pioA", bit: 18 }
   PC10: { gpio: "pioC", bit: 10 }
 
 peripherals:

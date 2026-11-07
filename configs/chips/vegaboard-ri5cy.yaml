@@ -29,6 +29,10 @@ flash: { base: 0x0, size: "1MiB" }
 ram: { base: 0x20000000, size: "192KB" }
 # 0x0 is the SoC's real flash, not an alias.
 flash_boot_alias: false
+# Simulation-only co-simulation inputs; the Vega descriptor has no physical
+# GPIO or ADC model, and these assumptions are not RI5CY pad specifications.
+io_voltage_v: 3.3
+gpio_input_thresholds: { vil: 0.3, vih: 0.7 }
 peripherals:
   - id: "lpuart0"
     type: "uart"
@@ -69,3 +73,9 @@ peripherals:
     type: "stub"
     base_address: 0x41027000
     size: "1KB"
+  # Generic mixed-signal co-simulation inputs; not SoC registers or board pads.
+  - id: "cosim_inputs"
+    type: "input_pin_bank"
+    base_address: 0xF0000000
+    size: "4KB"
+    config: { pin_count: 2 }

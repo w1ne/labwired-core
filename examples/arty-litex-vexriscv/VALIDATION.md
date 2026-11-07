@@ -15,12 +15,15 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | CAS `Switches` / `ButtonsStatus` levels | smoke-tested | `sw=0000000f btn=0000000f` (released active-low inputs read high) |
 | CAS `ButtonsPending` W1C + `ButtonsEnabled` | smoke-tested | `pend=00000000 en=0000000f` after the clear/enable sequence |
 | board_io bindings (4 LEDs, 4 switches, 4 buttons) | wired | attached at bus build; the button attach proves the driven level with `read_gpio_input` |
+| Beta NTC and Shockley diode into CAS SW0 / BTN0 | co-sim tested | `cosim_arty_litex_analog::arty_litex_ntc_and_diode_netlists_drive_cas_gpio_inputs_through_thresholds`; asserts MNA node voltages, CAS input levels, and Schmitt hysteresis using declared simulation thresholds |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical UART streams (`diff` clean) |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | Button press → pending/IRQ path under stimulus | **not exercised by the CLI smoke** | modelled and unit-tested (`active_low` press edge latches; `ButtonsEnabled` gates the level); a session-driven stimulus is a follow-up |
 | SPI-flash controller / Ethernet MAC / MMCM | **not modelled** | declared `type: stub` |
 | Main RAM (DDR, 0x40000000, 256 MiB) | **not mapped** | dense allocation; not needed by the smoke |
 | LiteX BIOS + flash-load boot flow | **not modelled** | fast boot loads the ELF directly |
+| XADC / ADC conversion | **not mapped** | analog coverage for this profile is thresholded digital GPIO input only |
+| Physical GPIO input thresholds | **not captured** | the 3.3 V / 0.3 / 0.7 ratios are explicit simulation assumptions |
 | Silicon / bitstream capture | **none** | SIM-DERIVED; no executing-fidelity differential |
 
 ## Commands and evidence (verified 2026-10-22)

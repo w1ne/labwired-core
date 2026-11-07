@@ -48,6 +48,7 @@ Parts catalog: [Parts](parts/index.md) · Support levels: [Target rubric](target
 |-------|------|
 | Agent tools | [Tool reference](agent/tools.md) |
 | CLI flags | [CLI reference](cli_reference.md) |
+| Mixed-signal coverage | [Board inventory](mixed_signal_board_coverage.md) |
 | Troubleshooting | [Troubleshooting](troubleshooting.md) |
 | YAML config | [Configuration reference](configuration_reference.md) |
 | Architecture (engine) | [Architecture](architecture.md) |

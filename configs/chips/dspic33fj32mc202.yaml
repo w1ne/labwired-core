@@ -30,6 +30,12 @@ flash:
 ram:
   base: 0x000800
   size: "2KB"
+# Generic mixed-signal GPIO threshold assumptions for cosim voltage inputs.
+# These are not a silicon-captured claim; ADC pad routing remains separate.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
 # M1: 28-pin package pads (DS70283H 28-pin pin diagrams): RA0-RA4,
 # RB0-RB15, no PORTC. The masks are the package truth; the CPU derives its
 # TRIS/LAT/ODC masks from these entries (44-pin defaults when absent).

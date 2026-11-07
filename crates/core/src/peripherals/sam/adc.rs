@@ -280,6 +280,21 @@ impl Peripheral for Samd51Adc {
             self.pending = false;
         }
     }
+    fn set_adc_channel_input(&mut self, channel: u8, millivolts: u16) -> bool {
+        if !self
+            .instance
+            .inputs
+            .iter()
+            .any(|&(ain, _, _)| ain == channel)
+        {
+            return false;
+        }
+        self.set_input_millivolts(usize::from(channel), u32::from(millivolts));
+        true
+    }
+    fn adc_channel_count(&self) -> Option<u8> {
+        Some(16)
+    }
     fn as_any(&self) -> Option<&dyn Any> {
         Some(self)
     }

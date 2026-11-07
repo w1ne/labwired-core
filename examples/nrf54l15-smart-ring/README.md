@@ -82,6 +82,12 @@ NOT the nRF52 TWIM at a new base — see `src/nrf54l15.h` and
 - `crates/core/tests/nrf54l15_smart_ring_probe.rs` — boots this ELF against
   `smart-ring.yaml` and asserts each sensor's real WHO_AM_I byte(s) come back
   over I²C, with no NACK, no mismatch, and no surviving `0xEE` sentinel.
+- `analog-ntc-diode-system.yaml` and
+  `crates/core/tests/cosim_nrf54l15_smart_ring_analog.rs` — route a generic
+  Beta NTC divider and an unrelated Shockley diode netlist through separate
+  modeled SAADC channels, assert their solved voltages and conversions, and
+  retain the ring's four I²C devices and board GPIO wiring. The profile uses
+  explicit ADC channel routes and does not claim physical pad aliases.
 
 ## Files
 

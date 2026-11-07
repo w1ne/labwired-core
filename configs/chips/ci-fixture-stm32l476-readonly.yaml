@@ -21,6 +21,14 @@ registers_count: 200
 # says so with its own `cpu_hz:` override, which is what that key is for.
 cpu_hz: 80_000_000
 
+# STM32L476 GPIO input thresholds from DS10198 Rev 8, §6.3.14, Table 70.
+# Keep the fixture's analog GPIO route consistent with the production chip
+# descriptor while preserving this fixture's read-only flash behavior.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
 flash:
   base: 0x08000000
   # 1 MiB, spelled in KB because `parse_size` reads MB as 10^6 — "1MB" would be

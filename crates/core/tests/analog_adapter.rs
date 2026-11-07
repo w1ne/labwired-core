@@ -217,6 +217,74 @@ mod analog {
     }
 
     #[test]
+    fn a_routed_temperature_updates_a_tempco_resistor_inside_the_analog_netlist() {
+        let netlist = "Vcc vcc 0 dc 3.3\nRhot vcc sense 10k tc1=4m tc2=1u tnom=25 temp=25\nRpull sense 0 10k\n";
+        let cfg = AnalogConfig {
+            probes: BTreeMap::from([("v_sense".to_string(), "v(sense)".to_string())]),
+            sources: BTreeMap::from([("temperature_c".to_string(), "Rhot".to_string())]),
+            ..AnalogConfig::default()
+        };
+        let mut adapter = AnalogCosimAdapter::from_netlist(netlist, &cfg).expect("adapter builds");
+        assert_eq!(
+            adapter.input_kind("temperature_c"),
+            Some(labwired_core::cosim::CosimInputKind::Number)
+        );
+        let sample = |adapter: &mut AnalogCosimAdapter, time_ns, celsius| {
+            let result = adapter
+                .step(CosimStep {
+                    time_ns,
+                    dt_ns: 100_000,
+                    inputs: BTreeMap::from([(
+                        "temperature_c".to_string(),
+                        CosimSignalValue::F64(celsius),
+                    )]),
+                })
+                .expect("temperature step solves");
+            match result.outputs["v_sense"] {
+                CosimSignalValue::F64(volts) => volts,
+                ref other => panic!("probe should be a voltage, got {other:?}"),
+            }
+        };
+
+        let cold = sample(&mut adapter, 100_000, -10.0);
+        let nominal = sample(&mut adapter, 200_000, 25.0);
+        let hot = sample(&mut adapter, 300_000, 125.0);
+        assert!(
+            hot < nominal && nominal < cold,
+            "a positive tempco raises the high-side resistance and lowers the divider output: cold={cold}, nominal={nominal}, hot={hot}"
+        );
+
+        let expected_sense = |temperature_celsius: f64| {
+            let delta = temperature_celsius - 25.0;
+            let hot_resistance = 10_000.0 * (1.0 + 4e-3 * delta + 1e-6 * delta * delta);
+            3.3 * 10_000.0 / (hot_resistance + 10_000.0)
+        };
+        for (label, actual, temperature_celsius) in [
+            ("cold", cold, -10.0),
+            ("nominal", nominal, 25.0),
+            ("hot", hot, 125.0),
+        ] {
+            let expected = expected_sense(temperature_celsius);
+            assert!(
+                (actual - expected).abs() < 1e-9,
+                "{label} routed resistor voltage should be {expected} V at {temperature_celsius} °C, got {actual} V"
+            );
+        }
+
+        let error = adapter
+            .step(CosimStep {
+                time_ns: 400_000,
+                dt_ns: 100_000,
+                inputs: BTreeMap::from([(
+                    "temperature_c".to_string(),
+                    CosimSignalValue::Bool(true),
+                )]),
+            })
+            .expect_err("temperature input cannot be boolean");
+        assert!(error.to_string().contains("degrees Celsius"), "{error}");
+    }
+
+    #[test]
     fn an_input_that_is_not_a_circuit_source_is_ignored() {
         let mut adapter =
             AnalogCosimAdapter::from_netlist(RC, &rc_config()).expect("adapter builds");

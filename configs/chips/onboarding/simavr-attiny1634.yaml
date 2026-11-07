@@ -13,7 +13,53 @@ flash:
 ram:
   base: 256
   size: 1KB
-peripherals: []
+# Register map checked against avr-libc 2.0.0 avr/iotn1634.h: the I/O-space
+# map LabWired's ATtiny1634 core runs (AvrModel::Attiny1634). ADCL/ADCH
+# 0x20/0x21, ADCSRB 0x22 (ADLAR is bit 3), ADCSRA 0x23, ADMUX 0x24 (REFS1:0,
+# MUX3:0); ports are PINx/DDRx/PORTx/PUEx groups: C at 0x27..0x2A, B at
+# 0x2B..0x2E, A at 0x2F..0x32. The CPU owns those registers; each port's
+# PINx/DDRx/PORTx is mirrored at 0x1_0000 + PINx (the PORTx byte there carries
+# PUEx on inputs, the 1634's pull-up enable) and the ADC input side
+# (millivolts per channel, two bytes each) sits at 0x1_0060, past the I/O
+# space. ADC0..11 are PA3..PA7, PB0..PB3, PC0..PC2 (ATtiny1634 datasheet 8303,
+# §19.13.1, and the 12 single-ended mux codes of simavr sim_tiny1634.h).
+# VIL 0.3 VCC / VIH 0.6 VCC are the datasheet DC input limits for VCC
+# 2.4..5.5 V (§26.2).
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.6
+peripherals:
+  - id: "porta"
+    type: "avr_gpio"
+    base_address: 0x0001002F
+    size: "3"
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x0001002B
+    size: "3"
+  - id: "portc"
+    type: "avr_gpio"
+    base_address: 0x00010027
+    size: "3"
+  - id: "adc"
+    type: "avr_adc"
+    base_address: 0x00010060
+    size: "24"
+    config:
+      channels: 12
+analog_pins:
+  PA3: { peripheral: adc, channel: 0 }
+  PA4: { peripheral: adc, channel: 1 }
+  PA5: { peripheral: adc, channel: 2 }
+  PA6: { peripheral: adc, channel: 3 }
+  PA7: { peripheral: adc, channel: 4 }
+  PB0: { peripheral: adc, channel: 5 }
+  PB1: { peripheral: adc, channel: 6 }
+  PB2: { peripheral: adc, channel: 7 }
+  PB3: { peripheral: adc, channel: 8 }
+  PC0: { peripheral: adc, channel: 9 }
+  PC1: { peripheral: adc, channel: 10 }
+  PC2: { peripheral: adc, channel: 11 }
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

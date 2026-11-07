@@ -2,6 +2,10 @@
 
 No required external simulated components for minimal deterministic smoke.
 
+The analog routing fixture in `analog-ntc-diode-system.yaml` uses generic
+netlist device models and the chip's simulation-only `input_pin_bank`. It does
+not attach a bespoke external component or claim physical ADC behavior.
+
 The onboarding path uses on-chip peripherals only:
 1. CCM (`imx_ccm`)
 2. IOMUXC (`imx_iomuxc` sticky stub)

@@ -37,6 +37,11 @@ arch: "riscv"
 core: "rv32im"
 cpu_hz: 100_000_000
 
+# Simulation-only electrical assumptions for the generic analog co-simulation
+# seam below. They are not LiteX gateware or Arty pad specifications.
+io_voltage_v: 3.3
+gpio_input_thresholds: { vil: 0.3, vih: 0.7 }
+
 # The SPI-flash memory-mapped window (the board's code storage). Untouched
 # flash reads 0xFF, as silicon does.
 flash: { base: 0x20000000, size: "32MiB" }
@@ -78,3 +83,10 @@ peripherals:
     type: "stub"
     base_address: 0xE0004800
     size: "2KB"
+  # Generic analog co-simulation inputs. This high address is a simulator
+  # endpoint, not a CSR or physical pad mapping in the LiteX design.
+  - id: "cosim_inputs"
+    type: "input_pin_bank"
+    base_address: 0xF0000000
+    size: "4KiB"
+    config: { pin_count: 2 }

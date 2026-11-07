@@ -12,10 +12,11 @@ board test.
 | RCC gates for GPIOA/GPIOD and USART2 | smoke-tested | firmware bring-up and UART output |
 | User LEDs PD12–PD15 | smoke-tested | UART reports each LED on/off with `GPIOD_ODR` readback |
 | USART2 PA2 TX from 16 MHz HSI | smoke-tested | smoke banner and heartbeat lines captured |
+| ADC1 external inputs | co-simulation tested | Generic NTC and Shockley diode netlists route through PA1/ADC1_IN1 and PA4/ADC1_IN4; solved voltages and register-visible 12-bit conversions are asserted by `cosim_stm32f4_discovery_analog.rs` |
 | Repeatability | smoke-tested | two runs produced identical UART logs |
 | Instruction support for this firmware | audited | 200,000 instructions, 0 unsupported |
 | USER button PA0 input | declared only | system manifest maps it; firmware does not read it |
-| I²C/SPI/timers/ADC/DMA/USB/Ethernet/CAN | **not modelled here** | see `EXTERNAL_COMPONENTS.md` |
+| I²C/SPI/timers/DMA/USB/Ethernet/CAN | **not modelled here** | see `EXTERNAL_COMPONENTS.md` |
 
 ## Commands and evidence
 
@@ -49,6 +50,18 @@ Results: build completed; both smoke runs passed **3/3 assertions** at
 and on/off readbacks for LD4/PD12, LD3/PD13, LD5/PD14, and LD6/PD15. The
 unsupported-instruction audit exited 0 with **200,000 instructions executed,
 0 unsupported**. Detailed run output is under the `out/` paths above.
+
+Mixed-signal regression:
+
+```sh
+cargo test -p labwired-core --test cosim_stm32f4_discovery_analog
+```
+
+This test uses the shared STM32F4 ADC and analog pin routing, retains the
+Discovery board-I/O mappings, and checks the NTC temperature response, an
+independent diode load line, channel isolation, undriven adjacent channels, and
+the ADC1 data register result. It is a simulator co-simulation proof, not a
+silicon capture.
 
 The heartbeat's `odr=` value is read back from `GPIOD_ODR` after each write.
 The board's ST-LINK VCP is not wired to the MCU UART (UM1472); the console

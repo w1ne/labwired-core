@@ -38,3 +38,14 @@ for what would invalidate the reuse.
 3. `io-smoke.yaml`: strict onboarding smoke path.
 4. `REQUIRED_DOCS.md`: source-grounding references.
 5. `EXTERNAL_COMPONENTS.md`: external component declaration.
+
+## Mixed-signal ADC example
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) routes a generic
+Beta NTC divider and a separate Shockley diode load line through PA0 and PA1 to
+ADC1 channels 0 and 1. The integration test checks the solved voltages,
+channel isolation, and firmware-visible one-shot conversions:
+
+```sh
+cargo test -p labwired-core --test cosim_feather_f405_analog
+```

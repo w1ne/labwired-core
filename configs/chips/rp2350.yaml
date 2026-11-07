@@ -53,6 +53,15 @@ coprocessors: [rp2350_dcp]
 # Atomic SET/CLR/XOR aliases, same scheme as RP2040 (rp2350 addressmap.h
 # REG_ALIAS_*_BITS).
 atomic_register_aliases: true
+# RP2350A analog-capable header pads (pico-sdk hardware_adc.h and
+# hardware_gpio.h): ADC inputs 0..3 are GP26..GP29, respectively. The RP2350B
+# package exposes a different set (GP40..GP47), which this RP2350A board
+# descriptor does not claim.
+analog_pins:
+  GP26: { peripheral: "adc", channel: 0 }
+  GP27: { peripheral: "adc", channel: 1 }
+  GP28: { peripheral: "adc", channel: 2 }
+  GP29: { peripheral: "adc", channel: 3 }
 peripherals:
   # SYSINFO (CHIP_ID 0x30004927 = revision 3, part 0x0004, manufacturer 0x927
   # — rp2350 sysinfo.h). The pico-sdk USB errata workaround asserts the

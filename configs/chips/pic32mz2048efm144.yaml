@@ -36,9 +36,11 @@
 # NOT modelled in this slice:
 # - The FPU, microMIPS, the DSP ASE, the TLB, caches and flash wait states
 #   (see the core's module docs).
-# - Ports (ANSEL/TRIS/PORT/LAT/ODC/CNPU/CNPD/CNCON/CNEN/CNSTAT), PPS:
-#   declared stubs, so the Curiosity LEDs (RJ7/RK7/RJ3) and switches are
-#   not reachable; UART2 needs no pad routing.
+# - PORTB models ANSEL/TRIS/PORT/LAT/ODC and the digital pin input/output path
+#   for mixed-signal co-simulation, not the complete PIC32 I/O block. Other
+#   ports, change notification, pulls, and PPS remain stubs; board LEDs and
+#   switches are not reachable. The analog GPIO test uses simulation
+#   threshold assumptions, not a silicon-captured claim.
 # - Oscillator, configuration (CFGCON, SYSKEY unlock), flash controller,
 #   watchdog, deadman timer, prefetch module: stubs. No clock rate follows
 #   OSCCON/SPLLCON/PBxDIV; `cpu_hz` is the 200 MHz SYSCLK the board's DEVCFG
@@ -61,6 +63,13 @@ ram:
   # Data RAM (KSEG0 0x80000000, KSEG1 0xA0000000).
   base: 0x00000000
   size: "512KB"
+io_voltage_v: 3.3
+# Simulation thresholds for the mixed-signal input route. These ratios are
+# a model assumption until PIC32MZ limits have verified Part Knowledge facts;
+# they are not a hardware-validation claim.
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
 memory_regions:
   # Lower boot alias (Boot Flash 1, 80 KiB): the reset and exception
   # vectors, the startup code, and the configuration space at 0x1FC0FF00
@@ -120,11 +129,25 @@ peripherals:
       clock_hz: 200000000
       # PBCLK2, the board's PB2DIV.
       pbclk_hz: 100000000
-  # PORTA-PORTK, 0x100 apart.
+  # PORTA remains a stub. PORTB uses the MIPS-family PIC32 GPIO model for
+  # mixed-signal routing. Only the digital pin behavior and core port
+  # registers are implemented; CN, pull, PPS, and interrupt behavior remain
+  # outside this slice.
   - id: "ports"
     type: "stub"
     base_address: 0x1F860000
-    size: "4KB"
+    size: "256B"
+  - id: "gpiob"
+    type: "pic32mz_port"
+    base_address: 0x1F860100
+    size: "256B"
+    config:
+      pin_count: 16
+  # PORTC-PORTK and the unused tail of the block remain stubs.
+  - id: "ports_c_to_k"
+    type: "stub"
+    base_address: 0x1F860200
+    size: "3584B"
   - id: "prefetch"
     type: "stub"
     base_address: 0x1F8E0000

@@ -13,6 +13,9 @@
 // Each test binary compiles this module separately and uses a subset of it.
 #![allow(dead_code)]
 
+/// Shared nRF54L application-core SAADC mixed-signal proof used by multiple
+/// system profiles to keep device physics and ADC expectations identical.
+pub mod nrf54l_analog;
 /// Two-pass Thumb assembler for hand-built differential fixtures.
 pub mod thumb_asm;
 pub mod transcript;

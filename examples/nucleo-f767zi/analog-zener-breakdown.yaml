@@ -1,0 +1,24 @@
+# Generic reverse-breakdown diode load driven through STM32F767 PA5 -> ADC1_IN5.
+name: "nucleo-f767zi-analog-zener-breakdown"
+chip: "../../configs/chips/stm32f767.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "zener_reverse_breakdown"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_voltage: "ui.zener.supply_v"
+    outputs:
+      zener_voltage: "board.analog.pa5_volts"
+    config:
+      netlist_text: |
+        Vsrc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 0 sense DZEN TEMP=25
+        .model DZEN D(IS=1p N=1.2 RS=20 BV=2 IBV=1m NBV=1.5 TNOM=25 EG=0 XTI=0)
+      probes:
+        zener_voltage: "v(sense)"
+      sources:
+        supply_voltage: "Vsrc"
+      vdd: 3.3

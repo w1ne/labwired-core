@@ -97,6 +97,18 @@ pins:
   PB29: { gpio: portb, bit: 29 }
   PB30: { gpio: portb, bit: 30 }
   PB31: { gpio: portb, bit: 31 }
+# Metro M4 analog-capable pads from Adafruit ArduinoCore-samd
+# variants/metro_m4/variant.cpp. ADC0 AIN numbers are the SAMD51J19A pad
+# assignments also used by the ADC co-simulation model.
+analog_pins:
+  PA02: { peripheral: "adc0", channel: 0 }   # A0 / ADC0 AIN0
+  PA05: { peripheral: "adc0", channel: 5 }   # A1 / ADC0 AIN5
+  PA06: { peripheral: "adc0", channel: 6 }   # A2 / ADC0 AIN6
+  PA04: { peripheral: "adc0", channel: 4 }   # A3 / ADC0 AIN4
+  PB08: { peripheral: "adc0", channel: 2 }   # A4 / ADC0 AIN2
+  PB09: { peripheral: "adc0", channel: 3 }   # A5 / ADC0 AIN3
+  PB02: { peripheral: "adc0", channel: 14 }  # A6 / ADC0 AIN14 / SDA
+  PB03: { peripheral: "adc0", channel: 15 }  # A7 / ADC0 AIN15 / SCL
 peripherals:
   - id: "mclk"
     type: "sam_mclk"

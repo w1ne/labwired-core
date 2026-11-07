@@ -138,7 +138,7 @@ Always confirm with `labwired_describe` once the playground id exists.
 | USB CDC / USB device | ❌ | Bench only |
 | SIO GPIO | ⚠️ | Enough for the GP16 LED stand-in |
 | WS2812 on GP16 | ⚠️ | Stand-in LED. PIO/WS2812 timing not claimed |
-| ADC GP26–29 | ⚠️ | Partial analog |
+| ADC GP26–29 | ⚠️ | RP2350A pad routes GP26–GP29 to AIN0–AIN3; generic NTC/diode netlists are asserted through GP26/GP27 and the 12-bit register path by `cosim_pico_analog.rs`. Simulation proof only; no silicon comparison. |
 
 ### Buses
 

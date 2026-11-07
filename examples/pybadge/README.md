@@ -17,6 +17,14 @@ cargo run -q -p labwired-cli -- test --script examples/pybadge/io-smoke.yaml --n
 
 The machine-run test is `crates/core/tests/pybadge_firmware.rs`.
 
+## Mixed-signal coverage
+
+`crates/core/tests/cosim_pybadge_analog.rs` reuses the generic Beta NTC divider and
+Shockley diode netlists from the Metro M4 analog example. It routes them through the
+PyBadge's A0/PA02 and A2/PB08 pads, enables each SAMD51 peripheral mux, and asserts the
+solved voltages and ADC0 results. The test also checks the board descriptor's A0–A5
+pad-to-channel mappings.
+
 ## Sources
 
 - LED: Adafruit ArduinoCore-samd `variants/pybadge_m4/variant.cpp`

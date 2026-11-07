@@ -8,9 +8,12 @@ This example provides deterministic bring-up for Arduino Uno R4 Minima (R7FA4M1A
 1. `ra_sysc` (HOCO / OSCSF)
 2. `port1` / `port3` (`ra_port`)
 3. `sci2` UART (header Serial on P301/P302)
-4. `systick`
+4. `adc0` (`ra_adc14`, group-A software scan with 12/14-bit results)
+5. `systick`
 
 USB CDC Serial is intentionally out of scope (USBFS is a stub window only).
+The A0–A5 header pads are mapped to ADC14 channels. The generic analog fixture
+drives A0 with a Beta NTC divider and A1 with an independent Shockley diode.
 
 **SIM-DERIVED.** Not silicon-verified. Playground bring-up is later.
 
@@ -19,6 +22,12 @@ USB CDC Serial is intentionally out of scope (USBFS is a stub window only).
 ```bash
 cargo build -p firmware-ra4m1-demo --release --target thumbv7em-none-eabi
 cargo run -q -p labwired-cli -- test --script examples/arduino-uno-r4-minima/uart-smoke.yaml --output-dir out/arduino-uno-r4-minima/uart-smoke --no-uart-stdout
+```
+
+Run the mixed-signal board assertion:
+
+```bash
+cargo test -p labwired-core --test cosim_ra4m1_analog -- --nocapture
 ```
 
 Expected result:
@@ -32,3 +41,5 @@ Expected result:
 3. `REQUIRED_DOCS.md`: source-grounding references (R01UH0887, pinout; FSP PAC as address cross-check only).
 4. `EXTERNAL_COMPONENTS.md`: external component declaration.
 5. `VALIDATION.md`: reproducible validation/audit commands.
+6. `analog-ntc-diode-system.yaml`: generic NTC and diode device netlists routed to A0/A1.
+7. `analog-mosfet-thermometer.yaml`: matched diode-connected level-1 NMOS threshold thermometers at 25 °C and 85 °C routed to A2/A3 (AN001/AN002).

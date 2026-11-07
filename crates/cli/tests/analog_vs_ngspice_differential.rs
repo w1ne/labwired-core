@@ -271,14 +271,15 @@ fn an_unsupported_element_fails_manifest_validation() {
 /// against a rail.
 ///
 /// **5e-4 (0.05 %), not the 2 % a differential like this is usually written
-/// with.** 2 % was measured to be vacuous here. The three decks below actually
+/// with.** 2 % was measured to be vacuous for the original three decks: they
 /// agree with ngspice to 2.5e-3 %, 2.6e-5 % and 1.0e-6 % of full scale, and
 /// perturbing the engine's thermal voltage by 1 % — a wrong physical constant,
 /// the exact class of bug this test exists to catch — moves the rectifier by
 /// 0.13 % and the amplifier by 0.24 %. At 2 % that sabotage passes. At 0.05 %
 /// it fails with 2.5x margin, while still leaving 20x headroom over the worst
-/// honest disagreement, which is the fixed-step-versus-adaptive-step
-/// difference between the two integrators.
+/// honest disagreement measured on those decks. Keep the gate tight when
+/// extending the matrix; the JFET's static channel equation also has a separate
+/// hand-calculation check in `analog_devices.rs`.
 ///
 /// The MOSFET deck is the weak one and is named as such: a level-1 FET has no
 /// thermal voltage, so that sabotage moves it by 1e-6 %. Its guard is the
@@ -366,6 +367,24 @@ const DIFFERENTIALS: &[Differential] = &[
         full_scale: 5.0,
         minimum_swing: 4.0,
     },
+    Differential {
+        name: "N-channel JFET switch",
+        // Exercise the level-1 channel equation as the gate drives through its
+        // pinch-off point, with the gate-drain depletion capacitance carrying
+        // charge during both edges.
+        deck: "* N-channel JFET switch: J + R + VPULSE\n\
+               Vdd vdd 0 dc 5\n\
+               Vg g 0 PULSE(-3 0 2u 200n 200n 18u 40u)\n\
+               Rd vdd d 10k\n\
+               J1 d g 0 JMOD\n\
+               .model JMOD NJF(VTO=-2 BETA=200u LAMBDA=0.02 IS=1e-14 CGS=120p CGD=60p PB=0.7 FC=0.5)\n",
+        node: "d",
+        sample: 200e-9,
+        substeps: 10,
+        samples: 400,
+        full_scale: 5.0,
+        minimum_swing: 4.0,
+    },
 ];
 
 /// Solve `deck` with the in-core engine, sampling `node` at every boundary.
@@ -398,6 +417,23 @@ fn in_core_series(case: &Differential) -> Vec<f64> {
         series.push(solver.node_voltage(node));
     }
     series
+}
+
+/// A differential must exercise a real transition before engine agreement can
+/// mean anything. Keep this assertion available when ngspice is not installed,
+/// too, so that path still checks the in-core JFET transient.
+fn assert_minimum_swing(case: &Differential, series: &[f64]) -> f64 {
+    let max = series.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let min = series.iter().cloned().fold(f64::INFINITY, f64::min);
+    let swing = max - min;
+    assert!(
+        swing >= case.minimum_swing,
+        "{}: the trace only swings {swing} V, so agreeing with ngspice about it \
+         proves nothing; expected at least {} V",
+        case.name,
+        case.minimum_swing
+    );
+    swing
 }
 
 /// Solve the same deck with ngspice, resampled onto the same uniform grid.
@@ -485,6 +521,7 @@ fn nonlinear_devices_match_ngspice_on_the_same_deck() {
             let series = in_core_series(case);
             assert_eq!(series.len(), case.samples);
             assert!(series.iter().all(|v| v.is_finite()));
+            assert_minimum_swing(case, &series);
         }
         eprintln!(
             "SKIP: `ngspice` is not on PATH, so the reference half of the \
@@ -508,18 +545,7 @@ fn nonlinear_devices_match_ngspice_on_the_same_deck() {
             case.samples
         );
 
-        let swing = {
-            let max = ours.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-            let min = ours.iter().cloned().fold(f64::INFINITY, f64::min);
-            max - min
-        };
-        assert!(
-            swing >= case.minimum_swing,
-            "{}: the trace only swings {swing} V, so agreeing with ngspice about it \
-             proves nothing; expected at least {} V",
-            case.name,
-            case.minimum_swing
-        );
+        let swing = assert_minimum_swing(case, &ours);
 
         let mut worst = 0.0_f64;
         let mut worst_sample = 0;

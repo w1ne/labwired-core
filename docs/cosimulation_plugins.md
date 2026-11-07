@@ -101,6 +101,7 @@ steps the model against the pins the firmware is actually driving:
 | `board.gpio_pad.<pad>` | machine → model | bool | The live level a logic probe clipped to `<pad>` sees: the GPIO latch for a plain output, the peripheral's wire for an alternate-function pad, the input register for an input. |
 | `board.gpio_driven.<pad>` | machine → model | bool | Whether the MCU's own output stage drives `<pad>`, through a GPIO output OR an alternate-function peripheral. False for an input, an analog pad, or a released open-drain line. |
 | `board.gpio_in.<pad>` | model → machine | bool or volts | An externally held level on an input pad (also readable). A number is volts, turned into a level with the chip's input thresholds. |
+| `board.gpio_in.<peripheral>.<pin>` | model → machine | bool or volts | An input on a pin-owning peripheral without GPIO register offsets. The peripheral name and physical pin number resolve through its `PinPort` interface. |
 | `board.analog.<pad>_volts` | model → machine | number | The analog level on the ADC channel belonging to `<pad>`. |
 | `adc.<peripheral>.<channel>_volts` | model → machine | number | The analog level on an explicitly named ADC channel. |
 | `board.power.vdd_volts` | model → machine | number | The MCU's supply. The chip's `supply_monitor:` holds the core in reset below its power-on threshold and resets it on power-down or brown-out; a chip without one refuses the route. |
@@ -115,6 +116,12 @@ pad-addressed feature uses: a chip's declared `pins:` map first, then the
 standard STM32/Nordic parse, then the ATmega `port<letter>` windows, then the
 ESP32 forms. Case does not matter. Board aliases such as Arduino `D2` are not
 pad labels; the playground resolves them before a manifest is written.
+
+When an input belongs to a peripheral that owns pads but has no GPIO register
+offsets, use `board.gpio_in.<peripheral>.<pin>` instead. For example,
+`board.gpio_in.cas.32` drives pin 32 on the LiteX Control-and-Status block.
+The endpoint must resolve to a pin the peripheral reports as an input. Voltage
+values use the same chip-declared Schmitt thresholds as pad labels.
 
 `board.gpio_output.<pad>` reads the GPIO model's direction register through
 `Peripheral::read_gpio_is_output`, the same register truth the logic
@@ -202,7 +209,8 @@ plain signal-store keys routed between models, exactly as before.
 
 ### Volts on an input pad
 
-A number routed to `board.gpio_in.<pad>` is a voltage, and the pad is a
+A number routed to `board.gpio_in.<pad>` or
+`board.gpio_in.<peripheral>.<pin>` is a voltage, and the input is a
 Schmitt-trigger input: it reads high once the voltage is at or above VIH, low
 once it is at or below VIL, and between the two it keeps the level it read last.
 It starts low. A boolean keeps meaning the level itself, exactly as before.
@@ -358,7 +366,7 @@ cosim_models:
       substeps: 10             # internal solver steps per co-sim step
       integration: be          # be (default) | trap
       probes:  { v_out: "v(out)" }   # output name <- node / branch current
-      sources: { gpio: Vgpio }       # input name  -> V, I or S element
+      sources: { gpio: Vgpio }       # input name  -> V, I, S or temperature-dependent R
       trace: ["v(in)", "i(Vgpio)"]   # extra oscilloscope channels
       trace_samples: 20000           # ring depth (default 20000)
 ```
@@ -392,6 +400,10 @@ an element line is the worst thing a netlist parser can do.
 A switch's `<ctrl>` is the name of a routed boolean input, not a circuit node,
 so it needs no `sources:` entry.
 
+A `sources:` entry may also target a resistor with `beta=` or `tc1=`/`tc2=`.
+The routed number is its external temperature in degrees Celsius; a value
+change rebuilds that resistor's MNA conductance on the next step.
+
 ### Op-amp and comparator macros
 
 `X` instances use `.model <name> OPAMP(...)` or `.model <name> COMP(...)`.
@@ -402,12 +414,14 @@ and `in-`, and `RINCM`, a fixed resistance from each input to `V−`. `RIN=0` or
 `RINCM=0`, or omission, disables those paths. Both cards accept `CMRR` in dB.
 It converts common-mode input voltage relative to the supply midpoint into
 input-referred differential voltage by `10^(−CMRR/20)`; omission means ideal
-common-mode rejection. OPAMP cards also accept output rail drops. COMP cards
-accept hysteresis and open-collector or push-pull outputs. These parameters
-have no temperature dependence. Slew-rate
-limiting beyond the modeled pole, output current limiting, and signal- or
-load-dependent supply current are not modeled. The hand-calculated macro tests
-are in `crates/core/tests/analog_macros.rs`.
+common-mode rejection. OPAMP cards also accept output rail drops, optional
+`IOLIM`, and optional `SR` in volts per second. `SR` caps the gain-node
+capacitor current to `Cg·SR`, so large-signal ramps are slew limited while
+settled DC gain and smaller-signal finite-GBW response are preserved. COMP
+cards accept hysteresis and open-collector or push-pull outputs. These
+parameters have no temperature dependence. Signal- or load-dependent supply
+current is not modeled. The hand-calculated macro tests are in
+`crates/core/tests/analog_macros.rs`.
 
 `.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`, `.probe`, `.width`,
 `.temp`, `.nodeset`, `.title` and a whole `.control` … `.endc` block are
@@ -438,8 +452,8 @@ input at a different element.
 ### Semiconductor models
 
 ```text
-.model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms>)
-.model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n>)
+.model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms> TRS1=<1/°C> TRS2=<1/°C²> TT=<s> TTT1=<1/°C> TTT2=<1/°C²> TM1=<1/°C> TM2=<1/°C²>)
+.model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n> IKF=<a> IKR=<a> NKF=<n> CJE=<f> VJE=<v> MJE=<ratio> CJC=<f> VJC=<v> MJC=<ratio> TMJE1=<1/°C> TMJE2=<1/°C²> TMJC1=<1/°C> TMJC2=<1/°C²> TLEVC=0|1 [CTE/CTC/TVJE/TVJC])
 .model <name> PNP  (...)
 .model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
@@ -468,10 +482,10 @@ Ward–Dutton drain/source partitioning and a charge-conserving terminal Jacobia
 It requires `TOX`. Without `TOX`, only explicit overlap and bulk-junction
 capacitances are present. `CHARGEMOD=WARD_DUTTON` is an in-core extension and
 is not a portable ngspice model-card parameter.
-Other device capacitances and temperature coefficients,
-`NKF`, and terminal resistances outside the modeled BJT, JFET and MOSFET parameters
-below are accepted and ignored. BJT terminal resistances `RB`/`RC`/`RE`, JFET
-terminal resistances `RD`/`RS`, and MOSFET terminal resistances `RD`/`RS` or
+Other device capacitances, temperature coefficients and terminal resistances
+outside the supported parameters below are accepted and ignored. BJT `RB`/`RC`/`RE`
+are modeled as series resistors, while `RBM`/`IRB` make `RB` fall with base
+current; JFET terminal resistances `RD`/`RS` and MOSFET terminal resistances `RD`/`RS` or
 `RSH` times the per-instance `NRD`/`NRS` are modeled as series resistors. An
 explicitly supplied direct MOSFET `RD` or `RS` takes precedence for that
 terminal, including an explicit zero that disables its sheet-resistance path.
@@ -494,16 +508,32 @@ recombination current from `ISR`/`NR`, clamped in reverse bias at the
 `−3·N·Vt` boundary; diode depletion charge in transient runs from
 `CJO`/`VJ`/`M`/`FC` (`CJO` defaults to zero) and quasi-static diffusion charge
 from `TT` (defaults to zero), including first-order soft reverse recovery
-when `TT > 0` and `VP > 0`; diode breakdown when `BV` is set. Gummel–Poon BJT
+when `TT > 0` and `VP > 0`; diode breakdown when `BV` is set, with `IBV`
+setting the knee current and optional `NBV` selecting its reverse exponential
+coefficient (default `N`). With instance `TEMP`, diode series resistance uses
+`TRS1` (also `TRS`) and `TRS2` as
+`RS(T) = RS · (1 + TRS1·ΔT + TRS2·ΔT²)`, where `ΔT = TEMP − TNOM` and both
+coefficients default to zero. Diode `TTT1`/`TTT2` similarly apply
+`TT(T) = TT · (1 + TTT1·ΔT + TTT2·ΔT²)` to diffusion and soft-recovery
+charge; both coefficients default to zero. `TM1`/`TM2` adjust the diode
+depletion grading coefficient as `M(T) = M · (1 + TM1·ΔT + TM2·ΔT²)`.
+`VJ(T)` and `CJO(T)` follow ngspice's silicon junction-potential and depletion
+capacitance temperature equations using `TNOM`; all four polynomial
+coefficients default to zero.
+Gummel–Poon BJT
 transport with `VAF`/`VAR` base-width modulation, optional
-`IKF`/`IKR` high-injection rolloff (both default to infinity), and B-E/B-C base
+`IKF`/`IKR` high-injection rolloff (both default to infinity) with optional
+`NKF` (also `NK`) exponent (0.5 when omitted), and B-E/B-C base
 recombination currents from `ISE`/`NE` and `ISC`/`NC`; BJT base-emitter and
 base-collector depletion charge from `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`,
 plus forward transit-time charge from `TF` with its `XTF`/`VTF`/`ITF` bias
 adjustment and reverse transit-time charge from `TR` (all default to zero;
 `XTF`/`ITF` default to zero and `VTF` to infinity; shared `FC` defaults to
 0.5) and ohmic terminal resistances `RB`/`RC`/`RE` (all
-default to zero). Nonzero BJT terminal resistances add probeable internal
+default to zero). `RBM` defaults to `RB` and `IRB` defaults to infinity, so
+omitting either leaves the base resistance fixed; with `RBM < RB` and finite
+`IRB`, the base resistance falls from `RB` toward `RBM` as base current rises.
+Nonzero BJT terminal resistances add probeable internal
 collector, base, or emitter nodes. Nonzero JFET and MOSFET terminal resistances
 add probeable `<element>#drain` and `<element>#source` nodes, respectively.
 Shichman–Hodges MOSFET level 1 with `RD`/`RS` ohmic terminal resistances (both
@@ -520,11 +550,40 @@ saturation regions for both channel polarities. Other tests cover MOSFET/JFET
 channel-length modulation, reverse-channel operation, MOSFET body effect,
 Meyer bias regions, and Ward–Dutton
 charge conservation and transient terminal response are covered by tests. The
-diode's forward and reverse knee reduction and first-order soft-recovery
-response are exercised in
-[`tests/analog_devices.rs`](../crates/core/tests/analog_devices.rs). Every
-parameter is taken at 300.00 K; there is no temperature
-model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
+diode's forward and reverse knee reduction, non-default reverse-breakdown
+emission coefficient, and first-order soft-recovery response are exercised in
+[`tests/analog_devices.rs`](../crates/core/tests/analog_devices.rs). BJT `NKF`
+is checked against solved forward/reverse terminal currents and its effect on
+transit charge. Every
+The diode's explicitly supported temperature laws are instance `TEMP` for
+thermal voltage and saturation current, plus `TCV`/`TBV1` for breakdown and
+`TRS1`/`TRS2` for series resistance. BJT instance `TEMP` applies the SPICE
+`TNOM`/`EG`/`XTI` saturation-current law, the `XTB` scaling for `BF`/`BR`, and
+the matching temperature adjustment for `ISE`/`ISC` using their `NE`/`NC`
+emission coefficients; it also sets the junction thermal voltage used by both
+conduction and transit charge.
+Diode `CJO`, `VJ`, `M`, and `TT` follow their SPICE temperature laws when an
+instance `TEMP` is supplied. BJT junction depletion parameters `CJE`/`VJE`/
+`MJE` and `CJC`/`VJC`/`MJC` use ngspice's silicon temperature law by default;
+`TMJE1`/`TMJE2` and `TMJC1`/`TMJC2` add grading-coefficient temperature
+dependence. `TLEVC=1` selects the linear `CTE`/`CTC` capacitance and
+`TVJE`/`TVJC` potential coefficients. BJT terminal resistances continue to
+use their documented `TR*` coefficients. JFET level-1 channel `VTO`/`BETA`
+use `VTOTC` (otherwise `TCV`) and `BETATCE` (otherwise `BEX`) when an instance
+`TEMP` is supplied. The same `TEMP` scales JFET gate-junction `IS` by `EG`/`XTI`
+(defaults 1.11 eV and 3), moves `PB` and `CGS`/`CGD` by the diode depletion law
+at grading 0.5, and evaluates the gate diodes at that `kT/q`. A level-1 MOSFET
+instance `TEMP` (card `TNOM`, default 27 °C) follows ngspice's `mos1temp` laws:
+`KP` scales by `(T/TNOM)^-1.5`, `PHI` and `PB` follow the silicon potential law,
+`VTO` moves by `type·γ·(√PHI(T) − √PHI) + type·½(PHI(T) − PHI) + ½(Eg(TNOM) − Eg(T))`,
+bulk-junction `IS` scales by `exp(Eg(TNOM)/Vt(TNOM) − Eg(T)/Vt(T))`, the bulk
+depletion capacitances (`CBD`/`CBS`/`CJ` with `MJ`, `CJSW` with `MJSW`) follow
+the diode depletion law, and the bulk diodes use `kT/q` at `TEMP`. `LAMBDA`,
+`GAMMA`, `RD`/`RS`/`RSH` and the overlap capacitances have no level-1
+temperature law. These are external instance temperatures; self-heating
+is not modeled.
+Differential decks handed to ngspice pin `temp`/`tnom` to 26.85 °C unless the
+deck is specifically checking an in-core temperature law.
 
 **What is not modeled:** Ward–Dutton mode includes strong-inversion channel
 charge only; it omits intrinsic accumulation/depletion charge. Select Meyer

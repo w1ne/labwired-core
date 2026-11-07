@@ -20,6 +20,18 @@ cargo run -q -p labwired-cli -- test \
   --script examples/atmega2561-io/io-smoke.yaml --no-uart-stdout
 ```
 
+## Analog input example
+
+[`analog-diode-system.yaml`](analog-diode-system.yaml) routes a parameterized
+Shockley diode load line into the standalone part's explicit ADC0 input. The
+end-to-end test checks the solved junction voltage against an independent
+load-line calculation, then checks the value returned by the AVR ADC registers:
+
+```bash
+cargo test -p labwired-core --test cosim_pin_routing \
+  atmega2561_diode_netlist_reaches_adc0_end_to_end -- --nocapture
+```
+
 ## What this proves
 
 | Surface | State |

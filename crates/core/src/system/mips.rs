@@ -12,6 +12,9 @@ use crate::bus::SystemBus;
 use crate::system::node::parse_elf_image;
 use crate::{Arch, Cpu, Machine};
 
+mod pic32_gpio;
+pub use pic32_gpio::Pic32GpioPlugin;
+
 /// The fixed KSEG0/KSEG1 windows map virtual `va` to physical `va & 0x1FFFFFFF`.
 pub const fn kseg_to_physical(va: u64) -> u64 {
     va & 0x1FFF_FFFF

@@ -22,18 +22,21 @@
 //!   Newton iteration existed. Nothing in this branch may move them.
 //!
 //! What remains unsupported is documented in `cosimulation_plugins.md`. Diode
-//! forward/reverse high-injection knees (`IK`/`IKF`/`IKR`), recombination
+//! forward/reverse high-injection knees (`IK`/`IKF`/`IKR`) and the BJT
+//! high-current beta exponent (`NKF`), recombination
 //! current (`ISR`/`NR`), diffusion charge (`TT`) and soft reverse recovery
 //! (`TT`/`VP`), plus BJT forward bias-dependent and reverse
 //! transit-time charge (`TF`/`TR`/`XTF`/`VTF`/`ITF`) are exercised below. Diode
-//! depletion charge through `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion
-//! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
+//! depletion charge through `CJO`/`VJ`/`M`/`FC` and reverse breakdown emission
+//! through `NBV`, BJT base-junction depletion charge through `CJE`/`CJC`,
+//! JFET gate-junction depletion charge through
 //! `CGS`/`CGD` and the Parker–Skellern channel fit `B`, MOSFET linear overlap
 //! charge through `CGSO`/`CGDO`/`CGBO`,
 //! MOSFET bulk-junction depletion charge through `CBD`/`CBS` and `CJ`/`CJSW`
 //! geometry, MOSFET intrinsic channel capacitance from `TOX`, and JFET terminal
 //! resistances `RD`/`RS`, and MOSFET terminal resistances from `RD`/`RS` or
-//! `RSH` times per-instance `NRD`/`NRS` are exercised below. Circuits depending
+//! `RSH` times per-instance `NRD`/`NRS`, and BJT current-dependent base
+//! resistance through `RBM`/`IRB` are exercised below. Circuits depending
 //! on unsupported stored charge still belong to `adapter: external_process`.
 
 // The `analog` module puts every test under `analog::`, so the design's
@@ -60,6 +63,35 @@ mod analog {
 
     fn relative(actual: f64, expected: f64) -> f64 {
         ((actual - expected) / expected).abs()
+    }
+
+    /// ngspice's level-1 diode `VJ(T)`/`CJO(T)` equations, calculated here
+    /// independently of the solver's operating-model adjustment.
+    fn spice_diode_depletion_parameters(
+        cjo: f64,
+        vj: f64,
+        m: f64,
+        nominal_celsius: f64,
+        temperature_celsius: f64,
+    ) -> (f64, f64) {
+        let nominal_kelvin = nominal_celsius + 273.15;
+        let temperature_kelvin = temperature_celsius + 273.15;
+        if nominal_kelvin.to_bits() == temperature_kelvin.to_bits() {
+            return (cjo, vj);
+        }
+        let nominal_vt = 1.380_649e-23 * nominal_kelvin / 1.602_176_634e-19;
+        let vt = 1.380_649e-23 * temperature_kelvin / 1.602_176_634e-19;
+        let eg_nominal =
+            1.16 - 7.02e-4 * nominal_kelvin * nominal_kelvin / (nominal_kelvin + 1108.0);
+        let eg = 1.16
+            - 7.02e-4 * temperature_kelvin * temperature_kelvin / (temperature_kelvin + 1108.0);
+        let ratio = temperature_kelvin / nominal_kelvin;
+        let temperature_vj =
+            vj * ratio - vt * (3.0 * ratio.ln() + eg_nominal / nominal_vt - eg / vt);
+        let temperature_cjo = cjo
+            * (1.0
+                + m * (4.0e-4 * (temperature_kelvin - nominal_kelvin) - temperature_vj / vj + 1.0));
+        (temperature_cjo, temperature_vj)
     }
 
     // -----------------------------------------------------------------------
@@ -106,6 +138,271 @@ mod analog {
                 "expected {target_current} A through the loop, got {current} A"
             );
         }
+    }
+
+    /// A diode's instance `TEMP` changes both `kT/q` and the SPICE saturation
+    /// current law. The expected load line is solved independently from those
+    /// equations, including the model's series resistance.
+    #[test]
+    fn diode_instance_temperature_matches_the_spice_saturation_current_law() {
+        let (is, n, eg, xti, tnom_c, rs, r, isr, nr, vj, m, target_current) = (
+            2.52e-14, 1.15, 1.11, 3.0, 27.0, 50.0, 2200.0, 4e-11, 1.8, 0.9, 0.4, 200e-6,
+        );
+        let source_voltage = {
+            let vt = 8.617_333_262_145e-5 * (tnom_c + 273.15);
+            let junction = n * vt * f64::ln(target_current / is + 1.0);
+            junction + target_current * (r + rs)
+        };
+        let adjusted_saturation = |nominal_is: f64, emission: f64, temperature_c: f64| {
+            let nominal = tnom_c + 273.15;
+            let temperature = temperature_c + 273.15;
+            let vt_nominal = 8.617_333_262_145e-5 * nominal;
+            let vt = 8.617_333_262_145e-5 * temperature;
+            let log_factor = eg / vt_nominal - eg / vt + xti * f64::ln(temperature / nominal);
+            nominal_is * f64::exp(log_factor / emission)
+        };
+        let expected_junction = |temperature_c: f64| {
+            let temperature = temperature_c + 273.15;
+            let vt = 8.617_333_262_145e-5 * temperature;
+            let is_temperature = adjusted_saturation(is, n, temperature_c);
+            let isr_temperature = adjusted_saturation(isr, nr, temperature_c);
+            let residual = |junction: f64| {
+                let diode = is_temperature * (f64::exp(junction / (n * vt)) - 1.0);
+                let recombination = isr_temperature
+                    * (f64::exp(junction / (nr * vt)) - 1.0)
+                    * ((1.0 - junction / vj).powi(2) + 0.005).powf(m / 2.0);
+                (source_voltage - junction) / (r + rs) - diode - recombination
+            };
+            let (mut low, mut high) = (0.0, source_voltage);
+            for _ in 0..100 {
+                let mid = 0.5 * (low + high);
+                if residual(mid) > 0.0 {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            let junction = 0.5 * (low + high);
+            let current = (source_voltage - junction) / (r + rs);
+            (junction, current)
+        };
+
+        let mut currents = Vec::new();
+        for temperature_c in [27.0, 125.0] {
+            let netlist = format!(
+                "V1 supply 0 dc {source_voltage}\n\
+                 R1 supply a {r}\n\
+                 D1 a 0 DMOD TEMP={temperature_c}\n\
+                 .model DMOD D(IS={is} N={n} RS={rs} EG={eg} XTI={xti} TNOM={tnom_c} \
+                               ISR={isr} NR={nr} VJ={vj} M={m})\n"
+            );
+            let solver = build(&netlist);
+            let (expected_vj, expected_current) = expected_junction(temperature_c);
+            let actual_current = source_current(&solver, "V1");
+            let external = solver.circuit().node("a").expect("external diode node");
+            let junction = solver
+                .circuit()
+                .node("D1#internal")
+                .expect("series resistance creates the junction node");
+            let actual_external_voltage = solver.node_voltage(external);
+            let actual_junction_voltage = solver.node_voltage(junction);
+
+            assert!(
+                relative(actual_current, expected_current) < 2e-7,
+                "TEMP={temperature_c} °C: SPICE load line predicts {expected_current} A, got {actual_current} A"
+            );
+            assert!(
+                (actual_junction_voltage - expected_vj).abs() < 2e-8,
+                "TEMP={temperature_c} °C: junction should be at {expected_vj} V, got {actual_junction_voltage} V"
+            );
+            assert!(
+                (actual_external_voltage - (source_voltage - r * expected_current)).abs() < 2e-8,
+                "TEMP={temperature_c} °C: external node must include the load resistor drop"
+            );
+            currents.push(actual_current);
+        }
+        assert!(
+            currents[1] > currents[0] * 1.3,
+            "heating the silicon junction must raise the current at this fixed bias: {currents:?}"
+        );
+    }
+
+    /// `TRS`/`TRS1` and `TRS2` apply a quadratic temperature law to the diode's
+    /// internal series resistance. Check the resulting load-line current and
+    /// both sides of the internal resistor against a separately solved diode
+    /// equation, with `IS` held temperature-independent to isolate this law.
+    #[test]
+    fn diode_series_resistance_temperature_coefficients_change_the_load_line() {
+        let (is, n, rs, trs1, trs2, tnom, load, supply) =
+            (1e-14, 1.2, 300.0, 1e-3, 2e-6, 27.0, 1_000.0, 2.0);
+        let expected = |temperature_celsius: f64| {
+            let delta = temperature_celsius - tnom;
+            let rs_at_temperature = rs * (1.0 + trs1 * delta + trs2 * delta * delta);
+            let vt = 8.617_333_262_145e-5 * (temperature_celsius + 273.15);
+            let residual = |junction: f64| {
+                (supply - junction) / (load + rs_at_temperature)
+                    - is * (f64::exp(junction / (n * vt)) - 1.0)
+            };
+            let (mut low, mut high) = (0.0, supply);
+            for _ in 0..100 {
+                let mid = 0.5 * (low + high);
+                if residual(mid) > 0.0 {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            let junction = 0.5 * (low + high);
+            let current = (supply - junction) / (load + rs_at_temperature);
+            (rs_at_temperature, junction, current)
+        };
+
+        let mut currents = Vec::new();
+        for temperature_celsius in [27.0, 127.0] {
+            let netlist = format!(
+                "V1 supply 0 dc {supply}\n\
+                 R1 supply a {load}\n\
+                 D1 a 0 DMOD TEMP={temperature_celsius}\n\
+                 .model DMOD D(IS={is} N={n} RS={rs} EG=0 XTI=0 TNOM={tnom} TRS={trs1} TRS2={trs2})\n"
+            );
+            let solver = build(&netlist);
+            let diode = &solver.circuit().diodes[0];
+            let (expected_rs, expected_junction, expected_current) = expected(temperature_celsius);
+            let external = solver.circuit().node("a").expect("external diode node");
+            let junction = solver
+                .circuit()
+                .node("D1#internal")
+                .expect("series resistance creates the junction node");
+            let actual_current = source_current(&solver, "V1");
+            let actual_external = solver.node_voltage(external);
+            let actual_junction = solver.node_voltage(junction);
+
+            assert_eq!(diode.model.rs, rs, "RS remains the nominal model value");
+            assert_eq!(diode.model.trs1, trs1, "TRS is the TRS1 alias");
+            assert_eq!(diode.model.trs2, trs2);
+            assert!(
+                (diode.series_resistance_ohms - expected_rs).abs() < 1e-12,
+                "TEMP={temperature_celsius} °C: expected RS(T)={expected_rs} Ω, got {} Ω",
+                diode.series_resistance_ohms
+            );
+            assert!(
+                relative(actual_current, expected_current) < 2e-7,
+                "TEMP={temperature_celsius} °C: expected load current {expected_current} A, got {actual_current} A"
+            );
+            assert!(
+                (actual_junction - expected_junction).abs() < 2e-8,
+                "TEMP={temperature_celsius} °C: expected junction {expected_junction} V, got {actual_junction} V"
+            );
+            assert!(
+                (actual_external - actual_junction - actual_current * expected_rs).abs() < 2e-8,
+                "the internal diode resistor must carry the load current at RS(T)"
+            );
+            currents.push(actual_current);
+        }
+        assert_ne!(
+            currents[0].to_bits(),
+            currents[1].to_bits(),
+            "the temperature-adjusted series resistance must change the solved load line"
+        );
+
+        let fixed_temperature = build(&format!(
+            "V1 supply 0 dc {supply}\nR1 supply a {load}\nD1 a 0 DMOD\n\
+             .model DMOD D(IS={is} N={n} RS={rs} EG=0 XTI=0 TNOM={tnom} TRS={trs1} TRS2={trs2})\n"
+        ));
+        assert_eq!(
+            fixed_temperature.circuit().diodes[0].series_resistance_ohms,
+            rs,
+            "without instance TEMP, preserve the nominal fixed-temperature resistance"
+        );
+    }
+
+    /// `TCV`/`TBV1` moves a zener's specified breakdown voltage relative to
+    /// `TNOM`. Check the shifted reverse knee through model `RS` and an external
+    /// load, so ignoring the coefficient or applying it at the external node
+    /// produces the wrong operating point.
+    #[test]
+    fn diode_breakdown_temperature_coefficient_moves_loaded_zener_knee() {
+        let (is, n, bv, ibv, nbv, tcv, tnom, rs, load, supply) =
+            (1e-14, 1.2, 5.0, 1e-3, 1.4, 2e-3, 27.0, 40.0, 1_000.0, -7.0);
+        let mut currents = Vec::new();
+
+        for temperature in [27.0, 127.0] {
+            let effective_bv = bv * (1.0 + tcv * (temperature - tnom));
+            let temperature_kelvin = temperature + 273.15;
+            let vt = 1.380_649e-23 * temperature_kelvin / 1.602_176_634e-19;
+            let xbv = device::breakdown_voltage_at_thermal_voltage(effective_bv, ibv, is, nbv, vt);
+            let current_at_junction =
+                |voltage: f64| -is * (-(xbv + voltage) / (nbv * vt)).exp() + device::GMIN * voltage;
+            let load_line = |junction_voltage: f64| {
+                let current = current_at_junction(junction_voltage);
+                (junction_voltage + current * rs - supply) / load + current
+            };
+            let (mut low, mut high) = (-12.0, 0.0);
+            assert!(load_line(low) < 0.0 && load_line(high) > 0.0);
+            for _ in 0..100 {
+                let mid = (low + high) / 2.0;
+                if load_line(mid) < 0.0 {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            let expected_junction = (low + high) / 2.0;
+            let expected_current = current_at_junction(expected_junction);
+            assert!(
+                expected_junction < -xbv,
+                "TEMP={temperature} °C test point must be in breakdown"
+            );
+
+            let netlist = format!(
+                "Vdrive drive 0 dc {supply}\nRload drive a {load}\nD1 a 0 DBV TEMP={temperature}\n\
+                 .model DBV D(IS={is} N={n} EG=0 XTI=0 TNOM={tnom} BV={bv} IBV={ibv} NBV={nbv} TCV={tcv} RS={rs})\n"
+            );
+            let solver = build(&netlist);
+            let diode = &solver.circuit().diodes[0];
+            assert_eq!(diode.model.tcv, tcv);
+            assert!(
+                (diode.breakdown.expect("BV is enabled") - xbv).abs() < 1e-12,
+                "TEMP={temperature} °C: effective breakdown fit should use BV(T)={effective_bv} V"
+            );
+            let external = solver.circuit().node("a").expect("external anode");
+            let junction = solver
+                .circuit()
+                .node("D1#internal")
+                .expect("RS creates an internal junction node");
+            let actual_external = solver.node_voltage(external);
+            let actual_junction = solver.node_voltage(junction);
+            let actual_current = source_current(&solver, "Vdrive");
+
+            assert!(
+                (actual_junction - expected_junction).abs() < 1e-8,
+                "TEMP={temperature} °C: expected internal junction {expected_junction} V, got {actual_junction} V"
+            );
+            assert!(
+                (actual_current - expected_current).abs() < 1e-9,
+                "TEMP={temperature} °C: expected reverse current {expected_current} A, got {actual_current} A"
+            );
+            assert!(
+                (actual_external - actual_junction - actual_current * rs).abs() < 1e-8,
+                "the diode's series resistance must carry the breakdown current"
+            );
+            currents.push(actual_current);
+        }
+
+        assert!(
+            currents[0] < currents[1],
+            "the positive zener coefficient raises BV with temperature and reduces current at fixed reverse bias: {currents:?}"
+        );
+
+        let legacy = build(&format!(
+            "Vdrive a 0 dc -5.5\nD1 a 0 DBV\n\
+             .model DBV D(IS={is} N={n} BV={bv} IBV={ibv} NBV={nbv} TCV={tcv})\n"
+        ));
+        assert_eq!(
+            legacy.circuit().diodes[0].breakdown,
+            Some(device::breakdown_voltage(bv, ibv, is, nbv)),
+            "without instance TEMP, the existing fixed-300 K path is retained"
+        );
     }
 
     /// `IK`/`IKF` and `IKR` reduce forward and reverse junction current at
@@ -168,6 +465,289 @@ mod analog {
             "reverse knee current should be {reverse_current} A, got {} A",
             source_current(&reverse, "V1")
         );
+    }
+
+    /// `NBV` controls the reverse-breakdown exponential independently of the
+    /// forward emission coefficient `N`; exercise it through model parsing and
+    /// a solved circuit rather than only through the voltage-fit helper.
+    #[test]
+    fn diode_nondefault_breakdown_emission_matches_the_reverse_current_equation() {
+        let (is, n, bv, ibv, nbv, vd) = (1e-14, 1.2, 5.0, 1e-3, 2.0, -5.05);
+        let solver = build(&format!(
+            "Vd a 0 dc {vd}\nD1 a 0 DBV\n\
+             .model DBV D(IS={is} N={n} BV={bv} IBV={ibv} NBV={nbv})\n"
+        ));
+        let diode = &solver.circuit().diodes[0];
+        assert_eq!(diode.model.nbv, Some(nbv));
+
+        // At BV, IBV sets the reverse current; below BV, NBV sets its
+        // exponential slope. The tiny correction from ngspice's effective-BV
+        // fit is below 2e-9 relative for these values.
+        let expected = -ibv * ((-vd - bv) / (nbv * VT)).exp() + 1e-12 * vd;
+        let actual = source_current(&solver, "Vd");
+        assert!(
+            (actual - expected).abs() < 1e-10 + 2e-8 * expected.abs(),
+            "NBV={nbv}: expected reverse current {expected} A, got {actual} A"
+        );
+
+        let default = build(&format!(
+            "Vd a 0 dc {vd}\nD1 a 0 DBV\n\
+             .model DBV D(IS={is} N={n} BV={bv} IBV={ibv})\n"
+        ));
+        let default_current = source_current(&default, "Vd");
+        let expected_default = -ibv * ((-vd - bv) / (n * VT)).exp() + 1e-12 * vd;
+        assert!(
+            (default_current - expected_default).abs()
+                < 1e-10 + 2e-8 * expected_default.abs(),
+            "default NBV=N={n}: expected reverse current {expected_default} A, got {default_current} A"
+        );
+        assert!(
+            (actual - default_current).abs() > 1e-3,
+            "explicit NBV should change current: {actual} A vs default {default_current} A"
+        );
+    }
+
+    /// The reverse-breakdown exponential is stamped at the junction behind
+    /// `RS`, while the external load line sees the anode voltage. Solve that
+    /// load line independently so a model that applies `NBV` at the external
+    /// terminal, or bypasses `RS` in breakdown, cannot pass on the fixed-bias
+    /// equation above.
+    #[test]
+    fn diode_nondefault_breakdown_emission_flows_through_series_resistance() {
+        let (is, n, bv, ibv, nbv, rs, supply, load) =
+            (1e-14, 1.2, 5.0, 1e-3, 2.0, 40.0, -6.0, 1_000.0);
+        let solver = build(&format!(
+            "Vdrive drive 0 dc {supply}\nRload drive a {load}\nD1 a 0 DBV\n\
+             .model DBV D(IS={is} N={n} BV={bv} IBV={ibv} NBV={nbv} RS={rs})\n"
+        ));
+        let diode = &solver.circuit().diodes[0];
+        assert_eq!(diode.model.nbv, Some(nbv));
+        let xbv = device::breakdown_voltage(bv, ibv, is, nbv);
+
+        // Independent reverse-breakdown law and load-line root. GMIN remains
+        // outside the breakdown exponential, as it does in the stamped model.
+        let current_at_junction =
+            |voltage: f64| -is * (-(xbv + voltage) / (nbv * VT)).exp() + device::GMIN * voltage;
+        let load_line = |junction_voltage: f64| {
+            let current = current_at_junction(junction_voltage);
+            (junction_voltage + current * rs - supply) / load + current
+        };
+        let (mut low, mut high) = (-10.0, 0.0);
+        assert!(load_line(low) < 0.0 && load_line(high) > 0.0);
+        for _ in 0..100 {
+            let mid = (low + high) / 2.0;
+            if load_line(mid) < 0.0 {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        let expected_junction = (low + high) / 2.0;
+        assert!(expected_junction < -xbv, "root must be in breakdown");
+        let expected_current = current_at_junction(expected_junction);
+
+        let external_anode = solver
+            .circuit()
+            .node("a")
+            .expect("external anode")
+            .expect("anode is not ground");
+        let internal_junction = solver
+            .circuit()
+            .node("D1#internal")
+            .expect("RS creates a probeable internal junction")
+            .expect("junction is not ground");
+        let actual_anode = solver.node_voltage(Some(external_anode));
+        let actual_junction = solver.node_voltage(Some(internal_junction));
+        let actual_current = source_current(&solver, "Vdrive");
+
+        assert!(
+            (actual_junction - expected_junction).abs() < 1e-8,
+            "NBV={nbv}: expected junction voltage {expected_junction} V, got {actual_junction} V"
+        );
+        assert!(
+            (actual_current - expected_current).abs() < 1e-10,
+            "NBV={nbv}: expected breakdown current {expected_current} A, got {actual_current} A"
+        );
+        assert!(
+            (actual_anode - actual_junction - actual_current * rs).abs() < 1e-8,
+            "RS should carry the reverse current: anode {actual_anode} V, junction {actual_junction} V, current {actual_current} A"
+        );
+        assert!(
+            (actual_current - (supply - actual_anode) / load).abs() < 1e-10,
+            "the external resistor load line should close at the solved anode voltage"
+        );
+    }
+
+    /// Reverse-breakdown transit charge uses the same NBV-dependent junction
+    /// current as the DC avalanche branch. Check that charge through model-card
+    /// RS against a scalar load-line solution and an explicit series resistor,
+    /// for both transient companion rules.
+    #[test]
+    fn diode_breakdown_transit_charge_flows_through_series_resistance() {
+        let (is, n, bv, ibv, nbv, rs, rdrive, cjo, vj, m, fc, tt, h) = (
+            1e-14, 1.2, 5.0, 1e-3, 2.0, 40.0, 1_000.0, 100e-12, 0.8, 0.5, 0.5, 100e-9, 1e-6,
+        );
+        let model = format!(
+            "IS={is} N={n} BV={bv} IBV={ibv} NBV={nbv} CJO={cjo} VJ={vj} M={m} FC={fc} TT={tt}"
+        );
+        let modelled = format!(
+            "Vdrive drive 0 dc 0\nRdrive drive a {rdrive}\nD1 a 0 DBV\n\
+             .model DBV D({model} RS={rs})\n"
+        );
+        let explicit = format!(
+            "Vdrive drive 0 dc 0\nRdrive drive a {rdrive}\nRseries a j {rs}\nD1 j 0 DBV\n\
+             .model DBV D({model})\n"
+        );
+        let uncharged = format!(
+            "Vdrive drive 0 dc 0\nRdrive drive a {rdrive}\nD1 a 0 DBV\n\
+             .model DBV D(IS={is} N={n} BV={bv} IBV={ibv} NBV={nbv} RS={rs})\n"
+        );
+        let xbv = device::breakdown_voltage(bv, ibv, is, nbv);
+        let current = |voltage: f64| device::diode_op_breakdown(voltage, is, n, xbv, nbv);
+        let stored_charge = |voltage: f64| {
+            let op = current(voltage);
+            let depletion = device::diode_depletion_charge(voltage, cjo, vj, m, fc).0;
+            let diffusion = device::diode_diffusion_charge(voltage, op, tt).0;
+            depletion + diffusion
+        };
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut modelled_solver = Solver::new(
+                parse_netlist(&modelled).expect("breakdown charge model parses"),
+                integration,
+            )
+            .expect("model-card series-resistance solver builds");
+            let mut explicit_solver = Solver::new(
+                parse_netlist(&explicit).expect("explicit series resistor parses"),
+                integration,
+            )
+            .expect("explicit-resistor solver builds");
+            let mut uncharged_solver = Solver::new(
+                parse_netlist(&uncharged).expect("uncharged model parses"),
+                integration,
+            )
+            .expect("uncharged solver builds");
+
+            let modelled_external = modelled_solver.circuit().node("a").expect("external anode");
+            let modelled_junction = modelled_solver
+                .circuit()
+                .node("D1#internal")
+                .expect("model-card RS creates an internal junction");
+            let explicit_external = explicit_solver.circuit().node("a").expect("external anode");
+            let explicit_junction = explicit_solver.circuit().node("j").expect("junction");
+            // All three start at zero bias, where the depletion and diffusion
+            // charge references are both zero, before the reverse avalanche step.
+            for solver in [
+                &mut modelled_solver,
+                &mut explicit_solver,
+                &mut uncharged_solver,
+            ] {
+                solver.advance(h).expect("zero-bias initial step settles");
+            }
+
+            let mut previous_charge = stored_charge(0.0);
+            let mut previous_charge_current = 0.0;
+            for step in 0..2 {
+                let supply = -6.0;
+                // A changed source restarts trapezoidal integration with one
+                // backward-Euler step, then resumes trapezoidal history.
+                let step_integration = if integration == Integration::Trapezoidal && step == 0 {
+                    Integration::BackwardEuler
+                } else {
+                    integration
+                };
+                let charge_current = |voltage: f64| {
+                    let q = stored_charge(voltage);
+                    match step_integration {
+                        Integration::BackwardEuler => (q - previous_charge) / h,
+                        Integration::Trapezoidal => {
+                            2.0 * (q - previous_charge) / h - previous_charge_current
+                        }
+                    }
+                };
+                let total_current = |voltage: f64| current(voltage).id + charge_current(voltage);
+                let residual =
+                    |voltage: f64| voltage + (rdrive + rs) * total_current(voltage) - supply;
+                let (mut low, mut high) = (-10.0, 0.0);
+                assert!(residual(low) < 0.0 && residual(high) > 0.0);
+                for _ in 0..120 {
+                    let middle = 0.5 * (low + high);
+                    if residual(middle) < 0.0 {
+                        low = middle;
+                    } else {
+                        high = middle;
+                    }
+                }
+                let expected_junction = 0.5 * (low + high);
+                let expected_current = total_current(expected_junction);
+                let expected_external = supply - expected_current * rdrive;
+
+                for solver in [
+                    &mut modelled_solver,
+                    &mut explicit_solver,
+                    &mut uncharged_solver,
+                ] {
+                    solver.set_voltage_source(
+                        solver
+                            .voltage_source_index("Vdrive")
+                            .expect("drive source exists"),
+                        supply,
+                    );
+                    solver
+                        .advance(h)
+                        .expect("reverse-breakdown charge step solves");
+                }
+
+                let actual_junction = modelled_solver.node_voltage(modelled_junction);
+                let actual_external = modelled_solver.node_voltage(modelled_external);
+                let actual_current = source_current(&modelled_solver, "Vdrive");
+                assert!(
+                    expected_junction < -xbv,
+                    "step {step}: expected point must be in breakdown, Vj={expected_junction} V"
+                );
+                assert!(
+                    (actual_junction - expected_junction).abs() < 1e-8,
+                    "{integration:?} step {step}: expected junction {expected_junction} V, got {actual_junction} V"
+                );
+                assert!(
+                    (actual_external - expected_external).abs() < 1e-8,
+                    "{integration:?} step {step}: expected external anode {expected_external} V, got {actual_external} V"
+                );
+                assert!(
+                    (actual_current - expected_current).abs() < 1e-10 + 1e-6 * expected_current.abs(),
+                    "{integration:?} step {step}: expected avalanche terminal current {expected_current} A, got {actual_current} A"
+                );
+                assert!(
+                    (actual_junction - modelled_solver.node_voltage(modelled_external)
+                        + actual_current * rs)
+                        .abs()
+                        < 1e-8,
+                    "model-card RS must carry avalanche current from the external anode to the junction"
+                );
+                assert!(
+                    (actual_external - explicit_solver.node_voltage(explicit_external)).abs() < 1e-8
+                        && (actual_junction - explicit_solver.node_voltage(explicit_junction)).abs()
+                            < 1e-8,
+                    "{integration:?} step {step}: model-card RS and explicit resistor must agree at both terminals"
+                );
+                assert!(
+                    (actual_current - source_current(&explicit_solver, "Vdrive")).abs() < 1e-10,
+                    "{integration:?} step {step}: model-card RS and explicit resistor terminal currents differ"
+                );
+                if step == 0 {
+                    let uncharged_current = source_current(&uncharged_solver, "Vdrive");
+                    assert!(
+                        (actual_current - uncharged_current).abs() > 1e-5,
+                        "reverse-breakdown depletion and transit charge must affect the first-step current, charged {actual_current} A vs uncharged {uncharged_current} A"
+                    );
+                }
+
+                let actual_charge = stored_charge(actual_junction);
+                let actual_charge_current = charge_current(actual_junction);
+                previous_charge = actual_charge;
+                previous_charge_current = actual_charge_current;
+            }
+        }
     }
 
     /// Ngspice's `ISR`/`NR` branch adds recombination current in forward bias
@@ -397,6 +977,479 @@ mod analog {
         }
     }
 
+    /// `TTT1`/`TTT2` scale diode transit time using the instance temperature.
+    /// A solved transient circuit must match an otherwise identical model
+    /// whose `TT` is set to the independently calculated value. Cover both
+    /// quasi-static diffusion charge and the `VP` soft-recovery state.
+    #[test]
+    fn diode_transit_time_temperature_coefficients_match_explicit_charge_models() {
+        let (is, n, tnom, tt) = (1e-14, 1.0, 27.0, 100e-9);
+        let (ttt1, ttt2) = (8e-4, 4e-6);
+        let (resistance, h) = (1e3, 20e-9);
+        let adjusted_tt = |temperature: f64| {
+            let delta = temperature - tnom;
+            tt * (1.0 + ttt1 * delta + ttt2 * delta * delta)
+        };
+        let mut hot_effects = Vec::new();
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for vp in [0.0, 0.25] {
+                for temperature in [tnom, 127.0] {
+                    let expected_tt = adjusted_tt(temperature);
+                    let make_solver = |model: String| {
+                        let netlist = format!(
+                            "Vdrive drive 0 dc 0\nRdrive drive out {resistance}\n\
+                             D1 out 0 DMOD TEMP={temperature}\n.model DMOD D({model})\n"
+                        );
+                        Solver::new(
+                            parse_netlist(&netlist)
+                                .expect("diode transient temperature deck parses"),
+                            integration,
+                        )
+                        .expect("diode transient temperature solver builds")
+                    };
+                    let common = format!("IS={is} N={n} TNOM={tnom} VP={vp}");
+                    let adjusted_model = format!("{common} TT={tt} TTT1={ttt1} TTT2={ttt2}");
+                    let explicit_model = format!("{common} TT={expected_tt}");
+                    let fixed_model = format!("{common} TT={tt}");
+                    let mut actual = make_solver(adjusted_model);
+                    let mut explicit = make_solver(explicit_model);
+                    let mut fixed = make_solver(fixed_model);
+
+                    for solver in [&mut actual, &mut explicit, &mut fixed] {
+                        let drive = solver
+                            .voltage_source_index("Vdrive")
+                            .expect("drive source exists");
+                        solver.set_voltage_source(drive, 1.0);
+                        solver.advance(h).expect("diode transient step solves");
+                    }
+
+                    let out = actual.circuit().node("out").expect("output node exists");
+                    let explicit_out = explicit
+                        .circuit()
+                        .node("out")
+                        .expect("explicit output node exists");
+                    let fixed_out = fixed
+                        .circuit()
+                        .node("out")
+                        .expect("fixed output node exists");
+                    let actual_voltage = actual.node_voltage(out);
+                    let explicit_voltage = explicit.node_voltage(explicit_out);
+                    assert!(
+                        (actual_voltage - explicit_voltage).abs() < 1e-8,
+                        "{integration:?} VP={vp} TEMP={temperature}: expected explicit TT={expected_tt} s voltage {explicit_voltage} V, got {actual_voltage} V"
+                    );
+                    assert!(
+                        relative(
+                            source_current(&actual, "Vdrive"),
+                            source_current(&explicit, "Vdrive")
+                        ) < 1e-6,
+                        "{integration:?} VP={vp} TEMP={temperature}: explicit-TT drive currents differ"
+                    );
+
+                    if temperature > tnom {
+                        let effect = (actual_voltage - fixed.node_voltage(fixed_out)).abs();
+                        assert!(
+                            effect > 1e-7,
+                            "{integration:?} VP={vp}: hot TTT1/TTT2 must change the solved transient, difference={effect} V"
+                        );
+                        hot_effects.push(effect);
+                    }
+                }
+            }
+        }
+        assert!(hot_effects.iter().all(|effect| *effect > 1e-7));
+    }
+
+    /// `TM1`/`TM2` scale the depletion grading coefficient `M` at `TEMP`.
+    /// A reverse-biased junction transient must match the same circuit with
+    /// the independently calculated `M(T)` entered directly on the model.
+    #[test]
+    fn diode_grading_temperature_coefficients_change_solved_depletion_charge() {
+        let (is, n, tnom, cjo, vj, m) = (1e-30, 1.0, 27.0, 10e-9, 0.75, 0.5);
+        let (tm1, tm2) = (8e-4, 4e-6);
+        let (resistance, h) = (1e3, 2e-6);
+        let adjusted_m = |temperature: f64| {
+            let delta = temperature - tnom;
+            m * (1.0 + tm1 * delta + tm2 * delta * delta)
+        };
+        let mut hot_effects = Vec::new();
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for temperature in [tnom, 127.0] {
+                let expected_m = adjusted_m(temperature);
+                let (expected_cjo, expected_vj) =
+                    spice_diode_depletion_parameters(cjo, vj, expected_m, tnom, temperature);
+                let make_solver = |model: String, instance_temperature: bool| {
+                    let temperature = if instance_temperature {
+                        format!(" TEMP={temperature}")
+                    } else {
+                        String::new()
+                    };
+                    let netlist = format!(
+                        "Vdrive drive 0 dc 0\nRdrive drive out {resistance}\n\
+                         D1 out 0 DMOD{temperature}\n.model DMOD D({model})\n"
+                    );
+                    Solver::new(
+                        parse_netlist(&netlist).expect("diode depletion-temperature deck parses"),
+                        integration,
+                    )
+                    .expect("diode depletion-temperature solver builds")
+                };
+                let common = format!("IS={is} N={n} TNOM={tnom} CJO={cjo} VJ={vj} FC=0.5");
+                let adjusted_model = format!("{common} M={m} TM1={tm1} TM2={tm2}");
+                let explicit_model = format!(
+                    "IS={is} N={n} TNOM={tnom} CJO={expected_cjo} VJ={expected_vj} FC=0.5 M={expected_m}"
+                );
+                let fixed_model = format!("{common} M={m}");
+                let mut actual = make_solver(adjusted_model, true);
+                let mut explicit = make_solver(explicit_model, false);
+                let mut fixed = make_solver(fixed_model, true);
+                let actual_model = actual.circuit().diodes[0].operating_model;
+                assert!(
+                    (actual_model.cjo - expected_cjo).abs() < 1e-20
+                        && (actual_model.vj - expected_vj).abs() < 1e-14,
+                    "TEMP={temperature}: expected operating CJO={expected_cjo}, VJ={expected_vj}; got CJO={}, VJ={}",
+                    actual_model.cjo,
+                    actual_model.vj
+                );
+
+                for solver in [&mut actual, &mut explicit, &mut fixed] {
+                    let drive = solver
+                        .voltage_source_index("Vdrive")
+                        .expect("drive source exists");
+                    solver.set_voltage_source(drive, -1.0);
+                    solver
+                        .advance(h)
+                        .expect("depletion-charge transient solves");
+                }
+
+                let out = actual.circuit().node("out").expect("output node exists");
+                let explicit_out = explicit
+                    .circuit()
+                    .node("out")
+                    .expect("explicit output node exists");
+                let fixed_out = fixed
+                    .circuit()
+                    .node("out")
+                    .expect("fixed output node exists");
+                let actual_voltage = actual.node_voltage(out);
+                let explicit_voltage = explicit.node_voltage(explicit_out);
+                assert!(
+                    (actual_voltage - explicit_voltage).abs() < 1e-8,
+                    "{integration:?} TEMP={temperature}: expected explicit M={expected_m} voltage {explicit_voltage} V, got {actual_voltage} V"
+                );
+                assert!(
+                    relative(
+                        source_current(&actual, "Vdrive"),
+                        source_current(&explicit, "Vdrive")
+                    ) < 1e-6,
+                    "{integration:?} TEMP={temperature}: explicit-M drive currents differ"
+                );
+                if temperature > tnom {
+                    let effect = (actual_voltage - fixed.node_voltage(fixed_out)).abs();
+                    assert!(
+                        effect > 1e-6,
+                        "{integration:?}: hot TM1/TM2 must change transient depletion charge, difference={effect} V"
+                    );
+                    hot_effects.push(effect);
+                }
+            }
+        }
+        assert!(hot_effects.iter().all(|effect| *effect > 1e-6));
+    }
+
+    /// `TEMP` adjusts the diode junction potential and zero-bias capacitance
+    /// used by depletion charge. Compare the transient solution with a
+    /// separate nominal-temperature circuit whose CJO/VJ are set from the
+    /// ngspice temperature equations, and require a measurable change from the
+    /// unadjusted junction at hot and cold temperatures.
+    #[test]
+    fn diode_depletion_capacitance_and_potential_follow_instance_temperature() {
+        let (is, n, tnom_c, cjo, vj, m, fc) = (1e-30, 1.0, 26.85, 10e-9, 0.75, 0.65, 0.5);
+        let mut temperature_effects = Vec::new();
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for temperature in [-40.0, tnom_c, 125.0] {
+                let (expected_cjo, expected_vj) =
+                    spice_diode_depletion_parameters(cjo, vj, m, tnom_c, temperature);
+                let make_solver = |device_temp: Option<f64>, depletion_model: String| {
+                    let temperature = device_temp
+                        .map(|value| format!(" TEMP={value}"))
+                        .unwrap_or_default();
+                    let netlist = format!(
+                        "Vdrive drive 0 dc 0\nRdrive drive out 1k\n\
+                         D1 out 0 DMOD{temperature}\n.model DMOD D({depletion_model})\n"
+                    );
+                    Solver::new(
+                        parse_netlist(&netlist).expect("diode depletion-temperature deck parses"),
+                        integration,
+                    )
+                    .expect("diode depletion-temperature solver builds")
+                };
+                let common = format!("IS={is} N={n} TNOM={tnom_c} M={m} FC={fc}");
+                let adjusted_model = format!("{common} CJO={cjo} VJ={vj}");
+                let explicit_model = format!("{common} CJO={expected_cjo} VJ={expected_vj}");
+                let mut actual = make_solver(Some(temperature), adjusted_model);
+                let mut explicit = make_solver(None, explicit_model);
+                let mut nominal = make_solver(None, format!("{common} CJO={cjo} VJ={vj}"));
+
+                for solver in [&mut actual, &mut explicit, &mut nominal] {
+                    let drive = solver
+                        .voltage_source_index("Vdrive")
+                        .expect("drive source exists");
+                    solver.set_voltage_source(drive, -1.0);
+                    solver
+                        .advance(2e-6)
+                        .expect("depletion temperature transient solves");
+                }
+
+                let out = actual.circuit().node("out").expect("output node exists");
+                let explicit_out = explicit
+                    .circuit()
+                    .node("out")
+                    .expect("explicit output node exists");
+                let nominal_out = nominal
+                    .circuit()
+                    .node("out")
+                    .expect("nominal output node exists");
+                let actual_voltage = actual.node_voltage(out);
+                let explicit_voltage = explicit.node_voltage(explicit_out);
+                assert!(
+                    (actual_voltage - explicit_voltage).abs() < 1e-8,
+                    "{integration:?} TEMP={temperature}: expected explicit CJO={expected_cjo} F, VJ={expected_vj} V voltage {explicit_voltage} V, got {actual_voltage} V"
+                );
+                assert!(
+                    relative(
+                        source_current(&actual, "Vdrive"),
+                        source_current(&explicit, "Vdrive")
+                    ) < 1e-6,
+                    "{integration:?} TEMP={temperature}: explicit CJO/VJ drive currents differ"
+                );
+                if (temperature - tnom_c).abs() > 1.0 {
+                    let effect = (actual_voltage - nominal.node_voltage(nominal_out)).abs();
+                    assert!(
+                        effect > 1e-5,
+                        "{integration:?} TEMP={temperature}: CJO/VJ temperature law must change solved depletion charge, difference={effect} V"
+                    );
+                    temperature_effects.push(effect);
+                }
+            }
+        }
+        assert!(temperature_effects.iter().all(|effect| *effect > 1e-5));
+    }
+
+    /// Depletion charge and transit charge share the diode's transient branch
+    /// in MNA. Check their combined current against an independently integrated
+    /// charge law while the junction is behind the model's series resistance.
+    #[test]
+    fn diode_depletion_and_transit_charge_combine_through_series_resistance() {
+        let (is, tt, cjo, vj, grading, fc, rs, source_r, h) =
+            (1e-14, 100e-9, 50e-12, 0.75, 0.5, 0.4, 47.0, 1_000.0, 1e-6);
+        let circuit = parse_netlist(&format!(
+            "V1 in 0 dc 0\nR1 in a {source_r}\nD1 a 0 DMOD\n\
+             .model DMOD D(IS={is} N=1 RS={rs} CJO={cjo} VJ={vj} M={grading} FC={fc} TT={tt})\n"
+        ))
+        .expect("diode depletion and transit model parses");
+
+        // This is the SPICE depletion-charge integral, written out here rather
+        // than calling the device helper under test. The quadratic continuation
+        // above FC·VJ keeps both charge and capacitance continuous.
+        let depletion_charge = |voltage: f64| {
+            let transition = fc * vj;
+            let x_transition: f64 = 1.0 - fc;
+            let q_transition =
+                cjo * vj / (1.0 - grading) * (1.0 - x_transition.powf(1.0 - grading));
+            let c_transition = cjo * x_transition.powf(-grading);
+            if voltage < transition {
+                let x = 1.0 - voltage / vj;
+                cjo * vj / (1.0 - grading) * (1.0 - x.powf(1.0 - grading))
+            } else {
+                let dv = voltage - transition;
+                let slope = grading * cjo * x_transition.powf(-1.0 - grading) / vj;
+                q_transition + c_transition * dv + 0.5 * slope * dv * dv
+            }
+        };
+        let junction_current =
+            |voltage: f64| is * ((voltage / VT).exp() - 1.0) + device::GMIN * voltage;
+        let charge = |voltage: f64| {
+            let transport_current = is * ((voltage / VT).exp() - 1.0);
+            depletion_charge(voltage) + tt * transport_current
+        };
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut solver =
+                Solver::new(circuit.clone(), integration).expect("diode charge solver builds");
+            let external = solver.circuit().node("a").expect("external anode");
+            let junction = solver
+                .circuit()
+                .node("D1#internal")
+                .expect("RS creates the internal junction node")
+                .expect("junction is not ground");
+            let source = solver.voltage_source_index("V1").expect("source exists");
+            let mut previous_charge = charge(solver.node_voltage(Some(junction)));
+            let mut previous_charge_current = 0.0;
+
+            for (step, supply) in [0.9, 0.9].into_iter().enumerate() {
+                solver.set_voltage_source(source, supply);
+                // Source changes and operating-point startup use BE even when
+                // trapezoidal integration is selected; the next step exercises
+                // its stored displacement-current history.
+                let rule = if step == 0 || integration == Integration::BackwardEuler {
+                    Integration::BackwardEuler
+                } else {
+                    Integration::Trapezoidal
+                };
+                let charge_current = |voltage: f64| {
+                    let next_charge = charge(voltage);
+                    match rule {
+                        Integration::BackwardEuler => (next_charge - previous_charge) / h,
+                        Integration::Trapezoidal => {
+                            2.0 * (next_charge - previous_charge) / h - previous_charge_current
+                        }
+                    }
+                };
+                let residual = |voltage: f64| {
+                    (supply - voltage) / (source_r + rs)
+                        - junction_current(voltage)
+                        - charge_current(voltage)
+                };
+                let mut low = 0.0;
+                let mut high = supply;
+                for _ in 0..120 {
+                    let mid = 0.5 * (low + high);
+                    if residual(mid) > 0.0 {
+                        low = mid;
+                    } else {
+                        high = mid;
+                    }
+                }
+                let expected_junction = 0.5 * (low + high);
+
+                solver
+                    .advance(h)
+                    .expect("combined diode charge step solves");
+                let actual_junction = solver.node_voltage(Some(junction));
+                let actual_current = source_current(&solver, "V1");
+                assert!(
+                    (actual_junction - expected_junction).abs() < 1e-8,
+                    "{integration:?} step {step}: combined depletion/transit charge predicts {expected_junction} V at the junction, got {actual_junction} V"
+                );
+                assert!(
+                    (solver.node_voltage(external) - actual_junction - actual_current * rs).abs()
+                        < 1e-8,
+                    "{integration:?} step {step}: diode RS must drop {actual_current}·{rs} V between the external and internal anodes"
+                );
+                assert!(
+                    (actual_current - junction_current(actual_junction)
+                        - charge_current(actual_junction))
+                    .abs()
+                        < 1e-9,
+                    "{integration:?} step {step}: source current must supply conduction plus both stored-charge currents"
+                );
+                assert!(
+                    depletion_charge(actual_junction) > 1e-12
+                        && tt
+                            * (junction_current(actual_junction) - device::GMIN * actual_junction)
+                            > 1e-12,
+                    "the solved point must carry measurable depletion and transit charge"
+                );
+
+                let next_charge = charge(actual_junction);
+                previous_charge_current = match rule {
+                    Integration::BackwardEuler => (next_charge - previous_charge) / h,
+                    Integration::Trapezoidal => {
+                        2.0 * (next_charge - previous_charge) / h - previous_charge_current
+                    }
+                };
+                previous_charge = next_charge;
+            }
+        }
+    }
+
+    /// The diffusion charge must use the same high-injection-limited junction
+    /// current as the diode's conductive stamp. Exercise the interaction in a
+    /// solved transient circuit: an ideal `TT·I` charge would produce a
+    /// measurably different node voltage once the base current is well above
+    /// `IK`.
+    #[test]
+    fn diode_high_injection_scales_transit_charge_in_transient_steps() {
+        let (is, ik, tt, resistance, h) = (1e-14, 100e-6, 100e-9, 1e3, 1e-6);
+        let circuit = parse_netlist(&format!(
+            "V1 in 0 dc 0\nR1 in out {resistance}\nD1 out 0 DMOD\n\
+             .model DMOD D(IS={is} N=1 IK={ik} TT={tt})\n"
+        ))
+        .expect("high-injection diode with transit charge parses");
+
+        // Independent forward-current transform from the SPICE IK equation.
+        // GMIN is outside the high-injection correction and carries no stored
+        // charge, so it is included in I(V) but excluded from Q(V).
+        let base_current = |voltage: f64| is * ((voltage / VT).exp() - 1.0);
+        let current = |voltage: f64| {
+            let base = base_current(voltage);
+            base / (1.0 + (base / ik).sqrt()) + device::GMIN * voltage
+        };
+        let charge = |voltage: f64| {
+            let base = base_current(voltage);
+            tt * base / (1.0 + (base / ik).sqrt())
+        };
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut solver =
+                Solver::new(circuit.clone(), integration).expect("transit solver builds");
+            let out = solver.circuit().node("out").expect("output node");
+            let source = solver.voltage_source_index("V1").expect("source exists");
+            solver.set_voltage_source(source, 2.0);
+
+            let mut previous_charge = charge(solver.node_voltage(out));
+            let mut previous_current = 0.0;
+            for step in 0..2 {
+                let rule = if step == 0 {
+                    Integration::BackwardEuler
+                } else {
+                    integration
+                };
+                let residual = |voltage: f64| {
+                    let next_charge = charge(voltage);
+                    let charge_current = match rule {
+                        Integration::BackwardEuler => (next_charge - previous_charge) / h,
+                        Integration::Trapezoidal => {
+                            2.0 * (next_charge - previous_charge) / h - previous_current
+                        }
+                    };
+                    (2.0 - voltage) / resistance - current(voltage) - charge_current
+                };
+                let mut low = 0.0;
+                let mut high = 2.0;
+                for _ in 0..100 {
+                    let mid = 0.5 * (low + high);
+                    if residual(mid) > 0.0 {
+                        low = mid;
+                    } else {
+                        high = mid;
+                    }
+                }
+                let expected = 0.5 * (low + high);
+                solver
+                    .advance(h)
+                    .expect("high-injection transit-charge step solves");
+                let actual = solver.node_voltage(out);
+                assert!(
+                    (actual - expected).abs() < 1e-8,
+                    "{integration:?} step {step}: expected {expected} V, got {actual} V"
+                );
+
+                let next_charge = charge(actual);
+                previous_current = (next_charge - previous_charge) / h;
+                previous_charge = next_charge;
+                assert!(
+                    base_current(actual) / ik > 10.0,
+                    "the solved junction must be in high injection; V={actual} V"
+                );
+            }
+        }
+    }
+
     /// `VP` makes the transit charge a first-order state. This step-by-step
     /// scalar solve checks its implicit BE/trapezoidal equation through a
     /// forward-to-reverse transition, where the stored charge produces a
@@ -524,6 +1577,343 @@ mod analog {
                 (v2 - expected_v2).abs() < 1e-8,
                 "{integration:?} second step: expected {expected_v2} V, got {v2} V"
             );
+        }
+    }
+
+    /// Depletion and diffusion charge are two parts of the same stored
+    /// junction charge. Exercise their sum in a solved transient circuit,
+    /// including the forward-bias continuation above `FC·VJ`, under both
+    /// integration rules.
+    #[test]
+    fn diode_depletion_and_transit_charge_sum_across_forward_transition() {
+        let (is, cjo, vj, m, fc, tt, resistance, h): (f64, f64, f64, f64, f64, f64, f64, f64) =
+            (1e-14, 100e-12, 0.8, 0.5, 0.5, 100e-9, 1e3, 100e-9);
+        let netlist = format!(
+            "V1 in 0 dc 0\nR1 in out {resistance}\nD1 out 0 DMOD\n\
+             .model DMOD D(IS={is} CJO={cjo} VJ={vj} M={m} FC={fc} TT={tt})\n"
+        );
+        let circuit = parse_netlist(&netlist).expect("combined diode charge model parses");
+        let v_transition = fc * vj;
+
+        // Independent SPICE charge integral with its linear continuation
+        // above FC·VJ. Diffusion storage excludes the solver's GMIN shunt.
+        let xfc = 1.0 - fc;
+        let qfc = cjo * vj / (1.0 - m) * (1.0 - xfc.powf(1.0 - m));
+        let cfc = cjo * xfc.powf(-m);
+        let slope = m * cjo * xfc.powf(-1.0 - m) / vj;
+        let depletion_charge = |voltage: f64| {
+            if voltage < v_transition {
+                let x = 1.0 - voltage / vj;
+                cjo * vj / (1.0 - m) * (1.0 - x.powf(1.0 - m))
+            } else {
+                let dv = voltage - v_transition;
+                qfc + cfc * dv + 0.5 * slope * dv * dv
+            }
+        };
+        let junction_current = |voltage: f64| is * ((voltage / VT).exp() - 1.0);
+        let conduction_current = |voltage: f64| junction_current(voltage) + 1e-12 * voltage;
+        let stored_charge =
+            |voltage: f64| depletion_charge(voltage) + tt * junction_current(voltage);
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut solver = Solver::new(circuit.clone(), integration)
+                .expect("combined diode charge solver builds");
+            let out = solver.circuit().node("out").expect("output node");
+            let source = solver.voltage_source_index("V1").expect("source exists");
+            solver.set_voltage_source(source, 1.0);
+
+            let mut previous_charge = 0.0;
+            let mut previous_current = 0.0;
+            for step in 0..2 {
+                let charge_current = |voltage: f64| {
+                    let next_charge = stored_charge(voltage);
+                    if step == 0 || integration == Integration::BackwardEuler {
+                        (next_charge - previous_charge) / h
+                    } else {
+                        2.0 * (next_charge - previous_charge) / h - previous_current
+                    }
+                };
+                let residual = |voltage: f64| {
+                    (1.0 - voltage) / resistance
+                        - conduction_current(voltage)
+                        - charge_current(voltage)
+                };
+                let mut lo = 0.0;
+                let mut hi = 1.0;
+                for _ in 0..100 {
+                    let mid = 0.5 * (lo + hi);
+                    if residual(mid) > 0.0 {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                let expected = 0.5 * (lo + hi);
+
+                solver
+                    .advance(h)
+                    .expect("combined diode charge step solves");
+                let actual = solver.node_voltage(out);
+                assert!(
+                    (actual - expected).abs() < 1e-8,
+                    "{integration:?} step {step}: expected {expected} V, got {actual} V"
+                );
+                if step == 0 {
+                    assert!(
+                        actual > v_transition,
+                        "the first step must enter the forward continuation above FC·VJ={v_transition} V, got {actual} V"
+                    );
+                }
+
+                let next_charge = stored_charge(actual);
+                previous_current = (next_charge - previous_charge) / h;
+                previous_charge = next_charge;
+            }
+        }
+    }
+
+    /// Depletion charge and soft reverse recovery belong to the intrinsic
+    /// diode junction, behind model-card `RS`. Check the solved junction
+    /// voltage and terminal current against a scalar transient equation, then
+    /// compare `RS` with an explicit resistor for both companion rules. The
+    /// reverse step also has to retain a recovery current that an uncharged
+    /// diode cannot produce.
+    #[test]
+    fn diode_charge_and_recovery_match_series_resistors_during_transients() {
+        let (is, rs, rdrive, cjo, vj, m, fc, tt, vp, h): (
+            f64,
+            f64,
+            f64,
+            f64,
+            f64,
+            f64,
+            f64,
+            f64,
+            f64,
+            f64,
+        ) = (
+            1e-14, 47.0, 100.0, 100e-12, 0.8, 0.5, 0.5, 100e-9, 0.2, 10e-9,
+        );
+        let charged = format!("CJO={cjo} VJ={vj} M={m} FC={fc} TT={tt} VP={vp}");
+        let modelled = format!(
+            "Vdrive in 0 dc 0\nRdrive in a {rdrive}\nD1 a 0 DMOD\n\
+             .model DMOD D(IS={is} RS={rs} {charged})\n"
+        );
+        let explicit = format!(
+            "Vdrive in 0 dc 0\nRdrive in a {rdrive}\nRseries a j {rs}\nD1 j 0 DMOD\n\
+             .model DMOD D(IS={is} {charged})\n"
+        );
+        let uncharged = format!(
+            "Vdrive in 0 dc 0\nRdrive in a {rdrive}\nD1 a 0 DMOD\n\
+             .model DMOD D(IS={is} RS={rs})\n"
+        );
+
+        // Independent SPICE depletion-charge integral, including its linear
+        // continuation above FC·VJ. VP moves diffusion storage into a first-
+        // order recovery state; its current is kept separate from depletion
+        // current just as the model equations specify.
+        let v_transition = fc * vj;
+        let xfc = 1.0 - fc;
+        let qfc = cjo * vj / (1.0 - m) * (1.0 - xfc.powf(1.0 - m));
+        let cfc = cjo * xfc.powf(-m);
+        let slope = m * cjo * xfc.powf(-1.0 - m) / vj;
+        let depletion_charge = |voltage: f64| {
+            if voltage < v_transition {
+                let x = 1.0 - voltage / vj;
+                cjo * vj / (1.0 - m) * (1.0 - x.powf(1.0 - m))
+            } else {
+                let dv = voltage - v_transition;
+                qfc + cfc * dv + 0.5 * slope * dv * dv
+            }
+        };
+        let junction_current = |voltage: f64| device::diode_op(voltage, is, 1.0).id;
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut model = Solver::new(
+                parse_netlist(&modelled).expect("model-card diode resistance parses"),
+                integration,
+            )
+            .expect("model-card diode solver builds");
+            let mut series = Solver::new(
+                parse_netlist(&explicit).expect("explicit diode resistance parses"),
+                integration,
+            )
+            .expect("explicit-resistor diode solver builds");
+            let mut no_charge = Solver::new(
+                parse_netlist(&uncharged).expect("uncharged diode parses"),
+                integration,
+            )
+            .expect("uncharged diode solver builds");
+
+            let model_external = model.circuit().node("a").expect("model external node");
+            let model_junction = model
+                .circuit()
+                .node("D1#internal")
+                .expect("model-card RS creates the junction node");
+            let series_external = series.circuit().node("a").expect("series external node");
+            let series_junction = series.circuit().node("j").expect("explicit junction node");
+            let no_charge_external = no_charge
+                .circuit()
+                .node("a")
+                .expect("uncharged external node");
+            // Settle all three at the same zero-bias operating point before
+            // applying the waveform, so the comparison covers transient
+            // charge rather than initialization order.
+            model.advance(h).expect("model diode initial step settles");
+            series
+                .advance(h)
+                .expect("explicit diode initial step settles");
+            no_charge
+                .advance(h)
+                .expect("uncharged diode initial step settles");
+
+            let mut previous_depletion_charge = depletion_charge(0.0);
+            let mut previous_depletion_current = 0.0;
+            let mut previous_recovery_state = -tt * junction_current(0.0);
+            let mut previous_recovery_rate = 0.0;
+            for (step, supply) in [2.0, 2.0, 2.0, 2.0, -1.0, -1.0, -1.0]
+                .into_iter()
+                .enumerate()
+            {
+                let rule = if step == 0 || step == 4 {
+                    Integration::BackwardEuler
+                } else {
+                    integration
+                };
+                let old_depletion_charge = previous_depletion_charge;
+                let old_depletion_current = previous_depletion_current;
+                let old_recovery_state = previous_recovery_state;
+                let old_recovery_rate = previous_recovery_rate;
+                let depletion_current = |voltage: f64| {
+                    let charge = depletion_charge(voltage);
+                    match rule {
+                        Integration::BackwardEuler => (charge - old_depletion_charge) / h,
+                        Integration::Trapezoidal => {
+                            2.0 * (charge - old_depletion_charge) / h - old_depletion_current
+                        }
+                    }
+                };
+                let recovery = |voltage: f64| {
+                    let tau = tt * vp;
+                    let current = junction_current(voltage);
+                    let (state, rate) = match rule {
+                        Integration::BackwardEuler => {
+                            let ratio = tau / h;
+                            let state =
+                                (-tt * current + ratio * old_recovery_state) / (1.0 + ratio);
+                            (state, (state - old_recovery_state) / h)
+                        }
+                        Integration::Trapezoidal => {
+                            let ratio = tau / h;
+                            let state = (-tt * current
+                                + 2.0 * ratio * old_recovery_state
+                                + tau * old_recovery_rate)
+                                / (1.0 + 2.0 * ratio);
+                            (
+                                state,
+                                2.0 * (state - old_recovery_state) / h - old_recovery_rate,
+                            )
+                        }
+                    };
+                    (state, rate, -(1.0 - vp) * rate)
+                };
+                let residual = |voltage: f64| {
+                    supply
+                        - voltage
+                        - (rdrive + rs)
+                            * (junction_current(voltage)
+                                + depletion_current(voltage)
+                                + recovery(voltage).2)
+                };
+                let mut low = supply - 10.0;
+                let mut high = supply + 10.0;
+                for _ in 0..100 {
+                    let mid = 0.5 * (low + high);
+                    if residual(mid) > 0.0 {
+                        low = mid;
+                    } else {
+                        high = mid;
+                    }
+                }
+                let expected_junction = 0.5 * (low + high);
+                let expected_current = (supply - expected_junction) / (rdrive + rs);
+                let expected_external = supply - expected_current * rdrive;
+
+                for solver in [&mut model, &mut series, &mut no_charge] {
+                    solver.set_voltage_source(
+                        solver
+                            .voltage_source_index("Vdrive")
+                            .expect("source exists"),
+                        supply,
+                    );
+                    solver.advance(h).expect("diode charge step solves");
+                }
+
+                let actual_junction = model.node_voltage(model_junction);
+                let actual_external = model.node_voltage(model_external);
+                let actual_current = source_current(&model, "Vdrive");
+                assert!(
+                    (actual_junction - expected_junction).abs() < 1e-8,
+                    "{integration:?} step {step}: scalar charge equation predicts junction {expected_junction} V, got {actual_junction} V"
+                );
+                assert!(
+                    (actual_external - expected_external).abs() < 1e-8,
+                    "{integration:?} step {step}: scalar equation predicts external anode {expected_external} V, got {actual_external} V"
+                );
+                assert!(
+                    (actual_current - expected_current).abs()
+                        < 1e-10 + 1e-6 * expected_current.abs(),
+                    "{integration:?} step {step}: scalar equation predicts terminal current {expected_current} A, got {actual_current} A"
+                );
+
+                for (label, actual, equivalent) in [
+                    (
+                        "external anode",
+                        actual_external,
+                        series.node_voltage(series_external),
+                    ),
+                    (
+                        "junction",
+                        actual_junction,
+                        series.node_voltage(series_junction),
+                    ),
+                ] {
+                    assert!(
+                        (actual - equivalent).abs() < 1e-8,
+                        "{integration:?} step {step} {label}: model-card RS gives {actual} V, explicit resistor gives {equivalent} V"
+                    );
+                }
+                assert!(
+                    (actual_current - source_current(&series, "Vdrive")).abs() < 1e-10,
+                    "{integration:?} step {step}: model-card RS and explicit resistor terminal currents differ"
+                );
+
+                if step == 0 {
+                    let charge_effect =
+                        (actual_external - no_charge.node_voltage(no_charge_external)).abs();
+                    assert!(
+                        charge_effect > 1e-7,
+                        "forward depletion/transit charge must affect the external anode, got {charge_effect} V"
+                    );
+                    assert!(
+                        actual_junction > v_transition,
+                        "the forward step must enter the depletion continuation above {v_transition} V, got {actual_junction} V"
+                    );
+                }
+                if step == 4 {
+                    let uncharged_current = source_current(&no_charge, "Vdrive");
+                    assert!(
+                        actual_current < uncharged_current - 1e-4,
+                        "stored forward charge must drive a measurable reverse-recovery current: charged {actual_current} A, uncharged {uncharged_current} A"
+                    );
+                }
+
+                previous_depletion_charge = depletion_charge(actual_junction);
+                previous_depletion_current = depletion_current(actual_junction);
+                let (state, rate, _) = recovery(actual_junction);
+                previous_recovery_state = state;
+                previous_recovery_rate = rate;
+            }
         }
     }
 
@@ -658,6 +2048,155 @@ mod analog {
                 (actual - expected).abs() < 1e-8,
                 "{kind} collector coupling: expected {expected} V, got {actual} V"
             );
+        }
+    }
+
+    /// BJT instance temperature adjusts both base-junction depletion charges.
+    /// The solved driven-base transient must match an independent ngspice
+    /// temperature calculation encoded as explicit nominal parameters, for
+    /// the default silicon law and `TLEVC=1`'s linear coefficients.
+    #[test]
+    fn bjt_junction_depletion_temperature_matches_explicit_charge_models() {
+        let (tnom, hot) = (40.0, 120.0);
+        let (cje, vje, mje) = (80e-12, 0.72, 0.42);
+        let (cjc, vjc, mjc) = (50e-12, 0.82, 0.35);
+        let (tmje1, tmje2, tmjc1, tmjc2) = (1e-3, 2e-6, 7e-4, 1e-6);
+        let (cte, ctc, tvje, tvjc) = (1.5e-3, 1e-3, 4e-4, 5e-4);
+        let h = 1e-6;
+
+        let adjusted_junction = |capacitance: f64,
+                                 potential: f64,
+                                 grading: f64,
+                                 grading_tc1: f64,
+                                 grading_tc2: f64,
+                                 capacitance_tc: f64,
+                                 potential_tc: f64,
+                                 temperature: f64,
+                                 tlevc: u8| {
+            let delta = temperature - tnom;
+            let grading_at = grading * (1.0 + grading_tc1 * delta + grading_tc2 * delta * delta);
+            if delta == 0.0 {
+                return (capacitance, potential, grading_at);
+            }
+            if tlevc == 1 {
+                return (
+                    capacitance * (1.0 + capacitance_tc * delta),
+                    potential - potential_tc * delta,
+                    grading_at,
+                );
+            }
+
+            const TREF: f64 = 300.15;
+            const EG_REF: f64 = 1.115_087_7;
+            const KB_EV: f64 = 8.617_333_262_145e-5;
+            let nominal_k = tnom + 273.15;
+            let temperature_k = temperature + 273.15;
+            let ratio_nominal = nominal_k / TREF;
+            let ratio_temperature = temperature_k / TREF;
+            let eg_temperature =
+                1.16 - 7.02e-4 * temperature_k * temperature_k / (temperature_k + 1108.0);
+            let vt = KB_EV * temperature_k;
+            let pbfact = vt
+                * (eg_temperature / (KB_EV * temperature_k)
+                    - EG_REF / (KB_EV * TREF)
+                    - 3.0 * ratio_temperature.ln());
+            let pbo = (potential - pbfact) / ratio_nominal;
+            let gma_old = (potential - pbo) / pbo;
+            let cap_temperature =
+                capacitance / (1.0 + grading_at * (4e-4 * (nominal_k - TREF) - gma_old));
+            let potential_temperature = ratio_temperature * pbo + pbfact;
+            let gma_new = (potential_temperature - pbo) / pbo;
+            let cap_temperature =
+                cap_temperature * (1.0 + grading_at * (4e-4 * (temperature_k - TREF) - gma_new));
+            (cap_temperature, potential_temperature, grading_at)
+        };
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for tlevc in [0u8, 1u8] {
+                for temperature in [tnom, hot] {
+                    let (cje_at, vje_at, mje_at) = adjusted_junction(
+                        cje,
+                        vje,
+                        mje,
+                        tmje1,
+                        tmje2,
+                        cte,
+                        tvje,
+                        temperature,
+                        tlevc,
+                    );
+                    let (cjc_at, vjc_at, mjc_at) = adjusted_junction(
+                        cjc,
+                        vjc,
+                        mjc,
+                        tmjc1,
+                        tmjc2,
+                        ctc,
+                        tvjc,
+                        temperature,
+                        tlevc,
+                    );
+                    let make_solver = |kind: &str, temp: Option<f64>, model: String| {
+                        let instance_temperature =
+                            temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                        let netlist = format!(
+                            "Vdrive drive 0 dc 0\nRdrive drive b 1k\nVc c 0 dc -0.5\n\
+                             Q1 c b 0 QMOD{instance_temperature}\n.model QMOD {kind}({model})\n"
+                        );
+                        Solver::new(
+                            parse_netlist(&netlist).expect("BJT junction-temperature deck parses"),
+                            integration,
+                        )
+                        .expect("BJT junction-temperature solver builds")
+                    };
+                    let base_model = format!(
+                        "IS=1e-40 TNOM={tnom} CJE={cje} VJE={vje} MJE={mje} \
+                         CJC={cjc} VJC={vjc} MJC={mjc} FC=0.5"
+                    );
+                    let temperature_model = format!(
+                        "{base_model} TLEVC={tlevc} TMJE1={tmje1} TMJE2={tmje2} \
+                         TMJC1={tmjc1} TMJC2={tmjc2} CTE={cte} CTC={ctc} TVJE={tvje} TVJC={tvjc}"
+                    );
+                    let explicit_model = format!(
+                        "IS=1e-40 CJE={cje_at} VJE={vje_at} MJE={mje_at} \
+                         CJC={cjc_at} VJC={vjc_at} MJC={mjc_at} FC=0.5"
+                    );
+                    let fixed_model = format!(
+                        "{base_model} TLEVC={tlevc} CTE={cte} CTC={ctc} TVJE={tvje} TVJC={tvjc}"
+                    );
+                    for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                        let mut actual =
+                            make_solver(kind, Some(temperature), temperature_model.clone());
+                        let mut explicit = make_solver(kind, None, explicit_model.clone());
+                        let mut fixed = make_solver(kind, Some(temperature), fixed_model.clone());
+                        for solver in [&mut actual, &mut explicit, &mut fixed] {
+                            let drive = solver
+                                .voltage_source_index("Vdrive")
+                                .expect("base drive source exists");
+                            solver.set_voltage_source(drive, sign * 0.8);
+                            solver.advance(h).expect("BJT depletion transient solves");
+                        }
+
+                        let node_voltage = |solver: &Solver| {
+                            let base = solver.circuit().node("b").expect("base node exists");
+                            sign * solver.node_voltage(base)
+                        };
+                        let actual_voltage = node_voltage(&actual);
+                        let explicit_voltage = node_voltage(&explicit);
+                        assert!(
+                            (actual_voltage - explicit_voltage).abs() < 1e-8,
+                            "{kind} {integration:?} TLEVC={tlevc} TEMP={temperature}: explicit adjusted CJE/VJE/MJE and CJC/VJC/MJC predict {explicit_voltage} V, got {actual_voltage} V"
+                        );
+                        if temperature > tnom {
+                            let effect = (actual_voltage - node_voltage(&fixed)).abs();
+                            assert!(
+                                effect > 1e-7,
+                                "{kind} {integration:?} TLEVC={tlevc}: TMJE/TMJC and junction temperature coefficients must change the solved transient, difference={effect} V"
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -815,6 +2354,343 @@ mod analog {
                 }
             }
         }
+    }
+
+    /// BJT depletion and diffusion charge share each junction's transient
+    /// companion. Check the complete base charge in both transport directions:
+    /// the result must include CJE/CJC and TF/TR together for NPN/PNP, under
+    /// both integration rules.
+    #[test]
+    fn bjt_depletion_and_transit_charge_integrate_together() {
+        let (is, beta_f, beta_r) = (1e-14, 100.0, 2.0);
+        let capacitance = 220e-12;
+        let transit_time = 1e-6;
+        let resistance = 1e3;
+        let h = 1e-6;
+        let drive_voltage = 1.0;
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                for forward in [true, false] {
+                    let (collector_v, emitter_v) = if forward {
+                        (sign * 2.0, 0.0)
+                    } else {
+                        (0.0, sign * 2.0)
+                    };
+                    let netlist = format!(
+                        "Vdrive drive 0 dc 0\nRdrive drive b {resistance}\n\
+                         Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\nQ1 c b e QMOD\n\
+                         .model QMOD {kind}(IS={is} BF={beta_f} BR={beta_r} CJE={capacitance} CJC={capacitance} VJE=1 MJE=0 VJC=1 MJC=0 TF={transit_time} TR={transit_time})\n"
+                    );
+                    let circuit = parse_netlist(&netlist).expect("BJT charge model parses");
+                    let mut solver =
+                        Solver::new(circuit, integration).expect("BJT charge solver builds");
+                    let base = solver.circuit().node("b").expect("base node");
+                    let source = solver
+                        .voltage_source_index("Vdrive")
+                        .expect("base drive exists");
+                    solver.set_voltage_source(source, sign * drive_voltage);
+
+                    let junctions = |v: f64| {
+                        if forward {
+                            (v, v - 2.0)
+                        } else {
+                            (v - 2.0, v)
+                        }
+                    };
+                    // MJE=MJC=0 makes depletion charge exactly C·V. With
+                    // VAF/VAR and IKF/IKR omitted, the transit-charge qb is 1.
+                    let depletion_charge = |vbe: f64, vbc: f64| capacitance * (vbe + vbc);
+                    let transit_charge = |vbe: f64, vbc: f64| {
+                        transit_time * is * (((vbe / VT).exp() - 1.0) + ((vbc / VT).exp() - 1.0))
+                    };
+                    let charge = |v: f64| {
+                        let (vbe, vbc) = junctions(v);
+                        depletion_charge(vbe, vbc) + transit_charge(vbe, vbc)
+                    };
+                    let base_current = |vbe: f64, vbc: f64| {
+                        is / beta_f * ((vbe / VT).exp() - 1.0)
+                            + is / beta_r * ((vbc / VT).exp() - 1.0)
+                    };
+
+                    let previous_v = sign * solver.node_voltage(base);
+                    let (previous_vbe, previous_vbc) = junctions(previous_v);
+                    let mut previous_charge = charge(previous_v);
+                    let mut previous_current = 0.0;
+                    for step in 0..2 {
+                        let charge_current = |v: f64| {
+                            let delta = charge(v) - previous_charge;
+                            if step == 0 || integration == Integration::BackwardEuler {
+                                delta / h
+                            } else {
+                                2.0 * delta / h - previous_current
+                            }
+                        };
+                        let residual = |v: f64| {
+                            let (vbe, vbc) = junctions(v);
+                            (drive_voltage - v) / resistance
+                                - base_current(vbe, vbc)
+                                - device::GMIN * (vbe + vbc)
+                                - charge_current(v)
+                        };
+                        let mut lo = 0.0;
+                        let mut hi = drive_voltage;
+                        for _ in 0..100 {
+                            let mid = 0.5 * (lo + hi);
+                            if residual(mid) > 0.0 {
+                                lo = mid;
+                            } else {
+                                hi = mid;
+                            }
+                        }
+                        let expected = 0.5 * (lo + hi);
+
+                        solver.advance(h).expect("combined BJT charge step solves");
+                        let actual = sign * solver.node_voltage(base);
+                        assert!(
+                            (actual - expected).abs() < 1e-8,
+                            "{kind} {integration:?} {} step {step}: expected {expected} V, got {actual} V",
+                            if forward { "TF/CJE" } else { "TR/CJC" }
+                        );
+
+                        let (next_vbe, next_vbc) = junctions(actual);
+                        if step == 0 {
+                            let depletion_delta = depletion_charge(next_vbe, next_vbc)
+                                - depletion_charge(previous_vbe, previous_vbc);
+                            let transit_delta = transit_charge(next_vbe, next_vbc)
+                                - transit_charge(previous_vbe, previous_vbc);
+                            assert!(
+                                depletion_delta.abs() > transit_delta.abs() * 0.1
+                                    && transit_delta.abs() > depletion_delta.abs() * 0.1,
+                                "both depletion and transit charge must affect the first step: ΔQdep={depletion_delta} C, ΔQtransit={transit_delta} C"
+                            );
+                        }
+                        let next_charge = charge(actual);
+                        previous_current = (next_charge - previous_charge) / h;
+                        previous_charge = next_charge;
+                    }
+                }
+            }
+        }
+    }
+
+    /// The transient stamp must use the same Early-effect and high-injection
+    /// base charge as the BJT transport model. Solve a driven base node with
+    /// both junction depletion charge, forward transit charge, and the two
+    /// recombination branches active; compare the MNA result with an
+    /// independent scalar charge-balance calculation for NPN and PNP.
+    #[test]
+    fn bjt_transit_charge_uses_early_and_high_injection_base_charge_in_transient() {
+        let (is, bf, br, vaf, var, ikf, ikr) = (1e-16, 80.0, 4.0, 35.0, 50.0, 0.2e-3, 0.5e-3);
+        let (ise, ne, isc, nc) = (1e-13, 1.5, 2e-13, 2.0);
+        let (tf, tr, cje, cjc) = (20e-9, 30e-9, 60e-12, 40e-12);
+        let (eg, xti, xtb, tnom_celsius) = (1.11, 3.0, 1.2, 27.0);
+        let (drive, resistance, collector, h) = (0.95, 1e3, 3.0, 1e-6);
+
+        for temperature_celsius in [27.0, 110.0] {
+            let temperature_kelvin = temperature_celsius + 273.15;
+            let nominal_kelvin = tnom_celsius + 273.15;
+            let ratio = temperature_kelvin / nominal_kelvin;
+            let vt = 1.380_649e-23 * temperature_kelvin / 1.602_176_634e-19;
+            let factlog = (ratio - 1.0) * eg / vt + xti * f64::ln(ratio);
+            let beta_factor = ratio.powf(xtb);
+            let adjusted_is = is * f64::exp(factlog);
+            let adjusted_bf = bf * beta_factor;
+            let adjusted_br = br * beta_factor;
+            let adjusted_ise = ise * f64::exp(factlog / ne) / beta_factor;
+            let adjusted_isc = isc * f64::exp(factlog / nc) / beta_factor;
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                    let netlist = format!(
+                    "Vdrive drive 0 dc 0\nRdrive drive b {resistance}\n\
+                     Vc c 0 dc {}\nVe e 0 dc 0\n\
+                     Q1 c b e QMOD TEMP={temperature_celsius}\n\
+                     .model QMOD {kind}(IS={is} BF={bf} BR={br} VAF={vaf} VAR={var} IKF={ikf} IKR={ikr} ISE={ise} NE={ne} ISC={isc} NC={nc} TF={tf} TR={tr} CJE={cje} CJC={cjc} VJE=1 MJE=0 VJC=1 MJC=0 TNOM={tnom_celsius} EG={eg} XTI={xti} XTB={xtb})\n",
+                    sign * collector,
+                );
+                    let circuit = parse_netlist(&netlist).expect("combined BJT model parses");
+                    let mut solver =
+                        Solver::new(circuit, integration).expect("combined BJT solver builds");
+                    let base = solver.circuit().node("b").expect("base node");
+                    let drive_source = solver
+                        .voltage_source_index("Vdrive")
+                        .expect("base drive source");
+                    let previous_v = sign * solver.node_voltage(base);
+                    solver.set_voltage_source(drive_source, sign * drive);
+
+                    let base_width_and_charge = |vbe: f64, vbc: f64| {
+                        let forward = (vbe / vt).exp();
+                        let reverse = (vbc / vt).exp();
+                        let cbe = adjusted_is * (forward - 1.0);
+                        let cbc = adjusted_is * (reverse - 1.0);
+                        let base_width = 1.0 - vbc / vaf - vbe / var;
+                        let q1 = 1.0 / base_width;
+                        let q2 = cbe / ikf + cbc / ikr;
+                        let qb = q1 * (1.0 + (1.0 + 4.0 * q2).sqrt()) / 2.0;
+                        (qb, cbe, cbc, forward, reverse)
+                    };
+                    let base_current_and_charge = |vbe: f64, vbc: f64| {
+                        let (qb, cbe, cbc, forward, reverse) = base_width_and_charge(vbe, vbc);
+                        let ibe = (adjusted_is / adjusted_bf) * (forward - 1.0)
+                            + adjusted_ise * ((vbe / (ne * vt)).exp() - 1.0);
+                        let ibc = (adjusted_is / adjusted_br) * (reverse - 1.0)
+                            + adjusted_isc * ((vbc / (nc * vt)).exp() - 1.0);
+                        let qbe = if vbe > 0.0 { tf * cbe / qb } else { tf * cbe };
+                        let qbc = tr * cbc;
+                        let junction_charge = cje * vbe + cjc * vbc;
+                        (
+                            ibe + ibc,
+                            junction_charge + qbe + qbc,
+                            qb,
+                            qbe,
+                            junction_charge,
+                        )
+                    };
+                    let previous_vbc = previous_v - collector;
+                    let (_, previous_charge, _, _, _) =
+                        base_current_and_charge(previous_v, previous_vbc);
+                    let residual = |vbe: f64| {
+                        let vbc = vbe - collector;
+                        let (base_current, charge, _, _, _) = base_current_and_charge(vbe, vbc);
+                        (drive - vbe) / resistance
+                            - base_current
+                            - device::GMIN * (vbe + vbc)
+                            - (charge - previous_charge) / h
+                    };
+                    let mut lo = 0.0;
+                    let mut hi = drive;
+                    for _ in 0..100 {
+                        let mid = 0.5 * (lo + hi);
+                        if residual(mid) > 0.0 {
+                            lo = mid;
+                        } else {
+                            hi = mid;
+                        }
+                    }
+                    let expected = 0.5 * (lo + hi);
+                    let (_, _, qb, transit_charge, junction_charge) =
+                        base_current_and_charge(expected, expected - collector);
+                    assert!(
+                        qb > 1.1,
+                        "{kind}: selected bias must activate high injection (qb={qb})"
+                    );
+                    assert!(
+                    transit_charge.abs() > 1e-13,
+                    "{kind}: transit charge must affect the solved base (QTF={transit_charge} C)"
+                );
+                    assert!(
+                        (junction_charge - previous_charge).abs() > 1e-13,
+                        "{kind}: junction depletion charge must affect the transient"
+                    );
+
+                    solver
+                        .advance(h)
+                        .expect("combined BJT transient step solves");
+                    let actual = sign * solver.node_voltage(base);
+                    assert!(
+                    (actual - expected).abs() < 1e-8,
+                    "{kind} TEMP={temperature_celsius} °C {integration:?}: Early/high-injection transit charge and junction charge predict {expected} V, got {actual} V"
+                );
+                }
+            }
+        }
+    }
+
+    /// `TTF1/2` and `TTR1/2` scale the SPICE forward and reverse transit times
+    /// with temperature. Compare each transient step to a separate transistor
+    /// whose `TF`/`TR` are explicitly set to the independently calculated
+    /// values, and confirm the hot result differs from an unscaled model.
+    #[test]
+    fn bjt_transit_time_temperature_coefficients_match_explicit_charge_models() {
+        let (is, bf, br, tnom, tf, tr) = (1e-14, 100.0, 2.0, 27.0, 1e-6, 2e-6);
+        let (ttf1, ttf2, ttr1, ttr2) = (1e-3, 1e-5, 2e-3, 1e-5);
+        let h = 1e-6;
+        let adjusted_times = |temperature: f64| {
+            let delta = temperature - tnom;
+            (
+                tf * (1.0 + ttf1 * delta + ttf2 * delta * delta),
+                tr * (1.0 + ttr1 * delta + ttr2 * delta * delta),
+            )
+        };
+        let mut hot_effects = Vec::new();
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for temperature in [tnom, 127.0] {
+                let (tf_at, tr_at) = adjusted_times(temperature);
+                for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                    for forward in [true, false] {
+                        let (collector_v, emitter_v) = if forward {
+                            (sign * 2.0, 0.0)
+                        } else {
+                            (0.0, sign * 2.0)
+                        };
+                        let make_solver = |transit_model: String| {
+                            let netlist = format!(
+                                "Vdrive drive 0 dc 0\nRdrive drive b 1k\n\
+                                 Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
+                                 Q1 c b e QMOD TEMP={temperature}\n.model QMOD {kind}({transit_model})\n"
+                            );
+                            Solver::new(
+                                parse_netlist(&netlist)
+                                    .expect("BJT transit-temperature deck parses"),
+                                integration,
+                            )
+                            .expect("BJT transit-temperature solver builds")
+                        };
+                        let nominal_model =
+                            format!("IS={is} BF={bf} BR={br} TNOM={tnom} TF={tf} TR={tr}");
+                        let adjusted_model = format!(
+                            "IS={is} BF={bf} BR={br} TNOM={tnom} TF={tf} TR={tr} \
+                             TTF1={ttf1} TTF2={ttf2} TTR1={ttr1} TTR2={ttr2}"
+                        );
+                        let explicit_model =
+                            format!("IS={is} BF={bf} BR={br} TNOM={tnom} TF={tf_at} TR={tr_at}");
+                        let mut actual = make_solver(adjusted_model);
+                        let mut explicit = make_solver(explicit_model);
+                        let mut fixed = make_solver(nominal_model);
+                        for solver in [&mut actual, &mut explicit, &mut fixed] {
+                            let drive = solver
+                                .voltage_source_index("Vdrive")
+                                .expect("base drive source exists");
+                            solver.set_voltage_source(drive, sign);
+                            solver.advance(h).expect("transit-charge step solves");
+                        }
+
+                        let actual_base =
+                            actual.circuit().node("b").expect("actual base node exists");
+                        let explicit_base = explicit
+                            .circuit()
+                            .node("b")
+                            .expect("explicit base node exists");
+                        let fixed_base = fixed.circuit().node("b").expect("fixed base node exists");
+                        let actual_voltage = actual.node_voltage(actual_base);
+                        let explicit_voltage = explicit.node_voltage(explicit_base);
+                        let fixed_voltage = fixed.node_voltage(fixed_base);
+                        assert!(
+                            (actual_voltage - explicit_voltage).abs() < 1e-8,
+                            "{kind} {forward:?} {integration:?} TEMP={temperature}: expected explicit-time base voltage {explicit_voltage} V, got {actual_voltage} V"
+                        );
+                        assert!(
+                            relative(
+                                source_current(&actual, "Vdrive"),
+                                source_current(&explicit, "Vdrive")
+                            ) < 1e-6,
+                            "{kind} {forward:?} {integration:?} TEMP={temperature}: transit-time drive currents differ"
+                        );
+                        if temperature > tnom {
+                            let difference = (actual_voltage - fixed_voltage).abs();
+                            assert!(
+                                difference > 1e-7,
+                                "{kind} {forward:?} {integration:?}: TTF/TTR must change the hot transient, difference={difference} V"
+                            );
+                            hot_effects.push(difference);
+                        }
+                    }
+                }
+            }
+        }
+        assert!(hot_effects.iter().all(|effect| *effect > 1e-7));
     }
 
     /// A reverse-biased diode with default `CJO=0` and `TT=0` conducts its
@@ -1056,6 +2932,467 @@ mod analog {
                     (actual_current - expected_current).abs() < 1e-10,
                     "{kind} {source}: expected {expected_current} A, got {actual_current} A"
                 );
+            }
+        }
+    }
+
+    /// BJT `TRB*`, `TRC*`, and `TRE*` coefficients scale the three terminal
+    /// resistors by `1 + TC1·ΔT + TC2·ΔT²`. Compare a real loaded transistor at
+    /// nominal and hot temperatures against explicit resistors with the
+    /// independently calculated values, for NPN and PNP models.
+    #[test]
+    fn bjt_terminal_resistance_temperature_coefficients_match_explicit_resistors() {
+        let (tnom, rb, rc, re) = (27.0, 31.0, 18.0, 7.0);
+        let (trb1, trb2, trc1, trc2, tre1, tre2) = (1e-3, 1e-5, 2e-3, 1e-5, 5e-4, 1e-5);
+        let resistances = |temperature_celsius: f64| {
+            let delta = temperature_celsius - tnom;
+            (
+                rb * (1.0 + trb1 * delta + trb2 * delta * delta),
+                rc * (1.0 + trc1 * delta + trc2 * delta * delta),
+                re * (1.0 + tre1 * delta + tre2 * delta * delta),
+            )
+        };
+
+        for temperature in [tnom, 127.0] {
+            let (rb_at, rc_at, re_at) = resistances(temperature);
+            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                let modelled = format!(
+                    "Vc c 0 dc {}\nVdrive drive 0 dc {}\nRdrive drive b 10k\n\
+                     Rload e 0 10k\nQ1 c b e QMOD TEMP={temperature}\n\
+                     .model QMOD {kind}(IS=1e-15 BF=100 BR=4 TNOM={tnom} \
+                     RB={rb} TRB1={trb1} TRB2={trb2} RC={rc} TRC1={trc1} TRC2={trc2} \
+                     RE={re} TRE1={tre1} TRE2={tre2})\n",
+                    sign * 5.0,
+                    sign * 1.0,
+                );
+                let explicit = format!(
+                    "Vc c 0 dc {}\nVdrive drive 0 dc {}\nRdrive drive b 10k\n\
+                     Rload e 0 10k\nRbase b qb {rb_at}\nRcollector c qc {rc_at}\n\
+                     Remitter e qe {re_at}\nQ1 qc qb qe QMOD TEMP={temperature}\n\
+                     .model QMOD {kind}(IS=1e-15 BF=100 BR=4 TNOM={tnom})\n",
+                    sign * 5.0,
+                    sign * 1.0,
+                );
+                let actual = build(&modelled);
+                let expected = build(&explicit);
+                let operating = actual.circuit().bjts[0].operating_model;
+                assert!((operating.rb - rb_at).abs() < 1e-12);
+                assert!((operating.rc - rc_at).abs() < 1e-12);
+                assert!((operating.re - re_at).abs() < 1e-12);
+
+                for (actual_name, expected_name) in [
+                    ("c", "c"),
+                    ("b", "b"),
+                    ("e", "e"),
+                    ("Q1#collector", "qc"),
+                    ("Q1#base", "qb"),
+                    ("Q1#emitter", "qe"),
+                ] {
+                    let actual_node = actual
+                        .circuit()
+                        .node(actual_name)
+                        .expect("modelled node exists");
+                    let expected_node = expected
+                        .circuit()
+                        .node(expected_name)
+                        .expect("explicit resistor node exists");
+                    let actual_voltage = actual.node_voltage(actual_node);
+                    let expected_voltage = expected.node_voltage(expected_node);
+                    assert!(
+                        (actual_voltage - expected_voltage).abs() < 1e-8,
+                        "{kind} TEMP={temperature} °C {actual_name}: expected {expected_voltage} V, got {actual_voltage} V"
+                    );
+                }
+                for source in ["Vc", "Vdrive"] {
+                    let actual_current = source_current(&actual, source);
+                    let expected_current = source_current(&expected, source);
+                    assert!(
+                        (actual_current - expected_current).abs() < 1e-10,
+                        "{kind} TEMP={temperature} °C {source}: expected {expected_current} A, got {actual_current} A"
+                    );
+                }
+            }
+        }
+    }
+
+    /// During a base step, Early effect, high-injection rolloff, base
+    /// recombination, and junction/transit charge interact while displacement
+    /// current flows through all three BJT terminals. Model-card RB/RC/RE must
+    /// match explicit resistors around the same transistor, for both channel
+    /// polarities and transient companion rules.
+    #[test]
+    fn bjt_transient_charge_matches_explicit_terminal_resistors_for_both_polarities() {
+        let (rb, rc, re) = (31.0, 18.0, 7.0);
+        let (h, drive_resistance) = (1e-9, 1e3);
+        let bjt_physics = "IS=1e-15 BF=100 BR=4 VAF=50 VAR=75 \
+            IKF=150u IKR=80u ISE=1e-12 NE=1.5 ISC=2e-12 NC=1.8";
+        let charge = "CJE=60p CJC=40p VJE=1 MJE=0 VJC=1 MJC=0 TF=20n TR=5n";
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for (kind, sign, collector_v, emitter_v) in
+                [("NPN", 1.0, 3.0, 0.0), ("PNP", -1.0, 0.0, 3.0)]
+            {
+                let model_card = format!("{bjt_physics} RB={rb} RC={rc} RE={re} {charge}");
+                let modelled = format!(
+                    "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
+                     Vdrive drive 0 dc {emitter_v}\nRdrive drive b {drive_resistance}\n\
+                     Q1 c b e QMOD\n.model QMOD {kind}({model_card})\n"
+                );
+                let explicit = format!(
+                    "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
+                     Vdrive drive 0 dc {emitter_v}\nRdrive drive b {drive_resistance}\n\
+                     Rbase b qb {rb}\nRcollector c qc {rc}\nRemitter e qe {re}\n\
+                     Q1 qc qb qe QMOD\n.model QMOD {kind}({bjt_physics} {charge})\n"
+                );
+                let no_charge = format!(
+                    "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
+                     Vdrive drive 0 dc {emitter_v}\nRdrive drive b {drive_resistance}\n\
+                     Q1 c b e QMOD\n\
+                     .model QMOD {kind}({bjt_physics} RB={rb} RC={rc} RE={re})\n"
+                );
+
+                let mut model = Solver::new(
+                    parse_netlist(&modelled).expect("BJT terminal charge model parses"),
+                    integration,
+                )
+                .expect("BJT terminal charge solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit).expect("explicit BJT terminal resistors parse"),
+                    integration,
+                )
+                .expect("explicit-resistor BJT solver builds");
+                let mut uncharged = Solver::new(
+                    parse_netlist(&no_charge).expect("uncharged BJT model parses"),
+                    integration,
+                )
+                .expect("uncharged BJT solver builds");
+
+                let model_nodes = ["c", "b", "e", "Q1#collector", "Q1#base", "Q1#emitter"]
+                    .map(|name| model.circuit().node(name).expect("model node"));
+                let explicit_nodes = ["c", "b", "e", "qc", "qb", "qe"]
+                    .map(|name| explicit.circuit().node(name).expect("explicit node"));
+                let model_drive = model
+                    .voltage_source_index("Vdrive")
+                    .expect("model base-drive source");
+                let explicit_drive = explicit
+                    .voltage_source_index("Vdrive")
+                    .expect("explicit base-drive source");
+                let uncharged_drive = uncharged
+                    .voltage_source_index("Vdrive")
+                    .expect("uncharged base-drive source");
+
+                model.advance(h).expect("model operating point settles");
+                explicit
+                    .advance(h)
+                    .expect("explicit-resistor operating point settles");
+                uncharged
+                    .advance(h)
+                    .expect("uncharged operating point settles");
+                for (model_node, explicit_node) in model_nodes.into_iter().zip(explicit_nodes) {
+                    assert!(
+                        (model.node_voltage(model_node) - explicit.node_voltage(explicit_node))
+                            .abs()
+                            < 1e-9,
+                        "{kind} {integration:?}: initial terminal voltages differ"
+                    );
+                }
+
+                let driven_base = emitter_v + sign * 0.9;
+                model.set_voltage_source(model_drive, driven_base);
+                explicit.set_voltage_source(explicit_drive, driven_base);
+                uncharged.set_voltage_source(uncharged_drive, driven_base);
+                model.advance(h).expect("model BJT charge step solves");
+                explicit
+                    .advance(h)
+                    .expect("explicit-resistor BJT charge step solves");
+                uncharged.advance(h).expect("uncharged BJT step solves");
+
+                let mut charge_effect = 0.0_f64;
+                for (label, model_node, explicit_node) in [
+                    ("external collector", model_nodes[0], explicit_nodes[0]),
+                    ("external base", model_nodes[1], explicit_nodes[1]),
+                    ("external emitter", model_nodes[2], explicit_nodes[2]),
+                    ("intrinsic collector", model_nodes[3], explicit_nodes[3]),
+                    ("intrinsic base", model_nodes[4], explicit_nodes[4]),
+                    ("intrinsic emitter", model_nodes[5], explicit_nodes[5]),
+                ] {
+                    let actual = model.node_voltage(model_node);
+                    let expected = explicit.node_voltage(explicit_node);
+                    charge_effect =
+                        charge_effect.max((actual - uncharged.node_voltage(model_node)).abs());
+                    assert!(
+                        (actual - expected).abs() < 1e-8,
+                        "{kind} {integration:?} {label}: model-card resistances give {actual} V, explicit resistors give {expected} V"
+                    );
+                }
+                assert!(
+                    charge_effect > 1e-7,
+                    "{kind} {integration:?}: junction/transit charge must measurably affect terminal voltages, got a largest charged/uncharged difference of {charge_effect} V"
+                );
+                for source in ["Vc", "Ve", "Vdrive"] {
+                    let actual = source_current(&model, source);
+                    let expected = source_current(&explicit, source);
+                    assert!(
+                        (actual - expected).abs() < 1e-10,
+                        "{kind} {integration:?} {source}: model-card resistances give {actual} A, explicit resistors give {expected} A"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The transient base current includes displacement current, but ngspice's
+    /// RBM/IRB law is controlled by the transistor's conduction base current.
+    /// Step a charged NPN and PNP through the MNA solver and check the external
+    /// base drop against that law at the solved intrinsic junction voltages.
+    #[test]
+    fn bjt_bias_dependent_base_resistance_uses_conduction_current_during_transients() {
+        let (rb, rbm, irb) = (50.0, 5.0, 100e-6);
+        let (h, drive_resistance) = (1e-6, 1e3);
+        let charge = "CJE=60p CJC=40p VJE=1 MJE=0 VJC=1 MJC=0 TF=20n TR=5n";
+        let expected_resistance = |base_current: f64| {
+            let x = (base_current / irb).max(1e-9);
+            let z = ((1.0 + 14.59025 * x).sqrt() - 1.0) / (2.4317 * x.sqrt());
+            let tan_z = z.tan();
+            rbm + 3.0 * (rb - rbm) * (tan_z - z) / (z * tan_z * tan_z)
+        };
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for (kind, sign, collector_v, emitter_v) in
+                [("NPN", 1.0, 3.0, 0.0), ("PNP", -1.0, 0.0, 3.0)]
+            {
+                let initial_base = emitter_v + sign * 0.7;
+                let modelled = format!(
+                    "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
+                     Vdrive drive 0 dc {initial_base}\nRdrive drive b {drive_resistance}\n\
+                     Q1 c b e QMOD\n\
+                     .model QMOD {kind}(IS=1e-15 BF=100 BR=4 VAF=0 VAR=0 \
+                     RB={rb} RBM={rbm} IRB={irb} {charge})\n"
+                );
+                let uncharged = format!(
+                    "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
+                     Vdrive drive 0 dc {initial_base}\nRdrive drive b {drive_resistance}\n\
+                     Q1 c b e QMOD\n\
+                     .model QMOD {kind}(IS=1e-15 BF=100 BR=4 VAF=0 VAR=0 \
+                     RB={rb} RBM={rbm} IRB={irb})\n"
+                );
+                let mut model = Solver::new(
+                    parse_netlist(&modelled).expect("charged BJT model parses"),
+                    integration,
+                )
+                .expect("charged BJT solver builds");
+                let mut uncharged = Solver::new(
+                    parse_netlist(&uncharged).expect("uncharged BJT model parses"),
+                    integration,
+                )
+                .expect("uncharged BJT solver builds");
+                let model_drive = model
+                    .voltage_source_index("Vdrive")
+                    .expect("model base-drive source");
+                let uncharged_drive = uncharged
+                    .voltage_source_index("Vdrive")
+                    .expect("uncharged base-drive source");
+                let external_base = model.circuit().node("b").expect("external base");
+                let internal_base = model.circuit().node("Q1#base").expect("intrinsic base");
+                let internal_collector = model.circuit().bjts[0].junction_c;
+                let internal_emitter = model.circuit().bjts[0].junction_e;
+                let uncharged_base = uncharged.circuit().node("b").expect("external base");
+
+                model.advance(h).expect("charged operating point settles");
+                uncharged
+                    .advance(h)
+                    .expect("uncharged operating point settles");
+                let driven_base = emitter_v + sign * 0.701;
+                model.set_voltage_source(model_drive, driven_base);
+                uncharged.set_voltage_source(uncharged_drive, driven_base);
+                model.advance(h).expect("charged BJT transient solves");
+                uncharged
+                    .advance(h)
+                    .expect("uncharged BJT transient solves");
+
+                let vbe = sign
+                    * (model.node_voltage(internal_base) - model.node_voltage(internal_emitter));
+                let vbc = sign
+                    * (model.node_voltage(internal_base) - model.node_voltage(internal_collector));
+                let model_card = model.circuit().bjts[0].model;
+                let op = device::bjt_op_with_nkf(
+                    vbe,
+                    vbc,
+                    model_card.is,
+                    model_card.bf,
+                    model_card.br,
+                    model_card.nf,
+                    model_card.nr,
+                    model_card.vaf,
+                    model_card.var,
+                    model_card.ikf,
+                    model_card.ikr,
+                    model_card.ise,
+                    model_card.ne,
+                    model_card.isc,
+                    model_card.nc,
+                    model_card.nkf,
+                );
+                let base_current = sign * source_current(&model, "Vdrive");
+                let base_drop =
+                    sign * (model.node_voltage(external_base) - model.node_voltage(internal_base));
+                let actual_resistance = base_drop / base_current;
+                let expected = expected_resistance(op.ib);
+                let total_current_resistance = expected_resistance(base_current);
+                let uncharged_voltage = uncharged.node_voltage(uncharged_base);
+                let charged_voltage = model.node_voltage(external_base);
+
+                assert!(
+                    op.ib > 0.0,
+                    "{kind} {integration:?}: expected forward conduction current, Vbe={vbe} V, Vbc={vbc} V, Ib={} A",
+                    op.ib
+                );
+                assert!(
+                    (base_current - op.ib).abs() > 1e-8,
+                    "{kind} {integration:?}: the transient must add measurable base displacement current, source={base_current} A, conduction={}",
+                    op.ib
+                );
+                assert!(
+                    relative(expected, total_current_resistance) > 1e-3,
+                    "{kind} {integration:?}: displacement current must select a distinct RBM/IRB resistance; conduction predicts {expected} Ω while total current predicts {total_current_resistance} Ω"
+                );
+                assert!(
+                    (charged_voltage - uncharged_voltage).abs() > 1e-7,
+                    "{kind} {integration:?}: stored charge must move the solved external base, charged={charged_voltage} V, uncharged={uncharged_voltage} V"
+                );
+                assert!(
+                    relative(actual_resistance, expected) < 1e-5,
+                    "{kind} {integration:?}: RBM/IRB should use conduction Ib={} A and give {expected} Ω, got {actual_resistance} Ω from total base current {base_current} A",
+                    op.ib
+                );
+            }
+        }
+    }
+
+    /// Ngspice's RBM/IRB law makes the base spreading resistance fall from RB
+    /// toward RBM as the solved base current rises. This drives both an NPN and
+    /// PNP through that transition and checks the voltage drop/current ratio
+    /// against the closed-form resistance interpolation.
+    #[test]
+    fn bjt_base_resistance_rolls_off_with_bias_for_both_polarities() {
+        let (rb, rbm, irb) = (50.0, 5.0, 100e-6);
+        let (trb1, trb2, trbm1, trbm2, tirb1, tirb2) = (1e-3, 2e-6, 2e-3, 3e-6, 1e-3, 1e-6);
+        let expected_resistance = |base_current: f64, temperature: f64| {
+            let delta = temperature - 27.0;
+            let rb_at = rb * (1.0 + trb1 * delta + trb2 * delta * delta);
+            let rbm_at = rbm * (1.0 + trbm1 * delta + trbm2 * delta * delta);
+            let irb_at = irb * (1.0 + tirb1 * delta + tirb2 * delta * delta);
+            let x = (base_current / irb_at).max(1e-9);
+            let z = ((1.0 + 14.59025 * x).sqrt() - 1.0) / (2.4317 * x.sqrt());
+            let tan_z = z.tan();
+            rbm_at + 3.0 * (rb_at - rbm_at) * (tan_z - z) / (z * tan_z * tan_z)
+        };
+
+        for temperature in [27.0, 127.0] {
+            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                let mut measured = Vec::new();
+                for drive in [0.75, 0.82] {
+                    let netlist = format!(
+                        "Vb b 0 dc {}\nVc c 0 dc {}\nQ1 c b 0 QMOD TEMP={temperature}\n\
+                         .model QMOD {kind}(IS=1e-15 BF=100 BR=1 VAF=0 VAR=0 TNOM=27 \
+                         RB={rb} RBM={rbm} IRB={irb} TRB1={trb1} TRB2={trb2} \
+                         TRBM1={trbm1} TRBM2={trbm2} TIRB1={tirb1} TIRB2={tirb2})\n",
+                        sign * drive,
+                        sign * 5.0,
+                    );
+                    let solver = build(&netlist);
+                    let base = solver
+                        .circuit()
+                        .node("b")
+                        .expect("external base node")
+                        .expect("base is not ground");
+                    let internal_base = solver
+                        .circuit()
+                        .node("Q1#base")
+                        .expect("internal base node")
+                        .expect("base is not ground");
+                    let base_current = sign * source_current(&solver, "Vb");
+                    let base_drop = sign
+                        * (solver.node_voltage(Some(base))
+                            - solver.node_voltage(Some(internal_base)));
+                    let actual_resistance = base_drop / base_current;
+                    let expected = expected_resistance(base_current, temperature);
+                    assert!(base_current > 0.0, "{kind}: expected forward base current");
+                    assert!(
+                        relative(actual_resistance, expected) < 1e-5,
+                        "{kind} TEMP={temperature} °C at {drive} V: expected RB={expected} Ω from Ib={base_current} A, got {actual_resistance} Ω"
+                    );
+                    measured.push(actual_resistance);
+                }
+                assert!(
+                    measured[1] < measured[0],
+                    "{kind} TEMP={temperature} °C: base resistance should roll off with increasing base current, got {measured:?}"
+                );
+            }
+        }
+    }
+
+    /// Instance TEMP adjusts BJT saturation current, thermal voltage and beta.
+    /// Pin both junction voltages in an MNA circuit, then compare all three
+    /// terminal currents with an independent SPICE temperature calculation.
+    #[test]
+    fn bjt_instance_temperature_matches_gummel_poon_current_laws() {
+        let (is, bf, br, nf, nr) = (1e-16, 80.0, 4.0, 1.1, 1.2);
+        let (ise, ne, isc, nc) = (1e-12, 1.5, 2e-12, 1.8);
+        let (eg, xti, xtb, tnom_celsius) = (1.11, 3.0, 1.4, 27.0);
+        let (vbe, vbc) = (0.62, -1.38);
+        let expected = |temperature_celsius: f64| {
+            let temperature_kelvin = temperature_celsius + 273.15;
+            let nominal_kelvin = tnom_celsius + 273.15;
+            let ratio = temperature_kelvin / nominal_kelvin;
+            let vt = 1.380_649e-23 * temperature_kelvin / 1.602_176_634e-19;
+            let factlog = (ratio - 1.0) * eg / vt + xti * f64::ln(ratio);
+            let beta_factor = ratio.powf(xtb);
+            let adjusted_is = is * f64::exp(factlog);
+            let adjusted_bf = bf * beta_factor;
+            let adjusted_br = br * beta_factor;
+            let adjusted_ise = ise * f64::exp(factlog / ne) / beta_factor;
+            let adjusted_isc = isc * f64::exp(factlog / nc) / beta_factor;
+            let forward = f64::exp(vbe / (nf * vt));
+            let reverse = f64::exp(vbc / (nr * vt));
+            let transport = adjusted_is * (forward - reverse);
+            let ibe = (adjusted_is / adjusted_bf) * (forward - 1.0)
+                + adjusted_ise * (f64::exp(vbe / (ne * vt)) - 1.0);
+            let ibc = (adjusted_is / adjusted_br) * (reverse - 1.0)
+                + adjusted_isc * (f64::exp(vbc / (nc * vt)) - 1.0);
+            let ic = transport - ibc - device::GMIN * vbc;
+            let ib = ibe + ibc + device::GMIN * (vbe + vbc);
+            [ic, ib, -(ic + ib)]
+        };
+
+        for temperature_celsius in [27.0, 125.0] {
+            let expected_currents = expected(temperature_celsius);
+            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                let netlist = format!(
+                    "Vb b 0 dc {}\nVc c 0 dc {}\nVe e 0 dc 0\n\
+                     Q1 c b e QMOD TEMP={temperature_celsius}\n\
+                     .model QMOD {kind}(IS={is} BF={bf} BR={br} NF={nf} NR={nr} \
+                     ISE={ise} NE={ne} ISC={isc} NC={nc} TNOM={tnom_celsius} \
+                     EG={eg} XTI={xti} XTB={xtb})\n",
+                    sign * vbe,
+                    sign * (vbe - vbc),
+                );
+                let solver = build(&netlist);
+                let actual = [
+                    sign * source_current(&solver, "Vc"),
+                    sign * source_current(&solver, "Vb"),
+                    sign * source_current(&solver, "Ve"),
+                ];
+                for (terminal, actual, expected) in [
+                    ("collector", actual[0], expected_currents[0]),
+                    ("base", actual[1], expected_currents[1]),
+                    ("emitter", actual[2], expected_currents[2]),
+                ] {
+                    assert!(
+                        relative(actual, expected) < 2e-5,
+                        "{kind} TEMP={temperature_celsius} °C {terminal}: expected {expected} A, got {actual} A"
+                    );
+                }
             }
         }
     }
@@ -1313,6 +3650,149 @@ mod analog {
         }
     }
 
+    /// Explicit `NKF` changes the exponent of the Gummel–Poon high-current
+    /// base-charge term. Exercise the resulting terminal currents through the
+    /// MNA solver rather than only checking that the model card parsed.
+    #[test]
+    fn bjt_nkf_controls_high_injection_rolloff_for_both_polarities_and_directions() {
+        let (is, bf, br, vaf, var, ikf, ikr, nkf) = (1e-16, 80.0, 4.0, 35.0, 50.0, 2e-4, 5e-4, 0.8);
+
+        for (vbe, vbc) in [(0.75, -4.25), (-4.25, 0.75)] {
+            let forward = (vbe / VT).exp();
+            let reverse = (vbc / VT).exp();
+            let q1 = 1.0 / (1.0 - vbc / vaf - vbe / var);
+            let q2 = is * (forward - 1.0) / ikf + is * (reverse - 1.0) / ikr;
+            let qb = q1 * (1.0 + (1.0 + 4.0 * q2).powf(nkf)) / 2.0;
+            let ict = is * (forward - reverse) / qb;
+            let ibe = (is / bf) * (forward - 1.0);
+            let ibc = (is / br) * (reverse - 1.0);
+            let ic = ict - ibc - device::GMIN * vbc;
+            let ib = ibe + ibc + device::GMIN * (vbe + vbc);
+            let ie = -(ic + ib);
+            let direction = if vbe > 0.0 { "forward" } else { "reverse" };
+
+            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                let netlist = format!(
+                    "Vb b 0 dc {}\nVc c 0 dc 0\nVe e 0 dc {}\nQ1 c b e QMOD\n\
+                     .model QMOD {kind}(IS={is} BF={bf} BR={br} VAF={vaf} VAR={var} IKF={ikf} IKR={ikr} NKF={nkf})\n",
+                    sign * vbc,
+                    sign * (vbc - vbe),
+                );
+                let solver = build(&netlist);
+                assert_eq!(solver.circuit().bjts[0].model.nkf, Some(nkf));
+                let actual_ic = sign * source_current(&solver, "Vc");
+                let actual_ib = sign * source_current(&solver, "Vb");
+                let actual_ie = sign * source_current(&solver, "Ve");
+
+                assert!(
+                    relative(actual_ic, ic) < 1e-5,
+                    "{kind} {direction} NKF={nkf}: expected Ic={ic} A, got {actual_ic} A"
+                );
+                assert!(
+                    relative(actual_ib, ib) < 1e-5,
+                    "{kind} {direction} NKF={nkf}: expected Ib={ib} A, got {actual_ib} A"
+                );
+                assert!(
+                    relative(actual_ie, ie) < 1e-5,
+                    "{kind} {direction} NKF={nkf}: expected Ie={ie} A, got {actual_ie} A"
+                );
+            }
+        }
+    }
+
+    /// The same NKF-dependent base charge feeds forward transit charge, so a
+    /// non-default exponent must change Qbe as well as the DC transport gain.
+    #[test]
+    fn bjt_nkf_changes_forward_transit_charge() {
+        let (is, nf, nr, vaf, var, ikf, ikr, nkf, tf) =
+            (2e-16, 1.2, 1.1, 40.0, 70.0, 2e-3, 5e-3, 0.8, 12e-9);
+        let circuit = parse_netlist(&format!(
+            "Q1 c b e QMOD\n.model QMOD NPN(IS={is} NF={nf} NR={nr} VAF={vaf} VAR={var} IKF={ikf} IKR={ikr} NKF={nkf} TF={tf})\n"
+        ))
+        .expect("NKF transit-charge model parses");
+        let model = circuit.bjts[0].model;
+        let (vbe, vbc) = (0.64, 0.35);
+        let forward = (vbe / (nf * VT)).exp();
+        let reverse = (vbc / (nr * VT)).exp();
+        let cbe = is * (forward - 1.0);
+        let cbc = is * (reverse - 1.0);
+        let q1 = 1.0 / (1.0 - vbc / vaf - vbe / var);
+        let q2 = cbe / ikf + cbc / ikr;
+        let qb = q1 * (1.0 + (1.0 + 4.0 * q2).powf(nkf)) / 2.0;
+        let expected = tf * cbe / qb;
+        let charge = device::bjt_transit_charge(vbe, vbc, model);
+        let actual = charge.qbe;
+        assert!(
+            (actual - expected).abs() < 1e-24 + expected.abs() * 1e-8,
+            "NKF={nkf}: expected Qbe={expected} C, got {actual} C"
+        );
+
+        let delta = 1e-6;
+        let plus_be = device::bjt_transit_charge(vbe + delta, vbc, model).qbe;
+        let minus_be = device::bjt_transit_charge(vbe - delta, vbc, model).qbe;
+        let plus_bc = device::bjt_transit_charge(vbe, vbc + delta, model).qbe;
+        let minus_bc = device::bjt_transit_charge(vbe, vbc - delta, model).qbe;
+        let finite_difference = |plus: f64, minus: f64| (plus - minus) / (2.0 * delta);
+        for (actual, expected) in [
+            (charge.dqbe_dvbe, finite_difference(plus_be, minus_be)),
+            (charge.dqbe_dvbc, finite_difference(plus_bc, minus_bc)),
+        ] {
+            assert!(
+                (actual - expected).abs() < expected.abs() * 2e-5 + 1e-24,
+                "NKF transit-charge derivative {actual} differs from finite difference {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn bjt_nkf_high_injection_partials_match_finite_difference() {
+        let (is, nf, nr, vaf, var, ikf, ikr, nkf) = (2e-15, 1.1, 1.2, 42.0, 65.0, 2e-4, 5e-4, 0.8);
+        let delta = 1e-7;
+        let transport = |vbe: f64, vbc: f64| {
+            let forward = (vbe / (nf * VT)).exp();
+            let reverse = (vbc / (nr * VT)).exp();
+            let q1 = 1.0 / (1.0 - vbc / vaf - vbe / var);
+            let q2 = is * (forward - 1.0) / ikf + is * (reverse - 1.0) / ikr;
+            let qb = q1 * (1.0 + (1.0 + 4.0 * q2).powf(nkf)) / 2.0;
+            is * (forward - reverse) / qb
+        };
+
+        for (vbe, vbc) in [(0.68, -0.1), (-0.1, 0.62)] {
+            let op = device::bjt_op_with_nkf(
+                vbe,
+                vbc,
+                is,
+                75.0,
+                3.0,
+                nf,
+                nr,
+                vaf,
+                var,
+                ikf,
+                ikr,
+                0.0,
+                1.5,
+                0.0,
+                2.0,
+                Some(nkf),
+            );
+            let expected_gif =
+                (transport(vbe + delta, vbc) - transport(vbe - delta, vbc)) / (2.0 * delta);
+            let expected_gir =
+                -(transport(vbe, vbc + delta) - transport(vbe, vbc - delta)) / (2.0 * delta);
+            assert!(
+                relative(op.gif, expected_gif) < 1e-6,
+                "NKF={nkf} gif: {} vs {expected_gif}",
+                op.gif
+            );
+            assert!(
+                relative(op.gir, expected_gir) < 1e-6,
+                "NKF={nkf} gir: {} vs {expected_gir}",
+                op.gir
+            );
+        }
+    }
+
     #[test]
     fn bjt_high_injection_partials_match_finite_difference() {
         let (is, bf, br, nf, nr, vaf, var, ikf, ikr) =
@@ -1432,6 +3912,288 @@ mod analog {
                     "{kind} {direction}: emitter current should be {ie} A, got {actual_ie} A"
                 );
             }
+        }
+    }
+
+    /// With the collector-base junction forward biased, both Gummel–Poon base
+    /// recombination branches draw current through the external base resistor.
+    /// Solve that resistor/device current balance independently, then check the
+    /// actual MNA base voltage and drive current for NPN and PNP polarities.
+    #[test]
+    fn bjt_base_recombination_loads_a_resistively_driven_base() {
+        let (is, bf, br, ise, ne, isc, nc, rb, vce, drive) = (
+            1e-16, 80.0, 4.0, 1e-11, 1.5, 5e-10, 2.0, 10_000.0, 0.15, 1.0,
+        );
+        let base_current = |vbe: f64, include_recombination: bool| {
+            let vbc = vbe - vce;
+            let ise = if include_recombination { ise } else { 0.0 };
+            let isc = if include_recombination { isc } else { 0.0 };
+            (is / bf) * ((vbe / VT).exp() - 1.0)
+                + ise * ((vbe / (ne * VT)).exp() - 1.0)
+                + (is / br) * ((vbc / VT).exp() - 1.0)
+                + isc * ((vbc / (nc * VT)).exp() - 1.0)
+                + device::GMIN * (vbe + vbc)
+        };
+        let expected_vbe = |include_recombination: bool| {
+            let mut lo = -0.1;
+            let mut hi = drive;
+            for _ in 0..100 {
+                let mid = (lo + hi) / 2.0;
+                let source_current = (drive - mid) / rb;
+                if source_current > base_current(mid, include_recombination) {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            (lo + hi) / 2.0
+        };
+        let expected = expected_vbe(true);
+        let without_recombination = expected_vbe(false);
+        assert!(expected > vce, "the selected bias must forward-bias B-C");
+        assert!(
+            without_recombination - expected > 0.1,
+            "both recombination branches should materially load the base"
+        );
+
+        for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+            let emitter_v = if sign > 0.0 { 0.0 } else { 3.0 };
+            let collector_v = emitter_v + sign * vce;
+            let drive_v = emitter_v + sign * drive;
+            let netlist = format!(
+                "Ve e 0 dc {emitter_v}\nVc c 0 dc {collector_v}\n\
+                 Vdrive drive 0 dc {drive_v}\nRbase drive b {rb}\n\
+                 Q1 c b e QMOD\n\
+                 .model QMOD {kind}(IS={is} BF={bf} BR={br} ISE={ise} NE={ne} ISC={isc} NC={nc})\n"
+            );
+            let solver = build(&netlist);
+            let base = solver
+                .circuit()
+                .node("b")
+                .expect("external base node")
+                .expect("base is not ground");
+            let actual_vbe = sign * (solver.node_voltage(Some(base)) - emitter_v);
+            let actual_drive_current = sign * source_current(&solver, "Vdrive");
+            let expected_drive_current = (drive - expected) / rb;
+
+            assert!(
+                (actual_vbe - expected).abs() < 1e-8,
+                "{kind}: both recombination branches predict Vbe={expected} V, got {actual_vbe} V"
+            );
+            assert!(
+                (actual_drive_current - expected_drive_current).abs() < 1e-10,
+                "{kind}: the base drive should supply {expected_drive_current} A, got {actual_drive_current} A"
+            );
+        }
+    }
+
+    /// The model-card base resistance sits outside both Gummel–Poon
+    /// recombination branches. Solve the current balance through the internal
+    /// base node, then compare it with the same resistor written explicitly.
+    #[test]
+    fn bjt_base_recombination_flows_through_modelled_base_resistance() {
+        let (is, bf, br, ise, ne, isc, nc, rb, drive_resistance, vce, drive) = (
+            1e-16, 80.0, 4.0, 1e-11, 1.5, 5e-10, 2.0, 250.0, 10_000.0, 0.15, 1.0,
+        );
+        let base_current = |vbe: f64, include_recombination: bool| {
+            let vbc = vbe - vce;
+            let ise = if include_recombination { ise } else { 0.0 };
+            let isc = if include_recombination { isc } else { 0.0 };
+            (is / bf) * ((vbe / VT).exp() - 1.0)
+                + ise * ((vbe / (ne * VT)).exp() - 1.0)
+                + (is / br) * ((vbc / VT).exp() - 1.0)
+                + isc * ((vbc / (nc * VT)).exp() - 1.0)
+                + device::GMIN * (vbe + vbc)
+        };
+        let expected_vbe = |include_recombination: bool| {
+            let mut lo = -0.1;
+            let mut hi = drive;
+            for _ in 0..100 {
+                let mid = (lo + hi) / 2.0;
+                let source_current = (drive - mid) / (drive_resistance + rb);
+                if source_current > base_current(mid, include_recombination) {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            (lo + hi) / 2.0
+        };
+        let expected = expected_vbe(true);
+        let without_recombination = expected_vbe(false);
+        assert!(expected > vce, "the selected bias must forward-bias B-C");
+        assert!(
+            without_recombination - expected > 0.1,
+            "recombination must materially load the intrinsic base"
+        );
+
+        for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+            let emitter_v = if sign > 0.0 { 0.0 } else { 3.0 };
+            let collector_v = emitter_v + sign * vce;
+            let drive_v = emitter_v + sign * drive;
+            let model = format!(
+                "Ve e 0 dc {emitter_v}\nVc c 0 dc {collector_v}\n\
+                 Vdrive drive 0 dc {drive_v}\nRdrive drive b {drive_resistance}\n\
+                 Q1 c b e QMOD\n\
+                 .model QMOD {kind}(IS={is} BF={bf} BR={br} RB={rb} \
+                 ISE={ise} NE={ne} ISC={isc} NC={nc})\n"
+            );
+            let explicit = format!(
+                "Ve e 0 dc {emitter_v}\nVc c 0 dc {collector_v}\n\
+                 Vdrive drive 0 dc {drive_v}\nRdrive drive b {drive_resistance}\n\
+                 Rbase b qb {rb}\nQ1 c qb e QMOD\n\
+                 .model QMOD {kind}(IS={is} BF={bf} BR={br} \
+                 ISE={ise} NE={ne} ISC={isc} NC={nc})\n"
+            );
+            let actual = build(&model);
+            let reference = build(&explicit);
+            let model_base = actual
+                .circuit()
+                .node("b")
+                .expect("external base node")
+                .expect("base is not ground");
+            let model_intrinsic_base = actual
+                .circuit()
+                .node("Q1#base")
+                .expect("internal base node")
+                .expect("internal base is not ground");
+            let actual_vbe = sign * (actual.node_voltage(Some(model_intrinsic_base)) - emitter_v);
+            let actual_base_current = sign * source_current(&actual, "Vdrive");
+            let actual_base_drop = sign
+                * (actual.node_voltage(Some(model_base))
+                    - actual.node_voltage(Some(model_intrinsic_base)));
+
+            assert!(
+                (actual_vbe - expected).abs() < 1e-8,
+                "{kind}: recombination plus RB predict intrinsic Vbe={expected} V, got {actual_vbe} V"
+            );
+            assert!(
+                (actual_base_current - base_current(expected, true)).abs() < 1e-10,
+                "{kind}: recombination predicts Ib={} A, got {actual_base_current} A",
+                base_current(expected, true)
+            );
+            assert!(
+                (actual_base_drop - actual_base_current * rb).abs() < 1e-8,
+                "{kind}: RB should drop {} V, got {actual_base_drop} V",
+                actual_base_current * rb
+            );
+            for (model_name, reference_name) in
+                [("b", "b"), ("Q1#base", "qb"), ("c", "c"), ("e", "e")]
+            {
+                let model_node = actual.circuit().node(model_name).expect("model node");
+                let reference_node = reference
+                    .circuit()
+                    .node(reference_name)
+                    .expect("reference node");
+                assert!(
+                    (actual.node_voltage(model_node) - reference.node_voltage(reference_node))
+                        .abs()
+                        < 1e-8,
+                    "{kind} {model_name}: model-card RB differs from explicit resistor"
+                );
+            }
+            for source in ["Vdrive", "Vc", "Ve"] {
+                assert!(
+                    (source_current(&actual, source) - source_current(&reference, source)).abs()
+                        < 1e-10,
+                    "{kind} {source}: model-card RB current differs from explicit resistor"
+                );
+            }
+        }
+    }
+
+    /// Base recombination changes the current that controls RBM/IRB, so both
+    /// effects must be solved together at the intrinsic junctions. Compare the
+    /// MNA result with an independent root of the base-current and spreading-
+    /// resistance equations for NPN and PNP devices.
+    #[test]
+    fn bjt_recombination_sets_bias_dependent_base_resistance() {
+        let (is, bf, br, ise, ne, isc, nc, rb, rbm, irb, drive_resistance, vce, drive) = (
+            1e-16, 80.0, 4.0, 1e-11, 1.5, 5e-10, 2.0, 1000.0, 10.0, 100e-6, 4000.0, 0.15, 1.2,
+        );
+        let base_current = |vbe: f64, include_recombination: bool| {
+            let vbc = vbe - vce;
+            let ise = if include_recombination { ise } else { 0.0 };
+            let isc = if include_recombination { isc } else { 0.0 };
+            (is / bf) * ((vbe / VT).exp() - 1.0)
+                + ise * ((vbe / (ne * VT)).exp() - 1.0)
+                + (is / br) * ((vbc / VT).exp() - 1.0)
+                + isc * ((vbc / (nc * VT)).exp() - 1.0)
+                + device::GMIN * (vbe + vbc)
+        };
+        // Independent transcription of the SPICE RBM/IRB interpolation. The
+        // input is the total base current, including both recombination legs.
+        let base_resistance = |current: f64| {
+            let x = (current / irb).max(1e-9);
+            let z = ((1.0 + 14.59025 * x).sqrt() - 1.0) / (2.4317 * x.sqrt());
+            let tan_z = z.tan();
+            rbm + 3.0 * (rb - rbm) * (tan_z - z) / (z * tan_z * tan_z)
+        };
+        let expected_vbe = |include_recombination: bool| {
+            let mut lo = -0.1;
+            let mut hi = drive;
+            for _ in 0..100 {
+                let mid = (lo + hi) / 2.0;
+                let current = base_current(mid, include_recombination);
+                let drive_current = (drive - mid) / (drive_resistance + base_resistance(current));
+                if drive_current > current {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            (lo + hi) / 2.0
+        };
+        let expected = expected_vbe(true);
+        let without_recombination = expected_vbe(false);
+        let expected_current = base_current(expected, true);
+        let expected_resistance = base_resistance(expected_current);
+        assert!(expected > vce, "the selected bias must forward-bias B-C");
+        assert!(
+            without_recombination - expected > 0.05,
+            "recombination must materially change the bias, with/without={without_recombination}/{expected} V"
+        );
+        assert!(
+            expected_resistance < rb * 0.8 && expected_resistance > rbm,
+            "the solved current should move RB into its transition: {expected_resistance} Ω"
+        );
+
+        for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+            let emitter_v = if sign > 0.0 { 0.0 } else { 3.0 };
+            let collector_v = emitter_v + sign * vce;
+            let drive_v = emitter_v + sign * drive;
+            let netlist = format!(
+                "Ve e 0 dc {emitter_v}\nVc c 0 dc {collector_v}\nVdrive drive 0 dc {drive_v}\nRdrive drive b {drive_resistance}\nQ1 c b e QMOD\n.model QMOD {kind}(IS={is} BF={bf} BR={br} RB={rb} RBM={rbm} IRB={irb} ISE={ise} NE={ne} ISC={isc} NC={nc})\n"
+            );
+            let solver = build(&netlist);
+            let base = solver
+                .circuit()
+                .node("b")
+                .expect("external base node")
+                .expect("base is not ground");
+            let internal_base = solver
+                .circuit()
+                .node("Q1#base")
+                .expect("internal base node")
+                .expect("base is not ground");
+            let actual_vbe = sign * (solver.node_voltage(Some(internal_base)) - emitter_v);
+            let actual_current = sign * source_current(&solver, "Vdrive");
+            let actual_base_drop =
+                sign * (solver.node_voltage(Some(base)) - solver.node_voltage(Some(internal_base)));
+
+            assert!(
+                (actual_vbe - expected).abs() < 1e-8,
+                "{kind}: recombination plus RBM/IRB predict intrinsic Vbe={expected} V, got {actual_vbe} V"
+            );
+            assert!(
+                (actual_current - expected_current).abs() < 1e-10,
+                "{kind}: recombination predicts Ib={expected_current} A, got {actual_current} A"
+            );
+            assert!(
+                (actual_base_drop - expected_current * expected_resistance).abs() < 1e-8,
+                "{kind}: RB(Ib)={expected_resistance} Ω predicts base drop {} V, got {actual_base_drop} V",
+                expected_current * expected_resistance
+            );
         }
     }
 
@@ -1703,6 +4465,71 @@ mod analog {
         }
     }
 
+    /// Forward body bias uses the level-1 linear continuation of the square
+    /// root. Check its channel current and `gmb` against the hand equation,
+    /// then exercise that same bias through MNA for both polarities and both
+    /// choices of effective source.
+    #[test]
+    fn mosfet_forward_body_effect_uses_the_level1_linear_continuation() {
+        let (kp, w, l, lambda, gamma, phi, vto): (f64, f64, f64, f64, f64, f64, f64) =
+            (20e-6, 100e-6, 10e-6, 0.02, 0.4, 0.7, 1.0);
+        let beta = kp * w / l;
+        let vds = 0.4;
+        let vgs = 3.0;
+        let vbs = 0.2;
+        let is = 1e-30;
+        let root_phi = phi.sqrt();
+        let threshold = vto - gamma * vbs / (2.0 * root_phi);
+        let overdrive = vgs - threshold;
+        let channel = beta * (1.0 + lambda * vds) * vds * (overdrive - 0.5 * vds);
+        let vbd = vbs - vds;
+        let expected = channel + device::GMIN * vds - device::diode_op(vbd, is, 1.0).id;
+
+        let op = device::mos_op(vgs, vds, vto, beta, lambda, gamma, phi, vbs);
+        let dv = 1e-6;
+        let finite_difference_gmb =
+            (device::mos_op(vgs, vds, vto, beta, lambda, gamma, phi, vbs + dv).id
+                - device::mos_op(vgs, vds, vto, beta, lambda, gamma, phi, vbs - dv).id)
+                / (2.0 * dv);
+        assert!(
+            relative(op.id, channel) < 1e-12,
+            "forward body bias should lower Vth by the linear continuation: expected {channel} A, got {} A",
+            op.id
+        );
+        assert!(
+            relative(op.gmb, finite_difference_gmb) < 1e-8,
+            "forward body-effect gmb should match the derivative: expected {finite_difference_gmb} S, got {} S",
+            op.gmb
+        );
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            for reverse in [false, true] {
+                // In reverse operation the physical drain becomes the
+                // effective source, so keep its body bias at +vbs.
+                let (drain, source, supply, bulk) = if reverse {
+                    (0.0, vds, "Vs", vbs)
+                } else {
+                    (vds, 0.0, "Vd", vbs)
+                };
+                let netlist = format!(
+                    "Vg g 0 dc {}\nVd d 0 dc {}\nVs s 0 dc {}\nVbulk b 0 dc {}\nM1 d g s b MMOD\n.model MMOD {kind}(VTO={} KP={kp} LAMBDA={lambda} GAMMA={gamma} PHI={phi} IS={is} W={w} L={l})\n",
+                    sign * vgs,
+                    sign * drain,
+                    sign * source,
+                    sign * bulk,
+                    sign * vto,
+                );
+                let solver = build(&netlist);
+                let measured = sign * source_current(&solver, supply);
+                let direction = if reverse { "reverse" } else { "forward" };
+                assert!(
+                    relative(measured, expected) < 1e-6,
+                    "{kind} {direction}: forward-body-biased current should be {expected} A, got {measured} A"
+                );
+            }
+        }
+    }
+
     /// The three level-1 gate overlap parameters become linear G-S, G-D and
     /// G-B capacitances after applying the instance width/length. Each route
     /// is solved as an RC transient for NMOS and PMOS under both integration
@@ -1796,6 +4623,240 @@ mod analog {
                         "{kind} {parameter} {integration:?} second step: expected {expected_second} V, got {actual_second} V"
                     );
                 }
+            }
+        }
+    }
+
+    /// Gate-drain overlap charge belongs to the intrinsic drain when model
+    /// card `RD` inserts a series resistance. Its transient must therefore
+    /// create the same internal-node trajectory as an explicit resistor, and
+    /// match the hand-derived RC companion equation for both polarities and
+    /// integration rules.
+    #[test]
+    fn mosfet_gate_drain_overlap_charge_flows_through_drain_resistance() {
+        let (resistance, capacitance, width, h, input) = (1e3, 1e-12, 100e-6, 1e-9, 1.0);
+        let ratio = resistance * capacitance / h;
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let vto = if kind == "NMOS" { 2.0 } else { -2.0 };
+            let model_resistance = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVb b 0 dc 0\n\
+                 M1 d g s b MMOD w={width}\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 \
+                 CGDO=10n RD={resistance})\n"
+            );
+            let explicit_resistance = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVb b 0 dc 0\n\
+                 RDM d di {resistance}\nM1 di g s b MMOD w={width}\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 CGDO=10n)\n"
+            );
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut model = Solver::new(
+                    parse_netlist(&model_resistance).expect("MOSFET RD overlap model parses"),
+                    integration,
+                )
+                .expect("MOSFET RD overlap solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit_resistance)
+                        .expect("explicit MOSFET drain resistor netlist parses"),
+                    integration,
+                )
+                .expect("explicit MOSFET resistor solver builds");
+
+                let model_internal = model
+                    .circuit()
+                    .node("M1#drain")
+                    .expect("model-card RD creates the intrinsic drain");
+                let explicit_internal = explicit
+                    .circuit()
+                    .node("di")
+                    .expect("explicit resistor creates the intrinsic drain");
+                let model_gate = model.voltage_source_index("Vg").expect("model gate source");
+                let explicit_gate = explicit
+                    .voltage_source_index("Vg")
+                    .expect("explicit gate source");
+
+                model.set_voltage_source(model_gate, sign * input);
+                explicit.set_voltage_source(explicit_gate, sign * input);
+
+                let expected_first = sign * input * ratio / (1.0 + ratio);
+                let expected_second = match integration {
+                    Integration::BackwardEuler => ratio * expected_first / (1.0 + ratio),
+                    Integration::Trapezoidal => {
+                        ratio * (3.0 * expected_first - sign * input) / (1.0 + 2.0 * ratio)
+                    }
+                };
+
+                for (step, expected) in [expected_first, expected_second].into_iter().enumerate() {
+                    model.advance(h).expect("model-card RD overlap step solves");
+                    explicit
+                        .advance(h)
+                        .expect("explicit-resistor overlap step solves");
+
+                    let actual = model.node_voltage(model_internal);
+                    let reference = explicit.node_voltage(explicit_internal);
+                    assert!(
+                        (actual - expected).abs() < 1e-8,
+                        "{kind} {integration:?} step {step}: CGDO should put the intrinsic drain at {expected} V, got {actual} V"
+                    );
+                    assert!(
+                        (actual - reference).abs() < 1e-10,
+                        "{kind} {integration:?} step {step}: model-card RD gives {actual} V, explicit drain resistance gives {reference} V"
+                    );
+                    if step == 0 {
+                        assert!(
+                            sign * actual > 0.1,
+                            "{kind} CGDO displacement current must create a measurable RD drop"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Gate-source overlap charge belongs to the intrinsic source when model
+    /// card `RS` inserts a series resistance. Its transient must therefore
+    /// create the same internal-node trajectory as an explicit resistor, and
+    /// match the hand-derived RC companion equation for both polarities and
+    /// integration rules.
+    #[test]
+    fn mosfet_gate_source_overlap_charge_flows_through_source_resistance() {
+        let (resistance, capacitance, width, h, input) = (1e3, 1e-12, 100e-6, 1e-9, 1.0);
+        let ratio = resistance * capacitance / h;
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let vto = if kind == "NMOS" { 2.0 } else { -2.0 };
+            let model_resistance = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVb b 0 dc 0\n\
+                 M1 d g s b MMOD w={width}\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 \
+                 CGSO=10n RS={resistance})\n"
+            );
+            let explicit_resistance = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVb b 0 dc 0\n\
+                 RSM si s {resistance}\nM1 d g si b MMOD w={width}\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 CGSO=10n)\n"
+            );
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut model = Solver::new(
+                    parse_netlist(&model_resistance).expect("MOSFET RS overlap model parses"),
+                    integration,
+                )
+                .expect("MOSFET RS overlap solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit_resistance)
+                        .expect("explicit MOSFET source resistor netlist parses"),
+                    integration,
+                )
+                .expect("explicit MOSFET source resistor solver builds");
+
+                let model_internal = model
+                    .circuit()
+                    .node("M1#source")
+                    .expect("model-card RS creates the intrinsic source");
+                let explicit_internal = explicit
+                    .circuit()
+                    .node("si")
+                    .expect("explicit resistor creates the intrinsic source");
+                let model_gate = model.voltage_source_index("Vg").expect("model gate source");
+                let explicit_gate = explicit
+                    .voltage_source_index("Vg")
+                    .expect("explicit gate source");
+
+                model.set_voltage_source(model_gate, sign * input);
+                explicit.set_voltage_source(explicit_gate, sign * input);
+
+                let expected_first = sign * input * ratio / (1.0 + ratio);
+                let expected_second = match integration {
+                    Integration::BackwardEuler => ratio * expected_first / (1.0 + ratio),
+                    Integration::Trapezoidal => {
+                        ratio * (3.0 * expected_first - sign * input) / (1.0 + 2.0 * ratio)
+                    }
+                };
+
+                for (step, expected) in [expected_first, expected_second].into_iter().enumerate() {
+                    model.advance(h).expect("model-card RS overlap step solves");
+                    explicit
+                        .advance(h)
+                        .expect("explicit-resistor overlap step solves");
+
+                    let actual = model.node_voltage(model_internal);
+                    let reference = explicit.node_voltage(explicit_internal);
+                    assert!(
+                        (actual - expected).abs() < 1e-8,
+                        "{kind} {integration:?} step {step}: CGSO should put the intrinsic source at {expected} V, got {actual} V"
+                    );
+                    assert!(
+                        (actual - reference).abs() < 1e-10,
+                        "{kind} {integration:?} step {step}: model-card RS gives {actual} V, explicit source resistance gives {reference} V"
+                    );
+                    if step == 0 {
+                        assert!(
+                            sign * actual > 0.1,
+                            "{kind} CGSO displacement current must create a measurable RS drop"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Gate-bulk overlap charge must conserve terminal current: the charge
+    /// taken from the gate is returned through the bulk-side load. Checking
+    /// only the bulk-node voltage would miss a one-sided G-B charge stamp.
+    #[test]
+    fn mosfet_gate_bulk_overlap_conserves_terminal_charge() {
+        let (resistance, capacitance, h, input) = (1e3, 1e-12, 1e-9, 0.2);
+        let ratio = resistance * capacitance / h;
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let vto = if kind == "NMOS" { 2.0 } else { -2.0 };
+            let netlist = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nRbulk b 0 {resistance}\n\
+                 M1 d g s b MMOD w=100u l=100u\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 CGBO=10n)\n"
+            );
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut solver = Solver::new(
+                    parse_netlist(&netlist).expect("MOSFET CGBO model parses"),
+                    integration,
+                )
+                .expect("MOSFET CGBO solver builds");
+                let bulk = solver.circuit().node("b").expect("bulk load node");
+                let gate = solver.voltage_source_index("Vg").expect("gate source");
+
+                solver.advance(h).expect("initial operating point settles");
+                solver.set_voltage_source(gate, sign * input);
+                solver.advance(h).expect("CGBO transient step solves");
+
+                // The first step after the gate edge uses backward Euler for
+                // both integration rules. The overlap capacitance is
+                // CGBO·L = 10 nF/m · 100 µm = 1 pF.
+                // The two intrinsic bulk junctions each contribute their
+                // documented GMIN conductance to the grounded drain/source.
+                let expected_bulk =
+                    sign * input * ratio / (1.0 + ratio + 2.0 * device::GMIN * resistance);
+                let actual_bulk = solver.node_voltage(bulk);
+                assert!(
+                    (actual_bulk - expected_bulk).abs() < 1e-10,
+                    "{kind} {integration:?}: CGBO should move the bulk node to {expected_bulk} V, got {actual_bulk} V"
+                );
+
+                let gate_current = source_current(&solver, "Vg");
+                let bulk_return_current =
+                    actual_bulk / resistance + 2.0 * device::GMIN * actual_bulk;
+                let expected_charge_current = capacitance * (sign * input - actual_bulk) / h;
+                assert!(
+                    (gate_current - expected_charge_current).abs() < 1e-10,
+                    "{kind} {integration:?}: gate current {gate_current} A should match CGBO charge current {expected_charge_current} A"
+                );
+                assert!(
+                    (gate_current - bulk_return_current).abs() < 1e-10,
+                    "{kind} {integration:?}: gate charge current {gate_current} A should return through the bulk load at {bulk_return_current} A"
+                );
             }
         }
     }
@@ -2439,6 +5500,92 @@ mod analog {
         }
     }
 
+    /// SPICE level-1 JFET temperature coefficients adjust the channel law at
+    /// the instance's external `TEMP`. Verify both coefficient alternatives,
+    /// their precedence, both channel polarities, and the resulting MNA
+    /// currents against an independently calculated model card.
+    #[test]
+    fn jfet_temperature_coefficients_match_level1_laws_in_solved_circuits() {
+        let (tnom, temperature, delta) = (40.0, 115.0, 75.0);
+        let (beta, lambda, is, vds) = (2e-4, 0.02, 1e-30, 1.0);
+        let cases = [
+            // VTOTC and BETATCE take precedence over the nonzero TCV and BEX.
+            ("NJF", 1.0, -2.0, Some(0.001), 0.02, Some(0.4), 2.5),
+            // With alternatives absent, TCV and the absolute-temperature BEX
+            // power law set VTO and BETA for a P-channel device.
+            ("PJF", -1.0, 2.0, None, -0.001, None, 1.2),
+        ];
+
+        for (kind, sign, vto, vtotc, tcv, betatce, bex) in cases {
+            let vtotc_parameter = vtotc.map_or_else(String::new, |value| format!(" VTOTC={value}"));
+            let betatce_parameter =
+                betatce.map_or_else(String::new, |value| format!(" BETATCE={value}"));
+            let delta_kelvin: f64 = (temperature + 273.15) / (tnom + 273.15);
+            let expected_vto = vtotc.map_or(vto - tcv * delta, |tc| vto + tc * delta);
+            let expected_beta = betatce.map_or_else(
+                || beta * delta_kelvin.powf(bex),
+                |tce| beta * 1.01_f64.powf(tce * delta),
+            );
+            let model_parameters = format!(
+                "TNOM={tnom} VTO={vto} BETA={beta} LAMBDA={lambda} IS={is} \
+                 TCV={tcv} BEX={bex}{vtotc_parameter}{betatce_parameter}"
+            );
+            let netlist = |model: String, instance_temp: Option<f64>| {
+                let temp = instance_temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                format!(
+                    "Vg g 0 dc 0\nVd d 0 dc {}\nVs s 0 dc 0\n\
+                     J1 d g s JMOD{temp}\n.model JMOD {kind}({model})\n",
+                    sign * vds
+                )
+            };
+
+            let operating = build(&netlist(model_parameters.clone(), Some(temperature)));
+            let explicit_model = format!(
+                "TNOM={tnom} VTO={expected_vto} BETA={expected_beta} \
+                 LAMBDA={lambda} IS={is}"
+            );
+            let explicit = build(&netlist(explicit_model, None));
+            let fixed = build(&netlist(model_parameters, None));
+            let adjusted = operating.circuit().jfets[0].operating_model;
+            assert_eq!(
+                operating.circuit().jfets[0].temperature_celsius,
+                Some(temperature)
+            );
+            assert!(
+                (adjusted.vto - expected_vto).abs() < 1e-14,
+                "{kind}: expected VTO(T)={expected_vto}, got {}",
+                adjusted.vto
+            );
+            assert!(
+                relative(adjusted.beta, expected_beta) < 1e-14,
+                "{kind}: expected BETA(T)={expected_beta}, got {}",
+                adjusted.beta
+            );
+
+            let channel_current = |effective_vto: f64, effective_beta: f64| {
+                let vgst = 0.0 - sign * effective_vto;
+                let channel = effective_beta * (1.0 + lambda * vds) * vds * (2.0 * vgst - vds);
+                channel + device::GMIN * vds - device::diode_op(-vds, is, 1.0).id
+            };
+            let expected_current = channel_current(expected_vto, expected_beta);
+            let actual_current = sign * source_current(&operating, "Vd");
+            let explicit_current = sign * source_current(&explicit, "Vd");
+            let fixed_current = sign * source_current(&fixed, "Vd");
+            assert!(
+                relative(actual_current, expected_current) < 2e-5,
+                "{kind}: level-1 temperature law predicts {expected_current} A, got {actual_current} A"
+            );
+            assert!(
+                relative(actual_current, explicit_current) < 2e-8,
+                "{kind}: TEMP model gives {actual_current} A, equivalent adjusted model gives {explicit_current} A"
+            );
+            assert!(
+                (actual_current - fixed_current).abs() > 1e-5,
+                "{kind}: explicit TEMP must change the solved channel current"
+            );
+        }
+    }
+
     /// The Parker–Skellern B fit changes both JFET channel regions. Its
     /// closed-form current and analytic partials are checked through the
     /// nonlinear MNA solve for both channel polarities.
@@ -2585,6 +5732,485 @@ mod analog {
         }
     }
 
+    /// During a gate step, intrinsic channel charge draws displacement current
+    /// through the MOSFET's external drain/source terminals. The model-card
+    /// `RD`/`RS` implementation must behave like the same resistors placed
+    /// explicitly outside a resistance-free device, including both transient
+    /// companion rules and both channel polarities.
+    #[test]
+    fn mosfet_channel_charge_matches_explicit_terminal_resistors_during_transients() {
+        let (rd, rs) = (800.0, 500.0);
+        let width = 10e-6;
+        let length = 1e-6;
+        let h = 10e-12;
+
+        for (kind, sign, vd, vs, vb) in [
+            ("NMOS", 1.0, 2.5, 0.0, 0.0),
+            ("PMOS", -1.0, 0.0, -2.5, -2.5),
+        ] {
+            let model_resistances = format!(
+                "Vg g 0 dc {}\nVd d 0 dc {vd}\nVs s 0 dc {vs}\nVb b 0 dc {vb}\n\
+                 M1 d g s b MMOD w={width} l={length}\n\
+                 .model MMOD {kind}(VTO={} KP=20u LAMBDA=0.02 IS=1e-30 \
+                 TOX=10n CHARGEMOD=WARD_DUTTON RD={rd} RS={rs})\n",
+                sign * 1.2,
+                sign
+            );
+            let explicit_resistances = format!(
+                "Vg g 0 dc {}\nVd d 0 dc {vd}\nVs s 0 dc {vs}\nVb b 0 dc {vb}\n\
+                 RDM d di {rd}\nRSM si s {rs}\n\
+                 M1 di g si b MMOD w={width} l={length}\n\
+                 .model MMOD {kind}(VTO={} KP=20u LAMBDA=0.02 IS=1e-30 \
+                 TOX=10n CHARGEMOD=WARD_DUTTON)\n",
+                sign * 1.2,
+                sign
+            );
+            let no_channel_charge = model_resistances.replace("TOX=10n CHARGEMOD=WARD_DUTTON ", "");
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut model = Solver::new(
+                    parse_netlist(&model_resistances).expect("MOSFET terminal model parses"),
+                    integration,
+                )
+                .expect("MOSFET terminal solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit_resistances).expect("explicit resistor netlist parses"),
+                    integration,
+                )
+                .expect("explicit resistor solver builds");
+                let mut uncharged = Solver::new(
+                    parse_netlist(&no_channel_charge).expect("uncharged MOSFET model parses"),
+                    integration,
+                )
+                .expect("uncharged MOSFET solver builds");
+
+                let model_nodes = ["d", "s", "M1#drain", "M1#source"]
+                    .map(|name| model.circuit().node(name).expect("model node"));
+                let explicit_nodes = ["d", "s", "di", "si"]
+                    .map(|name| explicit.circuit().node(name).expect("explicit node"));
+                let model_gate = model.voltage_source_index("Vg").expect("model gate source");
+                let explicit_gate = explicit
+                    .voltage_source_index("Vg")
+                    .expect("explicit gate source");
+
+                model.advance(h).expect("model operating point settles");
+                explicit
+                    .advance(h)
+                    .expect("explicit operating point settles");
+                uncharged
+                    .advance(h)
+                    .expect("uncharged operating point settles");
+                for (model_node, explicit_node) in model_nodes.into_iter().zip(explicit_nodes) {
+                    assert!(
+                        (model.node_voltage(model_node) - explicit.node_voltage(explicit_node))
+                            .abs()
+                            < 1e-9,
+                        "{kind} {integration:?}: initial terminal voltages differ"
+                    );
+                }
+
+                model.set_voltage_source(model_gate, sign * 3.0);
+                explicit.set_voltage_source(explicit_gate, sign * 3.0);
+                let uncharged_gate = uncharged
+                    .voltage_source_index("Vg")
+                    .expect("uncharged gate source");
+                uncharged.set_voltage_source(uncharged_gate, sign * 3.0);
+                for step in 0..3 {
+                    model.advance(h).expect("model channel-charge step solves");
+                    explicit
+                        .advance(h)
+                        .expect("explicit-resistor channel-charge step solves");
+                    uncharged.advance(h).expect("uncharged MOSFET step solves");
+
+                    let mut charge_effect = 0.0_f64;
+                    for (label, model_node, explicit_node) in [
+                        ("external drain", model_nodes[0], explicit_nodes[0]),
+                        ("external source", model_nodes[1], explicit_nodes[1]),
+                        ("intrinsic drain", model_nodes[2], explicit_nodes[2]),
+                        ("intrinsic source", model_nodes[3], explicit_nodes[3]),
+                    ] {
+                        let actual = model.node_voltage(model_node);
+                        let expected = explicit.node_voltage(explicit_node);
+                        charge_effect =
+                            charge_effect.max((actual - uncharged.node_voltage(model_node)).abs());
+                        assert!(
+                            (actual - expected).abs() < 1e-8,
+                            "{kind} {integration:?} step {step} {label}: model-card resistance gives {actual} V, explicit series resistor gives {expected} V"
+                        );
+                    }
+                    if step == 0 {
+                        assert!(
+                            charge_effect > 1e-7,
+                            "{kind} {integration:?}: the channel-charge step must measurably affect the terminal voltages, got a largest charged/uncharged difference of {charge_effect} V"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Channel, overlap and bulk-junction charge must all land on the
+    /// intrinsic MOSFET terminals before RD/RS carry their displacement
+    /// currents. Compare one combined transient against the same model with
+    /// explicit resistors, for both polarities and integration rules; a
+    /// charge stamp attached to an external terminal or a replaced charge
+    /// history will make the solved trajectories diverge.
+    #[test]
+    fn mosfet_combined_charge_physics_flows_through_terminal_resistances() {
+        let (rd, rs) = (800.0, 500.0);
+        let (width, length, h) = (100e-6, 10e-6, 10e-12);
+        let model_params = "TOX=10n CHARGEMOD=WARD_DUTTON CGSO=10n CGDO=10n \
+            CGBO=10n CBD=100p CBS=100p PB=1 MJ=0";
+
+        for (kind, sign, vd, vs, vb) in [
+            ("NMOS", 1.0, 2.5, 0.0, 0.0),
+            ("PMOS", -1.0, 0.0, -2.5, -2.5),
+        ] {
+            let vto = sign;
+            let model_resistances = format!(
+                "Vg g 0 dc {}\nVd d 0 dc {vd}\nVs s 0 dc {vs}\nVb b 0 dc {vb}\n\
+                 M1 d g s b MMOD w={width} l={length}\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0.02 IS=1e-30 \
+                 {model_params} RD={rd} RS={rs})\n",
+                sign * 1.2,
+            );
+            let explicit_resistances = format!(
+                "Vg g 0 dc {}\nVd d 0 dc {vd}\nVs s 0 dc {vs}\nVb b 0 dc {vb}\n\
+                 RDM d di {rd}\nRSM si s {rs}\n\
+                 M1 di g si b MMOD w={width} l={length}\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0.02 IS=1e-30 \
+                 {model_params})\n",
+                sign * 1.2,
+            );
+            let uncharged = model_resistances.replace(model_params, "");
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut model = Solver::new(
+                    parse_netlist(&model_resistances).expect("combined MOSFET charge model parses"),
+                    integration,
+                )
+                .expect("combined MOSFET charge solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit_resistances)
+                        .expect("explicit-resistor MOSFET model parses"),
+                    integration,
+                )
+                .expect("explicit-resistor MOSFET solver builds");
+                let mut without_charge = Solver::new(
+                    parse_netlist(&uncharged).expect("uncharged MOSFET model parses"),
+                    integration,
+                )
+                .expect("uncharged MOSFET solver builds");
+
+                let model_nodes = ["d", "s", "b", "M1#drain", "M1#source"]
+                    .map(|name| model.circuit().node(name).expect("model terminal node"));
+                let explicit_nodes = ["d", "s", "b", "di", "si"].map(|name| {
+                    explicit
+                        .circuit()
+                        .node(name)
+                        .expect("explicit terminal node")
+                });
+                let uncharged_nodes = ["d", "s", "b", "M1#drain", "M1#source"]
+                    .map(|name| without_charge.circuit().node(name).expect("uncharged node"));
+                let model_gate = model.voltage_source_index("Vg").expect("model gate source");
+                let explicit_gate = explicit
+                    .voltage_source_index("Vg")
+                    .expect("explicit gate source");
+                let uncharged_gate = without_charge
+                    .voltage_source_index("Vg")
+                    .expect("uncharged gate source");
+
+                model.advance(h).expect("model operating point settles");
+                explicit
+                    .advance(h)
+                    .expect("explicit operating point settles");
+                without_charge
+                    .advance(h)
+                    .expect("uncharged operating point settles");
+                for (actual, expected) in model_nodes.into_iter().zip(explicit_nodes) {
+                    assert!(
+                        (model.node_voltage(actual) - explicit.node_voltage(expected)).abs() < 1e-9,
+                        "{kind} {integration:?}: initial terminal voltages differ"
+                    );
+                }
+
+                model.set_voltage_source(model_gate, sign * 3.0);
+                explicit.set_voltage_source(explicit_gate, sign * 3.0);
+                without_charge.set_voltage_source(uncharged_gate, sign * 3.0);
+
+                let mut largest_charge_effect = 0.0_f64;
+                for step in 0..3 {
+                    model.advance(h).expect("combined model charge step solves");
+                    explicit
+                        .advance(h)
+                        .expect("combined explicit-resistor charge step solves");
+                    without_charge
+                        .advance(h)
+                        .expect("uncharged comparison step solves");
+
+                    for (index, (actual_node, expected_node)) in model_nodes
+                        .iter()
+                        .copied()
+                        .zip(explicit_nodes.iter().copied())
+                        .enumerate()
+                    {
+                        let actual = model.node_voltage(actual_node);
+                        let expected = explicit.node_voltage(expected_node);
+                        largest_charge_effect = largest_charge_effect.max(
+                            (actual - without_charge.node_voltage(uncharged_nodes[index])).abs(),
+                        );
+                        assert!(
+                            (actual - expected).abs() < 1e-8,
+                            "{kind} {integration:?} step {step} terminal {index}: model-card resistances give {actual} V, explicit resistors give {expected} V"
+                        );
+                    }
+                    for source in ["Vg", "Vd", "Vs", "Vb"] {
+                        assert!(
+                            (source_current(&model, source) - source_current(&explicit, source)).abs()
+                                < 1e-10,
+                            "{kind} {integration:?} step {step} {source}: model-card resistances and explicit resistors must carry the same combined charge current"
+                        );
+                    }
+                }
+                assert!(
+                    largest_charge_effect > 1e-7,
+                    "{kind} {integration:?}: combined MOSFET charge must measurably affect the terminal voltages"
+                );
+            }
+        }
+    }
+
+    /// Drain bulk-junction depletion charge is attached to the intrinsic
+    /// drain. With model-card `RD`, its transient current must cross that
+    /// resistor exactly as it does when the resistor is explicit in the
+    /// netlist. The constant-capacitance case also has a hand-derived RC
+    /// trajectory, so a missing junction charge cannot pass by matching two
+    /// otherwise identical circuits.
+    #[test]
+    fn mosfet_bulk_junction_charge_flows_through_drain_resistance() {
+        let (resistance, capacitance, step, h) = (1e3, 100e-12, 1.0, 100e-9);
+        let beta = resistance * capacitance / h;
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let vto = if kind == "NMOS" { 2.0 } else { -2.0 };
+            let model_resistance = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVb b 0 dc 0\n\
+                 M1 d g s b MMOD\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 \
+                 CBD={capacitance} PB=1 MJ=0 RD={resistance})\n"
+            );
+            let explicit_resistance = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVb b 0 dc 0\n\
+                 RDM d di {resistance}\nM1 di g s b MMOD\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 \
+                 CBD={capacitance} PB=1 MJ=0)\n"
+            );
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut model = Solver::new(
+                    parse_netlist(&model_resistance).expect("MOSFET bulk model parses"),
+                    integration,
+                )
+                .expect("MOSFET bulk solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit_resistance).expect("explicit resistor netlist parses"),
+                    integration,
+                )
+                .expect("explicit resistor solver builds");
+
+                let model_external = model.circuit().node("d").expect("external drain");
+                let model_intrinsic = model
+                    .circuit()
+                    .node("M1#drain")
+                    .expect("model-card RD creates the intrinsic drain");
+                let explicit_external = explicit.circuit().node("d").expect("external drain");
+                let explicit_intrinsic = explicit.circuit().node("di").expect("intrinsic drain");
+                let model_drive = model.voltage_source_index("Vd").expect("drain source");
+                let explicit_drive = explicit.voltage_source_index("Vd").expect("drain source");
+
+                model.advance(h).expect("model initial point settles");
+                explicit.advance(h).expect("explicit initial point settles");
+                model.set_voltage_source(model_drive, sign * step);
+                explicit.set_voltage_source(explicit_drive, sign * step);
+
+                let (mut previous_voltage, mut previous_current) = (0.0, 0.0);
+                for index in 0..3 {
+                    let rule = if index == 0 {
+                        // The first transient step restarts the companion with
+                        // Backward Euler, regardless of the selected rule.
+                        Integration::BackwardEuler
+                    } else {
+                        integration
+                    };
+                    let expected = match rule {
+                        Integration::BackwardEuler => {
+                            (step + beta * previous_voltage) / (1.0 + beta)
+                        }
+                        Integration::Trapezoidal => {
+                            (step + 2.0 * beta * previous_voltage + resistance * previous_current)
+                                / (1.0 + 2.0 * beta)
+                        }
+                    };
+
+                    model.advance(h).expect("model bulk-charge step solves");
+                    explicit
+                        .advance(h)
+                        .expect("explicit-resistor bulk-charge step solves");
+
+                    let actual = sign * model.node_voltage(model_intrinsic);
+                    let reference = sign * explicit.node_voltage(explicit_intrinsic);
+                    assert!(
+                        (actual - expected).abs() < 5e-9,
+                        "{kind} {integration:?} step {index}: intrinsic drain should be {expected} V from CBD charge, got {actual} V"
+                    );
+                    assert!(
+                        (actual - reference).abs() < 1e-10,
+                        "{kind} {integration:?} step {index}: model-card RD gives {actual} V, explicit series resistance gives {reference} V"
+                    );
+                    assert!(
+                        (model.node_voltage(model_external)
+                            - explicit.node_voltage(explicit_external))
+                        .abs()
+                            < 1e-12,
+                        "{kind} {integration:?} step {index}: external drains differ"
+                    );
+                    if index == 0 {
+                        assert!(
+                            (step - actual) > 0.1,
+                            "{kind} {integration:?}: CBD displacement current must create a measurable RD drop"
+                        );
+                    }
+
+                    previous_current = match rule {
+                        Integration::BackwardEuler => {
+                            capacitance * (expected - previous_voltage) / h
+                        }
+                        Integration::Trapezoidal => {
+                            2.0 * capacitance * (expected - previous_voltage) / h - previous_current
+                        }
+                    };
+                    previous_voltage = expected;
+                }
+            }
+        }
+    }
+
+    /// Source bulk-junction depletion charge is attached to the intrinsic
+    /// source. With model-card `RS`, its transient current must cross that
+    /// resistor exactly as it does when the resistor is explicit in the
+    /// netlist. The constant-capacitance case also has a hand-derived RC
+    /// trajectory, so a missing junction charge cannot pass by matching two
+    /// otherwise identical circuits.
+    #[test]
+    fn mosfet_source_bulk_junction_charge_flows_through_source_resistance() {
+        let (resistance, capacitance, step, h) = (1e3, 100e-12, 1.0, 100e-9);
+        let beta = resistance * capacitance / h;
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let vto = if kind == "NMOS" { 2.0 } else { -2.0 };
+            let model_resistance = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVb b 0 dc 0\n\
+                 M1 d g s b MMOD\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 \
+                 CBS={capacitance} PB=1 MJ=0 RS={resistance})\n"
+            );
+            let explicit_resistance = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVb b 0 dc 0\n\
+                 RSM si s {resistance}\nM1 d g si b MMOD\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 \
+                 CBS={capacitance} PB=1 MJ=0)\n"
+            );
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut model = Solver::new(
+                    parse_netlist(&model_resistance).expect("MOSFET bulk model parses"),
+                    integration,
+                )
+                .expect("MOSFET bulk solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit_resistance).expect("explicit resistor netlist parses"),
+                    integration,
+                )
+                .expect("explicit resistor solver builds");
+
+                let model_external = model.circuit().node("s").expect("external source");
+                let model_intrinsic = model
+                    .circuit()
+                    .node("M1#source")
+                    .expect("model-card RS creates the intrinsic source");
+                let explicit_external = explicit.circuit().node("s").expect("external source");
+                let explicit_intrinsic = explicit.circuit().node("si").expect("intrinsic source");
+                let model_drive = model.voltage_source_index("Vs").expect("source drive");
+                let explicit_drive = explicit.voltage_source_index("Vs").expect("source drive");
+
+                model.advance(h).expect("model initial point settles");
+                explicit.advance(h).expect("explicit initial point settles");
+                model.set_voltage_source(model_drive, sign * step);
+                explicit.set_voltage_source(explicit_drive, sign * step);
+
+                let (mut previous_voltage, mut previous_current) = (0.0, 0.0);
+                for index in 0..3 {
+                    let rule = if index == 0 {
+                        // The first transient step restarts the companion with
+                        // Backward Euler, regardless of the selected rule.
+                        Integration::BackwardEuler
+                    } else {
+                        integration
+                    };
+                    let expected = match rule {
+                        Integration::BackwardEuler => {
+                            (step + beta * previous_voltage)
+                                / (1.0 + beta + 2.0 * device::GMIN * resistance)
+                        }
+                        Integration::Trapezoidal => {
+                            (step + 2.0 * beta * previous_voltage + resistance * previous_current)
+                                / (1.0 + 2.0 * beta + 2.0 * device::GMIN * resistance)
+                        }
+                    };
+
+                    model.advance(h).expect("model bulk-charge step solves");
+                    explicit
+                        .advance(h)
+                        .expect("explicit-resistor bulk-charge step solves");
+
+                    let actual = sign * model.node_voltage(model_intrinsic);
+                    let reference = sign * explicit.node_voltage(explicit_intrinsic);
+                    assert!(
+                        (actual - expected).abs() < 5e-9,
+                        "{kind} {integration:?} step {index}: intrinsic source should be {expected} V from CBS charge, got {actual} V"
+                    );
+                    assert!(
+                        (actual - reference).abs() < 1e-10,
+                        "{kind} {integration:?} step {index}: model-card RS gives {actual} V, explicit series resistance gives {reference} V"
+                    );
+                    assert!(
+                        (model.node_voltage(model_external)
+                            - explicit.node_voltage(explicit_external))
+                        .abs()
+                            < 1e-12,
+                        "{kind} {integration:?} step {index}: external sources differ"
+                    );
+                    if index == 0 {
+                        assert!(
+                            (step - actual) > 0.1,
+                            "{kind} {integration:?}: CBS displacement current must create a measurable RS drop"
+                        );
+                    }
+
+                    previous_current = match rule {
+                        Integration::BackwardEuler => {
+                            capacitance * (expected - previous_voltage) / h
+                        }
+                        Integration::Trapezoidal => {
+                            2.0 * capacitance * (expected - previous_voltage) / h - previous_current
+                        }
+                    };
+                    previous_voltage = expected;
+                }
+            }
+        }
+    }
+
     /// The model's sheet resistance is multiplied by each instance's drain
     /// and source square counts, and those effective resistors participate in
     /// the solved channel path for both MOS polarities.
@@ -2682,6 +6308,126 @@ mod analog {
                     "{kind} {parameter} {signed_drop} should be {} V, got {actual_drop} V",
                     current * resistance
                 );
+            }
+        }
+    }
+
+    /// Gate depletion current flows through the JFET's internal drain/source
+    /// resistors during a gate step. Model-card RD/RS must match explicit
+    /// series resistors around a resistance-free level-1 JFET for NJF/PJF and
+    /// both transient companion rules.
+    #[test]
+    fn jfet_gate_charge_matches_explicit_terminal_resistors_during_transients() {
+        let (rd, rs, h) = (800.0, 500.0, 10e-9);
+        let (cgs, cgd, pb, fc) = (200e-12, 100e-12, 0.75, 0.5);
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for (kind, sign, vto) in [("NJF", 1.0, -2.0), ("PJF", -1.0, 2.0)] {
+                let gate_initial = -sign * 3.0;
+                let gate_step = -sign * 1.5;
+                let modelled = format!(
+                    "Vg g 0 dc {gate_initial}\nVd d 0 dc {}\nVs s 0 dc 0\n\
+                     J1 d g s JMOD\n.model JMOD {kind}(VTO={vto} BETA=200u \
+                     LAMBDA=0.02 IS=1e-30 RD={rd} RS={rs} \
+                     CGS={cgs} CGD={cgd} PB={pb} FC={fc})\n",
+                    sign * 2.5
+                );
+                let explicit = format!(
+                    "Vg g 0 dc {gate_initial}\nVd d 0 dc {}\nVs s 0 dc 0\n\
+                     RDM d di {rd}\nRSM si s {rs}\n\
+                     J1 di g si JMOD\n.model JMOD {kind}(VTO={vto} BETA=200u \
+                     LAMBDA=0.02 IS=1e-30 CGS={cgs} CGD={cgd} PB={pb} FC={fc})\n",
+                    sign * 2.5
+                );
+                let uncharged = format!(
+                    "Vg g 0 dc {gate_initial}\nVd d 0 dc {}\nVs s 0 dc 0\n\
+                     J1 d g s JMOD\n.model JMOD {kind}(VTO={vto} BETA=200u \
+                     LAMBDA=0.02 IS=1e-30 RD={rd} RS={rs})\n",
+                    sign * 2.5
+                );
+
+                let mut model = Solver::new(
+                    parse_netlist(&modelled).expect("JFET terminal charge model parses"),
+                    integration,
+                )
+                .expect("JFET terminal charge solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit).expect("explicit JFET resistors parse"),
+                    integration,
+                )
+                .expect("explicit-resistor JFET solver builds");
+                let mut uncharged = Solver::new(
+                    parse_netlist(&uncharged).expect("uncharged JFET model parses"),
+                    integration,
+                )
+                .expect("uncharged JFET solver builds");
+
+                let model_nodes = ["d", "s", "J1#drain", "J1#source", "g"]
+                    .map(|name| model.circuit().node(name).expect("model node"));
+                let explicit_nodes = ["d", "s", "di", "si", "g"]
+                    .map(|name| explicit.circuit().node(name).expect("explicit node"));
+                let model_gate = model.voltage_source_index("Vg").expect("model gate source");
+                let explicit_gate = explicit
+                    .voltage_source_index("Vg")
+                    .expect("explicit gate source");
+                let uncharged_gate = uncharged
+                    .voltage_source_index("Vg")
+                    .expect("uncharged gate source");
+
+                model.advance(h).expect("model operating point settles");
+                explicit
+                    .advance(h)
+                    .expect("explicit-resistor operating point settles");
+                uncharged
+                    .advance(h)
+                    .expect("uncharged operating point settles");
+                for (model_node, explicit_node) in model_nodes.into_iter().zip(explicit_nodes) {
+                    assert!(
+                        (model.node_voltage(model_node) - explicit.node_voltage(explicit_node))
+                            .abs()
+                            < 1e-9,
+                        "{kind} {integration:?}: initial terminal voltages differ"
+                    );
+                }
+
+                model.set_voltage_source(model_gate, gate_step);
+                explicit.set_voltage_source(explicit_gate, gate_step);
+                uncharged.set_voltage_source(uncharged_gate, gate_step);
+                model.advance(h).expect("model JFET charge step solves");
+                explicit
+                    .advance(h)
+                    .expect("explicit-resistor JFET charge step solves");
+                uncharged.advance(h).expect("uncharged JFET step solves");
+
+                let mut charge_effect = 0.0_f64;
+                for (label, model_node, explicit_node) in [
+                    ("external drain", model_nodes[0], explicit_nodes[0]),
+                    ("external source", model_nodes[1], explicit_nodes[1]),
+                    ("intrinsic drain", model_nodes[2], explicit_nodes[2]),
+                    ("intrinsic source", model_nodes[3], explicit_nodes[3]),
+                    ("gate", model_nodes[4], explicit_nodes[4]),
+                ] {
+                    let actual = model.node_voltage(model_node);
+                    let expected = explicit.node_voltage(explicit_node);
+                    charge_effect =
+                        charge_effect.max((actual - uncharged.node_voltage(model_node)).abs());
+                    assert!(
+                        (actual - expected).abs() < 1e-8,
+                        "{kind} {integration:?} {label}: model-card resistances give {actual} V, explicit resistors give {expected} V"
+                    );
+                }
+                assert!(
+                    charge_effect > 1e-7,
+                    "{kind} {integration:?}: gate depletion charge must measurably affect terminal voltages, got a largest charged/uncharged difference of {charge_effect} V"
+                );
+                for source in ["Vd", "Vg"] {
+                    let actual = source_current(&model, source);
+                    let expected = source_current(&explicit, source);
+                    assert!(
+                        (actual - expected).abs() < 1e-10,
+                        "{kind} {integration:?} {source}: model-card resistances give {actual} A, explicit resistors give {expected} A"
+                    );
+                }
             }
         }
     }
@@ -2803,6 +6549,481 @@ mod analog {
         }
     }
 
+    /// Thermal voltage written out from CODATA constants, independent of the
+    /// engine's helper, for the JFET gate-junction temperature checks.
+    fn kelvin_thermal_voltage(kelvin: f64) -> f64 {
+        1.380_649e-23 * kelvin / 1.602_176_634e-19
+    }
+
+    /// An explicit instance `TEMP` heats both JFET gate junctions: `IS`
+    /// follows the `EG`/`XTI` saturation law and the diode exponent uses
+    /// `kT/q` at that temperature. The forward gate current is solved for both
+    /// polarities, with default and explicit `EG`/`XTI`, and compared against
+    /// a hand-written Shockley law. `TEMP == TNOM` must reproduce the card.
+    #[test]
+    fn jfet_gate_junction_leakage_follows_eg_xti_at_instance_temperature() {
+        let (is, tnom, vgs): (f64, f64, f64) = (1e-14, 27.0, 0.45);
+        let gate_current = |is_t: f64, kelvin: f64| {
+            let vt = kelvin_thermal_voltage(kelvin);
+            2.0 * (is_t * ((vgs / vt).exp() - 1.0) + device::GMIN * vgs)
+        };
+        let saturation = |eg: f64, xti: f64, kelvin: f64| {
+            let nominal = tnom + 273.15;
+            is * (eg / kelvin_thermal_voltage(nominal) - eg / kelvin_thermal_voltage(kelvin)).exp()
+                * (kelvin / nominal).powf(xti)
+        };
+        // (EG/XTI card text, EG, XTI): ngspice's 1.11 eV / 3 defaults, then a
+        // wide-gap card with a weaker power law.
+        let cases = [("", 1.11, 3.0), (" EG=1.2 XTI=2", 1.2, 2.0)];
+
+        for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
+            for (parameters, eg, xti) in cases {
+                let netlist = |temp: Option<f64>| {
+                    let temp = temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                    format!(
+                        "Vg g 0 dc {}\nVd d 0 dc 0\nVs s 0 dc 0\n\
+                         J1 d g s JMOD{temp}\n.model JMOD {kind}(VTO={} BETA=100u \
+                         IS={is} TNOM={tnom}{parameters})\n",
+                        sign * vgs,
+                        -2.0 * sign
+                    )
+                };
+
+                let nominal = build(&netlist(Some(tnom)));
+                assert_eq!(nominal.circuit().jfets[0].operating_model.is, is);
+                let nominal_current = sign * source_current(&nominal, "Vg");
+                let nominal_expected = gate_current(is, tnom + 273.15);
+                assert!(
+                    relative(nominal_current, nominal_expected) < 1e-6,
+                    "{kind}{parameters}: TEMP=TNOM expected {nominal_expected} A, got \
+                     {nominal_current} A"
+                );
+
+                for temperature in [-20.0, 85.0, 125.0] {
+                    let kelvin = temperature + 273.15;
+                    let hot = build(&netlist(Some(temperature)));
+                    let expected_is = saturation(eg, xti, kelvin);
+                    let adjusted_is = hot.circuit().jfets[0].operating_model.is;
+                    assert!(
+                        relative(adjusted_is, expected_is) < 1e-12,
+                        "{kind}{parameters} at {temperature} C: IS(T) {expected_is} A, got \
+                         {adjusted_is} A"
+                    );
+                    let expected = gate_current(expected_is, kelvin);
+                    let measured = sign * source_current(&hot, "Vg");
+                    assert!(
+                        relative(measured, expected) < 1e-6,
+                        "{kind}{parameters} at {temperature} C: expected gate current \
+                         {expected} A, got {measured} A"
+                    );
+                    // A wrong law cannot hide in the tolerance: the solved
+                    // current moves by well over an order of magnitude.
+                    let ratio = measured / nominal_current;
+                    assert!(
+                        !(0.1..=10.0).contains(&ratio),
+                        "{kind}{parameters} at {temperature} C must move gate leakage \
+                         decisively, ratio {ratio}"
+                    );
+                }
+
+                // Without an instance TEMP the historical 300 K junction stays.
+                let fixed = sign * source_current(&build(&netlist(None)), "Vg");
+                let fixed_expected = gate_current(is, device::TEMPERATURE_K);
+                assert!(
+                    relative(fixed, fixed_expected) < 1e-6,
+                    "{kind}{parameters}: no TEMP expected {fixed_expected} A, got {fixed} A"
+                );
+            }
+        }
+    }
+
+    /// Instance `TEMP` moves the JFET gate potential `PB` and zero-bias
+    /// `CGS`/`CGD` by the silicon depletion law at grading 0.5. A reverse-bias
+    /// gate step through a resistor must then follow the same trajectory as a
+    /// card that states the hand-computed `PB(T)`/`CGS(T)`/`CGD(T)` directly,
+    /// and differ from the unheated card.
+    #[test]
+    fn jfet_gate_depletion_capacitance_follows_instance_temperature() {
+        let (tnom, temperature, pb, cgs, cgd): (f64, f64, f64, f64, f64) =
+            (27.0, 125.0, 0.8, 10e-9, 4e-9);
+        let (nominal, kelvin) = (tnom + 273.15, temperature + 273.15);
+        let bandgap = |t: f64| 1.16 - 7.02e-4 * t * t / (t + 1108.0);
+        let (vt_n, vt) = (
+            kelvin_thermal_voltage(nominal),
+            kelvin_thermal_voltage(kelvin),
+        );
+        let ratio = kelvin / nominal;
+        let pb_t =
+            pb * ratio - vt * (3.0 * ratio.ln() + bandgap(nominal) / vt_n - bandgap(kelvin) / vt);
+        let scale = 1.0 + 0.5 * (4e-4 * (kelvin - nominal) - pb_t / pb + 1.0);
+        let (cgs_t, cgd_t) = (cgs * scale, cgd * scale);
+        assert!(
+            pb_t < pb - 0.1 && scale > 1.05,
+            "a 98 K rise must lower PB and raise the depletion capacitance"
+        );
+
+        for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
+            let deck = |card: String, temp: Option<f64>| {
+                let temp = temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                format!(
+                    "V1 in 0 dc 0\nR1 in g 1k\nVd d 0 dc 0\nVs s 0 dc 0\n\
+                     J1 d g s JMOD{temp}\n.model JMOD {kind}(VTO={} BETA=100u IS=1e-30 \
+                     TNOM={tnom} FC=0.5 {card})\n",
+                    -2.0 * sign
+                )
+            };
+            let heated = deck(format!("CGS={cgs} CGD={cgd} PB={pb}"), Some(temperature));
+            let explicit = deck(format!("CGS={cgs_t} CGD={cgd_t} PB={pb_t}"), None);
+            let unheated = deck(format!("CGS={cgs} CGD={cgd} PB={pb}"), None);
+
+            let heated_circuit = parse_netlist(&heated).expect("heated JFET parses");
+            let operating = heated_circuit.jfets[0].operating_model;
+            assert!((operating.pb - pb_t).abs() < 1e-12, "{kind}: PB(T)");
+            assert!(relative(operating.cgs, cgs_t) < 1e-12, "{kind}: CGS(T)");
+            assert!(relative(operating.cgd, cgd_t) < 1e-12, "{kind}: CGD(T)");
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let run = |netlist: &str| {
+                    let circuit = parse_netlist(netlist).expect("JFET step deck parses");
+                    let mut solver =
+                        Solver::new(circuit, integration).expect("JFET step solver builds");
+                    let gate = solver.circuit().node("g").expect("gate node");
+                    let source = solver.voltage_source_index("V1").expect("input source");
+                    solver.set_voltage_source(source, -sign * 3.0);
+                    (0..6)
+                        .map(|_| {
+                            solver.advance(2e-6).expect("gate step solves");
+                            sign * solver.node_voltage(gate)
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let heated_trace = run(&heated);
+                let explicit_trace = run(&explicit);
+                let unheated_trace = run(&unheated);
+                let mut largest_shift: f64 = 0.0;
+                for step in 0..heated_trace.len() {
+                    assert!(
+                        heated_trace[step] < 0.0 && heated_trace[step] > -3.0,
+                        "{kind} {integration:?}: the gate must still be charging"
+                    );
+                    assert!(
+                        (heated_trace[step] - explicit_trace[step]).abs() < 1e-9,
+                        "{kind} {integration:?} step {step}: TEMP gives {} V, explicit \
+                         PB(T)/CGS(T)/CGD(T) give {} V",
+                        heated_trace[step],
+                        explicit_trace[step]
+                    );
+                    largest_shift =
+                        largest_shift.max((heated_trace[step] - unheated_trace[step]).abs());
+                }
+                assert!(
+                    largest_shift > 0.02,
+                    "{kind} {integration:?}: heating must slow the gate charge, shift \
+                     {largest_shift} V"
+                );
+            }
+        }
+    }
+
+    /// ngspice's level-1 silicon laws, written out independently of the
+    /// engine: the Varshni bandgap and the built-in potential moved from
+    /// `TNOM` to `T` (used for `PHI` and `PB`).
+    fn spice_silicon_potential(potential: f64, nominal_kelvin: f64, kelvin: f64) -> f64 {
+        let bandgap = |t: f64| 1.16 - 7.02e-4 * t * t / (t + 1108.0);
+        let (vt_n, vt) = (
+            kelvin_thermal_voltage(nominal_kelvin),
+            kelvin_thermal_voltage(kelvin),
+        );
+        let ratio = kelvin / nominal_kelvin;
+        potential * ratio
+            - vt * (3.0 * ratio.ln() + bandgap(nominal_kelvin) / vt_n - bandgap(kelvin) / vt)
+    }
+
+    /// An explicit MOSFET instance `TEMP` moves the level-1 channel by
+    /// ngspice's `mos1temp` laws: `KP` falls as `(T/TNOM)^-1.5`, `PHI` follows
+    /// the silicon potential law and `VTO` moves with the bandgap and the
+    /// surface potential, including the `GAMMA·√PHI` body term. A saturated,
+    /// back-biased device is solved for NMOS and PMOS and compared against
+    /// the hand-written square law. `TEMP == TNOM` and no `TEMP` reproduce
+    /// the card.
+    #[test]
+    fn mosfet_channel_follows_level1_temperature_laws_at_instance_temperature() {
+        let (vto, kp, gamma, phi, lambda, tnom): (f64, f64, f64, f64, f64, f64) =
+            (0.8, 50e-6, 0.5, 0.65, 0.02, 27.0);
+        let (w, l) = (20e-6, 2e-6);
+        let (vgs, vds, vbs): (f64, f64, f64) = (2.5, 3.0, -1.0);
+        let bandgap = |t: f64| 1.16 - 7.02e-4 * t * t / (t + 1108.0);
+        let nominal_kelvin = tnom + 273.15;
+        // Card-sign VTO and NMOS-coordinate drain current at `kelvin`.
+        let drain_current = |sign: f64, kelvin: f64| {
+            let ratio = kelvin / nominal_kelvin;
+            let kp_t = kp / ratio.powf(1.5);
+            let phi_t = spice_silicon_potential(phi, nominal_kelvin, kelvin);
+            let card_vto = sign * vto;
+            let card_vto_t = card_vto
+                + sign * gamma * (phi_t.sqrt() - phi.sqrt())
+                + sign * 0.5 * (phi_t - phi)
+                + 0.5 * (bandgap(nominal_kelvin) - bandgap(kelvin));
+            let threshold = sign * card_vto_t + gamma * ((phi_t - vbs).sqrt() - phi_t.sqrt());
+            let vgst = vgs - threshold;
+            assert!(vgst > 0.0 && vgst < vds, "reference must stay saturated");
+            let channel = 0.5 * kp_t * w / l * vgst * vgst * (1.0 + lambda * vds);
+            // GMIN drain-source and the reverse bulk-drain GMIN term; IS is
+            // tiny enough that its leakage is far below the tolerance.
+            let vbd = vbs - vds;
+            (
+                card_vto_t,
+                channel + device::GMIN * vds - device::GMIN * vbd,
+            )
+        };
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let netlist = |temp: Option<f64>| {
+                let temp = temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                format!(
+                    "Vg g 0 dc {}\nVd d 0 dc {}\nVb b 0 dc {}\n\
+                     M1 d g 0 b MMOD W={w} L={l}{temp}\n.model MMOD {kind}(VTO={} KP={kp} \
+                     GAMMA={gamma} PHI={phi} LAMBDA={lambda} IS=1e-30 TNOM={tnom})\n",
+                    sign * vgs,
+                    sign * vds,
+                    sign * vbs,
+                    sign * vto
+                )
+            };
+
+            let nominal = build(&netlist(Some(tnom)));
+            assert_eq!(nominal.circuit().mosfets[0].operating_model.vto, sign * vto);
+            assert_eq!(nominal.circuit().mosfets[0].operating_model.kp, kp);
+            let nominal_current = sign * source_current(&nominal, "Vd");
+            let (_, nominal_expected) = drain_current(sign, nominal_kelvin);
+            assert!(
+                relative(nominal_current, nominal_expected) < 1e-6,
+                "{kind}: TEMP=TNOM expected {nominal_expected} A, got {nominal_current} A"
+            );
+            let fixed = sign * source_current(&build(&netlist(None)), "Vd");
+            assert!(
+                relative(fixed, nominal_expected) < 1e-6,
+                "{kind}: no TEMP keeps the card, expected {nominal_expected} A, got {fixed} A"
+            );
+
+            for temperature in [-40.0, 85.0, 125.0] {
+                let kelvin = temperature + 273.15;
+                let hot = build(&netlist(Some(temperature)));
+                let operating = hot.circuit().mosfets[0].operating_model;
+                let (expected_vto, expected) = drain_current(sign, kelvin);
+                assert!(
+                    (operating.vto - expected_vto).abs() < 1e-12,
+                    "{kind} at {temperature} C: VTO(T) {expected_vto} V, got {} V",
+                    operating.vto
+                );
+                assert!(
+                    relative(operating.kp, kp / (kelvin / nominal_kelvin).powf(1.5)) < 1e-12,
+                    "{kind} at {temperature} C: KP(T)"
+                );
+                let measured = sign * source_current(&hot, "Vd");
+                assert!(
+                    relative(measured, expected) < 1e-6,
+                    "{kind} at {temperature} C: expected drain current {expected} A, got \
+                     {measured} A"
+                );
+                // A missing law cannot hide in the tolerance: the solved
+                // current moves by several percent either way.
+                assert!(
+                    relative(measured, nominal_current) > 0.05,
+                    "{kind} at {temperature} C must move the channel decisively: {measured} A \
+                     vs {nominal_current} A"
+                );
+            }
+        }
+    }
+
+    /// The level-1 bulk junctions heat with the instance: `IS` scales by
+    /// `exp(Eg(TNOM)/Vt(TNOM) − Eg(T)/Vt(T))` (level 1 has no `XTI`) and the
+    /// diode exponent uses `kT/q` at `TEMP`. Both bulk junctions are forward
+    /// biased with the channel off and the bulk current is compared against a
+    /// hand-written Shockley law for NMOS and PMOS.
+    #[test]
+    fn mosfet_bulk_junction_leakage_follows_bandgap_law_at_instance_temperature() {
+        let (is, tnom, forward): (f64, f64, f64) = (1e-14, 27.0, 0.5);
+        let bandgap = |t: f64| 1.16 - 7.02e-4 * t * t / (t + 1108.0);
+        let nominal_kelvin = tnom + 273.15;
+        let saturation = |kelvin: f64| {
+            is * (bandgap(nominal_kelvin) / kelvin_thermal_voltage(nominal_kelvin)
+                - bandgap(kelvin) / kelvin_thermal_voltage(kelvin))
+            .exp()
+        };
+        let bulk_current = |is_t: f64, kelvin: f64| {
+            let vt = kelvin_thermal_voltage(kelvin);
+            2.0 * (is_t * ((forward / vt).exp() - 1.0) + device::GMIN * forward)
+        };
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let netlist = |temp: Option<f64>| {
+                let temp = temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                format!(
+                    "Vb b 0 dc {}\nVd d 0 dc 0\nVs s 0 dc 0\n\
+                     M1 d 0 s b MMOD{temp}\n.model MMOD {kind}(VTO={} KP=20u IS={is} \
+                     TNOM={tnom})\n",
+                    sign * forward,
+                    sign * 1.0
+                )
+            };
+
+            let nominal = sign * source_current(&build(&netlist(Some(tnom))), "Vb");
+            let nominal_expected = bulk_current(is, nominal_kelvin);
+            assert!(
+                relative(nominal, nominal_expected) < 1e-6,
+                "{kind}: TEMP=TNOM expected {nominal_expected} A, got {nominal} A"
+            );
+            let fixed = sign * source_current(&build(&netlist(None)), "Vb");
+            let fixed_expected = bulk_current(is, device::TEMPERATURE_K);
+            assert!(
+                relative(fixed, fixed_expected) < 1e-6,
+                "{kind}: no TEMP expected {fixed_expected} A, got {fixed} A"
+            );
+
+            for temperature in [-20.0, 85.0, 125.0] {
+                let kelvin = temperature + 273.15;
+                let hot = build(&netlist(Some(temperature)));
+                let expected_is = saturation(kelvin);
+                let adjusted_is = hot.circuit().mosfets[0].operating_model.is;
+                assert!(
+                    relative(adjusted_is, expected_is) < 1e-12,
+                    "{kind} at {temperature} C: IS(T) {expected_is} A, got {adjusted_is} A"
+                );
+                let expected = bulk_current(expected_is, kelvin);
+                let measured = sign * source_current(&hot, "Vb");
+                assert!(
+                    relative(measured, expected) < 1e-6,
+                    "{kind} at {temperature} C: expected bulk current {expected} A, got \
+                     {measured} A"
+                );
+                let ratio = measured / nominal;
+                assert!(
+                    !(0.1..=10.0).contains(&ratio),
+                    "{kind} at {temperature} C must move bulk leakage decisively, ratio {ratio}"
+                );
+            }
+        }
+    }
+
+    /// Instance `TEMP` moves the bulk-junction `PB` and every zero-bias
+    /// depletion capacitance (`CBD`, or `CJ·AD` with `MJ` and `CJSW·PD` with
+    /// `MJSW`) by the silicon depletion law. A reverse-bias drain step through
+    /// a resistor must follow a card that states the hand-computed
+    /// `PB(T)`/`C(T)` directly, and differ from the unheated card.
+    #[test]
+    fn mosfet_bulk_depletion_capacitance_follows_instance_temperature() {
+        let (tnom, temperature, pb, mj, mjsw): (f64, f64, f64, f64, f64) =
+            (27.0, 125.0, 0.8, 0.5, 0.33);
+        let (nominal_kelvin, kelvin) = (tnom + 273.15, temperature + 273.15);
+        let pb_t = spice_silicon_potential(pb, nominal_kelvin, kelvin);
+        let scale =
+            |grading: f64| 1.0 + grading * (4e-4 * (kelvin - nominal_kelvin) - pb_t / pb + 1.0);
+        assert!(
+            pb_t < pb - 0.1 && scale(mj) > 1.05 && scale(mjsw) > 1.03,
+            "a 98 K rise must lower PB and raise the depletion capacitance"
+        );
+        let (cbd, cj, cjsw, ad, pd) = (10e-9, 2e-3, 2e-9, 4e-6, 2.0);
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            // (label, card parameters at TNOM, the same card at T, instance)
+            let variants = [
+                (
+                    "CBD",
+                    format!("CBD={cbd} PB={pb} MJ={mj}"),
+                    format!("CBD={} PB={pb_t} MJ={mj}", cbd * scale(mj)),
+                    String::new(),
+                ),
+                (
+                    "CJ/CJSW",
+                    format!("CJ={cj} CJSW={cjsw} PB={pb} MJ={mj} MJSW={mjsw}"),
+                    format!(
+                        "CJ={} CJSW={} PB={pb_t} MJ={mj} MJSW={mjsw}",
+                        cj * scale(mj),
+                        cjsw * scale(mjsw)
+                    ),
+                    format!(" AD={ad} PD={pd}"),
+                ),
+            ];
+            for (label, card, card_t, instance) in variants {
+                let deck = |card: &str, temp: Option<f64>| {
+                    let temp = temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                    format!(
+                        "V1 in 0 dc 0\nR1 in x 1k\nM1 x 0 0 0 MMOD{instance}{temp}\n\
+                         .model MMOD {kind}(VTO={} KP=20u IS=1e-30 TNOM={tnom} FC=0.5 {card})\n",
+                        sign * 1.0
+                    )
+                };
+                let heated = deck(&card, Some(temperature));
+                let explicit = deck(&card_t, None);
+                let unheated = deck(&card, None);
+
+                let heated_mosfet = parse_netlist(&heated)
+                    .expect("heated MOSFET parses")
+                    .mosfets[0]
+                    .clone();
+                let explicit_mosfet = parse_netlist(&explicit)
+                    .expect("explicit MOSFET parses")
+                    .mosfets[0]
+                    .clone();
+                assert!(
+                    (heated_mosfet.operating_model.pb - pb_t).abs() < 1e-12,
+                    "{kind} {label}: PB(T)"
+                );
+                let heated_caps = heated_mosfet.bulk_junction_capacitances(true);
+                let explicit_caps = explicit_mosfet.bulk_junction_capacitances(true);
+                for (heated_c, explicit_c) in heated_caps.into_iter().zip(explicit_caps) {
+                    assert!(
+                        heated_c == explicit_c || relative(heated_c, explicit_c) < 1e-12,
+                        "{kind} {label}: zero-bias capacitances {heated_caps:?} vs {explicit_caps:?}"
+                    );
+                }
+
+                for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                    let run = |netlist: &str| {
+                        let circuit = parse_netlist(netlist).expect("MOSFET step deck parses");
+                        let mut solver =
+                            Solver::new(circuit, integration).expect("MOSFET step solver builds");
+                        let drain = solver.circuit().node("x").expect("drain node");
+                        let source = solver.voltage_source_index("V1").expect("input source");
+                        solver.set_voltage_source(source, sign * 3.0);
+                        (0..6)
+                            .map(|_| {
+                                solver.advance(2e-6).expect("drain step solves");
+                                sign * solver.node_voltage(drain)
+                            })
+                            .collect::<Vec<_>>()
+                    };
+                    let heated_trace = run(&heated);
+                    let explicit_trace = run(&explicit);
+                    let unheated_trace = run(&unheated);
+                    let mut largest_shift: f64 = 0.0;
+                    for step in 0..heated_trace.len() {
+                        assert!(
+                            heated_trace[step] > 0.0 && heated_trace[step] < 3.0,
+                            "{kind} {label} {integration:?}: the drain must still be charging"
+                        );
+                        assert!(
+                            (heated_trace[step] - explicit_trace[step]).abs() < 1e-9,
+                            "{kind} {label} {integration:?} step {step}: TEMP gives {} V, \
+                             explicit PB(T)/C(T) give {} V",
+                            heated_trace[step],
+                            explicit_trace[step]
+                        );
+                        largest_shift =
+                            largest_shift.max((heated_trace[step] - unheated_trace[step]).abs());
+                    }
+                    assert!(
+                        largest_shift > 0.02,
+                        "{kind} {label} {integration:?}: heating must slow the drain charge, \
+                         shift {largest_shift} V"
+                    );
+                }
+            }
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Newton iteration itself
     // -----------------------------------------------------------------------
@@ -2818,6 +7039,23 @@ mod analog {
         assert!(build("V1 in 0 dc 5\nR1 in b 100k\nQ1 in b 0 NPN\n").is_nonlinear());
         assert!(build("V1 in 0 dc 5\nR1 in d 1k\nM1 d in 0 0 NMOS\n").is_nonlinear());
         assert!(build("V1 in 0 dc 0\nR1 in d 1k\nJ1 d in 0 NJF\n").is_nonlinear());
+    }
+
+    /// A solved load line checks that TC1/TC2 change the resistor stamp, not
+    /// only the parsed fields. At ΔT=100 °C, the coefficients multiply 1 kΩ
+    /// by 1 + 0.4 + 0.01 = 1.41.
+    #[test]
+    fn resistor_temperature_coefficients_change_the_operating_point() {
+        let solver = build(
+            "V1 in 0 dc 1.41\n\
+             R1 in 0 1k tc1=4m tc2=1u tnom=25 temp=125\n",
+        );
+
+        assert!(
+            (source_current(&solver, "V1") - 1e-3).abs() < 1e-12,
+            "1.41 V across the adjusted 1.41 kΩ resistor must be 1 mA, got {} A",
+            source_current(&solver, "V1")
+        );
     }
 
     /// An ideal voltage source connected straight across a junction with no

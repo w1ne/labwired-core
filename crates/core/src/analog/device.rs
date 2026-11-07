@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: MIT
 
 //! Device physics for the nonlinear elements: the exponential diode, the
-//! Gummel–Poon BJT with Early effect, high-injection rolloff and base
-//! recombination, the level-1 JFET with its Parker–Skellern fit and
-//! gate-junction depletion charge, and
+//! Gummel–Poon BJT with Early effect, high-injection rolloff, base
+//! recombination and bias-dependent base resistance, the level-1 JFET with its
+//! Parker–Skellern fit and gate-junction depletion charge, and
 //! the level-1 MOSFET, plus the constants and voltage-limiting heuristics
 //! Newton–Raphson needs to reach them.
 //!
@@ -30,16 +30,24 @@
 //! charge (`CGSO`, `CGDO`, `CGBO`) is integrated as linear capacitance using
 //! instance `W` and `L`; BJT transit-time charge (`TF`/`TR`) is integrated
 //! using ideal transit times with ngspice's forward `XTF`/`VTF`/`ITF` bias
-//! adjustment. MOSFET intrinsic channel charge from `TOX` uses the level-1
-//! Meyer model by default; opt-in Ward–Dutton mode integrates strong-inversion
+//! adjustment. BJT junction depletion parameters follow ngspice's default
+//! silicon temperature law or its `TLEVC=1` linear form. MOSFET intrinsic
+//! channel charge from `TOX` uses the level-1 Meyer model by default; opt-in
+//! Ward–Dutton mode integrates strong-inversion
 //! terminal charge with an analytic Jacobian. MOSFET bulk depletion charge integrates
 //! bottom-area capacitance from `CBD`/`CBS` or `CJ` times instance `AD`/`AS`,
 //! and sidewall capacitance from `CJSW` times `PD`/`PS`, with separate `MJ`
 //! and `MJSW` grading coefficients.
-//! There is no temperature model: every parameter is taken at
-//! [`TEMPERATURE_K`] as written. A `.model` line may
-//! carry unmodelled parameters (real vendor models do) and they are accepted
-//! and ignored; see [`super::netlist`]. Diode soft recovery covers the
+//! The diode and BJT support their documented explicit instance `TEMP` laws;
+//! diode `CJO`, `VJ`, `M`, and transit time use their documented temperature
+//! equations. BJT transit times use `TTF*`/`TTR*`, and terminal resistances use
+//! `TRB*`/`TRBM*`/`TIRB*`/`TRC*`/`TRE*`. JFET level-1 channel `VTO`/`BETA`
+//! use `VTOTC`/`TCV` and `BETATCE`/`BEX` when an instance `TEMP` is supplied,
+//! and its gate junctions use the diode `EG`/`XTI` and depletion laws;
+//! MOSFET temperature laws are not modeled. Other parameters are taken at [`TEMPERATURE_K`] as written. A `.model`
+//! line may carry unmodelled
+//! parameters (real vendor models do) and they are accepted and ignored; see
+//! [`super::netlist`]. Diode soft recovery covers the
 //! first-order `VP` charge state. Other recovery models and stored charge in
 //! unsupported junctions still require `adapter: external_process` with ngspice.
 //!
@@ -56,12 +64,13 @@
 //! calculations, so drift or an incorrect equation fails a test.
 
 use super::netlist::BjtModel;
-use super::netlist::{MosChannelChargeModel, Mosfet};
+use super::netlist::{JfetModel, MosChannelChargeModel, MosModel, Mosfet};
 
 /// Temperature every device parameter is evaluated at, in kelvin.
 ///
-/// The engine has no temperature model, so this is a constant rather than a
-/// setting. ngspice's default is 300.15 K (27 °C); the 0.05 % difference in
+/// This is the fallback for paths without an explicit diode instance
+/// temperature, so it is a constant rather than a setting. ngspice's default
+/// is 300.15 K (27 °C); the 0.05 % difference in
 /// [`THERMAL_VOLTAGE`] moves a silicon junction by about 13 µV per decade of
 /// current, which is why the ngspice differential decks pin `temp`/`tnom` to
 /// 26.85 °C — exactly 300.00 K — instead of arguing about it.
@@ -75,6 +84,85 @@ const ELEMENTARY_CHARGE: f64 = 1.602_176_634e-19;
 
 /// `kT/q` at [`TEMPERATURE_K`]: about 25.852 mV.
 pub const THERMAL_VOLTAGE: f64 = BOLTZMANN * TEMPERATURE_K / ELEMENTARY_CHARGE;
+
+/// `kT/q` at an explicitly selected absolute temperature, in kelvin.
+pub fn thermal_voltage_at_temperature(temperature_kelvin: f64) -> f64 {
+    BOLTZMANN * temperature_kelvin / ELEMENTARY_CHARGE
+}
+
+/// SPICE diode saturation current at an instance temperature.
+///
+/// `EG` is in eV; numerically it can be divided by the thermal voltage in
+/// volts because one electron-volt is the energy gained by one electron over
+/// one volt. The emission coefficient `n` scales both the power law and the
+/// activation-energy term, as in the SPICE diode temperature equation.
+pub fn diode_saturation_current_at_temperature(
+    is_nominal: f64,
+    n: f64,
+    eg_ev: f64,
+    xti: f64,
+    nominal_kelvin: f64,
+    temperature_kelvin: f64,
+) -> f64 {
+    let vt_nominal = thermal_voltage_at_temperature(nominal_kelvin);
+    let vt = thermal_voltage_at_temperature(temperature_kelvin);
+    let log_factor =
+        eg_ev / vt_nominal - eg_ev / vt + xti * ln(temperature_kelvin / nominal_kelvin);
+    is_nominal * exp_clamped(log_factor / n)
+}
+
+/// SPICE diode zero-bias depletion capacitance and junction potential at an
+/// instance temperature, following ngspice's silicon Varshni temperature law.
+///
+/// `M` is supplied after its `TM1`/`TM2` adjustment. `CJO` and `VJ` are
+/// measured at `nominal_kelvin`; at that temperature this returns their exact
+/// input values. The `EG` model parameter belongs to the saturation-current
+/// law; the standard junction-potential correction uses the silicon bandgap
+/// temperature fit documented by ngspice.
+pub fn diode_depletion_parameters_at_temperature(
+    cjo: f64,
+    vj: f64,
+    m: f64,
+    nominal_kelvin: f64,
+    temperature_kelvin: f64,
+) -> (f64, f64) {
+    if nominal_kelvin.to_bits() == temperature_kelvin.to_bits() {
+        return (cjo, vj);
+    }
+
+    let vj_at_temperature =
+        silicon_junction_potential_at_temperature(vj, nominal_kelvin, temperature_kelvin);
+    let cjo_at_temperature = cjo
+        * (1.0
+            + m * (4.0e-4 * (temperature_kelvin - nominal_kelvin) - vj_at_temperature / vj + 1.0));
+
+    (cjo_at_temperature, vj_at_temperature)
+}
+
+/// Silicon energy gap at an absolute temperature, eV, from the Varshni fit
+/// ngspice uses for its junction-potential and level-1 MOSFET laws.
+pub fn silicon_energy_gap_ev(temperature_kelvin: f64) -> f64 {
+    1.16 - 7.02e-4 * temperature_kelvin * temperature_kelvin / (temperature_kelvin + 1108.0)
+}
+
+/// A silicon built-in potential (`VJ`, `PB` or MOSFET `PHI`) measured at
+/// `nominal_kelvin`, moved to `temperature_kelvin` by ngspice's law:
+/// `P(T) = P·T/Tn − Vt(T)·(3·ln(T/Tn) + Eg(Tn)/Vt(Tn) − Eg(T)/Vt(T))`.
+pub fn silicon_junction_potential_at_temperature(
+    potential: f64,
+    nominal_kelvin: f64,
+    temperature_kelvin: f64,
+) -> f64 {
+    if nominal_kelvin.to_bits() == temperature_kelvin.to_bits() {
+        return potential;
+    }
+    let nominal_vt = thermal_voltage_at_temperature(nominal_kelvin);
+    let vt = thermal_voltage_at_temperature(temperature_kelvin);
+    let eg_nominal = silicon_energy_gap_ev(nominal_kelvin);
+    let eg = silicon_energy_gap_ev(temperature_kelvin);
+    let ratio = temperature_kelvin / nominal_kelvin;
+    potential * ratio - vt * (3.0 * ln(ratio) + eg_nominal / nominal_vt - eg / vt)
+}
 
 /// Conductance added across every pn junction, siemens.
 ///
@@ -110,6 +198,288 @@ pub fn ln(value: f64) -> f64 {
     libm::log(value)
 }
 
+/// SPICE Gummel–Poon parameters adjusted for one BJT instance's temperature.
+///
+/// This covers the standard `TNOM`/`EG`/`XTI` transport saturation-current
+/// law, `XTB` beta scaling, and the corresponding `ISE`/`ISC` recombination
+/// currents, the first and second order coefficients for forward/reverse
+/// transit time, and the coefficients for `RB`/`RBM`/`IRB`/`RC`/`RE`.
+/// `None` preserves the engine's historical fixed-300 K path. With an
+/// instance temperature, B-E and B-C depletion parameters use ngspice's
+/// default silicon-bandgap law (`TLEVC=0`) or its linear `CTE`/`CTC` and
+/// `TVJE`/`TVJC` form (`TLEVC=1`).
+pub fn bjt_parameters_at_temperature(
+    model: BjtModel,
+    temperature_celsius: Option<f64>,
+) -> (BjtModel, f64) {
+    let Some(temperature_celsius) = temperature_celsius else {
+        return (model, THERMAL_VOLTAGE);
+    };
+
+    let temperature_kelvin = temperature_celsius + 273.15;
+    let nominal_kelvin = model.tnom_celsius + 273.15;
+    let ratio = temperature_kelvin / nominal_kelvin;
+    let log_ratio = ln(ratio);
+    let delta = temperature_celsius - model.tnom_celsius;
+    let temperature_factor = |first: f64, second: f64| 1.0 + first * delta + second * delta * delta;
+    let thermal_voltage = thermal_voltage_at_temperature(temperature_kelvin);
+    // ngspice's BJT implementation uses (T/TNOM - 1)·EG/Vt(T) for this
+    // exponent. `EG` is in eV, so the numerical value is volts after dividing
+    // by Vt.
+    let log_current_factor = (ratio - 1.0) * model.eg / thermal_voltage + model.xti * log_ratio;
+    let beta_factor = libm::exp(model.xtb * log_ratio);
+
+    let mut adjusted = model;
+    adjusted.is *= libm::exp(log_current_factor);
+    adjusted.bf *= beta_factor;
+    adjusted.br *= beta_factor;
+    if adjusted.ise > 0.0 {
+        adjusted.ise *= libm::exp(log_current_factor / model.ne) / beta_factor;
+    }
+    if adjusted.isc > 0.0 {
+        adjusted.isc *= libm::exp(log_current_factor / model.nc) / beta_factor;
+    }
+    adjusted.tf *= temperature_factor(model.ttf1, model.ttf2);
+    adjusted.tr *= temperature_factor(model.ttr1, model.ttr2);
+    adjusted.rb *= temperature_factor(model.trb1, model.trb2);
+    adjusted.rbm =
+        Some(model.rbm.unwrap_or(model.rb) * temperature_factor(model.trbm1, model.trbm2));
+    adjusted.irb *= temperature_factor(model.tirb1, model.tirb2);
+    adjusted.rc *= temperature_factor(model.trc1, model.trc2);
+    adjusted.re *= temperature_factor(model.tre1, model.tre2);
+    let (cje, vje, mje) = bjt_junction_parameters_at_temperature(
+        model.cje,
+        model.vje,
+        model.mje,
+        model.tmje1,
+        model.tmje2,
+        model.cte,
+        model.tvje,
+        model.tnom_celsius,
+        temperature_celsius,
+        model.tlevc,
+    );
+    adjusted.cje = cje;
+    adjusted.vje = vje;
+    adjusted.mje = mje;
+    let (cjc, vjc, mjc) = bjt_junction_parameters_at_temperature(
+        model.cjc,
+        model.vjc,
+        model.mjc,
+        model.tmjc1,
+        model.tmjc2,
+        model.ctc,
+        model.tvjc,
+        model.tnom_celsius,
+        temperature_celsius,
+        model.tlevc,
+    );
+    adjusted.cjc = cjc;
+    adjusted.vjc = vjc;
+    adjusted.mjc = mjc;
+    (adjusted, thermal_voltage)
+}
+
+/// SPICE level-1 JFET parameters adjusted for an explicit instance
+/// temperature. `VTOTC` overrides `TCV`; `BETATCE` overrides `BEX`, matching
+/// ngspice's documented alternatives. The gate junctions follow the diode
+/// laws: `IS` scales with `EG`/`XTI` at emission coefficient 1, and `PB` with
+/// `CGS`/`CGD` follow the silicon depletion law at the JFET's fixed grading
+/// coefficient of 0.5. At `TEMP == TNOM` every parameter is returned as written.
+pub fn jfet_parameters_at_temperature(
+    model: JfetModel,
+    temperature_celsius: Option<f64>,
+) -> JfetModel {
+    let Some(temperature_celsius) = temperature_celsius else {
+        return model;
+    };
+
+    let delta = temperature_celsius - model.tnom_celsius;
+    let mut adjusted = model;
+    adjusted.vto = if let Some(vtotc) = model.vtotc {
+        model.vto + vtotc * delta
+    } else {
+        model.vto - model.tcv * delta
+    };
+    adjusted.beta = if let Some(betatce) = model.betatce {
+        model.beta * libm::pow(1.01, betatce * delta)
+    } else {
+        let temperature_kelvin = temperature_celsius + 273.15;
+        let nominal_kelvin = model.tnom_celsius + 273.15;
+        model.beta * libm::pow(temperature_kelvin / nominal_kelvin, model.bex)
+    };
+
+    let temperature_kelvin = temperature_celsius + 273.15;
+    let nominal_kelvin = model.tnom_celsius + 273.15;
+    adjusted.is = diode_saturation_current_at_temperature(
+        model.is,
+        1.0,
+        model.eg,
+        model.xti,
+        nominal_kelvin,
+        temperature_kelvin,
+    );
+    let (cgs, pb) = diode_depletion_parameters_at_temperature(
+        model.cgs,
+        model.pb,
+        0.5,
+        nominal_kelvin,
+        temperature_kelvin,
+    );
+    let (cgd, _) = diode_depletion_parameters_at_temperature(
+        model.cgd,
+        model.pb,
+        0.5,
+        nominal_kelvin,
+        temperature_kelvin,
+    );
+    adjusted.cgs = cgs;
+    adjusted.cgd = cgd;
+    adjusted.pb = pb;
+    adjusted
+}
+
+/// SPICE level-1 MOSFET parameters adjusted for an explicit instance
+/// temperature, following ngspice's `mos1temp` laws:
+///
+/// - `KP` scales by `(T/TNOM)^-1.5` (mobility);
+/// - `PHI` and `PB` follow [`silicon_junction_potential_at_temperature`];
+/// - `VTO` moves with the bandgap and the surface potential,
+///   `VTO(T) = VTO + type·γ·(√PHI(T) − √PHI) + type·½(PHI(T) − PHI)
+///   + ½(Eg(TNOM) − Eg(T))`, in card (signed) coordinates;
+/// - bulk-junction `IS` scales by `exp(Eg(TNOM)/Vt(TNOM) − Eg(T)/Vt(T))` —
+///   level 1 has no `XTI`, and its junctions use emission coefficient 1;
+/// - `CBD`/`CBS`/`CJ` (grading `MJ`) and `CJSW` (grading `MJSW`) follow the
+///   same depletion law as the diode.
+///
+/// `RD`/`RS`/`RSH`, `LAMBDA`, `GAMMA` and the overlap capacitances have no
+/// level-1 temperature law. `None`, or `TEMP == TNOM`, returns the card as
+/// written.
+pub fn mos_parameters_at_temperature(
+    model: MosModel,
+    temperature_celsius: Option<f64>,
+) -> MosModel {
+    let Some(temperature_celsius) = temperature_celsius else {
+        return model;
+    };
+    let temperature_kelvin = temperature_celsius + 273.15;
+    let nominal_kelvin = model.tnom_celsius + 273.15;
+    if nominal_kelvin.to_bits() == temperature_kelvin.to_bits() {
+        return model;
+    }
+
+    let ratio = temperature_kelvin / nominal_kelvin;
+    let vt = thermal_voltage_at_temperature(temperature_kelvin);
+    let nominal_vt = thermal_voltage_at_temperature(nominal_kelvin);
+    let eg = silicon_energy_gap_ev(temperature_kelvin);
+    let eg_nominal = silicon_energy_gap_ev(nominal_kelvin);
+    let sign = model.polarity.sign();
+
+    let mut adjusted = model;
+    adjusted.kp = model.kp / (ratio * libm::sqrt(ratio));
+    adjusted.phi =
+        silicon_junction_potential_at_temperature(model.phi, nominal_kelvin, temperature_kelvin);
+    adjusted.vto = model.vto
+        + sign * model.gamma * (libm::sqrt(adjusted.phi) - libm::sqrt(model.phi))
+        + sign * 0.5 * (adjusted.phi - model.phi)
+        + 0.5 * (eg_nominal - eg);
+    adjusted.is = model.is * exp_clamped(eg_nominal / nominal_vt - eg / vt);
+
+    let bottom = |capacitance: f64| {
+        diode_depletion_parameters_at_temperature(
+            capacitance,
+            model.pb,
+            model.mj,
+            nominal_kelvin,
+            temperature_kelvin,
+        )
+    };
+    let (cbd, pb) = bottom(model.cbd);
+    adjusted.cbd = cbd;
+    adjusted.cbs = bottom(model.cbs).0;
+    adjusted.cj = bottom(model.cj).0;
+    adjusted.cjsw = diode_depletion_parameters_at_temperature(
+        model.cjsw,
+        model.pb,
+        model.mjsw,
+        nominal_kelvin,
+        temperature_kelvin,
+    )
+    .0;
+    adjusted.pb = pb;
+    adjusted
+}
+
+/// Temperature-adjust one BJT depletion junction, matching ngspice's default
+/// `TLEVC=0` silicon law and the alternate `TLEVC=1` linear coefficient law.
+#[allow(clippy::too_many_arguments)]
+fn bjt_junction_parameters_at_temperature(
+    capacitance: f64,
+    potential: f64,
+    grading: f64,
+    grading_tc1: f64,
+    grading_tc2: f64,
+    capacitance_tc: f64,
+    potential_tc: f64,
+    nominal_celsius: f64,
+    temperature_celsius: f64,
+    tlevc: u8,
+) -> (f64, f64, f64) {
+    let delta = temperature_celsius - nominal_celsius;
+    let grading_at_temperature =
+        grading * (1.0 + grading_tc1 * delta + grading_tc2 * delta * delta);
+    if delta == 0.0 {
+        return (capacitance, potential, grading_at_temperature);
+    }
+
+    if tlevc == 1 {
+        return (
+            capacitance * (1.0 + capacitance_tc * delta),
+            potential - potential_tc * delta,
+            grading_at_temperature,
+        );
+    }
+
+    const REFERENCE_TEMPERATURE_K: f64 = 300.15;
+    const REFERENCE_SILICON_BANDGAP_EV: f64 = 1.115_087_7;
+    const SILICON_VARSHNI_A_EV_PER_K: f64 = 7.02e-4;
+    const SILICON_VARSHNI_B_K: f64 = 1108.0;
+
+    let nominal_kelvin = nominal_celsius + 273.15;
+    let temperature_kelvin = temperature_celsius + 273.15;
+    let nominal_reference_ratio = nominal_kelvin / REFERENCE_TEMPERATURE_K;
+    let temperature_reference_ratio = temperature_kelvin / REFERENCE_TEMPERATURE_K;
+    let bandgap_at_temperature = 1.16
+        - SILICON_VARSHNI_A_EV_PER_K * temperature_kelvin * temperature_kelvin
+            / (temperature_kelvin + SILICON_VARSHNI_B_K);
+    let boltzmann_ev_per_kelvin = BOLTZMANN / ELEMENTARY_CHARGE;
+    let potential_temperature_factor = thermal_voltage_at_temperature(temperature_kelvin)
+        * (bandgap_at_temperature / (boltzmann_ev_per_kelvin * temperature_kelvin)
+            - REFERENCE_SILICON_BANDGAP_EV / (boltzmann_ev_per_kelvin * REFERENCE_TEMPERATURE_K)
+            - 3.0 * ln(temperature_reference_ratio));
+
+    let nominal_reference_potential =
+        (potential - potential_temperature_factor) / nominal_reference_ratio;
+    let nominal_gma = (potential - nominal_reference_potential) / nominal_reference_potential;
+    let mut adjusted_capacitance = capacitance
+        / (1.0
+            + grading_at_temperature
+                * (4.0e-4 * (nominal_kelvin - REFERENCE_TEMPERATURE_K) - nominal_gma));
+    let adjusted_potential =
+        temperature_reference_ratio * nominal_reference_potential + potential_temperature_factor;
+    let temperature_gma =
+        (adjusted_potential - nominal_reference_potential) / nominal_reference_potential;
+    adjusted_capacitance *= 1.0
+        + grading_at_temperature
+            * (4.0e-4 * (temperature_kelvin - REFERENCE_TEMPERATURE_K) - temperature_gma);
+
+    (
+        adjusted_capacitance,
+        adjusted_potential,
+        grading_at_temperature,
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Diode
 // ---------------------------------------------------------------------------
@@ -129,7 +499,17 @@ pub struct DiodeOp {
 /// model that is *not* the anode-to-cathode voltage, because the series
 /// resistance drops the difference.
 pub fn diode_op(v_junction: f64, is: f64, n: f64) -> DiodeOp {
-    let vte = n * THERMAL_VOLTAGE;
+    diode_op_at_thermal_voltage(v_junction, is, n, THERMAL_VOLTAGE)
+}
+
+/// Shockley diode operating point using the selected thermal voltage.
+pub fn diode_op_at_thermal_voltage(
+    v_junction: f64,
+    is: f64,
+    n: f64,
+    thermal_voltage: f64,
+) -> DiodeOp {
+    let vte = n * thermal_voltage;
     let exponential = exp_clamped(v_junction / vte);
     DiodeOp {
         id: is * (exponential - 1.0) + GMIN * v_junction,
@@ -151,13 +531,26 @@ pub fn diode_recombination_op(
     vj: f64,
     m: f64,
 ) -> DiodeOp {
+    diode_recombination_op_at_thermal_voltage(v_junction, isr, nr, n, vj, m, THERMAL_VOLTAGE)
+}
+
+/// Recombination branch using an explicit operating thermal voltage.
+pub fn diode_recombination_op_at_thermal_voltage(
+    v_junction: f64,
+    isr: f64,
+    nr: f64,
+    n: f64,
+    vj: f64,
+    m: f64,
+    thermal_voltage: f64,
+) -> DiodeOp {
     if isr == 0.0 {
         return DiodeOp { id: 0.0, gd: 0.0 };
     }
 
-    let forward_boundary = -3.0 * n * THERMAL_VOLTAGE;
+    let forward_boundary = -3.0 * n * thermal_voltage;
     let voltage = v_junction.max(forward_boundary);
-    let vte = nr * THERMAL_VOLTAGE;
+    let vte = nr * thermal_voltage;
     let exponential = exp_clamped(voltage / vte);
     let base_current = isr * (exponential - 1.0);
     let x = 1.0 - voltage / vj;
@@ -256,7 +649,11 @@ pub const BREAKDOWN_FIT_RELTOL: f64 = 1e-9;
 /// Note that ngspice divides by the bare thermal voltage here, not by `N·Vt` —
 /// kept as written, since agreeing with ngspice is the point.
 pub fn breakdown_voltage(bv: f64, ibv: f64, is: f64, nbv: f64) -> f64 {
-    let vt = THERMAL_VOLTAGE;
+    breakdown_voltage_at_thermal_voltage(bv, ibv, is, nbv, THERMAL_VOLTAGE)
+}
+
+/// Fit the breakdown knee with an explicit operating thermal voltage.
+pub fn breakdown_voltage_at_thermal_voltage(bv: f64, ibv: f64, is: f64, nbv: f64, vt: f64) -> f64 {
     let cbv = ibv;
     if cbv < is * bv / vt {
         return bv;
@@ -287,9 +684,21 @@ pub fn breakdown_voltage(bv: f64, ibv: f64, is: f64, nbv: f64) -> f64 {
 /// not use it — it keeps the plain exponential it always had, so that nothing
 /// already simulated moves by a bit.
 pub fn diode_op_breakdown(v_junction: f64, is: f64, n: f64, xbv: f64, nbv: f64) -> DiodeOp {
-    let vte = n * THERMAL_VOLTAGE;
+    diode_op_breakdown_at_thermal_voltage(v_junction, is, n, xbv, nbv, THERMAL_VOLTAGE)
+}
+
+/// Three-region SPICE diode current using an explicit operating thermal voltage.
+pub fn diode_op_breakdown_at_thermal_voltage(
+    v_junction: f64,
+    is: f64,
+    n: f64,
+    xbv: f64,
+    nbv: f64,
+    thermal_voltage: f64,
+) -> DiodeOp {
+    let vte = n * thermal_voltage;
     if v_junction >= -3.0 * vte {
-        return diode_op(v_junction, is, n);
+        return diode_op_at_thermal_voltage(v_junction, is, n, thermal_voltage);
     }
     if v_junction >= -xbv {
         let arg = 3.0 * vte / (v_junction * core::f64::consts::E);
@@ -299,7 +708,7 @@ pub fn diode_op_breakdown(v_junction: f64, is: f64, n: f64, xbv: f64, nbv: f64) 
             gd: is * 3.0 * arg / v_junction + GMIN,
         };
     }
-    let vtebrk = nbv * THERMAL_VOLTAGE;
+    let vtebrk = nbv * thermal_voltage;
     let evrev = exp_clamped(-(xbv + v_junction) / vtebrk);
     DiodeOp {
         id: -is * evrev + GMIN * v_junction,
@@ -321,7 +730,20 @@ pub fn breakdown_limit(
     xbv: f64,
     nbv: f64,
 ) -> f64 {
-    let vtebrk = nbv * THERMAL_VOLTAGE;
+    breakdown_limit_at_thermal_voltage(v_new, v_old, vte, v_critical, xbv, nbv, THERMAL_VOLTAGE)
+}
+
+/// Breakdown-aware junction limiter using an explicit operating thermal voltage.
+pub fn breakdown_limit_at_thermal_voltage(
+    v_new: f64,
+    v_old: f64,
+    vte: f64,
+    v_critical: f64,
+    xbv: f64,
+    nbv: f64,
+    thermal_voltage: f64,
+) -> f64 {
+    let vtebrk = nbv * thermal_voltage;
     let threshold = (-xbv + 10.0 * vtebrk).min(0.0);
     if v_new < threshold {
         let mirrored = -(v_new + xbv);
@@ -339,7 +761,12 @@ pub fn breakdown_limit(
 /// The junction voltage above which [`pn_limit`] starts damping, per SPICE:
 /// the point where `dI/dV` of the exponential passes `1/Vt`.
 pub fn pn_critical_voltage(is: f64, n: f64) -> f64 {
-    let vte = n * THERMAL_VOLTAGE;
+    pn_critical_voltage_at_thermal_voltage(is, n, THERMAL_VOLTAGE)
+}
+
+/// Junction limiter's critical voltage using an explicit thermal voltage.
+pub fn pn_critical_voltage_at_thermal_voltage(is: f64, n: f64, thermal_voltage: f64) -> f64 {
+    let vte = n * thermal_voltage;
     vte * ln(vte / (core::f64::consts::SQRT_2 * is))
 }
 
@@ -402,7 +829,8 @@ pub struct BjtOp {
 /// q1  = 1 / (1 − Vbc/VAF − Vbe/VAR)
 /// q2  = Is·(exp(Vbe/(Nf·Vt)) − 1)/IKF
 ///     + Is·(exp(Vbc/(Nr·Vt)) − 1)/IKR
-/// qb  = q1·(1 + sqrt(1 + 4·q2))/2
+/// qb  = q1·(1 + (1 + 4·q2)^NKF)/2, when `NKF` is supplied
+///     = q1·(1 + sqrt(1 + 4·q2))/2, otherwise (`NKF=0.5`)
 /// Ict = Is·(exp(Vbe/(Nf·Vt)) − exp(Vbc/(Nr·Vt))) / qb
 /// Ibe = (Is/Bf)·(exp(Vbe/(Nf·Vt)) − 1) + ISE·(exp(Vbe/(NE·Vt)) − 1)
 /// Ibc = (Is/Br)·(exp(Vbc/(Nr·Vt)) − 1) + ISC·(exp(Vbc/(NC·Vt)) − 1)
@@ -414,6 +842,7 @@ pub struct BjtOp {
 /// `RE` = 0 and no capacitances, this is the portion of ngspice's model
 /// represented in-core. A zero or infinite Early voltage disables its
 /// corresponding base-width term.
+#[allow(clippy::too_many_arguments)] // Mirrors the scalar parameters of a SPICE BJT model card.
 pub fn bjt_op(
     vbe: f64,
     vbc: f64,
@@ -431,10 +860,79 @@ pub fn bjt_op(
     isc: f64,
     nc: f64,
 ) -> BjtOp {
-    let vtf = nf * THERMAL_VOLTAGE;
-    let vtr = nr * THERMAL_VOLTAGE;
-    let vte = ne * THERMAL_VOLTAGE;
-    let vtc = nc * THERMAL_VOLTAGE;
+    bjt_op_with_nkf(
+        vbe, vbc, is, bf, br, nf, nr, vaf, var, ikf, ikr, ise, ne, isc, nc, None,
+    )
+}
+
+/// Gummel–Poon operating point with an optional high-current beta exponent.
+/// `None` keeps the historical square-root path bit-for-bit; `Some(nkf)` uses
+/// the explicit ngspice `NKF` rolloff exponent.
+#[allow(clippy::too_many_arguments)] // Mirrors the scalar parameters of a SPICE BJT model card.
+pub fn bjt_op_with_nkf(
+    vbe: f64,
+    vbc: f64,
+    is: f64,
+    bf: f64,
+    br: f64,
+    nf: f64,
+    nr: f64,
+    vaf: f64,
+    var: f64,
+    ikf: f64,
+    ikr: f64,
+    ise: f64,
+    ne: f64,
+    isc: f64,
+    nc: f64,
+    nkf: Option<f64>,
+) -> BjtOp {
+    bjt_op_with_nkf_at_thermal_voltage(
+        vbe,
+        vbc,
+        is,
+        bf,
+        br,
+        nf,
+        nr,
+        vaf,
+        var,
+        ikf,
+        ikr,
+        ise,
+        ne,
+        isc,
+        nc,
+        nkf,
+        THERMAL_VOLTAGE,
+    )
+}
+
+/// Gummel–Poon operating point with an explicit junction thermal voltage.
+#[allow(clippy::too_many_arguments)] // Mirrors the scalar parameters of a SPICE BJT model card.
+pub fn bjt_op_with_nkf_at_thermal_voltage(
+    vbe: f64,
+    vbc: f64,
+    is: f64,
+    bf: f64,
+    br: f64,
+    nf: f64,
+    nr: f64,
+    vaf: f64,
+    var: f64,
+    ikf: f64,
+    ikr: f64,
+    ise: f64,
+    ne: f64,
+    isc: f64,
+    nc: f64,
+    nkf: Option<f64>,
+    thermal_voltage: f64,
+) -> BjtOp {
+    let vtf = nf * thermal_voltage;
+    let vtr = nr * thermal_voltage;
+    let vte = ne * thermal_voltage;
+    let vtc = nc * thermal_voltage;
     let forward = exp_clamped(vbe / vtf);
     let reverse = exp_clamped(vbc / vtr);
     let inv_vaf = if vaf > 0.0 && vaf.is_finite() {
@@ -474,16 +972,40 @@ pub fn bjt_op(
         let ibc_injection = is * (reverse - 1.0);
         let q2 = inv_ikf * ibe_injection + inv_ikr * ibc_injection;
         let q2_argument = (1.0 + 4.0 * q2).max(0.0);
-        // ngspice uses 1 when the clamped argument is zero, keeping both qb
-        // and its tangent finite at the limit.
-        let sqrt_q2 = if q2_argument > 0.0 {
-            libm::sqrt(q2_argument)
+        let (qb, d_qb_d_vbe, d_qb_d_vbc) = if let Some(nkf) = nkf {
+            // The exponent was introduced as an optional model-card parameter.
+            // Preserve the legacy square-root arithmetic below when omitted.
+            // The clamped zero branch is flat, so its high-injection derivative
+            // is zero rather than dividing by a zero argument.
+            let rolloff = if q2_argument > 0.0 {
+                libm::pow(q2_argument, nkf)
+            } else {
+                1.0
+            };
+            let qb = q1 * (1.0 + rolloff) / 2.0;
+            let d_rolloff_d_q2 = if q2_argument > 0.0 {
+                2.0 * rolloff * nkf / q2_argument
+            } else {
+                0.0
+            };
+            (
+                qb,
+                q1 * (qb * inv_var + inv_ikf * is * forward / vtf * d_rolloff_d_q2),
+                q1 * (qb * inv_vaf + inv_ikr * is * reverse / vtr * d_rolloff_d_q2),
+            )
         } else {
-            1.0
+            // ngspice uses 1 when the clamped argument is zero, keeping both
+            // qb and its tangent finite at the limit.
+            let sqrt_q2 = if q2_argument > 0.0 {
+                libm::sqrt(q2_argument)
+            } else {
+                1.0
+            };
+            let qb = q1 * (1.0 + sqrt_q2) / 2.0;
+            let d_qb_d_vbe = q1 * (qb * inv_var + inv_ikf * is * forward / vtf / sqrt_q2);
+            let d_qb_d_vbc = q1 * (qb * inv_vaf + inv_ikr * is * reverse / vtr / sqrt_q2);
+            (qb, d_qb_d_vbe, d_qb_d_vbc)
         };
-        let qb = q1 * (1.0 + sqrt_q2) / 2.0;
-        let d_qb_d_vbe = q1 * (qb * inv_var + inv_ikf * is * forward / vtf / sqrt_q2);
-        let d_qb_d_vbc = q1 * (qb * inv_vaf + inv_ikr * is * reverse / vtr / sqrt_q2);
         let d_transport_d_vbe = is * forward / vtf;
         let d_transport_d_vbc = -is * reverse / vtr;
         let qb_squared = qb * qb;
@@ -524,6 +1046,41 @@ pub fn bjt_op(
     }
 }
 
+/// Ngspice's level-1 Gummel–Poon base-spreading resistance for the current
+/// flowing into the base. `RBM` defaults to `RB` and `IRB` defaults to
+/// infinity, so an omitted transition leaves the old fixed resistor exactly
+/// unchanged.
+///
+/// The interpolation is the SPICE3/ngspice form:
+///
+/// ```text
+/// x = max(Ib / IRB, 1e-9)
+/// z = (sqrt(1 + 14.59025·x) − 1) / (2.4317·sqrt(x))
+/// RB(Ib) = RBM + 3·(RB − RBM)·(tan(z) − z)/(z·tan²(z))
+/// ```
+pub fn bjt_base_resistance(model: BjtModel, base_current: f64) -> f64 {
+    let rb = model.rb;
+    let rbm = model.rbm.unwrap_or(rb);
+    if rb == 0.0 || rbm == rb || model.irb.is_infinite() {
+        return rb;
+    }
+
+    let ratio = (base_current / model.irb).max(1e-9);
+    if ratio.is_infinite() {
+        return rbm;
+    }
+    let sqrt_ratio = libm::sqrt(ratio);
+    let z = (libm::sqrt(1.0 + 14.59025 * ratio) - 1.0) / (2.4317 * sqrt_ratio);
+    let tan_z = libm::tan(z);
+    let transition = 3.0 * (tan_z - z) / (z * tan_z * tan_z);
+    rbm + (rb - rbm) * transition
+}
+
+/// Whether `RBM`/`IRB` make the BJT base resistor depend on bias.
+pub fn bjt_has_bias_dependent_base_resistance(model: BjtModel) -> bool {
+    model.rb > 0.0 && model.irb.is_finite() && model.rbm.is_some_and(|rbm| rbm < model.rb)
+}
+
 /// Transit charge and its derivatives for the forward and reverse BJT
 /// transport junctions. Charge is stored in normalized NPN coordinates; the
 /// MNA caller applies device polarity when it stamps terminal currents.
@@ -557,12 +1114,22 @@ pub struct BjtTransitCharge {
 /// only the exponential voltage dependence; the default infinity makes its
 /// exponential equal one. `ITF = 0` disables current suppression.
 pub fn bjt_transit_charge(vbe: f64, vbc: f64, model: BjtModel) -> BjtTransitCharge {
+    bjt_transit_charge_at_thermal_voltage(vbe, vbc, model, THERMAL_VOLTAGE)
+}
+
+/// Gummel–Poon transit charge evaluated with an explicit thermal voltage.
+pub fn bjt_transit_charge_at_thermal_voltage(
+    vbe: f64,
+    vbc: f64,
+    model: BjtModel,
+    thermal_voltage: f64,
+) -> BjtTransitCharge {
     if model.tf == 0.0 && model.tr == 0.0 {
         return BjtTransitCharge::default();
     }
 
-    let vtf = model.nf * THERMAL_VOLTAGE;
-    let vtr = model.nr * THERMAL_VOLTAGE;
+    let vtf = model.nf * thermal_voltage;
+    let vtr = model.nr * thermal_voltage;
     let forward = exp_clamped(vbe / vtf);
     let reverse = exp_clamped(vbc / vtr);
     let cbe = model.is * (forward - 1.0);
@@ -599,17 +1166,36 @@ pub fn bjt_transit_charge(vbe: f64, vbc: f64, model: BjtModel) -> BjtTransitChar
         };
         let q2 = inv_ikf * cbe + inv_ikr * cbc;
         let q2_argument = (1.0 + 4.0 * q2).max(0.0);
-        let sqrt_q2 = if q2_argument > 0.0 {
-            libm::sqrt(q2_argument)
+        if let Some(nkf) = model.nkf {
+            let rolloff = if q2_argument > 0.0 {
+                libm::pow(q2_argument, nkf)
+            } else {
+                1.0
+            };
+            let qb = q1 * (1.0 + rolloff) / 2.0;
+            let d_rolloff_d_q2 = if q2_argument > 0.0 {
+                2.0 * rolloff * nkf / q2_argument
+            } else {
+                0.0
+            };
+            (
+                qb,
+                q1 * (qb * inv_var + inv_ikf * gbe * d_rolloff_d_q2),
+                q1 * (qb * inv_vaf + inv_ikr * gbc * d_rolloff_d_q2),
+            )
         } else {
-            1.0
-        };
-        let qb = q1 * (1.0 + sqrt_q2) / 2.0;
-        (
-            qb,
-            q1 * (qb * inv_var + inv_ikf * gbe / sqrt_q2),
-            q1 * (qb * inv_vaf + inv_ikr * gbc / sqrt_q2),
-        )
+            let sqrt_q2 = if q2_argument > 0.0 {
+                libm::sqrt(q2_argument)
+            } else {
+                1.0
+            };
+            let qb = q1 * (1.0 + sqrt_q2) / 2.0;
+            (
+                qb,
+                q1 * (qb * inv_var + inv_ikf * gbe / sqrt_q2),
+                q1 * (qb * inv_vaf + inv_ikr * gbc / sqrt_q2),
+            )
+        }
     };
 
     let (qbe, dqbe_dvbe, dqbe_dvbc) = if model.tf == 0.0 {
@@ -705,6 +1291,7 @@ pub struct MosOp {
 /// `gmb` is the matching `∂Id/∂Vbs`; the MNA solver stamps it with the gate and
 /// drain derivatives. The bulk terminal's drain and source pn junctions are
 /// stamped separately using the model's `IS`.
+#[allow(clippy::too_many_arguments)] // Mirrors the scalar parameters of a SPICE MOS model card.
 pub fn mos_op(
     vgs: f64,
     vds: f64,
@@ -945,13 +1532,13 @@ pub fn mos_ward_dutton_channel_charge(
     vbd: f64,
     vbs: f64,
 ) -> MosChannelChargeOp {
-    if mosfet.model.channel_charge_model != MosChannelChargeModel::WardDutton {
+    if mosfet.operating_model.channel_charge_model != MosChannelChargeModel::WardDutton {
         return MosChannelChargeOp {
             q: [0.0; 4],
             dq_dv: [[0.0; 3]; 4],
         };
     }
-    let Some(tox) = mosfet.model.tox else {
+    let Some(tox) = mosfet.operating_model.tox else {
         return MosChannelChargeOp {
             q: [0.0; 4],
             dq_dv: [[0.0; 3]; 4],
@@ -961,7 +1548,7 @@ pub fn mos_ward_dutton_channel_charge(
     let vgs = Dual3::variable(vgs, 0);
     let vds = Dual3::variable(vds, 1);
     let vbs = Dual3::variable(vbs, 2);
-    let sign = mosfet.model.polarity.sign();
+    let sign = mosfet.operating_model.polarity.sign();
     let reversed = vds.value < 0.0;
     let (vgs_eff, vds_eff, vbs_eff) = if reversed {
         (
@@ -978,7 +1565,7 @@ pub fn mos_ward_dutton_channel_charge(
         (vgs, vds, vbs)
     };
 
-    let model = mosfet.model;
+    let model = mosfet.operating_model;
     let threshold = if model.gamma == 0.0 {
         Dual3::constant(sign * model.vto)
     } else {

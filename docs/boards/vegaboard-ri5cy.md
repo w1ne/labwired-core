@@ -2,7 +2,7 @@
 
 The PULP **Vega** board's SoC: a 32-bit RISC-V **RI5CY** core (RV32IMC), 1 MiB of flash at `0x0`, 192 KiB of SRAM at `0x20000000`, an **NXP LPUART0** console at `0x40042000` (external IRQ 17), a second LPUART at `0x40043000`, low-power timers at `0x40032000`/`0x40033000`/`0x4102B000`, and the SCG/PCC clock blocks.
 
-This is an **L1 (smoke)** target: boot + the UART byte path are proven by a committed smoke fixture and an `io-smoke.yaml`. The CPU, memory map and LPUART0/1 are modelled; the SCG/PCC clock blocks, INTMUX and low-power timers are declared stubs, and the smoke prints the SCG/PCC readbacks so the boundary is visible on the wire. No silicon capture exists: **SIM-DERIVED**, no executing-fidelity differential yet.
+This is an **L1 (smoke)** target: boot + the UART byte path are proven by a committed smoke fixture and an `io-smoke.yaml`. The CPU, memory map and LPUART0/1 are modelled; the SCG/PCC clock blocks, INTMUX and low-power timers are declared stubs, and the smoke prints the SCG/PCC readbacks so the boundary is visible on the wire. A separate analog co-simulation test drives generic NTC and Shockley diode netlists through a simulation-only input bank and asserts voltage thresholds/hysteresis; Vega GPIO, ADC, and physical pad behavior remain unmodeled. No silicon capture exists: **SIM-DERIVED**, no executing-fidelity differential yet.
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:

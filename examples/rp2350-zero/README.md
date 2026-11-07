@@ -47,3 +47,11 @@ Expected: exit 0, UART contains `RP2350_SMOKE_OK`.
 6. `images/` — authored pinout and board illustration (schematic/wiki silk). Desk photographs are slice 2.
 
 Pinout: [`images/pinout.svg`](images/pinout.svg)
+
+## Mixed-signal coverage
+
+The shared `crates/core/tests/cosim_pico_analog.rs` suite reuses its generic Beta NTC
+divider and Shockley diode netlists for this RP2350A profile. The RP2350A descriptor
+maps GP26–GP29 to ADC inputs 0–3; the test routes the two solved devices through GP26
+and GP27 and checks their 12-bit ADC results. This is a simulator proof, not a silicon
+comparison.

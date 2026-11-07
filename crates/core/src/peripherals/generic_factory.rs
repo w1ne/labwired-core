@@ -17,6 +17,12 @@ use crate::peripherals::rcc::RccRegisterLayout;
 use crate::Peripheral;
 use labwired_config::{PeripheralConfig, SystemManifest};
 
+// nRF51 uses a legacy single-sample converter distinct from the nRF52 SAADC.
+// Keep this model outside the recursively silicon-watched nrf52/ tree so an
+// nRF51-only addition does not change the nRF52840 validation digest.
+#[path = "nrf51_adc.rs"]
+mod nrf51_adc;
+
 /// Canonical model-type names — the single source of truth for "is this string
 /// already a real, modelled peripheral type?".
 ///
@@ -39,6 +45,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // Generic core types (built here or by `from_config` descriptor loaders).
     "uart",
     "gpio",
+    // Simulation-only external input endpoints for profiles whose silicon
+    // GPIO register model is not available yet.
+    "input_pin_bank",
     "avr_gpio",
     "avr_adc",
     "pic24_gpio",
@@ -179,6 +188,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_sercom_spi",
     "samd51_nvmctrl_manual_storage",
     "samd51_cmcc_control",
+    // SAMD21's external analog converter has its own register layout and pad mux.
+    "samd21_adc",
     // Opt-in SAMD51 board models (`build_samd51_board_model`): fixed
     // instance addresses, wired by the SAMD51 chip descriptors.
     "samd51_oscctrl",
@@ -305,6 +316,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "nrf52_lpcomp",
     "nrf52_mwu",
     "nrf52_nfct",
+    "nrf51_adc",
     "nrf52_nvmc",
     "nrf52_pdm",
     "nrf52_ppi",
@@ -323,6 +335,7 @@ pub const MODEL_TYPES: &[&str] = &[
     // Further nRF54L factory arms.
     "nrf54l_clock",
     "nrf54l_grtc",
+    "nrf54l_saadc",
     "efr32s2_busalloc",
     "efr32s2_cmu",
     "efr32s2_gpio_head",
@@ -360,10 +373,12 @@ pub const MODEL_TYPES: &[&str] = &[
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
     "ra8_pfs",
     // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT, the
-    // 12-bit ADC and DAC, the IIC (RIIC) master and the GPT (saw-wave PWM).
+    // 12/14-bit ADC family and DAC, the IIC (RIIC) master and the GPT
+    // (saw-wave PWM).
     "ra_icu",
     "ra_agt",
     "ra_adc12",
+    "ra_adc14",
     "ra_dac12",
     "ra_iic",
     "ra_gpt",
@@ -422,6 +437,7 @@ pub const MODEL_TYPES: &[&str] = &[
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
     // staged onboarding/ambiq-apollo4 descriptor, which keeps its placeholder.
     "apollo4_gpio",
+    "apollo4_adc",
     "apollo4_pwrctrl",
     "apollo4_cpu",
     // NXP S32K3 SIUL2: MSCR pad mux + GPDO/GPDI/PGPDO/PGPDI/MPGPDO GPIO.
@@ -611,6 +627,26 @@ pub fn try_build(
     _bus_trace: &crate::bus::bus_trace::BusTrace,
 ) -> anyhow::Result<Option<Box<dyn Peripheral>>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
+        "input_pin_bank" => {
+            let pin_count = p_cfg
+                .config
+                .get("pin_count")
+                .and_then(|value| value.as_u64())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "input_pin_bank '{}' requires config.pin_count in 1..=32",
+                        p_cfg.id
+                    )
+                })?;
+            anyhow::ensure!(
+                (1..=32).contains(&pin_count),
+                "input_pin_bank '{}' config.pin_count must be in 1..=32, got {pin_count}",
+                p_cfg.id
+            );
+            Box::new(crate::peripherals::input_pin_bank::InputPinBank::new(
+                pin_count as u8,
+            )?)
+        }
         "systick" | "arm_generictimer" => {
             // CALIB is implementation-defined per chip; the yaml can
             // supply the silicon value via `config: { calib: ... }`.
@@ -853,6 +889,15 @@ pub fn try_build(
         }
         "sam_sercom_usart" => {
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
+        }
+        "samd21_adc" => {
+            if p_cfg.base_address != 0x4200_4000 || p_cfg.irq != Some(23) {
+                anyhow::bail!("SAMD21 ADC requires base 0x42004000 and IRQ 23");
+            }
+            if !p_cfg.config.is_empty() {
+                anyhow::bail!("SAMD21 ADC admits no config overrides");
+            }
+            Box::new(crate::peripherals::sam::adc21::Samd21Adc::new())
         }
         "samd51_oscctrl" | "samd51_gclk" | "samd51_tc" | "samd51_tcc" | "samd51_eic"
         | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm" => {
@@ -1313,6 +1358,7 @@ pub fn try_build(
             }
             Box::new(g)
         }
+        "nrf51_adc" => Box::new(nrf51_adc::Nrf51Adc::new()),
         "adc" => {
             let layout: crate::peripherals::adc::AdcRegisterLayout =
                 SystemBus::parse_profile_or_default(p_cfg, "ADC")?;
@@ -1571,13 +1617,17 @@ pub fn try_build(
                 .with_output_pads(pads),
             )
         }
-        "ra_adc12" => {
+        "ra_adc12" | "ra_adc14" => {
             use crate::peripherals::ra_adc12 as adc;
             let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
-            let mut unit = adc::RaAdc12::new(
+            let default_resolution = if p_cfg.r#type == "ra_adc14" { 14 } else { 12 };
+            let max_resolution =
+                get("max_resolution_bits").map_or(default_resolution, |bits| bits as u8);
+            let mut unit = adc::RaAdc12::new_with_max_resolution(
                 get("clock_hz").unwrap_or(adc::DEFAULT_CLOCK_HZ),
                 get("elc_event").map_or(adc::DEFAULT_ELC_EVENT, |v| v as u32),
                 get("vref_mv").map_or(adc::DEFAULT_VREF_MV, |v| v as u16),
+                max_resolution,
             );
             if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
                 for (k, v) in map {
@@ -1820,6 +1870,7 @@ pub fn try_build(
         "cc2538_aes" => Box::new(crate::peripherals::cc2538::aes::Cc2538Aes::new()),
         "cc2538_udma" => Box::new(crate::peripherals::cc2538::udma::Cc2538Udma::new()),
         "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
+        "apollo4_adc" => Box::new(crate::peripherals::apollo4_adc::Apollo4Adc::new()),
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
         "apollo4_cpu" => Box::new(crate::peripherals::apollo4::Apollo4Cpu::new()),
         "s32k3_siul2" => Box::new(crate::peripherals::s32k3_siul2::S32k3Siul2::new()),

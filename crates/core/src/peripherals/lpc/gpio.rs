@@ -289,6 +289,14 @@ impl Peripheral for LpcGpio {
         Some(self)
     }
 
+    fn gpio_port_offsets(&self) -> Option<crate::peripherals::gpio::GpioPortOffsets> {
+        Some(crate::peripherals::gpio::GpioPortOffsets {
+            // SET reads back the output latch; PIN reads the live pad state.
+            output: SET,
+            input: PIN,
+        })
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }

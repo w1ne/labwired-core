@@ -185,6 +185,94 @@ mod analog {
     }
 
     #[test]
+    fn opamp_sr_limits_large_signal_slew_and_preserves_small_signal_gbw() {
+        let (aol, gbw, sr, h) = (1e5, 1e6, 1e6, 100e-9);
+        let rg = MACRO_GAIN_RESISTANCE;
+        let gm = aol / rg;
+        let cg = aol / (2.0 * core::f64::consts::PI * gbw * rg);
+        let current_limit = cg * sr;
+        let expected = |input: f64| {
+            let current = gm * input;
+            if current.abs() >= current_limit {
+                current.clamp(-current_limit, current_limit) / (cg / h)
+            } else {
+                current / (1.0 / rg + cg / h)
+            }
+        };
+        let netlist = format!(
+            "Vcc vcc 0 dc 1000\nVee vee 0 dc -1000\n\
+             Vinp inp 0 dc 0\nVinn inn 0 dc 0\n\
+             X1 inp inn vcc vee out AMP\n\
+             .model AMP OPAMP(AOL={aol} GBW={gbw} ROUT=1 SR={sr})\n"
+        );
+
+        for large_input in [-5.0, 5.0] {
+            let mut large = build(&netlist);
+            let input = large.voltage_source_index("Vinp").expect("input source");
+            let initial = v(&large, "out");
+            large.set_voltage_source(input, large_input);
+            large
+                .advance(h)
+                .expect("slew-limited large-signal step solves");
+            let actual = v(&large, "out") - initial;
+            assert!(
+                (actual - expected(large_input)).abs() < 1e-7,
+                "large input step {large_input} V: expected {} V, got {actual} V",
+                expected(large_input)
+            );
+            assert!(actual.abs() / h <= sr * (1.0 + 1e-6));
+        }
+
+        let mut small = build(&netlist);
+        let input = small.voltage_source_index("Vinp").expect("input source");
+        small.set_voltage_source(input, 1e-3);
+        small.advance(h).expect("small-signal step solves");
+        let actual = v(&small, "out");
+        let expected = gm * 1e-3 / (1.0 / rg + cg / h);
+        assert!(
+            (actual - expected).abs() < 1e-8,
+            "below SR, the one-pole response must remain linear: expected {expected} V, got {actual} V"
+        );
+    }
+
+    #[test]
+    fn opamp_sr_preserves_settled_open_loop_dc_gain() {
+        let (aol, gbw, sr, input, vos, cm_gain) = (1e5, 1e6, 1e6, 0.2, 100e-6, 1e-3);
+        let netlist = |slew| {
+            format!(
+                "Vcc vcc 0 dc 1meg\nVee vee 0 dc -1meg\n\
+                 Vinp inp 0 dc {input}\nVinn inn 0 dc 0\n\
+                 X1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(AOL={aol} GBW={gbw} ROUT=1 VOS={vos} CMRR=60{slew})\n"
+            )
+        };
+        let linear = build(&netlist(""));
+        let slew_limited = build(&netlist(&format!(" SR={sr}")));
+        let expected = aol * (input + vos + cm_gain * input / 2.0);
+
+        for (name, solver) in [("without SR", &linear), ("with SR", &slew_limited)] {
+            let actual = v(solver, "out");
+            assert!(
+                (actual - expected).abs() < 0.1,
+                "{name} settled output should retain AOL: expected {expected} V, got {actual} V"
+            );
+        }
+    }
+
+    #[test]
+    fn opamp_sr_must_be_finite_and_positive() {
+        for sr in ["0", "-1", "1e999"] {
+            let error = parse_netlist(&format!(
+                "Vcc vcc 0 dc 5\nX1 inp inn vcc 0 out AMP\n\
+                 .model AMP OPAMP(AOL=100 GBW=1meg ROUT=100 SR={sr})\n"
+            ))
+            .expect_err("SR must be a finite positive slew rate")
+            .to_string();
+            assert!(error.contains("SR must be finite and positive"), "{error}");
+        }
+    }
+
+    #[test]
     fn opamp_common_mode_rejection_uses_supply_midpoint_and_db_scale() {
         let (aol, rout, load, attenuation) = (100.0, 100.0, 10e3, 0.01);
         for common_mode in [-1.0, 0.0, 1.0] {
@@ -592,6 +680,76 @@ mod analog {
             assert!(
                 out > low && out < high,
                 "vin = {vin}: out = {out} V, expected within [{low}, {high}]"
+            );
+        }
+    }
+
+    #[test]
+    fn opamp_output_current_limit_keeps_rout_below_limit_and_clamps_both_directions() {
+        let unlimited = build(
+            "Vcc vcc 0 dc 100\nVee vee 0 dc -100\nVin inp 0 dc 0.5\n\
+             Rl out 0 500\nX1 inp 0 vcc vee out AMP\n\
+             .model AMP OPAMP(AOL=10 GBW=1meg ROUT=50)\n",
+        );
+        let limited = build(
+            "Vcc vcc 0 dc 100\nVee vee 0 dc -100\nVin inp 0 dc 0.5\n\
+             Rl out 0 500\nX1 inp 0 vcc vee out AMP\n\
+             .model AMP OPAMP(AOL=10 GBW=1meg ROUT=50 IOLIM=10m)\n",
+        );
+        let expected = v(&limited, "X1#p") * 500.0 / (500.0 + 50.0);
+        assert!(
+            (v(&limited, "out") - expected).abs() < 1e-8,
+            "below IOLIM, Rout should set the divider output: got {}, expected {expected}",
+            v(&limited, "out")
+        );
+        assert!(v(&limited, "out") / 500.0 < 10e-3);
+        assert!(
+            (v(&limited, "out") - v(&unlimited, "out")).abs() < 1e-8,
+            "below IOLIM, Rout should retain the unlimited output: limited={}, unlimited={}",
+            v(&limited, "out"),
+            v(&unlimited, "out")
+        );
+
+        // A 100 Ω load asks for 50 mA from the high rail, so 10 mA at the
+        // output pin sets Vout = IOLIM·RL = 1 V.
+        let sourcing = build(
+            "Vcc vcc 0 dc 100\nVee vee 0 dc -100\nVin inp 0 dc 1\n\
+             Rl out 0 100\nX1 inp 0 vcc vee out AMP\n\
+             .model AMP OPAMP(AOL=10 GBW=1meg ROUT=50 IOLIM=10m)\n",
+        );
+        assert!(
+            (v(&sourcing, "out") - 1.0).abs() < 1e-8,
+            "source current should clamp at 10 mA: got {} V",
+            v(&sourcing, "out")
+        );
+
+        // Reversing the drive makes the output sink 10 mA from a 5 V pull-up;
+        // the same symmetric limit puts the pin at 4 V.
+        let sinking = build(
+            "Vcc vcc 0 dc 100\nVee vee 0 dc -100\nVload load 0 dc 5\nVin inn 0 dc 1\n\
+             Rl load out 100\nX1 0 inn vcc vee out AMP\n\
+             .model AMP OPAMP(AOL=10 GBW=1meg ROUT=50 IOLIM=10m)\n",
+        );
+        assert!(
+            (v(&sinking, "out") - 4.0).abs() < 1e-8,
+            "sink current should clamp at 10 mA: got {} V",
+            v(&sinking, "out")
+        );
+    }
+
+    #[test]
+    fn opamp_output_current_limit_must_be_finite_and_positive() {
+        for ilim in ["0", "-1m", "1e999"] {
+            let error = parse_netlist(&format!(
+                "X1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(IOLIM={ilim})\n"
+            ))
+            .expect_err("an invalid IOLIM cannot be stamped");
+            assert!(
+                error
+                    .to_string()
+                    .contains("IOLIM must be finite and positive"),
+                "{error}"
             );
         }
     }

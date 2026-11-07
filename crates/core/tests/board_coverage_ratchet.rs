@@ -253,7 +253,12 @@ fn is_declared_only_platform(stem: &str, chip: &ChipDescriptor) -> bool {
     chip.name == stem
         && chip.arch == Arch::Arm
         && chip.core.as_deref() == Some(core)
-        && chip.peripherals.is_empty()
+        // The simulation-only `input_pin_bank` co-sim endpoint models no
+        // silicon register, so it does not promote a declaration to a board.
+        && chip
+            .peripherals
+            .iter()
+            .all(|p| p.r#type == "input_pin_bank")
         && chip.flash.size == 0
         && chip.flash.base == 0
 }

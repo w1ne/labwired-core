@@ -7,6 +7,7 @@
 pub mod adc;
 pub mod afio;
 pub mod apollo4;
+pub mod apollo4_adc;
 pub mod armv7;
 pub mod avr_adc;
 pub mod avr_gpio;
@@ -71,6 +72,7 @@ pub mod icache;
 pub mod imx_ccm;
 pub mod imx_iomuxc;
 pub mod imxrt;
+pub mod input_pin_bank;
 pub mod itm;
 pub mod iwdg;
 pub mod jpeg_baseline;

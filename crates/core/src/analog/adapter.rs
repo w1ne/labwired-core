@@ -81,7 +81,7 @@ pub struct AnalogConfig {
     pub integration: Integration,
     /// LabWired output name → node or branch expression.
     pub probes: BTreeMap<String, String>,
-    /// LabWired input name → circuit element (`V`, `I`, `S` or an NTC `R`).
+    /// LabWired input name → circuit element (`V`, `I`, `S`, or a temperature-dependent `R`).
     pub sources: BTreeMap<String, String>,
     /// Extra trace-only expressions, beyond the routed outputs.
     pub trace: Vec<String>,
@@ -196,7 +196,7 @@ fn string_map(value: &Value, what: &str) -> Result<BTreeMap<String, String>, Ana
 enum InputTarget {
     VoltageSource(usize),
     CurrentSource(usize),
-    Thermistor(usize),
+    TemperatureDependentResistor(usize),
     /// Every switch sharing one control name.
     Switches(Vec<usize>),
 }
@@ -261,14 +261,14 @@ impl AnalogCosimAdapter {
                     )));
                 }
                 InputTarget::CurrentSource(index)
-            } else if let Some(index) = solver.thermistor_index(element) {
-                InputTarget::Thermistor(index)
+            } else if let Some(index) = solver.temperature_dependent_resistor_index(element) {
+                InputTarget::TemperatureDependentResistor(index)
             } else if let Some(index) = solver.switch_index(element) {
                 InputTarget::Switches(vec![index])
             } else {
                 return Err(AnalogError::Config(format!(
                     "config.sources.{input} names `{element}`, which the netlist does not declare \
-                     as a V, I, S or NTC resistor"
+                     as a V, I, S or temperature-dependent resistor"
                 )));
             };
             inputs.insert(input.clone(), target);
@@ -404,17 +404,17 @@ impl AnalogCosimAdapter {
                 let amps = self.numeric(name, value, "amps")?;
                 self.solver.set_current_source(index, amps);
             }
-            InputTarget::Thermistor(index) => {
+            InputTarget::TemperatureDependentResistor(index) => {
                 if matches!(value, CosimSignalValue::Bool(_)) {
                     return Err(SimulationError::Other(format!(
-                        "analog input `{name}` drives an NTC temperature; a boolean has no \
+                        "analog input `{name}` drives a resistor temperature; a boolean has no \
                          temperature to map to — route a number in degrees Celsius"
                     )));
                 }
                 let celsius = self.numeric(name, value, "degrees Celsius")?;
-                if !self.solver.set_thermistor_temperature(index, celsius) {
+                if !self.solver.set_resistor_temperature(index, celsius) {
                     return Err(SimulationError::Other(format!(
-                        "analog input `{name}` is not a finite NTC temperature above absolute zero"
+                        "analog input `{name}` is not a finite resistor temperature above absolute zero"
                     )));
                 }
             }
@@ -487,7 +487,7 @@ impl CosimAdapter for AnalogCosimAdapter {
             InputTarget::Switches(_) => CosimInputKind::Bool,
             InputTarget::VoltageSource(_)
             | InputTarget::CurrentSource(_)
-            | InputTarget::Thermistor(_) => CosimInputKind::Number,
+            | InputTarget::TemperatureDependentResistor(_) => CosimInputKind::Number,
         })
     }
 

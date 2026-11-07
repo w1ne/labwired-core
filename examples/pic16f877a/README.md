@@ -38,6 +38,13 @@ the PIC16 core (`arch_policy::image_arch_for_chip`).
 `crates/core/tests/pic16f877a_smoke.rs` and `ci/test.sh` both check that the
 ELF payload equals the HEX.
 
+The generic `analog-ntc-diode-system.yaml` fixture solves a Beta NTC divider and
+an unrelated Shockley diode, then routes each node to a separate threshold input.
+`crates/core/tests/cosim_pic16f877a_analog.rs` checks the voltage equations,
+input thresholds and hysteresis. These are simulation-only co-simulation
+endpoints: PIC16 PORTA/PORTE external sampling and ADC conversion are not
+modeled, so this is not a firmware-visible analog input path.
+
 ## Build and run
 
 ```bash

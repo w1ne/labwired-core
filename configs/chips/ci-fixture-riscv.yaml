@@ -11,6 +11,13 @@ registers_count: 50
 # scale their datasheet microseconds by it; a slower board overrides it.
 # CI fixture — see ci-fixture-cortex-m3-uart1.yaml.
 cpu_hz: 80_000_000
+# Synthetic mixed-signal endpoint for the CI fixture only. These are explicit
+# simulation thresholds for its generic GPIO input route, not board or silicon
+# data.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
 
 flash:
   base: 0x80000000
@@ -23,3 +30,10 @@ peripherals:
     type: "uart"
     base_address: 0x4000C000
     size: "1KB"
+  # Generic GPIO input endpoint used by the analog co-simulation fixture.
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40010000
+    size: "1KB"
+    config:
+      profile: "stm32v2"

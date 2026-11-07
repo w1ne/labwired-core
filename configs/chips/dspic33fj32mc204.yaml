@@ -29,6 +29,13 @@ flash:
 ram:
   base: 0x000800
   size: "2KB"
+# Simulation-only thresholds for mixed-signal GPIO co-simulation. These match
+# the sibling MC202 fixture assumptions; they are not transcribed silicon
+# limits and do not constitute hardware validation.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
 # M1b: the three port models behind the CPU's mirror window
 # (base = PIC24_IO_MIRROR_BASE + TRISA + 16*port; the 16-byte stride keeps
 # the window's non-silicon Output Compare drive registers clear of the next

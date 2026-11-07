@@ -30,6 +30,18 @@ cargo run -q -p labwired-cli -- test --script examples/curiosity-pic32mz-ef/nutt
 Rebuild the fixtures (byte-identical):
 `crates/firmware-curiosity-pic32mz-nuttx/build.sh nsh|ostest`.
 
+## Mixed-signal GPIO inputs
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) routes a generic
+Beta NTC divider and a separate Shockley diode load line to GPIOB input bits 0
+and 1. The test checks the solved voltages, the configured input threshold
+crossings, and hysteresis through reads at the PORTB input address.
+
+PORTB uses the MIPS-family PIC32 port model for ANSEL, TRIS, PORT, LAT, ODC,
+and the shared pin interface. Other ports and change notification, pulls, and
+PPS are not modelled. The input voltage thresholds are simulation assumptions;
+this is not a silicon comparison or ADC support.
+
 Why a pinned upstream commit and not a release: before 7956039dfd ("record
 the running task on interrupt exit"), NuttX's PIC32MZ interrupt path never
 updated `g_running_tasks[]`, so the first context switch corrupted the Idle
@@ -37,6 +49,7 @@ task's saved registers. The model reproduced that crash on NuttX 12.11.0
 before the fix was found upstream; no release tag (13.1.0 and earlier)
 carries it yet.
 
-Not modelled yet: ports and PPS (so no LEDs or switches), the FPU,
+Not modelled yet: the remaining GPIO ports and PPS (so board LEDs and switches
+are not reachable), the FPU,
 microMIPS, the DSP ASE, the TLB, caches, DMA, SPI, I2C and Timers 2-9. See
 `VALIDATION.md`.

@@ -18,7 +18,11 @@ echo "Running Clippy (all targets)..."
 cargo clippy --all-targets -- -D warnings
 
 echo "Running Cargo Check (Host)..."
-cargo check --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
+cargo check --workspace \
+  --exclude firmware \
+  --exclude firmware-ci-fixture \
+  --exclude riscv-ci-fixture \
+  --exclude firmware-semihost-smoke
 
 # Keep the generated board validation status in sync, and block the commit if a
 # peripheral model drifted past its last silicon capture without a drift_ack.

@@ -13,12 +13,14 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | LiteX timer one-shot + zero event | smoke-tested | `timer=running` then `timer=zero` (the event only latches if the countdown reached zero) |
 | Unmodelled CSR window (SPI-flash controller) answers zeros | smoke-tested | `spi=00000000` printed from 0x60005000 |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical UART streams (`diff` clean) |
+| Generic analog routing | tested | `cosim_litex_vexriscv_analog`: Beta NTC and Shockley diode netlists solve to separate `input_pin_bank` channels and assert the solved voltages, threshold states and NTC hysteresis; endpoint thresholds are simulation assumptions, not LiteX or board pad specifications |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | Timer zero-event IRQ delivery into the CPU | **not wired** | the status/pending registers are the firmware-visible surface; the engine does not deliver external IRQs to RISC-V cores yet |
 | SPI flash controller / Ethernet MAC / MMCM | **not modelled** | declared `type: stub`; the SPI window is mapped memory, no controller behind it |
 | Main RAM (DDR, 0x40000000, 256 MiB) | **not mapped** | the engine allocates memory regions densely; a 256 MiB window is not useful to the smoke |
 | LiteX BIOS + flash-load boot flow | **not modelled** | fast boot loads the ELF and enters it directly |
 | LEDs / switches / buttons | not modelled | no board_io bindings are declared (see `EXTERNAL_COMPONENTS.md`) |
+| Physical analog pads / ADC | **not modelled** | the generic analog input bank is only a co-simulation endpoint; no gateware, pad mapping or conversion path is claimed |
 | Silicon capture / executing-fidelity differential | **none** | SIM-DERIVED; no bitstream diff exists |
 
 ## Commands and evidence (verified 2026-10-20)
@@ -65,6 +67,9 @@ cargo test -p labwired-core --lib litex_timer
 
 cargo test -p labwired-core --test firmware_survival test_litex_vexriscv_smoke_survival
 #   1 passed — the committed fixture boots and prints the banner
+
+cargo test -p labwired-core --test cosim_litex_vexriscv_analog
+#   1 passed — NTC divider and Shockley diode route to separate thresholded inputs
 ```
 
 ## Notes

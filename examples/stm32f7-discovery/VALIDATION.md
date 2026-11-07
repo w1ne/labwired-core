@@ -54,3 +54,15 @@ cargo run -q -p labwired-cli -- \
   --max-steps 32 \
   --json
 ```
+
+## 7) Run the mixed-signal ADC routing proof
+
+```bash
+cargo test -p labwired-core --test cosim_stm32f746_discovery_analog \
+  stm32f746_discovery_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end -- --nocapture
+```
+
+The test solves the generic NTC divider and Shockley diode netlists, checks their
+independent PA0/PA1 voltages, converts ADC1 channels 0/1 through the modeled register
+interface, and confirms channel 2 remains undriven. This is simulator-model coverage;
+it makes no silicon or board-pinout claim.

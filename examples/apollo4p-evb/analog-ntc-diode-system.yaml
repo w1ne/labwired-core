@@ -1,0 +1,38 @@
+# Apollo4 Plus EVB with unrelated generic NTC and Shockley diode netlists
+# routed to ADC slot inputs SE0 and SE1. The routes are explicit because the
+# board manifest has no pin-level analog aliases for these ADC channels.
+name: "apollo4p-evb-analog-ntc-diode"
+chip: "../../configs/chips/amap42kp.yaml"
+external_devices: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "adc.adc.0_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 1.19
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 1.19
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "adc.adc.1_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 3.3

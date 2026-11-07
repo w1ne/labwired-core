@@ -49,6 +49,16 @@ cd core
   --output-dir out/stm32f072b-disco-smoke --no-uart-stdout
 ```
 
+## Mixed-signal GPIO input example
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) connects a
+generic Beta NTC divider and a separate Shockley diode load line to GPIOA input
+pins PA0 and PA9. The NTC voltage changes with its temperature input; the diode
+uses its own solved load line. The board-specific co-simulation test checks both
+voltages against independent calculations and observes the thresholded GPIOA
+IDR values. This exercises GPIO threshold routing; the current F072 ADC profile
+still does not convert external analog inputs.
+
 ## What the chip models
 
 | Surface | State |

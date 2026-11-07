@@ -42,3 +42,11 @@ The SPIM model records register state and completes `TASKS_START`, but it does
 not yet fetch EasyDMA buffers from system memory or route bytes to attached SPI
 devices. Full hardware parity for SPI waveforms requires a SWD probe or logic
 analyzer capture.
+
+Generic mixed-signal coverage reuses the Beta NTC divider and Shockley diode
+netlists in `examples/nrf52840-dk/analog-ntc-diode-system.yaml` and routes them
+to explicit SAADC channels 0 and 1. The test asserts solved voltages,
+temperature-dependent NTC behavior, 12-bit EasyDMA results, and channel
+isolation while retaining this profile's RGB LED wiring. It does not claim
+physical XIAO pad-to-AIN aliases; those aliases are not declared in the shared
+nRF52840 chip descriptor.

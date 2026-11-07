@@ -7,7 +7,7 @@
 # SIM-DERIVED R7FA4M1AB descriptor for Arduino Uno R4 Minima bring-up.
 # Not silicon-verified. USB CDC Serial is intentionally out of scope —
 # only the MCU core, PORT (ra_port), SYSTEM (HOCO/OSCSF), SCI2 UART
-# (header Serial on P301/P302), SysTick, and a USBFS stub window are modelled.
+# (header Serial on P301/P302), ADC14, SysTick, and a USBFS stub window are modelled.
 # Pin labels follow ArduinoCore-renesas variants/MINIMA.
 
 name: "r7fa4m1ab"
@@ -67,6 +67,16 @@ peripherals:
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
+  # ADC140 @ 0x4005C000 (R01UH0887 §35): group-A software scans of external
+  # channels, 12/14-bit accuracy, and ADDR results. ELC ADC140_ADI = 0x029.
+  - id: "adc0"
+    type: "ra_adc14"
+    base_address: 0x4005C000
+    size: "512B"
+    config:
+      elc_event: 41
+      clock_hz: 48000000
+      vref_mv: 5000
   # Header Serial — SCI2 @ 0x40070040 (ra4m1-fsp-pac / R7FA4M1AB.h).
   # NVIC line is an ICU IEL slot (0..31); SCI2_TXI is ELC event 0xA4 when
   # linked via IELSR. Smoke TX is polled TDR writes — IEL4 is the model TXI line.
@@ -82,3 +92,14 @@ peripherals:
     type: "stub"
     base_address: 0x40090000
     size: "1KB"
+
+# Arduino Uno R4 Minima header analog pins (ArduinoCore-renesas MINIMA
+# pinmux.inc): pin label → ADC14 AN channel. The board analog co-sim path
+# resolves these pads into ADC0 without guessing channel numbers.
+analog_pins:
+  P014: { peripheral: "adc0", channel: 9 }  # A0 / AN009
+  P000: { peripheral: "adc0", channel: 0 }  # A1 / AN000
+  P001: { peripheral: "adc0", channel: 1 }  # A2 / AN001
+  P002: { peripheral: "adc0", channel: 2 }  # A3 / AN002
+  P101: { peripheral: "adc0", channel: 21 } # A4 / AN021
+  P100: { peripheral: "adc0", channel: 22 } # A5 / AN022

@@ -16,7 +16,7 @@
 //! Provenance carried over from the retired per-board files:
 //! * `imxrt1064_config` — Teensy 4.1 silicon is MIMXRT1062; this model is the
 //!   RT1064-class cousin (GPIO / LPUART / CCM class). SIM-DERIVED.
-//! * `stm32f746_config` — SIM-DERIVED — F4-class RCC/GPIO/USART reuse +
+//! * `stm32f746_config` — SIM-DERIVED — F4-class RCC/GPIO/USART/ADC reuse +
 //!   Cortex-M7 DTCM map. Not silicon-verified.
 
 mod common;

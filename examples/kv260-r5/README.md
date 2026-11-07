@@ -28,6 +28,13 @@ examples/kv260-r5/ci/test.sh
 CI runs the same commands in `.github/workflows/core-qemu-arm.yml`. The core
 crate's `crates/core/tests/kv260_r5_zephyr.rs` covers hello and sync too.
 
+The generic `SystemBus` profile also exposes two simulation-only analog
+co-simulation inputs. The shared Beta NTC divider and Shockley diode fixture
+drives them in [`cosim_kv260_r5_analog.rs`](../../crates/core/tests/cosim_kv260_r5_analog.rs).
+These endpoints have assumed digital thresholds; they do not model ZynqMP
+GPIO registers, physical pad mapping, firmware-visible GPIO, or silicon
+electrical limits. The native RPU machine still has no GPIO model.
+
 ## Modelled / not modelled
 
 Installed from the chip's `native_rpu_peripherals`:
@@ -39,7 +46,7 @@ Not modelled:
 - the APU (Cortex-A53) cluster;
 - the PMU/CSU/FSBL boot flow: the ELF is loaded as the FSBL would place it;
 - TCM vs DDR timing, caches and lockstep;
-- IPI mailboxes, the other TTCs, GPIO, I2C, SPI/QSPI and the PL.
+- IPI mailboxes, the other TTCs, firmware-visible GPIO, I2C, SPI/QSPI and the PL.
 
 ## Availability
 

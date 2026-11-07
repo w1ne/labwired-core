@@ -80,3 +80,15 @@ peripherals:
     type: "avr_adc"
     base_address: 0x00010030
     size: "16"
+
+# The ATmega328P's six bonded analog inputs are ADC0..ADC5 on PC0..PC5. ADC6
+# and ADC7 exist only on other package variants and are not exposed by the
+# Uno's DIP-28. This lets the same board.analog.<pad>_volts route used by other
+# chips reach the AVR's bus-side ADC input model.
+analog_pins:
+  PC0: { peripheral: adc, channel: 0 }
+  PC1: { peripheral: adc, channel: 1 }
+  PC2: { peripheral: adc, channel: 2 }
+  PC3: { peripheral: adc, channel: 3 }
+  PC4: { peripheral: adc, channel: 4 }
+  PC5: { peripheral: adc, channel: 5 }

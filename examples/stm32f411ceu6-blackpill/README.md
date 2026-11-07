@@ -16,6 +16,18 @@ addresses without aborting simulation.
 reuses the same classic-SPI model as SPI1–SPI4; see the chip yaml for the
 sourcing of its base, IRQ and clock-gate bit.
 
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) exercises the
+generic analog adapter with a Beta NTC divider and an unrelated Shockley diode
+load line. The test routes the solved voltages through the F411 descriptor's
+PA1/PA4 ADC aliases and checks ADC1 one-shot conversion results. This proves
+the modeled chip path; the Black Pill connector pinout and silicon behavior
+remain unverified.
+
+[`analog-mosfet-switch.yaml`](analog-mosfet-switch.yaml) adds a generic level-1
+NMOS load line on PA0/ADC1_IN0. Its co-simulation test checks the independently
+calculated drain voltage across gate bias points, the firmware-visible ADC1
+conversion, and isolation from the NTC and diode channels.
+
 ## Fidelity
 
 **Sim-derived, not silicon-verified.** No F411 part was on a bench for this
@@ -48,4 +60,6 @@ Expected result:
 1. `system.yaml`: local board mapping for simulation runs.
 2. `io-smoke.yaml`: strict-onboarding smoke — runs the committed tier-1 fixture
    blob and asserts its TIER1 self-test transcript.
-3. `VALIDATION.md`: reproducible validation commands and the honest scope.
+3. `analog-ntc-diode-system.yaml`: reusable generic NTC and diode analog models
+   routed to the F411's modeled ADC1 inputs.
+4. `VALIDATION.md`: reproducible validation commands and the honest scope.

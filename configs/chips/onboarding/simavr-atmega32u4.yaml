@@ -13,7 +13,59 @@ flash:
 ram:
   base: 256
   size: 2560B
-peripherals: []
+# Register map checked against avr-libc 2.0.0 avr/iom32u4.h: the map
+# LabWired's ATmega32U4 core runs (AvrModel::Atmega32u4). PINB..PORTF at
+# 0x23..0x31 (no port A), ADCL/ADCH 0x78/0x79, ADCSRA 0x7A, ADCSRB 0x7B (MUX5
+# is bit 5), ADMUX 0x7C, MCUCR.PUD bit 4 (0x55), SRAM 0x100..0xAFF. The CPU
+# owns those registers; each port is mirrored at 0x1_0000 + PINx and the ADC
+# input side (millivolts per channel, two bytes each, indexed by ADC number)
+# sits at 0x1_0200. ADC0/1 are PF0/PF1, ADC4..7 PF4..PF7, ADC8..10 PD4, PD6,
+# PD7 and ADC11..13 PB4..PB6 (ATmega16U4/32U4 datasheet 7766 §24.9.1); there
+# is no ADC2/ADC3, so channels 2 and 3 have no pad. VIL 0.3 / VIH 0.6 VCC are
+# the same limits configs/chips/atmega328p.yaml and atmega1281.yaml use.
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.6
+peripherals:
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010023
+    size: "3"
+  - id: "portc"
+    type: "avr_gpio"
+    base_address: 0x00010026
+    size: "3"
+  - id: "portd"
+    type: "avr_gpio"
+    base_address: 0x00010029
+    size: "3"
+  - id: "porte"
+    type: "avr_gpio"
+    base_address: 0x0001002C
+    size: "3"
+  - id: "portf"
+    type: "avr_gpio"
+    base_address: 0x0001002F
+    size: "3"
+  - id: "adc"
+    type: "avr_adc"
+    base_address: 0x00010200
+    size: "28"
+    config:
+      channels: 14
+analog_pins:
+  PF0: { peripheral: adc, channel: 0 }
+  PF1: { peripheral: adc, channel: 1 }
+  PF4: { peripheral: adc, channel: 4 }
+  PF5: { peripheral: adc, channel: 5 }
+  PF6: { peripheral: adc, channel: 6 }
+  PF7: { peripheral: adc, channel: 7 }
+  PD4: { peripheral: adc, channel: 8 }
+  PD6: { peripheral: adc, channel: 9 }
+  PD7: { peripheral: adc, channel: 10 }
+  PB4: { peripheral: adc, channel: 11 }
+  PB5: { peripheral: adc, channel: 12 }
+  PB6: { peripheral: adc, channel: 13 }
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

@@ -27,6 +27,14 @@ PCLKA. 115200 cannot be hit accurately from the 8-MHz MOCO without the SCI
 `MDDR` modulator, so this smoke uses **9600 8N1**. Set the J-Link OB virtual
 COM port to 9600 on silicon.
 
+## Mixed-signal ADC input
+
+[`analog-ntc-system.yaml`](analog-ntc-system.yaml) uses the generic in-core
+Beta NTC divider and Shockley diode load line, routing their solved voltages
+to ADC1 channels 0 and 2. The
+`cosim_pin_routing::ek_ra6m5_ntc_and_diode_netlists_reach_adc1_end_to_end`
+test checks both 12-bit conversions at −10 °C, 25 °C, and 80 °C.
+
 ## Stock Zephyr
 
 Unmodified upstream Zephyr v4.0.0 `samples/hello_world` and

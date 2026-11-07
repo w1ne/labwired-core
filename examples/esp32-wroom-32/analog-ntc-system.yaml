@@ -1,0 +1,32 @@
+# ESP32-WROOM-32 with a Beta NTC divider driving classic ESP32 SAR ADC1 CH6.
+# The classic ESP32 has no declared GPIO-to-ADC pad map, so this circuit is
+# wired to the ADC channel explicitly, as an external analog device would be.
+name: "esp32-wroom-32-analog-ntc"
+chip: "../../configs/chips/esp32.yaml"
+cpu_hz: 240000000
+external_devices: []
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 2
+    signal: "output"
+    active_high: true
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "adc.sens_sar_adc.6_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3

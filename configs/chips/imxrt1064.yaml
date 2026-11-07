@@ -20,6 +20,10 @@ flash:
 ram:
   base: 0x20010000
   size: "64KB"
+# Simulation-only co-simulation inputs. These endpoints do not claim the
+# Teensy 4.1's physical ADC, analog pad mux, or digital input thresholds.
+io_voltage_v: 3.3
+gpio_input_thresholds: { vil: 0.3, vih: 0.7 }
 memory_regions:
   # Optional OCRAM window (IMXRT1060RM / MIMXRT1062.h).
   - name: "ocram"
@@ -65,3 +69,9 @@ peripherals:
     type: "stub"
     base_address: 0x402A8000
     size: "4KB"
+  # Generic mixed-signal co-simulation inputs; not RT106x registers or pads.
+  - id: "cosim_inputs"
+    type: "input_pin_bank"
+    base_address: 0xF0000000
+    size: "4KB"
+    config: { pin_count: 2 }

@@ -1,0 +1,30 @@
+# Arduino Nano with a Beta-model NTC divider routed through A0 / PC0 to ADC0.
+name: "arduino-nano-analog-ntc"
+chip: "../../configs/chips/atmega328p.yaml"
+cpu_hz: 16000000
+external_devices: []
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "portb"
+    pin: 5
+    signal: "output"
+    active_high: true
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 100000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.pc0_volts"
+    config:
+      vdd: 5.0
+      netlist_text: |
+        Vcc vcc 0 dc 5
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"

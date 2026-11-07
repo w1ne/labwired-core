@@ -20,6 +20,15 @@ core: "cortex-m0+"
 # Kinetis KW41Z Cortex-M0+ core maximum, 48 MHz.
 cpu_hz: 48_000_000
 
+# Simulation-only GPIO supply/threshold assumptions for analog co-simulation.
+# These values exercise generic MNA-to-PDIR routing; they are not a
+# transcription of MKW41Z electrical limits and must not be treated as silicon
+# claims.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.35
+  vih: 0.65
+
 flash:
   base: 0x00000000
   size: "512KB"

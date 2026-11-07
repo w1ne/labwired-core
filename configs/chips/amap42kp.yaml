@@ -27,6 +27,9 @@
 #   They are stored; the console model does not depend on them.
 # - gpio  `apollo4_gpio`    — one 128-pin block: PADKEY-locked PINCFGn,
 #   RD/WT/WTS/WTC/EN/ENS/ENC banks (crates/core/src/peripherals/apollo4.rs).
+# - adc   `apollo4_adc`     — software-triggered single scans of enabled
+#   external-input slots, routed millivolt inputs, and the result FIFO
+#   (crates/core/src/peripherals/apollo4_adc.rs).
 # - power `apollo4_pwrctrl` — MCUPERFREQ request/ack and DEVPWREN mirrored
 #   into DEVPWRSTATUS.
 # - `apollo4_cpu`           — CM4 cache / DAXI control (CPU_BASE): an idle,
@@ -49,7 +52,7 @@
 #   still works; DEVPWRSTATUS follows DEVPWREN on the same access.
 # - GPIO interrupts (no edge detection, no IRQ 56-59), the peripheral side of
 #   non-GPIO FNCSEL selections, drive strength, NCE routing.
-# - IOM0-7, MSPI0-2, ADC, timers, STIMER, RTC, WDT, security, crypto, GPU,
+# - IOM0-7, MSPI0-2, timers, STIMER, RTC, WDT, security, crypto, GPU,
 #   display, SDIO, USB, audio, IOS, DSP: declared stubs.
 #
 # Supersedes the staged configs/chips/onboarding/ambiq-apollo4.yaml, whose
@@ -210,7 +213,7 @@ peripherals:
     base_address: 0x40034000
     size: "4KB"
   - id: "adc"
-    type: "stub"
+    type: "apollo4_adc"
     base_address: 0x40038000
     size: "4KB"
   - id: "iom0"

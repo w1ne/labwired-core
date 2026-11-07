@@ -27,6 +27,12 @@ examples/ek-rx261/ci/test.sh
 
 Rebuild the fixtures (byte-identical): `crates/firmware-ek-rx261-zephyr/build.sh`.
 
-Not modelled yet: PORT/MPC pin control (so no LEDs or switches), SCI6
+The generic NTC and diode co-simulation proof is
+`cargo test -p labwired-core --test cosim_ek_rx261_analog`. It drives two
+input-only simulator endpoints on the `port` window and asserts their solved
+voltages, thresholded levels, and hysteresis. It does not model RX GPIO
+registers or firmware-visible pin reads.
+
+Not modelled yet: PORT/MPC register behavior (so no firmware-accessible LEDs or switches), SCI6
 ERI (receive-error interrupt), DTC, group interrupts, IRQ pins, the
 RXv3 register banks and user-mode privilege checks. See `VALIDATION.md`.

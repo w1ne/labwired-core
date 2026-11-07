@@ -703,3 +703,24 @@ pins:
   PH0: { gpio: gpioh, bit: 0 }
   PH1: { gpio: gpioh, bit: 1 }
   PH3: { gpio: gpioh, bit: 3 }
+
+# External ADC1 pad routes from ST open pin data
+# mcu/STM32U575ZITxQ.xml (commit 7d1f1514ed5583ec5007ad91236b4e1d377295b1).
+# Kept separate from `pins:` so `board.analog.<pad>_volts` has the same
+# explicit pad-to-channel contract as other chip descriptors.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 5 }
+  PA1: { peripheral: "adc1", channel: 6 }
+  PA2: { peripheral: "adc1", channel: 7 }
+  PA3: { peripheral: "adc1", channel: 8 }
+  PA4: { peripheral: "adc1", channel: 9 }
+  PA5: { peripheral: "adc1", channel: 10 }
+  PA6: { peripheral: "adc1", channel: 11 }
+  PA7: { peripheral: "adc1", channel: 12 }
+  PB0: { peripheral: "adc1", channel: 15 }
+  PB1: { peripheral: "adc1", channel: 16 }
+  PB2: { peripheral: "adc1", channel: 17 }
+  PC0: { peripheral: "adc1", channel: 1 }
+  PC1: { peripheral: "adc1", channel: 2 }
+  PC2: { peripheral: "adc1", channel: 3 }
+  PC3: { peripheral: "adc1", channel: 4 }

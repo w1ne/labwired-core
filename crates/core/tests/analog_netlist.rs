@@ -9,7 +9,8 @@
 // verification command `cargo test -p labwired-core analog` runs all of them.
 mod analog {
     use labwired_core::analog::{
-        parse_netlist, parse_spice_value, AnalogError, Integration, Polarity, Solver, Waveform,
+        device, parse_netlist, parse_spice_value, AnalogError, Integration, Polarity, Solver,
+        Waveform,
     };
 
     const RC: &str = "\
@@ -98,12 +99,41 @@ C1 out 0 100n
     }
 
     #[test]
+    fn parses_resistor_temperature_coefficients_and_applies_both_orders() {
+        let circuit = parse_netlist("Rtemp a 0 1k tc1=4m tc2=1u tnom=25 temp=125\n")
+            .expect("temperature-coefficient resistor parses");
+        let resistor = &circuit.resistors[0];
+        let model = resistor
+            .temperature_coefficients
+            .expect("TC parameters attach to the resistor");
+        assert_eq!(model.tc1, 4e-3);
+        assert_eq!(model.tc2, 1e-6);
+        assert_eq!(model.nominal_temperature_celsius, 25.0);
+        assert_eq!(model.temperature_celsius, 125.0);
+        assert_eq!(resistor.resistance_ohms(), 1410.0);
+    }
+
+    #[test]
     fn refuses_invalid_ntc_parameters() {
         for text in [
             "Rntc a 0 10k beta=0",
             "Rntc a 0 -10k beta=3950",
             "Rntc a 0 10k beta=3950 temp=-273.15",
             "Rntc a 0 10k temp=25",
+        ] {
+            assert!(parse_netlist(text).is_err(), "must refuse `{text}`");
+        }
+    }
+
+    #[test]
+    fn refuses_invalid_resistor_temperature_coefficients() {
+        for text in [
+            "R1 a 0 1k tc1=NaN temp=100",
+            "R1 a 0 1k tc2=1u tnom=-273.15",
+            "R1 a 0 1k tc1=1m temp=-300",
+            "R1 a 0 1k tc1=-1m temp=2027 tnom=27",
+            "R1 a 0 1k tc1=1m beta=3950",
+            "R1 a 0 1k temp=100",
         ] {
             assert!(parse_netlist(text).is_err(), "must refuse `{text}`");
         }
@@ -344,7 +374,7 @@ C1 out 0 100n $ dollar comment
         let circuit = parse_netlist(
             "D1 a 0 D1N4148\n\
              .model D1N4148 D(IS=2.52n RS=0.568 N=1.752 IKF=100m IKR=20m CJO=4p M=0.333 FC=0.4 TT=11.54n VP=0.2 \
-             VJ=0.75 BV=100 IBV=100u ISR=8p NR=1.8 EG=1.11 XTI=3)\n",
+             VJ=0.75 BV=100 IBV=100u ISR=8p NR=1.8 EG=1.11 XTI=3 TCV=1m)\n",
         )
         .expect("a vendor card parses");
         assert_eq!(circuit.diodes[0].model.is, 2.52e-9);
@@ -360,6 +390,94 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.diodes[0].model.m, 0.333);
         assert_eq!(circuit.diodes[0].model.vj, 0.75);
         assert_eq!(circuit.diodes[0].model.fc, 0.4);
+        assert_eq!(circuit.diodes[0].model.tcv, 1e-3);
+    }
+
+    #[test]
+    fn diode_temperature_parameters_and_instance_override_parse_and_validate() {
+        let circuit =
+            parse_netlist("D1 a 0 DMOD TEMP=100\n.model DMOD D(EG=1.05 XTI=2.4 TNOM=25)\n")
+                .expect("diode TEMP and model temperature parameters parse");
+        let diode = &circuit.diodes[0];
+        assert_eq!(diode.temperature_celsius, Some(100.0));
+        assert_eq!(diode.model.eg, 1.05);
+        assert_eq!(diode.model.xti, 2.4);
+        assert_eq!(diode.model.tnom_celsius, 25.0);
+
+        let alias =
+            parse_netlist("D1 a 0 D\n.model D D(TBV1=2m)\n").expect("ngspice TBV1 alias parses");
+        assert_eq!(alias.diodes[0].model.tcv, 2e-3);
+
+        let defaults = parse_netlist("D1 a 0 D\n").expect("default diode parses");
+        assert_eq!(defaults.diodes[0].temperature_celsius, None);
+        assert_eq!(defaults.diodes[0].model.eg, 1.11);
+        assert_eq!(defaults.diodes[0].model.xti, 3.0);
+        assert_eq!(defaults.diodes[0].model.tnom_celsius, 27.0);
+
+        for parameter in ["EG=-0.1", "XTI=1e999", "TNOM=-273.15", "TCV=1e999"] {
+            let error = parse_netlist(&format!("D1 a 0 DMOD\n.model DMOD D({parameter})\n"))
+                .expect_err("invalid diode temperature model parameter is refused");
+            assert!(error.to_string().contains("diode model"), "{error}");
+        }
+        for temp in ["-273.15", "1e999"] {
+            parse_netlist(&format!("D1 a 0 D TEMP={temp}\n"))
+                .expect_err("invalid diode instance temperature is refused");
+        }
+        parse_netlist("D1 a 0 DMOD TEMP=50\n.model DMOD D(BV=5 TCV=-0.1 TNOM=27)\n")
+            .expect_err("a nonpositive temperature-adjusted BV is refused");
+    }
+
+    #[test]
+    fn diode_transit_and_grading_temperature_parameters_parse_and_validate() {
+        let circuit = parse_netlist(
+            "D1 a 0 DMOD TEMP=127\n\
+             .model DMOD D(TNOM=27 TT=100n TTT1=800u TTT2=4u TM1=800u TM2=4u)\n",
+        )
+        .expect("diode transit-time temperature coefficients parse");
+        let diode = &circuit.diodes[0];
+        assert_eq!(diode.model.tt, 100e-9);
+        assert_eq!(diode.model.ttt1, 800e-6);
+        assert_eq!(diode.model.ttt2, 4e-6);
+        assert!((diode.operating_model.tt - 112e-9).abs() < 1e-22);
+        assert_eq!(diode.model.tm1, 800e-6);
+        assert_eq!(diode.model.tm2, 4e-6);
+        assert!((diode.operating_model.m - 0.56).abs() < 1e-15);
+
+        let defaults = parse_netlist("D1 a 0 D\n").expect("default diode parses");
+        assert_eq!(defaults.diodes[0].model.ttt1, 0.0);
+        assert_eq!(defaults.diodes[0].model.ttt2, 0.0);
+        assert_eq!(defaults.diodes[0].model.tm1, 0.0);
+        assert_eq!(defaults.diodes[0].model.tm2, 0.0);
+        assert_eq!(
+            defaults.diodes[0].operating_model.tt,
+            defaults.diodes[0].model.tt
+        );
+        assert_eq!(
+            defaults.diodes[0].operating_model.m,
+            defaults.diodes[0].model.m
+        );
+        let fixed_temperature = parse_netlist(
+            "D1 a 0 DMOD\n.model DMOD D(TNOM=27 TT=100n TTT1=800u TTT2=4u TM1=800u TM2=4u)\n",
+        )
+        .expect("temperature coefficients without instance TEMP preserve nominal parameters");
+        assert_eq!(
+            fixed_temperature.diodes[0].operating_model.tt,
+            fixed_temperature.diodes[0].model.tt
+        );
+        assert_eq!(
+            fixed_temperature.diodes[0].operating_model.m,
+            fixed_temperature.diodes[0].model.m
+        );
+
+        for parameter in ["TTT1=1e999", "TTT2=-1e999", "TM1=1e999", "TM2=-1e999"] {
+            let error = parse_netlist(&format!("D1 a 0 DMOD\n.model DMOD D({parameter})\n"))
+                .expect_err("non-finite diode temperature coefficients are refused");
+            assert!(error.to_string().contains("diode model"), "{error}");
+        }
+        parse_netlist("D1 a 0 DMOD TEMP=127\n.model DMOD D(TNOM=27 TT=100n TTT1=-20m)\n")
+            .expect_err("negative temperature-adjusted transit time is refused");
+        parse_netlist("D1 a 0 DMOD TEMP=127\n.model DMOD D(TNOM=27 M=0.5 TM1=-20m)\n")
+            .expect_err("negative temperature-adjusted grading coefficient is refused");
     }
 
     #[test]
@@ -385,6 +503,7 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.bjts[0].model.var, f64::INFINITY);
         assert_eq!(circuit.bjts[0].model.ikf, f64::INFINITY);
         assert_eq!(circuit.bjts[0].model.ikr, f64::INFINITY);
+        assert_eq!(circuit.bjts[0].model.nkf, None);
         assert_eq!(circuit.bjts[0].model.ise, 0.0);
         assert_eq!(circuit.bjts[0].model.ne, 1.5);
         assert_eq!(circuit.bjts[0].model.isc, 0.0);
@@ -397,6 +516,117 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.bjts[1].model.ne, 1.6);
         assert_eq!(circuit.bjts[1].model.isc, 4e-12);
         assert_eq!(circuit.bjts[1].model.nc, 1.8);
+    }
+
+    #[test]
+    fn bjt_temperature_parameters_resolve_and_validate() {
+        let circuit = parse_netlist(
+            "Q1 c b e QMOD TEMP=85\n\
+             .model QMOD PNP(TNOM=25 EG=1.08 XTI=2.5 XTB=-1 RB=30 RBM=10 IRB=1m RC=20 RE=5 \
+             TRB1=1m TRB2=10u TRM1=2m TRM2=20u TIRB1=1m TIRB2=30u \
+             TRC1=3m TRC2=10u TRE1=4m TRE2=20u TF=10n TR=20n \
+             TTF1=1m TTF2=10u TTR1=2m TTR2=20u)\n",
+        )
+        .expect("BJT instance and model temperature parameters parse");
+        let bjt = &circuit.bjts[0];
+        assert_eq!(bjt.temperature_celsius, Some(85.0));
+        assert_eq!(bjt.model.tnom_celsius, 25.0);
+        assert_eq!(bjt.model.eg, 1.08);
+        assert_eq!(bjt.model.xti, 2.5);
+        assert_eq!(bjt.model.xtb, -1.0);
+        assert!(bjt.operating_model.is > bjt.model.is);
+        assert!(bjt.operating_model.bf < bjt.model.bf);
+        assert!(bjt.thermal_voltage > device::THERMAL_VOLTAGE);
+        assert_eq!(bjt.model.trb1, 1e-3);
+        assert_eq!(bjt.model.trb2, 10e-6);
+        assert_eq!(bjt.model.trbm1, 2e-3);
+        assert_eq!(bjt.model.trbm2, 20e-6);
+        assert_eq!(bjt.model.tirb1, 1e-3);
+        assert_eq!(bjt.model.tirb2, 30e-6);
+        assert_eq!(bjt.model.trc1, 3e-3);
+        assert_eq!(bjt.model.trc2, 10e-6);
+        assert_eq!(bjt.model.tre1, 4e-3);
+        assert_eq!(bjt.model.tre2, 20e-6);
+        assert_eq!(bjt.model.ttf1, 1e-3);
+        assert_eq!(bjt.model.ttf2, 10e-6);
+        assert_eq!(bjt.model.ttr1, 2e-3);
+        assert_eq!(bjt.model.ttr2, 20e-6);
+        assert!((bjt.operating_model.rb - 32.88).abs() < 1e-12);
+        assert!((bjt.operating_model.rbm.unwrap() - 11.92).abs() < 1e-12);
+        assert!((bjt.operating_model.irb - 1.168e-3).abs() < 1e-15);
+        assert!((bjt.operating_model.rc - 24.32).abs() < 1e-12);
+        assert!((bjt.operating_model.re - 6.56).abs() < 1e-12);
+        assert!((bjt.operating_model.tf - 10.96e-9).abs() < 1e-21);
+        assert!((bjt.operating_model.tr - 23.84e-9).abs() < 1e-21);
+
+        let defaults = parse_netlist("Q1 c b e QMOD\n.model QMOD NPN\n")
+            .expect("default BJT temperature path parses");
+        let bjt = &defaults.bjts[0];
+        assert_eq!(bjt.model.tnom_celsius, 27.0);
+        assert_eq!(bjt.model.eg, 1.11);
+        assert_eq!(bjt.model.xti, 3.0);
+        assert_eq!(bjt.model.xtb, 0.0);
+        assert_eq!(bjt.model.trb1, 0.0);
+        assert_eq!(bjt.model.trb2, 0.0);
+        assert_eq!(bjt.model.trbm1, 0.0);
+        assert_eq!(bjt.model.trbm2, 0.0);
+        assert_eq!(bjt.model.tirb1, 0.0);
+        assert_eq!(bjt.model.tirb2, 0.0);
+        assert_eq!(bjt.model.trc1, 0.0);
+        assert_eq!(bjt.model.trc2, 0.0);
+        assert_eq!(bjt.model.tre1, 0.0);
+        assert_eq!(bjt.model.tre2, 0.0);
+        assert_eq!(bjt.model.ttf1, 0.0);
+        assert_eq!(bjt.model.ttf2, 0.0);
+        assert_eq!(bjt.model.ttr1, 0.0);
+        assert_eq!(bjt.model.ttr2, 0.0);
+        assert_eq!(bjt.temperature_celsius, None);
+        assert_eq!(bjt.operating_model, bjt.model);
+        assert_eq!(bjt.thermal_voltage, device::THERMAL_VOLTAGE);
+
+        for parameters in [
+            "TNOM=-273.15",
+            "EG=-0.1",
+            "EG=nan",
+            "XTI=inf",
+            "XTB=1e999",
+            "TRB1=nan",
+            "TRBM2=inf",
+            "TIRB1=1e999",
+            "TRC2=nan",
+            "TRE1=inf",
+            "TTF1=nan",
+            "TTR2=inf",
+            "IS=inf",
+        ] {
+            let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameters})\n"))
+                .expect_err("invalid BJT temperature parameters are refused");
+            assert!(matches!(error, AnalogError::Parse { .. }), "{error}");
+        }
+        let error = parse_netlist("Q1 c b e QMOD TEMP=-273.15\n.model QMOD NPN\n")
+            .expect_err("BJT instance temperature must stay above absolute zero");
+        assert!(error.to_string().contains("device TEMP"), "{error}");
+
+        let error = parse_netlist("Q1 c b e QMOD TEMP=100\n.model QMOD NPN(RB=10 TRB1=-20m)\n")
+            .expect_err("temperature coefficients cannot make a terminal resistance nonpositive");
+        assert!(error.to_string().contains("resistances"), "{error}");
+    }
+
+    #[test]
+    fn bjt_nkf_exponent_and_legacy_alias_parse_and_validate() {
+        for (parameter, expected) in [("NKF=0.8", 0.8), ("NK=0.7", 0.7)] {
+            let circuit = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
+                .expect("a finite nonnegative NKF exponent parses");
+            assert_eq!(circuit.bjts[0].model.nkf, Some(expected));
+        }
+
+        let error = parse_netlist("Q1 c b e QMOD\n.model QMOD NPN(NKF=-0.1)\n")
+            .expect_err("a negative NKF exponent is rejected");
+        assert!(error.to_string().contains("NKF >= 0"), "{error}");
+        for parameter in ["NKF=inf", "NKF=nan", "NKF=1e999"] {
+            parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
+                .expect_err("a nonfinite NKF exponent is rejected");
+        }
     }
 
     #[test]
@@ -426,12 +656,35 @@ C1 out 0 100n $ dollar comment
         assert_eq!(defaults.mjc, 0.33);
         assert_eq!(defaults.fc, 0.5);
 
+        let temperature = parse_netlist(
+            "Q1 c b e QMOD TEMP=85\n\
+             .model QMOD NPN(TMJE1=1m TMJE2=2u TMJC1=3m TMJC2=4u TLEVC=1 CTE=5m CTC=6m TVJE=7u TVJC=8u)\n",
+        )
+        .expect("BJT junction temperature parameters parse");
+        let model = temperature.bjts[0].model;
+        assert_eq!(model.tmje1, 1e-3);
+        assert_eq!(model.tmje2, 2e-6);
+        assert_eq!(model.tmjc1, 3e-3);
+        assert_eq!(model.tmjc2, 4e-6);
+        assert_eq!(model.tlevc, 1);
+        assert_eq!(model.cte, 5e-3);
+        assert_eq!(model.ctc, 6e-3);
+        assert_eq!(model.tvje, 7e-6);
+        assert_eq!(model.tvjc, 8e-6);
+
         for parameters in [
             "CJE=-1p", "VJE=0", "MJE=-0.1", "CJC=-1p", "VJC=0", "MJC=-0.1", "FC=-0.1", "FC=1",
         ] {
             let text = format!("Q1 c b e QMOD\n.model QMOD NPN({parameters})\n");
             let error =
                 parse_netlist(&text).expect_err("invalid BJT junction parameters are refused");
+            assert!(matches!(error, AnalogError::Parse { .. }), "{error}");
+        }
+        for parameter in ["TLEVC=-1", "TLEVC=2", "TMJE1=NaN", "CTC=NaN"] {
+            let error = parse_netlist(&format!(
+                "Q1 c b e QMOD TEMP=85\n.model QMOD NPN({parameter})\n"
+            ))
+            .expect_err("unsupported selectors and non-finite BJT temperature values are refused");
             assert!(matches!(error, AnalogError::Parse { .. }), "{error}");
         }
     }
@@ -471,6 +724,8 @@ C1 out 0 100n $ dollar comment
         assert_eq!(bjt.model.rb, 12.0);
         assert_eq!(bjt.model.rc, 3.0);
         assert_eq!(bjt.model.re, 0.5);
+        assert_eq!(bjt.model.rbm, None);
+        assert_eq!(bjt.model.irb, f64::INFINITY);
         assert_eq!(circuit.node_count(), 6);
         assert_eq!(
             bjt.junction_b,
@@ -505,6 +760,21 @@ C1 out 0 100n $ dollar comment
             let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
                 .expect_err("negative BJT terminal resistance is invalid");
             assert!(error.to_string().contains("RB/RC/RE >= 0"), "{error}");
+        }
+
+        let rolloff = parse_netlist("Q1 c b e QMOD\n.model QMOD NPN(RB=60 RBM=10 IRB=2m)\n")
+            .expect("current-dependent BJT base-resistance parameters parse");
+        assert_eq!(rolloff.bjts[0].model.rb, 60.0);
+        assert_eq!(rolloff.bjts[0].model.rbm, Some(10.0));
+        assert_eq!(rolloff.bjts[0].model.irb, 2e-3);
+
+        for parameters in ["RB=10 RBM=11", "RBM=-1", "IRB=0", "IRB=-1"] {
+            let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameters})\n"))
+                .expect_err("invalid current-dependent base-resistance parameters are refused");
+            assert!(
+                error.to_string().contains("0 <= RBM <= RB and IRB > 0"),
+                "{error}"
+            );
         }
 
         let collision = parse_netlist("Q1 c b e QMOD\nR1 Q1#base 0 1k\n.model QMOD NPN(RB=10)\n")
@@ -885,12 +1155,10 @@ C1 out 0 100n $ dollar comment
         assert_eq!(model.b, 1.2);
         assert_eq!(model.is, 4e-12);
 
-        for (card, rejected) in [("NJF(LEVEL=2)", "LEVEL=2")] {
-            let err = parse_netlist(&format!("J1 d g s MOD\n.model MOD {card}\n"))
-                .expect_err("unsupported JFET equations must be refused");
-            assert!(err.to_string().contains(rejected), "{err}");
-            assert!(err.to_string().contains("labwired_ngspice.py"), "{err}");
-        }
+        let err = parse_netlist("J1 d g s MOD\n.model MOD NJF(LEVEL=2)\n")
+            .expect_err("unsupported JFET equations must be refused");
+        assert!(err.to_string().contains("LEVEL=2"), "{err}");
+        assert!(err.to_string().contains("labwired_ngspice.py"), "{err}");
 
         for b in ["0", "-0.1", "1e999"] {
             let err = parse_netlist(&format!("J1 d g s MOD\n.model MOD NJF(B={b})\n"))

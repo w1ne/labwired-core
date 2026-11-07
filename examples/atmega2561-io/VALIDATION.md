@@ -11,6 +11,7 @@ Claims, evidence, and what is explicitly **not** claimed.
 | Boot, USART0 output, PB5 output | smoke-tested | committed `tests/fixtures/avr/atmega2561-io.elf`, `avr_atmega2561::atmega2561_boots_and_prints` |
 | 54-pin A..G map | smoke-tested | 54 entries in `configs/chips/atmega2561.yaml`, checked by the descriptor test |
 | ADC0..ADC7 only | smoke-tested | `avr_atmega2561::only_eight_adc_inputs_are_mapped` |
+| Generic diode netlist → ADC0 → firmware-visible conversion | end-to-end tested | `cosim_pin_routing::atmega2561_diode_netlist_reaches_adc0_end_to_end` |
 | CLI script | smoke-tested | `examples/atmega2561-io/io-smoke.yaml` via `examples/atmega2561-io/ci/test.sh` |
 | Silicon capture / executing-fidelity differential | **none** | SIM-DERIVED: no bench ATmega2561 was captured |
 
@@ -19,6 +20,7 @@ Claims, evidence, and what is explicitly **not** claimed.
 ```bash
 # from core/
 cargo test -p labwired-core --test avr_atmega2561
+cargo test -p labwired-core --test cosim_pin_routing atmega2561_diode_netlist_reaches_adc0_end_to_end -- --nocapture
 cargo run -q -p labwired-cli -- test \
   --script examples/atmega2561-io/io-smoke.yaml --no-uart-stdout
 ```

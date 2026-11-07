@@ -114,6 +114,16 @@ peripherals:
     config:
       debug_schema: "../peripherals/nrf5340/timer2_s.yaml"
 
+  # SAADC on the application core. The nRF5340 SVD places SAADC_S at
+  # 0x5000E000 with IRQ 14; reuse the shared Nordic SAADC conversion model.
+  - id: "saadc"
+    type: "nrf52_saadc"
+    base_address: 0x5000E000
+    size: "4KB"
+    irq: 14
+    config:
+      debug_schema: "../peripherals/nrf5340/saadc_s.yaml"
+
   # GPIO P0/P1 — the nRF5340 GPIO block sits at 0x5084_2500, far from the rest
   # of the peripheral window.
   #

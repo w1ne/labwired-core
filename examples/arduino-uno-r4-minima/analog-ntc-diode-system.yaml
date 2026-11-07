@@ -1,0 +1,39 @@
+# Generic Beta NTC divider and unrelated Shockley diode load-line on the
+# Arduino Uno R4 Minima. The NTC reaches A0/P014/AN009; the diode reaches
+# A1/P000/AN000 through the chip's descriptor-backed analog pin map.
+name: "arduino-uno-r4-minima-analog"
+chip: "../../configs/chips/ra4m1.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.p014_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 5.0
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 5.0
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.p000_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 5.0
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 5.0

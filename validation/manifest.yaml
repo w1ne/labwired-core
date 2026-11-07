@@ -1763,7 +1763,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: a8bc9f9e1e2b2ae0f4d5f1b0b70583b45579a5c322ac85434a549c56466e621d
+    drift_ack_digest: bec8ca01cf01ba7afac9fa1d02e7d512a51b3d2845cc48df56b75818d59f5486
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2356,7 +2356,11 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-03 (ADC analog pin resolution): adc.rs now resolves routed channel voltage and
+    # VREF+ and holds them at acquisition. This intentionally adds MNA-driven ADC input
+    # behavior outside the existing register-oracle capture scope. Andrii accepted the
+    # renewal after the live `--ignored` diff on this date; this is not a replacement capture.
+    drift_ack: 2026-11-03
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -3867,7 +3871,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 8a2315e4e13ec78e139f548a1174bf72edf71654c00921622330bfa2a8fd7422
+    drift_ack_digest: cefdf21bf11cfaeb0ba9965097d5beaf02ec1d256499e61c8b690bbf557cdd8e
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4448,7 +4452,11 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-03 (ADC analog pin resolution): adc.rs now resolves routed channel voltage and
+    # VREF+ and holds them at acquisition. This intentionally adds MNA-driven ADC input
+    # behavior outside the existing register-oracle capture scope. Andrii accepted the
+    # renewal after the live `--ignored` diff on this date; this is not a replacement capture.
+    drift_ack: 2026-11-03
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5968,7 +5976,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 48e3dbe1b716f0fc30fed1d3b162c3df00eef4ed4f258a52aefca2038bdb2862
+    drift_ack_digest: afee5cd80159fc4fe1c23ed672703e810723066875fa50f8e94b0fabc02c6ad4
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6552,7 +6560,11 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-03 (ADC analog pin resolution): adc.rs now resolves routed channel voltage and
+    # VREF+ and holds them at acquisition. This intentionally adds MNA-driven ADC input
+    # behavior outside the existing register-oracle capture scope. Andrii accepted the
+    # renewal after the live `--ignored` diff on this date; this is not a replacement capture.
+    drift_ack: 2026-11-03
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -8592,7 +8604,7 @@ boards:
     doc: docs/boards/microbit-v1.md
     chip: configs/chips/nrf51822.yaml
     tier: smoke-manual
-    note: "BBC micro:bit V1, target nRF51822 (QFAA), modelled as the S110 v8 application region: flash from 0x18000, the MBR/SoftDevice range an empty hole. Bare-metal legacy UART smoke prints OK\\n, PSELTXD=P0.24 / PSELRXD=P0.25, BAUDRATE=115200, ENABLE=4. Blocks reuse the nRF52 models (UART0 legacy personality, NVMC page size 1 KiB) plus an nRF51 FICR. The 5x5 matrix is a mux primitive. ADC, LPCOMP, QDEC and the radio protocol are not claimed. SoftDevice API emulation lives in crates/nrf-softdevice-hle and is not this board's PR gate. SIM-DERIVED — no silicon diff; no executing-fidelity differential."
+    note: "BBC micro:bit V1, target nRF51822 (QFAA), modelled as the S110 v8 application region: flash from 0x18000, the MBR/SoftDevice range an empty hole. Bare-metal legacy UART smoke prints OK\\n, PSELTXD=P0.24 / PSELRXD=P0.25, BAUDRATE=115200, ENABLE=4. Blocks reuse the nRF52 models (UART0 legacy personality, NVMC page size 1 KiB) plus an nRF51 FICR. The 5x5 matrix is a mux primitive. The nRF51 ADC has a bounded SVD-derived input-channel model, with no analog pad aliases or silicon ADC validation claimed; LPCOMP, QDEC and the radio protocol are not modelled. SoftDevice API emulation lives in crates/nrf-softdevice-hle and is not this board's PR gate. SIM-DERIVED — no silicon diff; no executing-fidelity differential."
     offline_tests:
       - "firmware_survival::test_nrf51822_microbit_v1_smoke_survival"
     models:
@@ -8602,8 +8614,12 @@ boards:
       - crates/core/src/peripherals/nvic.rs
       - crates/core/src/peripherals/nrf52/clock.rs
       - crates/core/src/peripherals/nrf52/ecb.rs
+      - crates/core/src/peripherals/nrf52/factory.rs
       - crates/core/src/peripherals/nrf52/ficr.rs
       - crates/core/src/peripherals/nrf52/gpiote.rs
+      - crates/core/src/peripherals/nrf52/mod.rs
+      - crates/core/src/peripherals/nrf51_adc.rs
+      - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/peripherals/nrf52/nvmc.rs
       - crates/core/src/peripherals/nrf52/ppi.rs
       - crates/core/src/peripherals/nrf52/radio.rs
@@ -9449,16 +9465,19 @@ boards:
     doc: docs/boards/atsamd21g18a.md
     chip: configs/chips/atsamd21g18a.yaml
     tier: sim-validated
-    note: "Microchip ATSAMD21G18A (Cortex-M0+, 256K flash at 0x0 / 32K SRAM) — the first SAM part in the engine, Arduino Zero / Feather M0 class. PORT and SERCOM are BEHAVIOURAL models, not stubs: PORT implements the DIR/OUT SET-CLR-TGL aliases as one register each, WRCONFIG's bulk PINCFG/PMUX write (the path ASF and the Arduino SAMD core actually take), and IN reading back what an output pin drives; SERCOM implements USART mode with DRE derived from CTRLA.ENABLE. A bare-metal firmware performs the real bring-up in datasheet order (NVMCTRL wait states, the SYSCTRL.PCLKSR ready poll, three GCLK SYNCBUSY spins, PM.APBCMASK, WRCONFIG, CTRLB before CTRLA.ENABLE) and its console reaches the capture sink — examples/samd21-smoke/io-smoke.yaml, 7 checks, executed by BOTH the strict-onboarding gate and the coverage matrix. Three of those checks are memory_value reads of the PORT registers the firmware configured, so the banner is not the gate. Every base and IRQ is checked against Microchip's Apache-2.0 ATSAMD21G18A.svd by svd_conformance with ZERO justified deviations. NOT PROVEN: no SAM D21 silicon diff (no bench part); nothing is clock-gated (PM is a register bank, so firmware that forgets APBCMASK works here and fails on hardware); SYNCBUSY always reads 0 and transmission has no latency — modelling truths, not silicon ones; SERCOM SPI/I2C modes, EIC, USB, TCC/TC, ADC and DMAC are unmodelled and their windows deliberately unmapped."
+    note: "Microchip ATSAMD21G18A (Cortex-M0+, 256K flash / 32K SRAM), Arduino Zero class. PORT and SERCOM USART have behavioral coverage; the ADC slice supports external AIN0..AIN19, function-B pad muxing, software single-ended 12/10/8-bit conversion, and INT1V/INTVCC0/INTVCC1. The existing bare-metal startup checks remain in examples/samd21-smoke/io-smoke.yaml. The mixed-signal integration test routes a Beta NTC to PA02/AIN0 and an unrelated Shockley diode to PB08/AIN2, asserts solved voltages and ADC result codes, and checks an unmuxed pad and undriven AIN3. SVD conformance reports zero justified deviations. NOT PROVEN: no SAM D21 silicon diff; the ADC does not model APBC/generic-clock gating, scan, averaging or correction; PM remains a register bank and GCLK synchronization remains instantaneous; SERCOM SPI/I2C modes, EIC, USB, TCC/TC, DAC, AC, I2S and DMAC remain unmodelled."
     offline_tests:
       - "strict_onboarding::test_strict_board_onboarding (executes examples/samd21-smoke/io-smoke.yaml)"
       - "atsamd21_peripheral_estate::{the_estate_answers_at_its_own_addresses,the_sercom_instances_are_not_each_other,the_port_groups_are_not_each_other}"
       - "svd_conformance::chip_configs_match_their_svd"
+      - "cosim_samd21_analog::arduino_zero_ntc_and_diode_netlists_reach_distinct_samd21_adc_pads"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/sam/sercom_usart.rs
+      - crates/core/src/peripherals/sam/adc21.rs
+      - crates/core/src/peripherals/generic_factory.rs
       - configs/chips/atsamd21g18a.yaml
       # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
       # its list omitted, so they were invisible to the drift digest. This
@@ -9474,14 +9493,14 @@ boards:
       - configs/peripherals/atsamd21g18a/gclk.yaml
       - configs/peripherals/atsamd21g18a/wdt.yaml
       - configs/peripherals/atsamd21g18a/nvmctrl.yaml
-
   - id: nrf54l15
     doc: docs/boards/nrf54l15.md
     chip: configs/chips/nrf54l15.yaml
     tier: sim-validated
-    note: "RRAM-based (NVM at 0x0, 1524 KB; 256 KB SRAM, initial SP at 0x2004_0000) rather than flash. Boots a bare smoke fixture and UNMODIFIED upstream Zephyr hello_world through the real nrfx/Zephyr boot path (TAMPC approtect gate, nRF54L CLOCK XO/LFCLK, GRTC, nRF54L-generation UARTE DMA.TX) — firmware_survival::nrf54l15_smoke/nrf54l15_zephyr. No nRF54L15 silicon diff — no bench board."
+    note: "RRAM-based (NVM at 0x0, 1524 KB; 256 KB SRAM, initial SP at 0x2004_0000) rather than flash. Boots a bare smoke fixture and UNMODIFIED upstream Zephyr hello_world through the real nrfx/Zephyr boot path (TAMPC approtect gate, nRF54L CLOCK XO/LFCLK, GRTC, nRF54L-generation UARTE DMA.TX) — firmware_survival::nrf54l15_smoke/nrf54l15_zephyr. The single-ended SAADC model covers its nRF54L PSELP, gain, 0.9 V reference, and 12-bit EasyDMA conversion path. No nRF54L15 silicon diff — no bench board."
     offline_tests:
       - "firmware_survival::nrf54l15_smoke / nrf54l15_zephyr"
+      - "cosim_nrf54l15_dk_analog::nrf54l15_dk_ntc_and_diode_netlists_reach_distinct_saadc_channels"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9496,9 +9515,13 @@ boards:
       - crates/core/src/peripherals/nrf52/temp.rs
       - crates/core/src/peripherals/nrf52/timer.rs
       - crates/core/src/peripherals/nrf54l/clock.rs
+      - crates/core/src/peripherals/nrf54l/factory.rs
       - crates/core/src/peripherals/nrf54l/grtc.rs
+      - crates/core/src/peripherals/nrf54l/mod.rs
+      - crates/core/src/peripherals/nrf54l/saadc.rs
       - crates/core/src/peripherals/nrf54l/twim.rs
       - crates/core/src/peripherals/nrf54l/uarte.rs
+      - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
 

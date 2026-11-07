@@ -1,0 +1,23 @@
+# ATmega2561 with a nonlinear diode load line routed into ADC0.
+# The standalone package has no Arduino-style analog pin aliases, so this
+# uses the supported explicit ADC channel route.
+name: "atmega2561-analog-diode"
+chip: "../../configs/chips/atmega2561.yaml"
+cpu_hz: 16000000
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "adc.adc.0_volts"
+    config:
+      vdd: 5.0
+      netlist_text: |
+        Vcc supply 0 dc 5
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"

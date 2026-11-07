@@ -15,7 +15,7 @@
 //!
 //! | Element | Line |
 //! |---|---|
-//! | Resistor | `R<name> n1 n2 <value> [beta=<K> [tnom=<°C>] [temp=<°C>]]` |
+//! | Resistor | `R<name> n1 n2 <value> [beta=<K> [tnom=<°C>] [temp=<°C>]] [tc1=<1/°C> [tc2=<1/°C²>] [tnom=<°C>] [temp=<°C>]` |
 //! | Capacitor | `C<name> n1 n2 <value> [ic=<v>]` |
 //! | Inductor | `L<name> n1 n2 <value> [ic=<i>]` |
 //! | Mutual inductance | `K<name> L<name1> L<name2> <k>` |
@@ -24,9 +24,9 @@
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
 //! | Diode | `D<name> n+ n- <model>` |
-//! | BJT | `Q<name> nc nb ne <model>` |
+//! | BJT | `Q<name> nc nb ne <model> [temp=<°C>]` |
 //! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
-//! | JFET | `J<name> nd ng ns <model>` |
+//! | JFET | `J<name> nd ng ns <model> [temp=<°C>]` |
 //! | VCVS | `E<name> n+ n- nc+ nc- <gain>` |
 //! | VCCS | `G<name> n+ n- nc+ nc- <transconductance>` |
 //! | CCCS | `F<name> n+ n- <vsource> <gain>` |
@@ -57,6 +57,12 @@
 //! carries a function is driven by the clock, so it cannot also be a routed
 //! input — [`super::adapter`] rejects a manifest that wires one.
 //!
+//! A resistor can use either an NTC `beta` law or the instance coefficients
+//! `tc1`/`tc2`, not both. The polynomial form is
+//! `R = Rnom · (1 + TC1·ΔT + TC2·ΔT²)`; `tnom` and `temp` default to 27 °C for
+//! that form. The temperature is imposed externally; self-heating is not
+//! modelled.
+//!
 //! ## Models
 //!
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
@@ -64,8 +70,12 @@
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (except diode forward/reverse knee currents `IK`/`IKF`/`IKR`, diode
 //! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
-//! soft-recovery parameter `VP`, BJT terminal resistances
-//! `RB`/`RC`/`RE`, JFET terminal
+//! soft-recovery parameter `VP`, BJT base-resistance rolloff `RBM`/`IRB`,
+//! terminal resistances `RB`/`RC`/`RE` and their `TRB*`/`TRBM*`/`TIRB*`/
+//! `TRC*`/`TRE*` temperature coefficients, diode transit-time temperature
+//! coefficients `TTT1`/`TTT2`, diode grading-coefficient temperature
+//! coefficients `TM1`/`TM2`, forward/reverse BJT transit-time temperature
+//! coefficients `TTF1`/`TTF2`/`TTR1`/`TTR2`, JFET terminal
 //! resistances `RD`/`RS`, the Parker–Skellern channel fit `B`, and
 //! gate-junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
 //! MOSFET terminal resistances `RD`/`RS` or `RSH` times instance `NRD`/`NRS`,
@@ -74,23 +84,53 @@
 //! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
-//! `AD`/`AS`/`PD`/`PS`, temperature coefficients, `NKF`, and most terminal
-//! resistances, …) are **accepted
-//! and ignored rather than rejected**. OPAMP and COMP `IBIAS`/`IOS` model the
+//! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients beyond the diode,
+//! BJT, and JFET laws below,
+//! and most terminal resistances, …) are **accepted and ignored rather than
+//! rejected**. A diode instance's `TEMP` and model `TNOM`/`EG`/`XTI` adjust
+//! its thermal voltage and saturation currents; `TCV`/`TBV1` adjusts the
+//! breakdown voltage; `TRS1`/`TRS2` adjust series resistance, `TTT1`/`TTT2`
+//! adjust transit time, and `TM1`/`TM2` adjust the depletion grading
+//! coefficient; `CJO` and `VJ` follow the diode junction-capacitance
+//! temperature law. A BJT
+//! instance's `TEMP` uses model `TNOM`/`EG`/
+//! `XTI`/`XTB` to adjust thermal voltage, transport and recombination
+//! saturation currents, and forward/reverse beta. BJT `CJE`/`VJE`/`MJE` and
+//! `CJC`/`VJC`/`MJC` follow the default silicon temperature law; `TMJE1`/`2`
+//! and `TMJC1`/`2` adjust the grading factors. `TLEVC=1` selects the linear
+//! `CTE`/`CTC` and `TVJE`/`TVJC` law. With `TEMP`, `TRB1`/`TRB2`, `TRBM1`/`TRBM2`,
+//! `TIRB1`/`TIRB2`, `TRC1`/`TRC2`, and `TRE1`/`TRE2` adjust base,
+//! minimum-base, base-current knee, collector, and emitter resistances using
+//! `ΔT = TEMP − TNOM`; `TRM1`/`TRM2` are accepted aliases for `TRBM1`/`TRBM2`.
+//! `TTF1`/`TTF2` and `TTR1`/`TTR2` apply the same polynomial to forward and
+//! reverse transit times. Without instance `TEMP`, these parameters retain
+//! their nominal values.
+//! A JFET instance `TEMP` adjusts level-1 `VTO` by `VTOTC` when supplied, or
+//! otherwise by `-TCV`; it adjusts `BETA` by `1.01^(BETATCE·ΔT)` when
+//! `BETATCE` is supplied, or otherwise by `(T/TNOM)^BEX` using absolute
+//! temperatures. The same `TEMP` scales gate-junction `IS` by the `EG`/`XTI`
+//! saturation-current law (defaults 1.11 eV and 3), moves `PB` and `CGS`/`CGD`
+//! by the diode depletion law with grading 0.5, and evaluates the gate diodes
+//! at the instance thermal voltage. Without instance `TEMP`, the historical
+//! channel and gate parameters are retained.
+//! OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
 //! models fixed differential resistance between them, and `RINCM` models an
 //! equal fixed resistance from each input to `V−`; `CMRR` converts common-mode
 //! input voltage relative to the supply midpoint into input-referred
 //! differential voltage;
 //! `CINCM` models common-mode capacitance from each input to `V−`, `CIND`
-//! models differential capacitance between the inputs, and `IQ` models a
-//! constant quiescent current from `V+` to `V−`. BJT
-//! high-injection rolloff from `IKF`/`IKR`, base recombination from
-//! `ISE`/`NE`/`ISC`/`NC`, and transit-time
+//! models differential capacitance between the inputs, `IQ` models a
+//! constant quiescent current from `V+` to `V−`, OPAMP `IOLIM` clamps the
+//! output current symmetrically, and OPAMP `SR` caps the gain-node capacitor
+//! current for large-signal slew. BJT
+//! high-injection rolloff from `IKF`/`IKR` with optional `NKF` (default
+//! exponent 0.5), base recombination from `ISE`/`NE`/`ISC`/`NC`, and transit-time
 //! charge from `TF`/`TR`,
 //! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
 //! resistances `RB`/`RC`/`RE` are modelled. JFET
-//! channel current uses the Parker–Skellern fit `B` (default 1); terminal
+//! channel current uses the Parker–Skellern fit `B` (default 1), with explicit
+//! instance `TEMP` laws for level-1 `VTO` and `BETA`; terminal
 //! resistances `RD`/`RS` create series resistors to its intrinsic
 //! drain/source nodes. MOSFET `RD`/`RS` and `RSH` multiplied by instance
 //! `NRD`/`NRS` do the same; level-1 `GAMMA`/`PHI` body effect is also modelled;
@@ -120,6 +160,29 @@
 //! `LM393`; [`builtin_model`] gives their values and where each came from.
 //! They are *-like* cards — the datasheet's headline numbers, not the vendor's
 //! macro model.
+//!
+//! A diode card may carry `TNOM` (measurement temperature, default 27 °C),
+//! `EG` (activation energy, default 1.11 eV), and `XTI` (saturation-current
+//! temperature exponent, default 3). On a diode instance, `TEMP=<°C>` applies
+//! ngspice's temperature law to the junction thermal voltage and to `IS` and
+//! `ISR` (using `N` and `NR`, respectively). Without `TEMP`, the historical
+//! fixed 300 K diode behavior is retained. `TCV` (also `TBV1`) applies a
+//! linear coefficient to `BV` when `TEMP` is present:
+//! `BV(T) = BV · (1 + TCV · (TEMP − TNOM))`. `RS` uses the polynomial
+//! `RS(T) = RS · (1 + TRS1·ΔT + TRS2·ΔT²)`, where `TRS` aliases `TRS1` and
+//! `ΔT = TEMP − TNOM`. `TTT1`/`TTT2` apply the SPICE polynomial to diode
+//! transit time and `TM1`/`TM2` apply it to the depletion grading coefficient.
+//!
+//! A BJT model uses `TNOM` (or `TREF`, default 27 °C), `EG` (default 1.11 eV),
+//! `XTI` (default 3), and `XTB` (default 0). On a BJT instance,
+//! `TEMP=<°C>` applies ngspice's level-1 temperature laws to thermal voltage,
+//! transport `IS`, base-recombination `ISE`/`ISC`, and forward/reverse beta
+//! `BF`/`BR`. Without instance `TEMP`, the historical fixed-300 K behavior is
+//! retained. `TRB*`/`TRM*` (also `TRBM*`)/`TIRB*`/`TRC*`/`TRE*` adjust
+//! terminal resistances, and `TTF*`/`TTR*` adjust forward/reverse transit time,
+//! all with `ΔT = TEMP − TNOM`. BJT junction depletion charge follows ngspice's
+//! default silicon temperature law, or its `TLEVC=1` linear coefficient form.
+//! Self-heating is not modeled.
 //!
 //! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
 //! knee current) to reduce the Shockley current under high injection. It may
@@ -302,6 +365,31 @@ pub struct NtcModel {
     pub temperature_celsius: f64,
 }
 
+/// Polynomial temperature coefficients on a resistor instance.
+///
+/// The resistor value is `Rnom · (1 + TC1·ΔT + TC2·ΔT²)`, where `ΔT` is the
+/// instance temperature minus the parameter measurement temperature. This is
+/// an externally specified temperature; the resistor does not self-heat.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ResistorTemperatureModel {
+    /// First-order coefficient, per °C.
+    pub tc1: f64,
+    /// Second-order coefficient, per °C².
+    pub tc2: f64,
+    /// Parameter measurement temperature, in °C.
+    pub nominal_temperature_celsius: f64,
+    /// Instance temperature, in °C.
+    pub temperature_celsius: f64,
+}
+
+impl ResistorTemperatureModel {
+    /// Resistance at `temperature_celsius`, in ohms.
+    pub fn resistance_ohms(self, nominal_ohms: f64) -> f64 {
+        let delta = self.temperature_celsius - self.nominal_temperature_celsius;
+        nominal_ohms * (1.0 + self.tc1 * delta + self.tc2 * delta * delta)
+    }
+}
+
 impl NtcModel {
     /// Resistance at `temperature_celsius`, in ohms.
     pub fn resistance_ohms(self, r25_ohms: f64) -> f64 {
@@ -311,7 +399,7 @@ impl NtcModel {
     }
 }
 
-/// `R<name> n1 n2 <ohms> [beta=<K> [tnom=<°C>] [temp=<°C>]]`.
+/// `R<name> n1 n2 <ohms>` with optional NTC or `tc1=`/`tc2=` temperature data.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Resistor {
     /// Element name as written, e.g. `R1`.
@@ -320,18 +408,24 @@ pub struct Resistor {
     pub a: NodeRef,
     /// Second terminal.
     pub b: NodeRef,
-    /// Fixed resistance, or NTC resistance at `ntc.nominal_temperature_celsius`.
+    /// Fixed resistance, or nominal resistance for either temperature model.
     pub ohms: f64,
     /// Optional external-temperature Beta model.
     pub ntc: Option<NtcModel>,
+    /// Optional first- and second-order temperature coefficient model.
+    pub temperature_coefficients: Option<ResistorTemperatureModel>,
 }
 
 impl Resistor {
     /// Resistance at the model's current external temperature, in ohms.
     pub fn resistance_ohms(&self) -> f64 {
-        self.ntc
-            .map(|ntc| ntc.resistance_ohms(self.ohms))
-            .unwrap_or(self.ohms)
+        if let Some(ntc) = self.ntc {
+            ntc.resistance_ohms(self.ohms)
+        } else if let Some(model) = self.temperature_coefficients {
+            model.resistance_ohms(self.ohms)
+        } else {
+            self.ohms
+        }
     }
 }
 
@@ -567,6 +661,15 @@ pub struct DiodeModel {
     /// Forward transit time `TT`, seconds. Zero disables diffusion charge,
     /// matching ngspice's default.
     pub tt: f64,
+    /// First and second order temperature coefficients for `TT`, per °C and
+    /// per °C². They apply when an instance `TEMP` is present.
+    pub ttt1: f64,
+    pub ttt2: f64,
+    /// First and second order temperature coefficients for the depletion
+    /// grading coefficient `M`, per °C and per °C². They apply with instance
+    /// `TEMP`.
+    pub tm1: f64,
+    pub tm2: f64,
     /// Soft reverse-recovery coefficient `VP`. Positive `VP` with positive
     /// `TT` replaces quasi-static diffusion charge with a first-order charge
     /// state; zero keeps `Qd = TT·Id`.
@@ -589,6 +692,58 @@ pub struct DiodeModel {
     /// Forward-bias depletion-capacitance transition coefficient `FC`, default
     /// 0.5.
     pub fc: f64,
+    /// Activation energy `EG` for the saturation-current temperature law, eV.
+    pub eg: f64,
+    /// Saturation-current temperature exponent `XTI`.
+    pub xti: f64,
+    /// Parameter measurement temperature `TNOM`, in Celsius.
+    pub tnom_celsius: f64,
+    /// Breakdown-voltage temperature coefficient `TCV`/`TBV1`, per Celsius
+    /// degree. Applies when an instance `TEMP` is present.
+    pub tcv: f64,
+    /// First-order series-resistance temperature coefficient `TRS1`/`TRS`,
+    /// per Celsius degree. Applies when an instance `TEMP` is present.
+    pub trs1: f64,
+    /// Second-order series-resistance temperature coefficient `TRS2`, per
+    /// Celsius degree squared. Applies when an instance `TEMP` is present.
+    pub trs2: f64,
+}
+
+impl DiodeModel {
+    /// Series resistance at the instance temperature, in ohms.
+    ///
+    /// With no instance temperature, retain the engine's historical fixed
+    /// 300 K behavior and nominal resistance. With `TEMP`, apply ngspice's
+    /// quadratic `TRS1`/`TRS2` law measured from `TNOM`.
+    pub fn series_resistance_ohms(self, temperature_celsius: Option<f64>) -> f64 {
+        let Some(temperature_celsius) = temperature_celsius else {
+            return self.rs;
+        };
+        let delta = temperature_celsius - self.tnom_celsius;
+        self.rs * (1.0 + self.trs1 * delta + self.trs2 * delta * delta)
+    }
+
+    /// Transit time at the instance temperature, in seconds.
+    ///
+    /// With no instance temperature, retain the engine's historical fixed
+    /// behavior. With `TEMP`, apply ngspice's quadratic `TTT1`/`TTT2` law
+    /// measured from `TNOM`.
+    pub fn transit_time_seconds(self, temperature_celsius: Option<f64>) -> f64 {
+        let Some(temperature_celsius) = temperature_celsius else {
+            return self.tt;
+        };
+        let delta = temperature_celsius - self.tnom_celsius;
+        self.tt * (1.0 + self.ttt1 * delta + self.ttt2 * delta * delta)
+    }
+
+    /// Depletion grading coefficient `M(T)` using the SPICE `TM1`/`TM2` law.
+    pub fn grading_coefficient_at_temperature(self, temperature_celsius: Option<f64>) -> f64 {
+        let Some(temperature_celsius) = temperature_celsius else {
+            return self.m;
+        };
+        let delta = temperature_celsius - self.tnom_celsius;
+        self.m * (1.0 + self.tm1 * delta + self.tm2 * delta * delta)
+    }
 }
 
 impl Default for DiodeModel {
@@ -602,6 +757,10 @@ impl Default for DiodeModel {
             nr: 2.0,
             rs: 0.0,
             tt: 0.0,
+            ttt1: 0.0,
+            ttt2: 0.0,
+            tm1: 0.0,
+            tm2: 0.0,
             vp: 0.0,
             bv: None,
             ibv: 1e-3,
@@ -610,6 +769,12 @@ impl Default for DiodeModel {
             vj: 1.0,
             m: 0.5,
             fc: 0.5,
+            eg: 1.11,
+            xti: 3.0,
+            tnom_celsius: 27.0,
+            tcv: 0.0,
+            trs1: 0.0,
+            trs2: 0.0,
         }
     }
 }
@@ -632,9 +797,11 @@ pub enum ComparatorOutput {
 /// ```text
 ///   gain node p:  G  = AOL/Rg · (v(in+) − v(in−) + VOS)  into p
 ///                 Rg = 1 MΩ   and   Cg = AOL/(2π·GBW·Rg)   from p to ground
+///                 optional SR limits the Cg current to ±(Cg·SR)
 ///   clamps:       D  p → (v+ − DROP_HI)      D  (v− + DROP_LO) → p
 ///   output:       Thevenin v(p) behind ROUT, i.e.  G = 1/ROUT into out,
-///                 R = ROUT from out to ground
+///                 R = ROUT from out to ground; optional IOLIM clamps the
+///                 current once |v(p) − v(out)| / ROUT reaches the limit
 /// ```
 ///
 /// So the DC gain is `AOL`, the single pole sits at `GBW/AOL`, the unity-gain
@@ -660,13 +827,22 @@ pub enum ComparatorOutput {
 /// supply midpoint into input-referred differential voltage using
 /// `10^(−CMRR/20)`. Omission gives ideal common-mode rejection.
 ///
+/// `IOLIM` is an optional, symmetric output-current limit. Below the limit the
+/// output follows the normal Thevenin source and `ROUT`; above it, the output
+/// current is held at `±IOLIM`. Omission leaves the output stage unlimited.
+///
+/// `SR` (volts/second) optionally caps the gain-node capacitor current to
+/// `Cg · SR`, where `Cg = AOL/(2π·GBW·Rg)`. A large input step therefore
+/// cannot move the gain node faster than the selected slew rate. The limit
+/// acts on transient capacitor current only; it preserves settled DC gain.
+/// Omission preserves the linear one-pole response.
+///
 /// `CINCM` is the common-mode capacitance from each input to `v−`; `CIND` is
 /// the differential capacitance between the inputs. Both are fixed linear
 /// capacitances with no voltage or temperature dependence. `IQ` is a fixed
 /// quiescent current from `v+` to `v−`, independent of signal and output load.
 ///
-/// What it does not model: slew-rate limiting beyond what the pole gives,
-/// output current limiting, and signal- or load-dependent supply current. The
+/// What it does not model: signal- or load-dependent supply current. The
 /// output stage's current returns through ground, not through the supply pins.
 /// Clamp current reaches `v+`/`v−`; input bias current reaches `v−`.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -696,6 +872,12 @@ pub struct OpAmpModel {
     pub iq: f64,
     /// Common-mode rejection ratio in dB. `None` means ideal rejection.
     pub cmrr: Option<f64>,
+    /// Symmetric output current limit, amps. `None` leaves the output stage
+    /// unlimited, preserving the ordinary Thevenin `ROUT` behavior.
+    pub ilim: Option<f64>,
+    /// Large-signal output slew rate `SR`, volts per second. `None` leaves the
+    /// gain-node capacitor current unlimited, preserving the one-pole response.
+    pub sr: Option<f64>,
     /// `DROP_HI`: how far below `v+` the output saturates, volts.
     pub drop_hi: f64,
     /// `DROP_LO`: how far above `v−` the output saturates, volts.
@@ -717,6 +899,8 @@ impl Default for OpAmpModel {
             cin_diff: 0.0,
             iq: 0.0,
             cmrr: None,
+            ilim: None,
+            sr: None,
             drop_hi: 0.0,
             drop_lo: 0.0,
         }
@@ -968,6 +1152,10 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     nr: 2.0,
     rs: 0.0,
     tt: 0.0,
+    ttt1: 0.0,
+    ttt2: 0.0,
+    tm1: 0.0,
+    tm2: 0.0,
     vp: 0.0,
     bv: None,
     ibv: 1e-3,
@@ -976,6 +1164,12 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     vj: 1.0,
     m: 0.5,
     fc: 0.5,
+    eg: 1.11,
+    xti: 3.0,
+    tnom_celsius: 27.0,
+    tcv: 0.0,
+    trs1: 0.0,
+    trs2: 0.0,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -1038,6 +1232,9 @@ pub struct BjtModel {
     /// Reverse beta rolloff knee current `IKR`, amps. Infinity disables
     /// reverse high-injection rolloff, matching ngspice's default.
     pub ikr: f64,
+    /// Optional high-current beta rolloff exponent `NKF` (`NK`). `None`
+    /// retains ngspice's default square-root form (exponent 0.5).
+    pub nkf: Option<f64>,
     /// Base-emitter recombination saturation current `ISE`, amps. Zero
     /// disables this current, matching ngspice's default.
     pub ise: f64,
@@ -1048,23 +1245,51 @@ pub struct BjtModel {
     pub isc: f64,
     /// Base-collector recombination emission coefficient `NC`.
     pub nc: f64,
+    /// Parameter measurement temperature `TNOM`, in Celsius.
+    pub tnom_celsius: f64,
+    /// Energy gap `EG` used by the saturation-current temperature law, in eV.
+    pub eg: f64,
+    /// Saturation-current temperature exponent `XTI`.
+    pub xti: f64,
+    /// Forward/reverse beta temperature exponent `XTB`.
+    pub xtb: f64,
     /// Zero-bias base-emitter depletion capacitance `CJE`, farads.
     pub cje: f64,
     /// Base-emitter junction potential `VJE`, volts.
     pub vje: f64,
     /// Base-emitter junction grading coefficient `MJE`.
     pub mje: f64,
+    /// First and second order temperature coefficients for `MJE`, per °C and
+    /// per °C².
+    pub tmje1: f64,
+    pub tmje2: f64,
     /// Zero-bias base-collector depletion capacitance `CJC`, farads.
     pub cjc: f64,
     /// Base-collector junction potential `VJC`, volts.
     pub vjc: f64,
     /// Base-collector junction grading coefficient `MJC`.
     pub mjc: f64,
+    /// First and second order temperature coefficients for `MJC`, per °C and
+    /// per °C².
+    pub tmjc1: f64,
+    pub tmjc2: f64,
+    /// BJT junction-capacitance temperature equation selector (`TLEVC`): 0
+    /// uses the silicon bandgap law, 1 uses the linear coefficient form.
+    pub tlevc: u8,
+    /// Linear temperature coefficients used by `TLEVC=1`, per °C.
+    pub cte: f64,
+    pub ctc: f64,
+    pub tvje: f64,
+    pub tvjc: f64,
     /// Forward-bias depletion-capacitance coefficient `FC`.
     pub fc: f64,
     /// Ideal forward transit time `TF`, seconds. Zero disables forward
     /// diffusion charge, matching ngspice's default.
     pub tf: f64,
+    /// First and second order temperature coefficients for `TF`, per °C and
+    /// per °C².
+    pub ttf1: f64,
+    pub ttf2: f64,
     /// Forward transit-time bias coefficient `XTF`. Zero disables the
     /// `VBC`/current-dependent adjustment, matching ngspice's default.
     pub xtf: f64,
@@ -1077,15 +1302,46 @@ pub struct BjtModel {
     /// Ideal reverse transit time `TR`, seconds. Zero disables reverse
     /// diffusion charge, matching ngspice's default.
     pub tr: f64,
-    /// Ohmic base terminal resistance `RB`, ohms. Zero disables the internal
-    /// base node, matching ngspice's default.
+    /// First and second order temperature coefficients for `TR`, per °C and
+    /// per °C².
+    pub ttr1: f64,
+    pub ttr2: f64,
+    /// Zero-bias base terminal resistance `RB`, ohms. Zero disables the
+    /// internal base node, matching ngspice's default.
     pub rb: f64,
+    /// First and second order temperature coefficients for `RB`, per °C and
+    /// per °C².
+    pub trb1: f64,
+    pub trb2: f64,
+    /// Minimum high-current base resistance `RBM`, ohms. `None` means RBM=RB,
+    /// ngspice's default, so the base resistance stays fixed.
+    pub rbm: Option<f64>,
+    /// First and second order temperature coefficients for `RBM`, per °C and
+    /// per °C².
+    pub trbm1: f64,
+    pub trbm2: f64,
+    /// Base current where resistance falls halfway from RB to RBM (`IRB`),
+    /// amps. Infinity disables the current-dependent transition, ngspice's
+    /// default.
+    pub irb: f64,
+    /// First and second order temperature coefficients for `IRB`, per °C and
+    /// per °C².
+    pub tirb1: f64,
+    pub tirb2: f64,
     /// Ohmic collector terminal resistance `RC`, ohms. Zero disables the
     /// internal collector node, matching ngspice's default.
     pub rc: f64,
+    /// First and second order temperature coefficients for `RC`, per °C and
+    /// per °C².
+    pub trc1: f64,
+    pub trc2: f64,
     /// Ohmic emitter terminal resistance `RE`, ohms. Zero disables the
     /// internal emitter node, matching ngspice's default.
     pub re: f64,
+    /// First and second order temperature coefficients for `RE`, per °C and
+    /// per °C².
+    pub tre1: f64,
+    pub tre2: f64,
 }
 
 impl BjtModel {
@@ -1101,25 +1357,55 @@ impl BjtModel {
             var: f64::INFINITY,
             ikf: f64::INFINITY,
             ikr: f64::INFINITY,
+            nkf: None,
             ise: 0.0,
             ne: 1.5,
             isc: 0.0,
             nc: 2.0,
+            tnom_celsius: 27.0,
+            eg: 1.11,
+            xti: 3.0,
+            xtb: 0.0,
             cje: 0.0,
             vje: 0.75,
             mje: 0.33,
+            tmje1: 0.0,
+            tmje2: 0.0,
             cjc: 0.0,
             vjc: 0.75,
             mjc: 0.33,
+            tmjc1: 0.0,
+            tmjc2: 0.0,
+            tlevc: 0,
+            cte: 0.0,
+            ctc: 0.0,
+            tvje: 0.0,
+            tvjc: 0.0,
             fc: 0.5,
             tf: 0.0,
+            ttf1: 0.0,
+            ttf2: 0.0,
             xtf: 0.0,
             vtf: f64::INFINITY,
             itf: 0.0,
             tr: 0.0,
+            ttr1: 0.0,
+            ttr2: 0.0,
             rb: 0.0,
+            trb1: 0.0,
+            trb2: 0.0,
+            rbm: None,
+            trbm1: 0.0,
+            trbm2: 0.0,
+            irb: f64::INFINITY,
+            tirb1: 0.0,
+            tirb2: 0.0,
             rc: 0.0,
+            trc1: 0.0,
+            trc2: 0.0,
             re: 0.0,
+            tre1: 0.0,
+            tre2: 0.0,
         }
     }
 }
@@ -1207,6 +1493,9 @@ pub struct MosModel {
     /// Intrinsic channel charge formulation. `WardDutton` is an engine
     /// extension selected by `CHARGEMOD=WARD_DUTTON`; `Meyer` is the default.
     pub channel_charge_model: MosChannelChargeModel,
+    /// Parameter measurement temperature `TNOM`, in Celsius. Only used when
+    /// an instance supplies `TEMP`.
+    pub tnom_celsius: f64,
 }
 
 /// Resolved parameters of a `.model <name> NJF|PJF(...)` card, SPICE
@@ -1239,6 +1528,22 @@ pub struct JfetModel {
     pub pb: f64,
     /// Forward-bias depletion-capacitance coefficient `FC`.
     pub fc: f64,
+    /// Parameter measurement temperature `TNOM`, in Celsius.
+    pub tnom_celsius: f64,
+    /// Alternative threshold temperature coefficient. When supplied, even as
+    /// zero, this takes precedence over `TCV`.
+    pub vtotc: Option<f64>,
+    /// Threshold voltage temperature coefficient used when `VTOTC` is absent.
+    pub tcv: f64,
+    /// Alternative beta temperature coefficient. When supplied, even as
+    /// zero, this takes precedence over `BEX`.
+    pub betatce: Option<f64>,
+    /// Mobility temperature exponent used when `BETATCE` is absent.
+    pub bex: f64,
+    /// Gate-junction activation energy `EG`, eV, for the `IS` temperature law.
+    pub eg: f64,
+    /// Gate-junction saturation-current temperature exponent `XTI`.
+    pub xti: f64,
 }
 
 impl JfetModel {
@@ -1256,6 +1561,13 @@ impl JfetModel {
             cgd: 0.0,
             pb: 1.0,
             fc: 0.5,
+            tnom_celsius: 27.0,
+            vtotc: None,
+            tcv: 0.0,
+            betatce: None,
+            bex: 0.0,
+            eg: 1.11,
+            xti: 3.0,
         }
     }
 }
@@ -1292,11 +1604,13 @@ impl MosModel {
             cgbo: 0.0,
             tox: None,
             channel_charge_model: MosChannelChargeModel::Meyer,
+            tnom_celsius: 27.0,
         }
     }
 }
 
 /// One `.model` card, before it is attached to an element.
+#[allow(clippy::large_enum_variant)] // Keep cards Copy; model cards are small, short-lived parser values.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModelCard {
     /// A `D` card.
@@ -1374,6 +1688,10 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             nr: 2.0,
             rs: 6.0,
             tt: 0.0,
+            ttt1: 0.0,
+            ttt2: 0.0,
+            tm1: 0.0,
+            tm2: 0.0,
             vp: 0.0,
             bv: Some(4.8),
             ibv: 49e-3,
@@ -1382,6 +1700,12 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             vj: 1.0,
             m: 0.5,
             fc: 0.5,
+            eg: 1.11,
+            xti: 3.0,
+            tnom_celsius: 27.0,
+            tcv: 0.0,
+            trs1: 0.0,
+            trs2: 0.0,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -1396,6 +1720,10 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             nr: 2.0,
             rs: 0.0525,
             tt: 0.0,
+            ttt1: 0.0,
+            ttt2: 0.0,
+            tm1: 0.0,
+            tm2: 0.0,
             vp: 0.0,
             bv: Some(6.7),
             ibv: 10e-3,
@@ -1404,6 +1732,12 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             vj: 1.0,
             m: 0.5,
             fc: 0.5,
+            eg: 1.11,
+            xti: 3.0,
+            tnom_celsius: 27.0,
+            tcv: 0.0,
+            trs1: 0.0,
+            trs2: 0.0,
         })),
         "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
         "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
@@ -1433,6 +1767,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             cin_diff: 0.0,
             iq: 0.0,
             cmrr: None,
+            ilim: None,
+            sr: None,
             drop_hi: 1.5,
             drop_lo: 0.0,
         })),
@@ -1582,13 +1918,21 @@ pub struct Diode {
     pub anode: NodeRef,
     /// Cathode.
     pub cathode: NodeRef,
-    /// The junction's anode side: the same node as [`Self::anode`] when
-    /// `RS = 0`, and the internal node `<name>#internal` when it is not.
+    /// The junction's anode side: the same node as [`Self::anode`] when the
+    /// temperature-adjusted `RS` is zero, and `<name>#internal` when it is not.
     pub junction_anode: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
     /// Resolved model parameters.
     pub model: DiodeModel,
+    /// Model parameters with `CJO`, `VJ`, `M`, and `TT` adjusted for this
+    /// instance's temperature.
+    pub operating_model: DiodeModel,
+    /// Model series resistance after applying the instance `TEMP`, in ohms.
+    pub series_resistance_ohms: f64,
+    /// Instance junction temperature in Celsius. `None` preserves the
+    /// engine's historical fixed 300 K behavior.
+    pub temperature_celsius: Option<f64>,
     /// The breakdown voltage the reverse exponential is actually written
     /// about — ngspice's `tBrkdwnV`, i.e. `BV` moved so that the current at
     /// `−BV` is `IBV` — or `None` when the model has no `BV`. See
@@ -1633,6 +1977,58 @@ pub struct Vccs {
     pub gm: f64,
 }
 
+/// A symmetric current limit in an op-amp's Norton output stage.
+///
+/// The output current is `clamp((v(drive) − v(output))/ROUT, −IOLIM, IOLIM)`.
+/// The drive node is only a control: the limited output current does not load
+/// the op-amp's internal gain node.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutputCurrentLimit {
+    /// Element name (`<X name>#go`).
+    pub name: String,
+    /// Internal op-amp drive node, used as the Thevenin voltage.
+    pub drive: NodeRef,
+    /// External output pin.
+    pub output: NodeRef,
+    /// Small-signal output resistance, ohms.
+    pub rout: f64,
+    /// Symmetric output-current limit, amps.
+    pub ilim: f64,
+}
+
+/// A slew-limited op-amp compensation-stage transconductance.
+///
+/// At an operating point it contributes the full `gm · error` current. During
+/// transient steps it compensates the gain-node `Rg` path and clamps only the
+/// capacitor current to `±ilim`, preserving settled gain while limiting
+/// `Cg · dV/dt`. `error` includes differential input, common-mode error
+/// relative to the supply midpoint, and input offset voltage.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SlewLimitedVccs {
+    /// Element name (`<X name>#g`).
+    pub name: String,
+    /// Terminal the current leaves the circuit at.
+    pub p: NodeRef,
+    /// Terminal the current returns to the circuit at.
+    pub n: NodeRef,
+    /// Non-inverting input pin.
+    pub input_plus: NodeRef,
+    /// Inverting input pin.
+    pub input_minus: NodeRef,
+    /// Positive supply pin, used for the common-mode reference.
+    pub vcc: NodeRef,
+    /// Negative supply pin, used for the common-mode reference.
+    pub vee: NodeRef,
+    /// Transconductance, siemens.
+    pub gm: f64,
+    /// Common-mode error gain (linear, not dB).
+    pub cm_gain: f64,
+    /// Input offset voltage, volts.
+    pub vos: f64,
+    /// Symmetric gain-node capacitor current limit, amps.
+    pub ilim: f64,
+}
+
 /// `F<name> n+ n- <vsource> <gain>` — current-controlled current source: a
 /// current `gain · i(vsource)` flows from `n+` through the source to `n−`.
 #[derive(Debug, Clone, PartialEq)]
@@ -1669,7 +2065,7 @@ pub struct Ccvs {
     pub ohms: f64,
 }
 
-/// `Q<name> nc nb ne <model>` — an Ebers–Moll bipolar transistor.
+/// `Q<name> nc nb ne <model> [temp=<°C>]` — an Ebers–Moll bipolar transistor.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bjt {
     /// Element name as written, e.g. `Q1`.
@@ -1693,9 +2089,16 @@ pub struct Bjt {
     pub model_name: String,
     /// Resolved model parameters.
     pub model: BjtModel,
+    /// Model parameters adjusted for this instance's explicit `TEMP`.
+    pub operating_model: BjtModel,
+    /// Junction thermal voltage for this instance.
+    pub thermal_voltage: f64,
+    /// Explicit instance junction temperature in Celsius. `None` preserves
+    /// the engine's historical fixed 300 K behavior.
+    pub temperature_celsius: Option<f64>,
 }
 
-/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` — a level-1 MOSFET.
+/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [temp=<°C>]` — a level-1 MOSFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mosfet {
     /// Element name as written, e.g. `M1`.
@@ -1717,9 +2120,16 @@ pub struct Mosfet {
     pub bulk: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
-    /// Resolved model parameters.
+    /// Resolved model parameters, as written on the card.
     pub model: MosModel,
-    /// `KP·W/L`, A/V² — the transconductance the solver actually stamps.
+    /// `KP`, `VTO`, `PHI`, bulk-junction `IS`/`PB` and junction capacitances
+    /// adjusted for this instance's explicit `TEMP`; what the solver stamps.
+    pub operating_model: MosModel,
+    /// Explicit instance temperature, in Celsius. `None` preserves the
+    /// historical fixed-300 K behaviour.
+    pub temperature_celsius: Option<f64>,
+    /// `KP·W/L` at the instance temperature, A/V² — the transconductance the
+    /// solver actually stamps.
     pub beta: f64,
     /// Instance channel width `W`, metres.
     pub w: f64,
@@ -1740,6 +2150,15 @@ pub struct Mosfet {
 }
 
 impl Mosfet {
+    /// Thermal voltage of the bulk junctions: `kT/q` at the explicit instance
+    /// `TEMP`, or the engine's fixed [`super::device::THERMAL_VOLTAGE`].
+    pub fn thermal_voltage(&self) -> f64 {
+        self.temperature_celsius
+            .map_or(super::device::THERMAL_VOLTAGE, |celsius| {
+                super::device::thermal_voltage_at_temperature(celsius + 273.15)
+            })
+    }
+
     /// Effective linear gate overlap capacitances in G-S, G-D, G-B order.
     pub fn overlap_capacitances(&self) -> [f64; 3] {
         [
@@ -1752,7 +2171,7 @@ impl Mosfet {
     /// Zero-bias bottom and sidewall capacitances for the selected bulk
     /// junction, in that order.
     pub fn bulk_junction_capacitances(&self, drain: bool) -> [f64; 2] {
-        let model = self.model;
+        let model = self.operating_model;
         if drain {
             [
                 if model.cbd_given {
@@ -1779,7 +2198,7 @@ impl Mosfet {
     /// otherwise the bulk-source junction is used. Explicit `CBD`/`CBS`
     /// overrides only the bottom-area term; sidewall charge remains additive.
     pub fn bulk_junction_charge(&self, voltage: f64, drain: bool) -> (f64, f64) {
-        let model = self.model;
+        let model = self.operating_model;
         let [bottom, sidewall] = self.bulk_junction_capacitances(drain);
         let (bottom_charge, bottom_capacitance) =
             super::device::junction_depletion_charge(voltage, bottom, model.pb, model.mj, model.fc);
@@ -1793,7 +2212,7 @@ impl Mosfet {
     }
 }
 
-/// `J<name> nd ng ns <model>` — a SPICE level-1 JFET.
+/// `J<name> nd ng ns <model> [temp=<°C>]` — a SPICE level-1 JFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Jfet {
     /// Element name as written, e.g. `J1`.
@@ -1812,6 +2231,23 @@ pub struct Jfet {
     pub model_name: String,
     /// Resolved model parameters.
     pub model: JfetModel,
+    /// Channel `VTO`/`BETA` and gate-junction `IS`/`PB`/`CGS`/`CGD` adjusted
+    /// for this instance's explicit `TEMP`.
+    pub operating_model: JfetModel,
+    /// Explicit instance temperature, in Celsius. `None` preserves the
+    /// historical channel and gate parameters.
+    pub temperature_celsius: Option<f64>,
+}
+
+impl Jfet {
+    /// Thermal voltage of the gate junctions: `kT/q` at the explicit instance
+    /// `TEMP`, or the engine's fixed [`super::device::THERMAL_VOLTAGE`].
+    pub fn thermal_voltage(&self) -> f64 {
+        self.temperature_celsius
+            .map_or(super::device::THERMAL_VOLTAGE, |celsius| {
+                super::device::thermal_voltage_at_temperature(celsius + 273.15)
+            })
+    }
 }
 
 /// Voltage threshold control for a switch: closes from the voltage between
@@ -1903,6 +2339,10 @@ pub struct Circuit {
     pub ccvs: Vec<Ccvs>,
     /// Power-balance sinks, one per lowered `BUCK`.
     pub power_sinks: Vec<PowerSink>,
+    /// Op-amp output stages with an explicit `IOLIM`.
+    pub output_current_limits: Vec<OutputCurrentLimit>,
+    /// Op-amp compensation stages with an explicit `SR`.
+    pub slew_limited_vccs: Vec<SlewLimitedVccs>,
     /// `.ic V(node)=value` entries, in netlist order.
     pub node_ic: Vec<(usize, f64)>,
 }
@@ -2004,6 +2444,8 @@ impl Circuit {
             || self.cccs.iter().any(|e| matches(&e.name))
             || self.ccvs.iter().any(|e| matches(&e.name))
             || self.power_sinks.iter().any(|e| matches(&e.name))
+            || self.output_current_limits.iter().any(|e| matches(&e.name))
+            || self.slew_limited_vccs.iter().any(|e| matches(&e.name))
             || pending_mutuals.iter().any(|e| matches(&e.name))
     }
 
@@ -2019,6 +2461,8 @@ impl Circuit {
             || !self.mosfets.is_empty()
             || !self.jfets.is_empty()
             || !self.power_sinks.is_empty()
+            || !self.output_current_limits.is_empty()
+            || !self.slew_limited_vccs.is_empty()
     }
 
     /// True when any independent source carries a transient function, so the
@@ -2159,6 +2603,7 @@ struct PendingDevice {
     as_: Option<f64>,
     pd: Option<f64>,
     ps: Option<f64>,
+    temperature_celsius: Option<f64>,
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -2272,38 +2717,52 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     return Err(ctx.parse_err("resistance must be non-zero"));
                 }
                 let mut beta = None;
-                let mut nominal_temperature_celsius = 25.0;
-                let mut temperature_celsius = 25.0;
+                let mut nominal_temperature_celsius = None;
+                let mut temperature_celsius = None;
+                let mut tc1 = None;
+                let mut tc2 = None;
                 let mut has_temperature_parameter = false;
                 for token in &rest[3..] {
                     let (key, value) = token.split_once('=').ok_or_else(|| {
-                        ctx.parse_err("NTC resistor options must be `beta=`, `tnom=` or `temp=`")
+                        ctx.parse_err(
+                            "resistor options must be `beta=`, `tc1=`, `tc2=`, `tnom=` or `temp=`",
+                        )
                     })?;
                     let parsed = ctx.value(value, key)?;
                     match key.to_ascii_lowercase().as_str() {
                         "beta" => beta = Some(parsed),
+                        "tc1" => tc1 = Some(parsed),
+                        "tc2" => tc2 = Some(parsed),
                         "tnom" => {
-                            nominal_temperature_celsius = parsed;
+                            nominal_temperature_celsius = Some(parsed);
                             has_temperature_parameter = true;
                         }
                         "temp" => {
-                            temperature_celsius = parsed;
+                            temperature_celsius = Some(parsed);
                             has_temperature_parameter = true;
                         }
                         other => {
                             return Err(ctx.parse_err(format!(
-                                "unknown resistor parameter `{other}`; expected `beta`, `tnom` or `temp`"
+                                "unknown resistor parameter `{other}`; expected `beta`, `tc1`, `tc2`, `tnom` or `temp`"
                             )))
                         }
                     }
                 }
-                if beta.is_none() && has_temperature_parameter {
-                    return Err(ctx.parse_err("`tnom` and `temp` require an NTC `beta`"));
+                let has_temperature_coefficients = tc1.is_some() || tc2.is_some();
+                if beta.is_some() && has_temperature_coefficients {
+                    return Err(ctx.parse_err("an NTC `beta` model cannot also use `tc1` or `tc2`"));
+                }
+                if beta.is_none() && !has_temperature_coefficients && has_temperature_parameter {
+                    return Err(ctx.parse_err(
+                        "`tnom` and `temp` require an NTC `beta` or resistor `tc1`/`tc2`",
+                    ));
                 }
                 let ntc = if let Some(beta) = beta {
                     if beta <= 0.0 || ohms <= 0.0 {
                         return Err(ctx.parse_err("an NTC resistor needs `beta > 0` and `r25 > 0`"));
                     }
+                    let nominal_temperature_celsius = nominal_temperature_celsius.unwrap_or(25.0);
+                    let temperature_celsius = temperature_celsius.unwrap_or(25.0);
                     if nominal_temperature_celsius <= -273.15 || temperature_celsius <= -273.15 {
                         return Err(ctx.parse_err("NTC temperatures must be above absolute zero"));
                     }
@@ -2319,6 +2778,35 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 } else {
                     None
                 };
+                let temperature_coefficients = if has_temperature_coefficients {
+                    let tc1 = tc1.unwrap_or(0.0);
+                    let tc2 = tc2.unwrap_or(0.0);
+                    let nominal_temperature_celsius = nominal_temperature_celsius.unwrap_or(27.0);
+                    let temperature_celsius = temperature_celsius.unwrap_or(27.0);
+                    if !tc1.is_finite() || !tc2.is_finite() {
+                        return Err(ctx.parse_err("resistor `tc1` and `tc2` must be finite"));
+                    }
+                    if nominal_temperature_celsius <= -273.15 || temperature_celsius <= -273.15 {
+                        return Err(
+                            ctx.parse_err("resistor temperatures must be above absolute zero")
+                        );
+                    }
+                    let model = ResistorTemperatureModel {
+                        tc1,
+                        tc2,
+                        nominal_temperature_celsius,
+                        temperature_celsius,
+                    };
+                    let resistance = model.resistance_ohms(ohms);
+                    if !resistance.is_finite() || resistance <= 0.0 {
+                        return Err(ctx.parse_err(
+                            "resistor temperature coefficients must produce a finite positive resistance",
+                        ));
+                    }
+                    Some(model)
+                } else {
+                    None
+                };
                 let a = circuit.intern(rest[0]);
                 let b = circuit.intern(rest[1]);
                 circuit.resistors.push(Resistor {
@@ -2327,6 +2815,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     b,
                     ohms,
                     ntc,
+                    temperature_coefficients,
                 });
             }
             'C' => {
@@ -2429,7 +2918,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     'Q' => (3, "Q<name> nc nb ne <model>"),
                     'M' => (
                         4,
-                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]",
+                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [temp=<°C>]",
                     ),
                     _ => (3, "J<name> nd ng ns <model>"),
                 };
@@ -2445,6 +2934,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let mut as_ = None;
                 let mut pd = None;
                 let mut ps = None;
+                let mut temperature_celsius = None;
                 for token in &rest[terminals + 1..] {
                     let (key, value) = token
                         .split_once('=')
@@ -2458,6 +2948,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "as" if letter == 'M' => as_ = Some(ctx.value(value, "as")?),
                         "pd" if letter == 'M' => pd = Some(ctx.value(value, "pd")?),
                         "ps" if letter == 'M' => ps = Some(ctx.value(value, "ps")?),
+                        "temp" => temperature_celsius = Some(ctx.value(value, "temp")?),
                         other => {
                             return Err(ctx.parse_err(format!(
                                 "unknown parameter `{other}`; expected `{shape}`"
@@ -2479,6 +2970,12 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     .any(|geometry| !geometry.is_finite() || geometry < 0.0)
                 {
                     return Err(ctx.parse_err("ad, as, pd and ps must be >= 0 and finite"));
+                }
+                if matches!(temperature_celsius, Some(temp) if !temp.is_finite() || temp <= -273.15)
+                {
+                    return Err(ctx.parse_err(
+                        "device TEMP must be finite and above absolute zero (-273.15 °C)",
+                    ));
                 }
                 // The terminals are interned now so that node numbering still
                 // follows netlist order; the model is bound after the last
@@ -2502,6 +2999,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     as_,
                     pd,
                     ps,
+                    temperature_celsius,
                 });
             }
             'E' | 'G' => {
@@ -2607,6 +3105,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     as_: None,
                     pd: None,
                     ps: None,
+                    temperature_celsius: None,
                 });
             }
             'S' => {
@@ -2903,6 +3402,18 @@ fn bind_models(
                 };
                 if model.is <= 0.0
                     || model.n <= 0.0
+                    || !model.eg.is_finite()
+                    || model.eg < 0.0
+                    || !model.xti.is_finite()
+                    || !model.tnom_celsius.is_finite()
+                    || model.tnom_celsius <= -273.15
+                    || !model.tcv.is_finite()
+                    || !model.trs1.is_finite()
+                    || !model.trs2.is_finite()
+                    || !model.ttt1.is_finite()
+                    || !model.ttt2.is_finite()
+                    || !model.tm1.is_finite()
+                    || !model.tm2.is_finite()
                     || !model.ik.is_finite()
                     || model.ik < 0.0
                     || !model.ikr.is_finite()
@@ -2911,6 +3422,7 @@ fn bind_models(
                     || model.isr < 0.0
                     || !model.nr.is_finite()
                     || model.nr <= 0.0
+                    || !model.rs.is_finite()
                     || model.rs < 0.0
                     || !model.tt.is_finite()
                     || model.tt < 0.0
@@ -2927,29 +3439,105 @@ fn bind_models(
                     || model.fc >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI/TCV/TRS1/TRS2/TTT1/TTT2/TM1/TM2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
+                let (is_at_temperature, thermal_voltage) =
+                    if let Some(temp_celsius) = device.temperature_celsius {
+                        let temperature_kelvin = temp_celsius + 273.15;
+                        let nominal_kelvin = model.tnom_celsius + 273.15;
+                        (
+                            super::device::diode_saturation_current_at_temperature(
+                                model.is,
+                                model.n,
+                                model.eg,
+                                model.xti,
+                                nominal_kelvin,
+                                temperature_kelvin,
+                            ),
+                            super::device::thermal_voltage_at_temperature(temperature_kelvin),
+                        )
+                    } else {
+                        (model.is, super::device::THERMAL_VOLTAGE)
+                    };
                 let breakdown = match model.bv {
                     None => None,
-                    Some(bv) => {
+                    Some(nominal_bv) => {
                         let nbv = model.nbv.unwrap_or(model.n);
-                        if bv <= 0.0 || model.ibv <= 0.0 || nbv <= 0.0 {
+                        if nominal_bv <= 0.0 || model.ibv <= 0.0 || nbv <= 0.0 {
                             return Err(ctx.parse_err(
                                 "a diode model with BV needs BV > 0, IBV > 0 and NBV > 0"
                                     .to_string(),
                             ));
                         }
-                        Some(super::device::breakdown_voltage(
-                            bv, model.ibv, model.is, nbv,
+                        let bv = device
+                            .temperature_celsius
+                            .map(|temperature| {
+                                nominal_bv * (1.0 + model.tcv * (temperature - model.tnom_celsius))
+                            })
+                            .unwrap_or(nominal_bv);
+                        if !bv.is_finite() || bv <= 0.0 {
+                            return Err(ctx.parse_err(
+                                "temperature-adjusted diode BV must be finite and > 0".to_string(),
+                            ));
+                        }
+                        Some(super::device::breakdown_voltage_at_thermal_voltage(
+                            bv,
+                            model.ibv,
+                            is_at_temperature,
+                            nbv,
+                            thermal_voltage,
                         ))
                     }
                 };
+                let series_resistance_ohms =
+                    model.series_resistance_ohms(device.temperature_celsius);
+                if !series_resistance_ohms.is_finite() || series_resistance_ohms < 0.0 {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted diode RS must be finite and >= 0".to_string(),
+                    ));
+                }
+                let mut operating_model = model;
+                operating_model.tt = model.transit_time_seconds(device.temperature_celsius);
+                operating_model.m =
+                    model.grading_coefficient_at_temperature(device.temperature_celsius);
+                if let Some(temperature_celsius) = device.temperature_celsius {
+                    let nominal_kelvin = model.tnom_celsius + 273.15;
+                    let temperature_kelvin = temperature_celsius + 273.15;
+                    (operating_model.cjo, operating_model.vj) =
+                        super::device::diode_depletion_parameters_at_temperature(
+                            model.cjo,
+                            model.vj,
+                            operating_model.m,
+                            nominal_kelvin,
+                            temperature_kelvin,
+                        );
+                }
+                if !operating_model.tt.is_finite() || operating_model.tt < 0.0 {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted diode TT must be finite and >= 0".to_string(),
+                    ));
+                }
+                if !operating_model.m.is_finite() || operating_model.m < 0.0 {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted diode M must be finite and >= 0".to_string(),
+                    ));
+                }
+                if !operating_model.cjo.is_finite()
+                    || operating_model.cjo < 0.0
+                    || !operating_model.vj.is_finite()
+                    || operating_model.vj <= 0.0
+                {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted diode CJO must be finite and >= 0 and VJ must be finite and > 0"
+                            .to_string(),
+                    ));
+                }
                 // A series resistance needs somewhere to drop its voltage, so
                 // it gets the internal node SPICE also creates. It is a real
                 // node: it costs an unknown and `v(d1#internal)` probes it.
-                let junction_anode = if model.rs > 0.0 {
+                let junction_anode = if series_resistance_ohms > 0.0 {
                     circuit.intern(&format!("{}#internal", device.name))
                 } else {
                     device.nodes[0]
@@ -2961,6 +3549,9 @@ fn bind_models(
                     junction_anode,
                     model_name: device.model_name,
                     model,
+                    operating_model,
+                    series_resistance_ohms,
+                    temperature_celsius: device.temperature_celsius,
                     breakdown,
                 });
             }
@@ -2973,25 +3564,74 @@ fn bind_models(
                         ctx.parse_err("a BJT model needs IS > 0, BF > 0 and BR > 0".to_string())
                     );
                 }
+                if !model.is.is_finite()
+                    || !model.bf.is_finite()
+                    || !model.br.is_finite()
+                    || !model.ise.is_finite()
+                    || !model.isc.is_finite()
+                    || !model.tnom_celsius.is_finite()
+                    || model.tnom_celsius <= -273.15
+                    || !model.eg.is_finite()
+                    || model.eg < 0.0
+                    || !model.xti.is_finite()
+                    || !model.xtb.is_finite()
+                    || !model.trb1.is_finite()
+                    || !model.trb2.is_finite()
+                    || !model.trbm1.is_finite()
+                    || !model.trbm2.is_finite()
+                    || !model.tirb1.is_finite()
+                    || !model.tirb2.is_finite()
+                    || !model.trc1.is_finite()
+                    || !model.trc2.is_finite()
+                    || !model.tre1.is_finite()
+                    || !model.tre2.is_finite()
+                    || !model.ttf1.is_finite()
+                    || !model.ttf2.is_finite()
+                    || !model.ttr1.is_finite()
+                    || !model.ttr2.is_finite()
+                    || !model.tmje1.is_finite()
+                    || !model.tmje2.is_finite()
+                    || !model.tmjc1.is_finite()
+                    || !model.tmjc2.is_finite()
+                    || !model.cte.is_finite()
+                    || !model.ctc.is_finite()
+                    || !model.tvje.is_finite()
+                    || !model.tvjc.is_finite()
+                    || model.tlevc > 1
+                {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs finite temperature parameters, TLEVC=0 or 1, and TNOM above absolute zero"
+                            .to_string(),
+                    ));
+                }
                 if model.nf <= 0.0 || model.nr <= 0.0 {
                     return Err(ctx.parse_err("a BJT model needs NF > 0 and NR > 0".to_string()));
                 }
-                if !(model.vaf >= 0.0) || !(model.var >= 0.0) {
+                if model.vaf.is_nan() || model.vaf < 0.0 || model.var.is_nan() || model.var < 0.0 {
                     return Err(ctx.parse_err(
                         "a BJT model needs VAF >= 0 and VAR >= 0 (zero disables Early effect)"
                             .to_string(),
                     ));
                 }
-                if !(model.ikf > 0.0) || !(model.ikr > 0.0) {
+                if model.ikf.is_nan() || model.ikf <= 0.0 || model.ikr.is_nan() || model.ikr <= 0.0
+                {
                     return Err(ctx.parse_err(
                         "a BJT model needs IKF > 0 and IKR > 0 (infinity disables high-injection rolloff)"
                             .to_string(),
                     ));
                 }
-                if !(model.ise >= 0.0)
-                    || !(model.isc >= 0.0)
-                    || !(model.ne > 0.0)
-                    || !(model.nc > 0.0)
+                if model.nkf.is_some_and(|nkf| !nkf.is_finite() || nkf < 0.0) {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs NKF >= 0 when the high-current beta exponent is supplied"
+                            .to_string(),
+                    ));
+                }
+                if model.ise < 0.0
+                    || model.isc < 0.0
+                    || model.ne <= 0.0
+                    || model.nc <= 0.0
+                    || !model.ne.is_finite()
+                    || !model.nc.is_finite()
                 {
                     return Err(ctx.parse_err(
                         "a BJT model needs ISE >= 0, ISC >= 0, NE > 0 and NC > 0".to_string(),
@@ -3016,8 +3656,8 @@ fn bind_models(
                     || model.tf < 0.0
                     || !model.xtf.is_finite()
                     || model.xtf < 0.0
-                    || !(model.vtf >= 0.0)
                     || model.vtf.is_nan()
+                    || model.vtf < 0.0
                     || !model.itf.is_finite()
                     || model.itf < 0.0
                     || !model.tr.is_finite()
@@ -3030,12 +3670,70 @@ fn bind_models(
                 }
                 if !model.rb.is_finite()
                     || model.rb < 0.0
+                    || model
+                        .rbm
+                        .is_some_and(|rbm| !rbm.is_finite() || rbm < 0.0 || rbm > model.rb)
+                    || model.irb.is_nan()
+                    || model.irb <= 0.0
                     || !model.rc.is_finite()
                     || model.rc < 0.0
                     || !model.re.is_finite()
                     || model.re < 0.0
                 {
-                    return Err(ctx.parse_err("a BJT model needs RB/RC/RE >= 0".to_string()));
+                    return Err(ctx.parse_err(
+                        "a BJT model needs RB/RC/RE >= 0, 0 <= RBM <= RB and IRB > 0".to_string(),
+                    ));
+                }
+                let (operating_model, thermal_voltage) =
+                    super::device::bjt_parameters_at_temperature(model, device.temperature_celsius);
+                if !operating_model.is.is_finite()
+                    || operating_model.is <= 0.0
+                    || !operating_model.bf.is_finite()
+                    || operating_model.bf <= 0.0
+                    || !operating_model.br.is_finite()
+                    || operating_model.br <= 0.0
+                    || !operating_model.ise.is_finite()
+                    || operating_model.ise < 0.0
+                    || !operating_model.isc.is_finite()
+                    || operating_model.isc < 0.0
+                    || !operating_model.tf.is_finite()
+                    || operating_model.tf < 0.0
+                    || !operating_model.tr.is_finite()
+                    || operating_model.tr < 0.0
+                    || !operating_model.rb.is_finite()
+                    || operating_model.rb < 0.0
+                    || (model.rb > 0.0 && operating_model.rb <= 0.0)
+                    || operating_model.rbm.is_some_and(|rbm| {
+                        !rbm.is_finite() || rbm < 0.0 || rbm > operating_model.rb
+                    })
+                    || operating_model.irb.is_nan()
+                    || operating_model.irb <= 0.0
+                    || (model.irb.is_finite() && !operating_model.irb.is_finite())
+                    || !operating_model.rc.is_finite()
+                    || operating_model.rc < 0.0
+                    || (model.rc > 0.0 && operating_model.rc <= 0.0)
+                    || !operating_model.re.is_finite()
+                    || operating_model.re < 0.0
+                    || (model.re > 0.0 && operating_model.re <= 0.0)
+                    || !operating_model.cje.is_finite()
+                    || operating_model.cje < 0.0
+                    || !operating_model.vje.is_finite()
+                    || operating_model.vje <= 0.0
+                    || !operating_model.mje.is_finite()
+                    || operating_model.mje < 0.0
+                    || !operating_model.cjc.is_finite()
+                    || operating_model.cjc < 0.0
+                    || !operating_model.vjc.is_finite()
+                    || operating_model.vjc <= 0.0
+                    || !operating_model.mjc.is_finite()
+                    || operating_model.mjc < 0.0
+                    || !thermal_voltage.is_finite()
+                    || thermal_voltage <= 0.0
+                {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted BJT currents, beta, resistances and junction charges must remain finite and valid"
+                            .to_string(),
+                    ));
                 }
                 let junction_node = |circuit: &mut Circuit,
                                      terminal: NodeRef,
@@ -3053,9 +3751,12 @@ fn bind_models(
                     }
                     Ok(circuit.intern(&internal_name))
                 };
-                let junction_c = junction_node(circuit, device.nodes[0], model.rc, "collector")?;
-                let junction_b = junction_node(circuit, device.nodes[1], model.rb, "base")?;
-                let junction_e = junction_node(circuit, device.nodes[2], model.re, "emitter")?;
+                let junction_c =
+                    junction_node(circuit, device.nodes[0], operating_model.rc, "collector")?;
+                let junction_b =
+                    junction_node(circuit, device.nodes[1], operating_model.rb, "base")?;
+                let junction_e =
+                    junction_node(circuit, device.nodes[2], operating_model.re, "emitter")?;
                 circuit.bjts.push(Bjt {
                     name: device.name,
                     c: device.nodes[0],
@@ -3066,6 +3767,9 @@ fn bind_models(
                     junction_e,
                     model_name: device.model_name,
                     model,
+                    operating_model,
+                    thermal_voltage,
+                    temperature_celsius: device.temperature_celsius,
                 });
             }
             'M' => {
@@ -3189,6 +3893,42 @@ fn bind_models(
                         "MOSFET `CHARGEMOD=WARD_DUTTON` needs `TOX` to define oxide charge",
                     ));
                 }
+                if !model.tnom_celsius.is_finite() || model.tnom_celsius <= -273.15 {
+                    return Err(ctx.parse_err(
+                        "a MOSFET model needs a finite TNOM above absolute zero (-273.15 °C)",
+                    ));
+                }
+                if device.temperature_celsius.is_some() && model.phi <= 0.0 {
+                    return Err(ctx.parse_err(
+                        "a MOSFET instance with TEMP needs PHI > 0 for the surface-potential law",
+                    ));
+                }
+                let operating_model =
+                    super::device::mos_parameters_at_temperature(model, device.temperature_celsius);
+                if !operating_model.vto.is_finite()
+                    || !operating_model.kp.is_finite()
+                    || operating_model.kp <= 0.0
+                    || !(operating_model.kp * w / l).is_finite()
+                    || !operating_model.is.is_finite()
+                    || operating_model.is <= 0.0
+                    || !operating_model.phi.is_finite()
+                    || (device.temperature_celsius.is_some() && operating_model.phi <= 0.0)
+                    || !operating_model.pb.is_finite()
+                    || operating_model.pb <= 0.0
+                    || [
+                        operating_model.cbd,
+                        operating_model.cbs,
+                        operating_model.cj,
+                        operating_model.cjsw,
+                    ]
+                    .into_iter()
+                    .any(|capacitance| !capacitance.is_finite() || capacitance < 0.0)
+                {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted MOSFET parameters must be finite with KP, IS, PB > 0, \
+                         PHI > 0 and junction capacitances >= 0",
+                    ));
+                }
                 let junction_node = |circuit: &mut Circuit,
                                      terminal: NodeRef,
                                      resistance: f64,
@@ -3244,7 +3984,9 @@ fn bind_models(
                     bulk: device.nodes[3],
                     model_name: device.model_name,
                     model,
-                    beta: model.kp * w / l,
+                    operating_model,
+                    temperature_celsius: device.temperature_celsius,
+                    beta: operating_model.kp * w / l,
                     w,
                     l,
                     ad,
@@ -3259,8 +4001,23 @@ fn bind_models(
                 let ModelCard::Jfet(model) = card else {
                     return Err(wrong_kind("J"));
                 };
-                if model.beta <= 0.0 || model.is <= 0.0 {
-                    return Err(ctx.parse_err("a JFET model needs BETA > 0 and IS > 0"));
+                if !model.vto.is_finite()
+                    || !model.beta.is_finite()
+                    || model.beta <= 0.0
+                    || !model.is.is_finite()
+                    || model.is <= 0.0
+                    || !model.tnom_celsius.is_finite()
+                    || model.tnom_celsius <= -273.15
+                    || !model.tcv.is_finite()
+                    || !model.bex.is_finite()
+                    || !model.eg.is_finite()
+                    || !model.xti.is_finite()
+                    || model.vtotc.is_some_and(|value| !value.is_finite())
+                    || model.betatce.is_some_and(|value| !value.is_finite())
+                {
+                    return Err(ctx.parse_err(
+                        "a JFET model needs finite temperature parameters, TNOM above absolute zero, BETA > 0 and IS > 0",
+                    ));
                 }
                 if !model.rd.is_finite()
                     || model.rd < 0.0
@@ -3285,6 +4042,27 @@ fn bind_models(
                     return Err(
                         ctx.parse_err("a JFET model needs CGS/CGD >= 0, PB > 0 and 0 <= FC < 1")
                     );
+                }
+                let operating_model = super::device::jfet_parameters_at_temperature(
+                    model,
+                    device.temperature_celsius,
+                );
+                if !operating_model.vto.is_finite()
+                    || !operating_model.beta.is_finite()
+                    || operating_model.beta <= 0.0
+                    || !operating_model.is.is_finite()
+                    || operating_model.is <= 0.0
+                    || !operating_model.pb.is_finite()
+                    || operating_model.pb <= 0.0
+                    || !operating_model.cgs.is_finite()
+                    || operating_model.cgs < 0.0
+                    || !operating_model.cgd.is_finite()
+                    || operating_model.cgd < 0.0
+                {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted JFET parameters must be finite with BETA, IS, PB > 0 \
+                         and CGS/CGD >= 0",
+                    ));
                 }
                 let junction_node = |circuit: &mut Circuit,
                                      terminal: NodeRef,
@@ -3313,6 +4091,8 @@ fn bind_models(
                     junction_s,
                     model_name: device.model_name,
                     model,
+                    operating_model,
+                    temperature_celsius: device.temperature_celsius,
                 });
             }
             _ => unreachable!("device letter filtered above"),
@@ -3505,12 +4285,22 @@ fn parse_model(
         match (&mut card, param.as_str()) {
             (ModelCard::Diode(model), "IS") => model.is = value,
             (ModelCard::Diode(model), "N") => model.n = value,
+            (ModelCard::Diode(model), "EG") => model.eg = value,
+            (ModelCard::Diode(model), "XTI") => model.xti = value,
+            (ModelCard::Diode(model), "TNOM") => model.tnom_celsius = value,
+            (ModelCard::Diode(model), "TCV" | "TBV1") => model.tcv = value,
+            (ModelCard::Diode(model), "TRS" | "TRS1") => model.trs1 = value,
+            (ModelCard::Diode(model), "TRS2") => model.trs2 = value,
             (ModelCard::Diode(model), "IK" | "IKF") => model.ik = value,
             (ModelCard::Diode(model), "IKR") => model.ikr = value,
             (ModelCard::Diode(model), "ISR") => model.isr = value,
             (ModelCard::Diode(model), "NR") => model.nr = value,
             (ModelCard::Diode(model), "RS") => model.rs = value,
             (ModelCard::Diode(model), "TT") => model.tt = value,
+            (ModelCard::Diode(model), "TTT1") => model.ttt1 = value,
+            (ModelCard::Diode(model), "TTT2") => model.ttt2 = value,
+            (ModelCard::Diode(model), "TM1") => model.tm1 = value,
+            (ModelCard::Diode(model), "TM2") => model.tm2 = value,
             (ModelCard::Diode(model), "VP") => model.vp = value,
             (ModelCard::Diode(model), "BV") => model.bv = Some(value),
             (ModelCard::Diode(model), "IBV") => model.ibv = value,
@@ -3531,6 +4321,8 @@ fn parse_model(
             (ModelCard::OpAmp(model), "RINCM") => model.rin_cm = value,
             (ModelCard::OpAmp(model), "IQ") => model.iq = value,
             (ModelCard::OpAmp(model), "CMRR") => model.cmrr = Some(value),
+            (ModelCard::OpAmp(model), "IOLIM") => model.ilim = Some(value),
+            (ModelCard::OpAmp(model), "SR") => model.sr = Some(value),
             (ModelCard::OpAmp(model), "DROP_HI") => model.drop_hi = value,
             (ModelCard::OpAmp(model), "DROP_LO") => model.drop_lo = value,
             (ModelCard::Comparator(model), "AOL") => model.aol = value,
@@ -3552,7 +4344,7 @@ fn parse_model(
             (ModelCard::OpAmp(_), other) => {
                 return Err(ctx.parse_err(format!(
                     "`{other}` is not an OPAMP parameter; expected AOL, GBW, ROUT, VOS, \
-                     IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, DROP_HI, DROP_LO"
+                     IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, IOLIM, SR, DROP_HI, DROP_LO"
                 )))
             }
             (ModelCard::Regulator(model), param) => {
@@ -3602,25 +4394,60 @@ fn parse_model(
             (ModelCard::Bjt(model), "VAR" | "VB") => model.var = value,
             (ModelCard::Bjt(model), "IKF") => model.ikf = value,
             (ModelCard::Bjt(model), "IKR") => model.ikr = value,
+            (ModelCard::Bjt(model), "NKF" | "NK") => model.nkf = Some(value),
             (ModelCard::Bjt(model), "ISE") => model.ise = value,
             (ModelCard::Bjt(model), "NE") => model.ne = value,
             (ModelCard::Bjt(model), "ISC") => model.isc = value,
             (ModelCard::Bjt(model), "NC") => model.nc = value,
+            (ModelCard::Bjt(model), "TNOM" | "TREF") => model.tnom_celsius = value,
+            (ModelCard::Bjt(model), "EG") => model.eg = value,
+            (ModelCard::Bjt(model), "XTI") => model.xti = value,
+            (ModelCard::Bjt(model), "XTB") => model.xtb = value,
             (ModelCard::Bjt(model), "CJE") => model.cje = value,
             (ModelCard::Bjt(model), "VJE" | "PE") => model.vje = value,
             (ModelCard::Bjt(model), "MJE" | "ME") => model.mje = value,
+            (ModelCard::Bjt(model), "TMJE1") => model.tmje1 = value,
+            (ModelCard::Bjt(model), "TMJE2") => model.tmje2 = value,
             (ModelCard::Bjt(model), "CJC") => model.cjc = value,
             (ModelCard::Bjt(model), "VJC" | "PC") => model.vjc = value,
             (ModelCard::Bjt(model), "MJC" | "MC") => model.mjc = value,
+            (ModelCard::Bjt(model), "TMJC1") => model.tmjc1 = value,
+            (ModelCard::Bjt(model), "TMJC2") => model.tmjc2 = value,
+            (ModelCard::Bjt(model), "TLEVC") => {
+                if value != 0.0 && value != 1.0 {
+                    return Err(ctx.parse_err("BJT TLEVC must be 0 or 1".to_string()));
+                }
+                model.tlevc = value as u8;
+            }
+            (ModelCard::Bjt(model), "CTE") => model.cte = value,
+            (ModelCard::Bjt(model), "CTC") => model.ctc = value,
+            (ModelCard::Bjt(model), "TVJE") => model.tvje = value,
+            (ModelCard::Bjt(model), "TVJC") => model.tvjc = value,
             (ModelCard::Bjt(model), "FC") => model.fc = value,
             (ModelCard::Bjt(model), "TF") => model.tf = value,
+            (ModelCard::Bjt(model), "TTF1") => model.ttf1 = value,
+            (ModelCard::Bjt(model), "TTF2") => model.ttf2 = value,
             (ModelCard::Bjt(model), "XTF") => model.xtf = value,
             (ModelCard::Bjt(model), "VTF") => model.vtf = value,
             (ModelCard::Bjt(model), "ITF") => model.itf = value,
             (ModelCard::Bjt(model), "TR") => model.tr = value,
+            (ModelCard::Bjt(model), "TTR1") => model.ttr1 = value,
+            (ModelCard::Bjt(model), "TTR2") => model.ttr2 = value,
             (ModelCard::Bjt(model), "RB") => model.rb = value,
+            (ModelCard::Bjt(model), "TRB1") => model.trb1 = value,
+            (ModelCard::Bjt(model), "TRB2") => model.trb2 = value,
+            (ModelCard::Bjt(model), "RBM") => model.rbm = Some(value),
+            (ModelCard::Bjt(model), "TRBM1" | "TRM1") => model.trbm1 = value,
+            (ModelCard::Bjt(model), "TRBM2" | "TRM2") => model.trbm2 = value,
+            (ModelCard::Bjt(model), "IRB") => model.irb = value,
+            (ModelCard::Bjt(model), "TIRB1") => model.tirb1 = value,
+            (ModelCard::Bjt(model), "TIRB2") => model.tirb2 = value,
             (ModelCard::Bjt(model), "RC") => model.rc = value,
+            (ModelCard::Bjt(model), "TRC1") => model.trc1 = value,
+            (ModelCard::Bjt(model), "TRC2") => model.trc2 = value,
             (ModelCard::Bjt(model), "RE") => model.re = value,
+            (ModelCard::Bjt(model), "TRE1") => model.tre1 = value,
+            (ModelCard::Bjt(model), "TRE2") => model.tre2 = value,
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,
@@ -3656,6 +4483,7 @@ fn parse_model(
             (ModelCard::Mos(model), "CGDO") => model.cgdo = value,
             (ModelCard::Mos(model), "CGBO") => model.cgbo = value,
             (ModelCard::Mos(model), "TOX") => model.tox = Some(value),
+            (ModelCard::Mos(model), "TNOM") => model.tnom_celsius = value,
             // A level this engine cannot honour is the one parameter worth
             // refusing: silently solving a BSIM card with Shichman-Hodges
             // would be wrong by orders of magnitude, not by a capacitance.
@@ -3677,6 +4505,13 @@ fn parse_model(
             (ModelCard::Jfet(model), "CGD") => model.cgd = value,
             (ModelCard::Jfet(model), "PB") => model.pb = value,
             (ModelCard::Jfet(model), "FC") => model.fc = value,
+            (ModelCard::Jfet(model), "TNOM") => model.tnom_celsius = value,
+            (ModelCard::Jfet(model), "VTOTC") => model.vtotc = Some(value),
+            (ModelCard::Jfet(model), "TCV") => model.tcv = value,
+            (ModelCard::Jfet(model), "BETATCE") => model.betatce = Some(value),
+            (ModelCard::Jfet(model), "BEX") => model.bex = value,
+            (ModelCard::Jfet(model), "EG") => model.eg = value,
+            (ModelCard::Jfet(model), "XTI") => model.xti = value,
             (ModelCard::Jfet(_), "LEVEL") if value != 1.0 => {
                 return Err(ctx.parse_err(format!(
                     "JFET `LEVEL={value}` is not modelled in-core; only level 1 is. Use \
@@ -3719,6 +4554,10 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     nr: 2.0,
     rs: 0.0,
     tt: 0.0,
+    ttt1: 0.0,
+    ttt2: 0.0,
+    tm1: 0.0,
+    tm2: 0.0,
     vp: 0.0,
     bv: None,
     ibv: 1e-3,
@@ -3727,6 +4566,12 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     vj: 1.0,
     m: 0.5,
     fc: 0.5,
+    eg: 1.11,
+    xti: 3.0,
+    tnom_celsius: 27.0,
+    tcv: 0.0,
+    trs1: 0.0,
+    trs2: 0.0,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V
@@ -3758,6 +4603,7 @@ impl Lowering<'_> {
             b,
             ohms,
             ntc: None,
+            temperature_coefficients: None,
         });
     }
 
@@ -3769,6 +4615,24 @@ impl Lowering<'_> {
             b,
             farads,
             ic: None,
+        });
+    }
+
+    fn output_current_limit(
+        &mut self,
+        part: &str,
+        drive: NodeRef,
+        output: NodeRef,
+        rout: f64,
+        ilim: f64,
+    ) {
+        let name = self.name(part);
+        self.circuit.output_current_limits.push(OutputCurrentLimit {
+            name,
+            drive,
+            output,
+            rout,
+            ilim,
         });
     }
 
@@ -3828,6 +4692,9 @@ impl Lowering<'_> {
             junction_anode: anode,
             model_name: "clamp".to_string(),
             model: MACRO_CLAMP_DIODE,
+            operating_model: MACRO_CLAMP_DIODE,
+            series_resistance_ohms: 0.0,
+            temperature_celsius: None,
             breakdown: None,
         });
     }
@@ -3999,11 +4866,28 @@ fn lower_opamp(
     check_input_resistance(ctx, model.rin)?;
     check_common_mode_input_resistance(ctx, model.rin_cm)?;
     check_quiescent_current(ctx, model.iq)?;
+    if let Some(ilim) = model.ilim {
+        if !ilim.is_finite() || ilim <= 0.0 {
+            return Err(ctx.parse_err("IOLIM must be finite and positive"));
+        }
+    }
     let cm_gain = check_common_mode_rejection(ctx, model.cmrr)?;
     let (ibias_plus, ibias_minus) = input_bias_currents(ctx, model.ibias, model.ios)?;
     let rg = MACRO_GAIN_RESISTANCE;
     let gm = model.aol / rg;
     let cg = model.aol / (2.0 * core::f64::consts::PI * model.gbw * rg);
+    let slew_current_limit = if let Some(sr) = model.sr {
+        if !sr.is_finite() || sr <= 0.0 {
+            return Err(ctx.parse_err("SR must be finite and positive"));
+        }
+        let ilim = cg * sr;
+        if !ilim.is_finite() || ilim <= 0.0 {
+            return Err(ctx.parse_err("SR and macro parameters produce an invalid slew current"));
+        }
+        Some(ilim)
+    } else {
+        None
+    };
 
     let mut lower = Lowering {
         circuit,
@@ -4016,20 +4900,37 @@ fn lower_opamp(
         lower.current("iq", vcc, vee, model.iq);
     }
     let p = lower.node("p");
-    // gm·(v(in+) − v(in−)) flows from ground through the source into p.
-    lower.vccs("g", None, p, inp, inn, gm);
-    if cm_gain > 0.0 {
-        // The input-referred error is the common-mode voltage relative to the
-        // midpoint of the supply rails, attenuated by 10^(−CMRR/20).
-        let gcm = 0.5 * gm * cm_gain;
-        lower.vccs("gcmp", None, p, inp, vee, gcm);
-        lower.vccs("gcmm", None, p, inn, vcc, gcm);
+    if let Some(ilim) = slew_current_limit {
+        let source = SlewLimitedVccs {
+            name: lower.name("g"),
+            p: None,
+            n: p,
+            input_plus: inp,
+            input_minus: inn,
+            vcc,
+            vee,
+            gm,
+            cm_gain,
+            vos: model.vos,
+            ilim,
+        };
+        lower.circuit.slew_limited_vccs.push(source);
+    } else {
+        // gm·(v(in+) − v(in−)) flows from ground through the source into p.
+        lower.vccs("g", None, p, inp, inn, gm);
+        if cm_gain > 0.0 {
+            // The input-referred error is the common-mode voltage relative to
+            // the midpoint of the supply rails, attenuated by 10^(−CMRR/20).
+            let gcm = 0.5 * gm * cm_gain;
+            lower.vccs("gcmp", None, p, inp, vee, gcm);
+            lower.vccs("gcmm", None, p, inn, vcc, gcm);
+        }
+        if model.vos != 0.0 {
+            lower.current("ios", None, p, gm * model.vos);
+        }
     }
     lower.resistor("rg", p, None, rg);
     lower.capacitor("cg", p, None, cg);
-    if model.vos != 0.0 {
-        lower.current("ios", None, p, gm * model.vos);
-    }
     if ibias_plus != 0.0 {
         lower.current("ibp", inp, vee, ibias_plus);
     }
@@ -4040,9 +4941,13 @@ fn lower_opamp(
     let lo = lower.offset_rail("lo", vee, model.drop_lo, false);
     lower.clamp("dhi", p, hi);
     lower.clamp("dlo", lo, p);
-    // Thevenin v(p) behind ROUT, as a Norton pair: no extra unknown.
-    lower.vccs("go", None, out, p, None, 1.0 / model.rout);
-    lower.resistor("ro", out, None, model.rout);
+    if let Some(ilim) = model.ilim {
+        lower.output_current_limit("go", p, out, model.rout, ilim);
+    } else {
+        // Thevenin v(p) behind ROUT, as a Norton pair: no extra unknown.
+        lower.vccs("go", None, out, p, None, 1.0 / model.rout);
+        lower.resistor("ro", out, None, model.rout);
+    }
     Ok(())
 }
 
@@ -4150,6 +5055,7 @@ fn lower_comparator(
                 cgbo: 0.0,
                 tox: None,
                 channel_charge_model: MosChannelChargeModel::Meyer,
+                tnom_celsius: 27.0,
             };
             lower.circuit.mosfets.push(Mosfet {
                 name,
@@ -4161,6 +5067,8 @@ fn lower_comparator(
                 bulk: vee,
                 model_name: "comparator-output".to_string(),
                 model: mos,
+                operating_model: mos,
+                temperature_celsius: None,
                 beta: kp,
                 w: 1.0,
                 l: 1.0,
@@ -4324,6 +5232,9 @@ fn lower_regulator(
         junction_anode: a,
         model_name: "limit-clamp".to_string(),
         model: REGULATOR_LIMIT_DIODE,
+        operating_model: REGULATOR_LIMIT_DIODE,
+        series_resistance_ohms: 0.0,
+        temperature_celsius: None,
         breakdown: None,
     });
 

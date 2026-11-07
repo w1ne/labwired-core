@@ -35,6 +35,10 @@ flash: { base: 0x20220000, size: "128KiB" }
 # maps only the window firmware uses.
 ram: { base: 0x80000000, size: "8MiB" }
 flash_boot_alias: false
+io_voltage_v: 3.3
+# Simulation-only input thresholds for the generic co-simulation endpoints
+# below. These are test assumptions, not MPFS MSS or fabric GPIO specifications.
+gpio_input_thresholds: { vil: 0.3, vih: 0.7 }
 memory_regions:
   # L2 cache as loosely-integrated memory (Zephyr `sram0`).
   - { name: "l2lim", base: 0x08000000, size: "512KiB" }
@@ -115,3 +119,10 @@ peripherals:
     type: "stub"
     base_address: 0x37020000
     size: "4KB"
+  # Abstract inputs for generic analog co-simulation. This does not model the
+  # MSS GPIO registers, FPGA fabric I/O, package pads, or board connectors.
+  - id: "cosim_inputs"
+    type: "input_pin_bank"
+    base_address: 0xF0000000
+    size: "4KB"
+    config: { pin_count: 2 }

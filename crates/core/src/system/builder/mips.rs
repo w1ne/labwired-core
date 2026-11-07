@@ -26,7 +26,12 @@ pub(super) fn build(
             ))
         }
     };
-    let mut bus = SystemBus::from_config_with_plugins(req.chip, req.system, plugins)
+    static PIC32_GPIO_PLUGIN: crate::system::mips::Pic32GpioPlugin =
+        crate::system::mips::Pic32GpioPlugin;
+    let mut mips_plugins = Vec::with_capacity(plugins.len() + 1);
+    mips_plugins.extend_from_slice(plugins);
+    mips_plugins.push(&PIC32_GPIO_PLUGIN);
+    let mut bus = SystemBus::from_config_with_plugins(req.chip, req.system, &mips_plugins)
         .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
     let console = ConsoleCapture::for_manifest(req.system);
     let sink = console.heard_sink();

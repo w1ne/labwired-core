@@ -256,6 +256,19 @@ peripherals:
     size: "4KB"
     irq: 215
 
+  # The application-core secure SAADC is at 0x500D5000 / IRQ 213 in the
+  # nRF54LM20A SVD. Its GLOBAL_SAADC_S definition derives from the same
+  # nRF54L-family register layout used by nRF54L15, so both profiles share the
+  # family conversion model and schema. PSELP remains an explicit channel
+  # selector; this does not infer board pad aliases.
+  - id: "saadc"
+    type: "nrf54l_saadc"
+    base_address: 0x500D5000
+    size: "4KB"
+    irq: 213
+    config:
+      debug_schema: "../peripherals/nrf54l15/global_saadc_s.yaml"
+
   # ── EGU ────────────────────────────────────────────────────────────────
   - id: "egu10"
     type: "nrf52840_egu"

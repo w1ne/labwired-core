@@ -52,6 +52,20 @@ Port. Drift between the two breaks `test_nucleo_l476rg_demo_survival` in
 | I2C1_SCL     | PB6   | AF4    | header CN10 D5                        |
 | I2C1_SDA     | PB7   | AF4    | header CN7 D7                         |
 | ADC1_IN5     | PA0   | analog | header CN8 A0                         |
+| ADC1_IN6     | PA1   | analog | header CN8 A1                         |
+
+## Mixed-signal GPIO inputs
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) connects a
+generic Beta NTC divider and an unrelated Shockley diode load line to PA0 and
+PA1. The MNA solver produces each pin voltage, then the STM32L476 GPIO input
+thresholds determine the levels read from GPIOA_IDR. The integration test also
+checks Schmitt hysteresis at intermediate NTC temperatures on both this profile
+and the read-only CI fixture.
+
+This proves external analog voltages can drive the board's modeled digital
+inputs. It does not prove firmware ADC conversions or an ADC pad-to-channel
+mapping.
 
 ## What's modelled
 

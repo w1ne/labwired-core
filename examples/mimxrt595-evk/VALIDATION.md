@@ -27,6 +27,7 @@ there is no MIMXRT595 bench part, and no Renode parity claim is made.
 | USART register layout and edge cases (PSELID present bits and lock, registers dark until `PERSEL` = USART, TX gating, RX FIFO 16 deep + `EMPTYRX`, FIFO interrupt status, 7-bit `DATALEN`, snapshot round-trip) | unit-tested | `lpc::flexcomm_usart::tests` (9 tests) |
 | GPIO `DIRSET`/`DIRCLR`, `SET`, `CLR`, `NOT`, byte pin `B`, word pin `W`, `MPIN` under `MASK`, `PIN` read-back | smoke-tested | `set red` … `clr all`; the whole-port `pin0` read proves no other pin moved |
 | GPIO input with an external level | smoke-tested | `sw1=1 sw2=1`: the released board buttons hold P0_25/P0_10 high |
+| Generic analog netlists routed into GPIO inputs | integration-tested | `cargo test -p labwired-core --test cosim_mimxrt595_analog`: Beta NTC to SW2/P0_10 and unrelated Shockley diode to SW1/P0_25; solved voltages and `PIN[0]` levels asserted. Voltage thresholds are test-only assumptions because no verified silicon threshold record is available; this is not ADC support. |
 | GPIO layout and edge cases | unit-tested | `lpc::gpio::tests` (7 tests) |
 | CLKCTL/RSTCTL SET/CLR aliases, IOPCTL plain bank, CLKCTL0/1 status bits | unit-tested | `lpc::rt5xx_ctl::tests` (9 tests) |
 | Determinism (same inputs → same output) | smoke-tested | two runs each of the smoke, Zephyr hello and Zephyr synchronization: identical `uart.log` and `snapshot.json` |

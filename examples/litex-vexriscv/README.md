@@ -67,6 +67,7 @@ cd core
 | LiteX UART (0x60001800) | modelled — polled console path |
 | LiteX timer (0x60002800) | modelled — countdown, `update_value` latch, zero-event status/pending |
 | LiteX SPI / Ethernet / MMCM CSRs | `type: stub` — zeros |
+| Generic analog input seam (0xF0000000) | simulation-only `input_pin_bank`; not LiteX gateware, physical pads, or ADC conversion |
 | Main RAM (0x40000000, 256 MB on the SoC) | not mapped — see `VALIDATION.md` |
 | LEDs / switches / buttons | not modelled — see `EXTERNAL_COMPONENTS.md` |
 

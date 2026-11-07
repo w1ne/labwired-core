@@ -38,6 +38,11 @@ hb=0 odsr=00000000 btn=1
 `odsr=` is the PIOC output-data register read from the model (PC10 = bit 10);
 `btn=1` is the released, pulled-up button on PA5.
 
+The analog co-simulation fixture routes a generic Beta NTC divider and
+Shockley diode to the EXT1 analog inputs PA17/PA18 through PIO's
+voltage-thresholded input path. It does not model ADC conversion or the
+board's touch/joystick controls.
+
 ## Smoke test
 
 ```bash

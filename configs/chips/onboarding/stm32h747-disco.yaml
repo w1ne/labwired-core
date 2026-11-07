@@ -29,6 +29,10 @@ peripherals:
   type: stm32h7_adc
   bus: sysbus
   base_address: 1476550656
+  # RM0433 §25: H7 ADC (DEEPPWD/ADVREGEN bring-up, PCSEL, 16-bit DR).
+  # Without a profile the generic `adc` model falls back to the F1 map.
+  config:
+    profile: stm32h7
 - id: bdma
   type: stm32ldma
   bus: sysbus
@@ -65,6 +69,10 @@ peripherals:
   type: stm32h7_adc
   bus: sysbus
   base_address: 1073881088
+  # RM0433 §25: H7 ADC (DEEPPWD/ADVREGEN bring-up, PCSEL, 16-bit DR).
+  # Without a profile the generic `adc` model falls back to the F1 map.
+  config:
+    profile: stm32h7
 - id: rng
   type: stm32_rng
   bus: sysbus

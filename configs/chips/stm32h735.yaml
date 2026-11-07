@@ -514,3 +514,9 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32h735/dbgmcu.yaml"
       idcode: 0x10016483
+
+# External analog inputs on the STM32H735VG (DS13312 pin table). PA0 maps to
+# ADC1_INP16 and PA1 maps to ADC1_INP17; ADC2 and other analog pads stay unmapped.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 16 }
+  PA1: { peripheral: "adc1", channel: 17 }

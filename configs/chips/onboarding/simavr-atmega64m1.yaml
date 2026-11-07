@@ -13,7 +13,55 @@ flash:
 ram:
   base: 256
   size: 4KB
-peripherals: []
+# Register map checked against avr-libc 2.0.0 avr/iom64m1.h: the map
+# LabWired's ATmega16M1/64M1 core runs (AvrModel::Atmega64m1). PINB..PORTE
+# at 0x23..0x2E (no port A; port E is PE0..PE2), ADCL/ADCH 0x78/0x79, ADCSRA
+# 0x7A, ADCSRB 0x7B (no MUX5; bit 5 is AREFEN), ADMUX 0x7C (MUX4:0),
+# MCUCR.PUD bit 4 (0x55), SRAM 0x100..0x10FF. The CPU owns those registers;
+# each port is mirrored at 0x1_0000 + PINx and the ADC input side
+# (millivolts per channel, two bytes each, indexed by ADC number) sits at
+# 0x1_0200. ADC0 is PE2, ADC1..3 PD4..PD6, ADC4 PB7, ADC5 PB2, ADC6 PB5,
+# ADC7 PB6 and ADC8..10 PC4..PC6 (ATmega16M1/32M1/64M1 datasheet 8209F §1.2
+# and Table 22-5). VIL 0.2 / VIH 0.6 VCC are the Table 29-1 DC limits for
+# ports B, C, D and the XTAL pins as I/O.
+gpio_input_thresholds:
+  vil: 0.2
+  vih: 0.6
+peripherals:
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010023
+    size: "3"
+  - id: "portc"
+    type: "avr_gpio"
+    base_address: 0x00010026
+    size: "3"
+  - id: "portd"
+    type: "avr_gpio"
+    base_address: 0x00010029
+    size: "3"
+  - id: "porte"
+    type: "avr_gpio"
+    base_address: 0x0001002C
+    size: "3"
+  - id: "adc"
+    type: "avr_adc"
+    base_address: 0x00010200
+    size: "22"
+    config:
+      channels: 11
+analog_pins:
+  PE2: { peripheral: adc, channel: 0 }
+  PD4: { peripheral: adc, channel: 1 }
+  PD5: { peripheral: adc, channel: 2 }
+  PD6: { peripheral: adc, channel: 3 }
+  PB7: { peripheral: adc, channel: 4 }
+  PB2: { peripheral: adc, channel: 5 }
+  PB5: { peripheral: adc, channel: 6 }
+  PB6: { peripheral: adc, channel: 7 }
+  PC4: { peripheral: adc, channel: 8 }
+  PC5: { peripheral: adc, channel: 9 }
+  PC6: { peripheral: adc, channel: 10 }
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

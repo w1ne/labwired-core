@@ -51,11 +51,14 @@ flash_boot_alias: false
 
 pins:
   # Board-relevant pads (SAM E70 Xplained: LED0 on PC8, SW0 on PA11, the EDBG
-  # virtual COM port on USART1 RXD1 PA21 / TXD1 PB4).
+  # virtual COM port on USART1 RXD1 PA21 / TXD1 PB4). EXT1 exposes PC31 as
+  # ADC(+) / AFE1_AD6 and PA19 as ADC(-) / AFE0_AD8 (SAME70-XPLD User Guide).
   PA11: { gpio: "pioA", bit: 11 }
+  PA19: { gpio: "pioA", bit: 19 }
   PA21: { gpio: "pioA", bit: 21 }
   PB4: { gpio: "pioB", bit: 4 }
   PC8: { gpio: "pioC", bit: 8 }
+  PC31: { gpio: "pioC", bit: 31 }
 
 peripherals:
   # --- System controller (0x400E0600 upwards) -----------------------------

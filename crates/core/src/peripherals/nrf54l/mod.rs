@@ -20,9 +20,12 @@
 //!   * CLOCK — oscillator control. Also *not* nRF52-compatible despite the
 //!     shared `nordic,nrf-clock` devicetree binding: the HFCLK/LFCLK task
 //!     pair became an XO/PLL/LFCLK trio and every status register moved.
+//!   * SAADC — task/event and EasyDMA offsets are familiar, but PSELP and
+//!     CONFIG use nRF54L's GPIO selector and 0.9 V reference encodings.
 
 pub mod clock;
 pub mod factory;
 pub mod grtc;
+pub mod saadc;
 pub mod twim;
 pub mod uarte;

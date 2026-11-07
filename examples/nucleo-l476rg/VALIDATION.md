@@ -16,6 +16,13 @@ revealed each bug, and which simulator commits closed each gap.
 
 ## Survival traces
 
+Mixed-signal simulation coverage is separate from the silicon-captured
+survival traces below. `cosim_nucleo_l476_analog::nucleo_l476rg_profiles_route_ntc_and_diode_to_gpio_thresholds`
+solves generic NTC and Shockley diode netlists, routes the voltages to PA0 and
+PA1, and asserts the GPIOA input levels and Schmitt hysteresis for both the
+production board profile and its read-only CI fixture. This is not an ADC or
+silicon analog capture.
+
 Each row is a captured byte stream from `/dev/ttyACM1` at 115200 8N1.
 Sim must reproduce verbatim (`crates/core/tests/firmware_survival.rs`).
 

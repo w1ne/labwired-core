@@ -8,7 +8,9 @@ booting through a clean-room boot ROM with the RF core and sleep timer
 modelled, the flash controller (Contiki-NG CFS/Coffee) and the AES/SHA-256
 cryptoprocessor (the Contiki-NG crypto suite), and a **three-node Contiki-NG
 RPL-UDP network** on a shared 802.15.4 air (RF core RX/TX, AUTOACK, µDMA).
-PKA, SSI, I2C, GPTimers, USB and the ADC are declared stubs.
+PKA, SSI, I2C, GPTimers, USB and the ADC are declared stubs. The mixed-signal
+co-simulation test uses synthetic NTC and diode netlists on the modeled PC4/PC5
+GPIO inputs; it covers voltage thresholds and GPIO readback, not the ADC.
 
 ## What runs here
 

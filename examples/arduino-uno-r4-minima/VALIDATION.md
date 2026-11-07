@@ -2,6 +2,18 @@
 
 Run all commands from `core/`.
 
+## Mixed-signal ADC14 proof
+
+The end-to-end test solves the generic NTC and diode netlists, routes them
+through the descriptor's A0/A1 analog pin mappings, and reads the ADC14 results
+in both supported 12-bit and 14-bit modes:
+
+```bash
+cargo test -p labwired-core --test cosim_ra4m1_analog -- --nocapture
+```
+
+The fixture is `examples/arduino-uno-r4-minima/analog-ntc-diode-system.yaml`.
+
 ## 1) Optional: ensure target installed
 
 ```bash

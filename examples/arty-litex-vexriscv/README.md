@@ -51,6 +51,22 @@ hb=0 txfull=00000000
 With no buttons pressed, the active-low switch/button lines read high
 (`0x0f`); the board_io bindings let a session or the browser drive them.
 
+## Mixed-signal input example
+
+`analog-ntc-diode-system.yaml` uses the generic analog adapter to solve a Beta
+NTC divider and an independent Shockley diode load line. The voltages drive
+CAS input pins through the shared `board.gpio_in.<peripheral>.<pin>` route;
+the integration test checks the solved node values, CAS readbacks, and Schmitt
+hysteresis:
+
+```bash
+cargo test -p labwired-core --test cosim_arty_litex_analog -- --nocapture
+```
+
+The 3.3 V input thresholds are simulation assumptions. This profile has no
+mapped ADC, so the example does not claim XADC support or silicon-captured
+thresholds.
+
 ## Smoke test
 
 ```bash

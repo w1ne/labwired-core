@@ -1,6 +1,6 @@
 # Required Documents — S32K388EVB-Q289
 
-Authoritative sources used by this example (retrieved 2026-10-30):
+Authoritative sources used by this example (retrieved 2026-11-06):
 
 | Doc | Title | Used for |
 | :--- | :--- | :--- |
@@ -9,7 +9,7 @@ Authoritative sources used by this example (retrieved 2026-10-30):
 | S32DS RTD template `linker_flash_s32k388.ld` | S32 Design Studio linker file | ITCM/DTCM, 8 MiB program flash at `0x0040_0000` (last 176 KiB HSE), data flash, SRAM_0–2 at `0x2040_0000` |
 | S32DS RTD template `ivt_config.c` | Boot header layout | IVT marker `0x5AA55AA5`, `BOOT_CONFIG`, CM7_0 start address at IVT + `0x0C` |
 | Zephyr `drivers/gpio/gpio_nxp_siul2.c` | SIUL2 GPIO driver (main) | Bit order of the parallel registers (`PGPDO`/`PGPDI` bit `15 - k` is pin `16·p + k`) |
-| NXP "Start Developing With S32K388EVB-Q289" | Board quick start | Green LED on PTF23 |
+| [NXP S32K388EVB-Q289 product page](https://www.nxp.com/design/design-center/development-boards-and-designs/S32K388EVB-Q289), Hardware User Manual (sec. 16.4, table 26) | Board quick start and S32K3X8EVB-Q289 hardware user manual | Green LED on PTF23; ADC_POT0/ADC_POT1 connections to PTA11/PTA17. ADC/BCTU conversion itself is not modeled by this slice |
 | Renode v1.17.0 `platforms/cpus/nxp-s32k388.repl`, `platforms/boards/nxp-s32k388evb.repl`, `tests/platforms/S32K388.robot` | Renode S32K388 platform | Cross-check of the SIUL2/LPUART/SWT/MC_ME/MC_CGM bases and LPUART IRQs 141–156; the other RGB LED pads (PTF17–19, PTF22, PTF24), SW10 on PTA1 and LPUART2 as the console. Not a parity claim |
 
 The chip descriptor (`configs/chips/s32k388.yaml`) carries the same values

@@ -65,7 +65,7 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             None => problems.push(format!(
                 "{chip}: {pad} names ADC '{peripheral}', not declared"
             )),
-            Some(p) if !matches!(p.r#type.as_str(), "adc" | "nrf52840_saadc") => {
+            Some(p) if !matches!(p.r#type.as_str(), "adc" | "avr_adc" | "nrf52840_saadc") => {
                 problems.push(format!(
                     "{chip}: {pad} names '{peripheral}', which is type '{}', not adc",
                     p.r#type
@@ -79,12 +79,14 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             .peripherals
             .iter()
             .any(|p| &p.id == peripheral && p.r#type == "nrf52840_saadc");
-        match pad_port_and_bit(pad, nordic) {
-            Some((port, bit)) => match desc
-                .peripherals
-                .iter()
-                .find(|p| p.id == port && matches!(p.r#type.as_str(), "gpio" | "stm32f4_gpio"))
-            {
+        let avr = desc
+            .peripherals
+            .iter()
+            .any(|p| &p.id == peripheral && p.r#type == "avr_adc");
+        match pad_port_and_bit(pad, nordic, avr) {
+            Some((port, bit)) => match desc.peripherals.iter().find(|p| {
+                p.id == port && matches!(p.r#type.as_str(), "gpio" | "avr_gpio" | "stm32f4_gpio")
+            }) {
                 Some(p) => {
                     let count = p
                         .config
@@ -116,7 +118,7 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
     problems
 }
 
-fn pad_port_and_bit(pad: &str, nordic: bool) -> Option<(String, u8)> {
+fn pad_port_and_bit(pad: &str, nordic: bool, avr: bool) -> Option<(String, u8)> {
     let upper = pad.to_ascii_uppercase();
     let rest = upper.strip_prefix('P')?;
     if nordic {
@@ -140,10 +142,26 @@ fn pad_port_and_bit(pad: &str, nordic: bool) -> Option<(String, u8)> {
         if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
             return None;
         }
+        let gpio_prefix = if avr { "port" } else { "gpio" };
         Some((
-            format!("gpio{}", port.to_ascii_lowercase()),
+            format!("{gpio_prefix}{}", port.to_ascii_lowercase()),
             digits.parse().ok()?,
         ))
+    }
+}
+
+#[test]
+fn atmega328p_bonded_analog_pads_resolve_to_their_avr_adc_channels() {
+    let desc = load("atmega328p");
+    assert_eq!(desc.analog_pins.len(), 6);
+    for channel in 0..6 {
+        assert_eq!(
+            desc.analog_pins[&format!("PC{channel}")],
+            AdcPinFn {
+                peripheral: "adc".to_string(),
+                channel,
+            }
+        );
     }
 }
 
