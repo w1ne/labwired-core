@@ -184,7 +184,8 @@ on:
       - "examples/renode-onboarding/renesas-rz_t2m_rsk-r52-sci-smoke.yaml"
       - "tests/fixtures/avr/arduino-uno-blinky.elf"
       - "tests/fixtures/avr/atmega1284p-cpu-smoke.c"
-      - "tests/fixtures/avr/atmega1284p-cpu-smoke.elf"
+      - "tests/fixtures/avr/atmega1284p-io-smoke.elf"
+      - "tests/fixtures/avr/mega164-io-smoke.c"
       - "scripts/build_atmega1284p_cpu_smoke.sh"
       - "tests/fixtures/avr/atmega1280-cpu-smoke.c"
       - "tests/fixtures/avr/atmega1280-cpu-smoke.elf"
@@ -876,10 +877,10 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/atmega32u4-gpio-smoke.elf
             script: examples/renode-onboarding/simavr-atmega32u4-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega32u4.yaml
-          # ATmega1284P is measured only for CPU instruction execution and SRAM;
-          # the profile makes no peripheral or board-I/O claims.
+          # ATmega1284P is measured for AVR8 execution, GPIOA and polled USART0
+          # only (shared mega164-io-smoke.c fixture).
           - id: simavr-atmega1284p
-            prebuilt_firmware: tests/fixtures/avr/atmega1284p-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/atmega1284p-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega1284p-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega1284p.yaml
           # The ATmega1280 smoke covers only its shared ATmega1281-class AVR8
@@ -980,11 +981,11 @@ jobs:
             script: examples/renode-onboarding/simavr-atmega164-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega164.yaml
           - id: simavr-atmega324
-            prebuilt_firmware: tests/fixtures/avr/atmega324-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/atmega324-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega324-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega324.yaml
           - id: simavr-atmega644
-            prebuilt_firmware: tests/fixtures/avr/atmega644-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/atmega644-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega644-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega644.yaml
           - id: simavr-atmega169p

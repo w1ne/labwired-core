@@ -431,7 +431,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/simavr-atmega32u4-smoke.yaml",
     },
     "simavr-atmega1284p": {
-        "prebuilt_firmware": "tests/fixtures/avr/atmega1284p-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/atmega1284p-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega1284p-smoke.yaml",
     },
     "simavr-atmega1280": {
@@ -515,11 +515,11 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/simavr-atmega164-smoke.yaml",
     },
     "simavr-atmega324": {
-        "prebuilt_firmware": "tests/fixtures/avr/atmega324-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/atmega324-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega324-smoke.yaml",
     },
     "simavr-atmega644": {
-        "prebuilt_firmware": "tests/fixtures/avr/atmega644-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/atmega644-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega644-smoke.yaml",
     },
     "simavr-atmega169p": {

@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 100000,
-  "cycles": 185705,
+  "cycles": 172649,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -30,6 +30,32 @@
   "assertions": [
     {
       "assertion": {
+        "uart_contains": "M1284P IO bits=7F"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 292,
+          "expected_value": 127,
+          "mask": null,
+          "size": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "porta:0",
+          "min_edges": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -52,37 +78,52 @@
       0,
       0,
       0,
-      0,
-      0,
-      0,
-      0,
+      33,
+      1,
+      36,
+      1,
       1,
       0,
       0,
       0,
       0,
       0,
-      202,
-      55,
-      2,
+      6,
+      0,
+      37,
       1,
-      255,
+      249,
       64,
-      0,
-      0
+      36,
+      1
     ],
-    "pc": 192,
-    "sp": 16637,
+    "pc": 408,
+    "sp": 16633,
     "sreg": 0
   },
-  "firmware_hash": "8dfe4d1aa7b5f5ea6699370a1a2cd985856ffd3976acaffa388f3e24f9e15ad5",
+  "firmware_hash": "9ad01c78ed9160d0a991e3fcf44e4cd967bd3a61350757fb96bde0a58e4a3ca4",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega1284p-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega1284p-io-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-atmega1284p.yaml",
     "script": "examples/renode-onboarding/simavr-atmega1284p-smoke.yaml"
   },
   "inspect": {
-    "peripherals": [],
+    "peripherals": [
+      {
+        "name": "porta",
+        "kind": "native",
+        "base": 65568,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 65728,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
     "devices": []
   },
   "fidelity": [
@@ -94,17 +135,458 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 172649,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "porta",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 401,
+            "value": 1
+          },
+          {
+            "cycle": 409,
+            "value": 0
+          },
+          {
+            "cycle": 414,
+            "value": 1
+          },
+          {
+            "cycle": 854,
+            "value": 0
+          },
+          {
+            "cycle": 4669,
+            "value": 1
+          },
+          {
+            "cycle": 8484,
+            "value": 0
+          },
+          {
+            "cycle": 12299,
+            "value": 1
+          },
+          {
+            "cycle": 16114,
+            "value": 0
+          },
+          {
+            "cycle": 19929,
+            "value": 1
+          },
+          {
+            "cycle": 23744,
+            "value": 0
+          },
+          {
+            "cycle": 27559,
+            "value": 1
+          },
+          {
+            "cycle": 31374,
+            "value": 0
+          },
+          {
+            "cycle": 35189,
+            "value": 1
+          },
+          {
+            "cycle": 39004,
+            "value": 0
+          },
+          {
+            "cycle": 42819,
+            "value": 1
+          },
+          {
+            "cycle": 46634,
+            "value": 0
+          },
+          {
+            "cycle": 50449,
+            "value": 1
+          },
+          {
+            "cycle": 54264,
+            "value": 0
+          },
+          {
+            "cycle": 58079,
+            "value": 1
+          },
+          {
+            "cycle": 61894,
+            "value": 0
+          },
+          {
+            "cycle": 65709,
+            "value": 1
+          },
+          {
+            "cycle": 69524,
+            "value": 0
+          },
+          {
+            "cycle": 73339,
+            "value": 1
+          },
+          {
+            "cycle": 77154,
+            "value": 0
+          },
+          {
+            "cycle": 80969,
+            "value": 1
+          },
+          {
+            "cycle": 84784,
+            "value": 0
+          },
+          {
+            "cycle": 88599,
+            "value": 1
+          },
+          {
+            "cycle": 92414,
+            "value": 0
+          },
+          {
+            "cycle": 96229,
+            "value": 1
+          },
+          {
+            "cycle": 100044,
+            "value": 0
+          },
+          {
+            "cycle": 103859,
+            "value": 1
+          },
+          {
+            "cycle": 107674,
+            "value": 0
+          },
+          {
+            "cycle": 111489,
+            "value": 1
+          },
+          {
+            "cycle": 115304,
+            "value": 0
+          },
+          {
+            "cycle": 119119,
+            "value": 1
+          },
+          {
+            "cycle": 122934,
+            "value": 0
+          },
+          {
+            "cycle": 126749,
+            "value": 1
+          },
+          {
+            "cycle": 130564,
+            "value": 0
+          },
+          {
+            "cycle": 134379,
+            "value": 1
+          },
+          {
+            "cycle": 138194,
+            "value": 0
+          },
+          {
+            "cycle": 142009,
+            "value": 1
+          },
+          {
+            "cycle": 145824,
+            "value": 0
+          },
+          {
+            "cycle": 149639,
+            "value": 1
+          },
+          {
+            "cycle": 153454,
+            "value": 0
+          },
+          {
+            "cycle": 157269,
+            "value": 1
+          },
+          {
+            "cycle": 161084,
+            "value": 0
+          },
+          {
+            "cycle": 164899,
+            "value": 1
+          },
+          {
+            "cycle": 168714,
+            "value": 0
+          },
+          {
+            "cycle": 172529,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 400,
+            "state": "0"
+          },
+          {
+            "cycle": 401,
+            "state": "1"
+          },
+          {
+            "cycle": 409,
+            "state": "0"
+          },
+          {
+            "cycle": 414,
+            "state": "1"
+          },
+          {
+            "cycle": 854,
+            "state": "0"
+          },
+          {
+            "cycle": 4669,
+            "state": "1"
+          },
+          {
+            "cycle": 8484,
+            "state": "0"
+          },
+          {
+            "cycle": 12299,
+            "state": "1"
+          },
+          {
+            "cycle": 16114,
+            "state": "0"
+          },
+          {
+            "cycle": 19929,
+            "state": "1"
+          },
+          {
+            "cycle": 23744,
+            "state": "0"
+          },
+          {
+            "cycle": 27559,
+            "state": "1"
+          },
+          {
+            "cycle": 31374,
+            "state": "0"
+          },
+          {
+            "cycle": 35189,
+            "state": "1"
+          },
+          {
+            "cycle": 39004,
+            "state": "0"
+          },
+          {
+            "cycle": 42819,
+            "state": "1"
+          },
+          {
+            "cycle": 46634,
+            "state": "0"
+          },
+          {
+            "cycle": 50449,
+            "state": "1"
+          },
+          {
+            "cycle": 54264,
+            "state": "0"
+          },
+          {
+            "cycle": 58079,
+            "state": "1"
+          },
+          {
+            "cycle": 61894,
+            "state": "0"
+          },
+          {
+            "cycle": 65709,
+            "state": "1"
+          },
+          {
+            "cycle": 69524,
+            "state": "0"
+          },
+          {
+            "cycle": 73339,
+            "state": "1"
+          },
+          {
+            "cycle": 77154,
+            "state": "0"
+          },
+          {
+            "cycle": 80969,
+            "state": "1"
+          },
+          {
+            "cycle": 84784,
+            "state": "0"
+          },
+          {
+            "cycle": 88599,
+            "state": "1"
+          },
+          {
+            "cycle": 92414,
+            "state": "0"
+          },
+          {
+            "cycle": 96229,
+            "state": "1"
+          },
+          {
+            "cycle": 100044,
+            "state": "0"
+          },
+          {
+            "cycle": 103859,
+            "state": "1"
+          },
+          {
+            "cycle": 107674,
+            "state": "0"
+          },
+          {
+            "cycle": 111489,
+            "state": "1"
+          },
+          {
+            "cycle": 115304,
+            "state": "0"
+          },
+          {
+            "cycle": 119119,
+            "state": "1"
+          },
+          {
+            "cycle": 122934,
+            "state": "0"
+          },
+          {
+            "cycle": 126749,
+            "state": "1"
+          },
+          {
+            "cycle": 130564,
+            "state": "0"
+          },
+          {
+            "cycle": 134379,
+            "state": "1"
+          },
+          {
+            "cycle": 138194,
+            "state": "0"
+          },
+          {
+            "cycle": 142009,
+            "state": "1"
+          },
+          {
+            "cycle": 145824,
+            "state": "0"
+          },
+          {
+            "cycle": 149639,
+            "state": "1"
+          },
+          {
+            "cycle": 153454,
+            "state": "0"
+          },
+          {
+            "cycle": 157269,
+            "state": "1"
+          },
+          {
+            "cycle": 161084,
+            "state": "0"
+          },
+          {
+            "cycle": 164899,
+            "state": "1"
+          },
+          {
+            "cycle": 168714,
+            "state": "0"
+          },
+          {
+            "cycle": 172529,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 49
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "porta",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "M1284P IO bits=7F",
+        "cycle_lo": 0,
+        "cycle": 17286,
+        "end_cycle": 17286
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 214,
-    "data_bytes": 0,
-    "bss_bytes": 2,
-    "flash_used_bytes": 214,
-    "ram_static_bytes": 2,
+    "text_bytes": 444,
+    "data_bytes": 36,
+    "bss_bytes": 1,
+    "flash_used_bytes": 480,
+    "ram_static_bytes": 37,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 0.16,
-    "ram_static_pct": 0.01,
+    "flash_used_pct": 0.37,
+    "ram_static_pct": 0.23,
     "notes": [
       "section_sum_not_bin_image",
       "totals_from_chip_catalog"
@@ -116,40 +598,24 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 185705,
+    "cycles": 172649,
     "instructions": 100000,
     "steps_executed": 100000,
     "memory_reads": 0,
-    "memory_writes": 28570,
-    "peripheral_accesses": 0,
+    "memory_writes": 18206,
+    "peripheral_accesses": 114,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 188,
-        "count": 78
+        "pc": 418,
+        "count": 195
       },
       {
-        "pc": 192,
-        "count": 78
+        "pc": 406,
+        "count": 156
       },
       {
-        "pc": 202,
-        "count": 78
-      },
-      {
-        "pc": 196,
-        "count": 39
-      },
-      {
-        "pc": 198,
-        "count": 39
-      },
-      {
-        "pc": 206,
-        "count": 39
-      },
-      {
-        "pc": 208,
+        "pc": 408,
         "count": 39
       }
     ]

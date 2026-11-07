@@ -1,7 +1,14 @@
-// GPIOA + polled USART0 smoke for the imported ATmega164 profile.
+// GPIOA + polled USART0 smoke for the imported ATmega164/324/644/1284P profiles.
 // Build: avr-gcc -mmcu=atmega164p -Os -o atmega164-io-smoke.elf mega164-io-smoke.c
+//        avr-gcc -mmcu=atmega324p -Os -DPART_TAG='"324"' -o atmega324-io-smoke.elf mega164-io-smoke.c
+//        avr-gcc -mmcu=atmega644 -Os -DPART_TAG='"644"' -o atmega644-io-smoke.elf mega164-io-smoke.c
+//        avr-gcc -mmcu=atmega1284p -Os -DPART_TAG='"1284P"' -o atmega1284p-io-smoke.elf mega164-io-smoke.c
 #include <avr/io.h>
 #include <stdint.h>
+
+#ifndef PART_TAG
+#define PART_TAG "164"
+#endif
 
 volatile uint8_t result_bits;
 
@@ -46,7 +53,7 @@ int main(void) {
     if ((PINA & pa0) && (PORTA & pa0)) bits |= 0x40;
 
     result_bits = bits;
-    puts_("M164 IO bits=");
+    puts_("M" PART_TAG " IO bits=");
     hex8(bits);
     puts_("\r\n");
 

@@ -9,8 +9,8 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `4/224`
-- pass_observable_assertions: `190/224`
-- pass_stop_reason_only: `34/224`
+- pass_observable_assertions: `193/224`
+- pass_stop_reason_only: `31/224`
 - pass_depth_unknown: `0/224`
 - median_elapsed_ms: `1223`
 - median_elapsed_seconds: `1.223`
@@ -184,7 +184,7 @@
 | `simavr-atmega128` | `pass` | `True` | `yes` | `yes` | `85887` | `85.887` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega1280` | `pass` | `True` | `yes` | `yes` | `86214` | `86.214` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega1281` | `pass` | `True` | `yes` | `yes` | `100493` | `100.493` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `simavr-atmega1284p` | `pass` | `True` | `yes` | `yes` | `86419` | `86.419` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `simavr-atmega1284p` | `pass` | `True` | `yes` | `yes` | `710` | `0.71` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega128rfa1` | `pass` | `True` | `yes` | `yes` | `610` | `0.61` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega128rfr2` | `pass` | `True` | `yes` | `yes` | `621` | `0.621` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega16` | `pass` | `True` | `yes` | `yes` | `87856` | `87.856` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
@@ -194,12 +194,12 @@
 | `simavr-atmega16m1` | `pass` | `True` | `yes` | `yes` | `607` | `0.607` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega2560` | `pass` | `True` | `yes` | `yes` | `11541` | `11.541` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega32` | `pass` | `True` | `yes` | `yes` | `607` | `0.607` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `simavr-atmega324` | `pass` | `True` | `yes` | `yes` | `604` | `0.604` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `simavr-atmega324` | `pass` | `True` | `yes` | `yes` | `12120` | `12.12` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega328` | `pass` | `True` | `yes` | `yes` | `14574` | `14.574` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega328pb` | `pass` | `True` | `yes` | `yes` | `9330` | `9.33` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega32u4` | `pass` | `True` | `yes` | `yes` | `121577` | `121.577` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega48` | `pass` | `True` | `yes` | `yes` | `2172` | `2.172` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `simavr-atmega644` | `pass` | `True` | `yes` | `yes` | `606` | `0.606` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `simavr-atmega644` | `pass` | `True` | `yes` | `yes` | `622` | `0.622` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega64m1` | `pass` | `True` | `yes` | `yes` | `628` | `0.628` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega8` | `pass` | `True` | `yes` | `yes` | `86394` | `86.394` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega88` | `pass` | `True` | `yes` | `yes` | `1058` | `1.058` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

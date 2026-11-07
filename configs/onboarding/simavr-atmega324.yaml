@@ -6,9 +6,10 @@
 
 name: simavr-atmega324
 description: >-
-  ATmega324 (Atmel AVR). Imported profile measured for bounded AVR8 CPU and SRAM
-  execution only; it declares no peripheral models and makes no board-I/O claim.
-  Memory geometry: flash 32KB @ 0x0, ram 2KB @ 0x100. Aliases: atmega324, atmega324p, atmega324a, atmega324pa.
+  ATmega324 (Atmel AVR). Imported profile measured for bounded AVR8 execution,
+  GPIOA and polled USART0 output. Other peripheral ranges are omitted from this
+  profile. Memory geometry: flash 32KB @ 0x0, ram 2KB @ 0x100. Aliases:
+  atmega324, atmega324p, atmega324a, atmega324pa.
 family: Atmel AVR
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
   \    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"

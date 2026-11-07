@@ -13,7 +13,20 @@ flash:
 ram:
   base: 256
   size: 2KB
-peripherals: []
+peripherals:
+  # This bounded smoke claims only GPIOA and polled USART0. Other ports,
+  # timers, ADC, SPI, TWI, USART1 and interrupts remain outside this imported
+  # profile.
+  - id: porta
+    type: avr_gpio
+    base_address: 0x00010020
+    size: 3
+  - id: usart0
+    type: uart
+    base_address: 0x000100C0
+    size: 8
+    config:
+      profile: avr
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr
