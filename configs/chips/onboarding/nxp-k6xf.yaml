@@ -39,3 +39,46 @@ peripherals:
   type: k6xf_rng
   bus: sysbus
   base_address: 1073909760
+# GPIO ports PTA-PTE. Renode's nxp-k6xf platform models only UART0, MCG, SIM,
+# ENET and RNG, so the import carried no GPIO. The K64/K66 GPIO module puts
+# PTA..PTE at 0x400FF000 + 0x40 * n with PDOR/PSOR/PCOR/PTOR at +0x00..+0x0C,
+# PDIR +0x10 and PDDR +0x14 (K64P144M120SF5RM ch. 55; K66P144M180SF5RM ch. 63),
+# the map the promoted configs/chips/mk64f12.yaml runs on `profile: kinetis`.
+# The PORT block (PCRn MUX/pulls) and SIM_SCGC5 clock gating are not declared,
+# so PDIR reads the pin whatever its MUX or port clock, where silicon reads 0
+# until MUX = GPIO and the port clock is on.
+- id: pta
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF000
+  size: 64B
+  config:
+    profile: kinetis
+- id: ptb
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF040
+  size: 64B
+  config:
+    profile: kinetis
+- id: ptc
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF080
+  size: 64B
+  config:
+    profile: kinetis
+- id: ptd
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF0C0
+  size: 64B
+  config:
+    profile: kinetis
+- id: pte
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF100
+  size: 64B
+  config:
+    profile: kinetis

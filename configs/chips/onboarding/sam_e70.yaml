@@ -46,3 +46,34 @@ peripherals:
   type: pythonperipheral
   bus: sysbus
   base_address: 1074660968
+# PIO controllers A-E. Renode's sam_e70 platform leaves PIO out, so the import
+# carried none. PIOA..PIOE sit at 0x400E0E00 + 0x200 * n (DS60001527 ch. 32,
+# Zephyr samx7x.dtsi), with the SAM4S PIO register layout (PIO_PDSR @0x3C), so
+# they run on `sam4s_pio` as in the promoted configs/chips/same70q21b.yaml.
+# PMC_PCER0 clock gating of the PIO input path is not modelled: PDSR reads the
+# pin with the peripheral clock off, where silicon holds the last sampled value.
+- id: pioA
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 0x400E0E00
+  size: 512B
+- id: pioB
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 0x400E1000
+  size: 512B
+- id: pioC
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 0x400E1200
+  size: 512B
+- id: pioD
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 0x400E1400
+  size: 512B
+- id: pioE
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 0x400E1600
+  size: 512B

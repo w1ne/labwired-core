@@ -101,12 +101,13 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 163;
+const COVERED: usize = 165;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 61;
-/// Profiles whose descriptor declares no GPIO input and no convertible ADC:
-/// nothing analog can reach them yet.
-const NO_ANALOG_ENDPOINT: usize = 82;
+const SILICON_REGISTER: usize = 63;
+/// Profiles whose descriptor declares no GPIO input. Three of them
+/// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
+/// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
+const NO_ANALOG_ENDPOINT: usize = 80;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
