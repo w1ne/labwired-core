@@ -220,7 +220,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32f746 | — | — | ✓ |
 | stm32f767 | ✓ | ✓ | ✓ |
 | stm32g071 | ✓ | ✓ | ✓ |
-| stm32g0b1re | — | — | ✓ |
+| stm32g0b1re | ✓ | ✓ | ✓ |
 | stm32g431rb | ✓ | ✓ | ✓ |
 | stm32g474re | ✓ | ✓ | ✓ |
 | stm32h563 | ✓ | ✓ | ✓ |

@@ -80,14 +80,14 @@ pins:
 # FDCAN1's registers, while the shared `fdcan` model serves its message RAM at
 # window offset +0x800. A window that wide would claim PWR, DAC1, LPTIM and
 # TAMP in between, so this same-backing mirror routes SRAMCAN onto the model's
-# RAM instead. It covers only the FDCAN1 section (0x350, HAL SRAMCAN_SIZE):
-# the model's RAM above 0x40007000 is shadowed by PWR (the bus routes an
-# address to the window with the greatest start), so the FDCAN2 section would
-# not land in the model.
+# RAM instead. The mirror is 1 KiB (0x4000B400-0x4000B800 onto
+# 0x40006C00-0x40007000): the FDCAN1 section (0x350, HAL SRAMCAN_SIZE) plus the
+# head of the FDCAN2 section. fdcan1's window stops at PWR (0x40007000), so the
+# rest of FDCAN2's section has no backing; FDCAN2 is not modelled.
 memory_regions:
 - name: sramcan
   base: 0x4000B400
-  size: 0x350
+  size: 1KB
   alias_of: 0x40006C00
 peripherals:
 - id: rcc
@@ -270,7 +270,9 @@ peripherals:
 - id: fdcan1
   type: fdcan
   base_address: 0x40006400
-  size: 4KB
+  # 3 KiB: registers + message RAM at +0x800, ending where PWR (0x40007000)
+  # begins. A 4 KiB window collides with PWR.
+  size: 3KB
   irq: 21  # TIM16_FDCAN_IT0; IT1 = 22 via ILS not modeled
   # RCC_APBENR1.FDCANEN (bit 12, RCC_APBENR1_FDCANEN_Pos) gates both instances.
   clock:
