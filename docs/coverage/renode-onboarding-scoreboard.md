@@ -9,11 +9,11 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `4/224`
-- pass_observable_assertions: `179/224`
-- pass_stop_reason_only: `45/224`
+- pass_observable_assertions: `180/224`
+- pass_stop_reason_only: `44/224`
 - pass_depth_unknown: `0/224`
-- median_elapsed_ms: `1195`
-- median_elapsed_seconds: `1.195`
+- median_elapsed_ms: `1223`
+- median_elapsed_seconds: `1.223`
 - threshold_seconds: `3600`
 - threshold_met: `224/224`
 
@@ -244,7 +244,7 @@
 | `stm32l072` | `pass` | `True` | `yes` | `yes` | `1070` | `1.07` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `stm32l151` | `pass` | `True` | `yes` | `yes` | `1070` | `1.07` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `stm32l552` | `pass` | `True` | `yes` | `yes` | `1940` | `1.94` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `stm32w108` | `pass` | `True` | `yes` | `yes` | `990` | `0.99` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `stm32w108` | `pass` | `True` | `yes` | `yes` | `11281` | `11.281` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `stm32wba52` | `pass` | `True` | `yes` | `yes` | `2429` | `2.429` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `tegra2` | `pass` | `True` | `yes` | `yes` | `1154` | `1.154` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `tegra3` | `pass` | `True` | `yes` | `yes` | `1043` | `1.043` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

@@ -6,12 +6,24 @@
 
 name: stm32w108
 arch: arm
-# Boot-only profile. The imported timers are outside this smoke, so this
-# profile does not claim any peripheral windows.
+# Narrowed profile: CPU, memory and the two general-purpose timers Renode
+# maps (STM32_Timer at 0x4000_E000 / 0x4000_F000). The generic STM32 timer
+# model covers the counter path (CR1/EGR/CNT/PSC/ARR, 16-bit). On this part
+# the update/compare flags and interrupt enables live in the separate
+# INT_TIMx block at 0x4000_A800, which is not mapped, so no timer IRQ is
+# claimed. UART, GPIO, radio, ADC and clock control are not mapped.
 flash:
   base: 134217728
   size: 262144B
 ram:
   base: 536870912
   size: 1048576B
-peripherals: []
+peripherals:
+- id: tim1
+  type: timer
+  base_address: 0x4000E000
+  size: 1KB
+- id: tim2
+  type: timer
+  base_address: 0x4000F000
+  size: 1KB

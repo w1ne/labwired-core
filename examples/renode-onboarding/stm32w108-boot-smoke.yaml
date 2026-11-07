@@ -1,4 +1,6 @@
-# CPU-only instruction stepping smoke for the narrowed imported STM32W108 profile.
+# TIM1/TIM2 counter smoke for the narrowed imported STM32W108 profile.
+# 0x5710807F = magic | seven checks: reset values, stopped hold, CEN count,
+# PSC=7 ratio, ARR=99 bound+wrap, CEN clear freeze.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32w108-boot-smoke"
@@ -6,4 +8,8 @@ inputs:
 limits:
   max_steps: 100000
 assertions:
+  - memory_value:
+      address: 0x20080000
+      expected_value: 0x5710807F
+      size: 4
   - expected_stop_reason: max_steps

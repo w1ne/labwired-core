@@ -30,6 +30,17 @@
   "assertions": [
     {
       "assertion": {
+        "memory_value": {
+          "address": 537395200,
+          "expected_value": 1460699263,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -38,24 +49,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      536870912,
-      536870912,
-      134218840,
+      1460699263,
+      1460699200,
+      1,
+      63,
+      33,
+      537395200,
+      17,
+      537919472,
       0,
       0,
       0,
       0,
-      537919480,
-      0,
-      0,
-      0,
-      0,
-      0,
-      537919480,
-      134218791,
-      134218830
+      6011,
+      537919472,
+      751,
+      134219176
     ],
-    "pc": 134218830,
+    "pc": 134219176,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -68,7 +79,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "a1db978b3964ef07fb17756561ad66c7fab9de292dc57d0683473a3bfd2c314f",
+  "firmware_hash": "c512d181faccaeccf157a0b1b102898772a944800276ff3bd97e5976ca6a56b2",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32w108-boot-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32w108.yaml",
@@ -76,6 +87,20 @@
   },
   "inspect": {
     "peripherals": [
+      {
+        "name": "tim1",
+        "kind": "native",
+        "base": 1073799168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim2",
+        "kind": "native",
+        "base": 1073803264,
+        "registers": [],
+        "artifacts": []
+      },
       {
         "name": "scb",
         "kind": "native",
@@ -118,14 +143,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 1112,
+    "text_bytes": 1628,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 1112,
+    "flash_used_bytes": 1628,
     "ram_static_bytes": 0,
     "flash_total_bytes": 262144,
     "ram_total_bytes": 1048576,
-    "flash_used_pct": 0.42,
+    "flash_used_pct": 0.62,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -135,15 +160,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 1048576,
-    "main_stack_high_water_bytes": 8,
-    "main_stack_free_min_bytes": 1048568,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 1048548,
     "main_stack_base": 536870912,
     "main_stack_top": 537919488,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 1048576,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 1048568,
+    "heap_free_min_bytes": 1048548,
     "heap_base": 536870912,
     "heap_top": 537919488
   },
@@ -151,13 +176,13 @@
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 28,
-    "memory_writes": 4,
-    "peripheral_accesses": 0,
+    "memory_reads": 188,
+    "memory_writes": 9,
+    "peripheral_accesses": 84,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134218830,
+        "pc": 134219176,
         "count": 390,
         "symbol": "firmware_stm32w108_boot_smoke::__cortex_m_rt_main"
       }
