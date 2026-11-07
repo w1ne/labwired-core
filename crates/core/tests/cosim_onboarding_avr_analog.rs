@@ -91,7 +91,7 @@ use labwired_core::bus::SystemBus;
 use labwired_core::cosim::{CosimSession, CosimSignalValue, RoutingError};
 use labwired_core::cpu::avr::{Avr, AvrModel};
 use labwired_core::peripherals::avr_adc::AVR_ADC_UNDRIVEN_MV;
-use labwired_core::{Cpu, SimulationConfig};
+use labwired_core::{Bus, Cpu, SimulationConfig};
 use std::path::{Path, PathBuf};
 
 /// Covered simavr profiles, the core they run on, and the two pads.
@@ -111,6 +111,7 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-atmega32", AvrModel::Atmega32, "pa0", "pa7"),
     ("simavr-atmega324", AvrModel::Atmega324, "pa0", "pa7"),
     ("simavr-atmega328", AvrModel::Atmega328p, "pc0", "pc5"),
+    ("simavr-atmega328pb", AvrModel::Atmega328pb, "pe2", "pe3"),
     ("simavr-atmega32u4", AvrModel::Atmega32u4, "pf0", "pb6"),
     ("simavr-atmega48", AvrModel::Atmega328p, "pc0", "pc5"),
     ("simavr-atmega644", AvrModel::Atmega644, "pa0", "pa7"),
@@ -161,11 +162,9 @@ const COMPARATOR_COVERED: &[(&str, AvrModel, u16, &str, &str)] = &[
 ];
 
 /// simavr profiles with no analog endpoint, and why (addresses per avr-libc
-/// 2.0.0). Covering one has to move it into [`COVERED`].
-const UNCOVERED: &[(&str, &str)] = &[(
-    "simavr-atmega328pb",
-    "no avr-libc header to check PE2/PE3 against",
-)];
+/// 2.0.0). Covering one has to move it into [`COVERED`]. Empty since the
+/// ATmega328PB, checked against avr-libc main's `iom328pb.h`.
+const UNCOVERED: &[(&str, &str)] = &[];
 
 const AVCC_MV: u32 = 5000;
 /// ATmega128RFA1/128RFR2 ADC supply: the internal AVDD regulator (REFS = 01).
@@ -794,6 +793,27 @@ fn assert_avr_converts_generic_analog(
             );
         }
     }
+    if core == AvrModel::Atmega328pb {
+        assert_m328pb_port_e_carries_the_analog_pads(board, chip, base_profile);
+        // The 328P's mux table (sim_mega328pb.c muxmode): REFS = 11 is the
+        // internal 1.1 V, 0x0E the 1.1 V bandgap, 0x0F GND.
+        let mv = (expected_diode_v * 1000.0).round() as u32;
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0xC0, diode_channel),
+            (mv * 1024 / 1100).min(1023) as u16,
+            "{board}: the PE3 diode converts against the internal 1.1 V reference"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, 0x0E),
+            (1100 * 1024 / AVCC_MV) as u16,
+            "{board}: MUX 0x0E converts the 1.1 V bandgap"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, 0x0F),
+            0,
+            "{board}: MUX 0x0F is GND"
+        );
+    }
     if core.is_classic() || core.is_mega128() {
         // REFS = 11 is the classic parts' internal 2.56 V, not the 328P's 1.1 V.
         let mv = (expected_diode_v * 1000.0).round() as u32;
@@ -817,6 +837,64 @@ fn assert_avr_converts_generic_analog(
             "{board}: MUX {code:#04x} converts the {bandgap_mv} mV bandgap"
         );
     }
+}
+
+/// ATmega328PB: ADC6/ADC7 are bonded to PE2/PE3, so the routed pads must be
+/// port E's and firmware must reach that port at PINE/DDRE/PORTE
+/// (0x2C..0x2E). Firmware writes DDRE/PORTE with STS, and the bus-side port E
+/// window must hold them: the 328P core keeps those addresses as plain
+/// storage and would leave the window untouched.
+fn assert_m328pb_port_e_carries_the_analog_pads(
+    board: &str,
+    chip: &ChipDescriptor,
+    base_profile: &SystemManifest,
+) {
+    for (pad, channel) in [("PE2", 6), ("PE3", 7)] {
+        assert_eq!(
+            analog_channel(chip, pad),
+            channel,
+            "{board}: {pad} is ADC{channel}"
+        );
+    }
+    assert!(
+        !chip
+            .analog_pins
+            .keys()
+            .any(|pad| pad.eq_ignore_ascii_case("PC6") || pad.eq_ignore_ascii_case("PC7")),
+        "{board}: ADC6/ADC7 have no dedicated pads on the 328PB"
+    );
+    let mut bus = SystemBus::from_config(chip, base_profile).expect("build 328PB bus");
+    let porte = bus
+        .peripherals
+        .iter()
+        .find(|p| p.name == "porte")
+        .unwrap_or_else(|| panic!("{board}: port E window"));
+    assert_eq!(porte.base, 0x1_002C, "{board}: port E mirrors PINE at 0x2C");
+
+    let mut cpu = Avr::for_chip_name(&chip.name);
+    let mut words = Vec::new();
+    // PE0/PE1 outputs driven 1/0; PE2/PE3 inputs, pull-ups off.
+    words.push(ldi(16, 0x03));
+    words.extend(sts(0x2D, 16));
+    words.push(ldi(16, 0x01));
+    words.extend(sts(0x2E, 16));
+    words.extend(lds(24, 0x2D));
+    cpu.load_words(0, &words);
+    let config = SimulationConfig::default();
+    for _ in 0..5 {
+        cpu.step(&mut bus, &[], &config).expect("port E setup");
+    }
+    assert_eq!(cpu.r[24], 0x03, "{board}: LDS DDRE reads back");
+    assert_eq!(
+        bus.read_u8(0x1_002D).expect("DDRE mirror"),
+        0x03,
+        "{board}: DDRE reaches the port E window"
+    );
+    assert_eq!(
+        bus.read_u8(0x1_002E).expect("PORTE mirror") & 0x0F,
+        0x01,
+        "{board}: PORTE drives PE0 high and PE1 low, PE2/PE3 undriven"
+    );
 }
 
 /// ATmega169P gain-1 differential channels (datasheet 8018P §22.7, Table

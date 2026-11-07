@@ -479,11 +479,11 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
-        cpu_owned, 33,
+        cpu_owned, 34,
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 192,
+        without_adc, 191,
         "onboarding profiles that declare no modelled ADC"
     );
 }

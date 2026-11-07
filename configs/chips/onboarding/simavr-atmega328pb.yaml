@@ -13,7 +13,51 @@ flash:
 ram:
   base: 256
   size: 2KB
-peripherals: []
+# Register map checked against avr-libc avr/iom328pb.h (main; 2.0.0 ships no
+# 328PB header) and simavr sim_mega328pb.c: PINB..PORTD, ADCL/ADCH 0x78/0x79,
+# ADCSRA 0x7A, ADCSRB 0x7B and ADMUX 0x7C at the ATmega328P's addresses, plus
+# PINE/DDRE/PORTE at 0x2C..0x2E (PE0..PE3). The ATmega328PB core owns those
+# registers; each port is mirrored at 0x1_0000 + PINx (PIN/DDR/PORT) and the
+# ADC input side is millivolts per channel, two bytes each, as on the 328P.
+# ADC0..5 are PC0..PC5; ADC6/ADC7 are bonded to PE2/PE3 (datasheet
+# DS40001906 pinout; MiniCore pb-variant pins_arduino.h maps A6/A7 to
+# PE2/PE3 and analogPinToChannel to 6/7). VIL 0.3 VCC / VIH 0.6 VCC are the
+# datasheet DC input limits (VCC 2.4..5.5 V), the same as the 328P's.
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.6
+peripherals:
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010023
+    size: "3"
+  - id: "portc"
+    type: "avr_gpio"
+    base_address: 0x00010026
+    size: "3"
+  - id: "portd"
+    type: "avr_gpio"
+    base_address: 0x00010029
+    size: "3"
+  - id: "porte"
+    type: "avr_gpio"
+    base_address: 0x0001002C
+    size: "3"
+  - id: "adc"
+    type: "avr_adc"
+    base_address: 0x00010030
+    size: "16"
+    config:
+      channels: 8
+analog_pins:
+  PC0: { peripheral: adc, channel: 0 }
+  PC1: { peripheral: adc, channel: 1 }
+  PC2: { peripheral: adc, channel: 2 }
+  PC3: { peripheral: adc, channel: 3 }
+  PC4: { peripheral: adc, channel: 4 }
+  PC5: { peripheral: adc, channel: 5 }
+  PE2: { peripheral: adc, channel: 6 }
+  PE3: { peripheral: adc, channel: 7 }
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr
