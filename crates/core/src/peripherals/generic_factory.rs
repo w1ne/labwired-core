@@ -1152,10 +1152,24 @@ pub fn try_build(
                 ),
             )
         }
-        "rp2040_timer" => Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new()),
+        "rp2040_timer" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::timer::TimerLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::timer::TimerLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new().with_layout(layout))
+        }
         "rp2040_dma" => Box::new(crate::peripherals::rp2040::dma::Rp2040Dma::new()),
         "rp2040_io_bank0" => Box::new(crate::peripherals::rp2040::io_bank0::Rp2040IoBank0::new()),
-        "rp2040_sio" => Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new()),
+        "rp2040_sio" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::sio::SioLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::sio::SioLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new().with_layout(layout))
+        }
         "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
         "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),
         "rp2040_pwm" => Box::new(crate::peripherals::rp2040::pwm::Rp2040Pwm::new()),

@@ -465,7 +465,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 18b383d8fdb752886eb8303c36bf5353777b01a217ea1fab9d11a18f54004f48
+    drift_ack_digest: 358a434cc84e49767bcafd0ae2953840c701e1095f069f5b77263dd96a08c767
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -683,7 +683,14 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-01
+    drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
     # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
     # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
@@ -1039,7 +1046,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 18b383d8fdb752886eb8303c36bf5353777b01a217ea1fab9d11a18f54004f48
+    drift_ack_digest: 358a434cc84e49767bcafd0ae2953840c701e1095f069f5b77263dd96a08c767
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1257,7 +1264,14 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-01
+    drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
     # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
     # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
@@ -1790,7 +1804,10 @@ boards:
     # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
     # captured window is touched. Reviewed model-drift acknowledgment, NOT a
     # new silicon capture; live re-capture remains pending.
-    drift_ack_digest: 46ff50ae5453ec46164693ed3e0e5d684233fc4834134c56c0e0964866888997
+    # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
+    # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
+    # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
+    drift_ack_digest: f36ca0e3deaa6d9325a478fec8274ea8790226d853abca7f291c9598bf9955ca
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2430,6 +2447,13 @@ boards:
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -3999,7 +4023,10 @@ boards:
     # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
     # captured window is touched. Reviewed model-drift acknowledgment, NOT a
     # new silicon capture; live re-capture remains pending.
-    drift_ack_digest: 83b0c45d91b0a25184997abdb4672c1ae1739e63a2b869e73f5e82519a988231
+    # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
+    # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
+    # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
+    drift_ack_digest: d5242e1c3c51fa59b9f309922814d0bef05cc3edd86b3c6d717464df4bc5e298
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4627,6 +4654,13 @@ boards:
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5127,7 +5161,10 @@ boards:
     # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
     # captured window is touched. Reviewed model-drift acknowledgment, NOT a
     # new silicon capture; live re-capture remains pending.
-    drift_ack_digest: 56c102db072398f872fd84b8ff4ff52fdb39120c3a61eebb61b0d5df8108bf1d
+    # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
+    # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
+    # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
+    drift_ack_digest: 56f15caa31da32d97eb5be2af2a5a52b23a537e2dc02e4d5149f5d2f9e976951
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5688,6 +5725,13 @@ boards:
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6246,7 +6290,10 @@ boards:
     # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
     # captured window is touched. Reviewed model-drift acknowledgment, NOT a
     # new silicon capture; live re-capture remains pending.
-    drift_ack_digest: 615440e7faf82912ce9ae97e95b1f610f11d4c63a847e2ccadfa85b5ad85d04f
+    # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
+    # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
+    # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
+    drift_ack_digest: 13ceca3f3aaa98fe1123c1553aa29529aff8c27a77a598e7264290f3bc94d830
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6877,6 +6924,13 @@ boards:
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7398,7 +7452,10 @@ boards:
     # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
     # captured window is touched. Reviewed model-drift acknowledgment, NOT a
     # new silicon capture; live re-capture remains pending.
-    drift_ack_digest: a88fbd44c25ad15776881e0772c26b00f2b4cdf35ea143af229a4c672f78f19d
+    # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
+    # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
+    # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
+    drift_ack_digest: d9dc9f1e2eff59fd99e763c6b3a096ac14853d6563432d2f9e7c15a05677b3e5
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7961,6 +8018,13 @@ boards:
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
