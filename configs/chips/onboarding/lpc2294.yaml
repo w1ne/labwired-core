@@ -13,6 +13,38 @@ ram:
   base: 536870912
   size: 65536B
 peripherals:
+# Renode's lpc2294 platform declares no GPIO. The legacy APB GPIO puts
+# ports 0..3 at 0xE002_8000 + 0x10*n: IOnPIN @0x0, IOnSET @0x4, IOnDIR @0x8,
+# IOnCLR @0xC (UM10114 GPIO chapter). PINSEL0..2 reset to 0, so P0.0/P0.1
+# are GPIO until firmware selects UART0; the pin connect block is not declared.
+- id: gpio0
+  type: declarative
+  bus: sysbus
+  base_address: 3758260224
+  size: 16B
+  config:
+    path: ../../peripherals/lpc2000/gpio.yaml
+- id: gpio1
+  type: declarative
+  bus: sysbus
+  base_address: 3758260240
+  size: 16B
+  config:
+    path: ../../peripherals/lpc2000/gpio.yaml
+- id: gpio2
+  type: declarative
+  bus: sysbus
+  base_address: 3758260256
+  size: 16B
+  config:
+    path: ../../peripherals/lpc2000/gpio.yaml
+- id: gpio3
+  type: declarative
+  bus: sysbus
+  base_address: 3758260272
+  size: 16B
+  config:
+    path: ../../peripherals/lpc2000/gpio.yaml
 - id: can1
   type: lpc_can
   bus: sysbus

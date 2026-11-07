@@ -70,6 +70,9 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         "PL061 TRM DDI0190B §3.3.1 GPIODATA (SWRU319C Table 9-2)",
     ),
     ("nrf52840_gpio", 0x510, "nRF52840 PS §6.9.2 IN"),
+    // A declarative port is keyed by its descriptor; its `IN` register is
+    // the one the declarative GPIO path stores the routed level in.
+    ("declarative/lpc2000/gpio.yaml", 0x00, "UM10114 GPIO IOnPIN"),
     (
         "sam4s_pio",
         0x3C,
@@ -172,16 +175,17 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
         "vf610.dtsi gpio0 + PDIR",
     ),
     ("stm32w108", "gpioa", 0x4000_B008, "em357 regs.h GPIO_PAIN"),
+    ("lpc2294", "gpio0", 0xE002_8000, "UM10114 IO0PIN"),
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 179;
+const COVERED: usize = 180;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 73;
+const SILICON_REGISTER: usize = 74;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 66;
+const NO_ANALOG_ENDPOINT: usize = 65;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -268,6 +272,12 @@ fn input_register(chip: &ChipDescriptor, port: &str, base: u64) -> (u64, bool, S
     if kind == "gpio" {
         let profile = cfg.config.get("profile").and_then(|v| v.as_str());
         kind = format!("gpio/{}", profile.expect("a `gpio` port names its layout"));
+    }
+    if kind == "declarative" {
+        let path = cfg.config.get("path").and_then(|v| v.as_str());
+        let path = path.expect("a declarative port names its descriptor");
+        let key = path.rsplit_once("peripherals/").map_or(path, |(_, k)| k);
+        kind = format!("declarative/{key}");
     }
     // A window based part-way into its block (Nordic ports at OUT) says so.
     let window = cfg
@@ -481,9 +491,13 @@ fn every_onboarding_profile_with_a_gpio_input_takes_routed_ntc_and_diode_levels(
             .unwrap()
             .to_string_lossy()
             .to_string();
-        let profile =
+        let mut profile =
             SystemManifest::from_file(&system_path).unwrap_or_else(|e| panic!("load {board}: {e}"));
-        let mut chip = ChipDescriptor::from_file(system_path.parent().unwrap().join(&profile.chip))
+        // Anchor the chip path at the system file, as the CLI does, so a
+        // declarative port's descriptor `path` resolves next to the chip.
+        let chip_path = system_path.parent().unwrap().join(&profile.chip);
+        profile.chip = chip_path.to_string_lossy().into_owned();
+        let mut chip = ChipDescriptor::from_file(&chip_path)
             .unwrap_or_else(|e| panic!("load {board} descriptor: {e}"));
         // Simulation assumptions where the import records nothing; no
         // silicon threshold is claimed.
