@@ -33,3 +33,46 @@ peripherals:
   type: lowpower_timer
   bus: sysbus
   base_address: 1090695168
+# GPIO ports A-E. Renode's RV32M1 platform leaves GPIO out, so the import
+# carried none. The RV32M1 SDK header (RV32M1_ri5cy.h GPIOx_BASE) and Zephyr
+# rv32m1.dtsi (openisa,rv32m1-gpio) put GPIOA..GPIOD at 0x48020000 + 0x40 * n
+# and GPIOE at 0x4100F000, with the Kinetis register set: PDOR/PSOR/PCOR/PTOR
+# at +0x00..+0x0C, PDIR +0x10, PDDR +0x14 (GPIO_Type in the same header). The
+# same map as the promoted configs/chips/mk64f12.yaml, so these ports run on
+# `profile: kinetis`. The PORT blocks (PCRn MUX/pulls) and the PCC clock gates
+# are not modelled, so PDIR reads the pad whatever its MUX or clock.
+- id: gpioa
+  type: gpio
+  bus: sysbus
+  base_address: 0x48020000
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpiob
+  type: gpio
+  bus: sysbus
+  base_address: 0x48020040
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpioc
+  type: gpio
+  bus: sysbus
+  base_address: 0x48020080
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpiod
+  type: gpio
+  bus: sysbus
+  base_address: 0x480200C0
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpioe
+  type: gpio
+  bus: sysbus
+  base_address: 0x4100F000
+  size: 64B
+  config:
+    profile: kinetis

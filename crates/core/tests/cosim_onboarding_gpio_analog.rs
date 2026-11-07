@@ -51,7 +51,7 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
     (
         "gpio/kinetis",
         0x10,
-        "S32K1xx RM rev 14 §12.3 GPIOx_PDIR; RT700 PERI_GPIO.h PDIR @0x50",
+        "S32K1xx RM rev 14 §12.3 GPIOx_PDIR; RT700 PERI_GPIO.h PDIR @0x50; RV32M1_ri5cy.h PDIR",
     ),
     ("gpio/sam_port", 0x20, "SAM D5x/E5x DS60001507 §32.7 IN"),
     ("imxrt_gpio", 0x08, "IMXRT1060RM §12.5 GPIO_PSR"),
@@ -176,16 +176,28 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
     ),
     ("stm32w108", "gpioa", 0x4000_B008, "em357 regs.h GPIO_PAIN"),
     ("lpc2294", "gpio0", 0xE002_8000, "UM10114 IO0PIN"),
+    (
+        "ri5cy",
+        "gpioa",
+        0x4802_0010,
+        "RV32M1_ri5cy.h GPIOA_BASE + GPIO_Type PDIR",
+    ),
+    (
+        "vegaboard_ri5cy",
+        "gpioa",
+        0x4802_0010,
+        "RV32M1_ri5cy.h GPIOA_BASE + GPIO_Type PDIR",
+    ),
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 180;
+const COVERED: usize = 182;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 74;
+const SILICON_REGISTER: usize = 76;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 65;
+const NO_ANALOG_ENDPOINT: usize = 63;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
