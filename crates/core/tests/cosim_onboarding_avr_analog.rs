@@ -57,8 +57,9 @@
 //! or the RF parts' 1.8 V AVDD), and the NTC code must fall monotonically with
 //! temperature wherever it is below full scale.
 //!
-//! The ATtiny2313/2313A/4313 ([`COMPARATOR_COVERED`]) have no ADC; their
-//! analog input is the comparator (ACSR 0x28, AIN0 on PB0, AIN1 on PB1). There
+//! The ATtiny2313/2313A/4313 and the AT90USB162 ([`COMPARATOR_COVERED`]) have
+//! no ADC; their analog input is the comparator (ACSR 0x28, AIN0 on PB0, AIN1
+//! on PB1 on the tinies; ACSR 0x50, AIN0 on PD1, AIN1 on PD2 on the USB162). There
 //! the same two netlists are routed to AIN0 and AIN1, both ways round, and
 //! firmware reads ACO back with LDS ACSR: it must be set exactly while the
 //! positive input is above the negative one, so with the NTC on AIN0 and the
@@ -110,18 +111,42 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-attiny85", AvrModel::Attiny85, "pb5", "pb3"),
 ];
 
-/// simavr profiles with no ADC whose comparator AIN0/AIN1 (PB0/PB1) take the
-/// netlists: (profile, core).
-const COMPARATOR_COVERED: &[(&str, AvrModel)] = &[
-    ("simavr-attiny2313", AvrModel::Attiny2313),
-    ("simavr-attiny2313a", AvrModel::Attiny2313),
-    ("simavr-attiny4313", AvrModel::Attiny4313),
+/// simavr profiles with no ADC whose comparator AIN0/AIN1 take the netlists:
+/// (profile, core, ACSR data address, AIN0 pad, AIN1 pad).
+const COMPARATOR_COVERED: &[(&str, AvrModel, u16, &str, &str)] = &[
+    (
+        "simavr-at90usb162",
+        AvrModel::At90usb162,
+        0x50,
+        "pd1",
+        "pd2",
+    ),
+    (
+        "simavr-attiny2313",
+        AvrModel::Attiny2313,
+        0x28,
+        "pb0",
+        "pb1",
+    ),
+    (
+        "simavr-attiny2313a",
+        AvrModel::Attiny2313,
+        0x28,
+        "pb0",
+        "pb1",
+    ),
+    (
+        "simavr-attiny4313",
+        AvrModel::Attiny4313,
+        0x28,
+        "pb0",
+        "pb1",
+    ),
 ];
 
 /// simavr profiles with no analog endpoint, and why (addresses per avr-libc
 /// 2.0.0). Covering one has to move it into [`COVERED`].
 const UNCOVERED: &[(&str, &str)] = &[
-    ("simavr-at90usb162", "no ADC"),
     ("simavr-atmega169p", "LCD-controller part, no 169P core"),
     (
         "simavr-atmega16m1",
@@ -725,21 +750,21 @@ fn assert_avr_converts_generic_analog(
     }
 }
 
-/// ATtiny2313/4313 `ACSR` and its bits (avr-libc `iotn2313.h`).
-const ACSR: u16 = 0x28;
+/// `ACSR` bits, the same on the ATtiny2313/4313 (avr-libc `iotn2313.h`) and
+/// the AT90USB162 (`iousb162.h`).
 const ACSR_ACD: u8 = 1 << 7;
 const ACSR_ACBG: u8 = 1 << 6;
 const ACSR_ACO: u8 = 1 << 5;
 /// The comparator's internal bandgap with ACBG set (1.1 V typical).
 const BANDGAP_V: f64 = 1.1;
 
-/// Firmware writes `acsr_value` to ACSR and loads ACSR back: `LDI r16, K;
-/// STS ACSR, r16; LDS r24, ACSR`.
-fn read_acsr(chip: &ChipDescriptor, bus: &mut SystemBus, acsr_value: u8) -> u8 {
+/// Firmware writes `acsr_value` to ACSR at `acsr` and loads ACSR back:
+/// `LDI r16, K; STS ACSR, r16; LDS r24, ACSR`.
+fn read_acsr(chip: &ChipDescriptor, bus: &mut SystemBus, acsr: u16, acsr_value: u8) -> u8 {
     let mut cpu = Avr::for_chip_name(&chip.name);
     let mut words = vec![ldi(16, acsr_value)];
-    words.extend(sts(ACSR, 16));
-    words.extend(lds(24, ACSR));
+    words.extend(sts(acsr, 16));
+    words.extend(lds(24, acsr));
     cpu.load_words(0, &words);
     let config = SimulationConfig::default();
     for _ in 0..3 {
@@ -755,7 +780,7 @@ fn assert_avr_comparator_compares_generic_analog(
     board: &str,
     chip: &ChipDescriptor,
     base_profile: &SystemManifest,
-    core: AvrModel,
+    (core, acsr, ain0, ain1): (AvrModel, u16, &str, &str),
     ntc_on_ain0: bool,
 ) {
     assert_eq!(
@@ -763,14 +788,18 @@ fn assert_avr_comparator_compares_generic_analog(
         core,
         "{board}: descriptor name selects the core whose map it was checked against"
     );
-    assert!(core.is_tiny2313(), "{board}: comparator-only core");
+    assert_eq!(
+        core.comparator_acsr(),
+        Some(acsr),
+        "{board}: comparator-only core with ACSR at {acsr:#x}"
+    );
     let (ntc_pad, diode_pad) = if ntc_on_ain0 {
-        ("pb0", "pb1")
+        (ain0, ain1)
     } else {
-        ("pb1", "pb0")
+        (ain1, ain0)
     };
-    assert_eq!(analog_channel(chip, "pb0"), 0, "{board}: AIN0 is channel 0");
-    assert_eq!(analog_channel(chip, "pb1"), 1, "{board}: AIN1 is channel 1");
+    assert_eq!(analog_channel(chip, ain0), 0, "{board}: AIN0 is channel 0");
+    assert_eq!(analog_channel(chip, ain1), 1, "{board}: AIN1 is channel 1");
 
     let mut profile = base_profile.clone();
     profile.cosim_models = generic_netlists(ntc_pad, diode_pad).cosim_models;
@@ -786,7 +815,7 @@ fn assert_avr_comparator_compares_generic_analog(
 
     // Before any solve both pins sit at the undriven level: equal, so ACO = 0.
     assert_eq!(
-        read_acsr(chip, &mut bus, 0) & ACSR_ACO,
+        read_acsr(chip, &mut bus, acsr, 0) & ACSR_ACO,
         0,
         "{board}: equal inputs"
     );
@@ -827,22 +856,22 @@ fn assert_avr_comparator_compares_generic_analog(
             (ain0_v - ain1_v).abs() > 0.05 && (BANDGAP_V - ain1_v).abs() > 0.05,
             "{board}: the fixture keeps every comparison clear of millivolt rounding"
         );
-        let aco = read_acsr(chip, &mut bus, 0) & ACSR_ACO != 0;
+        let aco = read_acsr(chip, &mut bus, acsr, 0) & ACSR_ACO != 0;
         assert_eq!(
             aco,
             ain0_v > ain1_v,
             "{board}: at {temperature_c} °C ACO compares AIN0 {ain0_v} V with AIN1 {ain1_v} V"
         );
         outputs.push(aco);
-        let acsr = read_acsr(chip, &mut bus, ACSR_ACBG);
-        assert_eq!(acsr & ACSR_ACBG, ACSR_ACBG, "{board}: ACBG reads back");
+        let with_bg = read_acsr(chip, &mut bus, acsr, ACSR_ACBG);
+        assert_eq!(with_bg & ACSR_ACBG, ACSR_ACBG, "{board}: ACBG reads back");
         assert_eq!(
-            acsr & ACSR_ACO != 0,
+            with_bg & ACSR_ACO != 0,
             BANDGAP_V > ain1_v,
             "{board}: at {temperature_c} °C ACBG compares the 1.1 V bandgap with AIN1 {ain1_v} V"
         );
         assert_eq!(
-            read_acsr(chip, &mut bus, ACSR_ACD) & ACSR_ACO,
+            read_acsr(chip, &mut bus, acsr, ACSR_ACD) & ACSR_ACO,
             0,
             "{board}: ACD switches the comparator off"
         );
@@ -871,13 +900,15 @@ fn every_simavr_profile_on_a_modelled_avr_core_converts_ntc_and_diode_in_firmwar
         let chip = ChipDescriptor::from_file(system_path.parent().unwrap().join(&profile.chip))
             .unwrap_or_else(|e| panic!("load {board} descriptor: {e}"));
         let has_adc = chip.peripherals.iter().any(|p| p.r#type == "avr_adc");
-        if let Some((_, core)) = COMPARATOR_COVERED.iter().find(|(b, _)| *b == board) {
+        if let Some((_, core, acsr, ain0, ain1)) =
+            COMPARATOR_COVERED.iter().find(|(b, ..)| *b == board)
+        {
             for ntc_on_ain0 in [true, false] {
                 assert_avr_comparator_compares_generic_analog(
                     &board,
                     &chip,
                     &profile,
-                    *core,
+                    (*core, *acsr, ain0, ain1),
                     ntc_on_ain0,
                 );
             }
@@ -904,7 +935,7 @@ fn every_simavr_profile_on_a_modelled_avr_core_converts_ntc_and_diode_in_firmwar
     let mut expected_covered: Vec<_> = COVERED
         .iter()
         .map(|(b, ..)| b.to_string())
-        .chain(COMPARATOR_COVERED.iter().map(|(b, _)| b.to_string()))
+        .chain(COMPARATOR_COVERED.iter().map(|(b, ..)| b.to_string()))
         .collect();
     expected_covered.sort();
     let expected_uncovered: Vec<_> = UNCOVERED.iter().map(|(b, _)| b.to_string()).collect();

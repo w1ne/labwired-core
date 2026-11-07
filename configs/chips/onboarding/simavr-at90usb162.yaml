@@ -13,7 +13,38 @@ flash:
 ram:
   base: 256
   size: 512B
-peripherals: []
+# Register map checked against avr-libc 2.0.0 avr/iousb162.h: the ATmega328P
+# data map LabWired's AT90USB162 core runs (AvrModel::At90usb162). Ports are
+# PINx/DDRx/PORTx at 0x23 (B), 0x26 (C), 0x29 (D); MCUCR.PUD is bit 4; SRAM
+# 0x100..0x2FF. There is no ADC; the analog input is the comparator, ACSR 0x50
+# (ACD 7, ACBG 6, ACO 5), with AIN0 on PD1 (positive) and AIN1 on PD2
+# (negative), datasheet 7707 §2.2.4. The CPU owns those registers; each port
+# is mirrored at 0x1_0000 + PINx and the comparator input side (millivolts,
+# two bytes per pin) is an avr_adc window at 0x1_0030, channel 0 AIN0 and
+# channel 1 AIN1. No gpio_input_thresholds: the datasheet DC input limits have
+# not been checked for this part, so none are claimed.
+peripherals:
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010023
+    size: "3"
+  - id: "portc"
+    type: "avr_gpio"
+    base_address: 0x00010026
+    size: "3"
+  - id: "portd"
+    type: "avr_gpio"
+    base_address: 0x00010029
+    size: "3"
+  - id: "acomp"
+    type: "avr_adc"
+    base_address: 0x00010030
+    size: "4"
+    config:
+      channels: 2
+analog_pins:
+  PD1: { peripheral: acomp, channel: 0 }
+  PD2: { peripheral: acomp, channel: 1 }
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

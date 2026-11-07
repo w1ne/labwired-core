@@ -158,12 +158,23 @@ pub const SRAM_START: u16 = 0x0100;
 /// `iotn4313.h`) have no ADC. Their analog input is the comparator: ACSR at
 /// I/O 0x08 (data 0x28) with ACO (bit 5) high while AIN0 (PB0) is above AIN1
 /// (PB1), and ACBG (bit 6) putting the 1.1 V bandgap on the positive input
-/// (see [`Avr::tiny2313_acsr`]). Ports D, B, A are PINx/DDRx/PORTx at
+/// (see [`Avr::comparator_acsr`]). Ports D, B, A are PINx/DDRx/PORTx at
 /// 0x30, 0x36, 0x39 (as on the classic parts, with no port C), MCUCR.PUD is
 /// bit 7, SRAM is 0x60..0xDF (4313: 0x60..0x15F) and flash 2 KB (4313:
 /// 4 KB). 0x24..0x27 are PCMSK1/PCMSK2 and timer registers, not an ADC, so
 /// they are stored. Timers, the USART, USI, PCINT and the comparator's
 /// ACI/ACIE/ACIC are stored only and no interrupt is taken.
+///
+/// The AT90USB162 (avr-libc `iousb162.h`) keeps the ATmega328P's data map for
+/// what this core shares: ports B..D at 0x23..0x2B, Timer0/1, SPI and
+/// MCUCR.PUD (bit 4), with SRAM 0x100..0x2FF and 16 KB flash. It has no ADC,
+/// so 0x78..0x7C are stored, not converted. Its analog input is the
+/// comparator: ACSR at 0x50 (I/O 0x30, ACD 7, ACBG 6, ACO 5, ACI 4) with AIN0
+/// on PD1 and AIN1 on PD2 (datasheet 7707 §2.2.4), composed the same way as
+/// the ATtiny2313's (see [`Avr::comparator_acsr`]). Its vector table is
+/// [`usb162_vector`]. Not modelled: USB, USART1 at 0xC8..0xCE, INT0..7 and
+/// PCINT0/1 (INT0 is PD0 here; the registers are stored only), and the
+/// Timer1 channel C. The 328P's Timer2, USART0 and TWI are not gated off.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
     #[default]
@@ -190,6 +201,7 @@ pub enum AvrModel {
     Attiny1634,
     Attiny2313,
     Attiny4313,
+    At90usb162,
 }
 
 impl AvrModel {
@@ -209,7 +221,9 @@ impl AvrModel {
     /// are other maps); attiny13/attiny13a select the ATtiny13 core and
     /// atmega32u4 the ATmega32U4 core (exact name: the 16U4 has less SRAM);
     /// attiny1634 selects the ATtiny1634 core; attiny2313/attiny2313a and
-    /// attiny4313 the comparator-only ATtiny2313/4313 cores.
+    /// attiny4313 the comparator-only ATtiny2313/4313 cores, and at90usb162
+    /// the comparator-only AT90USB162 core (exact name: the AT90USB82 has
+    /// less flash and SRAM).
     /// atmega128/atmega128a select the ATmega128
     /// core (exact name: atmega1280, atmega1281, atmega1284 and atmega128rfa1
     /// are other maps). Other names default to the ATmega328P.
@@ -243,6 +257,7 @@ impl AvrModel {
             "attiny1634" => return AvrModel::Attiny1634,
             "attiny2313" | "attiny2313a" => return AvrModel::Attiny2313,
             "attiny4313" => return AvrModel::Attiny4313,
+            "at90usb162" => return AvrModel::At90usb162,
             _ => {}
         }
         if n.contains("1280") || n.contains("1281") {
@@ -273,6 +288,7 @@ impl AvrModel {
             AvrModel::Attiny1634 => 16 * 1024,
             AvrModel::Attiny2313 => 2 * 1024,
             AvrModel::Attiny4313 => 4 * 1024,
+            AvrModel::At90usb162 => 16 * 1024,
         }
     }
     pub fn sram_start(self) -> u16 {
@@ -284,7 +300,8 @@ impl AvrModel {
             | AvrModel::Atmega1284
             | AvrModel::Atmega128
             | AvrModel::Atmega32u4
-            | AvrModel::Attiny1634 => SRAM_START,
+            | AvrModel::Attiny1634
+            | AvrModel::At90usb162 => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 | AvrModel::Atmega128Rf => 0x0200,
             AvrModel::Atmega8
             | AvrModel::Atmega16
@@ -319,6 +336,7 @@ impl AvrModel {
             AvrModel::Attiny1634 => 0x04FF,
             AvrModel::Attiny2313 => 0x00DF,
             AvrModel::Attiny4313 => 0x015F,
+            AvrModel::At90usb162 => 0x02FF,
         }
     }
     /// The classic ATmega8/16/32 I/O-space map (see [`AvrModel`]).
@@ -353,6 +371,21 @@ impl AvrModel {
     /// The ATtiny2313/2313A/4313 map, comparator and no ADC (see [`AvrModel`]).
     pub fn is_tiny2313(self) -> bool {
         matches!(self, AvrModel::Attiny2313 | AvrModel::Attiny4313)
+    }
+    /// The AT90USB162 map, comparator and no ADC (see [`AvrModel`]).
+    pub fn is_usb162(self) -> bool {
+        self == AvrModel::At90usb162
+    }
+    /// Data address of ACSR on a part whose only analog input is the analog
+    /// comparator: 0x28 on the ATtiny2313/4313, 0x50 on the AT90USB162.
+    pub fn comparator_acsr(self) -> Option<u16> {
+        if self.is_tiny2313() {
+            Some(TINY2313_ACSR)
+        } else if self.is_usb162() {
+            Some(USB162_ACSR)
+        } else {
+            None
+        }
     }
     /// The ATmega128 map (see [`AvrModel`]).
     pub fn is_mega128(self) -> bool {
@@ -405,7 +438,8 @@ impl AvrModel {
             | AvrModel::Atmega164
             | AvrModel::Atmega324
             | AvrModel::Atmega644
-            | AvrModel::Atmega1284 => AVR_ADC_INPUT_BASE,
+            | AvrModel::Atmega1284
+            | AvrModel::At90usb162 => AVR_ADC_INPUT_BASE,
             AvrModel::Atmega1281
             | AvrModel::Atmega2560
             | AvrModel::Atmega128Rf
@@ -485,6 +519,23 @@ pub fn u4_vector(vec328: u32) -> u32 {
         25 => 37, // TWI
         26 => 38, // SPM READY
         v => mega2560_vector(v),
+    }
+}
+/// AT90USB162 vector number (1-based, avr-libc `_VECTOR(n)` + 1) for a vector
+/// this core numbers the ATmega328P way. INT2..7 push PCINT0/1 to 10/11, the
+/// two USB vectors put WDT at 14, and Timer1 COMPC (18) moves Timer1 OVF
+/// through SPI to 19..23. The part has no PCINT2, Timer2, USART0, ADC or TWI;
+/// firmware for it never enables them, and their 328P numbers pass through.
+pub fn usb162_vector(vec328: u32) -> u32 {
+    match vec328 {
+        4 | 5 => vec328 + 6,   // PCINT0/1 -> 10/11
+        7 => 14,               // WDT
+        11..=13 => vec328 + 4, // TIMER1 CAPT/COMPA/COMPB -> 15..17
+        14..=18 => vec328 + 5, // TIMER1 OVF 19, TIMER0 COMPA/B/OVF 20..22, SPI 23
+        23 => 28,              // EE READY
+        24 => 27,              // ANALOG COMP
+        26 => 29,              // SPM READY
+        v => v,
     }
 }
 pub const AVR_DATA_VMA_BIAS: u64 = 0x0080_0000;
@@ -662,6 +713,9 @@ pub const AVR_MEGA_ADC_INPUT_BASE: u64 = 0x0001_0200;
 /// Bus base of the classic ATmega8/16/32 `avr_adc` input window: just past
 /// their I/O space, clear of the port mirrors at 0x1_0030..0x1_003B.
 pub const AVR_CLASSIC_ADC_INPUT_BASE: u64 = 0x0001_0060;
+/// AT90USB162 `ACSR` (I/O 0x30, avr-libc `iousb162.h`): the bits sit where
+/// the ATtiny2313's do.
+const USB162_ACSR: u16 = 0x0050;
 /// Classic ATmega8/16/32 PINx data addresses, ports D, C, B, A.
 pub const CLASSIC_PIN_ADDRS: [u16; 4] = [0x30, 0x33, 0x36, 0x39];
 /// ATmega128 bus mirror of port F (PINF, DDRF, PORTF at +0, +1, +2): PINF
@@ -937,14 +991,16 @@ impl Avr {
     /// only.
     #[inline]
     fn has_328p_ext_int(&self) -> bool {
-        !self.is_mega() && !self.model.is_xx4() && !self.model.is_u4()
+        !self.is_mega() && !self.model.is_xx4() && !self.model.is_u4() && !self.model.is_usb162()
     }
 
     /// `PINx` of a port this model has.
     #[inline]
     fn is_pin_reg(&self, addr: u16) -> bool {
         match self.model {
-            AvrModel::Atmega328p => matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND),
+            AvrModel::Atmega328p | AvrModel::At90usb162 => {
+                matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
+            }
             AvrModel::Atmega164
             | AvrModel::Atmega324
             | AvrModel::Atmega644
@@ -974,7 +1030,9 @@ impl Avr {
     #[inline]
     fn is_port_reg(&self, addr: u16) -> bool {
         match self.model {
-            AvrModel::Atmega328p => (AVR_PINB..=AVR_PIND + 2).contains(&addr),
+            AvrModel::Atmega328p | AvrModel::At90usb162 => {
+                (AVR_PINB..=AVR_PIND + 2).contains(&addr)
+            }
             AvrModel::Atmega164
             | AvrModel::Atmega324
             | AvrModel::Atmega644
@@ -1151,7 +1209,7 @@ impl Avr {
                 let external = bus.read_u8(self.port_mirror_addr(addr))?;
                 Ok((port & ddr) | (external & !ddr))
             }
-            TINY2313_ACSR if self.model.is_tiny2313() => self.tiny2313_acsr(bus),
+            a if self.model.comparator_acsr() == Some(a) => self.comparator_acsr(a, bus),
             a if self.model.is_io_space() => self.classic_io_read(a),
             0x005D => Ok((self.sp & 0xFF) as u8),
             0x005E => Ok((self.sp >> 8) as u8),
@@ -1208,10 +1266,11 @@ impl Avr {
             0x00BB => Ok(self.twdr),
             0x00BC => Ok(self.twcr),
             // ADC: ADCL/ADCH/ADCSRA/ADMUX (data space)
-            0x0078 => Ok(self.adcl),
-            0x0079 => Ok(self.adch),
-            0x007A => Ok(self.adcsra),
-            0x007C => Ok(self.admux),
+            // The AT90USB162 has no ADC: 0x78..0x7C are stored below.
+            0x0078 if !self.model.is_usb162() => Ok(self.adcl),
+            0x0079 if !self.model.is_usb162() => Ok(self.adch),
+            0x007A if !self.model.is_usb162() => Ok(self.adcsra),
+            0x007C if !self.model.is_usb162() => Ok(self.admux),
             0x007B if self.model.is_rf() => Ok(self.rf_adcsrb()),
             ext_int::ADDR_PCIFR..=ext_int::ADDR_EIMSK
             | ext_int::ADDR_SMCR
@@ -1448,6 +1507,16 @@ impl Avr {
                 self.twi_write_cr(value);
                 Ok(())
             }
+            // ACO is the comparator's output and ACI is write-one-to-clear
+            // (never set here: no interrupt is taken), so neither is stored.
+            USB162_ACSR if self.model.is_usb162() => {
+                self.io[usize::from(USB162_ACSR - 0x20)] = value & !(ACSR_ACO | ACSR_ACI);
+                Ok(())
+            }
+            0x0078..=0x007C if self.model.is_usb162() => {
+                self.io[usize::from(addr - 0x20)] = value;
+                Ok(())
+            }
             0x0078 => {
                 self.adcl = value;
                 Ok(())
@@ -1613,20 +1682,22 @@ impl Avr {
         }
     }
 
-    /// ATtiny2313/4313 ACSR as firmware reads it: the stored ACD, ACBG, ACIE,
-    /// ACIC and ACIS1:0 with ACO (bit 5) composed from the pins (ATtiny2313
-    /// datasheet 2543 §16.1, ATtiny2313A/4313 8246 §15.2).
+    /// ACSR at `acsr` as firmware reads it on a comparator-only part: the
+    /// stored ACD, ACBG, ACIE, ACIC and ACIS1:0 with ACO (bit 5) composed from
+    /// the pins (ATtiny2313 datasheet 2543 §16.1, ATtiny2313A/4313 8246 §15.2,
+    /// AT90USB162 7707 §19.1).
     ///
-    /// The positive input is AIN0 (PB0), or the 1.1 V bandgap when ACBG
-    /// (bit 6) is set; the negative input is AIN1 (PB1). Both pin voltages are
+    /// The positive input is AIN0 (PB0 on the ATtiny2313/4313, PD1 on the
+    /// AT90USB162), or the 1.1 V bandgap when ACBG (bit 6) is set; the
+    /// negative input is AIN1 (PB1, or PD2). Both pin voltages are
     /// the millivolts the bus-side `avr_adc` input window holds for channels
     /// 0 and 1, so any routed analog device reaches them. ACO is 1 while the
     /// positive input is strictly above the negative one; there is no modelled
     /// hysteresis or offset. ACD (bit 7) powers the comparator off and ACO
     /// then reads 0. ACI never sets: the output is evaluated on read, not
     /// watched for edges, and no interrupt is taken.
-    fn tiny2313_acsr(&self, bus: &dyn Bus) -> SimResult<u8> {
-        let stored = self.io[usize::from(TINY2313_ACSR - 0x20)];
+    fn comparator_acsr(&self, acsr: u16, bus: &dyn Bus) -> SimResult<u8> {
+        let stored = self.io[usize::from(acsr - 0x20)];
         if stored & ACSR_ACD != 0 {
             return Ok(stored);
         }
@@ -2498,6 +2569,8 @@ impl Avr {
             xx4_vector(vec)
         } else if self.model.is_u4() {
             u4_vector(vec)
+        } else if self.model.is_usb162() {
+            usb162_vector(vec)
         } else {
             vec
         };
@@ -4683,6 +4756,112 @@ mod tests {
         let mut x5 = Avr::new_model(AvrModel::Attiny85);
         x5.data_write(0x28, 0x00, &mut bus).unwrap();
         assert_eq!(x5.data_read(0x28, &bus).unwrap(), 0x00);
+    }
+
+    // ---- AT90USB162 (AvrModel::is_usb162) ----
+
+    #[test]
+    fn usb162_core_has_the_iousb162_map_and_no_adc() {
+        assert_eq!(
+            AvrModel::from_chip_name("simavr-at90usb162"),
+            AvrModel::At90usb162
+        );
+        // The AT90USB82 has 8 KB flash and SRAM to 0x1FF: not this core.
+        assert_ne!(
+            AvrModel::from_chip_name("simavr-at90usb82"),
+            AvrModel::At90usb162
+        );
+        let mut cpu = Avr::for_chip_name("simavr-at90usb162");
+        let mut bus = MockBus::new();
+        // RAMSTART 0x100, RAMEND 0x2FF, FLASHEND 0x3FFF.
+        assert_eq!(cpu.sp, 0x02FF);
+        assert_eq!(cpu.flash.len(), 16 * 1024);
+        cpu.data_write(0x0100, 0x11, &mut bus).unwrap();
+        cpu.data_write(0x02FF, 0x5A, &mut bus).unwrap();
+        assert_eq!(cpu.sram[0], 0x11);
+        assert!(cpu.data_read(0x0300, &bus).is_err());
+        // No ADC: ADMUX/ADCSRA are plain registers, no conversion starts.
+        bus.mem.insert(AVR_ADC_INPUT_BASE, 0x88);
+        bus.mem.insert(AVR_ADC_INPUT_BASE + 1, 0x13);
+        cpu.data_write(0x7C, 0x40, &mut bus).unwrap();
+        cpu.data_write(0x7A, 0xC0, &mut bus).unwrap();
+        assert_eq!((cpu.admux, cpu.adcsra, cpu.adcl, cpu.adch), (0, 0, 0, 0));
+        assert_eq!(cpu.data_read(0x7A, &bus).unwrap(), 0xC0);
+        assert_eq!(cpu.data_read(0x78, &bus).unwrap(), 0x00);
+        // Ports B, C, D at PINx 0x23, 0x26, 0x29, as on the 328P.
+        for pin in [0x23u16, 0x26, 0x29] {
+            cpu.data_write(pin + 1, 0x0F, &mut bus).unwrap();
+            cpu.data_write(pin + 2, 0x05, &mut bus).unwrap();
+            bus.mem.insert(AVR_IO_MIRROR_BASE + u64::from(pin), 0xF0);
+            assert_eq!(cpu.data_read(pin, &bus).unwrap(), 0xF5, "PINx {pin:#x}");
+        }
+        // INT0..7/PCINT are wired to other pins: stored only.
+        assert!(!cpu.has_328p_ext_int());
+    }
+
+    #[test]
+    fn usb162_vectors_follow_iousb162() {
+        // (328P vector, AT90USB162 `_VECTOR(n)` + 1)
+        for (vec328, slot) in [
+            (2, 2),   // INT0
+            (3, 3),   // INT1
+            (4, 10),  // PCINT0
+            (5, 11),  // PCINT1
+            (7, 14),  // WDT
+            (11, 15), // TIMER1 CAPT
+            (12, 16), // TIMER1 COMPA
+            (13, 17), // TIMER1 COMPB
+            (14, 19), // TIMER1 OVF
+            (15, 20), // TIMER0 COMPA
+            (16, 21), // TIMER0 COMPB
+            (17, 22), // TIMER0 OVF
+            (18, 23), // SPI STC
+            (24, 27), // ANALOG COMP
+            (23, 28), // EE READY
+            (26, 29), // SPM READY
+        ] {
+            assert_eq!(usb162_vector(vec328), slot, "328P vector {vec328}");
+        }
+    }
+
+    #[test]
+    fn usb162_comparator_compares_ain0_or_bandgap_against_ain1() {
+        let mut cpu = Avr::new_model(AvrModel::At90usb162);
+        let mut bus = MockBus::new();
+        assert_eq!(AvrModel::At90usb162.comparator_acsr(), Some(0x50));
+        assert_eq!(AvrModel::Attiny2313.comparator_acsr(), Some(0x28));
+        assert_eq!(AvrModel::Atmega328p.comparator_acsr(), None);
+        let drive = |bus: &mut MockBus, ch: u64, mv: u16| {
+            let base = AVR_ADC_INPUT_BASE + ch * 2;
+            bus.mem.insert(base, (mv & 0xFF) as u8);
+            bus.mem.insert(base + 1, (mv >> 8) as u8);
+        };
+        let aco = |cpu: &Avr, bus: &MockBus| cpu.data_read(0x50, bus).unwrap() & ACSR_ACO != 0;
+        drive(&mut bus, 0, 900);
+        drive(&mut bus, 1, 600);
+        assert!(aco(&cpu, &bus), "AIN0 900 mV above AIN1 600 mV");
+        drive(&mut bus, 0, 400);
+        assert!(!aco(&cpu, &bus), "AIN0 400 mV below AIN1 600 mV");
+        cpu.data_write(0x50, ACSR_ACBG, &mut bus).unwrap();
+        assert!(aco(&cpu, &bus), "1.1 V above AIN1 600 mV");
+        drive(&mut bus, 1, 1200);
+        assert!(!aco(&cpu, &bus), "1.1 V below AIN1 1.2 V");
+        drive(&mut bus, 1, 0);
+        cpu.data_write(
+            0x50,
+            ACSR_ACD | ACSR_ACBG | ACSR_ACO | ACSR_ACI | 0x0B,
+            &mut bus,
+        )
+        .unwrap();
+        assert_eq!(
+            cpu.data_read(0x50, &bus).unwrap(),
+            ACSR_ACD | ACSR_ACBG | 0x0B
+        );
+        // The 328P keeps 0x50 as a stored register: no composed ACO.
+        let mut m328 = Avr::new_model(AvrModel::Atmega328p);
+        drive(&mut bus, 0, 900);
+        m328.data_write(0x50, 0x00, &mut bus).unwrap();
+        assert_eq!(m328.data_read(0x50, &bus).unwrap(), 0x00);
     }
 
     // ---- ATtiny24/44/84 (AvrModel::is_tiny_x4) ----
