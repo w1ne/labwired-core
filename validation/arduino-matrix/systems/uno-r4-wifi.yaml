@@ -11,6 +11,11 @@ external_devices:
     connection: "iic1"
     config:
       i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on `SPI` = RSPI SPI0 (D11/D12/D13); CS is
+  # D10 (P103), driven by digitalWrite.
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi0"
 board_io: []
 connectors:
   - type: "uart"

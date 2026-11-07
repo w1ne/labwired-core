@@ -31,8 +31,8 @@
 #
 # NOT modelled: USB FS (declared stub; the Minima's `Serial` is USB CDC, so
 # stock Minima sketches print nowhere; the WiFi board's `Serial` is SCI9),
-# the external IRQ pins (no `irq_pins`), DTC/DMAC/ELC (stubs), SPI0/1
-# (stubs), CAN0, CTSU, RTC, the watchdogs, flash programming, DAC12.
+# the external IRQ pins (no `irq_pins`), DTC/DMAC/ELC (stubs), CAN0, CTSU,
+# RTC, the watchdogs, flash programming, DAC12.
 
 name: "r7fa4m1ab"
 arch: "arm"
@@ -256,10 +256,22 @@ peripherals:
     type: "stub"
     base_address: 0x40041000
     size: "256B"
-  - id: "spi"
-    type: "stub"
+  # RSPI (R_SPI0/R_SPI1, 0x40072000/0x40072100). ArduinoCore-renesas `SPI`
+  # is SPI0 on D11/D12/D13 (P411/P410/P102), driven by direct register
+  # writes and a polled SPDR_BY / SPSR.SPRF loop, so no IRQ is wired. No
+  # pad waveform: the frame goes straight to the attached device.
+  - id: "spi0"
+    type: "spi"
     base_address: 0x40072000
-    size: "512B"
+    size: "256B"
+    config:
+      profile: "ra_rspi"
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40072100
+    size: "256B"
+    config:
+      profile: "ra_rspi"
   # USBFS stub — USB CDC (the Minima's `Serial`) is not modelled.
   - id: "usbfs"
     type: "stub"
