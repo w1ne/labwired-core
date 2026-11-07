@@ -32,8 +32,11 @@
 //! setting ADLAR in ADCSRB bit 4 (ADMUX bit 5 is MUX5 there) gets a
 //! left-adjusted result. The ATmega128 runs on its own I/O-space core (ADC0..7
 //! on PF0..PF7, whose PINF and DDRF/PORTF are not adjacent); there it checks
-//! the internal 2.56 V reference and the MUX 0x1E 1.23 V bandgap. Every result
-//! is read back with LDS ADCL/ADCH.
+//! the internal 2.56 V reference and the MUX 0x1E 1.23 V bandgap. The ATtiny13
+//! runs on its own I/O-space core (ADC0..3 on PB5, PB2, PB4, PB3, MUX1:0
+//! only); there it checks REFS0 (ADMUX bit 6, AVcc on the megas) selecting
+//! the internal 1.1 V, and that the x5 parts' REFS1 and bandgap code do not
+//! exist. Every result is read back with LDS ADCL/ADCH.
 //!
 //! For each covered part the generic Beta NTC divider and the unrelated
 //! Shockley diode route through the descriptor's `analog_pins`, to the lowest
@@ -76,6 +79,7 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-atmega644", AvrModel::Atmega644, "pa0", "pa7"),
     ("simavr-atmega8", AvrModel::Atmega8, "pc0", "pc5"),
     ("simavr-atmega88", AvrModel::Atmega328p, "pc0", "pc5"),
+    ("simavr-attiny13", AvrModel::Attiny13, "pb5", "pb3"),
     ("simavr-attiny24", AvrModel::Attiny24, "pa0", "pa7"),
     ("simavr-attiny25", AvrModel::Attiny25, "pb5", "pb3"),
     ("simavr-attiny44", AvrModel::Attiny44, "pa0", "pa7"),
@@ -102,7 +106,6 @@ const UNCOVERED: &[(&str, &str)] = &[
         "simavr-atmega64m1",
         "ADMUX MUX4:0 maps ADC0..10 differently",
     ),
-    ("simavr-attiny13", "ADMUX at 0x27"),
     ("simavr-attiny1634", "ADMUX at 0x24"),
     ("simavr-attiny2313", "no ADC"),
     ("simavr-attiny2313a", "no ADC"),
@@ -191,7 +194,7 @@ fn lds(rd: u16, addr: u16) -> [u16; 2] {
 /// ADMUX REFS bits selecting AVcc/VCC: REFS = 01 on the megas, 00 on the
 /// ATtinys (where 01 is the external AREF pin).
 fn vcc_refs(core: AvrModel) -> u8 {
-    if core.is_tiny_x4() || core.is_tiny_x5() {
+    if core.is_tiny_x4() || core.is_tiny_x5() || core.is_tiny13() {
         0x00
     } else {
         0x40
@@ -539,6 +542,34 @@ fn assert_avr_converts_generic_analog(
             convert_mux(chip, &mut bus, 0x40, 0x04),
             0,
             "{board}: MUX 0x04 is differential"
+        );
+    }
+    if core.is_tiny13() {
+        // REFS0 is the only reference bit: ADMUX bit 6 (AVcc on the megas,
+        // AREF on the other tinies) is the internal 1.1 V here, and bit 7
+        // (the x5 parts' REFS1) is reserved, so 0x80 is still VCC.
+        let mv = (expected_diode_v * 1000.0).round() as u32;
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, diode_channel),
+            (mv * 1024 / 1100).min(1023) as u16,
+            "{board}: REFS0 converts the diode against the internal 1.1 V"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x80, diode_channel),
+            (mv * 1024 / AVCC_MV) as u16,
+            "{board}: ADMUX bit 7 is reserved, VCC stays the reference"
+        );
+        // MUX3:2 are reserved: the x5 bandgap code 0x0C selects ADC0, the
+        // NTC pad, not a 1.1 V input.
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x00, 0x0C),
+            convert_mux(chip, &mut bus, 0x00, 0x00),
+            "{board}: MUX 0x0C is ADC0 (no bandgap input)"
+        );
+        assert_ne!(
+            convert_mux(chip, &mut bus, 0x00, 0x0C),
+            (1100 * 1024 / AVCC_MV) as u16,
+            "{board}: MUX 0x0C is not the bandgap"
         );
     }
     if core.is_classic() || core.is_mega128() {
