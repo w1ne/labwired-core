@@ -88,7 +88,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f407vg | open | L0 | 34 | 935.8 | 1.6 | ≥1× (CI) | — |
 | stm32f407ze | open | L0 | 34 | 935.8 | 1.6 | ≥1× (CI) | — |
 | stm32f407zg | open | L0 | 34 | 935.8 | 1.6 | ≥1× (CI) | — |
-| stm32g0b1re | open | L0 | 15 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/stm32g0b1re.md) |
+| stm32g0b1re | open | L0 | 21 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/stm32g0b1re.md) |
 | stm32g474re | open | L1 | 22 | 936.3 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32g474re.md) |
 | stm32g431rb | open | L0 | 22 | 931.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32g431rb.md) |
 | stm32h563 | open | L1 | 37 | 986.5 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32h563.md) |

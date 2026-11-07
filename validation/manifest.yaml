@@ -1812,6 +1812,10 @@ boards:
     # answers it from the existing register_layout(); bus/attach.rs uses it in
     # place of an as_any() downcast. No register behaviour changes. ACK, NOT A
     # SILICON CAPTURE.
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2462,7 +2466,7 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: 18db35f24e621c4228447d9ad73b3291c21778894b2857931d45d93366eebe5a
+    drift_ack_digest: 9c06b4bf3c9b4b3221d3387adc9fc645142cc7b8a9e9e0b6273d67455a4d969d
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4054,6 +4058,10 @@ boards:
     # answers it from the existing register_layout(); bus/attach.rs uses it in
     # place of an as_any() downcast. No register behaviour changes. ACK, NOT A
     # SILICON CAPTURE.
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4692,7 +4700,7 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: b0cd1ea5e8a1b86dbd0dd977ba2d46f0c59ec174a015076ac98f126145aea949
+    drift_ack_digest: dece829cb5f5e5c3c40ce4a9399a1ea410e7a262504d0e973ce94b19e66d5e48
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5193,7 +5201,11 @@ boards:
     # answers it from the existing register_layout(); bus/attach.rs uses it in
     # place of an as_any() downcast. No register behaviour changes. ACK, NOT A
     # SILICON CAPTURE.
-    drift_ack_digest: 890a1b90a621c54eb2d454bd913c3d8c7aec45775138faccd25f78ef22e4b58e
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 4d64445caedab13b8f77959f8d2a8e09328b962714f9db6da7dc81ec4fc57869
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6333,6 +6345,10 @@ boards:
     # answers it from the existing register_layout(); bus/attach.rs uses it in
     # place of an as_any() downcast. No register behaviour changes. ACK, NOT A
     # SILICON CAPTURE.
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6974,7 +6990,7 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: da08f913ae3400fe7d925f2280f9d7488c8d919436fff3c30ceb3a6532d5d90e
+    drift_ack_digest: cb95961a08e75f27be8585c73fcb5f4f0445b7364d6bfe1edbb58aaed705ad4c
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7499,7 +7515,11 @@ boards:
     # answers it from the existing register_layout(); bus/attach.rs uses it in
     # place of an as_any() downcast. No register behaviour changes. ACK, NOT A
     # SILICON CAPTURE.
-    drift_ack_digest: fc3c2baa2a6b046a7c6e3f333df167407f7eb477f5501c0bfb0383f788640d62
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 33757a831b59266ba1b6c95d9501209ac0843e406c888ff1998ffb361c5495f9
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
