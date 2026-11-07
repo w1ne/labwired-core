@@ -43,8 +43,11 @@
 # inputs in mode 3), including CCxP input polarity and the input prescaler;
 # it does not count CK_INT while encoder mode is selected. Not modeled on
 # TIM2: the RCC_APB1PRSTR reset (dropped, as for I2C1), PD7's NRST option
-# byte (the pad is treated as GPIO), the ETR input, external-clock/gated/
-# trigger slave modes, DMA and TIM2 interrupts.
+# byte (the pad is treated as GPIO), the ETR input, gated/trigger slave
+# modes, DMA and TIM2 interrupts. External clock mode 1 (SMS=111) counts
+# TRGI: on ITR0 that is TIM1's TRGO (CTLR2.MMS = update only), on TS =
+# 100..110 the TI edges. In that mode TIM2's flags latch when it is read,
+# not on a scheduled wake.
 #
 # TIM1 is the engine's advanced-control timer (`advanced: true`: the F1
 # general-purpose block plus RCR/BDTR, same offsets as ch32fun's
@@ -277,11 +280,15 @@ peripherals:
     config:
       advanced: true
 
+  # ITR0 is TIM1's TRGO (ch32fun tim1_tim2_cascade: "Select TRIGO of TIM1 as
+  # CLK source for TIM2" with TIM_TS_ITR0); ITR1..ITR3 are not wired.
   - id: tim2
     type: timer
     base_address: 0x40000000
     size: 1KB
     clock: { reg: apb1pcenr, bit: 0 }
+    config:
+      itr: [tim1]
 
   # SPI1 at 0x40013000; RCC_APB2PCENR.SPI1EN is bit 12 (ch32v003hw.h).
   - id: spi1

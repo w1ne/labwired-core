@@ -3111,6 +3111,55 @@ impl SystemBus {
         }
     }
 
+    /// Wire each timer's internal triggers ITR0..ITR3 to the master timers'
+    /// TRGO outputs the chip yaml names (`config: { itr: [tim1, ~, ...] }`,
+    /// index = ITRx; `~` leaves that input unconnected), so a slave in
+    /// external clock mode 1 counts its master's update events. A name that
+    /// is not a timer on this bus is an error, not a silent no-op.
+    pub(crate) fn wire_timer_trigger_links(
+        &mut self,
+        peripherals: &[labwired_config::PeripheralConfig],
+    ) -> anyhow::Result<()> {
+        for p_cfg in peripherals {
+            let Some(itr) = p_cfg.config.get("itr") else {
+                continue;
+            };
+            let names = itr.as_sequence().ok_or_else(|| {
+                anyhow::anyhow!("timer '{}': config.itr must be a list", p_cfg.id)
+            })?;
+            if names.len() > 4 {
+                anyhow::bail!("timer '{}': config.itr has more than ITR0..ITR3", p_cfg.id);
+            }
+            let Some(slave) = self.find_peripheral_index_by_name(&p_cfg.id) else {
+                continue;
+            };
+            for (index, name) in names.iter().enumerate() {
+                if name.is_null() {
+                    continue;
+                }
+                let master_name = name.as_str().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "timer '{}': config.itr[{index}] must be a timer id",
+                        p_cfg.id
+                    )
+                })?;
+                let link = self
+                    .find_peripheral_index_by_name(master_name)
+                    .and_then(|master| self.peripherals[master].dev.timer_trgo())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "timer '{}': ITR{index} names '{master_name}', which is not a timer",
+                            p_cfg.id
+                        )
+                    })?;
+                if !self.peripherals[slave].dev.attach_timer_itr(index, link) {
+                    anyhow::bail!("'{}' has no internal trigger inputs", p_cfg.id);
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Bind each ADC channel a board wires to an analog output (the ADC's
     /// `analog_links`, e.g. a jumper from a DAC pin to an ADC input) to a
     /// live probe of that output, so a conversion reads what the source

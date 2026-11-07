@@ -1492,6 +1492,8 @@ impl SystemBus {
         bus.wire_ra_gpt_output_pads();
         // Board wires from an analog output (a DAC pin) to an ADC input.
         bus.wire_analog_links();
+        // Timer master/slave: each slave's ITRx reads its master's TRGO.
+        bus.wire_timer_trigger_links(&merged_peripherals)?;
         // nRF52: bind every TWIM/SPIM/UARTE wire to every pad its PSEL can
         // name. Unlike the four above this is not a datasheet AF table — the
         // pad has no function register on this family, so the peripherals

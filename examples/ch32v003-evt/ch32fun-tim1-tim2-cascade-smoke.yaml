@@ -1,0 +1,37 @@
+# ch32fun examples/tim1_tim2_cascade, unmodified. TIM1 counts milliseconds
+# (PSC 47999, ATRLR 999 at 48 MHz) and is the master: CTLR2.MMS = 010 sends
+# TRGO on every update event. TIM2 takes that TRGO on internal trigger ITR0
+# in external clock mode 1 (SMCFGR.TS = 000, SMS = 111), so it counts
+# seconds and never sees CK_INT. main() prints "TIM2.TIM1 s" every
+# Delay_Ms(500) on the debug-printf channel.
+#
+# 170 M cycles is 3.54 s: eight lines, 0.000 s .. 3.500 s, every one exact.
+# Before the TRGO/ITR link TIM2 had no external clock and counted CK_INT, so
+# the seconds field was HCLK cycles mod 65536.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/tim1_tim2_cascade.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 170000000
+  max_steps: 200000000
+  wall_time_ms: 900000
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "0.000 s" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "0.500 s" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "1.000 s" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "1.500 s" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "2.000 s" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "2.500 s" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "3.000 s" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "3.500 s" }
+  # TIM1: PSC, ATRLR, CTLR2.MMS = update, CEN.
+  - memory_value: { address: 0x40012C28, size: 16, expected_value: 47999 }
+  - memory_value: { address: 0x40012C2C, size: 16, expected_value: 999 }
+  - memory_value: { address: 0x40012C04, size: 16, mask: 0x0070, expected_value: 0x0020 }
+  - memory_value: { address: 0x40012C00, size: 16, mask: 0x0001, expected_value: 0x0001 }
+  # TIM2: SMCFGR TS = ITR0, SMS = external clock mode 1; CEN; CNT = 3 whole
+  # seconds at 3.54 s.
+  - memory_value: { address: 0x40000008, size: 16, mask: 0x0077, expected_value: 0x0007 }
+  - memory_value: { address: 0x40000000, size: 16, mask: 0x0001, expected_value: 0x0001 }
+  - memory_value: { address: 0x40000024, size: 16, expected_value: 3 }

@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs eighteen of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs nineteen of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -176,6 +176,7 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `iwdg` | the independent watchdog: PD0/PD4/PC0 on 1.5 s, off 1 s, the IWDG started at /128 with RLDR 0xFFF, on 3 s, one feed, then 250 ms blinks with no further feed until the watchdog resets the chip. The smoke checks the edge counts and that PSCR is back at 0 after the reset (11.25 s, 540 M cycles). [`check-iwdg.py`](check-iwdg.py) decodes PD0 from a `--watch-gpio` run, committed as [`iwdg-capture.json.gz`](evidence/ch32fun-iwdg-smoke/iwdg-capture.json.gz) with its output in [`iwdg-check.log`](evidence/ch32fun-iwdg-smoke/iwdg-check.log) | feed at 5,500.003 ms, 17 blink edges at 250 ms, then the reset at feed + 4,095.002 ms (4095 counts of LSI/128 at 128 kHz) releases PD0, and the second boot's 1,500 ms on pulse starts 94 cycles later, as on power-up |
 | `tim2_encoder` | TIM2 in encoder mode 3 (`SMCFGR.SMS` = 011, both inputs, x4) on partial remap 1: a switch encoder's A on PC5 (T2CH1) and B on PC2 (T2CH2), both pulled up by the example and closing to GND. Three detents forward from cycle 6,000,000 and five back from 13,000,000; `main()` prints the position when `CNT` moved. The smoke checks both printed lines, the remap, SMS, CEN and `CTLR1.DIR`, and the final `CNT`; the whole terminal is in [`terminal.log`](evidence/ch32fun-tim2-encoder-smoke/terminal.log) | 7/7; `relative=12 absolute=36875 delta=12`, then `relative=-8 absolute=36855 delta=-20`, nothing else: `CNT` sits at 0x8FFF until the first edge |
 | `tim2_pwm_remap` | TIM2 PWM (ATRLR 255, CH1/CH2 active low, CH2 = 255 - CH1) with LEDs on PD4, PD3, PC1 and PC7; after 255 duty steps `ToggleRemap()` sets `TIM2_RM` = 11 while TIM2 runs. The smoke checks the console (`Full Remapping!`), the remap and the TIM2 setup; [`check-tim2-pwm-remap.py`](check-tim2-pwm-remap.py) decodes a `--watch-gpio` run, committed as [`pwm-capture.json.gz`](evidence/ch32fun-tim2-pwm-remap-smoke/pwm-capture.json.gz) with its output in [`remap-check.log`](evidence/ch32fun-tim2-pwm-remap-smoke/remap-check.log) | 9/9; PD4/PD3 carry counts 253..254 and stop at cycle 66,011,469, PC1/PC7 start 255 cycles later at count 0 and carry 0..16; every whole period is 256 cycles with CH1 low + CH2 low = 255 |
+| `tim1_tim2_cascade` | timer master/slave: TIM1 counts milliseconds (PSC 47999, ATRLR 999) and sends TRGO on every update (`CTLR2.MMS` = 010); TIM2 counts that TRGO on ITR0 in external clock mode 1 (`SMCFGR` TS = 000, SMS = 111), so it counts seconds. `main()` prints `TIM2.TIM1 s` every 500 ms on the debug-printf channel. The smoke checks all eight lines, the TIM1/TIM2 setup and TIM2 `CNT` = 3 at the stop | 15/15 over 170 M cycles (3.54 s): `0.000 s`, `0.500 s` .. `3.500 s`. Before the TRGO/ITR link, SMS = 111 still counted CK_INT, so the seconds field was HCLK cycles mod 65536 |
 | `input_capture` | TIM1 input capture at 1 us per count: a pulse source on PD2 (T1CH1) gives a 1000 us and a 2500 us pulse; CH1 latches the rising edge, CH2 (TI1, `CC2P`) the falling edge, and the TIM1_CC handler (PFIC 37) queues each capture for `main()` to print. The smoke checks the four printed captures and the TIM1 setup left behind (PSC, CHCTLR1, CCER, DMAINTENR, CEN); the whole terminal is in [`terminal.log`](evidence/ch32fun-input-capture-smoke/terminal.log) | 11/11; fall minus rise is exactly 1000 (24993 → 25993) and 2500 (21957 → 24457) counts, one handler entry per capture, no `badtrigger` |
 
 This profile adds these to the PFIC profile:
@@ -312,6 +313,23 @@ This profile adds these to the PFIC profile:
   pins the PD2 route, the level drop on the read, the remap, and TIM2's
   CH32V003 pads. The smoke uses
   [`ch32v003evt-ch32fun-input-capture-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-input-capture-smoke.yaml).
+- **TIM1 → TIM2 cascade (TRGO / ITR0).** The engine had no link between
+  timers, and SMS = 111 (external clock mode 1) was not decoded, so TIM2 kept
+  counting CK_INT. Now a chip yaml names each slave's internal triggers,
+  `config: { itr: [tim1] }` here (ITR0 = TIM1, as `tim1_tim2_cascade`
+  selects with `TIM_TS_ITR0`), and a master with `CTLR2.MMS` = 010 sends
+  one TRGO pulse per update event, a counter wrap or an EGR.UG. The master
+  publishes a closed-form plan of its future updates whenever firmware
+  changes it, so the slave reads its pulse count at any cycle without the
+  master being advanced, and the legacy walk counts pulses as they happen.
+  In external clock mode 1 the slave's prescaler and counter step on TRGI,
+  either those pulses on ITRx or the TI edges for TS = 100..110. Not
+  modeled: the other MMS sources (reset, enable, compare pulse, OCxREF),
+  the gated and trigger slave modes on ITRx, ETR, and scheduled interrupts
+  for an externally clocked slave: its flags latch when it is read, so
+  UIE on TIM2 in this mode would not wake the core. Unit tests in
+  `timer.rs` pin the pulse count, a mid-run master reconfiguration, the
+  slave prescaler and wrap, MMS gating, the no-CK_INT rule, and the walk.
 - **IWDG** (`0x40003000`): the STM32 independent watchdog block
   (CTLR/PSCR/RLDR/STATR at the KR/PR/RLR/SR offsets) with
   `config: { lsi_hz: 128000 }`, which turns on its counting mode. Key

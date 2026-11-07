@@ -194,6 +194,16 @@ pub struct Timer {
     /// Only populated in scheduler mode with a non-zero filter.
     #[serde(skip)]
     ic_pending: Vec<PendingInputEdge>,
+    /// This timer's TRGO, once a slave timer's ITRx is wired to it.
+    #[serde(skip)]
+    trgo: Option<Arc<TrgoLink>>,
+    /// The masters' TRGO links on internal triggers ITR0..ITR3 (chip yaml
+    /// `config: { itr: [...] }`).
+    #[serde(skip)]
+    itr: [Option<Arc<TrgoLink>>; 4],
+    /// The TRGI pulse count external clock mode 1 has consumed.
+    #[serde(skip)]
+    trgi_seen: Cell<u64>,
 }
 
 /// One raw TIx edge that has not yet been stable for its filter's N samples.
@@ -318,6 +328,85 @@ const SR_CCOF_SHIFT: u32 = 9;
 /// fire, so the counter free-runs mod 2^32 with no update events.
 const ARR_NEVER_WRAPS: u32 = u32::MAX;
 
+/// A master timer's TRGO output, shared with the slave timers whose internal
+/// trigger ITRx the chip wires to it (RM0008 §15.3.15 "Timer synchronization",
+/// Table 86; CH32V003 RM §10.2.6: TIM2's ITR0 is TIM1).
+///
+/// Only the update-event source is modelled (CR2.MMS = 010): one TRGO pulse
+/// per update event, the counter's wrap past ARR and an EGR.UG alike. The
+/// master publishes a closed-form plan of its future updates whenever its
+/// state changes, so a slave reads the pulse count at any cycle without the
+/// master being advanced first; in legacy (walk) mode the master counts each
+/// update as it happens and the plan stays empty.
+#[derive(Debug, Default)]
+pub struct TrgoLink {
+    plan: std::sync::Mutex<TrgoPlan>,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct TrgoPlan {
+    /// TRGO pulses up to and including cycle `anchor`.
+    base: u64,
+    anchor: u64,
+    /// The master counting with MMS = update, from its state at `anchor`.
+    live: Option<TrgoSchedule>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TrgoSchedule {
+    /// Cycles from `anchor` to the first counter increment.
+    k1: u64,
+    /// Cycles per increment (PSC + 1).
+    period: u64,
+    /// Increments to the first update event.
+    to_wrap: u64,
+    /// Increments per update after the first (ARR + 1).
+    lap: u64,
+    /// The increment after which the master's counter freezes (an enabled
+    /// flag held as an interrupt level), if one is reached.
+    freeze_after: Option<u64>,
+}
+
+impl TrgoLink {
+    /// TRGO pulses the master has produced up to cycle `now`.
+    pub fn pulses_at(&self, now: u64) -> u64 {
+        let plan = *self.plan.lock().unwrap();
+        plan.base
+            + plan
+                .live
+                .map_or(0, |s| s.updates_within(now.saturating_sub(plan.anchor)))
+    }
+
+    fn publish(&self, anchor: u64, live: Option<TrgoSchedule>) {
+        let mut plan = self.plan.lock().unwrap();
+        let base = plan.base
+            + plan
+                .live
+                .map_or(0, |s| s.updates_within(anchor.saturating_sub(plan.anchor)));
+        *plan = TrgoPlan { base, anchor, live };
+    }
+
+    /// One pulse now (an EGR.UG, or an update on the legacy walk).
+    fn pulse(&self) {
+        self.plan.lock().unwrap().base += 1;
+    }
+}
+
+impl TrgoSchedule {
+    fn updates_within(&self, e: u64) -> u64 {
+        if e < self.k1 {
+            return 0;
+        }
+        let n = 1 + (e - self.k1) / self.period;
+        let m = self.freeze_after.map_or(n, |f| n.min(f));
+        if m < self.to_wrap {
+            0
+        } else {
+            1 + (m - self.to_wrap) / self.lap
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TimerChannelOutputSnapshot {
     pub enabled: bool,
@@ -410,6 +499,9 @@ impl Timer {
             ti_level: [false; 4],
             ic_pending: Vec::new(),
             wave: TimerOutputWave::default(),
+            trgo: None,
+            itr: Default::default(),
+            trgi_seen: Cell::new(0),
         }
     }
 
@@ -955,8 +1047,12 @@ impl Timer {
             self.sr.set(self.sr.get() | SR_TIF);
             // SMS=100 reset mode: reinitialise the counter and generate an
             // update event — UIF unless CR1.URS restricts it to overflow.
-            // Gated (101), trigger (110) and external-clock (111) modes are
-            // not modelled.
+            // SMS=111 external clock mode 1: the trigger edge is one counter
+            // clock. Gated (101) and trigger (110) modes are not modelled.
+            if self.external_clock() {
+                let frozen = self.counter_frozen();
+                self.count_ticks(1, frozen);
+            }
             if self.smcr & 0x7 == 0b100 {
                 self.cnt.set(0);
                 self.psc_cnt.set(0);
@@ -971,6 +1067,60 @@ impl Timer {
             self.freeze_revision
                 .set(self.freeze_revision.get().wrapping_add(1));
         }
+        self.publish_trgo();
+    }
+
+    /// SMCR.SMS = 111, external clock mode 1: rising edges of TRGI clock the
+    /// counter and CK_INT does not.
+    fn external_clock(&self) -> bool {
+        !self.basic && self.smcr & 0x7 == 0b111
+    }
+
+    /// The master's TRGO on internal trigger ITR0..ITR3 (SMCR.TS = 000..011)
+    /// when external clock mode 1 selects one the chip wired. TS = 100..110
+    /// count TI edges in `apply_filtered_edge`; ETR (111) is not modelled.
+    fn itr_clock(&self) -> Option<&Arc<TrgoLink>> {
+        let ts = ((self.smcr >> 4) & 0x7) as usize;
+        if self.external_clock() && ts < 4 {
+            self.itr[ts].as_ref()
+        } else {
+            None
+        }
+    }
+
+    /// CR2.MMS = 010: TRGO pulses on every update event.
+    fn trgo_on_update(&self) -> bool {
+        (self.cr2 >> 4) & 0x7 == 0b010
+    }
+
+    /// Republish this timer's TRGO plan from its state at the anchor, after
+    /// anything the plan cannot predict (a register write, an input edge).
+    /// Legacy mode counts pulses in `tick_counter` instead.
+    fn publish_trgo(&self) {
+        let Some(link) = &self.trgo else {
+            return;
+        };
+        if !self.scheduler_mode() {
+            return;
+        }
+        let counting = self.trgo_on_update()
+            && self.cr1 & 0x1 != 0
+            && !self.counter_frozen()
+            && self.encoder_mode().is_none()
+            && !self.external_clock();
+        let live = if counting {
+            self.increments_to_wrap(self.cnt.get())
+                .map(|to_wrap| TrgoSchedule {
+                    k1: self.ticks_to_first_increment(),
+                    period: self.psc as u64 + 1,
+                    to_wrap,
+                    lap: self.arr as u64 + 1,
+                    freeze_after: self.first_enabled_event(),
+                })
+        } else {
+            None
+        };
+        link.publish(self.anchor.get(), live);
     }
 
     /// The encoder mode SMCR.SMS selects: 1 counts TI1FP1 edges, 2 TI2FP2
@@ -1263,12 +1413,28 @@ impl Timer {
             return;
         }
         self.anchor.set(now);
-        if self.counter_frozen() || (self.cr1 & 0x1) == 0 || self.encoder_mode().is_some() {
+        // External clock mode 1 counts the master's TRGO pulses in the window
+        // instead of CK_INT cycles; the pulses go by whether or not CEN is set.
+        let e = match self.itr_clock() {
+            Some(link) => {
+                let pulses = link.pulses_at(now);
+                pulses.saturating_sub(self.trgi_seen.replace(pulses))
+            }
+            None if self.external_clock() => 0,
+            None => now - anchor,
+        };
+        self.count_ticks(e, frozen_before);
+    }
+
+    /// Replay `e` counter-clock ticks (CK_INT cycles, or TRGI pulses in
+    /// external clock mode 1) from the current state.
+    fn count_ticks(&self, e: u64, frozen_before: bool) {
+        if e == 0 || self.counter_frozen() || (self.cr1 & 0x1) == 0 || self.encoder_mode().is_some()
+        {
             // Frozen (held IRQ level) or not enabled: the window elapses with
             // no counting — exactly the walk's early returns.
             return;
         }
-        let e = now - anchor;
         let k1 = self.ticks_to_first_increment();
         if e < k1 {
             // No increment in the window: only the prescaler phase advances.
@@ -1374,8 +1540,11 @@ impl Timer {
             .ic_pending
             .first()
             .map(|p| p.accept.saturating_sub(anchor).max(1));
+        // In external clock mode the increments are TRGI pulses, not cycles,
+        // so there is no cycle to arm: the flags latch on the next sync.
         let counter = self
             .first_enabled_event()
+            .filter(|_| !self.external_clock())
             .map(|j| self.ticks_to_first_increment() + (j - 1) * (self.psc as u64 + 1));
         match (counter, filter) {
             (Some(a), Some(b)) => Some(a.min(b)),
@@ -1452,7 +1621,18 @@ impl Timer {
             }
             // SMCR is 16-bit on every layout (bit 3 reserved): 0xFFF7,
             // silicon-confirmed on F103 TIM2.
-            0x08 => self.smcr = value & 0x0000_FFF7,
+            0x08 => {
+                self.smcr = value & 0x0000_FFF7;
+                // External clock mode 1 counts the pulses from here on.
+                if let Some(link) = self.itr_clock() {
+                    let at = if self.scheduler_mode() {
+                        link.pulses_at(self.anchor.get())
+                    } else {
+                        link.pulses_at(0)
+                    };
+                    self.trgi_seen.set(at);
+                }
+            }
             // DIER: general-purpose has no COMIE(5)/BIE(7)/COMDE(13) — 0x5F5F,
             // silicon-confirmed on F103 TIM2. Advanced (TIM1) exposes them (0x7FFF).
             0x0C => {
@@ -1586,6 +1766,13 @@ impl Timer {
             self.freeze_revision
                 .set(self.freeze_revision.get().wrapping_add(1));
         }
+        // UG is an update event, so TRGO pulses with MMS = update.
+        if explicit_update && self.trgo_on_update() {
+            if let Some(link) = &self.trgo {
+                link.pulse();
+            }
+        }
+        self.publish_trgo();
     }
 }
 
@@ -1650,6 +1837,23 @@ impl Timer {
             };
         }
 
+        // External clock mode 1: count the TRGI pulses since the last tick.
+        if self.external_clock() {
+            let e = match self.itr_clock() {
+                Some(link) => {
+                    let pulses = link.pulses_at(0);
+                    pulses.saturating_sub(self.trgi_seen.replace(pulses))
+                }
+                None => 0,
+            };
+            self.count_ticks(e, frozen_before);
+            return crate::PeripheralTickResult {
+                irq: self.irq_level_held(),
+                cycles: 0,
+                ..Default::default()
+            };
+        }
+
         // Counter Enable (bit 0). An encoder-mode counter only moves on an
         // input edge.
         if (self.cr1 & 0x1) == 0 || self.encoder_mode().is_some() {
@@ -1668,6 +1872,11 @@ impl Timer {
             if self.cnt.get() > self.arr {
                 self.cnt.set(0);
                 self.sr.set(self.sr.get() | 1); // Set UIF (Update Interrupt Flag)
+                if self.trgo_on_update() {
+                    if let Some(link) = &self.trgo {
+                        link.pulse();
+                    }
+                }
                 if !self.basic {
                     self.latch_compare_match_flags();
                 }
@@ -1805,6 +2014,20 @@ impl crate::Peripheral for Timer {
     fn reads_can_deassert_irq(&self) -> bool {
         // Only a channel in input-capture mode has a read-to-clear flag.
         !self.basic && (self.ccmr1 & 0x0303 != 0 || self.ccmr2 & 0x0303 != 0)
+    }
+
+    fn timer_trgo(&mut self) -> Option<Arc<TrgoLink>> {
+        let link = self.trgo.get_or_insert_with(Default::default).clone();
+        self.publish_trgo();
+        Some(link)
+    }
+
+    fn attach_timer_itr(&mut self, index: usize, link: Arc<TrgoLink>) -> bool {
+        if self.basic || index >= 4 {
+            return false;
+        }
+        self.itr[index] = Some(link);
+        true
     }
 
     fn timer_input_edge(&mut self, ti: u8, level: bool, cycle: u64) -> bool {
@@ -2605,6 +2828,28 @@ mod tests {
         assert_eq!(t.read_reg(0x10) & 0x2, 0x2);
     }
 
+    /// Legacy walk: the master counts each TRGO pulse as it updates and the
+    /// slave in external clock mode 1 picks them up on its next tick.
+    #[test]
+    fn itr_external_clock_on_the_legacy_walk() {
+        use crate::Peripheral;
+        let mut master = Timer::new_with_layout(16, true);
+        let mut slave = Timer::new();
+        let link = master.timer_trgo().unwrap();
+        assert!(slave.attach_timer_itr(0, link));
+        master.write_reg(0x28, 9);
+        master.write_reg(0x2C, 4);
+        master.write_reg(0x04, 0x20);
+        slave.write_reg(0x08, 0x07);
+        master.write_reg(0x00, 1);
+        slave.write_reg(0x00, 1);
+        for _ in 0..1000 {
+            master.tick();
+            slave.tick();
+        }
+        assert_eq!(slave.read_reg(0x24), 20);
+    }
+
     #[cfg(feature = "event-scheduler")]
     mod scheduler_mode {
         use super::*;
@@ -3016,6 +3261,87 @@ mod tests {
                 t.sync_to(400);
                 assert_eq!(t.read_reg(0x34), 308, "CNT as of edge + filter");
             }
+        }
+
+        /// A master that updates every 50 cycles (PSC 9, ARR 4, MMS =
+        /// update) and a slave on ITR0 in external clock mode 1, sharing one
+        /// clock, as ch32fun's tim1_tim2_cascade sets TIM1/TIM2 up.
+        fn cascade(clock: &CycleClock) -> (Timer, Timer) {
+            use crate::Peripheral;
+            let mut master = Timer::new_with_layout(16, true);
+            let mut slave = Timer::new();
+            master.attach_cycle_clock(clock.clone());
+            slave.attach_cycle_clock(clock.clone());
+            let link = master.timer_trgo().unwrap();
+            assert!(slave.attach_timer_itr(0, link));
+            master.write_reg(0x28, 9);
+            master.write_reg(0x2C, 4);
+            master.write_reg(0x04, 0x20);
+            slave.write_reg(0x08, 0x07);
+            master.write_reg(0x00, 1);
+            slave.write_reg(0x00, 1);
+            (master, slave)
+        }
+
+        #[test]
+        fn itr_external_clock_counts_master_updates_without_syncing_the_master() {
+            let clock = CycleClock::default();
+            let (mut master, slave) = cascade(&clock);
+            clock.publish(1000);
+            // The master is never advanced here: the slave reads its plan.
+            assert_eq!(slave.read_u32(0x24).unwrap(), 20, "1000 / 50 updates");
+            clock.publish(1049);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 20);
+            clock.publish(1050);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 21);
+            // Reconfigure the master mid-run: from cycle 1050 it updates every
+            // 100 cycles, and an EGR.UG is one more TRGO pulse.
+            master.sync_to(1050);
+            master.write_reg(0x2C, 9);
+            master.write_reg(0x14, 1);
+            // The slave already synced to 1050; the next read is a later cycle.
+            clock.publish(1051);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 22, "UG pulses TRGO");
+            clock.publish(2050);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 32);
+            assert_eq!(master.read_u32(0x24).unwrap(), 0);
+        }
+
+        #[test]
+        fn itr_external_clock_runs_the_slave_prescaler_and_wrap() {
+            let clock = CycleClock::default();
+            let (_master, mut slave) = cascade(&clock);
+            slave.sync_to(0);
+            slave.write_reg(0x28, 1); // two pulses per count
+            slave.write_reg(0x2C, 3); // wrap after four counts
+            clock.publish(50 * 7);
+            // Seven pulses: three counts and a half, no wrap yet.
+            assert_eq!(slave.read_u32(0x24).unwrap(), 3);
+            assert_eq!(slave.read_u32(0x10).unwrap() & 1, 0);
+            clock.publish(50 * 8);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 0);
+            assert_eq!(slave.read_u32(0x10).unwrap() & 1, 1, "UIF on the wrap");
+        }
+
+        #[test]
+        fn external_clock_mode_does_not_count_ck_int() {
+            let clock = CycleClock::default();
+            let (_master, mut slave) = cascade(&clock);
+            // TS = ITR1, which this chip leaves unconnected.
+            slave.sync_to(0);
+            slave.write_reg(0x08, 0x17);
+            clock.publish(5000);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 0);
+        }
+
+        #[test]
+        fn trgo_needs_mms_update() {
+            let clock = CycleClock::default();
+            let (mut master, slave) = cascade(&clock);
+            master.sync_to(0);
+            master.write_reg(0x04, 0x00); // MMS = reset
+            clock.publish(1000);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 0);
         }
 
         #[test]

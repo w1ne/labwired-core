@@ -846,6 +846,22 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// Timer capability: this timer's TRGO output, as the shared link a
+    /// slave timer's internal trigger reads. Default: no TRGO.
+    fn timer_trgo(&mut self) -> Option<std::sync::Arc<crate::peripherals::timer::TrgoLink>> {
+        None
+    }
+
+    /// Timer capability: wire internal trigger ITR`index` (0..=3) to a
+    /// master's TRGO. Returns `false` when this peripheral has no ITR inputs.
+    fn attach_timer_itr(
+        &mut self,
+        _index: usize,
+        _link: std::sync::Arc<crate::peripherals::timer::TrgoLink>,
+    ) -> bool {
+        false
+    }
+
     /// Timer capability: input `ti` (0 = TI1 … 3 = TI4) changed to `level`
     /// at absolute engine cycle `cycle`. A timer with capture channels latches
     /// CNT as of that cycle into CCRx per its CCMR/CCER configuration and
