@@ -180,6 +180,7 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `tim1_tim2_cascade` | timer master/slave: TIM1 counts milliseconds (PSC 47999, ATRLR 999) and sends TRGO on every update (`CTLR2.MMS` = 010); TIM2 counts that TRGO on ITR0 in external clock mode 1 (`SMCFGR` TS = 000, SMS = 111), so it counts seconds. `main()` prints `TIM2.TIM1 s` every 500 ms on the debug-printf channel. The smoke checks all eight lines, the TIM1/TIM2 setup and TIM2 `CNT` = 3 at the stop | 15/15 over 170 M cycles (3.54 s): `0.000 s`, `0.500 s` .. `3.500 s`. Before the TRGO/ITR link, SMS = 111 still counted CK_INT, so the seconds field was HCLK cycles mod 65536 |
 | `input_capture` | TIM1 input capture at 1 us per count: a pulse source on PD2 (T1CH1) gives a 1000 us and a 2500 us pulse; CH1 latches the rising edge, CH2 (TI1, `CC2P`) the falling edge, and the TIM1_CC handler (PFIC 37) queues each capture for `main()` to print. The smoke checks the four printed captures and the TIM1 setup left behind (PSC, CHCTLR1, CCER, DMAINTENR, CEN); the whole terminal is in [`terminal.log`](evidence/ch32fun-input-capture-smoke/terminal.log) | 11/11; fall minus rise is exactly 1000 (24993 → 25993) and 2500 (21957 → 24457) counts, one handler entry per capture, no `badtrigger` |
 | `standby_autowake` | standby with the auto-wakeup: a 5 s `Delay_Ms`, every GPIO to input pull-up, the LSI on (`RCC_RSTSCKR` LSION/LSIRDY), EXTI line 9 as a falling-edge event, the AWU at LSI/4096 with window 63 (2.016 s), PDDS + SLEEPDEEP, then `__WFE()` and `awake, N` in a loop. The smoke checks the banner, `entering sleep loop` and `awake, 2` within 576 M cycles (12 s). [`check-standby-autowake.py`](check-standby-autowake.py) reruns the image to either side of the third wake-up, logged in [`autowake-check.log`](evidence/ch32fun-standby-autowake-smoke/autowake-check.log). Uses [`ch32v003evt-ch32fun-standby-autowake-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-standby-autowake-smoke.yaml) | 3/3; exactly `awake, 0`..`awake, 2` in 12 s. At 530.2 M cycles `awake, 1` is printed and `awake, 2` is not; at 532.0 M `awake, 2` is printed. That rules out a core that falls through WFE, and it rules out a 64-count window |
+| `i2c_slave` | I2C1 as an interrupt-driven slave at 0x09 (`I2C1_EV_IRQHandler`/`I2C1_ER_IRQHandler`, PFIC 30/31), a 3-register EEPROM-style map, PA2 driven from register 0 bit 0. It is the only two-chip smoke: [`i2c-slave/env.yaml`](i2c-slave/env.yaml) puts the CH32V003 on two open-drain `gpio_net`s with an STM32F103 controller ([`i2c-slave/src/f1_controller.c`](i2c-slave/src/f1_controller.c), 100 kHz), and both I2C bit engines drive the wire. The controller writes registers 1..2, then register 0 = 1, reads 4 bytes back from offset 0, reads 1 more byte, and NACKs an absent 0x50. [`i2c-slave/test.yaml`](i2c-slave/test.yaml) checks both RAMs and `GPIOA_OUTDR` | 11/11: read back `01 AB 5A 00`, PA2 high. The single read after it returns `00`, the byte ch32fun's TXE handler loaded into DR while the 4-byte read's last byte was NACKed. [`test-past-end.yaml`](i2c-slave/test-past-end.yaml) (7/7) pins a bug in ch32fun's own handler: a write past the array end leaves RXNE set, the next transfer takes the stale byte as its offset, and the slave holds SCL low for good |
 
 This profile adds these to the PFIC profile:
 
@@ -238,6 +239,12 @@ This profile adds these to the PFIC profile:
   and the panel stayed blank. A 16-bit store to the data register now sends
   one byte. ch32fun declares `DATAR` as `uint16_t`, and the old byte-sliced
   store sent every byte twice, which drew the diagonals at half slope.
+  For `i2c_slave`, I2C1 declares its two PFIC lines (`irq: 30`,
+  `irq_error: 31`). Slave mode runs on a world `gpio_net` only: the legacy
+  controller's bit engine (`i2c_legacy_net.rs`) answers OAR1, stretches SCL
+  while ADDR, RXNE/BTF or TXE wait for firmware, and raises the event and
+  error lines. The CH32V003 needed no new engine code for it, only the
+  PC1/PC2 pad routes it already had.
 - **SSD1306 on SPI1** (`spi_oled`): the SPI master is the one `spi_max7219`
   already uses. The new part is the panel,
   [`configs/devices/ssd1306_spi.yaml`](../../configs/devices/ssd1306_spi.yaml)
@@ -427,7 +434,8 @@ Read these results correctly:
   source and raise no interrupt.
 - On I2C1: bus timing (`CKCFGR` is stored, and transfers complete
   immediately), the `RCC_APB1PRSTR` peripheral reset, the AFIO remaps,
-  slave mode, PEC/SMBus, the I2C interrupts and DMA are not modeled. The
+  PEC/SMBus and DMA are not modeled; slave mode and the I2C interrupts are
+  modeled on a world `gpio_net` only (`i2c_slave`), not against device models. The
   `i2c_oled` run stops in mode 1, about 2.2 s in; modes 2 to 8 (lines,
   circles, image, text) take another 14 s of simulated time and are not
   checked.

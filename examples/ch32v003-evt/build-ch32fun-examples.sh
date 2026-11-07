@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build twenty-one unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build twenty-two unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -97,6 +97,10 @@
 #                    falling-edge event, AWU at LSI/4096 with window 63
 #                    (2.016 s), PDDS + SLEEPDEEP, then a loop of __WFE()
 #                    and "awake, N" on the debug printf channel.
+#   i2c_slave.elf    examples/i2c_slave: I2C1 slave at 0x09 on PC1/PC2,
+#                    interrupt driven, three registers; PA2 follows
+#                    register 0 bit 0. Run against an STM32F103 controller
+#                    in i2c-slave/env.yaml.
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V003 (rv32ec/ilp32e, -Os -flto, generated_ch32v003.ld),
@@ -136,7 +140,7 @@ ld="${out_dir}/generated_ch32v003.ld"
 for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr \
     spi_max7219 uart_tx_dma ws2812bdemo tim1_pwm tim1_pwm_complementary_outputs iwdg \
     input_capture tim2_encoder tim2_pwm_remap spi_oled usart_dma_rx_circular tim1_tim2_cascade \
-    adc_dma_opamp standby_autowake; do
+    adc_dma_opamp standby_autowake i2c_slave; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

@@ -11,7 +11,8 @@
 # spi_max7219, and DMA1 with USART1 TX on channel 4 for ch32fun's
 # uart_tx_dma (and USART1 RX on channel 5 for usart_dma_rx_circular) and SPI1 TX on channel 3 for ch32fun's ws2812bdemo, and TIM1
 # with its complementary outputs for ch32fun's tim1_pwm, and the IWDG
-# (counting from LSI, resetting the core on time-out) for ch32fun's iwdg.
+# (counting from LSI, resetting the core on time-out) for ch32fun's iwdg,
+# and the I2C1 event/error interrupts for ch32fun's i2c_slave.
 #
 # Sources:
 # - ch32fun ch32v003hw.h (register map, DMDATA0/DMDATA1/sentinel at
@@ -303,8 +304,12 @@ peripherals:
     base_address: 0x40005400
     size: 1KB
     clock: { reg: apb1pcenr, bit: 21 }
+    # PFIC 30 = I2C1_EV, 31 = I2C1_ER (ch32v003hw.h IRQn_Type); ch32fun's
+    # i2c_slave runs the whole slave from these two handlers.
+    irq: 30
     config:
       profile: stm32f1
+      irq_error: 31
 
   # TIM1 at 0x40012C00; RCC_APB2PCENR.TIM1EN is bit 11 (ch32v003hw.h).
   # irq 37 is TIM1_CC_IRQn (ch32fun ch32v003hw.h): the capture/compare flags

@@ -1,0 +1,27 @@
+# CLI: labwired test --script examples/ch32v003-evt/i2c-slave/test-past-end.yaml --output-dir out
+# A write past the end of ch32fun's i2c_slave register array wedges the bus.
+# Step 2 writes 0x02 0x5A 0x77 to the 3-register slave. Its RXNE branch
+# stores 0x5A at position 2 and does not read DATAR for 0x77 (position 3 is
+# past size1), so RXNE stays set with 0x77 in DR. Step 3's first byte (0x00)
+# then arrives while DR is full. The handler takes the stale 0x77 as the
+# new offset, and the 0x00 that moves up into DR is never read either
+# (position 0x77 is past the end too). With DR full and RXNE never cleared,
+# the slave holds SCL low (BTF, RM0008 §26.3.2) and the controller never
+# finishes. ch32fun's own code, unmodified, causes this; the model only
+# shows it.
+schema_version: "1.0"
+inputs:
+  env: "env-past-end.yaml"
+limits:
+  max_steps: 400000
+assertions:
+  # The controller never reached step 4: RESULT[0] and done are still 0.
+  - memory_value: { node: master, address: 0x20000100, expected_value: 0, size: 32 }
+  - memory_value: { node: master, address: 0x2000011C, expected_value: 0, size: 32 }
+  # Slave: step 1 and the in-range byte of step 2 landed, register 0 never
+  # got step 3's 0x01, the offset is the stale 0x77, and PA2 stayed low.
+  - memory_value: { node: slave, address: 0x20000000, expected_value: 0x00, size: 8 }
+  - memory_value: { node: slave, address: 0x20000001, expected_value: 0xAB, size: 8 }
+  - memory_value: { node: slave, address: 0x20000002, expected_value: 0x5A, size: 8 }
+  - memory_value: { node: slave, address: 0x20000005, expected_value: 0x77, size: 8 }
+  - memory_value: { node: slave, address: 0x4001080C, expected_value: 0x0, size: 32 }
