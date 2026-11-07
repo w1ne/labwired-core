@@ -23,7 +23,10 @@
 //! are against 1.8 V (the NTC divider clips at 0x3FF when it sits above it),
 //! and it checks the internal 1.5 V and 1.6 V references, the 1.2 V bandgap
 //! on MUX 0x1E, AVSS on 0x1F, and that firmware polling ADCSRB.AVDDOK/REFOK
-//! sees them set once ADEN is. Every result is read back with LDS ADCL/ADCH.
+//! sees them set once ADEN is. The ATtiny25/45/85 run on the I/O-space ATtiny
+//! x5 cores (ADC0..3 on PB5, PB2, PB4, PB3); there it checks REFS2 (ADMUX
+//! bit 4) selecting the internal 1.1 V and 2.56 V references and the MUX
+//! 0x0C bandgap. Every result is read back with LDS ADCL/ADCH.
 //!
 //! For each covered part the generic Beta NTC divider and the unrelated
 //! Shockley diode route through the descriptor's `analog_pins`, to the lowest
@@ -65,6 +68,9 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-atmega644", AvrModel::Atmega644, "pa0", "pa7"),
     ("simavr-atmega8", AvrModel::Atmega8, "pc0", "pc5"),
     ("simavr-atmega88", AvrModel::Atmega328p, "pc0", "pc5"),
+    ("simavr-attiny25", AvrModel::Attiny25, "pb5", "pb3"),
+    ("simavr-attiny45", AvrModel::Attiny45, "pb5", "pb3"),
+    ("simavr-attiny85", AvrModel::Attiny85, "pb5", "pb3"),
 ];
 
 /// simavr profiles with no analog endpoint, and why (addresses per avr-libc
@@ -91,12 +97,9 @@ const UNCOVERED: &[(&str, &str)] = &[
     ("simavr-attiny2313", "no ADC"),
     ("simavr-attiny2313a", "no ADC"),
     ("simavr-attiny24", "ADMUX at 0x27"),
-    ("simavr-attiny25", "ADMUX at 0x27"),
     ("simavr-attiny4313", "no ADC"),
     ("simavr-attiny44", "ADMUX at 0x27"),
-    ("simavr-attiny45", "ADMUX at 0x27"),
     ("simavr-attiny84", "ADMUX at 0x27"),
-    ("simavr-attiny85", "ADMUX at 0x27"),
 ];
 
 const AVCC_MV: u32 = 5000;
@@ -113,10 +116,10 @@ fn avcc_mv(core: AvrModel) -> u32 {
 }
 
 /// ADCSRB/ADMUX/ADCSRA/ADCL data addresses on `core` (ADCH = ADCL + 1). The
-/// classic ATmega8/16/32 keep the ADC in I/O space and have no ADCSRB (MUX5
-/// does not exist).
+/// classic ATmega8/16/32 and the ATtiny25/45/85 keep the ADC in I/O space;
+/// MUX5 does not exist there (the tinies' ADCSRB holds only trigger bits).
 fn adc_registers(core: AvrModel) -> (Option<u16>, u16, u16, u16) {
-    if core.is_classic() {
+    if core.is_io_space() {
         (None, 0x27, 0x26, 0x24)
     } else {
         (Some(0x7B), 0x7C, 0x7A, 0x78)
@@ -425,6 +428,41 @@ fn assert_avr_converts_generic_analog(
             poll_adcsrb_status(chip, &mut bus),
             (0, 0xA0),
             "{board}: AVDDOK/REFOK read 0 before ADEN and 1 after"
+        );
+    }
+    if core.is_tiny_x5() {
+        // REFS2 is ADMUX bit 4 here (MUX4 on the ATmega16/32): REFS2:0 = 010
+        // is the internal 1.1 V and 110 the internal 2.56 V. MUX 0x0C is the
+        // 1.1 V bandgap and 0x0D GND; 0x0E (the ATmega8's bandgap) has no
+        // input and 0x0F is the unmodelled temperature sensor.
+        let mv = (expected_diode_v * 1000.0).round() as u32;
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x80, diode_channel),
+            (mv * 1024 / 1100).min(1023) as u16,
+            "{board}: the diode converts against the internal 1.1 V reference"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x90, diode_channel),
+            (mv * 1024 / 2560) as u16,
+            "{board}: REFS2:0 = 110 converts against the internal 2.56 V"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, 0x0C),
+            (1100 * 1024 / AVCC_MV) as u16,
+            "{board}: MUX 0x0C converts the 1.1 V bandgap"
+        );
+        for code in [0x0D, 0x0E, 0x0F] {
+            assert_eq!(
+                convert_mux(chip, &mut bus, 0x40, code),
+                0,
+                "{board}: MUX {code:#04x} is not a modelled input"
+            );
+        }
+        // Only four channels: MUX 0x04 is a differential code, not ADC4.
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, 0x04),
+            0,
+            "{board}: MUX 0x04 is differential"
         );
     }
     if core.is_classic() {
