@@ -74,6 +74,11 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
     // the one the declarative GPIO path stores the routed level in.
     ("declarative/lpc2000/gpio.yaml", 0x00, "UM10114 GPIO IOnPIN"),
     (
+        "declarative/tegra/gpio.yaml",
+        0x30,
+        "Linux gpio-tegra.c GPIO_IN (GPIO_REG + 0x30)",
+    ),
+    (
         "sam4s_pio",
         0x3C,
         "SAM4S DS §31.7 PIO_PDSR; AT91RM9200 DS 1768 PIO_PDSR",
@@ -188,16 +193,28 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
         0x4802_0010,
         "RV32M1_ri5cy.h GPIOA_BASE + GPIO_Type PDIR",
     ),
+    (
+        "tegra2",
+        "gpioA",
+        0x6000_D030,
+        "tegra20.dtsi gpio@6000d000 + gpio-tegra.c GPIO_IN",
+    ),
+    (
+        "tegra3",
+        "gpioA",
+        0x6000_D030,
+        "tegra30.dtsi gpio@6000d000 + gpio-tegra.c GPIO_IN",
+    ),
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 182;
+const COVERED: usize = 184;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 76;
+const SILICON_REGISTER: usize = 78;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 63;
+const NO_ANALOG_ENDPOINT: usize = 61;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
