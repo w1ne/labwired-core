@@ -1298,6 +1298,18 @@ boards:
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: stm32h563
+    # 2026-11-07: CH32V003 DMA1 changes the shared dma.rs/uart.rs/
+    # peripheral.rs/bus digests (and exti.rs/inspect.rs: a test-only match
+    # arm and rustfmt). New `profile: ch32v003` DMA (G0 commit-after-copy
+    # without the EN=1 config lock, channel levels on the QingKe PFIC); the
+    # G0 lock is now its own flag, still set by `profile: stm32g0`. A DMA
+    # channel enabled while a routed source's request is already a level
+    # (USART CR3.DMAT & TXE, CR3.DMAR & RX data) is served at once; only
+    # chips whose DMA `requests:` table names a USART reach that path (the
+    # CH32V003 ch32fun profile today), and the legacy profile's walk, its
+    # register file and IRQ behaviour are unchanged. This is a reviewed
+    # model-drift acknowledgment, NOT a new silicon capture; no capture, ack
+    # date or expiry changed.
     # 2026-11-07: SPI 16-bit frames to byte-level devices change the shared
     # spi.rs digest (and rcc.rs/inspect.rs where watched). A CR1.DFF (or DS >
     # 8) frame now reaches an attached byte-level device as two bytes in
@@ -1792,7 +1804,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 55add3b968652ce849ecc224caf94102c32f19ebb47052c805dbde577a5b25aa
+    drift_ack_digest: ad10255893b0e297199c942dd28a3ba1a1a93a6925123f735ab801cb60018140
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3542,6 +3554,18 @@ boards:
     drift_ack: 2026-11-07
 
   - id: nucleo-l476rg
+    # 2026-11-07: CH32V003 DMA1 changes the shared dma.rs/uart.rs/
+    # peripheral.rs/bus digests (and exti.rs/inspect.rs: a test-only match
+    # arm and rustfmt). New `profile: ch32v003` DMA (G0 commit-after-copy
+    # without the EN=1 config lock, channel levels on the QingKe PFIC); the
+    # G0 lock is now its own flag, still set by `profile: stm32g0`. A DMA
+    # channel enabled while a routed source's request is already a level
+    # (USART CR3.DMAT & TXE, CR3.DMAR & RX data) is served at once; only
+    # chips whose DMA `requests:` table names a USART reach that path (the
+    # CH32V003 ch32fun profile today), and the legacy profile's walk, its
+    # register file and IRQ behaviour are unchanged. This is a reviewed
+    # model-drift acknowledgment, NOT a new silicon capture; no capture, ack
+    # date or expiry changed.
     # 2026-11-07: SPI 16-bit frames to byte-level devices change the shared
     # spi.rs digest (and rcc.rs/inspect.rs where watched). A CR1.DFF (or DS >
     # 8) frame now reaches an attached byte-level device as two bytes in
@@ -4025,7 +4049,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 311fda904abd151ae8792b24d7e361244af9855cf75b286e751f46477658141e
+    drift_ack_digest: 8acf05dccf69fe4e26761ca6f0f40378ab4420e20475ba650d4b104efb60fd27
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4724,6 +4748,18 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: nucleo-l073rz
+    # 2026-11-07: CH32V003 DMA1 changes the shared dma.rs/uart.rs/
+    # peripheral.rs/bus digests (and exti.rs/inspect.rs: a test-only match
+    # arm and rustfmt). New `profile: ch32v003` DMA (G0 commit-after-copy
+    # without the EN=1 config lock, channel levels on the QingKe PFIC); the
+    # G0 lock is now its own flag, still set by `profile: stm32g0`. A DMA
+    # channel enabled while a routed source's request is already a level
+    # (USART CR3.DMAT & TXE, CR3.DMAR & RX data) is served at once; only
+    # chips whose DMA `requests:` table names a USART reach that path (the
+    # CH32V003 ch32fun profile today), and the legacy profile's walk, its
+    # register file and IRQ behaviour are unchanged. This is a reviewed
+    # model-drift acknowledgment, NOT a new silicon capture; no capture, ack
+    # date or expiry changed.
     # 2026-11-07: SPI 16-bit frames to byte-level devices change the shared
     # spi.rs digest (and rcc.rs/inspect.rs where watched). A CR1.DFF (or DS >
     # 8) frame now reaches an attached byte-level device as two bytes in
@@ -5159,7 +5195,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 24fc10919a58dec568944a67fb9f025ee82dad0ed2e419501599c6645619c7a0
+    drift_ack_digest: 315b9f3f930b726661d92022cc1bf53124453e76fd964903106aebe2b110079c
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5795,6 +5831,18 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f103
+    # 2026-11-07: CH32V003 DMA1 changes the shared dma.rs/uart.rs/
+    # peripheral.rs/bus digests (and exti.rs/inspect.rs: a test-only match
+    # arm and rustfmt). New `profile: ch32v003` DMA (G0 commit-after-copy
+    # without the EN=1 config lock, channel levels on the QingKe PFIC); the
+    # G0 lock is now its own flag, still set by `profile: stm32g0`. A DMA
+    # channel enabled while a routed source's request is already a level
+    # (USART CR3.DMAT & TXE, CR3.DMAR & RX data) is served at once; only
+    # chips whose DMA `requests:` table names a USART reach that path (the
+    # CH32V003 ch32fun profile today), and the legacy profile's walk, its
+    # register file and IRQ behaviour are unchanged. This is a reviewed
+    # model-drift acknowledgment, NOT a new silicon capture; no capture, ack
+    # date or expiry changed.
     # 2026-11-07: SPI 16-bit frames to byte-level devices change the shared
     # spi.rs digest (and rcc.rs/inspect.rs where watched). A CR1.DFF (or DS >
     # 8) frame now reaches an attached byte-level device as two bytes in
@@ -6291,7 +6339,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 9d9e308631410b8b83d2f648db204bd3c8e42a3c52759aa5515f4106aa885371
+    drift_ack_digest: c728221fc9aeaa0b7dae2f427babfd06e644df54192b34c7b64a50276cd8cfb2
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6997,6 +7045,18 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f407
+    # 2026-11-07: CH32V003 DMA1 changes the shared dma.rs/uart.rs/
+    # peripheral.rs/bus digests (and exti.rs/inspect.rs: a test-only match
+    # arm and rustfmt). New `profile: ch32v003` DMA (G0 commit-after-copy
+    # without the EN=1 config lock, channel levels on the QingKe PFIC); the
+    # G0 lock is now its own flag, still set by `profile: stm32g0`. A DMA
+    # channel enabled while a routed source's request is already a level
+    # (USART CR3.DMAT & TXE, CR3.DMAR & RX data) is served at once; only
+    # chips whose DMA `requests:` table names a USART reach that path (the
+    # CH32V003 ch32fun profile today), and the legacy profile's walk, its
+    # register file and IRQ behaviour are unchanged. This is a reviewed
+    # model-drift acknowledgment, NOT a new silicon capture; no capture, ack
+    # date or expiry changed.
     # 2026-11-07: SPI 16-bit frames to byte-level devices change the shared
     # spi.rs digest (and rcc.rs/inspect.rs where watched). A CR1.DFF (or DS >
     # 8) frame now reaches an attached byte-level device as two bytes in
@@ -7449,7 +7509,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 53ccd711306f8c6cc1c172f18f6c780975c62dcc5a393ddd2df5b4398b654fe8
+    drift_ack_digest: 314a0f6f685387bbe05bd3ad8b9544e07c668d89dff1037bdc04b11b7b52fe49
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the

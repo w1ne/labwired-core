@@ -8,7 +8,8 @@
 # channel outputs on the reset-mapped pads (PD4/PD3/PC0/PD7) for ch32fun's
 # tim2_pwm, and EXTI with its AFIO_EXTICR port select for ch32fun's
 # exti_pin_change_isr, and SPI1 (PC5 SCK, PC6 MOSI, PC7 MISO) for ch32fun's
-# spi_max7219.
+# spi_max7219, and DMA1 with USART1 TX on channel 4 for ch32fun's
+# uart_tx_dma.
 #
 # Sources:
 # - ch32fun ch32v003hw.h (register map, DMDATA0/DMDATA1/sentinel at
@@ -57,8 +58,21 @@
 # baud-rate prescaler as bus timing, HSCR, the AFIO PCFR1 SPI1 remap,
 # hardware NSS, slave mode, CRC, the SPI1 interrupt and DMA.
 #
+# DMA1 is the STM32F1 seven-channel block at the same INTFR/INTFCR/CFGRx/
+# CNTRx/PADDRx/MADDRx offsets as ch32fun's ch32v003hw.h, on the `ch32v003`
+# DMA profile: an item's count, pointers and flags commit after its bus copy
+# succeeds, CIRC reloads CNTR and the pointers, and each channel's
+# TC/HT/TE & TCIE/HTIE/TEIE is a level on PFIC interrupt 21 + N
+# (DMA1_Channel1_IRQn = 22 .. DMA1_Channel7_IRQn = 28) until INTFCR clears
+# it. CFGR/CNTR/PADDR/MADDR stay writable while EN=1 (the G0 lock does not
+# apply). The only routed request is USART1 TX (CTLR3.DMAT) on channel 4,
+# the fixed CH32V003 mapping. Not modeled on DMA1: the other request lines
+# (ADC1 ch1, SPI1 RX/TX ch2/ch3, USART1 RX ch5, I2C1, TIM1/TIM2), bus
+# arbitration timing against the CPU (an item takes no CPU cycles), and
+# RCC_AHBPCENR's SRAM/flash enables.
+#
 # Not modeled: debug-printf input from the host, a detached probe, the rest
-# of the RISC-V debug module, TIM1, DMA, OPA, the
+# of the RISC-V debug module, TIM1, OPA, the
 # watchdogs, sleep/standby, the HSE, the option bytes, and everything listed
 # as not modeled in ch32v003f4p6-pfic-smoke.yaml.
 name: ch32v003f4p6-ch32fun-smoke
@@ -161,6 +175,18 @@ peripherals:
     clock: { reg: apb2enr, bit: 5 }
     config:
       profile: ch32v003
+
+  # DMA1 at 0x40020000; RCC_AHBPCENR.DMA1EN is bit 0 (ch32v003hw.h).
+  - id: dma1
+    type: dma
+    base_address: 0x40020000
+    size: 1KB
+    clock: { reg: ahbpcenr, bit: 0 }
+    config:
+      profile: ch32v003
+      # Fixed request mapping, CH32V003 RM DMA1 request table.
+      requests:
+        usart1_tx: 4
 
   - id: usart1
     type: uart

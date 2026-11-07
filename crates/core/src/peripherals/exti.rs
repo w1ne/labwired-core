@@ -1138,6 +1138,8 @@ mod scheduler_diff {
             Exti::Stm32F1(e) | Exti::Stm32L0(e) => e.clock.clone(),
             Exti::Stm32L4(e) => e.clock.clone(),
             Exti::Stm32G0(e) | Exti::Stm32U5(e) => e.clock.clone(),
+            // A PFIC level source with no cycle clock: never built here.
+            Exti::Ch32v003(_) => unreachable!("no walk/scheduler identity for the QingKe EXTI"),
         }
         .unwrap();
 

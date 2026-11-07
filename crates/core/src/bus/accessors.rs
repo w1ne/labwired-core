@@ -106,6 +106,7 @@ impl SystemBus {
             self.finish_rtc_io_write(rtc_io_capture);
         }
         self.maybe_service_edge_driven_gpio_devices(idx);
+        self.poll_enabled_dma_request_levels(idx);
         #[cfg(feature = "event-scheduler")]
         self.collect_scheduled_events(idx);
         r
@@ -1320,6 +1321,7 @@ impl crate::Bus for SystemBus {
             }
 
             self.maybe_service_edge_driven_gpio_devices(idx);
+            self.poll_enabled_dma_request_levels(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             if r.is_ok() {
@@ -1520,6 +1522,7 @@ impl crate::Bus for SystemBus {
             }
 
             self.maybe_service_edge_driven_gpio_devices(idx);
+            self.poll_enabled_dma_request_levels(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             if r.is_ok() {

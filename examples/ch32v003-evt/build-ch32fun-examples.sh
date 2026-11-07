@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build seven unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build nine unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -25,6 +25,12 @@
 #                    (AFIO_EXTICR = PD, rising edge, INTENR), the
 #                    EXTI7_0 handler blipping PC1 high then low and
 #                    clearing INTFR; main spins on nop.
+#   spi_max7219.elf  examples/spi_max7219: 16-bit SPI1 frames (PC5 SCK,
+#                    PC6 MOSI) to a MAX7219 with CS/LOAD on PD0.
+#   uart_tx_dma.elf  examples/uart_tx_dma: "Hello World!\r\n" on USART1
+#                    (PD5, 115200) moved by DMA1 channel 4 (CTLR3.DMAT)
+#                    once per second; the channel's transfer-complete
+#                    interrupt (PFIC 25) toggles PD6.
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V003 (rv32ec/ilp32e, -Os -flto, generated_ch32v003.ld),
@@ -62,7 +68,7 @@ ld="${out_dir}/generated_ch32v003.ld"
   -DTARGET_MCU_MEMORY_SPLIT= "${src}/ch32fun/ch32fun.ld" > "${ld}"
 
 for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr \
-    spi_max7219; do
+    spi_max7219 uart_tx_dma; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

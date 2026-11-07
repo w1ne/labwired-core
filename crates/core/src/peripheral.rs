@@ -1218,6 +1218,26 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn drain_attached_pin_drives(&mut self, _out: &mut Vec<(String, String, bool)>) {}
 
     fn dma_request(&mut self, _request_id: u32) {}
+    /// DMA controller only: a bitmask (bit `n - 1` for channel `n`) of the
+    /// peripheral-paced channels whose EN went 0 -> 1 since the last call,
+    /// cleared by the call. The bus asks each source routed to those
+    /// channels for its request LEVEL ([`Self::dma_request_level`]), because
+    /// a request line is a level: a source already asking when the channel
+    /// is enabled is served at once (CH32V003 ch32fun sets USART CTLR3.DMAT
+    /// before it enables the channel). Default: never.
+    fn take_enabled_dma_channels(&mut self) -> u8 {
+        0
+    }
+    /// DMA controller only: append the request names (`<peripheral id>_tx` /
+    /// `_rx`) hard-wired to `channel` (1-based) as the routing registers
+    /// stand now. Default: none.
+    fn dma_requests_on_channel(&self, _channel: u32, _out: &mut Vec<String>) {}
+    /// Request source only: whether request line `line` ([`DMA_SIGNAL_TX`] /
+    /// [`DMA_SIGNAL_RX`]) is asserted NOW. Only consulted when a DMA channel
+    /// routed to it is enabled. Default: not asserted.
+    fn dma_request_level(&self, _line: u32) -> bool {
+        false
+    }
     /// Flash-controller capability: `true` for the peripheral that decides what
     /// a CPU store into the flash region does (NXP JN51xx / K32W flash
     /// controllers latch addresses and program pages through stores to the

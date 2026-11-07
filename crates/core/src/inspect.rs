@@ -1506,7 +1506,12 @@ mod tests {
         assert_eq!(at(7, 2), (1, 1), "bit 0 is column 7");
         assert_eq!(at(1, 2), (0, 1));
         assert_eq!(at(0, 3), (0, 1), "the next row is its own byte");
-        let full = PixelRegion { x: 0, y: 0, w: 8, h: 8 };
+        let full = PixelRegion {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 8,
+        };
         assert_eq!(
             artifact_region_ink(MAX7219_ROWS, &meta(8, 8), &fb, full).unwrap(),
             (2, 64)

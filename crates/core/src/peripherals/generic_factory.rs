@@ -1261,6 +1261,7 @@ pub fn try_build(
             let mut dma = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
                 None | Some("legacy") => crate::peripherals::dma::Dma1::new(),
                 Some("stm32g0") => crate::peripherals::dma::Dma1::new_stm32g0(),
+                Some("ch32v003") => crate::peripherals::dma::Dma1::new_ch32v003(),
                 Some(profile) => {
                     anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
                 }

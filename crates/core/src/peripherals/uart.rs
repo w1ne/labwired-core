@@ -2718,6 +2718,31 @@ impl crate::Peripheral for Uart {
         self.sci_b_irq.is_some() && !self.sci_irq_vectors
     }
 
+    /// STM32-shaped USARTs (F1/CH32 and V2): the TX request is CR3.DMAT
+    /// while TXE (status bit 7) is set; the RX request is CR3.DMAR while a
+    /// received character waits. Other layouts keep the edge-only requests.
+    fn dma_request_level(&self, line: u32) -> bool {
+        if !matches!(
+            self.layout,
+            UartRegisterLayout::Stm32F1 | UartRegisterLayout::Stm32V2
+        ) {
+            return false;
+        }
+        match line {
+            crate::DMA_SIGNAL_TX => {
+                self.cr3 & (1 << 7) != 0
+                    && self
+                        .read(self.status_offset())
+                        .is_ok_and(|sr| sr & 0x80 != 0)
+            }
+            crate::DMA_SIGNAL_RX => {
+                self.cr3 & self.layout.dmar_mask() != 0
+                    && self.rx_buf.lock().is_ok_and(|g| !g.is_empty())
+            }
+            _ => false,
+        }
+    }
+
     /// Phase 2B.3b (issue #192): the shared `Uart` is migrated to the event
     /// scheduler. With the feature on, the bus stops calling `tick()` every
     /// cycle; `take_scheduled_events` / `on_event` drive it instead. With the
