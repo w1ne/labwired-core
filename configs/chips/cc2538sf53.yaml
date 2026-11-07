@@ -230,14 +230,21 @@ peripherals:
     type: "stub"
     base_address: 0x400D7000
     size: "4KB"
+  # SSI0/SSI1 (SWRU319C §19; Renode SPI.CC2538_SSI): master
+  # mode, LBM loopback, 4..16-bit frames, 8-deep TX/RX FIFOs, RORRIS and the
+  # TX/RX FIFO-level interrupts (crates/core/src/peripherals/cc2538/ssi.rs).
+  # Not modelled: slave mode, RX timeout, TI/MICROWIRE formats, bit timing,
+  # µDMA requests. IRQ 7 / 34 in the regular map (Table 5-2).
   - id: "ssi0"
-    type: "stub"
+    type: "cc2538_pl022_ssi"
     base_address: 0x40008000
     size: "4KB"
+    irq: 7
   - id: "ssi1"
-    type: "stub"
+    type: "cc2538_pl022_ssi"
     base_address: 0x40009000
     size: "4KB"
+    irq: 34
   - id: "i2cm"
     type: "stub"
     base_address: 0x40020000

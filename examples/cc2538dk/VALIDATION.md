@@ -67,7 +67,9 @@ ELFs are not run. No wider Renode parity claim is made.
 | IOC pin mux / pad overrides | **not modelled** | the IOC window is a stub |
 | GPIO interrupts, AFSEL commit lock | **not modelled** | `GPIO_RIS`/`GPIO_MIS` read 0 |
 | CCA in the smoke image | pinned | the loader enters the smoke at its flash-base table; `test_cc2538dk_smoke_customer_configuration_area_boots` pins its 44 bytes |
-| PKA, SSI, I2C, GPTimers, USB, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
+| SSI0/SSI1 master mode: TX-FIFO queueing while disabled, LBM loopback, 4..16-bit frames, 8-deep RX FIFO overrun (RORRIS) and ICR clear, FIFO-level RIS/MIS and IRQ 7/34 | unit-tested; exercised | `cargo test -p labwired-core --lib cc2538::ssi` (10 tests); the smoke's `ssi0 ...` lines in `io-smoke.yaml` |
+| SSI slave mode, RX timeout, TI SSF / MICROWIRE formats, bit timing, µDMA requests | **not modelled** | `crates/core/src/peripherals/cc2538/ssi.rs` |
+| PKA, I2C, GPTimers, USB, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
 
 ## Commands and evidence (verified 2026-10-30)
 

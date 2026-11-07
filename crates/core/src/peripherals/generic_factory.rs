@@ -416,8 +416,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "armv8m_mpu",
     // TI CC2538: the PL061-style GPIO port (address-masked GPIO_DATA),
     // SYS_CTRL, the 802.15.4 RF core, the sleep timer, the flash controller, the AES/SHA-256
-    // cryptoprocessor and the µDMA. Deliberately not `cc2538_gpio`: that
-    // spelling belongs to the staged onboarding/cc2538 descriptor, which keeps its placeholder.
+    // cryptoprocessor, the µDMA and the SSI. Deliberately not `cc2538_gpio`/`cc2538_ssi`: those
+    // spellings belong to the staged onboarding/cc2538 descriptor, which keeps its placeholders.
     "cc2538_pl061_gpio",
     "cc2538_sys_ctrl",
     "cc2538_rfcore",
@@ -425,6 +425,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "cc2538_flash_ctrl",
     "cc2538_aes",
     "cc2538_udma",
+    "cc2538_pl022_ssi",
     // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
     // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
@@ -1895,6 +1896,8 @@ pub fn try_build(
         }
         "cc2538_aes" => Box::new(crate::peripherals::cc2538::aes::Cc2538Aes::new()),
         "cc2538_udma" => Box::new(crate::peripherals::cc2538::udma::Cc2538Udma::new()),
+        // SSI0/1: master-mode SPI; devices attach through `external_devices:`.
+        "cc2538_pl022_ssi" => Box::new(crate::peripherals::cc2538::ssi::Cc2538Ssi::new()),
         "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
         "apollo4_cpu" => Box::new(crate::peripherals::apollo4::Apollo4Cpu::new()),

@@ -47,6 +47,8 @@
           "led=orange on pin=1 leds=08",
           "led=orange off pin=0 leds=00",
           "keys select=1 left=1 right=1 up=1 down=1",
+          "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c",
+          "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08",
           "hb=0 yellow=1 green=0 orange=0",
           "hb=1 yellow=1 green=0 orange=0"
         ]
@@ -63,7 +65,7 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      67943,
+      68185,
       24,
       101,
       61,
@@ -77,10 +79,10 @@
       61,
       1074638856,
       536903640,
-      2103439,
-      2104982
+      2107357,
+      2108904
     ],
-    "pc": 2104982,
+    "pc": 2108904,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -93,7 +95,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "8e56b609f63b7b1dbdc67e127aa1fb475d120dfa9342b2fbf314b1edc7ca0bb9",
+  "firmware_hash": "fce507ed40c81527d572960f5fb460d33dd49186d98522f5393d828178b73b8f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/cc2538.yaml",
@@ -406,6 +408,18 @@
         "end_cycle": 10000
       },
       {
+        "text": "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
         "text": "hb=0 yellow=1 green=0 orange=0",
         "cycle_lo": 0,
         "cycle": 10000,
@@ -452,14 +466,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 9700,
+    "text_bytes": 13620,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 9700,
+    "flash_used_bytes": 13620,
     "ram_static_bytes": 0,
     "flash_total_bytes": 524288,
     "ram_total_bytes": 32768,
-    "flash_used_pct": 1.85,
+    "flash_used_pct": 2.6,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -485,25 +499,25 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 1996,
+    "memory_reads": 2864,
     "memory_writes": 189,
-    "peripheral_accesses": 1158,
+    "peripheral_accesses": 1435,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 2104982,
+        "pc": 2108904,
         "count": 5234,
-        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 2104986,
-        "count": 5196,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 2104984,
-        "count": 5195,
+        "pc": 2108902,
+        "count": 5196,
         "symbol": "firmware_cc2538dk_smoke::spin"
+      },
+      {
+        "pc": 2108900,
+        "count": 5195,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       }
     ]
   }

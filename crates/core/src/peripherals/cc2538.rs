@@ -287,6 +287,7 @@ pub mod aes;
 pub mod flash_ctrl;
 pub mod rfcore;
 pub mod sleep_timer;
+pub mod ssi;
 pub mod udma;
 
 impl Peripheral for Cc2538Gpio {

@@ -3,7 +3,7 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      67943,
+      68185,
       24,
       101,
       61,
@@ -17,10 +17,10 @@
       61,
       1074638856,
       536903640,
-      2103439,
-      2104982
+      2107357,
+      2108904
     ],
-    "pc": 2104982,
+    "pc": 2108904,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "8e56b609f63b7b1dbdc67e127aa1fb475d120dfa9342b2fbf314b1edc7ca0bb9",
+  "firmware_hash": "fce507ed40c81527d572960f5fb460d33dd49186d98522f5393d828178b73b8f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/cc2538.yaml",

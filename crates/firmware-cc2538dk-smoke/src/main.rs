@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: MIT
 //
 //! CC2538DK (CC2538SF53, Cortex-M3) L1 smoke: UART0 console, a walk over the
-//! SmartRF06 LEDs with GPIO_DATA readback, the keys' pad levels and a
-//! heartbeat, in bare registers.
+//! SmartRF06 LEDs with GPIO_DATA readback, the keys' pad levels, an SSI0
+//! loopback self-test and a heartbeat, in bare registers.
 //!
 //! Board facts (Contiki-NG `cc2538dk` dev/board.h; RIOT `cc2538dk`):
 //!   LED1 red    PC0 (active high) — shared with the USB D+ pull-up, NOT driven
@@ -46,6 +46,9 @@ const CLOCK_STA_SYS_DIV: u32 = 0x7;
 const CLOCK_STA_IO_DIV_SHIFT: u32 = 8;
 /// RCGCUART.UART0 (bit 0).
 const RCGCUART_UART0: u32 = 1 << 0;
+const SYS_CTRL_RCGCSSI: u32 = SYS_CTRL + 0x18;
+/// RCGCSSI.SSI0 (bit 0).
+const RCGCSSI_SSI0: u32 = 1 << 0;
 
 // ── IOC (SWRU319C §9.1.1 / Table 9-7, base 0x400D_4000) ─────────────────────
 const IOC: u32 = 0x400D_4000;
@@ -98,6 +101,29 @@ const UART_CTL_EN: u32 = (1 << 0) | (1 << 8) | (1 << 9);
 const UART_CC_SYSDIV: u32 = 0x0;
 
 const BAUD: u32 = 115_200;
+
+// ── SSI0 (SWRU319C §19, base 0x4000_8000) ───────────────────────────────────
+const SSI0: u32 = 0x4000_8000;
+const SSI_CR0: u32 = SSI0;
+const SSI_CR1: u32 = SSI0 + 0x004;
+const SSI_DR: u32 = SSI0 + 0x008;
+const SSI_SR: u32 = SSI0 + 0x00C;
+const SSI_CPSR: u32 = SSI0 + 0x010;
+const SSI_RIS: u32 = SSI0 + 0x018;
+const SSI_ICR: u32 = SSI0 + 0x020;
+const SSI_CC: u32 = SSI0 + 0xFC8;
+/// CR0.DSS: 0x7 = 8-bit, 0xF = 16-bit frames; FRF = 0 (Motorola SPI).
+const SSI_CR0_DSS8: u32 = 0x7;
+const SSI_CR0_DSS16: u32 = 0xF;
+/// CR1: LBM (bit 0) loopback, SSE (bit 1) enable; MS = 0 (master).
+const SSI_CR1_LBM: u32 = 1 << 0;
+const SSI_CR1_SSE: u32 = 1 << 1;
+/// SR.RNE (bit 2): receive FIFO not empty.
+const SSI_SR_RNE: u32 = 1 << 2;
+/// ICR.RORIC (bit 0): clear the receive-overrun interrupt.
+const SSI_ICR_RORIC: u32 = 1 << 0;
+/// The SSI FIFOs are eight frames deep (§19.2).
+const SSI_FIFO_DEPTH: u32 = 8;
 
 /// Customer Configuration Area (SWRU319C §8.6, Tables 8-3 to 8-6), placed at
 /// 0x0027_FFD4 by memory.x. The ROM boot code reads it at reset: a valid image
@@ -169,6 +195,62 @@ fn put_hex8(value: u32) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     putc(HEX[((value >> 4) & 0xF) as usize]);
     putc(HEX[(value & 0xF) as usize]);
+}
+
+fn ssi_drain() {
+    while rd(SSI_SR) & SSI_SR_RNE != 0 {
+        rd(SSI_DR);
+    }
+}
+
+/// SSI0 in internal loopback (CR1.LBM, §19.4): frames written while the port
+/// is disabled wait in the TX FIFO, leave when SSE is set and come back in the
+/// RX FIFO; a 16-bit frame keeps all 16 bits; a ninth frame overruns the
+/// eight-deep RX FIFO (RIS.RORRIS) until ICR clears it.
+fn ssi0_selftest() {
+    wr(SYS_CTRL_RCGCSSI, rd(SYS_CTRL_RCGCSSI) | RCGCSSI_SSI0);
+    wr(SSI_CR1, 0);
+    wr(SSI_CC, 0);
+    wr(SSI_CPSR, 2);
+    wr(SSI_CR0, SSI_CR0_DSS8);
+    wr(SSI_DR, 0xA5);
+    wr(SSI_DR, 0x3C);
+    puts(b"ssi0 queued sr=");
+    put_hex8(rd(SSI_SR));
+    wr(SSI_CR1, SSI_CR1_LBM | SSI_CR1_SSE);
+    puts(b" enabled sr=");
+    put_hex8(rd(SSI_SR));
+    puts(b" ris=");
+    put_hex8(rd(SSI_RIS));
+    puts(b" rx=");
+    put_hex8(rd(SSI_DR));
+    putc(b' ');
+    put_hex8(rd(SSI_DR));
+    putc(b'\n');
+
+    wr(SSI_CR1, 0);
+    wr(SSI_CR0, SSI_CR0_DSS16);
+    wr(SSI_CR1, SSI_CR1_LBM | SSI_CR1_SSE);
+    wr(SSI_DR, 0xBEEF);
+    let w16 = rd(SSI_DR);
+    puts(b"ssi0 w16=");
+    put_hex8(w16 >> 8);
+    put_hex8(w16);
+    for frame in 0..=SSI_FIFO_DEPTH {
+        wr(SSI_DR, frame);
+    }
+    puts(b" overrun sr=");
+    put_hex8(rd(SSI_SR));
+    puts(b" ris=");
+    put_hex8(rd(SSI_RIS));
+    wr(SSI_ICR, SSI_ICR_RORIC);
+    puts(b" cleared ris=");
+    put_hex8(rd(SSI_RIS));
+    ssi_drain();
+    puts(b" drained ris=");
+    put_hex8(rd(SSI_RIS));
+    putc(b'\n');
+    wr(SSI_CR1, 0);
 }
 
 /// System clock from CLOCK_STA: 32 MHz >> SYS_DIV.
@@ -287,6 +369,8 @@ fn main() -> ! {
     puts(b" down=");
     put_dec32(pin(GPIO_C, KEY_DOWN));
     putc(b'\n');
+
+    ssi0_selftest();
 
     // Leave yellow lit; the heartbeat reports the three driven pad levels.
     led_set(LED_YELLOW, true);

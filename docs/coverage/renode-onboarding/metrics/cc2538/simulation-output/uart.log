@@ -9,6 +9,8 @@ led=green off pin=0 leds=00
 led=orange on pin=1 leds=08
 led=orange off pin=0 leds=00
 keys select=1 left=1 right=1 up=1 down=1
+ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c
+ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08
 hb=0 yellow=1 green=0 orange=0
 hb=1 yellow=1 green=0 orange=0
 hb=2 yellow=1 green=0 orange=0

@@ -977,32 +977,30 @@
       "script": "examples/renode-onboarding/cc2538-smoke.yaml",
       "system": "configs/systems/onboarding/cc2538.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:47:50Z",
-      "finished_at_utc": "2026-11-05T14:47:51Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1421,
+      "started_at_utc": "2026-11-07T04:22:01Z",
+      "finished_at_utc": "2026-11-07T04:23:29Z",
+      "elapsed_seconds": 89,
+      "elapsed_ms": 88011,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.304,
-        "build_firmware": 0.657,
-        "run_smoke": 0.449
+        "build_cli": 86.859,
+        "build_firmware": 0.395,
+        "run_smoke": 0.739
       },
       "stages_ms": {
-        "build_cli": 304,
-        "build_firmware": 657,
-        "run_smoke": 449
+        "build_cli": 86859,
+        "build_firmware": 395,
+        "run_smoke": 739
       },
       "_artifact_path": "cc2538",
       "zero_answering_windows": [
         "ioc:stub",
         "ana_regs:stub",
         "soc_adc:stub",
-        "ssi0:stub",
-        "ssi1:stub",
         "i2cm:stub",
         "i2cs:stub",
         "gptimer0:stub",
