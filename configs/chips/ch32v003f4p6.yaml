@@ -14,6 +14,8 @@
 #   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/inc/ch32v00x.h
 #   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/inc/ch32v00x_rcc.h
 #   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/src/ch32v00x_usart.c
+#   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Core/core_riscv.h
+#   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Debug/debug.c
 #   https://www.wch-ic.com/downloads/CH32V003DS0_PDF.html
 #   https://www.lcsc.com/product-detail/microcontrollers-mcu-mpu-soc_wch-jiangsu-qin-heng-ch32v003f4p6_C5187096.html
 
@@ -97,3 +99,11 @@ peripherals:
     base_address: 0x40013800
     size: "1KB"
     clock: { reg: "apb2pcenr", bit: 14 }
+
+  # QingKe V2 STK, WCH core_riscv.h `SysTick` at 0xE000F000. It sits on the
+  # core, outside RCC, so it has no clock gate. The STK interrupt is not
+  # delivered because the PFIC is not modelled.
+  - id: "stk"
+    type: "wch_stk"
+    base_address: 0xE000F000
+    size: "256B"
