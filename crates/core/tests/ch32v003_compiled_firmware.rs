@@ -65,7 +65,7 @@ fn run_uart_hello(chip: &ChipDescriptor) -> (Vec<u8>, u32) {
 #[test]
 fn ch32v003_compiled_rv32ec_firmware_prints_on_usart1() {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let chip = ChipDescriptor::from_file(&root.join("configs/chips/ch32v003f4p6.yaml"))
+    let chip = ChipDescriptor::from_file(root.join("configs/chips/ch32v003f4p6.yaml"))
         .expect("CH32V003 descriptor");
     let (out, mcause) = run_uart_hello(&chip);
     assert_eq!(
