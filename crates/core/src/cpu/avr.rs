@@ -129,6 +129,17 @@ pub const SRAM_START: u16 = 0x0100;
 /// REFS = 11 is the internal 2.56 V (ATmega128 datasheet 2467X §23.8.1,
 /// Tables 96/97). As on the classic cores, timers, USARTs, SPI and TWI are
 /// stored only and no interrupt is taken.
+///
+/// The ATmega32U4 (avr-libc `iom32u4.h`; Arduino Leonardo/Micro) keeps the
+/// ATmega328P's data map for what this core shares: Timer0/1, SPI, TWI,
+/// MCUCR.PUD (bit 4) and ADCL..ADMUX at 0x78..0x7C, with SRAM 0x100..0xAFF
+/// (2.5 KB) and 32 KB flash. Ports B..F are PINx/DDRx/PORTx at 0x23..0x31 (no
+/// port A). Its vector table is the ATmega1281's from INT0 to EE READY, with
+/// TWI at slot 37 and SPM READY at 38 ([`u4_vector`]). The ADC has no ADC2/ADC3
+/// and puts MUX5 in ADCSRB bit 5, not the 2560's bit 3 (see
+/// [`Avr::u4_adc_input`]). Not modelled: USB, USART1 at 0xC8..0xCE, Timer3/4,
+/// INTn/PCINT (INT0/INT1 are PD0/PD1 here; the registers are stored only) and
+/// the OC pads (OC0A PB7, OC1A..C PB5..PB7; they follow `PORTx`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
     #[default]
@@ -151,6 +162,7 @@ pub enum AvrModel {
     Attiny84,
     Atmega128,
     Attiny13,
+    Atmega32u4,
 }
 
 impl AvrModel {
@@ -167,7 +179,8 @@ impl AvrModel {
     /// the 64/256/644/1284/2564RFR2 have other memory sizes). attiny25/45/85
     /// select the ATtiny x5 I/O-space cores and attiny24/44/84 (with their
     /// `a` variants) the ATtiny x4 cores (exact name: the ATtiny261/461/861,
-    /// 2313 are other maps); attiny13/attiny13a select the ATtiny13 core.
+    /// 2313 are other maps); attiny13/attiny13a select the ATtiny13 core and
+    /// atmega32u4 the ATmega32U4 core (exact name: the 16U4 has less SRAM).
     /// atmega128/atmega128a select the ATmega128
     /// core (exact name: atmega1280, atmega1281, atmega1284 and atmega128rfa1
     /// are other maps). Other names default to the ATmega328P.
@@ -197,6 +210,7 @@ impl AvrModel {
             "attiny84" | "attiny84a" => return AvrModel::Attiny84,
             "atmega128" | "atmega128a" => return AvrModel::Atmega128,
             "attiny13" | "attiny13a" => return AvrModel::Attiny13,
+            "atmega32u4" => return AvrModel::Atmega32u4,
             _ => {}
         }
         if n.contains("1280") || n.contains("1281") {
@@ -223,6 +237,7 @@ impl AvrModel {
             AvrModel::Attiny45 | AvrModel::Attiny44 => 4 * 1024,
             AvrModel::Attiny85 | AvrModel::Attiny84 => 8 * 1024,
             AvrModel::Attiny13 => 1024,
+            AvrModel::Atmega32u4 => 32 * 1024,
         }
     }
     pub fn sram_start(self) -> u16 {
@@ -232,7 +247,8 @@ impl AvrModel {
             | AvrModel::Atmega324
             | AvrModel::Atmega644
             | AvrModel::Atmega1284
-            | AvrModel::Atmega128 => SRAM_START,
+            | AvrModel::Atmega128
+            | AvrModel::Atmega32u4 => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 | AvrModel::Atmega128Rf => 0x0200,
             AvrModel::Atmega8
             | AvrModel::Atmega16
@@ -261,6 +277,7 @@ impl AvrModel {
             AvrModel::Attiny45 | AvrModel::Attiny44 => 0x015F,
             AvrModel::Attiny85 | AvrModel::Attiny84 => 0x025F,
             AvrModel::Attiny13 => 0x009F,
+            AvrModel::Atmega32u4 => 0x0AFF,
         }
     }
     /// The classic ATmega8/16/32 I/O-space map (see [`AvrModel`]).
@@ -310,6 +327,10 @@ impl AvrModel {
             AvrModel::Atmega164 | AvrModel::Atmega324 | AvrModel::Atmega644 | AvrModel::Atmega1284
         )
     }
+    /// The ATmega32U4 map (see [`AvrModel`]).
+    pub fn is_u4(self) -> bool {
+        self == AvrModel::Atmega32u4
+    }
     /// The ATmega128RFA1/128RFR2 1.8 V-AVDD ADC map (see [`AvrModel`]).
     pub fn is_rf(self) -> bool {
         self == AvrModel::Atmega128Rf
@@ -327,7 +348,8 @@ impl AvrModel {
             AvrModel::Atmega1281
             | AvrModel::Atmega2560
             | AvrModel::Atmega128Rf
-            | AvrModel::Atmega128 => AVR_MEGA_ADC_INPUT_BASE,
+            | AvrModel::Atmega128
+            | AvrModel::Atmega32u4 => AVR_MEGA_ADC_INPUT_BASE,
             AvrModel::Atmega8
             | AvrModel::Atmega16
             | AvrModel::Atmega32
@@ -387,6 +409,18 @@ pub fn xx4_vector(vec328: u32) -> u32 {
         24 => 24,              // ANALOG COMP
         25 | 26 => vec328 + 2, // TWI 27, SPM READY 28
         v => v,
+    }
+}
+/// ATmega32U4 vector number (1-based, avr-libc `_VECTOR(n)` + 1) for a vector
+/// this core numbers the ATmega328P way. INT0 through EE READY sit where the
+/// ATmega1281 has them ([`mega2560_vector`]); TWI is slot 37 and SPM READY 38.
+/// The 32U4 has no Timer2, PCINT1 or PCINT2, so their 328P vectors are never
+/// raised.
+pub fn u4_vector(vec328: u32) -> u32 {
+    match vec328 {
+        25 => 37, // TWI
+        26 => 38, // SPM READY
+        v => mega2560_vector(v),
     }
 }
 pub const AVR_DATA_VMA_BIAS: u64 = 0x0080_0000;
@@ -823,11 +857,12 @@ impl Avr {
         )
     }
 
-    /// INT0/INT1 and PCINT0..2 wired to the 328P's pins. The mega and the
-    /// port-A parts route PCINT elsewhere, so their registers are stored only.
+    /// INT0/INT1 and PCINT0..2 wired to the 328P's pins. The mega, the port-A
+    /// parts and the 32U4 route them elsewhere, so their registers are stored
+    /// only.
     #[inline]
     fn has_328p_ext_int(&self) -> bool {
-        !self.is_mega() && !self.model.is_xx4()
+        !self.is_mega() && !self.model.is_xx4() && !self.model.is_u4()
     }
 
     /// `PINx` of a port this model has.
@@ -852,6 +887,7 @@ impl Avr {
             AvrModel::Attiny24 | AvrModel::Attiny44 | AvrModel::Attiny84 => {
                 matches!(addr, 0x36 | 0x39)
             }
+            AvrModel::Atmega32u4 => MEGA2560_PIN_ADDRS[1..6].contains(&addr),
         }
     }
 
@@ -881,6 +917,7 @@ impl Avr {
             AvrModel::Attiny24 | AvrModel::Attiny44 | AvrModel::Attiny84 => {
                 (0x36..=0x3B).contains(&addr)
             }
+            AvrModel::Atmega32u4 => (0x23..=0x31).contains(&addr),
         }
     }
 
@@ -1672,6 +1709,39 @@ impl Avr {
         Ok((input_mv, reference_mv))
     }
 
+    /// ATmega32U4 ADMUX: the input millivolts and the reference (avr-libc
+    /// `iom32u4.h`, ATmega16U4/32U4 datasheet 7766 §24.9, Table 24-4).
+    ///
+    /// MUX5 is ADCSRB bit 5 (bit 3 on the 1281/2560). MUX5:0 0x00, 0x01 and
+    /// 0x04..0x07 are ADC0, ADC1, ADC4..7 (PF0, PF1, PF4..PF7; there is no
+    /// ADC2/ADC3), 0x20..0x25 are ADC8..13 (PD4, PD6, PD7, PB4, PB5, PB6),
+    /// 0x1E the 1.1 V bandgap, 0x1F GND; the differential/gain codes and the
+    /// temperature sensor (0x27) are not modelled and read 0. The `avr_adc`
+    /// window is indexed by ADC number. REFS = 11 is the internal 2.56 V; 00
+    /// (AREF, not a modelled pin), 01 (AVcc) and the reserved 10 are taken as
+    /// 5 V AVcc.
+    fn u4_adc_input(&self, bus: &dyn Bus) -> SimResult<(u32, u32)> {
+        let mux5 = self.io[(0x7B - 0x20) as usize] & (1 << 5) != 0;
+        let channel_mv = |ch: u8| -> SimResult<u32> {
+            let base = self.model.adc_input_base() + u64::from(ch) * 2;
+            let lo = bus.read_u8(base)?;
+            let hi = bus.read_u8(base + 1)?;
+            Ok(u32::from(u16::from_le_bytes([lo, hi])))
+        };
+        let input_mv = match (self.admux & 0x1F) | if mux5 { 0x20 } else { 0 } {
+            ch @ (0x00 | 0x01 | 0x04..=0x07) => channel_mv(ch)?,
+            code @ 0x20..=0x25 => channel_mv(code - 0x18)?,
+            0x1E => AVR_BANDGAP_MV,
+            _ => 0,
+        };
+        let reference_mv = if self.admux >> 6 == 0b11 {
+            CLASSIC_INTERNAL_REF_MV
+        } else {
+            AVR_AVCC_MV
+        };
+        Ok((input_mv, reference_mv))
+    }
+
     /// One 10-bit conversion of the channel ADMUX selects.
     ///
     /// MUX 0..7 are the input pins, whose millivolts come from the bus-side
@@ -1706,6 +1776,10 @@ impl Avr {
         }
         if self.model.is_rf() {
             let (input_mv, reference_mv) = self.rf_adc_input(bus)?;
+            return Ok((input_mv * 1024 / reference_mv).min(1023) as u16);
+        }
+        if self.model.is_u4() {
+            let (input_mv, reference_mv) = self.u4_adc_input(bus)?;
             return Ok((input_mv * 1024 / reference_mv).min(1023) as u16);
         }
         let channel: Option<u8> = if self.is_mega() {
@@ -2203,6 +2277,8 @@ impl Avr {
             mega2560_vector(vec)
         } else if self.model.is_xx4() {
             xx4_vector(vec)
+        } else if self.model.is_u4() {
+            u4_vector(vec)
         } else {
             vec
         };
@@ -3727,7 +3803,7 @@ mod tests {
             ("simavr-atmega168", AvrModel::Atmega328p),
             ("simavr-atmega16m1", AvrModel::Atmega328p),
             ("simavr-atmega328", AvrModel::Atmega328p),
-            ("simavr-atmega32u4", AvrModel::Atmega328p),
+            ("simavr-atmega32u4", AvrModel::Atmega32u4),
         ] {
             assert_eq!(AvrModel::from_chip_name(name), model, "{name}");
         }
@@ -4081,6 +4157,99 @@ mod tests {
         assert_eq!(convert(&mut cpu, &mut bus, 0x53), 1000 * 1024 / 1100);
         // MUX3:2 are reserved: 0x0C (the x5 bandgap) is still ADC0.
         assert_eq!(convert(&mut cpu, &mut bus, 0x0C), 400 * 1024 / 5000);
+    }
+
+    // ---- ATmega32U4 (AvrModel::is_u4) ----
+
+    #[test]
+    fn u4_core_needs_the_exact_part_name_and_has_the_iom32u4_map() {
+        for (name, model) in [
+            ("simavr-atmega32u4", AvrModel::Atmega32u4),
+            ("atmega32u4", AvrModel::Atmega32u4),
+            // The 16U4 has 1.25 KB SRAM; the 32U2 has no ADC.
+            ("atmega16u4", AvrModel::Atmega328p),
+            ("atmega32u2", AvrModel::Atmega328p),
+        ] {
+            assert_eq!(AvrModel::from_chip_name(name), model, "{name}");
+        }
+        // RAMSTART 0x100, RAMEND 0xAFF, FLASHEND 0x7FFF per avr-libc iom32u4.h.
+        let mut cpu = Avr::new_model(AvrModel::Atmega32u4);
+        let mut bus = MockBus::new();
+        assert_eq!(cpu.sp, 0x0AFF);
+        assert_eq!(cpu.flash.len(), 32 * 1024);
+        cpu.data_write(0x0AFF, 0x5A, &mut bus).unwrap();
+        assert_eq!(cpu.sram[0x09FF], 0x5A);
+        assert!(cpu.data_read(0x0B00, &bus).is_err());
+        // 0x100 is SRAM here, not the mega's extended I/O.
+        cpu.data_write(0x0100, 0xA5, &mut bus).unwrap();
+        assert_eq!(cpu.sram[0], 0xA5);
+        // Ports B..F; 0x20..0x22 (the mega's port A) is not a port.
+        assert!(!cpu.is_pin_reg(0x20) && !cpu.is_port_reg(0x22));
+        assert!(cpu.is_pin_reg(0x23) && cpu.is_pin_reg(0x2F) && cpu.is_port_reg(0x31));
+        assert!(!cpu.is_pin_reg(0x32) && !cpu.is_port_reg(0x32));
+        cpu.data_write(0x30, 0x0F, &mut bus).unwrap();
+        cpu.data_write(0x31, 0x05, &mut bus).unwrap();
+        bus.mem.insert(AVR_IO_MIRROR_BASE + 0x2F, 0xF0);
+        assert_eq!(cpu.data_read(0x2F, &bus).unwrap(), 0xF5);
+    }
+
+    #[test]
+    fn u4_adc_has_mux5_in_adcsrb_bit5_and_no_adc2_or_adc3() {
+        let mut cpu = Avr::new_model(AvrModel::Atmega32u4);
+        let mut bus = MockBus::new();
+        for (ch, mv) in [(0u64, 400u16), (2, 700), (5, 900), (13, 1000)] {
+            let base = AVR_MEGA_ADC_INPUT_BASE + ch * 2;
+            bus.mem.insert(base, (mv & 0xFF) as u8);
+            bus.mem.insert(base + 1, (mv >> 8) as u8);
+        }
+        let convert = |cpu: &mut Avr, bus: &mut MockBus, adcsrb: u8, admux: u8| {
+            cpu.data_write(0x7B, adcsrb, bus).unwrap();
+            cpu.data_write(0x7C, admux, bus).unwrap();
+            cpu.data_write(0x7A, 0xC0, bus).unwrap();
+            u32::from(cpu.adch) << 8 | u32::from(cpu.adcl)
+        };
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0x40), 400 * 1024 / 5000);
+        // MUX5 (bit 5) with MUX4:0 = 5 is ADC13 (PB6) ...
+        assert_eq!(convert(&mut cpu, &mut bus, 0x20, 0x45), 1000 * 1024 / 5000);
+        // ... while the 2560's MUX5 position (bit 3) leaves ADC5.
+        assert_eq!(convert(&mut cpu, &mut bus, 0x08, 0x45), 900 * 1024 / 5000);
+        // There is no ADC2: its window slot is never converted.
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0x42), 0);
+        // REFS = 11 is 2.56 V; the reserved 10 is taken as AVcc.
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0xC0), 400 * 1024 / 2560);
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0x80), 400 * 1024 / 5000);
+        // 0x1E is the 1.1 V bandgap, 0x1F GND, 0x27 the unmodelled temperature
+        // sensor and 0x3E (0x1E with MUX5) a differential code.
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0x5E), 1100 * 1024 / 5000);
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0x5F), 0);
+        assert_eq!(convert(&mut cpu, &mut bus, 0x20, 0x47), 0);
+        assert_eq!(convert(&mut cpu, &mut bus, 0x20, 0x5E), 0);
+    }
+
+    #[test]
+    fn u4_vectors_follow_iom32u4() {
+        // avr-libc iom32u4.h `_VECTOR(n)` + 1 for each 328P vector this core raises.
+        for (vec328, slot) in [
+            (2, 2),   // INT0
+            (3, 3),   // INT1
+            (4, 10),  // PCINT0
+            (7, 13),  // WDT
+            (11, 17), // TIMER1 CAPT
+            (12, 18), // TIMER1 COMPA
+            (13, 19), // TIMER1 COMPB
+            (14, 21), // TIMER1 OVF
+            (15, 22), // TIMER0 COMPA
+            (17, 24), // TIMER0 OVF
+            (18, 25), // SPI STC
+            (19, 26), // USART RX
+            (22, 30), // ADC
+            (23, 31), // EE READY
+            (24, 29), // ANALOG COMP
+            (25, 37), // TWI
+            (26, 38), // SPM READY
+        ] {
+            assert_eq!(u4_vector(vec328), slot, "328P vector {vec328}");
+        }
     }
 
     // ---- ATtiny24/44/84 (AvrModel::is_tiny_x4) ----

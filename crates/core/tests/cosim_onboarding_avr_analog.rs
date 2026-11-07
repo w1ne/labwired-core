@@ -36,12 +36,17 @@
 //! runs on its own I/O-space core (ADC0..3 on PB5, PB2, PB4, PB3, MUX1:0
 //! only); there it checks REFS0 (ADMUX bit 6, AVcc on the megas) selecting
 //! the internal 1.1 V, and that the x5 parts' REFS1 and bandgap code do not
-//! exist. Every result is read back with LDS ADCL/ADCH.
+//! exist. The ATmega32U4 runs on its own core (ADC0/1, ADC4..7 on port F and
+//! ADC8..13 on PD4, PD6, PD7, PB4..PB6, no ADC2/ADC3); there the highest pad
+//! is PB6/ADC13, selected with MUX5 in ADCSRB bit 5, and it checks that the
+//! 2560's MUX5 bit (3) does not reach ADC8..13, that MUX 0x02 has no input,
+//! the internal 2.56 V reference and the MUX 0x1E 1.1 V bandgap. Every result
+//! is read back with LDS ADCL/ADCH.
 //!
 //! For each covered part the generic Beta NTC divider and the unrelated
 //! Shockley diode route through the descriptor's `analog_pins`, to the lowest
-//! and highest ADC pad. On the 100-pin megas the highest pad is PK7/ADC15,
-//! which needs ADCSRB.MUX5. Both solved voltages are checked against
+//! and highest ADC pad. On the 100-pin megas the highest pad is PK7/ADC15
+//! and on the 32U4 PB6/ADC13; both need ADCSRB.MUX5. Both solved voltages are checked against
 //! independent references, the 10-bit codes against `mV * 1024 / AVcc` (5 V,
 //! or the RF parts' 1.8 V AVDD), and the NTC code must fall monotonically with
 //! temperature wherever it is below full scale.
@@ -75,6 +80,7 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-atmega32", AvrModel::Atmega32, "pa0", "pa7"),
     ("simavr-atmega324", AvrModel::Atmega324, "pa0", "pa7"),
     ("simavr-atmega328", AvrModel::Atmega328p, "pc0", "pc5"),
+    ("simavr-atmega32u4", AvrModel::Atmega32u4, "pf0", "pb6"),
     ("simavr-atmega48", AvrModel::Atmega328p, "pc0", "pc5"),
     ("simavr-atmega644", AvrModel::Atmega644, "pa0", "pa7"),
     ("simavr-atmega8", AvrModel::Atmega8, "pc0", "pc5"),
@@ -101,7 +107,6 @@ const UNCOVERED: &[(&str, &str)] = &[
         "simavr-atmega328pb",
         "no avr-libc header to check PE2/PE3 against",
     ),
-    ("simavr-atmega32u4", "ADC2/ADC3 do not exist, MUX5 differs"),
     (
         "simavr-atmega64m1",
         "ADMUX MUX4:0 maps ADC0..10 differently",
@@ -232,21 +237,49 @@ fn convert_left_adjusted_tiny_x4(
     (cpu.r[25], cpu.r[24])
 }
 
+/// ADCSRB.MUX5 on the cores whose ADC8..ADC15 the test reaches through it:
+/// bit 3 on the 1281/2560, bit 5 on the 32U4.
+fn adcsrb_mux5(core: AvrModel) -> Option<u8> {
+    match core {
+        AvrModel::Atmega1281 | AvrModel::Atmega2560 => Some(1 << 3),
+        AvrModel::Atmega32u4 => Some(1 << 5),
+        _ => None,
+    }
+}
+
 /// One firmware conversion: ADCSRB.MUX5 for ADC8..15 (where ADCSRB exists),
 /// ADMUX = `refs` | MUX, then ADCSRA = ADEN | ADSC, and the result read back
 /// with LDS ADCL/ADCH into r24/r25.
 fn convert_mux(chip: &ChipDescriptor, bus: &mut SystemBus, refs: u8, mux: u8) -> u16 {
+    let core = AvrModel::from_chip_name(&chip.name);
+    let adcsrb = match adcsrb_mux5(core) {
+        Some(mux5) if mux >= 8 => mux5,
+        _ => 0,
+    };
+    let admux = if adcsrb_mux5(core).is_some() {
+        mux & 0x07
+    } else {
+        mux
+    };
+    convert_raw(chip, bus, adcsrb, refs | admux)
+}
+
+/// One firmware conversion with ADCSRB (where it exists) and ADMUX written
+/// as given.
+fn convert_raw(
+    chip: &ChipDescriptor,
+    bus: &mut SystemBus,
+    adcsrb_value: u8,
+    admux_value: u8,
+) -> u16 {
     let mut cpu = Avr::for_chip_name(&chip.name);
     let (adcsrb, admux, adcsra, adcl) = adc_registers(cpu.model);
-    // Only the megas split the mux across ADCSRB.MUX5 and ADMUX MUX4:0 the
-    // test drives as MUX2:0; the other cores take the whole code in ADMUX.
-    let mega = matches!(cpu.model, AvrModel::Atmega1281 | AvrModel::Atmega2560);
     let mut words = Vec::new();
     if let Some(adcsrb) = adcsrb {
-        words.push(ldi(16, if mega && mux >= 8 { 1 << 3 } else { 0 }));
+        words.push(ldi(16, adcsrb_value));
         words.extend(sts(adcsrb, 16));
     }
-    words.push(ldi(16, refs | if mega { mux & 0x07 } else { mux }));
+    words.push(ldi(16, admux_value));
     words.extend(sts(admux, 16));
     words.push(ldi(16, 0xC0));
     words.extend(sts(adcsra, 16));
@@ -570,6 +603,38 @@ fn assert_avr_converts_generic_analog(
             convert_mux(chip, &mut bus, 0x00, 0x0C),
             (1100 * 1024 / AVCC_MV) as u16,
             "{board}: MUX 0x0C is not the bandgap"
+        );
+    }
+    if core.is_u4() {
+        // MUX5 is ADCSRB bit 5: with bit 3 (the 2560's MUX5) instead, MUX4:0 =
+        // 5 stays ADC5 (PF5, undriven), not ADC13 (PB6, the diode).
+        let mv = (expected_diode_v * 1000.0).round() as u32;
+        assert_eq!(
+            convert_raw(chip, &mut bus, 1 << 3, 0x45),
+            expected_code(core, f64::from(AVR_ADC_UNDRIVEN_MV) / 1000.0),
+            "{board}: ADCSRB bit 3 is not MUX5 on the 32U4"
+        );
+        assert_eq!(
+            convert_raw(chip, &mut bus, 1 << 5, 0x45),
+            (mv * 1024 / AVCC_MV) as u16,
+            "{board}: ADCSRB bit 5 with MUX 5 is ADC13 (PB6)"
+        );
+        // There is no ADC2/ADC3: MUX 0x02 has no input even though the window
+        // slot exists.
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, 0x02),
+            0,
+            "{board}: no ADC2"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0xC0, diode_channel),
+            (mv * 1024 / 2560) as u16,
+            "{board}: the diode converts against the internal 2.56 V reference"
+        );
+        assert_eq!(
+            convert_raw(chip, &mut bus, 0, 0x5E),
+            (1100 * 1024 / AVCC_MV) as u16,
+            "{board}: MUX 0x1E converts the 1.1 V bandgap"
         );
     }
     if core.is_classic() || core.is_mega128() {
