@@ -57,6 +57,15 @@
 //! or the RF parts' 1.8 V AVDD), and the NTC code must fall monotonically with
 //! temperature wherever it is below full scale.
 //!
+//! The ATtiny2313/2313A/4313 ([`COMPARATOR_COVERED`]) have no ADC; their
+//! analog input is the comparator (ACSR 0x28, AIN0 on PB0, AIN1 on PB1). There
+//! the same two netlists are routed to AIN0 and AIN1, both ways round, and
+//! firmware reads ACO back with LDS ACSR: it must be set exactly while the
+//! positive input is above the negative one, so with the NTC on AIN0 and the
+//! diode on AIN1 it flips between 50 °C and 80 °C, and swapped it flips the
+//! other way. ACBG (the 1.1 V bandgap on the positive input) and ACD are
+//! checked against the same solved voltages.
+//!
 //! [`UNCOVERED`] lists the simavr parts whose register map no LabWired core
 //! runs (their ADC or ports sit elsewhere, per avr-libc), so a part cannot
 //! silently be given the 328P core.
@@ -101,6 +110,14 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-attiny85", AvrModel::Attiny85, "pb5", "pb3"),
 ];
 
+/// simavr profiles with no ADC whose comparator AIN0/AIN1 (PB0/PB1) take the
+/// netlists: (profile, core).
+const COMPARATOR_COVERED: &[(&str, AvrModel)] = &[
+    ("simavr-attiny2313", AvrModel::Attiny2313),
+    ("simavr-attiny2313a", AvrModel::Attiny2313),
+    ("simavr-attiny4313", AvrModel::Attiny4313),
+];
+
 /// simavr profiles with no analog endpoint, and why (addresses per avr-libc
 /// 2.0.0). Covering one has to move it into [`COVERED`].
 const UNCOVERED: &[(&str, &str)] = &[
@@ -118,9 +135,6 @@ const UNCOVERED: &[(&str, &str)] = &[
         "simavr-atmega64m1",
         "ADMUX MUX4:0 maps ADC0..10 differently",
     ),
-    ("simavr-attiny2313", "no ADC"),
-    ("simavr-attiny2313a", "no ADC"),
-    ("simavr-attiny4313", "no ADC"),
 ];
 
 const AVCC_MV: u32 = 5000;
@@ -711,6 +725,137 @@ fn assert_avr_converts_generic_analog(
     }
 }
 
+/// ATtiny2313/4313 `ACSR` and its bits (avr-libc `iotn2313.h`).
+const ACSR: u16 = 0x28;
+const ACSR_ACD: u8 = 1 << 7;
+const ACSR_ACBG: u8 = 1 << 6;
+const ACSR_ACO: u8 = 1 << 5;
+/// The comparator's internal bandgap with ACBG set (1.1 V typical).
+const BANDGAP_V: f64 = 1.1;
+
+/// Firmware writes `acsr_value` to ACSR and loads ACSR back: `LDI r16, K;
+/// STS ACSR, r16; LDS r24, ACSR`.
+fn read_acsr(chip: &ChipDescriptor, bus: &mut SystemBus, acsr_value: u8) -> u8 {
+    let mut cpu = Avr::for_chip_name(&chip.name);
+    let mut words = vec![ldi(16, acsr_value)];
+    words.extend(sts(ACSR, 16));
+    words.extend(lds(24, ACSR));
+    cpu.load_words(0, &words);
+    let config = SimulationConfig::default();
+    for _ in 0..3 {
+        cpu.step(bus, &[], &config)
+            .expect("execute ACSR write and read");
+    }
+    cpu.r[24]
+}
+
+/// The generic NTC divider and Shockley diode on AIN0/AIN1 of a part whose
+/// only analog input is the comparator. `ntc_on_ain0` picks which way round.
+fn assert_avr_comparator_compares_generic_analog(
+    board: &str,
+    chip: &ChipDescriptor,
+    base_profile: &SystemManifest,
+    core: AvrModel,
+    ntc_on_ain0: bool,
+) {
+    assert_eq!(
+        Avr::for_chip_name(&chip.name).model,
+        core,
+        "{board}: descriptor name selects the core whose map it was checked against"
+    );
+    assert!(core.is_tiny2313(), "{board}: comparator-only core");
+    let (ntc_pad, diode_pad) = if ntc_on_ain0 {
+        ("pb0", "pb1")
+    } else {
+        ("pb1", "pb0")
+    };
+    assert_eq!(analog_channel(chip, "pb0"), 0, "{board}: AIN0 is channel 0");
+    assert_eq!(analog_channel(chip, "pb1"), 1, "{board}: AIN1 is channel 1");
+
+    let mut profile = base_profile.clone();
+    profile.cosim_models = generic_netlists(ntc_pad, diode_pad).cosim_models;
+    let mut bus = SystemBus::from_config(chip, &profile).expect("build simavr bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries both generic devices");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "{board}: {ntc_pad}/{diode_pad} resolve through analog_pins"
+    );
+
+    // Before any solve both pins sit at the undriven level: equal, so ACO = 0.
+    assert_eq!(
+        read_acsr(chip, &mut bus, 0) & ACSR_ACO,
+        0,
+        "{board}: equal inputs"
+    );
+
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut outputs = Vec::new();
+    for temperature_c in [-10.0_f64, 0.0, 25.0, 50.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("set NTC temperature");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route both netlists");
+        assert_eq!(steps.len(), 2, "{board}: both netlists solve each step");
+        assert!(errors.is_empty(), "{board}: route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, &format!("board.analog.{ntc_pad}_volts"));
+        let r = ntc_resistance_ohms(temperature_c);
+        let expected_ntc_v = 3.3 * r / (10_000.0 + r);
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "{board}: at {temperature_c} °C the Beta divider should be {expected_ntc_v} V, got {ntc_v} V"
+        );
+        let diode_v = signal_voltage(&session, &format!("board.analog.{diode_pad}_volts"));
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "{board}: Shockley load line should be {expected_diode_v} V, got {diode_v} V"
+        );
+
+        let (ain0_v, ain1_v) = if ntc_on_ain0 {
+            (expected_ntc_v, expected_diode_v)
+        } else {
+            (expected_diode_v, expected_ntc_v)
+        };
+        assert!(
+            (ain0_v - ain1_v).abs() > 0.05 && (BANDGAP_V - ain1_v).abs() > 0.05,
+            "{board}: the fixture keeps every comparison clear of millivolt rounding"
+        );
+        let aco = read_acsr(chip, &mut bus, 0) & ACSR_ACO != 0;
+        assert_eq!(
+            aco,
+            ain0_v > ain1_v,
+            "{board}: at {temperature_c} °C ACO compares AIN0 {ain0_v} V with AIN1 {ain1_v} V"
+        );
+        outputs.push(aco);
+        let acsr = read_acsr(chip, &mut bus, ACSR_ACBG);
+        assert_eq!(acsr & ACSR_ACBG, ACSR_ACBG, "{board}: ACBG reads back");
+        assert_eq!(
+            acsr & ACSR_ACO != 0,
+            BANDGAP_V > ain1_v,
+            "{board}: at {temperature_c} °C ACBG compares the 1.1 V bandgap with AIN1 {ain1_v} V"
+        );
+        assert_eq!(
+            read_acsr(chip, &mut bus, ACSR_ACD) & ACSR_ACO,
+            0,
+            "{board}: ACD switches the comparator off"
+        );
+    }
+    // The NTC divider crosses the diode's forward voltage between 50 and 80 °C.
+    let expected: &[bool] = if ntc_on_ain0 {
+        &[true, true, true, true, false]
+    } else {
+        &[false, false, false, false, true]
+    };
+    assert_eq!(outputs, expected, "{board}: ACO over -10/0/25/50/80 °C");
+}
+
 #[test]
 fn every_simavr_profile_on_a_modelled_avr_core_converts_ntc_and_diode_in_firmware() {
     let mut covered = Vec::new();
@@ -726,6 +871,19 @@ fn every_simavr_profile_on_a_modelled_avr_core_converts_ntc_and_diode_in_firmwar
         let chip = ChipDescriptor::from_file(system_path.parent().unwrap().join(&profile.chip))
             .unwrap_or_else(|e| panic!("load {board} descriptor: {e}"));
         let has_adc = chip.peripherals.iter().any(|p| p.r#type == "avr_adc");
+        if let Some((_, core)) = COMPARATOR_COVERED.iter().find(|(b, _)| *b == board) {
+            for ntc_on_ain0 in [true, false] {
+                assert_avr_comparator_compares_generic_analog(
+                    &board,
+                    &chip,
+                    &profile,
+                    *core,
+                    ntc_on_ain0,
+                );
+            }
+            covered.push(board);
+            continue;
+        }
         match COVERED.iter().find(|(b, ..)| *b == board) {
             Some((_, core, ntc_pad, diode_pad)) => {
                 assert!(has_adc, "{board}: covered parts declare avr_adc");
@@ -743,7 +901,12 @@ fn every_simavr_profile_on_a_modelled_avr_core_converts_ntc_and_diode_in_firmwar
             }
         }
     }
-    let expected_covered: Vec<_> = COVERED.iter().map(|(b, ..)| b.to_string()).collect();
+    let mut expected_covered: Vec<_> = COVERED
+        .iter()
+        .map(|(b, ..)| b.to_string())
+        .chain(COMPARATOR_COVERED.iter().map(|(b, _)| b.to_string()))
+        .collect();
+    expected_covered.sort();
     let expected_uncovered: Vec<_> = UNCOVERED.iter().map(|(b, _)| b.to_string()).collect();
     assert_eq!(
         covered, expected_covered,

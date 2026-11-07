@@ -13,7 +13,41 @@ flash:
 ram:
   base: 96
   size: 128B
-peripherals: []
+# Register map checked against avr-libc 2.0.0 avr/iotn2313.h: the I/O-space map
+# LabWired's ATtiny2313/4313 core runs (AvrModel::Attiny2313). There is no ADC;
+# the analog input is the comparator, ACSR 0x28 (ACD 7, ACBG 6, ACO 5), with
+# AIN0 on PB0 (positive) and AIN1 on PB1 (negative). Ports are
+# PINx/DDRx/PORTx at 0x30 (D), 0x36 (B), 0x39 (A); MCUCR.PUD is bit 7; SRAM
+# 0x60..0xDF. The CPU owns those registers; each port is mirrored at
+# 0x1_0000 + PINx and the comparator input side (millivolts, two bytes per
+# pin) is an avr_adc window at 0x1_0060, channel 0 AIN0 and channel 1 AIN1.
+# VIL 0.3 VCC / VIH 0.6 VCC are the datasheet DC input limits for VCC
+# 2.4..5.5 V (ATtiny2313 datasheet 2543, DC characteristics, pins other than RESET).
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.6
+peripherals:
+  - id: "porta"
+    type: "avr_gpio"
+    base_address: 0x00010039
+    size: "3"
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010036
+    size: "3"
+  - id: "portd"
+    type: "avr_gpio"
+    base_address: 0x00010030
+    size: "3"
+  - id: "acomp"
+    type: "avr_adc"
+    base_address: 0x00010060
+    size: "4"
+    config:
+      channels: 2
+analog_pins:
+  PB0: { peripheral: acomp, channel: 0 }
+  PB1: { peripheral: acomp, channel: 1 }
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

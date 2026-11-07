@@ -8,7 +8,7 @@ input on profiles without an ADC or without an externally routable ADC input. A 
 does not imply ADC support. Generic chip bus tests, analog output traces without a board endpoint,
 and device-only unit tests do not count.
 
-Current inventory: **103 top-level profiles; 103 have end-to-end analog coverage; 0 have no end-to-end analog coverage.** The 26 exact-part profiles in `configs/systems/stm32-catalog/` are also covered (see [STM32 catalog profiles](#stm32-catalog-profiles)). Of the 245 imported profiles in `configs/systems/onboarding/`, 143 are covered end to end through a GPIO input (12 of them also through every ADC instance they declare, and 26 simavr AVR parts also through a firmware conversion on their CPU-owned ADC), and 102 declare neither a GPIO input nor a convertible ADC (see [Onboarding profiles](#onboarding-profiles)). Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 top-level profiles; 103 have end-to-end analog coverage; 0 have no end-to-end analog coverage.** The 26 exact-part profiles in `configs/systems/stm32-catalog/` are also covered (see [STM32 catalog profiles](#stm32-catalog-profiles)). Of the 245 imported profiles in `configs/systems/onboarding/`, 146 are covered end to end through a GPIO input (12 of them also through every ADC instance they declare, 26 simavr AVR parts also through a firmware conversion on their CPU-owned ADC, and the 3 ATtiny2313/2313A/4313 through their analog comparator), and 99 declare neither a GPIO input nor a convertible ADC (see [Onboarding profiles](#onboarding-profiles)). Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -134,8 +134,8 @@ The 245 imported profiles in `configs/systems/onboarding/*.yaml` are inventoried
 |---|---|
 | Covered, all 24 ADC instances converted | `stm32f777`, `nucleo_f767zi` (ADC1–3, F4 map); `stm32f401cdu6-blackpill` (ADC1, F4 map); `stm32h7`, `stm32h743`, `stm32h747`, `stm32h747-disco`, `stm32h753`, `nucleo_h753zi` (ADC3 and ADC1/2 `adcM1S2`, H7 map: DEEPPWD/ADVREGEN bring-up, PCSEL, SQR1); `imxrt1064`, `mimxrt1064_evk` (ADC1/2, HC0/R0 software trigger at 12 bits); `nrf52840` (SAADC EasyDMA scan, idle AIN7 reads zero) |
 | ADC declared, not convertible yet | `stm32f042`, `stm32f072`, `stm32f072b_discovery`, `stm32l071`, `stm32l072`, `stm32wba52`, `nucleo_wba52cg` (F0/L0/WBA `CHSELR` ADC, which no `adc` layout models); `ramn` (STM32L5, where the L4-map engine converts a fixed internal source instead of the routed channel) |
-| CPU-owned AVR ADC | 26 simavr profiles, converted by firmware in [`cosim_onboarding_avr_analog.rs`](#simavr-avr-profiles) |
-| No modelled ADC | 199 profiles: ADC absent or a `stub` |
+| CPU-owned AVR ADC or comparator | 29 simavr profiles (26 ADC, 3 comparator-only), driven by firmware in [`cosim_onboarding_avr_analog.rs`](#simavr-avr-profiles) |
+| No modelled ADC | 196 profiles: ADC absent or a `stub` |
 
 The F7 and H7 onboarding descriptors used to declare their Renode ADC types with no `profile`, so the shared `adc` model fell back to the STM32F1 register map. They now name `stm32f4` (RM0410 §15) and `stm32h7` (RM0433 §25). The test fails if a profile moves between the first two rows, if the instance count changes, or if the no-ADC count changes. The 8 non-convertible profiles need a `CHSELR` layout and a routed-input L4 engine in `peripherals/adc.rs`. Every STM32 silicon-validated board watches that file, so the change needs a drift ack.
 
@@ -145,10 +145,10 @@ The F7 and H7 onboarding descriptors used to declare their Renode ADC types with
 
 | Status | Profiles |
 |---|---|
-| Covered, firmware load from the silicon input register | 41: the 26 simavr AVR parts below (PINx through the CPU IO mirror); `stm32f103` (IDR @0x08); `stm32f401cdu6-blackpill` (IDR @0x10, `stm32v2`); `imxrt1064`, `mimxrt1064_evk` (PSR @0x08); `nrf52840`, `nrf52840dk_nrf52840`, `arduino_nano_33_ble` (IN @0x510); `sam4s`, `sam4s16c`, `sam4s8b`, `sam4s_xplained` (PIO_PDSR @0x3C); the four Mi-V profiles (CoreGPIO InputRegister @0x90, after firmware sets `CONFIG_X.INREG`) |
+| Covered, firmware load from the silicon input register | 44: the 29 simavr AVR parts below (PINx through the CPU IO mirror); `stm32f103` (IDR @0x08); `stm32f401cdu6-blackpill` (IDR @0x10, `stm32v2`); `imxrt1064`, `mimxrt1064_evk` (PSR @0x08); `nrf52840`, `nrf52840dk_nrf52840`, `arduino_nano_33_ble` (IN @0x510); `sam4s`, `sam4s16c`, `sam4s8b`, `sam4s_xplained` (PIO_PDSR @0x3C); the four Mi-V profiles (CoreGPIO InputRegister @0x90, after firmware sets `CONFIG_X.INREG`) |
 | Covered, firmware load from the placeholder IDR @0x08 | 96 profiles whose imported GPIO type (`stm32_gpioport`, `efmgpioport`, `npcx_gpio`, `xilinxgpiops`, `gaisler_gpio`, and 18 more listed in the test) has no dedicated model and runs on the STM32F1 placeholder map. The level is firmware-visible, but not at that IP's silicon register |
 | Covered, register load does not see the level | 6: `nucleo_wba52cg`, `ramn`, `stm32l552`, `stm32wba52` (Cortex-M33 GPIO at 0x4202_xxxx is answered as the M3/M4 bit-band alias); `nxp-frdm-imx8mplus`, `nxp-mimx8ml` (the GPIO1 window reads all ones, not diagnosed) |
-| No analog endpoint | 102 profiles that declare no GPIO input and no convertible ADC |
+| No analog endpoint | 99 profiles that declare no GPIO input and no convertible ADC |
 
 The nRF52840-DK and Nano 33 BLE descriptors based GPIO0/GPIO1 at OUT (0x5000_0500 / 0x5000_0800) with no `reg_offset`. That put IN at 0x5000_0A10, inside the next port's window. They now declare `reg_offset: 0x500`, the same fix as `configs/chips/nrf52833.yaml`. The test fails if any count changes, if an unclassified GPIO type appears, or if a listed register gap starts tracking.
 
@@ -169,6 +169,7 @@ The simavr imports used to carry `peripherals: []`. [`cosim_onboarding_avr_analo
 | Covered, ATtiny13 core (PB5/ADC0, PB3/ADC3) | `simavr-attiny13` |
 | Covered, ATmega32U4 core (PF0/ADC0, PB6/ADC13) | `simavr-atmega32u4` |
 | Covered, ATtiny1634 core (PA3/ADC0, PC2/ADC11) | `simavr-attiny1634` |
-| No analog endpoint | 8 parts listed with the reason in the test's `UNCOVERED`: a different MUX map (16M1/64M1), no ADC (AT90USB162, ATtiny2313/4313), or no core for the part (169P, 328PB) |
+| Covered, ATtiny2313/4313 comparator (AIN0 PB0, AIN1 PB1) | `simavr-attiny2313`, `simavr-attiny2313a`, `simavr-attiny4313`: no ADC. The NTC divider and the diode are routed to AIN0/AIN1 both ways round and firmware reads ACSR.ACO (0x28, bit 5) with LDS. ACO must equal V(AIN0) > V(AIN1) at each temperature, so it flips between 50 °C and 80 °C, where the divider crosses the diode's forward voltage. With ACBG set the 1.1 V bandgap replaces AIN0, and with ACD set ACO reads 0. ACI is not modelled (no edge watch, no interrupt), and neither are offset or hysteresis |
+| No analog endpoint | 5 parts listed with the reason in the test's `UNCOVERED`: a different MUX map (16M1/64M1), no ADC (AT90USB162), or no core for the part (169P, 328PB) |
 
 AVcc is the core's fixed 5 V reference, and the 0.3/0.6 VCC GPIO thresholds (0.2/0.6 VCC on the classic ATmega8/16/32) are the datasheet DC limits. The classic cores model only the map, the ports and the ADC; their timers, USART, SPI and TWI registers are stored only, and they take no interrupts. The port-A cores share the 328P's timers, USART0, SPI and TWI and enter their own vector slots, but INTn/PCINT, output-compare pads and USART1 are stored only. RAM size and SP reset follow the selected core, not the smaller parts' datasheets (ATmega48: 512 B). That does not affect the conversion path tested here.
