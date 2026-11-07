@@ -1276,12 +1276,12 @@ cosim_models:
         V1 in 0 dc 1
         R1 in out 1k
         D1 out 0 vendor
-        .model vendor D(IS=2n CJO=4p)
+        .model vendor D(IS=2n XTI=3)
       probes: { out: "v(out)" }
 "#,
     );
     assert!(
-        error.contains("vendor_circuit") && error.contains("CJO") && error.contains("ngspice"),
+        error.contains("vendor_circuit") && error.contains("XTI") && error.contains("ngspice"),
         "{error}"
     );
 }
