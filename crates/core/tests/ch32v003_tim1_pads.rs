@@ -142,10 +142,11 @@ fn ch32v003_tim1_partial_remap_1_moves_the_channels() {
     }
 }
 
-/// PCFR1.TIM1_RM = 11 (full remap). CH4 is deliberately unbound: ch32fun's
-/// header and its example disagree on its pad (PD4 vs PD2).
+/// PCFR1.TIM1_RM = 11 (full remap). CH4 is on PD4: ch32fun's header and its
+/// example disagreed (PD4 vs PD2), and the reference manual's TIM1_RM field
+/// text (quoted in ch32-rs/ch32-data) says PD4.
 #[test]
-fn ch32v003_tim1_full_remap_moves_the_channels_and_leaves_ch4_dark() {
+fn ch32v003_tim1_full_remap_moves_the_channels_and_ch4_to_pd4() {
     let mut bus = bus();
     bus.write_u32(RCC_APB2PCENR, AFIOEN | (1 << 4) | (1 << 5) | (1 << 11))
         .unwrap();
@@ -157,14 +158,10 @@ fn ch32v003_tim1_full_remap_moves_the_channels_and_leaves_ch4_dark() {
     assert_eq!(func(&bus, "gpioc", 4).as_deref(), Some("TIM1_CH1"));
     assert_eq!(func(&bus, "gpioc", 7).as_deref(), Some("TIM1_CH2"));
     assert_eq!(func(&bus, "gpioc", 5).as_deref(), Some("TIM1_CH3"));
+    assert_eq!(func(&bus, "gpiod", 4).as_deref(), Some("TIM1_CH4"));
     assert_eq!(func(&bus, "gpioc", 3).as_deref(), Some("TIM1_CH1N"));
     assert_eq!(func(&bus, "gpiod", 2).as_deref(), Some("TIM1_CH2N"));
     assert_eq!(func(&bus, "gpioc", 6).as_deref(), Some("TIM1_CH3N"));
-    assert_eq!(
-        func(&bus, "gpiod", 4),
-        None,
-        "full-remap CH4 is not claimed"
-    );
 }
 
 /// Writing PCFR1 back to 00 hands the reset pads back to TIM1.

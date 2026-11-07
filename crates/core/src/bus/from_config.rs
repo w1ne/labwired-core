@@ -506,6 +506,7 @@ impl SystemBus {
             flash_models_ops: false,
             nordic_gpio_service: false,
             timer_capture_wired: false,
+            remap_block: None,
             wire_inputs_live: false,
             resident_scheduling_disabled: false,
             flash_error_flags_idx: None,

@@ -847,6 +847,11 @@ pub struct SystemBus {
     /// feed a timer input, so the post-write hook drains timer-input edges
     /// only on buses that have any. One predictable false branch elsewhere.
     pub(crate) timer_capture_wired: bool,
+    /// Bus index of the block whose register moves pads at run time (the
+    /// CH32V003 AFIO, `Peripheral::remap_register`), once a pad router has
+    /// bound a route gated on it. A store there re-syncs every GPIO port's
+    /// routes ([`Self::remap_changed`]). `None` elsewhere.
+    pub(crate) remap_block: Option<usize>,
     /// Set when a world `gpio_net` puts a pad on a net (`join_net_pads`):
     /// from then on the post-write and external-input hooks hand outside pad
     /// levels to the peripheral lines they are routed to. False elsewhere.

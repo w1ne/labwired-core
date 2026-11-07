@@ -69,3 +69,21 @@ Rechecked live on 2026-11-06 UTC for the SysTick and WCH SDK smokes.
 - The EVT schematic in the same SDK (`EVT/PUB/CH32V00xSCH.pdf`) shows a 24 MHz
   Y1 whose links R4/R5 are marked `NC(0R)`. That is why the unmodified example
   runs from the HSI at 24 MHz on the default board fit.
+
+## CH32V003 TIM2 encoder and remap smoke
+
+Rechecked live on 2026-11-07 UTC before extending TIM2 encoder and remap
+coverage.
+
+- WCH's live [CH32V003 product page](https://www.wch-ic.com/products/CH32V003)
+  lists the QingKe V2A series and its 48 MHz, 2 KB SRAM, 16 KB flash, timer,
+  USART, I2C, and SPI capabilities, and links the series datasheet, reference
+  manual, and evaluation-board materials. The page does not publish an
+  “Active”/“NRND”/“Obsolete” lifecycle label, so this receipt does not claim a
+  formal classification.
+- LCSC's live [CH32V003F4P6 listing](https://www.lcsc.com/product-detail/Microcontroller-Units-MCUs-MPUs-SOCs_WCH-Jiangsu-Qin-Heng-CH32V003F4P6_C5187096.html)
+  identifies the WCH TSSOP-20 part and showed 15,435 units in stock, “ships
+  now”, and an add-to-cart control at review time. That is current purchase
+  evidence for the exact MCU; it is separate from WCH's lifecycle statement.
+- WCH's product page points to its current CH32V003 evaluation-board archive,
+  supporting the CH32V003EVT board profile used by these firmware smokes.

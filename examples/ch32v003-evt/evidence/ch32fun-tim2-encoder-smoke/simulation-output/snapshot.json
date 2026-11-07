@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1992,
+      536872948,
+      536871932,
+      0,
+      536872793,
+      0,
+      10,
+      36855,
+      36863,
+      46,
+      536872792,
+      536872851,
+      3758157824,
+      2101226,
+      4294866066,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 2014,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 1740,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 15999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 16000000,
+  "cycles": 42666718,
+  "instructions": 16000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 16000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 16000000
+    }
+  },
+  "limits": {
+    "max_steps": 32000000,
+    "max_cycles": 16000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "28248933f23ed156b55ccd5b20bb379eb5a64ff25336e663a2bc596fdf90f2b5",
+  "config": {
+    "firmware": "examples/ch32v003-evt/ch32fun/tim2_encoder.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-ch32fun-tim2-encoder-smoke.yaml",
+    "script": "examples/ch32v003-evt/ch32fun-tim2-encoder-smoke.yaml"
+  }
+}

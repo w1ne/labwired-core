@@ -379,9 +379,9 @@ impl PadRoutes {
             // channel whenever the pad is handed to a peripheral at all; it
             // publishes nothing while it does not drive. A gated route
             // whose remap field selects another mapping does not report: the
-            // remap moved its signal to a different pad. (A remap written
-            // AFTER the pads were configured re-syncs on the next write to
-            // this port; ch32fun and the WCH SDK both remap first.)
+            // remap moved its signal to a different pad. A remap written
+            // after the pads were configured re-syncs through the port's
+            // `routes_changed` (`SystemBus::remap_changed`).
             if selector_of(pin).is_some() {
                 for r in self.routes.iter().filter(|r| {
                     r.when_driving && r.pin == pin && r.gate.as_ref().is_none_or(RemapGate::open)

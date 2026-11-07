@@ -2846,9 +2846,7 @@ impl SystemBus {
     fn wire_ch32v003_timer_capture_pads(&mut self) -> bool {
         use crate::peripherals::pad_routing::RemapGate;
         use crate::peripherals::timer::TimerInputStage;
-        let remap = self
-            .find_peripheral_index_by_name("afio")
-            .and_then(|i| self.peripherals[i].dev.remap_register());
+        let remap = self.remap_block_register();
         let mut wired = false;
         for &(tim, port, pin, ch, func, shift, value) in CH32V003_TIMER_PADS {
             if ch > 3 || (remap.is_none() && value != 0) {
@@ -2877,6 +2875,15 @@ impl SystemBus {
                 .bind_remapped_timer_capture_pad(pin, t_idx, ch as u8, func, gate);
         }
         wired
+    }
+
+    /// The CH32V003 AFIO's remap register, recording the block as the bus's
+    /// [`SystemBus::remap_block`] so a store to it re-syncs the pads.
+    fn remap_block_register(&mut self) -> Option<std::sync::Arc<std::sync::atomic::AtomicU32>> {
+        let idx = self.find_peripheral_index_by_name("afio")?;
+        let register = self.peripherals[idx].dev.remap_register()?;
+        self.remap_block = Some(idx);
+        Some(register)
     }
 
     /// Whether the chip's RCC is the narrow WCH CH32V003 profile. Its I²C1
@@ -2933,10 +2940,7 @@ impl SystemBus {
         let remap = if self.rcc_is_ch32v003() {
             // No AFIO block on the bus: nothing can move a pad, so the reset
             // rows stand alone.
-            Some(
-                self.find_peripheral_index_by_name("afio")
-                    .and_then(|i| self.peripherals[i].dev.remap_register()),
-            )
+            Some(self.remap_block_register())
         } else {
             None
         };
@@ -4123,13 +4127,24 @@ fn edge_sampling_unsupported(controller: &str, engine: &str) -> anyhow::Error {
 //   00/10: CH1/CH1N PD2/PD0, CH2/CH2N PA1/PA2, CH3/CH3N PC3/PD1, CH4 PC4
 //   01:    CH1/CH1N PC6/PC3, CH2/CH2N PC7/PC4, CH3/CH3N PC0/PD1, CH4 PD3
 //   11:    CH1/CH1N PC4/PC3, CH2/CH2N PC7/PD2, CH3/CH3N PC5/PC6
-// ⚠️ Full-remap CH4 is left out: the header puts it on PD4, the
-// example's table on PD2 (already CH2N there). Two sources disagree,
-// so that output stays dark rather than guessed.
+//   11:    CH4 PD4
+// Full-remap CH4 was first left out because the header puts it on PD4
+// and the example's table on PD2 (already CH2N there). The reference
+// manual's TIM1_RM field text, quoted verbatim in ch32-rs/ch32-data
+// (data/family/CH32V003.yaml: "11：完全映射(ETR/PC2，CH1/PC4，CH2/PC7，
+// CH3/PC5，CH4/PD4，…)"), settles it on PD4.
 //
-// TIM2_RM is PCFR1 [9:8]; only its reset mapping 00 is bound, the
-// pads ch32fun's examples/tim2_pwm drives: T2CH1ETR PD4, T2CH2 PD3,
-// T2CH3 PC0, T2CH4 PD7. A remapped TIM2 is dark, not on the wrong pad.
+// TIM2_RM is PCFR1 [9:8]. The RM's field text (same ch32-data file) and
+// the remap tables in ch32fun's examples/tim2_pwm_remap and
+// examples/tim2_encoder agree on all sixteen pads:
+//   00: CH1/ETR PD4, CH2 PD3, CH3 PC0, CH4 PD7
+//   01: CH1/ETR PC5, CH2 PC2, CH3 PD2, CH4 PC1
+//   10: CH1/ETR PC1, CH2 PD3, CH3 PC0, CH4 PD7
+//   11: CH1/ETR PC1, CH2 PC7, CH3 PD6, CH4 PD5
+// ch32v003hw.h's AFIO_PCFR1_TIM2_REMAP_* comments have two typos (CH4
+// at 00 and CH3 at 01 both "PD4") and are not used. tim2_encoder's code
+// comments call PC2 "T2CH1_" and PC5 "T2CH2_" under 01; the RM and both
+// tables say the reverse, which only flips the encoder's count direction.
 //
 // A TxCHy pad is also that channel's input TIy (CH32V003 RM, "TIMx_CHy"
 // is input capture or output compare), so the rows with channel 0..3 are
@@ -4165,8 +4180,21 @@ const CH32V003_TIMER_PADS: &[Ch32Row] = &[
     ("tim1", 'c', 3, 4, "TIM1_CH1N", TIM1_RM, 0b11),
     ("tim1", 'd', 2, 5, "TIM1_CH2N", TIM1_RM, 0b11),
     ("tim1", 'c', 6, 6, "TIM1_CH3N", TIM1_RM, 0b11),
+    ("tim1", 'd', 4, 3, "TIM1_CH4", TIM1_RM, 0b11),
     ("tim2", 'd', 4, 0, "TIM2_CH1", TIM2_RM, 0b00),
     ("tim2", 'd', 3, 1, "TIM2_CH2", TIM2_RM, 0b00),
     ("tim2", 'c', 0, 2, "TIM2_CH3", TIM2_RM, 0b00),
     ("tim2", 'd', 7, 3, "TIM2_CH4", TIM2_RM, 0b00),
+    ("tim2", 'c', 5, 0, "TIM2_CH1", TIM2_RM, 0b01),
+    ("tim2", 'c', 2, 1, "TIM2_CH2", TIM2_RM, 0b01),
+    ("tim2", 'd', 2, 2, "TIM2_CH3", TIM2_RM, 0b01),
+    ("tim2", 'c', 1, 3, "TIM2_CH4", TIM2_RM, 0b01),
+    ("tim2", 'c', 1, 0, "TIM2_CH1", TIM2_RM, 0b10),
+    ("tim2", 'd', 3, 1, "TIM2_CH2", TIM2_RM, 0b10),
+    ("tim2", 'c', 0, 2, "TIM2_CH3", TIM2_RM, 0b10),
+    ("tim2", 'd', 7, 3, "TIM2_CH4", TIM2_RM, 0b10),
+    ("tim2", 'c', 1, 0, "TIM2_CH1", TIM2_RM, 0b11),
+    ("tim2", 'c', 7, 1, "TIM2_CH2", TIM2_RM, 0b11),
+    ("tim2", 'd', 6, 2, "TIM2_CH3", TIM2_RM, 0b11),
+    ("tim2", 'd', 5, 3, "TIM2_CH4", TIM2_RM, 0b11),
 ];

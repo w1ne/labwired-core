@@ -1580,6 +1580,9 @@ struct CaptureRoute {
     func: &'static str,
     /// Remap field the route is live under (CH32V003 AFIO_PCFR1), if any.
     gate: Option<crate::peripherals::pad_routing::RemapGate>,
+    /// The level this route last reported to the timer. Starts low, the
+    /// timer's own reset view of an unconnected input.
+    reported: bool,
 }
 
 /// A level change on a pad routed to a timer input, drained by the bus
@@ -2001,6 +2004,7 @@ impl GpioPort {
             ti,
             func,
             gate: None,
+            reported: false,
         });
     }
 
@@ -2021,33 +2025,29 @@ impl GpioPort {
         }
     }
 
-    /// The input word timer routes watch, or 0 with no routes (no read).
-    #[inline]
-    fn capture_input_word(&self) -> u32 {
-        if self.capture_routes.is_empty() {
-            return 0;
-        }
-        self.read_reg(self.idr_offset())
-    }
-
-    /// Record an edge for every live timer route whose pad input moved since
-    /// `before` (a [`Self::capture_input_word`] taken ahead of the change).
-    fn record_timer_input_edges(&mut self, before: u32) {
+    /// Report the pad level of every live timer route that differs from the
+    /// level it last reported. A level is what the timer's input stage sees,
+    /// so this covers a pad moving (an outside driver, a pull switched on by
+    /// a CFGLR/OUTDR write) and a route going live on a pad that was already
+    /// high: an encoder input idling high behind its pull-up from reset, or
+    /// a remap that selects such a pad. The level is remembered per route,
+    /// so switching the remap between two pads that sit at different levels
+    /// reports the newly selected pad only when it next differs from what
+    /// that route last reported.
+    fn record_timer_input_edges(&mut self) {
         if self.capture_routes.is_empty() {
             return;
         }
-        let after = self.read_reg(self.idr_offset());
-        let diff = before ^ after;
-        if diff == 0 {
-            return;
-        }
+        let word = self.read_reg(self.idr_offset());
         for i in 0..self.capture_routes.len() {
             let route = self.capture_routes[i].clone();
-            if (diff >> route.pin) & 1 != 0 && self.capture_route_live(&route) {
+            let level = (word >> route.pin) & 1 != 0;
+            if level != route.reported && self.capture_route_live(&route) {
+                self.capture_routes[i].reported = level;
                 self.timer_edges.push(TimerInputEdge {
                     timer: route.timer,
                     ti: route.ti,
-                    level: (after >> route.pin) & 1 != 0,
+                    level,
                 });
             }
         }
@@ -2603,7 +2603,6 @@ impl crate::pins::PinPort for GpioPort {
             return None;
         }
         let before = crate::Peripheral::read_gpio_input(self, pin)?;
-        let capture_before = self.capture_input_word();
         let ok = self.mutate_pads(|s| match ext {
             crate::pins::External::Level(level) => {
                 let ok = s.family.set_external_input(pin, level);
@@ -2626,7 +2625,7 @@ impl crate::pins::PinPort for GpioPort {
         if ok {
             self.sync_wire_input(pin);
         }
-        self.record_timer_input_edges(capture_before);
+        self.record_timer_input_edges();
         let after = crate::Peripheral::read_gpio_input(self, pin)?;
         ok.then_some(crate::pins::InputChange { before, after })
     }
@@ -2687,6 +2686,9 @@ impl crate::pins::PinPort for GpioPort {
 
     fn routes_changed(&mut self) {
         self.sync_pad_line_taps();
+        self.sync_pad_line_observers();
+        // A remap can make a timer route live on a pad already high.
+        self.record_timer_input_edges();
         // A pad that just became routed to a peripheral line hands it the
         // level the outside already holds there.
         self.sync_wire_inputs();
@@ -2833,17 +2835,14 @@ impl crate::Peripheral for GpioPort {
         reg_val &= !mask;
         reg_val |= (value as u32) << (byte_offset * 8);
 
-        let before = if reg_offset == self.idr_offset() {
-            self.capture_input_word()
-        } else {
-            0
-        };
+        // Any write can move a timer input or make its route live: besides
+        // an IDR poke, a CFGLR or OUTDR write that turns a pull-up on, or that
+        // makes a pad a digital input, changes what the timer's input stage
+        // sees (an encoder needs the level of the input that is not moving).
         self.mutate_pads(|s| s.write_reg(reg_offset, reg_val));
         self.sync_wire_inputs();
         self.refresh_console_af();
-        if reg_offset == self.idr_offset() {
-            self.record_timer_input_edges(before);
-        }
+        self.record_timer_input_edges();
         Ok(())
     }
 
@@ -2860,18 +2859,11 @@ impl crate::Peripheral for GpioPort {
         // wins). Silicon performs the STR as one 32-bit transaction; mirror
         // that by handing write_reg the full word. Silicon-verified on the
         // bench STM32F103 (stm32f1_exec_oracle::gpioa_bsrr_set_reset).
-        let input_reg = (offset & !3) == self.idr_offset();
-        let before = if input_reg {
-            self.capture_input_word()
-        } else {
-            0
-        };
+        // See `write`: a configuration write can move a timer input too.
         self.mutate_pads(|s| s.write_reg(offset & !3, value));
         self.sync_wire_inputs();
         self.refresh_console_af();
-        if input_reg {
-            self.record_timer_input_edges(before);
-        }
+        self.record_timer_input_edges();
         Ok(())
     }
 
@@ -3017,6 +3009,7 @@ impl crate::Peripheral for GpioPort {
             ti,
             func,
             gate,
+            reported: false,
         });
         true
     }

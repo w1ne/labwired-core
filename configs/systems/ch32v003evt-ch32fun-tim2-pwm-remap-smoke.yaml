@@ -1,0 +1,14 @@
+# WCH CH32V003 evaluation board running ch32fun's tim2_pwm_remap, unmodified,
+# with the four LEDs the example asks for: PD4 and PD3 (T2CH1/T2CH2 at
+# TIM2_RM = 00) and PC1 and PC7 (T2CH1_/T2CH2_ at TIM2_RM = 11, full remap),
+# and a WCH-LinkE on SWIO for the debug-printf console. The example sets
+# CC1P/CC2P, so both channels are active low (LED to 3.3 V). The LEDs are
+# test connections, not factory-installed parts.
+name: ch32v003evt-ch32fun-tim2-pwm-remap-smoke
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+external_devices: []
+board_io:
+  - { id: external_led_pd4, kind: led, peripheral: gpiod, pin: 4, signal: output, active_high: false }
+  - { id: external_led_pd3, kind: led, peripheral: gpiod, pin: 3, signal: output, active_high: false }
+  - { id: external_led_pc1, kind: led, peripheral: gpioc, pin: 1, signal: output, active_high: false }
+  - { id: external_led_pc7, kind: led, peripheral: gpioc, pin: 7, signal: output, active_high: false }

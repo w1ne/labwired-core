@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build fourteen unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build sixteen unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -54,6 +54,18 @@
 #                    the 128 kHz LSI), on 3 s, one feed, then 250 ms blinks
 #                    with no further feed until the watchdog resets the
 #                    chip and the sequence starts again.
+#   input_capture.elf
+#                    examples/input_capture: TIM1 CH1/CH2 capture the rising
+#                    and falling edges of a pulse on PD2 (T1CH1), queued by
+#                    TIM1_CC_IRQHandler (PFIC 37) and printed.
+#   tim2_encoder.elf examples/tim2_encoder: TIM2 encoder mode 3 on partial
+#                    remap 1 (A = PC5, B = PC2, pulled up), CNT preset to
+#                    0x8FFF, the position printed whenever it moves.
+#   tim2_pwm_remap.elf
+#                    examples/tim2_pwm_remap: TIM2 PWM on CH1/CH2, the duty
+#                    stepping every Delay_Ms(5); every 255 steps the AFIO
+#                    TIM2 remap toggles between 00 (PD4/PD3) and 11
+#                    (PC1/PC7) while TIM2 runs.
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V003 (rv32ec/ilp32e, -Os -flto, generated_ch32v003.ld),
@@ -92,7 +104,7 @@ ld="${out_dir}/generated_ch32v003.ld"
 
 for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr \
     spi_max7219 uart_tx_dma ws2812bdemo tim1_pwm tim1_pwm_complementary_outputs iwdg \
-    input_capture; do
+    input_capture tim2_encoder tim2_pwm_remap; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

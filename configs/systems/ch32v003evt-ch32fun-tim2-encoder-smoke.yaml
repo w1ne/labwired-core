@@ -1,0 +1,13 @@
+# WCH CH32V003 evaluation board running ch32fun's tim2_encoder, unmodified:
+# a mechanical quadrature encoder on TIM2 partial remap 1 (AFIO_PCFR1
+# TIM2_RM = 01), A on PC5 (T2CH1ETR_) and B on PC2 (T2CH2_). The example
+# turns on the pins' pull-ups, so each encoder switch is modelled as a
+# contact to GND (active low), as on a bare EC11-style encoder. It is a test
+# connection, not a factory-installed part. A WCH-LinkE on SWIO carries the
+# debug-printf console, as for the other ch32fun profiles.
+name: ch32v003evt-ch32fun-tim2-encoder-smoke
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+external_devices: []
+board_io:
+  - { id: encoder_a, kind: button, peripheral: gpioc, pin: 5, signal: input, active_high: false }
+  - { id: encoder_b, kind: button, peripheral: gpioc, pin: 2, signal: input, active_high: false }

@@ -172,6 +172,8 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `uart_tx_dma` | `Hello World!\r\n` three times on USART1 (PD5), every byte moved by DMA1 channel 4; the transfer-complete handler (PFIC 25) toggles PD6 | 5/5: 42 bytes, PD6 4 edges, CNTR4 = 0, INTFR nibble 4 = 0x5 |
 | `ws2812bdemo` | a 191-LED WS2812B strip on PC6, fed by SPI1 at 3 MHz from DMA1 channel 3 in circular mode with HT/TC refills (PFIC 24). The strip decodes PC6's pulse widths; [`check-ws2812.py`](check-ws2812.py) recomputes every LED from the demo's own colour tables and replays the driver's buffer protocol ([`check-ws2812.log`](evidence/ch32fun-ws2812-smoke/colour-check/check-ws2812.log)) | 3/3 and all 190 LEDs the driver sends match frame 9. The driver clocks out 190 of `NR_LEDS` 191: the HT refill that writes LED 190 is the one that clears CIRC, so that half is never sent. [CH32V003F4P6 status and sourcing](evidence/ch32fun-ws2812-smoke/component-status.md) |
 | `iwdg` | the independent watchdog: PD0/PD4/PC0 on 1.5 s, off 1 s, the IWDG started at /128 with RLDR 0xFFF, on 3 s, one feed, then 250 ms blinks with no further feed until the watchdog resets the chip. The smoke checks the edge counts and that PSCR is back at 0 after the reset (11.25 s, 540 M cycles). [`check-iwdg.py`](check-iwdg.py) decodes PD0 from a `--watch-gpio` run, committed as [`iwdg-capture.json.gz`](evidence/ch32fun-iwdg-smoke/iwdg-capture.json.gz) with its output in [`iwdg-check.log`](evidence/ch32fun-iwdg-smoke/iwdg-check.log) | feed at 5,500.003 ms, 17 blink edges at 250 ms, then the reset at feed + 4,095.002 ms (4095 counts of LSI/128 at 128 kHz) releases PD0, and the second boot's 1,500 ms on pulse starts 94 cycles later, as on power-up |
+| `tim2_encoder` | TIM2 in encoder mode 3 (`SMCFGR.SMS` = 011, both inputs, x4) on partial remap 1: a switch encoder's A on PC5 (T2CH1) and B on PC2 (T2CH2), both pulled up by the example and closing to GND. Three detents forward from cycle 6,000,000 and five back from 13,000,000; `main()` prints the position when `CNT` moved. The smoke checks both printed lines, the remap, SMS, CEN and `CTLR1.DIR`, and the final `CNT`; the whole terminal is in [`terminal.log`](evidence/ch32fun-tim2-encoder-smoke/terminal.log) | 7/7; `relative=12 absolute=36875 delta=12`, then `relative=-8 absolute=36855 delta=-20`, nothing else: `CNT` sits at 0x8FFF until the first edge |
+| `tim2_pwm_remap` | TIM2 PWM (ATRLR 255, CH1/CH2 active low, CH2 = 255 - CH1) with LEDs on PD4, PD3, PC1 and PC7; after 255 duty steps `ToggleRemap()` sets `TIM2_RM` = 11 while TIM2 runs. The smoke checks the console (`Full Remapping!`), the remap and the TIM2 setup; [`check-tim2-pwm-remap.py`](check-tim2-pwm-remap.py) decodes a `--watch-gpio` run, committed as [`pwm-capture.json.gz`](evidence/ch32fun-tim2-pwm-remap-smoke/pwm-capture.json.gz) with its output in [`remap-check.log`](evidence/ch32fun-tim2-pwm-remap-smoke/remap-check.log) | 9/9; PD4/PD3 carry counts 253..254 and stop at cycle 66,011,469, PC1/PC7 start 255 cycles later at count 0 and carry 0..16; every whole period is 256 cycles with CH1 low + CH2 low = 255 |
 | `input_capture` | TIM1 input capture at 1 us per count: a pulse source on PD2 (T1CH1) gives a 1000 us and a 2500 us pulse; CH1 latches the rising edge, CH2 (TI1, `CC2P`) the falling edge, and the TIM1_CC handler (PFIC 37) queues each capture for `main()` to print. The smoke checks the four printed captures and the TIM1 setup left behind (PSC, CHCTLR1, CCER, DMAINTENR, CEN); the whole terminal is in [`terminal.log`](evidence/ch32fun-input-capture-smoke/terminal.log) | 11/11; fall minus rise is exactly 1000 (24993 → 25993) and 2500 (21957 → 24457) counts, one handler entry per capture, no `badtrigger` |
 
 This profile adds these to the PFIC profile:
@@ -249,17 +251,42 @@ This profile adds these to the PFIC profile:
   Partial remap 1, which ch32fun's `tim1_pwm_complementary_outputs` uses,
   puts CH1/CH1N on PC6/PC3, CH2/CH2N on PC7/PC4, CH3 on PC0 and CH4 on
   PD3. Partial remap 2 uses the reset pads. Full remap puts CH1/CH2/CH3 on
-  PC4/PC7/PC5 and CH1N/CH2N/CH3N on PC3/PD2/PC6. The pads come from
-  ch32fun's `ch32v003hw.h` (`AFIO_PCFR1_TIM1_REMAP_*`), checked against the
-  example's own table. The two sources disagree on full-remap CH4 (PD4 vs
-  PD2), so that output is left unbound. TIM2 is gated on its reset mapping
-  (`TIM2_RM` = 00) only, so a remapped TIM2 is dark rather than wrong.
+  PC4/PC7/PC5, CH4 on PD4 and CH1N/CH2N/CH3N on PC3/PD2/PC6. The pads come
+  from ch32fun's `ch32v003hw.h` (`AFIO_PCFR1_TIM1_REMAP_*`), checked against
+  the example's own table. Those two disagree on full-remap CH4 (PD4 vs
+  PD2); the reference manual's `TIM1_RM` field text, quoted verbatim in
+  [ch32-rs/ch32-data](https://github.com/ch32-rs/ch32-data)
+  `data/family/CH32V003.yaml`, settles it on PD4.
+- **AFIO `PCFR1` TIM2 remap** (`TIM2_RM`, bits [9:8]), all four settings:
+  00 CH1/ETR PD4, CH2 PD3, CH3 PC0, CH4 PD7; 01 PC5, PC2, PD2, PC1; 10 PC1,
+  PD3, PC0, PD7; 11 PC1, PC7, PD6, PD5. The RM field text (same ch32-data
+  file) and the tables in ch32fun's `tim2_pwm_remap` and `tim2_encoder`
+  agree on all sixteen pads; `ch32v003hw.h` has two typos ("PD4" for CH4 at
+  00 and CH3 at 01) and is not used. A `PCFR1` store re-syncs every GPIO
+  port's routes (`SystemBus::remap_changed`), so a remap written while the
+  timer runs moves the PWM outputs and logic-capture taps immediately. Timer
+  input levels are reported from the selected pad when their level differs
+  from the last level reported for that route; a route that returns at its
+  previously reported level can leave a timer input's remembered level stale
+  until that pad next changes. The checked encoder example keeps remap 01
+  fixed while it runs.
+  [`crates/core/tests/ch32v003_tim2_pads.rs`](../../crates/core/tests/ch32v003_tim2_pads.rs)
+  checks the four output mappings and that no extra TIM2 pad is live. The
+  unmodified `tim2_pwm_remap` smoke checks the register setup and console, and
+  its [waveform capture](evidence/ch32fun-tim2-pwm-remap-smoke/pwm-capture.json.gz)
+  verifies the PWM pair moves from PD4/PD3 to PC1/PC7 while the timer runs.
+  [`crates/core/tests/ch32v003_tim2_encoder.rs`](../../crates/core/tests/ch32v003_tim2_encoder.rs)
+  checks encoder counts from the pulled-up PC5/PC2 inputs; its unmodified
+  firmware smoke is [`ch32fun-tim2-encoder-smoke.yaml`](ch32fun-tim2-encoder-smoke.yaml).
   [`crates/core/tests/ch32v003_tim1_pads.rs`](../../crates/core/tests/ch32v003_tim1_pads.rs)
   pins partial and full remap and the move back to reset. The smoke uses
   [`ch32v003evt-ch32fun-tim1-complementary-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-tim1-complementary-smoke.yaml).
-- **TIM1/TIM2 input capture.** The capture router uses the same CH32V003
-  pad table as the outputs: a channel pad that is a digital input feeds
-  that channel's TIy while `PCFR1` selects its mapping. Before this, the
+- **TIM1/TIM2 input capture and TIM2 encoder mode.** The capture router uses
+  the same CH32V003 pad table as the outputs: a channel pad that is a digital
+  input feeds that channel's TIy while `PCFR1` selects its mapping. TIM2
+  encoder SMS modes 001/010/011 count the selected TI1/TI2 edges, with
+  direction from the other input, CCxP polarity and the input prescaler.
+  `tim2_encoder` checks x4 switch-encoder counts on remap 01. Before this, the
   router used the STM32F103 table, which puts TIM1 on PA8..PA11 (not on
   this package) and TIM2 CH2/CH3 on PA1/PA2 (TIM1 pads here). TIM1 has
   `irq: 37` (TIM1_CC): on a QingKe chip a level source's own line now
@@ -351,10 +378,7 @@ Read these results correctly:
   external triggers, the analog watchdog, DMA, the internal V_REFINT/V_CAL
   channels and calibration offsets are not modeled. Codes are ideal (no
   offset, gain or noise error) against a 3.3 V reference.
-- On TIM1: full-remap CH4 is unbound (see above). A `PCFR1` write made
-  after the pads are already configured moves the pad levels at once, but a
-  `--watch-gpio` capture follows it only from the next GPIO register write;
-  ch32fun and the WCH SDK both remap first. Not modeled: the break input (BKIN) and
+- On TIM1: not modeled: the break input (BKIN) and
   `BDTR.AOE`/`LOCK`, center-aligned and down counting, the repetition
   counter as an update divider, DMA, the TIM1 break/update/trigger
   interrupts and the `RCC_APB2PRSTR` reset. `tim1_pwm` does not set
@@ -363,11 +387,13 @@ Read these results correctly:
   check sees as at most one period of lag on CH4. The capture window is
   `count` 116 to 134. `tim1_pwm` never enables both halves of a pair;
   dead time is checked by `tim1_pwm_complementary_outputs` instead.
-- On TIM2: the AFIO `PCFR1` TIM2 remaps (stored only, so a remapped
-  output stays on its reset pad), the `RCC_APB1PRSTR` reset, PD7's NRST
-  option byte (the pad is treated as GPIO, as after `minichlink -d`),
-  encoder and slave modes, DMA and TIM2 interrupts are not modeled (TIM2
-  input captures land, but only polling sees them). The
+- On TIM2: the `RCC_APB1PRSTR` reset, PD7's NRST option byte (the pad is
+  treated as GPIO, as after `minichlink -d`), the ETR input, the
+  external-clock, gated and trigger slave modes, DMA and TIM2 interrupts are
+  not modeled (TIM2 input captures and encoder counts land, but only polling
+  sees them). Encoder mode has no input filter delay beyond `ICxF`'s, and
+  a remap between two pads at different levels reports the newly selected
+  pad only once its level differs from what that route last reported. The
   logic capture keeps the newest ~21,800 edges per pad, so the decoded
   window is `count` 121 to 134 of the 0 to 255 ramp (about 60 ms, including
   CH2's wrap through 0). Earlier steps only reach the edge-count checks.
@@ -551,7 +577,7 @@ cargo run -q -p labwired-cli -- test \
 # ch32fun ELFs are committed; this rebuilds them byte-identically.
 examples/ch32v003-evt/build-ch32fun-examples.sh
 for t in blink uartdemo systick-irq adc-polled i2c-oled tim2-pwm tim1-pwm tim1-complementary exti \
-    input-capture; do
+    input-capture tim2-encoder tim2-pwm-remap; do
   cargo run -q -p labwired-cli -- test \
     --script examples/ch32v003-evt/ch32fun-$t-smoke.yaml \
     --output-dir /tmp/ch32v003-ch32fun-$t
@@ -577,6 +603,12 @@ cargo run -q -p labwired-cli -- test \
   --output-dir /tmp/ch32v003-tim1-complementary \
   --watch-gpio gpioc:6 --watch-gpio gpioc:3
 python3 examples/ch32v003-evt/check-tim1-complementary.py /tmp/ch32v003-tim1-complementary/result.json
+# tim2_pwm_remap: the pair on PD4/PD3, then on PC1/PC7 after the remap.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003-evt/ch32fun-tim2-pwm-remap-smoke.yaml \
+  --output-dir /tmp/ch32v003-tim2-pwm-remap \
+  --watch-gpio gpiod:4 --watch-gpio gpiod:3 --watch-gpio gpioc:1 --watch-gpio gpioc:7
+python3 examples/ch32v003-evt/check-tim2-pwm-remap.py /tmp/ch32v003-tim2-pwm-remap/result.json
 # exti_pin_change_isr: the PD3 presses and the PC1 blips they cause.
 cargo run -q -p labwired-cli -- test \
   --script examples/ch32v003-evt/ch32fun-exti-smoke.yaml \

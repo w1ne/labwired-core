@@ -84,9 +84,11 @@ use std::sync::Arc;
 /// - **32-bit `ARR == 0xFFFF_FFFF` never wraps**: the walk's `cnt > arr`
 ///   check can never fire (u32 wrapping_add), so the counter free-runs
 ///   mod 2^32 with no UIF — reproduced exactly.
-/// - **SMCR (external clock / encoder modes) is a pure register bank bit**:
-///   the walk ignores it and always counts the CPU clock, so scheduler mode
-///   is exactly as expressive — no configuration needs to stay on the walk.
+/// - **SMCR encoder modes (SMS = 001/010/011) count input edges**, not the
+///   CPU clock: the counter moves only on a TI1FP1/TI2FP2 edge
+///   ([`Timer::encoder_step`]), so neither the walk nor the lazy replay
+///   counts while one is selected. The external-clock, gated and trigger
+///   modes stay register bits; the counter keeps counting the CPU clock.
 ///
 /// ### Tick-cost normalization (B2/B3)
 ///
@@ -178,8 +180,9 @@ pub struct Timer {
     /// 1st/2nd/4th/8th accepted edge. Reset when CCxE is cleared.
     #[serde(skip)]
     ic_psc_count: [u8; 4],
-    /// Filtered level of TI1..TI4 as last accepted (informational: the GPIO
-    /// port only ever reports real level changes).
+    /// Filtered level of TI1..TI4 as last accepted. The encoder reads the
+    /// still input's level from here; the GPIO port reports every real level
+    /// change, a pull-up being switched on included.
     #[serde(skip)]
     ti_level: [bool; 4],
     /// Channel OUTPUT waveform (OC1..OC4) published onto the GPIO pads the
@@ -306,6 +309,8 @@ pub enum TimerInputStage {
 
 /// SR flag bits the input-capture path sets (RM0368 §13.4.5 / RM0008 §15.4.5).
 const SR_TIF: u32 = 1 << 6;
+/// CR1.DIR: 1 = the counter counts down.
+const CR1_DIR: u32 = 1 << 4;
 /// CCxOF (over-capture) for channel `ch` (0-based) sits at SR bit 9 + ch.
 const SR_CCOF_SHIFT: u32 = 9;
 
@@ -712,7 +717,7 @@ impl Timer {
             // A lone CCxNE output follows OCxREF itself (Table 83).
             (reference, reference)
         };
-        let stopped = (self.cr1 & 1) == 0 || self.counter_frozen();
+        let stopped = (self.cr1 & 1) == 0 || self.counter_frozen() || self.encoder_mode().is_some();
         let to_drive = |active: OcWave, low: bool| {
             let drive = match if low { active.inverted() } else { active } {
                 OcWave::Const(level) => LedcDrive::Level(level),
@@ -920,7 +925,11 @@ impl Timer {
             self.advance_to(at);
         }
         let frozen_before = self.counter_frozen();
+        let moved = self.ti_level[ti as usize] != level;
         self.ti_level[ti as usize] = level;
+        if moved {
+            self.encoder_step(ti);
+        }
         for ch in 0..4 {
             if self.ic_source(ch) == Some(ti) && self.polarity_accepts(ch, level) {
                 self.capture_channel(ch);
@@ -962,6 +971,73 @@ impl Timer {
             self.freeze_revision
                 .set(self.freeze_revision.get().wrapping_add(1));
         }
+    }
+
+    /// The encoder mode SMCR.SMS selects: 1 counts TI1FP1 edges, 2 TI2FP2
+    /// edges, 3 both (RM0008 §15.3.12; WCH's `TIM_EncoderMode_TI1/TI2/TI12`
+    /// are the same 1/2/3).
+    fn encoder_mode(&self) -> Option<u32> {
+        let sms = self.smcr & 0x7;
+        (!self.basic && (1..=3).contains(&sms)).then_some(sms)
+    }
+
+    /// TIxFPx: input `ti` through its CCxP polarity (1 = inverted).
+    fn encoder_input(&self, ti: usize) -> bool {
+        self.ti_level[ti] ^ ((self.ccer >> (ti * 4 + 1)) & 1 != 0)
+    }
+
+    /// One encoder count after input `ti` moved (RM0008 Table 79): an edge
+    /// on one input counts up or down by the edge's direction and the other
+    /// input's level. TI1FP1 rising counts up while TI2FP2 is low and down
+    /// while it is high; TI2FP2 rising counts up while TI1FP1 is high and
+    /// down while it is low; falling edges count the other way. The edge
+    /// clocks the prescaler, CR1.DIR shows the direction, and running past
+    /// ARR upward or 0 downward is an update event (UIF).
+    fn encoder_step(&mut self, ti: u8) {
+        let Some(sms) = self.encoder_mode() else {
+            return;
+        };
+        if self.cr1 & 1 == 0 || ti > 1 || sms & (1 << ti) == 0 {
+            return;
+        }
+        let this = self.encoder_input(ti as usize);
+        let other = self.encoder_input(1 - ti as usize);
+        let up = if ti == 0 {
+            this != other
+        } else {
+            this == other
+        };
+        if up {
+            self.cr1 &= !CR1_DIR;
+        } else {
+            self.cr1 |= CR1_DIR;
+        }
+        self.psc_cnt.set(self.psc_cnt.get() + 1);
+        if self.psc_cnt.get() <= self.psc {
+            return;
+        }
+        self.psc_cnt.set(0);
+        let cnt = self.cnt.get();
+        let next = if up {
+            if cnt >= self.arr {
+                None
+            } else {
+                Some(cnt + 1)
+            }
+        } else if cnt == 0 || cnt > self.arr {
+            None
+        } else {
+            Some(cnt - 1)
+        };
+        match next {
+            Some(v) => self.cnt.set(v),
+            None => {
+                self.cnt.set(if up { 0 } else { self.arr });
+                self.sr.set(self.sr.get() | 1);
+            }
+        }
+        self.latch_compare_match_flags();
+        self.phase_revision = self.phase_revision.wrapping_add(1);
     }
 
     /// Apply every filtered edge whose acceptance cycle is at or before `now`.
@@ -1142,7 +1218,7 @@ impl Timer {
     /// line on the same tick (`irq_line_level` — a level tracks its flag), so
     /// this one number serves the freeze and the event chain alike.
     fn first_enabled_event(&self) -> Option<u64> {
-        if (self.cr1 & 0x1) == 0 {
+        if (self.cr1 & 0x1) == 0 || self.encoder_mode().is_some() {
             return None;
         }
         let v = self.cnt.get();
@@ -1187,7 +1263,7 @@ impl Timer {
             return;
         }
         self.anchor.set(now);
-        if self.counter_frozen() || (self.cr1 & 0x1) == 0 {
+        if self.counter_frozen() || (self.cr1 & 0x1) == 0 || self.encoder_mode().is_some() {
             // Frozen (held IRQ level) or not enabled: the window elapses with
             // no counting — exactly the walk's early returns.
             return;
@@ -1353,7 +1429,15 @@ impl Timer {
         );
         let explicit_update = offset == 0x14 && (value & 1) != 0;
         match offset {
-            0x00 => self.cr1 = value & 0x3FF,
+            // CR1.DIR is read-only in encoder mode: the inputs set it.
+            0x00 => {
+                let keep = if self.encoder_mode().is_some() {
+                    CR1_DIR
+                } else {
+                    0
+                };
+                self.cr1 = ((value & 0x3FF) & !keep) | (self.cr1 & keep);
+            }
             // CR2 writable bits differ by layout. General-purpose (TIM2-5):
             // CCDS(3)+MMS(6:4)+TI1S(7) = 0xF8, silicon-confirmed on F103 TIM2.
             // Advanced (TIM1) adds CCPC/CCUS/OISx — left at the wider mask
@@ -1566,8 +1650,9 @@ impl Timer {
             };
         }
 
-        // Counter Enable (bit 0)
-        if (self.cr1 & 0x1) == 0 {
+        // Counter Enable (bit 0). An encoder-mode counter only moves on an
+        // input edge.
+        if (self.cr1 & 0x1) == 0 || self.encoder_mode().is_some() {
             return crate::PeripheralTickResult {
                 irq: self.capture_irq_held(),
                 cycles: 0,
@@ -1688,8 +1773,9 @@ impl crate::Peripheral for Timer {
     fn needs_legacy_walk(&self) -> bool {
         // Everything this model's `tick()` can ever do (prescaled up-count,
         // UIF/CCxIF latching, held-level NVIC pend) is event-expressible —
-        // SMCR external-clock/encoder modes are inert register bits the walk
-        // ignores identically, so no configuration needs a dynamic fallback.
+        // an encoder counts on input edges, which arrive as
+        // `timer_input_edge`, not as ticks — so no configuration needs a
+        // dynamic fallback.
         // In legacy mode (no clock / feature off) the walk does real work and
         // the conservative `true` stands.
         !self.scheduler_mode()
@@ -2397,6 +2483,117 @@ mod tests {
         assert_eq!(t.read_reg(0x24), 0, "counter reset by the trigger");
         assert_ne!(t.read_reg(0x10) & (1 << 6), 0, "TIF");
         assert_ne!(t.read_reg(0x10) & 1, 0, "UIF from the reset update (URS=0)");
+    }
+
+    /// TIM2 as ch32fun's tim2_encoder leaves it: SMS=011 (both inputs),
+    /// CC1S/CC2S left at 00, CNT at mid-scale, CEN.
+    fn encoder_timer(sms: u32) -> Timer {
+        let mut t = Timer::new_with_layout(16, false);
+        t.write_reg(0x2C, 0xFFFF);
+        t.write_reg(0x08, sms);
+        t.write_reg(0x24, 0x8FFF);
+        t.write_reg(0x00, 0x01);
+        t
+    }
+
+    /// One full quadrature cycle, A leading B (00 -> 10 -> 11 -> 01 -> 00).
+    fn quadrature_forward(t: &mut Timer) {
+        t.input_edge(0, true, 0);
+        t.input_edge(1, true, 0);
+        t.input_edge(0, false, 0);
+        t.input_edge(1, false, 0);
+    }
+
+    fn quadrature_reverse(t: &mut Timer) {
+        t.input_edge(1, true, 0);
+        t.input_edge(0, true, 0);
+        t.input_edge(1, false, 0);
+        t.input_edge(0, false, 0);
+    }
+
+    #[test]
+    fn encoder_mode_counts_quadrature_edges_not_the_clock() {
+        let mut t = encoder_timer(3);
+        walk(&mut t, 1000);
+        assert_eq!(
+            t.read_reg(0x24),
+            0x8FFF,
+            "no CK_INT counting in encoder mode"
+        );
+        quadrature_forward(&mut t);
+        assert_eq!(
+            t.read_reg(0x24),
+            0x8FFF + 4,
+            "x4: every edge of both inputs"
+        );
+        assert_eq!(t.read_reg(0x00) & super::CR1_DIR, 0, "counting up");
+        quadrature_reverse(&mut t);
+        quadrature_reverse(&mut t);
+        assert_eq!(t.read_reg(0x24), 0x8FFF - 4);
+        assert_ne!(
+            t.read_reg(0x00) & super::CR1_DIR,
+            0,
+            "DIR shows down-counting"
+        );
+    }
+
+    #[test]
+    fn encoder_modes_1_and_2_count_one_input() {
+        let mut t1 = encoder_timer(1);
+        quadrature_forward(&mut t1);
+        assert_eq!(
+            t1.read_reg(0x24),
+            0x8FFF + 2,
+            "SMS=001 counts TI1 edges only"
+        );
+        let mut t2 = encoder_timer(2);
+        quadrature_forward(&mut t2);
+        assert_eq!(
+            t2.read_reg(0x24),
+            0x8FFF + 2,
+            "SMS=010 counts TI2 edges only"
+        );
+        quadrature_reverse(&mut t2);
+        assert_eq!(t2.read_reg(0x24), 0x8FFF);
+    }
+
+    #[test]
+    fn encoder_polarity_inverts_an_input() {
+        // CC1P inverts TI1FP1: the forward sequence now counts down.
+        let mut t = encoder_timer(3);
+        t.write_reg(0x20, 0x0002);
+        quadrature_forward(&mut t);
+        assert_eq!(t.read_reg(0x24), 0x8FFF - 4);
+    }
+
+    #[test]
+    fn encoder_wraps_at_arr_and_zero_with_an_update() {
+        let mut t = encoder_timer(3);
+        t.write_reg(0x2C, 9);
+        t.write_reg(0x24, 8);
+        quadrature_forward(&mut t);
+        assert_eq!(t.read_reg(0x24), 2, "8, 9, 0, 1, 2");
+        assert_ne!(t.read_reg(0x10) & 1, 0, "UIF on the upward wrap");
+        t.write_reg(0x10, 0);
+        quadrature_reverse(&mut t);
+        assert_eq!(t.read_reg(0x24), 8, "2, 1, 0, 9, 8");
+        assert_ne!(t.read_reg(0x10) & 1, 0, "UIF on the downward wrap");
+    }
+
+    #[test]
+    fn encoder_edges_clock_the_prescaler_and_need_cen() {
+        let mut t = encoder_timer(3);
+        t.write_reg(0x28, 3); // one count per four edges
+        quadrature_forward(&mut t);
+        quadrature_forward(&mut t);
+        assert_eq!(t.read_reg(0x24), 0x8FFF + 2);
+        t.write_reg(0x00, 0);
+        quadrature_forward(&mut t);
+        assert_eq!(
+            t.read_reg(0x24),
+            0x8FFF + 2,
+            "CEN clear: edges do not count"
+        );
     }
 
     #[test]

@@ -1,0 +1,13 @@
+# The whole debug-printf terminal of the ch32fun-tim2-encoder-smoke run, 2
+# lines. The test CLI has no terminal dump, so it was read back with one probe
+# assertion that cannot match. The run used the committed smoke plus:
+#   - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "__terminal_dump_probe__" }
+# and the failure message lists every line, because the log holds fewer than
+# the CLI's five-line tail (crates/cli/src/lib.rs, TAIL = 5):
+#   has 0 line(s) with "__terminal_dump_probe__", need 1 (2 line(s) in the log); last line(s): Position relative=12 absolute=36875 delta=12 | Position relative=-8 absolute=36855 delta=-20
+#
+# One line per burst and nothing else: CNT stays at 36863 (0x8FFF) until the
+# first edge, so the 48 MHz clock never moved it. Three detents forward are
+# +12 (x4 counting), five back are -20.
+Position relative=12 absolute=36875 delta=12
+Position relative=-8 absolute=36855 delta=-20
