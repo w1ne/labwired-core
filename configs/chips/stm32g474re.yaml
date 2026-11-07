@@ -14,6 +14,19 @@ ram:
   base: 0x20000000
   size: "128KB"
 
+# SRAMCAN (CMSIS stm32g474xx.h SRAMCAN_BASE) sits at 0x4000A400, 0x4000 above FDCAN1's
+# registers, while the shared `fdcan` model (peripherals/fdcan.rs, written
+# for the H5) serves its message RAM at window offset +0x800. A window wide
+# enough to reach 0x4000A400 would claim every unmodelled APB1 block in
+# between (I2C3, LPTIM1, I2C4, UCPD1), so this same-backing mirror routes
+# SRAMCAN onto the model's RAM instead. It covers the FDCAN1 and FDCAN2 sections (2 x 0x350, HAL SRAMCAN_SIZE); the FDCAN3
+# section is not mapped.
+memory_regions:
+  - name: "sramcan"
+    base: 0x4000A400
+    size: 0x6A0
+    alias_of: 0x40006C00
+
 peripherals:
   - id: "rcc"
     type: "rcc"
@@ -88,6 +101,23 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32g474re/pwr.yaml"
+  # FDCAN1 (SVD base 0x40006400). Bosch M_CAN with the same fixed message-RAM layout
+  # and register map as the H5 (CMSIS stm32g474xx.h FDCAN_GlobalTypeDef and
+  # FDCAN_CONFIG_BASE = FDCAN1 + 0x100 match RM0481 offset for offset), so it
+  # uses the shared `fdcan` model and the H563 debug schema. Message RAM: see
+  # `sramcan` above. Divergences: FDCAN2 (0x40006800) reads 0; FDCAN3's
+  # register block (0x40006C00) is where the model keeps SRAMCAN, so FDCAN3
+  # is not usable on this twin.
+  - id: "fdcan1"
+    type: "fdcan"
+    base_address: 0x40006400
+    size: "4KB"
+    irq: 21  # FDCAN1_IT0 (SVD); IT1 = 22 via ILS not modeled
+    # RCC_APB1ENR1.FDCANEN (bit 25, CMSIS RCC_APB1ENR1_FDCANEN_Pos) gates all
+    # three instances.
+    clock: { reg: "apb1enr1", bit: 25 }
+    config:
+      debug_schema: "../peripherals/stm32h563/fdcan1.yaml"
   # CRC (RM0440) @ 0x40023000 — the AHB1 base ST's own stm32g474.svd gives, the
   # same address stm32l476/stm32h563 already map. This is the v2 programmable
   # block (CRC_INIT@0x10, CRC_POL@0x14), and STM32Cube's HAL_CRC_Init writes the

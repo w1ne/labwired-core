@@ -15,7 +15,7 @@ Legend: ✅ pass · 🔧 compile/build fail · 📦 toolchain missing · 🔴 bo
 | `stm32f103` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |  |
 | `stm32f401` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⏭️ | L8_can:skipped |
 | `stm32f407` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |  |
-| `stm32g474re` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⏭️ | L8_can:skipped |
+| `stm32g474re` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |  |
 | `stm32h563` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |  |
 | `stm32l073` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⏭️ | L8_can:skipped |
 | `stm32l476` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |  |
@@ -26,7 +26,7 @@ Legend: ✅ pass · 🔧 compile/build fail · 📦 toolchain missing · 🔴 bo
 ## Summary
 
 - Cells: **144**
-- **pass: 133** · **skip: 11** · **fail: 0**
+- **pass: 134** · **skip: 10** · **fail: 0**
 
 ### Status breakdown
 
@@ -51,9 +51,6 @@ No on-chip CAN model
 
 ### `stm32f401` × `L8_can` → **skipped**
 No bxCAN/FDCAN in chip yaml
-
-### `stm32g474re` × `L8_can` → **skipped**
-No FDCAN in chip yaml for matrix L8
 
 ### `stm32l073` × `L8_can` → **skipped**
 No CAN peripheral on L0 series
