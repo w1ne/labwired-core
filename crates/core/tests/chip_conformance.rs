@@ -151,8 +151,9 @@ const CHIPS: &[ChipConf] = &[
         // PolarFire SoC MPFS095T (Discovery Kit), first RV64 part: one U54
         // hart (RV64IMAC M-mode, CLINT in the core). SIM-DERIVED: no MPFS
         // bench part. Modelled: MMUART0-4 as 16550s with the DLAB divisor
-        // latch. PLIC, MSS GPIO/I2C/SPI/QSPI and the system-controller mailbox
-        // are declared stubs — see examples/mpfs-disco-kit/VALIDATION.md.
+        // latch; the PLIC, MSS GPIO_0..2, I2C0/1 and SPI1 (master). QSPI and the
+        // system-controller mailbox are declared stubs — see
+        // examples/mpfs-disco-kit/VALIDATION.md.
         name: "mpfs095t",
         yaml: "configs/chips/mpfs095t.yaml",
         reset_oracle: None,
