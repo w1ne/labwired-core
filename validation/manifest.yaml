@@ -1781,7 +1781,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 65fb88305dd8bcb87e01276e856c20442637351102e5db4ae561d9414aa57000
+    drift_ack_digest: 10990f764c5137ecc790872e7e5239640264022c9d72abda24aac26681ffc086
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2406,7 +2406,17 @@ boards:
     #     never mapped by any descriptor, so nothing reached it); rcc.rs
     #     changes doc comments on the WCH layout only. No executable line
     #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-06
+    # 2026-11-07 (feat/ch32v003-usart1): gpio.rs + bus/attach.rs, WCH only.
+    #   gpio.rs — `register_layout()` reports `Wch` for a port built with the
+    #     WCH single-config-register flag. That flag is false on every port
+    #     these boards construct, so they still report `Stm32F1`/`Stm32V2`.
+    #   attach.rs — the UART pad wiring adds a `Wch` arm with a CH32V003-only
+    #     table (USART1_TX = PD5). The F1 arm still selects the unchanged `F1`
+    #     table, and the V2 arm is untouched.
+    #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
+    #   OOM-killed on the authoring host, so the full --lib result is the PR's
+    #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -3967,7 +3977,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 2875b433b69e01720a7115568c8b204f8ab16e7347addb67b925deb88c7e610b
+    drift_ack_digest: 38d3392672696f059903453912b55048629f802fa3eba2f0f8398005f6c5a0b3
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4580,7 +4590,17 @@ boards:
     #     never mapped by any descriptor, so nothing reached it); rcc.rs
     #     changes doc comments on the WCH layout only. No executable line
     #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-06
+    # 2026-11-07 (feat/ch32v003-usart1): gpio.rs + bus/attach.rs, WCH only.
+    #   gpio.rs — `register_layout()` reports `Wch` for a port built with the
+    #     WCH single-config-register flag. That flag is false on every port
+    #     these boards construct, so they still report `Stm32F1`/`Stm32V2`.
+    #   attach.rs — the UART pad wiring adds a `Wch` arm with a CH32V003-only
+    #     table (USART1_TX = PD5). The F1 arm still selects the unchanged `F1`
+    #     table, and the V2 arm is untouched.
+    #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
+    #   OOM-killed on the authoring host, so the full --lib result is the PR's
+    #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5072,7 +5092,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 0b38234f04de52933b375461b932cd201903c2c3e30154fee613e294c4c1640a
+    drift_ack_digest: 582770eb8df8ec6e3326098b9fe083891fe3002fd590dcc6b516fc0e074a450e
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5618,7 +5638,17 @@ boards:
     #     never mapped by any descriptor, so nothing reached it); rcc.rs
     #     changes doc comments on the WCH layout only. No executable line
     #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-06
+    # 2026-11-07 (feat/ch32v003-usart1): gpio.rs + bus/attach.rs, WCH only.
+    #   gpio.rs — `register_layout()` reports `Wch` for a port built with the
+    #     WCH single-config-register flag. That flag is false on every port
+    #     these boards construct, so they still report `Stm32F1`/`Stm32V2`.
+    #   attach.rs — the UART pad wiring adds a `Wch` arm with a CH32V003-only
+    #     table (USART1_TX = PD5). The F1 arm still selects the unchanged `F1`
+    #     table, and the V2 arm is untouched.
+    #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
+    #   OOM-killed on the authoring host, so the full --lib result is the PR's
+    #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6168,7 +6198,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 723a6a5766c5c7101f5c9747e356d25bb235e884d85cf08933534302d8588741
+    drift_ack_digest: 64ae2a154aca9fcf04bf0ceb7e394d2944afca30c6790868c43b0c63c7d82d3b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6784,7 +6814,17 @@ boards:
     #     never mapped by any descriptor, so nothing reached it); rcc.rs
     #     changes doc comments on the WCH layout only. No executable line
     #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-06
+    # 2026-11-07 (feat/ch32v003-usart1): gpio.rs + bus/attach.rs, WCH only.
+    #   gpio.rs — `register_layout()` reports `Wch` for a port built with the
+    #     WCH single-config-register flag. That flag is false on every port
+    #     these boards construct, so they still report `Stm32F1`/`Stm32V2`.
+    #   attach.rs — the UART pad wiring adds a `Wch` arm with a CH32V003-only
+    #     table (USART1_TX = PD5). The F1 arm still selects the unchanged `F1`
+    #     table, and the V2 arm is untouched.
+    #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
+    #   OOM-killed on the authoring host, so the full --lib result is the PR's
+    #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7297,7 +7337,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: c54a792d3eaf35f28f53a51d5ebc005d1df53e528143b9c89eb08ad78c7d76f1
+    drift_ack_digest: f1f9b4fc4f09f118c40355c4a733269c6cce085f73e42ff1b467edb97d2dbaed
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7845,7 +7885,17 @@ boards:
     #     never mapped by any descriptor, so nothing reached it); rcc.rs
     #     changes doc comments on the WCH layout only. No executable line
     #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-06
+    # 2026-11-07 (feat/ch32v003-usart1): gpio.rs + bus/attach.rs, WCH only.
+    #   gpio.rs — `register_layout()` reports `Wch` for a port built with the
+    #     WCH single-config-register flag. That flag is false on every port
+    #     these boards construct, so they still report `Stm32F1`/`Stm32V2`.
+    #   attach.rs — the UART pad wiring adds a `Wch` arm with a CH32V003-only
+    #     table (USART1_TX = PD5). The F1 arm still selects the unchanged `F1`
+    #     table, and the V2 arm is untouched.
+    #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
+    #   OOM-killed on the authoring host, so the full --lib result is the PR's
+    #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are

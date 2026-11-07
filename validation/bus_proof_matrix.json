@@ -6,9 +6,11 @@
     "ch32v003f4p6": {
       "in_boards": false,
       "uart": {
-        "state": "none",
-        "gap": "The CH32V003 slice models RCC and GPIO A/C/D only (no PFIC: interrupts are not wired). USART1 (0x40013800) has a base in the memory map but no peripheral descriptor, so no firmware byte can move through it yet.",
-        "lane": "none"
+        "state": "proven",
+        "file": "crates/core/tests/ch32v003_compiled_firmware.rs",
+        "test": "ch32v003_compiled_rv32ec_firmware_prints_on_usart1",
+        "signal": "the committed RV32EC fixture ELF (examples/ch32v003f4p6/uart_hello.c) clocks USART1 from APB2PCENR bit 14, polls STATR.TXE and writes 'Hello from CH32V003\\r\\n' through DATAR (0x40013804); the test asserts the console sink receives exactly that string, and a negative control with the clock gate moved to an unset bit asserts the sink stays empty. Polled TX only: no PFIC, so USART1_IRQn is not wired",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test ch32v003_compiled_firmware"
       },
       "spi": {
         "state": "none",
