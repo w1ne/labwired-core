@@ -222,6 +222,14 @@ pub const PIC16_CLASSIC_NO_USART_MAP: Pic16SfrMap = Pic16SfrMap {
     ..PIC16_CLASSIC_MAP
 };
 
+/// PIC16F84A: no peripheral interrupt registers and no asynchronous USART.
+/// File-register address 0x0C is general-purpose RAM on this part.
+pub const PIC16_CLASSIC_F84A_MAP: Pic16SfrMap = Pic16SfrMap {
+    pir: &[],
+    pie: &[],
+    ..PIC16_CLASSIC_NO_USART_MAP
+};
+
 /// The PIC16F182x/F193x enhanced mid-range layout (DS40001440E Table 3-8):
 /// ports at 0x00C, TRIS at 0x08C, LAT at 0x10C, PIR1-4 at 0x011, PIE1-4 at
 /// 0x091, TMR0 0x015, OPTION_REG 0x095, PCON 0x096, OSCSTAT 0x09A (HFIOFR, HFIOFL,
@@ -244,12 +252,26 @@ pub const PIC16E_F182X_MAP: Pic16SfrMap = Pic16SfrMap {
     osc_ready: Some((0x09A, 0x1F)),
 };
 
+/// PIC16F1613 uses the F182x register layout but has no EUSART. The
+/// EUSART-addressed file registers remain ordinary storage on this device.
+pub const PIC16E_F182X_NO_EUSART_MAP: Pic16SfrMap = Pic16SfrMap {
+    has_usart: false,
+    ..PIC16E_F182X_MAP
+};
+
 /// The PIC16F145x/150x/151x: the F182x layout without the MFINTOSC, so
 /// OSCSTAT has no MFIOFR (bit 2) or HFIOFL (bit 3), which read 0
 /// (per the parts' SDCC 4.4.0 pic14 headers).
 pub const PIC16E_F151X_MAP: Pic16SfrMap = Pic16SfrMap {
     osc_ready: Some((0x09A, 0x13)),
     ..PIC16E_F182X_MAP
+};
+
+/// PIC16F1503 layout without an EUSART. The EUSART file-register addresses
+/// remain ordinary storage on this device.
+pub const PIC16E_F151X_NO_EUSART_MAP: Pic16SfrMap = Pic16SfrMap {
+    has_usart: false,
+    ..PIC16E_F151X_MAP
 };
 
 /// The PIC16(L)F1614/1615/1618/1619 (DS40001769C and DS40001770D, Tables
@@ -317,6 +339,18 @@ const fn dev_no_usart(
     }
 }
 
+const fn dev_f84a(
+    name: &'static str,
+    flash_words: usize,
+    port_masks: [u8; PIC16_PORT_COUNT as usize],
+    aliases: &'static [(u16, u16, u16)],
+) -> Pic16Device {
+    Pic16Device {
+        map: PIC16_CLASSIC_F84A_MAP,
+        ..dev(name, flash_words, port_masks, aliases)
+    }
+}
+
 /// A classic row whose part has its own registers at some of the bank-2/3
 /// SFR mirror addresses (see [`Pic16Device::own_sfrs`]).
 const fn dev_own(
@@ -368,19 +402,30 @@ const fn edev(
 ///
 /// Classic parts with absent ports have a zero mask at that port slot, so
 /// reads return 0 and writes are ignored. PIC16F610/616/630/676/684 have no
-/// PORTB but do have PORTC; PIC16F627A/628A/648A and PIC16F87/88 have no PORTC.
+/// PORTB but do have PORTC; PIC16F677/685 bond only RB4-RB7. PIC16F627A/628A/648A
+/// and PIC16F87/88 have no PORTC.
 /// The checker requires absent-port addresses to be free in the device header. The
 /// OTP/EPROM PIC16C63A/65B/73B/74B match the map; other PIC16C parts lack an
 /// SDCC header or gputils lkr.
 ///
 /// Left out: classic parts without the USART at 0x18/0x19/0x98/0x99
-/// (PIC16F84A, PIC16F716 and friends), except PIC16F610/616/630/676/684,
-/// PIC16F818 and PIC16F819 which use `PIC16_CLASSIC_NO_USART_MAP`; enhanced
-/// parts without an EUSART (PIC16F1503/1507/1613/1703/1707), parts with
+/// (PIC16F84A and friends), except PIC16F84A/610/616/630/631/676/677/684/685/716/785,
+/// PIC16F818 and PIC16F819 which use `PIC16_CLASSIC_NO_USART_MAP`; PIC16F84A
+/// uses `PIC16_CLASSIC_F84A_MAP` because 0x0C is GPR and has no PIR/PIE registers; enhanced
+/// parts without an EUSART (except PIC16F1503, PIC16F1507, and PIC16LF1507,
+/// which use `PIC16E_F151X_NO_EUSART_MAP`; PIC16F1613 uses
+/// `PIC16E_F182X_NO_EUSART_MAP`; PIC16F1703, PIC16F1707 and PIC16LF1707 use
+/// `PIC16E_F182X_NO_EUSART_MAP`; PIC16LF1703 uses the same map), parts with
 /// comparator SFRs at LATD/LATE (PIC16F176x), the 64-bank PIC16F18xxx/19xxx,
 /// and for now the PIC16F157x (their headers match, but gputils 1.4.0 has no
 /// processor entry for them, so no lkr cross-check or SDCC firmware build).
 const PIC16_DEVICES: &[Pic16Device] = &[
+    dev_f84a(
+        "pic16f84a",
+        1024,
+        [0x1F, 0xFF, 0x00, 0x00, 0x00],
+        &[(0x08C, 0x0CF, 0x00C)],
+    ),
     dev_no_usart(
         "pic16f610",
         1024,
@@ -400,10 +445,40 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         &[(0x0A0, 0x0DF, 0x020)],
     ),
     dev_no_usart(
+        "pic16f631",
+        1024,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev_no_usart(
         "pic16f676",
         1024,
         [0x3F, 0x00, 0x3F, 0x00, 0x00],
         &[(0x0A0, 0x0DF, 0x020)],
+    ),
+    dev_no_usart(
+        "pic16f677",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev_no_usart(
+        "pic16f685",
+        4096,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
     ),
     dev_no_usart(
         "pic16f684",
@@ -851,6 +926,22 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         ],
         &[0x106, 0x186],
     ),
+    dev_no_usart(
+        "pic16f716",
+        2048,
+        [0x1F, 0xFF, 0x00, 0x00, 0x00],
+        &[(0x0F0, 0x0FF, 0x070)],
+    ),
+    dev_no_usart(
+        "pic16f785",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
     dev_own(
         "pic16lf707",
         8192,
@@ -882,6 +973,24 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         8192,
         [0x3B, 0xF0, 0xFF, 0x00, 0x00],
         PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16f1503",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F151X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16f1507",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F151X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16lf1507",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F151X_NO_EUSART_MAP,
     ),
     edev(
         "pic16f1508",
@@ -919,6 +1028,12 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
         PIC16E_F151X_MAP,
     ),
+    edev(
+        "pic16f1613",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_NO_EUSART_MAP,
+    ),
     // SDCC 4.4.0's pic14devices.txt lacks `enhanced 1` for 16(L)F1704/1708,
     // so SDCC emits classic code for them that gpasm rejects. Rebuilding
     // firmware for these parts needs a locally patched device DB.
@@ -947,6 +1062,12 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         PIC16E_F161X_MAP,
     ),
     edev(
+        "pic16f1703",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_NO_EUSART_MAP,
+    ),
+    edev(
         "pic16f1704",
         4096,
         [0x3F, 0x00, 0x3F, 0x00, 0x00],
@@ -957,6 +1078,18 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         8192,
         [0x3F, 0x00, 0x3F, 0x00, 0x00],
         PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1707",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16lf1707",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_NO_EUSART_MAP,
     ),
     edev(
         "pic16f1708",
@@ -1203,6 +1336,12 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         8192,
         [0x3F, 0xF0, 0xFF, 0x00, 0x00],
         PIC16E_F161X_MAP,
+    ),
+    edev(
+        "pic16lf1703",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_NO_EUSART_MAP,
     ),
     edev(
         "pic16lf1704",
@@ -3347,6 +3486,43 @@ mod tests {
     }
 
     #[test]
+    fn pic16f631_uses_exact_classic_no_usart_geometry() {
+        let device = pic16_device("pic16f631").expect("F631 row");
+        assert_eq!(device.flash_words, 1024);
+        assert_eq!(device.port_masks, [0x3F, 0xF0, 0xFF, 0x00, 0x00]);
+        assert_eq!(
+            device.aliases,
+            &[
+                (0x0F0, 0x0FF, 0x070),
+                (0x170, 0x17F, 0x070),
+                (0x1F0, 0x1FF, 0x070),
+            ]
+        );
+        assert!(!device.enhanced);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("PIC16F631");
+        assert_eq!(cpu.flash_words(), 1024);
+        for (address, value) in [(0x18, 0xA1), (0x19, 0xA2), (0x98, 0xA3), (0x99, 0xA4)] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "unimplemented USART address {address:#04x}"
+            );
+        }
+        cpu.write_data(0x11E, 0x5A);
+        assert_eq!(cpu.read_data(0x11E), 0x5A, "ANSEL file register");
+
+        cpu.write_data(0x86, 0x00);
+        cpu.write_data(0x06, 0xFF);
+        assert_eq!(cpu.read_data(0x06), 0xF0, "PORTB RB4-RB7");
+        cpu.write_data(0x87, 0x00);
+        cpu.write_data(0x07, 0xFF);
+        assert_eq!(cpu.read_data(0x07), 0xFF, "PORTC");
+    }
+
+    #[test]
     fn pic16f610_uses_no_usart_geometry_and_shared_bank_alias() {
         let device = pic16_device("pic16f610").expect("F610 row");
         assert_eq!(device.flash_words, 1024);
@@ -3463,6 +3639,463 @@ mod tests {
     }
 
     #[test]
+    fn pic16f677_uses_exact_no_usart_geometry_and_port_masks() {
+        let device = pic16_device("pic16f677").expect("F677 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0xF0, 0xFF, 0x00, 0x00]);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("pic16f677");
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [(0x18, 0xA1), (0x19, 0xA2), (0x98, 0xA3), (0x99, 0xA4)] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#04x}"
+            );
+        }
+
+        cpu.write_data(0x87, 0x00);
+        cpu.write_data(0x07, 0x01);
+        assert_eq!(cpu.read_data(0x07), 0x01, "PORTC");
+        cpu.write_data(0x86, 0x00);
+        cpu.write_data(0x06, 0xFF);
+        assert_eq!(cpu.read_data(0x06), 0xF0, "only RB4-RB7 are bonded");
+
+        cpu.write_data(0x70, 0x5A);
+        assert_eq!(cpu.read_data(0x0F0), 0x5A, "shared bank-0 alias");
+    }
+
+    #[test]
+    fn pic16f685_uses_exact_no_usart_geometry_and_port_masks() {
+        let device = pic16_device("pic16f685").expect("F685 row");
+        assert_eq!(device.flash_words, 4096);
+        assert_eq!(device.port_masks, [0x3F, 0xF0, 0xFF, 0x00, 0x00]);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("PIC16F685");
+        assert_eq!(cpu.flash_words(), 4096);
+        for (address, value) in [(0x18, 0xA1), (0x19, 0xA2), (0x98, 0xA3), (0x99, 0xA4)] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#04x}"
+            );
+        }
+
+        cpu.write_data(0x87, 0x00);
+        cpu.write_data(0x07, 0x01);
+        assert_eq!(cpu.read_data(0x07), 0x01, "PORTC");
+        cpu.write_data(0x86, 0x00);
+        cpu.write_data(0x06, 0xFF);
+        assert_eq!(cpu.read_data(0x06), 0xF0, "only RB4-RB7 are bonded");
+
+        cpu.write_data(0x70, 0x5A);
+        assert_eq!(cpu.read_data(0x0F0), 0x5A, "shared bank-0 alias");
+        assert_eq!(cpu.read_data(0x170), 0x5A, "shared bank-2 alias");
+        assert_eq!(cpu.read_data(0x1F0), 0x5A, "shared bank-3 alias");
+    }
+
+    #[test]
+    fn pic16f716_uses_exact_no_usart_geometry_and_port_masks() {
+        let device = pic16_device("pic16f716").expect("F716 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x1F, 0xFF, 0x00, 0x00, 0x00]);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("PIC16F716");
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [(0x18, 0xA1), (0x19, 0xA2), (0x98, 0xA3), (0x99, 0xA4)] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#04x}"
+            );
+        }
+
+        cpu.write_data(0x85, 0x00);
+        cpu.write_data(0x05, 0xFF);
+        assert_eq!(cpu.read_data(0x05), 0x1F, "PORTA RA0-RA4");
+        cpu.write_data(0x86, 0x00);
+        cpu.write_data(0x06, 0xA5);
+        assert_eq!(cpu.read_data(0x06), 0xA5, "PORTB");
+        cpu.write_data(0x07, 0xFF);
+        assert_eq!(cpu.read_data(0x07), 0x00, "unimplemented PORTC");
+
+        cpu.write_data(0x70, 0x5A);
+        assert_eq!(cpu.read_data(0x0F0), 0x5A, "shared bank-1 alias");
+    }
+
+    #[test]
+    fn pic16f84a_uses_exact_no_pir_no_usart_geometry() {
+        let device = pic16_device("pic16f84a").expect("F84A row");
+        assert_eq!(device.flash_words, 1024);
+        assert_eq!(device.port_masks, [0x1F, 0xFF, 0x00, 0x00, 0x00]);
+        assert!(!device.map.has_usart);
+        assert!(device.map.pir.is_empty());
+        assert!(device.map.pie.is_empty());
+
+        let mut cpu = Pic16::for_chip_name("PIC16F84A");
+        assert_eq!(cpu.flash_words(), 1024);
+        for (address, value) in [
+            (0x0C, 0x5A),
+            (0x18, 0xA1),
+            (0x19, 0xA2),
+            (0x98, 0xA3),
+            (0x99, 0xA4),
+        ] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#04x}"
+            );
+        }
+        assert_eq!(cpu.read_data(0x08C), 0x5A, "bank-1 GPR alias");
+
+        cpu.write_data(0x85, 0x00);
+        cpu.write_data(0x05, 0xFF);
+        assert_eq!(cpu.read_data(0x05), 0x1F, "PORTA RA0-RA4");
+        cpu.write_data(0x86, 0x00);
+        cpu.write_data(0x06, 0xFF);
+        assert_eq!(cpu.read_data(0x06), 0xFF, "PORTB");
+        cpu.write_data(0x07, 0xFF);
+        assert_eq!(cpu.read_data(0x07), 0x00, "unimplemented PORTC");
+    }
+
+    #[test]
+    fn pic16f1503_uses_exact_enhanced_no_eusart_map() {
+        let device = pic16_device("pic16f1503").expect("F1503 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0x00, 0x3F, 0x00, 0x00]);
+        assert!(device.enhanced);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("PIC16F1503");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [
+            (0x199, 0xA0),
+            (0x19A, 0xA1),
+            (0x19B, 0xA2),
+            (0x19D, 0xA3),
+            (0x19E, 0xA4),
+        ] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#05x}"
+            );
+        }
+
+        cpu.write_data(0x08C, 0x00);
+        cpu.write_data(0x00C, 0xFF);
+        assert_eq!(cpu.read_data(0x00C), 0x3F, "PORTA");
+        cpu.write_data(0x08E, 0x00);
+        cpu.write_data(0x00E, 0xFF);
+        assert_eq!(cpu.read_data(0x00E), 0x3F, "PORTC");
+        cpu.write_data(0x00D, 0xFF);
+        assert_eq!(cpu.read_data(0x00D), 0x00, "unimplemented PORTB");
+    }
+
+    #[test]
+    fn pic16f1507_uses_exact_enhanced_no_eusart_geometry() {
+        let device = pic16_device("pic16f1507").expect("F1507 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0xF0, 0xFF, 0x00, 0x00]);
+        assert!(device.enhanced);
+        assert!(!device.map.has_usart);
+        assert_eq!(device.map.osc_ready, Some((0x09A, 0x13)));
+
+        let mut cpu = Pic16::for_chip_name("PIC16F1507");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [
+            (0x199, 0xA0),
+            (0x19A, 0xA1),
+            (0x19B, 0xA2),
+            (0x19D, 0xA3),
+            (0x19E, 0xA4),
+        ] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#05x}"
+            );
+        }
+
+        cpu.write_data(0x08C, 0x00);
+        cpu.write_data(0x00C, 0xFF);
+        assert_eq!(cpu.read_data(0x00C), 0x3F, "PORTA");
+        cpu.write_data(0x08D, 0x00);
+        cpu.write_data(0x00D, 0xFF);
+        assert_eq!(cpu.read_data(0x00D), 0xF0, "PORTB only RB4-RB7");
+        cpu.write_data(0x08E, 0x00);
+        cpu.write_data(0x00E, 0xFF);
+        assert_eq!(cpu.read_data(0x00E), 0xFF, "PORTC");
+    }
+
+    #[test]
+    fn pic16lf1507_uses_exact_enhanced_no_eusart_geometry() {
+        let device = pic16_device("pic16lf1507").expect("LF1507 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0xF0, 0xFF, 0x00, 0x00]);
+        assert!(device.enhanced);
+        assert!(!device.map.has_usart);
+        assert_eq!(device.map.osc_ready, Some((0x09A, 0x13)));
+
+        let mut cpu = Pic16::for_chip_name("PIC16LF1507");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [(0x199, 0xA0), (0x19A, 0xA1), (0x19D, 0xA3)] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#05x}"
+            );
+        }
+
+        cpu.write_data(0x08D, 0x00);
+        cpu.write_data(0x00D, 0xFF);
+        assert_eq!(cpu.read_data(0x00D), 0xF0, "PORTB only RB4-RB7");
+    }
+
+    #[test]
+    fn pic16f1613_uses_exact_enhanced_no_eusart_geometry() {
+        let device = pic16_device("pic16f1613").expect("F1613 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0x00, 0x3F, 0x00, 0x00]);
+        assert!(device.enhanced);
+        assert!(!device.map.has_usart);
+        assert_eq!(device.map.pir, &[0x011, 0x012, 0x013, 0x014]);
+        assert_eq!(device.map.osc_ready, Some((0x09A, 0x1F)));
+
+        let mut cpu = Pic16::for_chip_name("PIC16F1613");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [
+            (0x199, 0xA0),
+            (0x19A, 0xA1),
+            (0x19B, 0xA2),
+            (0x19D, 0xA3),
+            (0x19E, 0xA4),
+        ] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#05x}"
+            );
+        }
+
+        cpu.write_data(0x08C, 0x00);
+        cpu.write_data(0x00C, 0xFF);
+        assert_eq!(cpu.read_data(0x00C), 0x3F, "PORTA");
+        cpu.write_data(0x08D, 0x00);
+        cpu.write_data(0x00D, 0xFF);
+        assert_eq!(cpu.read_data(0x00D), 0x00, "unimplemented PORTB");
+        cpu.write_data(0x08E, 0x00);
+        cpu.write_data(0x00E, 0xFF);
+        assert_eq!(cpu.read_data(0x00E), 0x3F, "PORTC");
+    }
+
+    #[test]
+    fn pic16f1707_uses_exact_enhanced_no_eusart_geometry() {
+        let device = pic16_device("pic16f1707").expect("F1707 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0xF0, 0xFF, 0x00, 0x00]);
+        assert!(device.enhanced);
+        assert!(!device.map.has_usart);
+        assert_eq!(device.map.pir, &[0x011, 0x012, 0x013, 0x014]);
+        assert_eq!(device.map.osc_ready, Some((0x09A, 0x1F)));
+
+        let mut cpu = Pic16::for_chip_name("PIC16F1707");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [
+            (0x199, 0xA0),
+            (0x19A, 0xA1),
+            (0x19B, 0xA2),
+            (0x19D, 0xA3),
+            (0x19E, 0xA4),
+        ] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#05x}"
+            );
+        }
+
+        cpu.write_data(0x08C, 0x00);
+        cpu.write_data(0x00C, 0xFF);
+        assert_eq!(cpu.read_data(0x00C), 0x3F, "PORTA");
+        cpu.write_data(0x08D, 0x00);
+        cpu.write_data(0x00D, 0xFF);
+        assert_eq!(cpu.read_data(0x00D), 0xF0, "PORTB only RB4-RB7");
+        cpu.write_data(0x08E, 0x00);
+        cpu.write_data(0x00E, 0xFF);
+        assert_eq!(cpu.read_data(0x00E), 0xFF, "PORTC");
+    }
+
+    #[test]
+    fn pic16f1703_uses_exact_enhanced_no_eusart_geometry() {
+        let device = pic16_device("pic16f1703").expect("F1703 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0x00, 0x3F, 0x00, 0x00]);
+        assert!(device.enhanced);
+        assert!(!device.map.has_usart);
+        assert_eq!(device.map.pir, &[0x011, 0x012, 0x013, 0x014]);
+        assert_eq!(device.map.osc_ready, Some((0x09A, 0x1F)));
+
+        let mut cpu = Pic16::for_chip_name("PIC16F1703");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [
+            (0x199, 0xA0),
+            (0x19A, 0xA1),
+            (0x19B, 0xA2),
+            (0x19D, 0xA3),
+            (0x19E, 0xA4),
+        ] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#05x}"
+            );
+        }
+
+        cpu.write_data(0x08C, 0x00);
+        cpu.write_data(0x00C, 0xFF);
+        assert_eq!(cpu.read_data(0x00C), 0x3F, "PORTA");
+        cpu.write_data(0x08D, 0x00);
+        cpu.write_data(0x00D, 0xFF);
+        assert_eq!(cpu.read_data(0x00D), 0x00, "unimplemented PORTB");
+        cpu.write_data(0x08E, 0x00);
+        cpu.write_data(0x00E, 0xFF);
+        assert_eq!(cpu.read_data(0x00E), 0x3F, "PORTC");
+    }
+
+    #[test]
+    fn pic16lf1703_uses_exact_enhanced_no_eusart_geometry() {
+        let device = pic16_device("pic16lf1703").expect("LF1703 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0x00, 0x3F, 0x00, 0x00]);
+        assert!(device.enhanced);
+        assert!(!device.map.has_usart);
+        assert_eq!(device.map.pir, &[0x011, 0x012, 0x013, 0x014]);
+        assert_eq!(device.map.osc_ready, Some((0x09A, 0x1F)));
+
+        let mut cpu = Pic16::for_chip_name("PIC16LF1703");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [
+            (0x199, 0xA0),
+            (0x19A, 0xA1),
+            (0x19B, 0xA2),
+            (0x19D, 0xA3),
+            (0x19E, 0xA4),
+        ] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#05x}"
+            );
+        }
+
+        cpu.write_data(0x08C, 0x00);
+        cpu.write_data(0x00C, 0xFF);
+        assert_eq!(cpu.read_data(0x00C), 0x3F, "PORTA");
+        cpu.write_data(0x08D, 0x00);
+        cpu.write_data(0x00D, 0xFF);
+        assert_eq!(cpu.read_data(0x00D), 0x00, "unimplemented PORTB");
+        cpu.write_data(0x08E, 0x00);
+        cpu.write_data(0x00E, 0xFF);
+        assert_eq!(cpu.read_data(0x00E), 0x3F, "PORTC");
+    }
+
+    #[test]
+    fn pic16lf1707_uses_exact_enhanced_no_eusart_geometry() {
+        let device = pic16_device("pic16lf1707").expect("LF1707 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0xF0, 0xFF, 0x00, 0x00]);
+        assert!(device.enhanced);
+        assert!(!device.map.has_usart);
+        assert_eq!(device.map.pir, &[0x011, 0x012, 0x013, 0x014]);
+        assert_eq!(device.map.osc_ready, Some((0x09A, 0x1F)));
+
+        let mut cpu = Pic16::for_chip_name("PIC16LF1707");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [
+            (0x199, 0xA0),
+            (0x19A, 0xA1),
+            (0x19B, 0xA2),
+            (0x19D, 0xA3),
+            (0x19E, 0xA4),
+        ] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#05x}"
+            );
+        }
+
+        cpu.write_data(0x08C, 0x00);
+        cpu.write_data(0x00C, 0xFF);
+        assert_eq!(cpu.read_data(0x00C), 0x3F, "PORTA");
+        cpu.write_data(0x08D, 0x00);
+        cpu.write_data(0x00D, 0xFF);
+        assert_eq!(cpu.read_data(0x00D), 0xF0, "PORTB only RB4-RB7");
+        cpu.write_data(0x08E, 0x00);
+        cpu.write_data(0x00E, 0xFF);
+        assert_eq!(cpu.read_data(0x00E), 0xFF, "PORTC");
+    }
+
+    #[test]
+    fn pic16f785_uses_exact_no_usart_geometry_and_port_masks() {
+        let device = pic16_device("pic16f785").expect("F785 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0xF0, 0xFF, 0x00, 0x00]);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("PIC16F785");
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [(0x18, 0xA1), (0x19, 0xA2), (0x98, 0xA3), (0x99, 0xA4)] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#04x}"
+            );
+        }
+
+        cpu.write_data(0x85, 0x00);
+        cpu.write_data(0x05, 0xFF);
+        assert_eq!(cpu.read_data(0x05), 0x3F, "PORTA");
+        cpu.write_data(0x86, 0x00);
+        cpu.write_data(0x06, 0xFF);
+        assert_eq!(cpu.read_data(0x06), 0xF0, "only RB4-RB7 are bonded");
+        cpu.write_data(0x87, 0x00);
+        cpu.write_data(0x07, 0x01);
+        assert_eq!(cpu.read_data(0x07), 0x01, "PORTC");
+
+        cpu.write_data(0x70, 0x5A);
+        assert_eq!(cpu.read_data(0x0F0), 0x5A, "shared bank-1 alias");
+        assert_eq!(cpu.read_data(0x170), 0x5A, "shared bank-2 alias");
+        assert_eq!(cpu.read_data(0x1F0), 0x5A, "shared bank-3 alias");
+    }
+
+    #[test]
     fn device_table_knows_the_pic16f877a() {
         let d = pic16_device("PIC16F877A").expect("877A row");
         assert_eq!(d.flash_words, 8192);
@@ -3473,10 +4106,12 @@ mod tests {
 
     #[test]
     fn enhanced_rows_pick_the_core_flash_and_oscstat_map() {
-        // Left out: no EUSART, 64 banks.
-        for name in ["pic16f1503", "pic16f18855"] {
-            assert!(pic16_device(name).is_none(), "{name}");
-        }
+        // Left out: 64-bank parts still without an exact row.
+        // pic16f1503 now has an exact enhanced no-EUSART row (see pic16f1503_uses_exact_...).
+        assert!(
+            pic16_device("pic16f18855").is_none(),
+            "pic16f18855 still has no exact row"
+        );
         let names: Vec<_> = PIC16_DEVICES.iter().map(|d| d.name).collect();
         let mut sorted = names.clone();
         sorted.sort_unstable();
