@@ -37,10 +37,10 @@ ram:
   size: "512KB"
 memory_regions:
   # Mask ROM: 320 kB at 0x4000_0000..0x4004_FFFF (ESP32-C6 Memory map;
-  # ESP32-C6-MINI-1 datasheet v1.5 §1.1 "ROM: 320 KB"). The reset path of an
-  # IDF image runs from here; a bare-ELF smoke does not need it. The dump is
-  # Espressif's copyrighted mask ROM, so it is loaded from a path in
-  # LABWIRED_ESP32C6_ROM rather than committed; the region stays zero if unset.
+  # ESP32-C6-MINI-1 datasheet v1.5 §1.1 "ROM: 320 KB"). A bare-ELF smoke does
+  # not need it; stock Arduino-ESP32 3.x calls ROM routines from its first
+  # instructions. LABWIRED_ESP32C6_ROM wins (empty opts out); otherwise the
+  # in-tree flattened esp32c6_rev0_rom.elf loads (crates/core/roms/esp32c6/).
   - name: "rom"
     base: 0x40000000
     size: "320KB"

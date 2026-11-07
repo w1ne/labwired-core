@@ -27,6 +27,7 @@ This is the product bar beyond unit tests and UART-only CI fixtures.
 | esp32 | ✅ L0–L4 | ❌ no ESP Zephyr path yet | ✅ Arduino | L4 SPI MISO from kits; FreeRTOS dual-core |
 | esp32c3 | ✅ L0–L4 | ❌ | ✅ Arduino | L4 SPI green; RISC-V FreeRTOS |
 | esp32s3 | ✅ L0–L4 | ❌ | ✅ Arduino | L4 via spi2_s3 Esp32s3Spi; dual-core |
+| esp32c6 | ✅ L0 L1 L4 L7 (4 pass / 5 skip) | ❌ | ❌ L3 skip (INA219 NACK) | Arduino-ESP32 3.x (IDF 5.5, CI pins espressif32@8.0.0) on the in-tree C6 mask ROM. Skips: L2 RMT, L5 SAR power ctrl, L6 unprobed (RGB LED_BUILTIN), L8 no TWAI |
 | nrf52832 | ✅ L0–L4 | ✅ | ✅ Arduino; Zephyr system+i2c0 | L4 legacy SPI; TWIM overlay Zephyr L3 |
 | nrf52840 | ✅ L0–L4 | ✅ | ✅ both | L4 legacy SPI; Zephyr L3 green |
 | nrf5340 | ❌ | ✅ | ❌ no I2C model | Add Arduino when PIO path exists |
