@@ -765,6 +765,18 @@ pub fn artifact_region_ink(
                 (bytes[i] >> (y % 8)) & 1 != 0
             })
         }
+        // One byte per matrix row, row 0 first, bit 7 = leftmost column (SEG
+        // A), as `get_led_matrix_framebuffer` documents. The model has already
+        // applied shutdown (all clear) and display test (all set).
+        artifact_format::MAX7219_ROWS => {
+            if pw > 8 || bytes.len() < ph {
+                return Err(format!(
+                    "{format} payload is {} bytes, expected one row byte per row of {pw}x{ph} (w <= 8)",
+                    bytes.len()
+                ));
+            }
+            Box::new(move |x, y| (bytes[y] >> (7 - x)) & 1 != 0)
+        }
         // Black plane then red plane, each 1bpp row-major, MSB = leftmost
         // pixel. Ground is WHITE, so a set bit is blank and a CLEAR bit is ink;
         // a pixel counts as lit if either plane inks it.
@@ -791,13 +803,14 @@ pub fn artifact_region_ink(
             return Err(format!(
                 "display format `{other}` has no pixel decoder here, so this region cannot be \
                  measured. Reporting it as unpainted would make the assertion pass or fail on a \
-                 measurement that was never taken. Supported: {}, {}, {}, {}, {}, {}",
+                 measurement that was never taken. Supported: {}, {}, {}, {}, {}, {}, {}",
                 artifact_format::RGB565_BE,
                 artifact_format::RGB888,
                 artifact_format::SSD1306_PAGE,
                 artifact_format::SH1107_PAGE,
                 artifact_format::EPAPER_TRICOLOR_PLANES,
                 artifact_format::WS2812_GRB,
+                artifact_format::MAX7219_ROWS,
             ))
         }
     };
@@ -1472,6 +1485,36 @@ mod tests {
         assert_eq!(at(5, 10), (1, 1), "the written pixel is lit");
         assert_eq!(at(5, 11), (0, 1), "its neighbour in the same page is not");
         assert_eq!(at(6, 10), (0, 1), "nor the next column");
+    }
+
+    #[test]
+    fn max7219_rows_bit7_is_the_leftmost_column() {
+        use artifact_format::MAX7219_ROWS;
+        // Row 2 = 0b1000_0001: columns 0 and 7 lit.
+        let mut fb = [0u8; 8];
+        fb[2] = 0x81;
+        let at = |x, y| {
+            artifact_region_ink(
+                MAX7219_ROWS,
+                &meta(8, 8),
+                &fb,
+                PixelRegion { x, y, w: 1, h: 1 },
+            )
+            .unwrap()
+        };
+        assert_eq!(at(0, 2), (1, 1), "bit 7 is column 0");
+        assert_eq!(at(7, 2), (1, 1), "bit 0 is column 7");
+        assert_eq!(at(1, 2), (0, 1));
+        assert_eq!(at(0, 3), (0, 1), "the next row is its own byte");
+        let full = PixelRegion { x: 0, y: 0, w: 8, h: 8 };
+        assert_eq!(
+            artifact_region_ink(MAX7219_ROWS, &meta(8, 8), &fb, full).unwrap(),
+            (2, 64)
+        );
+        assert!(
+            artifact_region_ink(MAX7219_ROWS, &meta(8, 8), &fb[..4], full).is_err(),
+            "a short payload is an error, not a dark half-panel"
+        );
     }
 
     #[test]

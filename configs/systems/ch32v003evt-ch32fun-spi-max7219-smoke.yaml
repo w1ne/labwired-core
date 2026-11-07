@@ -1,0 +1,17 @@
+# WCH CH32V003 evaluation board running ch32fun's spi_max7219, unmodified: a
+# MAX7219 display module on SPI1 (PC6 DIN/MOSI, PC5 CLK/SCK) with its
+# CS/LOAD on PD0, driven by the example's software chip select. The module is
+# the test connection the example's README asks for, not a factory-installed
+# part on the board. The engine's MAX7219 model publishes the eight digit
+# registers as rows of an 8x8 panel; decode mode is stored, not rendered, so
+# Code-B digits read back as their raw register bytes. `led-matrix` is the
+# engine's type name for the MAX7219 kit (configs/devices/max7219.yaml).
+name: ch32v003evt-ch32fun-spi-max7219-smoke
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+external_devices:
+  - id: max7219
+    type: led-matrix
+    connection: spi1
+    config:
+      cs_pin: PD0
+board_io: []

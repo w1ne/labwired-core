@@ -1,0 +1,22 @@
+warning: unused variable: `hi`
+    --> crates/core/src/peripherals/spi.rs:3541:26
+     |
+3541 |                     let (hi, lo) = ((mosi >> 8) as u8, (mosi & 0xFF) as u8);
+     |                          ^^ help: if this is intentional, prefix it with an underscore: `_hi`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+[2m2026-11-07T00:25:08.738368Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+[2m2026-11-07T00:25:08.824309Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+[2m2026-11-07T00:26:35.562272Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: display_region 'max7219': region (0,0) 8x8 is 100.0% inked (64/64 pixels), outside the required 18.8%..=18.8%
+[2m2026-11-07T00:26:35.562351Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: DisplayRegion(DisplayRegionAssertion { display_region: DisplayRegionDetails { id: "max7219", x: 0, y: 0, w: None, h: None, min_ink: 0.1875, max_ink: Some(0.1875), lit: None, colour: None, min_colour_pixels: None, max_colour_pixels: None } }) (captured len=0)
+[2m2026-11-07T00:26:35.562389Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: display_region 'max7219': region (0,0) 5x1 is 100.0% inked (5/5 pixels), outside the required 0.0%..=0.0%
+[2m2026-11-07T00:26:35.562404Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: DisplayRegion(DisplayRegionAssertion { display_region: DisplayRegionDetails { id: "max7219", x: 0, y: 0, w: Some(5), h: Some(1), min_ink: 0.0, max_ink: Some(0.0), lit: None, colour: None, min_colour_pixels: None, max_colour_pixels: None } }) (captured len=0)
+[2m2026-11-07T00:26:35.562426Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: display_region 'max7219': region (7,1) 1x1 is 100.0% inked (1/1 pixels), outside the required 0.0%..=0.0%
+[2m2026-11-07T00:26:35.562439Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: DisplayRegion(DisplayRegionAssertion { display_region: DisplayRegionDetails { id: "max7219", x: 7, y: 1, w: Some(1), h: Some(1), min_ink: 0.0, max_ink: Some(0.0), lit: None, colour: None, min_colour_pixels: None, max_colour_pixels: None } }) (captured len=0)
+[2m2026-11-07T00:26:35.562467Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: display_region 'max7219': region (6,3) 2x1 is 100.0% inked (2/2 pixels), outside the required 0.0%..=0.0%
+[2m2026-11-07T00:26:35.562480Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: DisplayRegion(DisplayRegionAssertion { display_region: DisplayRegionDetails { id: "max7219", x: 6, y: 3, w: Some(2), h: Some(1), min_ink: 0.0, max_ink: Some(0.0), lit: None, colour: None, min_colour_pixels: None, max_colour_pixels: None } }) (captured len=0)
+[2m2026-11-07T00:26:35.562500Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: display_region 'max7219': region (0,7) 8x1 is 100.0% inked (8/8 pixels), outside the required 0.0%..=0.0%
+[2m2026-11-07T00:26:35.562513Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: DisplayRegion(DisplayRegionAssertion { display_region: DisplayRegionDetails { id: "max7219", x: 0, y: 7, w: Some(8), h: Some(1), min_ink: 0.0, max_ink: Some(0.0), lit: None, colour: None, min_colour_pixels: None, max_colour_pixels: None } }) (captured len=0)
+FAIL  5/10 checks · ch32fun-spi-max7219-smoke · 120000000 steps · 86.73s

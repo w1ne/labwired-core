@@ -284,6 +284,27 @@ fn plain_stm32_does_not_pack() {
     assert_eq!(captured(&spi), vec![0xAB], "non-FIFO ⇒ 1 frame");
 }
 
+/// A classic 16-bit frame (CR1.DFF) is two bytes to a byte-level device,
+/// high byte first at the reset MSB-first order: ch32fun's MAX7219 driver
+/// writes `reg << 8 | data` as one 16-bit DATAR store.
+#[test]
+fn plain_stm32_dff_frame_reaches_the_device_high_byte_first() {
+    let mut spi = Spi::new_with_layout(SpiRegisterLayout::Stm32);
+    spi.push_device(Box::new(Capture { rx: Vec::new() }));
+    spi.write_u16(0x00, 0x0840).unwrap(); // DFF | SPE
+    spi.write_u16(0x0C, 0x0F01).unwrap();
+    run_engine(&mut spi);
+    assert_eq!(captured(&spi), vec![0x0F, 0x01], "address byte, then data");
+
+    // LSBFIRST shifts the low byte out first.
+    let mut spi = Spi::new_with_layout(SpiRegisterLayout::Stm32);
+    spi.push_device(Box::new(Capture { rx: Vec::new() }));
+    spi.write_u16(0x00, 0x08C0).unwrap(); // DFF | SPE | LSBFIRST
+    spi.write_u16(0x0C, 0x0F01).unwrap();
+    run_engine(&mut spi);
+    assert_eq!(captured(&spi), vec![0x01, 0x0F]);
+}
+
 #[test]
 fn test_spi_transfer_timing() {
     let mut spi = Spi::new();

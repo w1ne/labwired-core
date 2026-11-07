@@ -61,7 +61,8 @@ ld="${out_dir}/generated_ch32v003.ld"
 "${prefix}gcc" -E -P -x c -DTARGET_MCU=CH32V003 -DMCU_PACKAGE=1 -DTARGET_MCU_LD=0 \
   -DTARGET_MCU_MEMORY_SPLIT= "${src}/ch32fun/ch32fun.ld" > "${ld}"
 
-for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr; do
+for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr \
+    spi_max7219; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

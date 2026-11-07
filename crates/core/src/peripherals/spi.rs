@@ -3530,15 +3530,32 @@ impl Spi {
                 (master_rx, Some(halves))
             }
             // ── Default: byte-level ──────────────────────────────────────────
+            // A frame wider than 8 bits (CR1.DFF, or CR2.DS > 7 on a FIFO
+            // port) is two bytes on the wire to a byte-level device, in shift
+            // order: high byte first when MSB-first (the reset default), low
+            // byte first when LSBFIRST. Handing the device only the low byte
+            // dropped every MAX7219 address byte from ch32fun's 16-bit
+            // `SPI_write_16` driver.
             _ => {
                 let miso = if !self.attached_devices.is_empty() {
-                    let mosi_byte = (mosi & 0xFF) as u8;
-                    // Last device wins; 0x00 is a valid MISO byte (MAX31855 LSB).
-                    let mut miso_byte = 0u8;
-                    for dev in &mut self.attached_devices {
-                        miso_byte = dev.transfer(mosi_byte);
+                    let (hi, lo) = ((mosi >> 8) as u8, (mosi & 0xFF) as u8);
+                    let wire: &[u8] = match (t.bits > 8, t.lsb_first) {
+                        (false, _) => &[lo],
+                        (true, false) => &[hi, lo],
+                        (true, true) => &[lo, hi],
+                    };
+                    let mut answer = [0u8; 2];
+                    for (slot, &mosi_byte) in answer.iter_mut().zip(wire) {
+                        // Last device wins; 0x00 is a valid MISO byte (MAX31855 LSB).
+                        for dev in &mut self.attached_devices {
+                            *slot = dev.transfer(mosi_byte);
+                        }
                     }
-                    miso_byte as u16
+                    match (t.bits > 8, t.lsb_first) {
+                        (false, _) => u16::from(answer[0]),
+                        (true, false) => u16::from_be_bytes(answer),
+                        (true, true) => u16::from_le_bytes(answer),
+                    }
                 } else if self.loopback {
                     mosi
                 } else {

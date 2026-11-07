@@ -7,7 +7,8 @@
 # default pins (PC1 SDA, PC2 SCL) for ch32fun's i2c_oled, and TIM2 with its
 # channel outputs on the reset-mapped pads (PD4/PD3/PC0/PD7) for ch32fun's
 # tim2_pwm, and EXTI with its AFIO_EXTICR port select for ch32fun's
-# exti_pin_change_isr.
+# exti_pin_change_isr, and SPI1 (PC5 SCK, PC6 MOSI, PC7 MISO) for ch32fun's
+# spi_max7219.
 #
 # Sources:
 # - ch32fun ch32v003hw.h (register map, DMDATA0/DMDATA1/sentinel at
@@ -48,8 +49,16 @@
 # sources and their interrupts 17/21, and the input filter/synchroniser
 # latency (the flag is set on the same cycle as the pad edge).
 #
+# SPI1 reuses the engine's STM32F1 SPI (same CTLR1/CTLR2/STATR/DATAR/
+# CRCR/RCRCR/TCRCR offsets and CTLR1.DFF 8/16-bit frames as ch32fun's
+# ch32v003hw.h), master mode with a software chip select on a GPIO. A
+# 16-bit frame goes out MSB first. Not modeled on SPI1: the SCK/MOSI pad
+# waveforms (the device sees whole frames, not edges; no pad_map), the
+# baud-rate prescaler as bus timing, HSCR, the AFIO PCFR1 SPI1 remap,
+# hardware NSS, slave mode, CRC, the SPI1 interrupt and DMA.
+#
 # Not modeled: debug-printf input from the host, a detached probe, the rest
-# of the RISC-V debug module, TIM1, SPI, DMA, OPA, the
+# of the RISC-V debug module, TIM1, DMA, OPA, the
 # watchdogs, sleep/standby, the HSE, the option bytes, and everything listed
 # as not modeled in ch32v003f4p6-pfic-smoke.yaml.
 name: ch32v003f4p6-ch32fun-smoke
@@ -70,6 +79,9 @@ pins:
   PC0: { gpio: gpioc, bit: 0, functions: [{ type: timer, peripheral: tim2, channel: 3 }] }
   PC1: { gpio: gpioc, bit: 1, functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
   PC2: { gpio: gpioc, bit: 2, functions: [{ type: i2c, peripheral: i2c1, role: scl }] }
+  PC5: { gpio: gpioc, bit: 5, functions: [{ type: spi, peripheral: spi1, role: sck }] }
+  PC6: { gpio: gpioc, bit: 6, functions: [{ type: spi, peripheral: spi1, role: mosi }] }
+  PC7: { gpio: gpioc, bit: 7, functions: [{ type: spi, peripheral: spi1, role: miso }] }
   PD0: { gpio: gpiod, bit: 0 }
   PD3: { gpio: gpiod, bit: 3, functions: [{ type: timer, peripheral: tim2, channel: 2 }] }
   PD4: { gpio: gpiod, bit: 4, functions: [{ type: timer, peripheral: tim2, channel: 1 }] }
@@ -180,3 +192,10 @@ peripherals:
     base_address: 0x40000000
     size: 1KB
     clock: { reg: apb1pcenr, bit: 0 }
+
+  # SPI1 at 0x40013000; RCC_APB2PCENR.SPI1EN is bit 12 (ch32v003hw.h).
+  - id: spi1
+    type: spi
+    base_address: 0x40013000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 12 }

@@ -1298,6 +1298,17 @@ boards:
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: stm32h563
+    # 2026-11-07: SPI 16-bit frames to byte-level devices change the shared
+    # spi.rs digest (and rcc.rs/inspect.rs where watched). A CR1.DFF (or DS >
+    # 8) frame now reaches an attached byte-level device as two bytes in
+    # shift order (high byte first unless LSBFIRST) instead of its low byte
+    # alone; MISO packs both answers. Register files, SCK/MOSI waveforms, SR
+    # flag timing and 8-bit frames are unchanged (spi_byte_level_golden: only
+    # the DFF case's MISO bits moved). rcc.rs only widens the CH32V003
+    # APB2PCENR mask (SPI1EN); inspect.rs adds a max7219_rows pixel decoder.
+    # SPI unit tests and the SPI/display integration tests pass. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture, ack date or expiry changed.
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
     # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
     # existing constructors retain their legacy profile. The bus completion
@@ -1781,7 +1792,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: b2a680e53de01c68a9710fb4518b45445b3fe39fe861ae887727f89dd6815a96
+    drift_ack_digest: a4371957422a22e29fc60566b0e13c136f98b977e41022a8bb02dc7352b316cc
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3459,6 +3470,17 @@ boards:
     drift_ack: 2026-11-06
 
   - id: nucleo-l476rg
+    # 2026-11-07: SPI 16-bit frames to byte-level devices change the shared
+    # spi.rs digest (and rcc.rs/inspect.rs where watched). A CR1.DFF (or DS >
+    # 8) frame now reaches an attached byte-level device as two bytes in
+    # shift order (high byte first unless LSBFIRST) instead of its low byte
+    # alone; MISO packs both answers. Register files, SCK/MOSI waveforms, SR
+    # flag timing and 8-bit frames are unchanged (spi_byte_level_golden: only
+    # the DFF case's MISO bits moved). rcc.rs only widens the CH32V003
+    # APB2PCENR mask (SPI1EN); inspect.rs adds a max7219_rows pixel decoder.
+    # SPI unit tests and the SPI/display integration tests pass. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture, ack date or expiry changed.
     # 2026-11-06: CH32V003 EXTI/AFIO layouts change the shared exti.rs/afio.rs
     # digests. The additions are new variants only (`ExtiRegisterLayout::
     # Ch32v003`, `AfioLayout::Ch32v003`, selected by `profile: ch32v003`);
@@ -3931,7 +3953,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: e0724d981c432ed98130efd1a085f09da577f2da7453826b2fa0723cdb43cdde
+    drift_ack_digest: e411e0d3f9acfa9ce0ca5de18559efb69c4b4d146a5350b7a20f11899f2cff13
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4591,6 +4613,17 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: nucleo-l073rz
+    # 2026-11-07: SPI 16-bit frames to byte-level devices change the shared
+    # spi.rs digest (and rcc.rs/inspect.rs where watched). A CR1.DFF (or DS >
+    # 8) frame now reaches an attached byte-level device as two bytes in
+    # shift order (high byte first unless LSBFIRST) instead of its low byte
+    # alone; MISO packs both answers. Register files, SCK/MOSI waveforms, SR
+    # flag timing and 8-bit frames are unchanged (spi_byte_level_golden: only
+    # the DFF case's MISO bits moved). rcc.rs only widens the CH32V003
+    # APB2PCENR mask (SPI1EN); inspect.rs adds a max7219_rows pixel decoder.
+    # SPI unit tests and the SPI/display integration tests pass. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture, ack date or expiry changed.
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
     # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
     # existing constructors retain their legacy profile. The bus completion
@@ -5015,7 +5048,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: cacd8d08c6e253ce594d441111b1b6d537c1da1583f2134e6111d238b00ea1cd
+    drift_ack_digest: d02a6eebf7e4c8b7150b0973762a72eab70e75d6e08cbd98038f4ac8d3d01d55
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5612,6 +5645,17 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f103
+    # 2026-11-07: SPI 16-bit frames to byte-level devices change the shared
+    # spi.rs digest (and rcc.rs/inspect.rs where watched). A CR1.DFF (or DS >
+    # 8) frame now reaches an attached byte-level device as two bytes in
+    # shift order (high byte first unless LSBFIRST) instead of its low byte
+    # alone; MISO packs both answers. Register files, SCK/MOSI waveforms, SR
+    # flag timing and 8-bit frames are unchanged (spi_byte_level_golden: only
+    # the DFF case's MISO bits moved). rcc.rs only widens the CH32V003
+    # APB2PCENR mask (SPI1EN); inspect.rs adds a max7219_rows pixel decoder.
+    # SPI unit tests and the SPI/display integration tests pass. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture, ack date or expiry changed.
     # 2026-11-06: CH32V003 EXTI/AFIO layouts change the shared exti.rs/afio.rs
     # digests. The additions are new variants only (`ExtiRegisterLayout::
     # Ch32v003`, `AfioLayout::Ch32v003`, selected by `profile: ch32v003`);
@@ -6097,7 +6141,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 134c715ff3ca196e60405251c56fb21cdc2cbcd9cd87f64befa8fddb7a2ce988
+    drift_ack_digest: 83c25962ad65e154b74d7e5b1a2cc8f258164c33252328318c3445e14ba20b60
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6764,6 +6808,17 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f407
+    # 2026-11-07: SPI 16-bit frames to byte-level devices change the shared
+    # spi.rs digest (and rcc.rs/inspect.rs where watched). A CR1.DFF (or DS >
+    # 8) frame now reaches an attached byte-level device as two bytes in
+    # shift order (high byte first unless LSBFIRST) instead of its low byte
+    # alone; MISO packs both answers. Register files, SCK/MOSI waveforms, SR
+    # flag timing and 8-bit frames are unchanged (spi_byte_level_golden: only
+    # the DFF case's MISO bits moved). rcc.rs only widens the CH32V003
+    # APB2PCENR mask (SPI1EN); inspect.rs adds a max7219_rows pixel decoder.
+    # SPI unit tests and the SPI/display integration tests pass. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture, ack date or expiry changed.
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
     # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
     # existing constructors retain their legacy profile. The bus completion
@@ -7205,7 +7260,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 559cf575aa7095d0b5450ae07e87023274e38aa3175f1b96c6093b0ea50f18ea
+    drift_ack_digest: b986840637026535cc3d869e11eeaf448c4f37c6eab69c8df9f256cd72fcd453
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
