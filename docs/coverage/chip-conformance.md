@@ -124,6 +124,7 @@ This page covers the public models. For every chip we model — public and priva
 | pic24f08ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f08ka102_uart_smoke |
 | pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
 | pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
+| ch32v003f4p6 | **L1** | ✓ | 4 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
 
 ## Declared platforms without a model
 

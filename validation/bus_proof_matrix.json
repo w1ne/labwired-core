@@ -3,6 +3,24 @@
   "chip_set_derived_from": "configs/chips/*.yaml minus ci-fixture-* (same rule as crates/core/src/tests/builtin_chip_self_contained.rs). This is a SUPERSET of the `chip:` values in the superproject's packages/board-config/src/boards.ts BOARDS array, which is why a new BOARDS chip cannot dodge this gate: it cannot ship without its chip yaml. `in_boards` records BOARDS membership as of 2026-08-03 and is informational only.",
   "surveyed": "2026-08-03",
   "chips": {
+    "ch32v003f4p6": {
+      "in_boards": false,
+      "uart": {
+        "state": "none",
+        "gap": "The CH32V003 slice models RCC and GPIO A/C/D only (no PFIC: interrupts are not wired). USART1 (0x40013800) has a base in the memory map but no peripheral descriptor, so no firmware byte can move through it yet.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SPI1 (0x40013000) is not modelled; it is not in the ch32v003f4p6 descriptor's peripherals list.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "I2C1 (0x40005400) is not modelled; it is not in the ch32v003f4p6 descriptor's peripherals list.",
+        "lane": "none"
+      }
+    },
     "dspic33fj32mc204": {
       "in_boards": false,
       "uart": {
