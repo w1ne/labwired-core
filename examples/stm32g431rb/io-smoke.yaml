@@ -1,0 +1,18 @@
+# LabWired — STM32G431RB io-smoke (strict-onboarding boot proof).
+#
+# Boots the committed TIER1 fixture (tests/fixtures/tier1/stm32g431rb.elf,
+# sha256 in tests/fixtures/tier1/MANIFEST.json) on the bare-MCU manifest and
+# asserts the reset vector ran, the clock tree came up, GPIO and the UART
+# banner path work, and the program reached its end. tier1-smoke.yaml in this
+# directory asserts every class; this is the per-chip boot proof that
+# crates/core/tests/strict_onboarding.rs requires.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/stm32g431rb.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 8000000
+assertions:
+  - uart_contains: "TIER1 clock PASS"
+  - uart_contains: "TIER1 gpio PASS"
+  - uart_contains: "TIER1 done"
