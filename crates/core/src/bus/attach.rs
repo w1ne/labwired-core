@@ -2606,6 +2606,10 @@ impl SystemBus {
     /// 0`, `CNF >= 0b10`, RM0008 §9.1.11 Table 20 "TIMx_CHx output compare:
     /// alternate function push-pull").
     ///
+    /// WCH CH32V003 runs the same F1 engine with its own DEFAULT map (TIM2
+    /// CH1-4 = PD4/PD3/PC0/PD7); a row binds only onto a port of its own
+    /// register layout.
+    ///
     /// Several of these pads carry another peripheral's DEFAULT function too
     /// (PA7 SPI1_MOSI, PA9 USART1_TX, PA2 USART2_TX, PB6/PB7 I2C1). DS5319 Rev
     /// 20 Table 5 note 4 leaves that to firmware ("only one peripheral should
@@ -2633,8 +2637,24 @@ impl SystemBus {
             ("tim4", 'b', 8, 2, "TIM4_CH3"),
             ("tim4", 'b', 9, 3, "TIM4_CH4"),
         ];
+        // WCH CH32V003: TIM2 default (no-remap) CH1-4 = PD4, PD3, PC0, PD7.
+        // Source: openwch/arduino_core_ch32 variant_CH32V003F4
+        // PeripheralPins.c `PinMap_TIM` (AFIO_Remap_TIM2_DISABLE rows). Same
+        // F1-style CFGLR, so the same AF-output gate applies. TIM1 is not
+        // modelled on this part, and AFIO_PCFR1 remaps are not decoded.
+        const WCH: &[(&str, char, u8, usize, &str)] = &[
+            ("tim2", 'd', 4, 0, "TIM2_CH1"),
+            ("tim2", 'd', 3, 1, "TIM2_CH2"),
+            ("tim2", 'c', 0, 2, "TIM2_CH3"),
+            ("tim2", 'd', 7, 3, "TIM2_CH4"),
+        ];
+        use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
         use crate::peripherals::timer::TimerInputStage;
-        for &(tim, port, pin, ch, func) in F1 {
+        let rows = F1
+            .iter()
+            .map(|r| (GpioRegisterLayout::Stm32F1, r))
+            .chain(WCH.iter().map(|r| (GpioRegisterLayout::Wch, r)));
+        for (layout, &(tim, port, pin, ch, func)) in rows {
             let Some(t_idx) = self
                 .find_peripheral_index_by_name(tim)
                 .or_else(|| self.find_peripheral_index_by_name(&format!("{tim}_pwm")))
@@ -2649,6 +2669,17 @@ impl SystemBus {
             let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}")) else {
                 continue;
             };
+            // A WCH port runs the F1 engine but has its own pad map: an F1 row
+            // must not land on a CH32 port (PA1/PA2 exist there and carry
+            // TIM1/ADC), nor a WCH row on an F1 port.
+            let gpio_layout = self.peripherals[gpio_idx]
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<GpioPort>())
+                .map(GpioPort::register_layout);
+            if gpio_layout != Some(layout) {
+                continue;
+            }
             let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
                 continue;
             };

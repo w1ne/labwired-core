@@ -1211,7 +1211,16 @@ pub fn try_build(
                 layout, line_mask,
             ))
         }
-        "afio" => Box::new(crate::peripherals::afio::Afio::new()),
+        "afio" => match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+            None | Some("stm32f1") => Box::new(crate::peripherals::afio::Afio::new()),
+            Some("wch") => Box::new(crate::peripherals::afio::Afio::new_wch()),
+            Some(other) => {
+                return Err(anyhow::anyhow!(
+                    "afio '{}': unknown profile '{other}' (supported: stm32f1, wch)",
+                    p_cfg.id
+                ))
+            }
+        },
         // Channel-based DMA (F1/L0/L4/G0). `config: { requests: { spi1_tx: 3,
         // spi1_rx: [2, 1] } }` hard-wires a peripheral request to a channel
         // (F1), or — `[channel, selector]` — to a channel while its L4

@@ -116,6 +116,32 @@ peripherals:
     config:
       profile: "ch32v00x"
 
+  # AFIO (ch32v00x.h): AFIO_BASE = APB2PERIPH_BASE + 0x0000, RCC_APB2Periph_AFIO
+  # = APB2PCENR bit 0. AFIO_TypeDef is RESERVED0, PCFR1, EXTICR, so the
+  # `wch` profile, not the F1 map. WCH's pinmap calls GPIO_PinRemapConfig
+  # (a PCFR1 read-modify-write) on every TIM/USART pin it configures.
+  - id: "afio"
+    type: "afio"
+    base_address: 0x40010000
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 0 }
+    config:
+      profile: "wch"
+
+  # TIM2 (ch32v00x.h): TIM2_BASE = APB1PERIPH_BASE + 0x0000, RCC_APB1Periph_TIM2
+  # = APB1PCENR bit 0, TIM2_IRQn = 38. TIM_TypeDef is CTLR1, CTLR2, SMCFGR,
+  # DMAINTENR, INTFR, SWEVGR, CHCTLR1-2, CCER, CNT, PSC, ATRLR, RPTCR,
+  # CH1CVR-CH4CVR, BDTR, DMACFGR, DMAADR: the STM32F1 TIMx block at the F1
+  # offsets, so the 16-bit general-purpose `timer` serves it. Default
+  # (no-remap) CH1-4 pads PD4/PD3/PC0/PD7 are wired in
+  # `wire_stm32_timer_output_pads`; AFIO_PCFR1 remaps are not decoded.
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 38
+    clock: { reg: "apb1pcenr", bit: 0 }
+
   # FLASH interface (ch32v00x.h): FLASH_R_BASE = AHBPERIPH_BASE + 0x2000.
   # FLASH_TypeDef is ACTLR, KEYR, OBKEYR, STATR, CTLR, ADDR, -, OBR, WPR at
   # 4-byte strides, the STM32F1 FLASH layout (ACR, KEYR, OPTKEYR, SR, CR, AR,

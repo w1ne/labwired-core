@@ -6227,7 +6227,14 @@ boards:
     # unseeded pads convert 0), gated by a flag only that layout sets. The
     # F1/F4/L4/H5/H7/U5 paths are unchanged; their existing adc tests pass
     # as before. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 42008e44a260dc2fbaa76e424921d121d7971e4a500e7718ee32a3a4ee5c48f8
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 TIM2 PWM): afio.rs gains an
+    # opt-in `wch` profile (RESERVED0, PCFR1, one 2-bit-field EXTICR) behind a
+    # flag only that profile sets; the F1 EVCR/MAPR/EXTICR1-4 path is unchanged.
+    # bus/attach.rs adds a WCH TIM2 pad table and binds each timer pad row only
+    # onto a port of its own register layout; F1 ports report Stm32F1, so every
+    # F103 row binds as before. afio and stm32f1_timer_outputs tests pass
+    # unchanged. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 993378caadff63f97ce3d49ad17036783e542d167a73f4e61d26ddb738aecbd1
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
