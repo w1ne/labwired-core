@@ -16,10 +16,12 @@ UART, not only that the step budget ran out.
 |------|------|
 | `src/main.cpp` | The sketch |
 | `platformio.ini` | `atmelavr` / `uno` / `arduino` |
+| `build-firmware.sh` | Rebuilds the Arduino sketch and committed twin fixture |
 | `io-smoke.yaml` | CLI smoke against `configs/systems/arduino-uno.yaml` |
 | `REQUIRED_DOCS.md` | Vendor documents the model and pinout were read from |
 | `EXTERNAL_COMPONENTS.md` | Onboard parts and how the twin treats each |
 | `VALIDATION.md` | Runbook and validation record |
+| `evidence/` | Latest rebuild, smoke log, metrics, and live lifecycle check |
 | `images/` | Board drawing and pinout (see images/README.md for source and licence) |
 
 For all three I/O ports and the ADC, see
@@ -43,3 +45,5 @@ cp examples/arduino-uno-blinky/.pio/build/uno/firmware.hex tests/fixtures/avr/ar
 
 The HEX is the same image for a real board:
 `avrdude -c arduino -p m328p -b 115200 -P <port> -U flash:w:tests/fixtures/avr/arduino-uno-blinky.hex`.
+
+**Demand rank:** ATmega328 is #2 in the survey (30%). This is maintenance of the existing Uno path; Microchip currently marks ATmega328P **Not Recommended for new designs**, so this round does not onboard a new part.

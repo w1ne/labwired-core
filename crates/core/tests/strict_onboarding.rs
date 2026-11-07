@@ -12,13 +12,16 @@ use std::process::Command;
 /// and a GitHub issue number so the debt is visible.
 const SMOKE_LESS_ALLOWLIST: &[&str] = &[
     "am6234", // SK-AM62: proven by stock Zephyr hello/sync/kernel-common (examples/sk-am62/ci/test.sh); no GPIO model for an io-smoke yet
-    "stm32f401cdu6", // BlackPill variant; shared smoke with stm32f401 pending
-    "stm32f401", // only example is the cosim-spice-rc analog lab; dedicated NUCLEO-F401RE smoke pending — see #1202
     "stm32g474re", // STM32G4 peripheral models in progress
-    "stm32l476", // L476 smoke added per survival tests, io-smoke.yaml pending
-    "stm32wb55", // BLE peripheral not yet modelled
-    "esp32",     // Classic ESP32 Xtensa; separate e2e lane
-    "nrf52840",  // io-smoke pruned with its example by #300; restore pending — see #311
+    "esp32",  // Classic ESP32 Xtensa; separate e2e lane
+    // The five below are proven by full-OS boots, not by an io-smoke, the way
+    // am6234 is. They were never reported because the example-gap error
+    // above returned first.
+    "rv1103", // #1711: Luckfox Pico Mini A: Linux loader (rv1103_linux_loader.rs, cosim basket)
+    "r5f52618bgfp", // #1711: EK-RX261: stock Zephyr (ek_rx261_zephyr.rs)
+    "mpfs095t", // #1711: PolarFire SoC Discovery: stock Zephyr in firmware_survival.rs
+    "pic32mz2048efm144", // #1711: Curiosity PIC32MZ EF: stock NuttX (curiosity_pic32mz_nuttx.rs)
+    "xck26-rpu", // #1711: KV260 Cortex-R5F: stock Zephyr (kv260_r5_zephyr.rs)
 ];
 
 #[test]
@@ -378,10 +381,12 @@ fn firmware_path_from_smoke(smoke_test: &Path) -> anyhow::Result<Option<PathBuf>
 /// a matcher, and a copy drifts; following the reference the smoke already
 /// declares does not.
 fn example_uses_chip(dir: &std::path::Path, chip_name: &str) -> bool {
-    let names_chip = |content: &str| -> bool {
-        content.contains(&format!("chips/{}.yaml", chip_name))
-            || content.contains(&format!("chips/{}", chip_name))
-    };
+    // Exact descriptor file only. A bare `chips/<name>` prefix match let a
+    // chip borrow a longer-named sibling's example: `stm32f401cd` was
+    // "covered" by `stm32f401cdu6`'s, and the generic `atsamd21` by any
+    // `atsamd21<variant>` example, so neither descriptor was ever booted.
+    let names_chip =
+        |content: &str| -> bool { content.contains(&format!("chips/{}.yaml", chip_name)) };
 
     let system_yaml = dir.join("system.yaml");
     if system_yaml.exists() && names_chip(&fs::read_to_string(&system_yaml).unwrap_or_default()) {
@@ -434,6 +439,14 @@ fn find_example_for_chip(root: &std::path::Path, chip_name: &str) -> Option<Path
 
     if candidates.is_empty() {
         return None;
+    }
+
+    // An example that HAS an io-smoke beats one that does not. Without this,
+    // a sorted-first lab with no smoke (stm32g071 -> gpio-net-buses) hid a
+    // passing board smoke (nucleo-g071rb), and the gate reported the chip as
+    // smoke-less while a smoke for it sat in the tree.
+    if candidates.iter().any(|p| p.join("io-smoke.yaml").exists()) {
+        candidates.retain(|p| p.join("io-smoke.yaml").exists());
     }
 
     // Preferred canonical names (in order): demo-blinky for STM32F1, the

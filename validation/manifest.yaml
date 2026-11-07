@@ -465,7 +465,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 18b383d8fdb752886eb8303c36bf5353777b01a217ea1fab9d11a18f54004f48
+    drift_ack_digest: 358a434cc84e49767bcafd0ae2953840c701e1095f069f5b77263dd96a08c767
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -683,7 +683,14 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-01
+    drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
     # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
     # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
@@ -1039,7 +1046,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 18b383d8fdb752886eb8303c36bf5353777b01a217ea1fab9d11a18f54004f48
+    drift_ack_digest: 358a434cc84e49767bcafd0ae2953840c701e1095f069f5b77263dd96a08c767
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1257,7 +1264,14 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-01
+    drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
     # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
     # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
@@ -1298,6 +1312,24 @@ boards:
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: stm32h563
+    # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
+    # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
+    # existing constructors retain their legacy profile. The bus completion
+    # hook defaults to no-op. Timed UART adds real DMAR/DMAT requests, documented
+    # DDRE/OVRDIS receive policies and consumed-wake rearming; byte-stream
+    # capture paths retain their behavior. G0 DMA register/fault/reset tests,
+    # existing DMA walk/event differential and G071 DMAMUX gates pass. Real
+    # CMSIS/HAL ELF recovery and one-action tests are model evidence only.
+    # No live silicon capture; preserve capture dates, ack age and expiry.
+    # 2026-11-05 (#1702): TIOL112 attachment changes the shared UART/RCC file
+    # digests. RCC clock publication is opt-in and STM32G0-only; the existing
+    # H5/L4/L0/F1/F4 RCC implementations are unchanged. UART EN/CQ gating and
+    # local echo apply only when a TIOL112 is attached (None by default); these
+    # boards do not attach one. The existing per-board offline MMIO/parity
+    # regression targets are the supporting software evidence. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture date, asserted hardware scope, existing ack date or expiry is
+    # extended. Live recapture remains pending on the existing schedule.
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
     # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
@@ -1763,7 +1795,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: a8bc9f9e1e2b2ae0f4d5f1b0b70583b45579a5c322ac85434a549c56466e621d
+    drift_ack_digest: 8493034a3cec84d57c0727e3df8a21eebb2ab30ca55b5e42c17fa1d39c2874f6
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2356,7 +2388,56 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+    # three files on this board's watch list. Each change is provably
+    # behaviour-preserving for THIS part, so no re-capture is owed:
+    #
+    #   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+    #     variant is only ever selected by a descriptor whose `core:` is
+    #     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+    #     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+    #     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+    #     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+    #     exactly, only re-ordered so the `rv32e` prefix is tested first.
+    #   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+    #     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+    #     families `pin_count()` is 16, and `effective_idr()` already masks with
+    #     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+    #     zero. The loop assembles the identical word. The WCH-only `+0x04`
+    #     single-config-register short-circuit is behind `wch_single_config_register`,
+    #     false on every port these boards construct.
+    #   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+    #     arm is modified; the only touched line outside the new type is the
+    #     unsupported-layout error string.
+    #
+    # Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+    # stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+    # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+    # (the test that would catch a pin_count regression). ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-07 (feat/ch32v003-usart1): gpio.rs + bus/attach.rs, WCH only.
+    #   gpio.rs — `register_layout()` reports `Wch` for a port built with the
+    #     WCH single-config-register flag. That flag is false on every port
+    #     these boards construct, so they still report `Stm32F1`/`Stm32V2`.
+    #   attach.rs — the UART pad wiring adds a `Wch` arm with a CH32V003-only
+    #     table (USART1_TX = PD5). The F1 arm still selects the unchanged `F1`
+    #     table, and the V2 arm is untouched.
+    #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
+    #   OOM-killed on the authoring host, so the full --lib result is the PR's
+    #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -2587,7 +2668,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 1bea3abf94dcd2d8822f3415ac8cfab5a76eb687cf513b465bf7787da4a52371
+    drift_ack_digest: 1b66043f16a4f5b4aa270889ae766e40e74e7fa94dfdf2995d27ed0ce91342e0
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3417,9 +3498,59 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-01
+    # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+    # three files on this board's watch list. Each change is provably
+    # behaviour-preserving for THIS part, so no re-capture is owed:
+    #
+    #   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+    #     variant is only ever selected by a descriptor whose `core:` is
+    #     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+    #     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+    #     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+    #     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+    #     exactly, only re-ordered so the `rv32e` prefix is tested first.
+    #   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+    #     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+    #     families `pin_count()` is 16, and `effective_idr()` already masks with
+    #     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+    #     zero. The loop assembles the identical word. The WCH-only `+0x04`
+    #     single-config-register short-circuit is behind `wch_single_config_register`,
+    #     false on every port these boards construct.
+    #   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+    #     arm is modified; the only touched line outside the new type is the
+    #     unsupported-layout error string.
+    #
+    # Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+    # stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+    # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+    # (the test that would catch a pin_count regression). ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (#1708 fix/esp32-idf5-static-mutex): watched rom_thunks.rs.
+    # xQueueCreateMutexStatic is no longer thunked to "return the buffer";
+    # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
+    # Firmware-library thunk only: no peripheral register map, reset value
+    # or captured reset-state window changes. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-06
 
   - id: nucleo-l476rg
+    # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
+    # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
+    # existing constructors retain their legacy profile. The bus completion
+    # hook defaults to no-op. Timed UART adds real DMAR/DMAT requests, documented
+    # DDRE/OVRDIS receive policies and consumed-wake rearming; byte-stream
+    # capture paths retain their behavior. G0 DMA register/fault/reset tests,
+    # existing DMA walk/event differential and G071 DMAMUX gates pass. Real
+    # CMSIS/HAL ELF recovery and one-action tests are model evidence only.
+    # No live silicon capture; preserve capture dates, ack age and expiry.
+    # 2026-11-05 (#1702): TIOL112 attachment changes the shared UART/RCC file
+    # digests. RCC clock publication is opt-in and STM32G0-only; the existing
+    # H5/L4/L0/F1/F4 RCC implementations are unchanged. UART EN/CQ gating and
+    # local echo apply only when a TIOL112 is attached (None by default); these
+    # boards do not attach one. The existing per-board offline MMIO/parity
+    # regression targets are the supporting software evidence. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture date, asserted hardware scope, existing ack date or expiry is
+    # extended. Live recapture remains pending on the existing schedule.
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
     # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
@@ -3867,7 +3998,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 8a2315e4e13ec78e139f548a1174bf72edf71654c00921622330bfa2a8fd7422
+    drift_ack_digest: 81ad1035baee1ce5c8256867de47f1ff4c98994ebee83edb0323851b789958f7
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4448,7 +4579,56 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+    # three files on this board's watch list. Each change is provably
+    # behaviour-preserving for THIS part, so no re-capture is owed:
+    #
+    #   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+    #     variant is only ever selected by a descriptor whose `core:` is
+    #     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+    #     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+    #     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+    #     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+    #     exactly, only re-ordered so the `rv32e` prefix is tested first.
+    #   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+    #     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+    #     families `pin_count()` is 16, and `effective_idr()` already masks with
+    #     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+    #     zero. The loop assembles the identical word. The WCH-only `+0x04`
+    #     single-config-register short-circuit is behind `wch_single_config_register`,
+    #     false on every port these boards construct.
+    #   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+    #     arm is modified; the only touched line outside the new type is the
+    #     unsupported-layout error string.
+    #
+    # Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+    # stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+    # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+    # (the test that would catch a pin_count regression). ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-07 (feat/ch32v003-usart1): gpio.rs + bus/attach.rs, WCH only.
+    #   gpio.rs — `register_layout()` reports `Wch` for a port built with the
+    #     WCH single-config-register flag. That flag is false on every port
+    #     these boards construct, so they still report `Stm32F1`/`Stm32V2`.
+    #   attach.rs — the UART pad wiring adds a `Wch` arm with a CH32V003-only
+    #     table (USART1_TX = PD5). The F1 arm still selects the unchanged `F1`
+    #     table, and the V2 arm is untouched.
+    #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
+    #   OOM-killed on the authoring host, so the full --lib result is the PR's
+    #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4516,6 +4696,24 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: nucleo-l073rz
+    # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
+    # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
+    # existing constructors retain their legacy profile. The bus completion
+    # hook defaults to no-op. Timed UART adds real DMAR/DMAT requests, documented
+    # DDRE/OVRDIS receive policies and consumed-wake rearming; byte-stream
+    # capture paths retain their behavior. G0 DMA register/fault/reset tests,
+    # existing DMA walk/event differential and G071 DMAMUX gates pass. Real
+    # CMSIS/HAL ELF recovery and one-action tests are model evidence only.
+    # No live silicon capture; preserve capture dates, ack age and expiry.
+    # 2026-11-05 (#1702): TIOL112 attachment changes the shared UART/RCC file
+    # digests. RCC clock publication is opt-in and STM32G0-only; the existing
+    # H5/L4/L0/F1/F4 RCC implementations are unchanged. UART EN/CQ gating and
+    # local echo apply only when a TIOL112 is attached (None by default); these
+    # boards do not attach one. The existing per-board offline MMIO/parity
+    # regression targets are the supporting software evidence. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture date, asserted hardware scope, existing ack date or expiry is
+    # extended. Live recapture remains pending on the existing schedule.
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
     # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
@@ -4922,7 +5120,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 839a91b752187ec110986a34e2e18a91d63ae0e98745c744da70f1d67b3599ca
+    drift_ack_digest: 68c9e9cfd57ff055daf05e84dbfb8475e27a8e91a8fb0e846917c94b6a39f6de
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5436,7 +5634,56 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+    # three files on this board's watch list. Each change is provably
+    # behaviour-preserving for THIS part, so no re-capture is owed:
+    #
+    #   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+    #     variant is only ever selected by a descriptor whose `core:` is
+    #     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+    #     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+    #     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+    #     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+    #     exactly, only re-ordered so the `rv32e` prefix is tested first.
+    #   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+    #     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+    #     families `pin_count()` is 16, and `effective_idr()` already masks with
+    #     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+    #     zero. The loop assembles the identical word. The WCH-only `+0x04`
+    #     single-config-register short-circuit is behind `wch_single_config_register`,
+    #     false on every port these boards construct.
+    #   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+    #     arm is modified; the only touched line outside the new type is the
+    #     unsupported-layout error string.
+    #
+    # Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+    # stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+    # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+    # (the test that would catch a pin_count regression). ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-07 (feat/ch32v003-usart1): gpio.rs + bus/attach.rs, WCH only.
+    #   gpio.rs — `register_layout()` reports `Wch` for a port built with the
+    #     WCH single-config-register flag. That flag is false on every port
+    #     these boards construct, so they still report `Stm32F1`/`Stm32V2`.
+    #   attach.rs — the UART pad wiring adds a `Wch` arm with a CH32V003-only
+    #     table (USART1_TX = PD5). The F1 arm still selects the unchanged `F1`
+    #     table, and the V2 arm is untouched.
+    #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
+    #   OOM-killed on the authoring host, so the full --lib result is the PR's
+    #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5508,6 +5755,24 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f103
+    # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
+    # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
+    # existing constructors retain their legacy profile. The bus completion
+    # hook defaults to no-op. Timed UART adds real DMAR/DMAT requests, documented
+    # DDRE/OVRDIS receive policies and consumed-wake rearming; byte-stream
+    # capture paths retain their behavior. G0 DMA register/fault/reset tests,
+    # existing DMA walk/event differential and G071 DMAMUX gates pass. Real
+    # CMSIS/HAL ELF recovery and one-action tests are model evidence only.
+    # No live silicon capture; preserve capture dates, ack age and expiry.
+    # 2026-11-05 (#1702): TIOL112 attachment changes the shared UART/RCC file
+    # digests. RCC clock publication is opt-in and STM32G0-only; the existing
+    # H5/L4/L0/F1/F4 RCC implementations are unchanged. UART EN/CQ gating and
+    # local echo apply only when a TIOL112 is attached (None by default); these
+    # boards do not attach one. The existing per-board offline MMIO/parity
+    # regression targets are the supporting software evidence. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture date, asserted hardware scope, existing ack date or expiry is
+    # extended. Live recapture remains pending on the existing schedule.
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
     # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
@@ -5968,7 +6233,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 48e3dbe1b716f0fc30fed1d3b162c3df00eef4ed4f258a52aefca2038bdb2862
+    drift_ack_digest: fabfd96c6de8e48ac201f8ab621c16fae75772b9d8adb9a000e29faf5585d785
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6552,7 +6817,56 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+    # three files on this board's watch list. Each change is provably
+    # behaviour-preserving for THIS part, so no re-capture is owed:
+    #
+    #   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+    #     variant is only ever selected by a descriptor whose `core:` is
+    #     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+    #     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+    #     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+    #     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+    #     exactly, only re-ordered so the `rv32e` prefix is tested first.
+    #   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+    #     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+    #     families `pin_count()` is 16, and `effective_idr()` already masks with
+    #     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+    #     zero. The loop assembles the identical word. The WCH-only `+0x04`
+    #     single-config-register short-circuit is behind `wch_single_config_register`,
+    #     false on every port these boards construct.
+    #   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+    #     arm is modified; the only touched line outside the new type is the
+    #     unsupported-layout error string.
+    #
+    # Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+    # stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+    # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+    # (the test that would catch a pin_count regression). ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-07 (feat/ch32v003-usart1): gpio.rs + bus/attach.rs, WCH only.
+    #   gpio.rs — `register_layout()` reports `Wch` for a port built with the
+    #     WCH single-config-register flag. That flag is false on every port
+    #     these boards construct, so they still report `Stm32F1`/`Stm32V2`.
+    #   attach.rs — the UART pad wiring adds a `Wch` arm with a CH32V003-only
+    #     table (USART1_TX = PD5). The F1 arm still selects the unchanged `F1`
+    #     table, and the V2 arm is untouched.
+    #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
+    #   OOM-killed on the authoring host, so the full --lib result is the PR's
+    #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6624,6 +6938,24 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f407
+    # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
+    # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
+    # existing constructors retain their legacy profile. The bus completion
+    # hook defaults to no-op. Timed UART adds real DMAR/DMAT requests, documented
+    # DDRE/OVRDIS receive policies and consumed-wake rearming; byte-stream
+    # capture paths retain their behavior. G0 DMA register/fault/reset tests,
+    # existing DMA walk/event differential and G071 DMAMUX gates pass. Real
+    # CMSIS/HAL ELF recovery and one-action tests are model evidence only.
+    # No live silicon capture; preserve capture dates, ack age and expiry.
+    # 2026-11-05 (#1702): TIOL112 attachment changes the shared UART/RCC file
+    # digests. RCC clock publication is opt-in and STM32G0-only; the existing
+    # H5/L4/L0/F1/F4 RCC implementations are unchanged. UART EN/CQ gating and
+    # local echo apply only when a TIOL112 is attached (None by default); these
+    # boards do not attach one. The existing per-board offline MMIO/parity
+    # regression targets are the supporting software evidence. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture date, asserted hardware scope, existing ack date or expiry is
+    # extended. Live recapture remains pending on the existing schedule.
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
     # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
@@ -7047,7 +7379,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 780a3148225acde1c39a01a78d59445ee12528618df1af9fb98006ec015e0527
+    drift_ack_digest: b8752e3eb5bcb1099561c0419886c22bb94440d54c33f7c1975596c65364cf9b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7563,7 +7895,56 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+    # three files on this board's watch list. Each change is provably
+    # behaviour-preserving for THIS part, so no re-capture is owed:
+    #
+    #   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+    #     variant is only ever selected by a descriptor whose `core:` is
+    #     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+    #     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+    #     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+    #     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+    #     exactly, only re-ordered so the `rv32e` prefix is tested first.
+    #   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+    #     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+    #     families `pin_count()` is 16, and `effective_idr()` already masks with
+    #     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+    #     zero. The loop assembles the identical word. The WCH-only `+0x04`
+    #     single-config-register short-circuit is behind `wch_single_config_register`,
+    #     false on every port these boards construct.
+    #   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+    #     arm is modified; the only touched line outside the new type is the
+    #     unsupported-layout error string.
+    #
+    # Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+    # stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+    # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+    # (the test that would catch a pin_count regression). ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-07 (feat/ch32v003-usart1): gpio.rs + bus/attach.rs, WCH only.
+    #   gpio.rs — `register_layout()` reports `Wch` for a port built with the
+    #     WCH single-config-register flag. That flag is false on every port
+    #     these boards construct, so they still report `Stm32F1`/`Stm32V2`.
+    #   attach.rs — the UART pad wiring adds a `Wch` arm with a CH32V003-only
+    #     table (USART1_TX = PD5). The F1 arm still selects the unchanged `F1`
+    #     table, and the V2 arm is untouched.
+    #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
+    #   OOM-killed on the authoring host, so the full --lib result is the PR's
+    #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
+    # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+    # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+    # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+    # core keeps p0 UNDEFINED. bus/* and config carry the flag;
+    # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+    # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+    # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -8463,8 +8844,13 @@ boards:
     # Same RX-inject scheduler wake + RXFIFO_TOUT sticky latch as on C3. S3
     # UART0 is outside the nine captured reset-state windows; no register map
     # or reset value change. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-29
-    drift_ack_digest: 9bf67e33982a546e9231f535016f4c705266f71a0c1faf768262bea62394b98b
+    # 2026-11-06 (#1708 fix/esp32-idf5-static-mutex): watched rom_thunks.rs.
+    # xQueueCreateMutexStatic is no longer thunked to "return the buffer";
+    # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
+    # Firmware-library thunk only: no peripheral register map, reset value
+    # or captured reset-state window changes. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-06
+    drift_ack_digest: 688e14f97c4f031e6adceca987640b45b5f96d450292dd4c8ab7201429f55d38
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
@@ -9517,6 +9903,32 @@ boards:
       # its list omitted, so they were invisible to the drift digest. This
       # board records no silicon capture, so there is no "silicon-verified"
       # claim for the corrected digest to invalidate — no ack is implied.
+      - crates/core/src/peripherals/adc.rs
+      - crates/core/src/peripherals/crc.rs
+      - crates/core/src/peripherals/dbgmcu.rs
+      - crates/core/src/peripherals/dma.rs
+      - crates/core/src/peripherals/flash.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/iwdg.rs
+      - crates/core/src/peripherals/pwr.rs
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/rtc.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/uart.rs
+
+  - id: stm32g431rb
+    doc: docs/boards/stm32g431rb.md
+    chip: configs/chips/stm32g431rb.yaml
+    tier: structural
+    note: "STM32G431RB (Cortex-M4F, RM0440; NUCLEO-G431RB). Shares the RM0440 peripheral map with stm32g474re at the G431 geometry (128 KiB flash, 22 KiB SRAM + 10 KiB CCM). Exercised by the tier-1 fast-boot fixture (tests/fixtures/tier1/stm32g431rb.elf) via examples/stm32g431rb/{tier1-smoke,io-smoke}.yaml. No G431 silicon bench."
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - configs/chips/stm32g431rb.yaml
       - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/crc.rs
       - crates/core/src/peripherals/dbgmcu.rs

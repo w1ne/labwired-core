@@ -464,7 +464,7 @@ mod esp32_input_threshold_tests {
                     CosimSignalValue::F64(dt_volts),
                 ),
             ]);
-            let errors = router.apply(&mut bus, &signals);
+            let errors = router.apply(&mut bus, &signals, 0);
             assert!(errors.is_empty(), "voltage application failed: {errors:?}");
             let gpio = bus
                 .peripherals

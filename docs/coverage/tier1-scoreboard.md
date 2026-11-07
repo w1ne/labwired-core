@@ -4,6 +4,9 @@ Each cell shows its committed status (gated by the Tier-1 ratchet on every
 change; the full sim suite runs nightly) and links the CI run that recorded
 it when one is available.
 
+This page covers the public models. For every chip we model — public and
+private — see the [chip list](chips.md).
+
 **Confidence tier:** ✅ means *sim-consistent* — the check passed against
 the simulator's peripheral models on real firmware. Silicon-anchored
 verification (hardware-in-the-loop capture replay) is a separate tier
@@ -28,7 +31,8 @@ an "N/A".
 | STM32F401RE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | STM32F407VG | ✅ | ✅ | ✅ | ✅ | · | · | ✅ | ✅ | ✅ | · | ✅ | ✅ |
 | STM32F411CEU6 (Black Pill) | ✅ | ✅ | ✅ | ✅ | · | 🚧 | ✅ | ✅ | ✅ | 🚧 | ✅ | ✅ |
-| stm32g071 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| stm32g071 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔ | ✅ | ✅ | ✅ | ✅ |
+| stm32g431rb | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | STM32G474RE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | STM32H563 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | stm32h735 | ✅ | ✅ | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | · | ✅ | ✅ | 🚧 |

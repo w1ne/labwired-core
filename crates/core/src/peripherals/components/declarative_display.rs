@@ -241,6 +241,14 @@ pub struct GenericDisplay {
     /// stream (capped). An oracle can prove the glass content changed across
     /// steps from one end-of-run inspect, without mid-run samples.
     generation_history: VecDeque<u64>,
+    /// Closed paints: generation + sim time + sha256 of the oriented framebuffer.
+    /// Cap matches generation_history. Used by Acc framebuffer prove clauses.
+    frames_seen: VecDeque<serde_json::Value>,
+    /// Data bytes written since the last `note_fb_generation` for
+    /// `ram.stream: always` panels. Adafruit SSD1306 chunks a display() into
+    /// many short I²C transactions; we only log a frame once a full plane
+    /// (typically 1024 bytes) has arrived.
+    ram_bytes_since_note: usize,
     last_logged_generation: Option<u64>,
 
     // ── protocol state ──────────────────────────────────────────────────
@@ -1051,6 +1059,8 @@ impl GenericDisplay {
             screen,
             refresh_generation: 0,
             generation_history: VecDeque::new(),
+            frames_seen: VecDeque::new(),
+            ram_bytes_since_note: 0,
             last_logged_generation: None,
             framing: Framing::Idle,
             pending_cmd: 0,
@@ -1666,6 +1676,11 @@ impl GenericDisplay {
         // which is why this reads the descriptor rather than the framing.
         if self.spec.ram.stream == DisplayRamStream::Always {
             self.ram_byte(byte);
+            self.ram_bytes_since_note = self.ram_bytes_since_note.saturating_add(1);
+            if self.ram_bytes_since_note >= self.plane_bytes {
+                self.note_fb_generation();
+                self.ram_bytes_since_note = 0;
+            }
             return;
         }
         match self.framing {
@@ -1881,11 +1896,26 @@ impl GenericDisplay {
             return;
         }
         self.last_logged_generation = Some(gen);
-        const CAP: usize = 16;
+        // Cover + ~70 play frames + game-over fits comfortably under 128.
+        const CAP: usize = 128;
         if self.generation_history.len() >= CAP {
             self.generation_history.pop_front();
         }
         self.generation_history.push_back(gen);
+        if self.frames_seen.len() >= CAP {
+            self.frames_seen.pop_front();
+        }
+        let sha = {
+            use sha2::{Digest, Sha256};
+            let dig = Sha256::digest(&fb);
+            dig.iter().map(|b| format!("{b:02x}")).collect::<String>()
+        };
+        self.frames_seen.push_back(serde_json::json!({
+            "generation": gen,
+            "t_us": self.elapsed_us,
+            "sha256": sha,
+            "ink_bytes": fb.iter().filter(|&&b| b != 0).count(),
+        }));
     }
 
     fn build_artifacts(
@@ -1925,6 +1955,10 @@ impl GenericDisplay {
             history.push(generation);
         }
         meta.insert("generation_history".into(), serde_json::json!(history));
+        meta.insert(
+            "frames_seen".into(),
+            serde_json::Value::Array(self.frames_seen.iter().cloned().collect()),
+        );
         // Which panel this is. Two panels can hold the same picture (three
         // OLEDs at 0x3C behind a TCA9548A drawing one splash), and a consumer
         // that tells evidence apart by its contents would merge them into one.
@@ -2197,6 +2231,13 @@ impl I2cDevice for GenericDisplay {
     }
 
     fn stop(&mut self) {
+        // `ram.stream: always` paints are logged from `data_byte` once a full
+        // plane has been written (chunked I²C STOPs must not each count as a
+        // frame). Windowed RAM streams still close on STOP.
+        if self.spec.ram.stream != DisplayRamStream::Always && self.framing == Framing::Ram {
+            self.note_fb_generation();
+            self.framing = Framing::Idle;
+        }
         self.control = None;
     }
 
@@ -2679,6 +2720,11 @@ display_kit!(
     "ili9341"
 );
 display_kit!(
+    /// ILI Technology ILI9488, 320×480 RGB666 SPI TFT (`ili9488.yaml`).
+    ILI9488_KIT,
+    "ili9488"
+);
+display_kit!(
     /// Raydium RM67162, 240×536 RGB565 AMOLED (`rm67162.yaml`).
     RM67162_KIT,
     "amoled-rm67162"
@@ -2733,6 +2779,15 @@ pub fn pcd8544(cs_pin: &str, dc_pin: &str) -> GenericDisplay {
 /// directly rather than through a manifest.
 pub fn ili9341(cs_pin: &str, dc_pin: &str) -> GenericDisplay {
     let mut dev = embedded("ili9341").expect("ili9341 descriptor builds");
+    dev.set_cs_pin(cs_pin);
+    dev.set_dc_pin(dc_pin);
+    dev
+}
+
+/// The ILI9488 model with its two pins wired — 320×480 memory, serial_color
+/// 18-bit COLMOD path.
+pub fn ili9488(cs_pin: &str, dc_pin: &str) -> GenericDisplay {
+    let mut dev = embedded("ili9488").expect("ili9488 descriptor builds");
     dev.set_cs_pin(cs_pin);
     dev.set_dc_pin(dc_pin);
     dev
@@ -4076,5 +4131,28 @@ mod tests {
             [0x55, 0x22, 0x33, 0x44],
             "the fifth byte must overwrite the first, not run off the window"
         );
+    }
+
+    #[test]
+    fn ili9488_constructs_and_accepts_colmod_0x66_rgb666_pixels() {
+        let mut panel = ili9488("PB2", "PD7");
+        assert_eq!((panel.width(), panel.height()), (320, 480));
+        assert_eq!(panel.framebuffer().len(), 460_800);
+        assert_eq!(panel.vars["colmod"], 6);
+        // Firmware writes COLMOD=0x66; low three bits select RGB666.
+        serial_command(&mut panel, 0x3a, &[0x66]);
+        assert_eq!(panel.vars["colmod"], 0x66);
+        assert_eq!(serial_artifact(&panel).meta["colmod"], "0x66");
+        // One cyan-ish RGB666 pixel: wire bytes are 6-bit left-aligned;
+        // RAM stores the bit-expanded RGB888 channels.
+        serial_command(&mut panel, 0x2c, &[0x00, 0xFC, 0xFC]);
+        assert_eq!(&panel.framebuffer()[..3], &[0x00, 0xFF, 0xFF]);
+        assert_eq!(panel.known_pixels().map(|k| k[0]), Some(true));
+        // MADCTL MV swaps the legal CASET/PASET extents (landscape 480×320).
+        serial_command(&mut panel, 0x36, &[0x28]);
+        assert_eq!(panel.vars["madctl"], 0x28);
+        serial_command(&mut panel, 0x2a, &[0x00, 0x00, 0x01, 0xDF]); // 0..479
+        serial_command(&mut panel, 0x2b, &[0x00, 0x00, 0x01, 0x3F]); // 0..319
+        assert_eq!((panel.col_end, panel.row_end), (479, 319));
     }
 }
