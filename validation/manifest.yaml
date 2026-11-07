@@ -1781,7 +1781,11 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 884ca160cb72b35913539d34d0e944c0759eb221014e3fb782a056cd5a677a98
+    # 2026-11-07: merge of origin/main into lane/renode-coverage combined two
+    # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
+    # main's CH32V003 riscv/gpio/rcc slice). No new model change; digest
+    # recomputed for the merged tree. ACK, NOT A CAPTURE.
+    drift_ack_digest: 6bdf7c9ef3e8b68d55c5a1b95222c693fc12d9889631683735a3fb86a0a289c9
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2378,7 +2382,39 @@ boards:
     # USART layout (new enum arm, FT9001-only control-register store and
     # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
     # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-02
+    # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+    # three files on this board's watch list. Each change is provably
+    # behaviour-preserving for THIS part, so no re-capture is owed:
+    #
+    #   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+    #     variant is only ever selected by a descriptor whose `core:` is
+    #     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+    #     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+    #     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+    #     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+    #     exactly, only re-ordered so the `rv32e` prefix is tested first.
+    #   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+    #     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+    #     families `pin_count()` is 16, and `effective_idr()` already masks with
+    #     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+    #     zero. The loop assembles the identical word. The WCH-only `+0x04`
+    #     single-config-register short-circuit is behind `wch_single_config_register`,
+    #     false on every port these boards construct.
+    #   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+    #     arm is modified; the only touched line outside the new type is the
+    #     unsupported-layout error string.
+    #
+    # Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+    # stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+    # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+    # (the test that would catch a pin_count regression). ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-06
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -2609,7 +2645,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 44221ed01c6b108290ad5bfc0286188cd08dfcdf6569085523d2354b5b4b98fa
+    drift_ack_digest: 1b66043f16a4f5b4aa270889ae766e40e74e7fa94dfdf2995d27ed0ce91342e0
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3439,6 +3475,33 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+    # three files on this board's watch list. Each change is provably
+    # behaviour-preserving for THIS part, so no re-capture is owed:
+    #
+    #   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+    #     variant is only ever selected by a descriptor whose `core:` is
+    #     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+    #     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+    #     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+    #     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+    #     exactly, only re-ordered so the `rv32e` prefix is tested first.
+    #   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+    #     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+    #     families `pin_count()` is 16, and `effective_idr()` already masks with
+    #     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+    #     zero. The loop assembles the identical word. The WCH-only `+0x04`
+    #     single-config-register short-circuit is behind `wch_single_config_register`,
+    #     false on every port these boards construct.
+    #   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+    #     arm is modified; the only touched line outside the new type is the
+    #     unsupported-layout error string.
+    #
+    # Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+    # stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+    # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+    # (the test that would catch a pin_count regression). ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
     # 2026-11-06 (#1708 fix/esp32-idf5-static-mutex): watched rom_thunks.rs.
     # xQueueCreateMutexStatic is no longer thunked to "return the buffer";
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
@@ -3912,7 +3975,11 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: ab21b38195b3866dc0cf4635f32477787d316e6f39f8223d6dd50c3edd5568c4
+    # 2026-11-07: merge of origin/main into lane/renode-coverage combined two
+    # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
+    # main's CH32V003 riscv/gpio/rcc slice). No new model change; digest
+    # recomputed for the merged tree. ACK, NOT A CAPTURE.
+    drift_ack_digest: c7ad3ea2aaa021b6344a0612f5a149379fbae3f391c415dc419811bc4bf39f5e
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4497,7 +4564,39 @@ boards:
     # USART layout (new enum arm, FT9001-only control-register store and
     # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
     # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-02
+    # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+    # three files on this board's watch list. Each change is provably
+    # behaviour-preserving for THIS part, so no re-capture is owed:
+    #
+    #   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+    #     variant is only ever selected by a descriptor whose `core:` is
+    #     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+    #     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+    #     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+    #     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+    #     exactly, only re-ordered so the `rv32e` prefix is tested first.
+    #   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+    #     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+    #     families `pin_count()` is 16, and `effective_idr()` already masks with
+    #     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+    #     zero. The loop assembles the identical word. The WCH-only `+0x04`
+    #     single-config-register short-circuit is behind `wch_single_config_register`,
+    #     false on every port these boards construct.
+    #   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+    #     arm is modified; the only touched line outside the new type is the
+    #     unsupported-layout error string.
+    #
+    # Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+    # stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+    # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+    # (the test that would catch a pin_count regression). ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-06
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4989,7 +5088,11 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 4db81cc060fa88289e4a625b234782c377d31732e807571c1ddaa9e2d15bc767
+    # 2026-11-07: merge of origin/main into lane/renode-coverage combined two
+    # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
+    # main's CH32V003 riscv/gpio/rcc slice). No new model change; digest
+    # recomputed for the merged tree. ACK, NOT A CAPTURE.
+    drift_ack_digest: 0d61e01380afa5594e48f5a95239753812b6d4f98e1522bbc58a2ab3ff306ffc
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5507,7 +5610,39 @@ boards:
     # USART layout (new enum arm, FT9001-only control-register store and
     # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
     # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-02
+    # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+    # three files on this board's watch list. Each change is provably
+    # behaviour-preserving for THIS part, so no re-capture is owed:
+    #
+    #   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+    #     variant is only ever selected by a descriptor whose `core:` is
+    #     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+    #     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+    #     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+    #     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+    #     exactly, only re-ordered so the `rv32e` prefix is tested first.
+    #   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+    #     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+    #     families `pin_count()` is 16, and `effective_idr()` already masks with
+    #     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+    #     zero. The loop assembles the identical word. The WCH-only `+0x04`
+    #     single-config-register short-circuit is behind `wch_single_config_register`,
+    #     false on every port these boards construct.
+    #   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+    #     arm is modified; the only touched line outside the new type is the
+    #     unsupported-layout error string.
+    #
+    # Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+    # stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+    # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+    # (the test that would catch a pin_count regression). ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-06
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6057,7 +6192,11 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 93c33846be2076871acc9becd79b636996e4ee1a8161a995cda783f06be2fd8b
+    # 2026-11-07: merge of origin/main into lane/renode-coverage combined two
+    # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
+    # main's CH32V003 riscv/gpio/rcc slice). No new model change; digest
+    # recomputed for the merged tree. ACK, NOT A CAPTURE.
+    drift_ack_digest: 8d56d4b5f4f314f60536d7c3d5eea7b7f0c92a68596f1bff5d30e3a80289f588
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6645,7 +6784,39 @@ boards:
     # USART layout (new enum arm, FT9001-only control-register store and
     # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
     # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-02
+    # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+    # three files on this board's watch list. Each change is provably
+    # behaviour-preserving for THIS part, so no re-capture is owed:
+    #
+    #   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+    #     variant is only ever selected by a descriptor whose `core:` is
+    #     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+    #     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+    #     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+    #     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+    #     exactly, only re-ordered so the `rv32e` prefix is tested first.
+    #   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+    #     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+    #     families `pin_count()` is 16, and `effective_idr()` already masks with
+    #     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+    #     zero. The loop assembles the identical word. The WCH-only `+0x04`
+    #     single-config-register short-circuit is behind `wch_single_config_register`,
+    #     false on every port these boards construct.
+    #   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+    #     arm is modified; the only touched line outside the new type is the
+    #     unsupported-layout error string.
+    #
+    # Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+    # stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+    # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+    # (the test that would catch a pin_count regression). ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-06
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7158,7 +7329,11 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: ab1fb5a795074aa3bc0c57a845eb5593c839b81faf39a24f95dc05f6cdfda818
+    # 2026-11-07: merge of origin/main into lane/renode-coverage combined two
+    # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
+    # main's CH32V003 riscv/gpio/rcc slice). No new model change; digest
+    # recomputed for the merged tree. ACK, NOT A CAPTURE.
+    drift_ack_digest: 4c9dba4ae5ec66a0bcc4540b15ae59d1d065b2e079e966b195c6ecb0d5c8ee11
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7678,7 +7853,39 @@ boards:
     # USART layout (new enum arm, FT9001-only control-register store and
     # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
     # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-02
+    # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+    # three files on this board's watch list. Each change is provably
+    # behaviour-preserving for THIS part, so no re-capture is owed:
+    #
+    #   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+    #     variant is only ever selected by a descriptor whose `core:` is
+    #     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+    #     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+    #     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+    #     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+    #     exactly, only re-ordered so the `rv32e` prefix is tested first.
+    #   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+    #     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+    #     families `pin_count()` is 16, and `effective_idr()` already masks with
+    #     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+    #     zero. The loop assembles the identical word. The WCH-only `+0x04`
+    #     single-config-register short-circuit is behind `wch_single_config_register`,
+    #     false on every port these boards construct.
+    #   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+    #     arm is modified; the only touched line outside the new type is the
+    #     unsupported-layout error string.
+    #
+    # Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+    # stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+    # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+    # (the test that would catch a pin_count regression). ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-06
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are

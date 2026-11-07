@@ -132,6 +132,10 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `UDS bootloader/ECU (0x10/0x27/0x34/0x36/0x37/0x85/0x28 — example firmware, not gated)`
 
+### `ch32v003f4p6`
+
+_No tier-1 fixture or hosted model-verification gate. A compiled RV32E/ILP32E bare-metal C fixture executes from flash, configures WCH RCC/GPIOC, and toggles PC0 in the local simulator; the matching CLI smoke and core integration test require two GPIO edges. This is local simulator evidence, not hosted model_verified or hardware confirmation._
+
 ### `nrf5340`
 
 _No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). Nine peripheral blocks are benign boot stubs._
