@@ -144,6 +144,7 @@ pub mod uart_waveform;
 pub mod usb_otg;
 pub mod virtual_ble;
 pub mod wave_plan;
+pub mod wch_pfic;
 pub mod wch_stk;
 pub mod wwdg;
 

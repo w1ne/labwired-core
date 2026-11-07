@@ -45,6 +45,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rcc",
     "systick",
     "wch_stk",
+    "wch_pfic",
     "timer",
     "i2c",
     "spi",
@@ -625,6 +626,9 @@ pub fn try_build(
         // WCH QingKe V2 STK (CH32V003 SysTick): its own register file and an
         // up-counter, not the ARMv7-M SysTick layout.
         "wch_stk" => Box::new(crate::peripherals::wch_stk::WchStk::new()),
+        // WCH QingKe V2 PFIC (CH32V003 interrupt controller). The QingKe core
+        // takes interrupts from its state; see `configure_riscv`.
+        "wch_pfic" => Box::new(crate::peripherals::wch_pfic::WchPfic::new()),
         // Silicon Labs Series-2 GPIO external interrupts — the `attachInterrupt`
         // block, in the GPIO head at `GPIO_S_BASE + 0x400`. A separate window
         // from the four port structs, which keep their own model.

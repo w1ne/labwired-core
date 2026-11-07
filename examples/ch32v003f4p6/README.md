@@ -38,8 +38,8 @@ sources:
 
 - Clock: the RCC step of `SystemInit` (`RCC->CFGR0 &= 0xF8FF0000`) leaves
   SYSCLK on HSI with HPRE = DIV1, so HCLK is 24 MHz. That is WCH's
-  `SetSysClockTo_24MHZ_HSI` minus its `FLASH->ACTLR` write. The flash
-  controller is not modelled, and that write selects 0 wait states anyway.
+  `SetSysClockTo_24MHZ_HSI` minus its `FLASH->ACTLR` write, which selects 0
+  wait states anyway.
 - Pins: USART1's default mapping from WCH `Debug/debug.c`. TX is PD5, AF
   push-pull, 30 MHz (CFGLR nibble 0xB).
 - Baud: `USART_Init`'s divider for 115200 at 24 MHz gives BRR = 0x00D0
@@ -53,8 +53,8 @@ cargo run -q -p labwired-cli -- test \
   --output-dir out/boards/ch32v003f4p6/uart-smoke --no-uart-stdout
 ```
 
-The smoke asserts `Hello from CH32V003` on the UART stream. TX is polled. The
-PFIC is not modelled, so USART1 interrupts are not delivered. On a physical
+The smoke asserts `Hello from CH32V003` on the UART stream. TX is polled.
+USART1's interrupt (32) is not wired to the PFIC yet. On a physical
 part, PD5 goes to the RX pin of a 3.3 V USB-serial adapter at 115200 8N1.
 
 The committed `tests/fixtures/ch32v003f4p6-uart-hello.elf` was built by
@@ -71,7 +71,28 @@ the QingKe core timer at `0xE000F000`, register layout `SysTick_Type` from WCH
 `Delay_Ms(1)` takes 24,000 CPU cycles.
 
 `crates/core/tests/ch32v003_systick.rs` measures the PC0 edge spacing in CPU
-cycles. The STK interrupt is not delivered, because the PFIC is not modelled.
+cycles. `Delay_Ms` polls CNTIF; the STK interrupt path is covered by the
+Arduino image below.
+
+## WCH Arduino core (`L0_serial_boot`)
+
+The stock Arduino matrix L0 sketch, built with WCH's official Arduino core
+(PlatformIO `ch32v`, board `genericCH32V003F4P6`), boots and prints
+`LW_L0_OK`. `crates/core/tests/ch32v003_arduino.rs` runs the committed
+`tests/fixtures/ch32v003f4p6-arduino-l0.elf`; build inputs are in
+`tests/fixtures/ch32v003f4p6-arduino-l0.md`. That image needs the QingKe pieces
+plain EVT code does not:
+
+- INTSYSCR (CSR 0x804) and the `mtvec` mode-3 absolute-address vector table;
+- the PFIC at `0xE000E000` and the STK interrupt (`SysTicK_IRQn` = 12) behind
+  `millis()`/`delay()`;
+- HPE: `SysTick_Handler` is `interrupt("WCH-Interrupt-fast")` and saves none
+  of ra, t0-t2, a0-a5 itself;
+- WCH XW compressed byte/halfword loads and stores (`-march=rv32ecxw`);
+- the FLASH interface `ACTLR` write in `SystemInit`.
+
+Stock L2 does not run as-is: the CH32V003F4 variant defines `LED_BUILTIN` as
+`PNUM_NOT_DEFINED`, and GCC compiles `digitalWrite(LED_BUILTIN, ...)` to a trap.
 
 The committed `tests/fixtures/ch32v003f4p6-systick-blink.elf` was built by
 `build.sh` with xPack `riscv-none-elf-gcc` 15.2.0-1. Its sha256 is

@@ -459,6 +459,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// WCH QingKe PFIC capability: the enable/pending/active/priority state of
+    /// a `wch_pfic` block. `configure_riscv` hands it to the core (which takes
+    /// interrupts from it) and to the bus's pend path. `None` for every other
+    /// peripheral.
+    fn wch_pfic_state(&self) -> Option<std::sync::Arc<crate::peripherals::nvic::NvicState>> {
+        None
+    }
+
     /// Cortex-M FP extension capability: the FP context control state
     /// (FPCCR/FPCAR/FPDSCR) of a `cortex_m_fpu` block. `configure_cortex_m`
     /// hands it to the core, which then tracks CONTROL.FPCA and stacks

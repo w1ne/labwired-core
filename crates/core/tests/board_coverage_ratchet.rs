@@ -829,9 +829,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // behaviour gate that asserts PC0 edges. It carries no bundled-configs.ts
         // catalog board, no silicon oracle (no CH32V003 has been diffed over
         // SDI) and no executing-fidelity differential of its own. The slice
-        // models RCC and GPIO A/C/D only (no PFIC) — USART/I2C/SPI/ADC are not
-        // modelled, so there is no bus to diff yet. Promote when the catalog
-        // board, a bus model and a differential all exist.
+        // models RCC, GPIO A/C/D, polled USART1, the STK and the PFIC (enough
+        // for WCH's Arduino core to boot) — I2C/SPI/ADC are not modelled, so
+        // there is no bus to diff yet. Promote when the catalog board, a bus
+        // model and a differential all exist.
         "ch32v003f4p6",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).

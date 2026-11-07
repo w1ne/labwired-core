@@ -2647,7 +2647,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 1b66043f16a4f5b4aa270889ae766e40e74e7fa94dfdf2995d27ed0ce91342e0
+    drift_ack_digest: a5bae5a30bbe5bb94355f631f97a3f94b22599ec592cd1eaa22b14dd3e4ed054
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3509,7 +3509,21 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-06
+    # 2026-11-07 (feat/ch32v003-pfic): watched cpu/riscv.rs and
+    # decoder/riscv.rs moved for the WCH QingKe core. Behaviour-preserving
+    # for THIS part:
+    #   riscv.rs — every new path (INTSYSCR 0x804, PFIC take, mode-3 vector
+    #     fetch, HPE, the XW decode fallback, the mret IACTR clear, the
+    #     `set_exception_pending` early return) is gated on `self.pfic`, which
+    #     only `configure_riscv` sets, and only when the chip declares a
+    #     `wch_pfic`. The C3 declares none, so `pfic_next_irq()` is `None` and
+    #     the three pending checks it was OR-ed into are unchanged.
+    #   decoder/riscv.rs — adds `decode_wch_xw`, a separate function the base
+    #     decoder never calls; `decode_rv32` is byte-identical.
+    # Evidence: labwired-core --lib 5443 pass / 0 fail on this head;
+    # firmware_survival esp32c3/esp32c6/litex/arty/ri5cy 5/5. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
 
   - id: nucleo-l476rg
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict

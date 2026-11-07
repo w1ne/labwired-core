@@ -37,10 +37,18 @@
 //! cycle; STCLK = 0 divides it by 8 and the sub-tick remainder is carried so no
 //! time is lost across reads.
 //!
+//! ## Interrupt
+//!
+//! With CTLR.STIE set, CNTIF is a LEVEL source on the entry's `irq:` line
+//! (`SysTicK_IRQn = 12` through the PFIC): it stays asserted until firmware
+//! writes SR = 0, which is what the WCH Arduino core's `SysTick_Handler` does.
+//! On the walk path a match raises the line from `tick_elapsed`; on the
+//! scheduler path the model books a wake at the exact cycle CNT reaches CMP
+//! and raises it from `on_event`.
+//!
 //! ## What is deliberately NOT modelled
 //!
-//! * The STK interrupt (STIE) and the software interrupt (SWIE). The PFIC is
-//!   not modelled on this chip, so both bits are stored and never delivered.
+//! * The software interrupt (SWIE). The bit is stored and never delivered.
 //! * STRE reload timing beyond "CNT reaches CMP, the next count is 0"; the
 //!   WCH reference manual does not spell out the reload cycle and no
 //!   shipped example here depends on it.
@@ -57,6 +65,7 @@ const CNT: u64 = 0x08;
 const CMP: u64 = 0x10;
 
 const CTLR_STE: u32 = 1 << 0;
+const CTLR_STIE: u32 = 1 << 1;
 const CTLR_STCLK: u32 = 1 << 2;
 const CTLR_STRE: u32 = 1 << 3;
 const SR_CNTIF: u32 = 1 << 0;
@@ -76,6 +85,11 @@ pub struct WchStk {
     anchor: Cell<u64>,
     /// Bus-published cycle clock; `None` keeps the model on the walk path.
     clock: Option<CycleClock>,
+    /// Scheduler wake generation. Every reconfiguration books a new wake; a
+    /// wake whose token is not the current generation is stale and ignored.
+    generation: u32,
+    /// Wakes booked by the last write, drained by `take_scheduled_events`.
+    pending_events: Vec<(u64, u32)>,
 }
 
 impl Default for WchStk {
@@ -94,6 +108,8 @@ impl WchStk {
             prescale: Cell::new(0),
             anchor: Cell::new(0),
             clock: None,
+            generation: 0,
+            pending_events: Vec::new(),
         }
     }
 
@@ -104,10 +120,11 @@ impl WchStk {
         self.clock = None;
     }
 
-    /// Apply `cycles` CPU cycles at the current configuration.
-    fn advance_cycles(&self, cycles: u64) {
+    /// Apply `cycles` CPU cycles at the current configuration. Returns whether
+    /// CNT reached CMP (CNTIF set) inside them.
+    fn advance_cycles(&self, cycles: u64) -> bool {
         if cycles == 0 || self.ctlr & CTLR_STE == 0 {
-            return;
+            return false;
         }
         let counts = if self.ctlr & CTLR_STCLK != 0 {
             cycles
@@ -121,6 +138,42 @@ impl WchStk {
         self.cnt.set(cnt);
         if hit {
             self.cntif.set(true);
+        }
+        hit
+    }
+
+    fn interrupt_enabled(&self) -> bool {
+        self.ctlr & (CTLR_STE | CTLR_STIE) == CTLR_STE | CTLR_STIE
+    }
+
+    /// CPU cycles from the current (synced) state until CNT next reaches CMP.
+    /// The inverse of `count_up`: from CNT == CMP the next match is a full
+    /// period away (`cmp + 1` with STRE, 2^32 without).
+    fn cycles_to_next_match(&self) -> u64 {
+        let (cnt, cmp) = (self.cnt.get(), self.cmp);
+        let counts = if cnt == cmp {
+            if self.ctlr & CTLR_STRE != 0 {
+                cmp as u64 + 1
+            } else {
+                1u64 << 32
+            }
+        } else {
+            cmp.wrapping_sub(cnt) as u64
+        };
+        if self.ctlr & CTLR_STCLK != 0 {
+            counts
+        } else {
+            counts * HCLK_DIV8 - self.prescale.get()
+        }
+    }
+
+    /// Book the scheduler wake for the next match, superseding any earlier one.
+    fn rearm(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.pending_events.clear();
+        if self.scheduler_mode() && self.interrupt_enabled() {
+            self.pending_events
+                .push((self.cycles_to_next_match(), self.generation));
         }
     }
 
@@ -177,6 +230,12 @@ impl WchStk {
         self.advance_cycles(now - anchor);
     }
 
+    /// Wake drain for tests (what the bus does after a write).
+    #[cfg(test)]
+    fn take_events(&mut self) -> Vec<(u64, u32)> {
+        std::mem::take(&mut self.pending_events)
+    }
+
     /// Live counter (test introspection).
     pub fn counter(&self) -> u32 {
         self.cnt.get()
@@ -216,8 +275,9 @@ impl Peripheral for WchStk {
             SR if value & SR_CNTIF == 0 => self.cntif.set(false),
             CNT => self.cnt.set(value),
             CMP => self.cmp = value,
-            _ => {}
+            _ => return Ok(()),
         }
+        self.rearm();
         Ok(())
     }
 
@@ -226,10 +286,38 @@ impl Peripheral for WchStk {
     }
 
     fn tick_elapsed(&mut self, cycles: u64) -> crate::PeripheralTickResult {
-        if !self.scheduler_mode() {
-            self.advance_cycles(cycles);
+        let hit = !self.scheduler_mode() && self.advance_cycles(cycles);
+        crate::PeripheralTickResult {
+            irq: hit && self.interrupt_enabled(),
+            ..Default::default()
         }
-        crate::PeripheralTickResult::default()
+    }
+
+    fn irq_line_level(&self) -> Option<bool> {
+        Some(self.ctlr & CTLR_STIE != 0 && self.cntif.get())
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        std::mem::take(&mut self.pending_events)
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if event_token != self.generation || !self.interrupt_enabled() {
+            return crate::sched::EventResult::default();
+        }
+        self.sync_from_clock();
+        // The wake lands on the match cycle, so CNTIF is set now. The next
+        // wake re-uses this token: the configuration has not changed.
+        crate::sched::EventResult {
+            raise_own_irq: self.cntif.get(),
+            reschedule_delay: Some(self.cycles_to_next_match()),
+            ..Default::default()
+        }
     }
 
     fn uses_scheduler(&self) -> bool {
@@ -358,6 +446,84 @@ mod tests {
         t.write_u32(CTLR, CTLR_STE | CTLR_STCLK).unwrap();
         t.tick_elapsed(2);
         assert_eq!(t.counter(), 1);
+    }
+
+    /// The WCH Arduino core's `main` prologue: SR = 0, CTLR = 0, CNT = 0,
+    /// CMP = 48 MHz / 1 kHz - 1, CTLR = STE|STIE|STCLK|STRE (0xF).
+    fn arduino_millis_tick() -> WchStk {
+        let mut t = WchStk::new();
+        t.write_u32(SR, 0).unwrap();
+        t.write_u32(CTLR, 0).unwrap();
+        t.write_u32(CNT, 0).unwrap();
+        t.write_u32(CMP, 0xBB7F).unwrap();
+        t.write_u32(CTLR, 0xF).unwrap();
+        t
+    }
+
+    #[test]
+    fn stie_raises_a_level_irq_on_each_match_until_sr_is_cleared() {
+        let mut t = arduino_millis_tick();
+        assert_eq!(t.irq_line_level(), Some(false));
+        assert!(!t.tick_elapsed(0xBB7F - 1).irq, "one count early");
+        assert!(t.tick_elapsed(1).irq, "CNT reached CMP");
+        assert_eq!(t.irq_line_level(), Some(true));
+        // The handler writes SR = 0: the line drops.
+        t.write_u32(SR, 0).unwrap();
+        assert_eq!(t.irq_line_level(), Some(false));
+        // Period is CMP + 1 = 48000 HCLK: the next match is 48000 later.
+        assert!(!t.tick_elapsed(47_999).irq);
+        assert!(t.tick_elapsed(1).irq);
+    }
+
+    #[test]
+    fn without_stie_a_match_sets_cntif_but_raises_nothing() {
+        let mut t = WchStk::new();
+        t.write_u32(CMP, 4).unwrap();
+        t.write_u32(CTLR, CTLR_STE | CTLR_STCLK).unwrap();
+        assert!(!t.tick_elapsed(4).irq);
+        assert_eq!(t.read_u32(SR).unwrap(), 1);
+        assert_eq!(t.irq_line_level(), Some(false));
+    }
+
+    /// The scheduler wake lands on the exact match cycle, under both clock
+    /// sources, and a reconfiguration supersedes the booked wake.
+    #[test]
+    fn next_match_distance_is_exact() {
+        let mut t = arduino_millis_tick();
+        assert_eq!(t.cycles_to_next_match(), 0xBB7F);
+        t.tick_elapsed(0xBB7F);
+        assert_eq!(
+            t.cycles_to_next_match(),
+            48_000,
+            "STRE: full period from CNT == CMP"
+        );
+
+        let mut t = WchStk::new();
+        t.write_u32(CMP, 10).unwrap();
+        t.write_u32(CTLR, CTLR_STE).unwrap(); // HCLK/8
+        t.tick_elapsed(3); // 3 cycles into the first count
+        assert_eq!(t.cycles_to_next_match(), 10 * 8 - 3);
+        t.tick_elapsed(10 * 8 - 3);
+        assert_eq!(t.read_u32(SR).unwrap(), 1);
+    }
+
+    #[test]
+    fn writes_book_a_wake_only_in_scheduler_mode_with_stie() {
+        let clock = CycleClock::default();
+        let mut t = WchStk::new();
+        t.attach_cycle_clock(clock);
+        if !t.uses_scheduler() {
+            return;
+        }
+        t.write_u32(CMP, 0xBB7F).unwrap();
+        t.write_u32(CTLR, CTLR_STE | CTLR_STCLK).unwrap();
+        assert!(
+            t.take_events().is_empty(),
+            "STIE clear: nothing to wake for"
+        );
+        t.write_u32(CTLR, 0xF).unwrap();
+        let events = t.take_events();
+        assert_eq!(events, vec![(0xBB7F, t.generation)]);
     }
 
     #[test]

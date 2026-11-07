@@ -92,18 +92,42 @@ peripherals:
   # USART1 (ch32v00x.h): USART1_BASE = APB2PERIPH_BASE + 0x3800, RCC_USART1EN =
   # APB2PCENR bit 14. USART_TypeDef is STATR, DATAR, BRR, CTLR1, CTLR2, CTLR3,
   # GPR at 4-byte strides, the same layout as the STM32F1 USART, so the default
-  # `stm32f1` UART layout serves it. No `irq`: the PFIC is not modelled, so
-  # USART1_IRQn (32) has no controller to reach. TX is polled only.
+  # `stm32f1` UART layout serves it. No `irq` yet: USART1_IRQn (32) is not
+  # wired to the PFIC in this slice, so TX is polled only.
   - id: "usart1"
     type: "uart"
     base_address: 0x40013800
     size: "1KB"
     clock: { reg: "apb2pcenr", bit: 14 }
 
+  # FLASH interface (ch32v00x.h): FLASH_R_BASE = AHBPERIPH_BASE + 0x2000.
+  # FLASH_TypeDef is ACTLR, KEYR, OBKEYR, STATR, CTLR, ADDR, -, OBR, WPR at
+  # 4-byte strides, the STM32F1 FLASH layout (ACR, KEYR, OPTKEYR, SR, CR, AR,
+  # -, OBR, WRPR), so the `stm32f1` profile serves it. WCH `SystemInit` sets
+  # ACTLR.LATENCY here before switching SYSCLK; the latency is stored, not timed.
+  - id: "flash_ctrl"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      profile: "stm32f1"
+
+  # QingKe V2 PFIC, WCH core_riscv.h `PFIC` at 0xE000E000 (`PFIC_Type`:
+  # ISR, IPR, ITHRESDR, CFGR, GISR, VTF*, then IENR/IRER/IPSR/IPRR/IACTR at
+  # +0x100 steps, IPRIOR at 0x400, SCTLR at 0xD10). A bit position is the
+  # interrupt number (ch32v00x.h IRQn_Type), so a peripheral's `irq:` below is
+  # that number. Priority threshold, VTF fast vectoring and nesting are not
+  # applied; see crates/core/src/peripherals/wch_pfic.rs.
+  - id: "pfic"
+    type: "wch_pfic"
+    base_address: 0xE000E000
+    size: "4KB"
+
   # QingKe V2 STK, WCH core_riscv.h `SysTick` at 0xE000F000. It sits on the
-  # core, outside RCC, so it has no clock gate. The STK interrupt is not
-  # delivered because the PFIC is not modelled.
+  # core, outside RCC, so it has no clock gate. CNTIF with CTLR.STIE raises
+  # `SysTicK_IRQn = 12` (ch32v00x.h) through the PFIC.
   - id: "stk"
     type: "wch_stk"
     base_address: 0xE000F000
     size: "256B"
+    irq: 12
