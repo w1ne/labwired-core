@@ -10,7 +10,8 @@
 # exti_pin_change_isr, and SPI1 (PC5 SCK, PC6 MOSI, PC7 MISO) for ch32fun's
 # spi_max7219, and DMA1 with USART1 TX on channel 4 for ch32fun's
 # uart_tx_dma and SPI1 TX on channel 3 for ch32fun's ws2812bdemo, and TIM1
-# with its complementary outputs for ch32fun's tim1_pwm.
+# with its complementary outputs for ch32fun's tim1_pwm, and the IWDG
+# (counting from LSI, resetting the core on time-out) for ch32fun's iwdg.
 #
 # Sources:
 # - ch32fun ch32v003hw.h (register map, DMDATA0/DMDATA1/sentinel at
@@ -94,7 +95,10 @@
 #
 # Not modeled: debug-printf input from the host, a detached probe, the rest
 # of the RISC-V debug module, OPA, the
-# watchdogs, sleep/standby, the HSE, the option bytes, and everything listed
+# window watchdog (WWDG), the RCC_RSTSCKR reset flags (a watchdog reset is
+# not recorded there), the IWDG hardware-watchdog option byte and its
+# PVU/RVU busy flags, sleep/standby, the HSE, the option bytes, and
+# everything listed
 # as not modeled in ch32v003f4p6-pfic-smoke.yaml.
 name: ch32v003f4p6-ch32fun-smoke
 arch: riscv
@@ -159,6 +163,16 @@ peripherals:
     size: 24B
     config:
       profile: ch32v003
+
+  # IWDG (CTLR/PSCR/RLDR/STATR, the STM32 KR/PR/RLR/SR layout) clocked by
+  # the 128 kHz LSI; it has no RCC enable bit. Counting mode: started by
+  # 0xCCCC it resets the core when the 12-bit counter runs out.
+  - id: iwdg
+    type: iwdg
+    base_address: 0x40003000
+    size: 16B
+    config:
+      lsi_hz: 128000
 
   # WCH-LinkE attached and polling like `minichlink -T`.
   - id: debug_printf

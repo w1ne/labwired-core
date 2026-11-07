@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build twelve unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build thirteen unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -49,6 +49,11 @@
 #                    50% duty, both outputs active low (CC1P|CC1NP); the
 #                    main loop steps BDTR.DTG (dead time) 0..255 every
 #                    Delay_Ms(20).
+#   iwdg.elf         examples/iwdg: PD0, PD4 and PC0 on 1.5 s, off 1 s, then
+#                    the IWDG started at PSCR /128, RLDR 0xFFF (~4.1 s at
+#                    the 128 kHz LSI), on 3 s, one feed, then 250 ms blinks
+#                    with no further feed until the watchdog resets the
+#                    chip and the sequence starts again.
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V003 (rv32ec/ilp32e, -Os -flto, generated_ch32v003.ld),
@@ -86,7 +91,7 @@ ld="${out_dir}/generated_ch32v003.ld"
   -DTARGET_MCU_MEMORY_SPLIT= "${src}/ch32fun/ch32fun.ld" > "${ld}"
 
 for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr \
-    spi_max7219 uart_tx_dma ws2812bdemo tim1_pwm tim1_pwm_complementary_outputs; do
+    spi_max7219 uart_tx_dma ws2812bdemo tim1_pwm tim1_pwm_complementary_outputs iwdg; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

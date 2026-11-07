@@ -148,6 +148,14 @@ const RULE_A_ALLOWLIST: &[(&str, &str, &str)] = &[
 /// `uses_scheduler()`.
 const CONDITIONAL_ALLOWLIST: &[(&str, &str, &str)] = &[
     (
+        "peripherals/iwdg.rs",
+        "Iwdg",
+        "`self.countdown.is_some()`: fixed at construction by the descriptor's \
+         `lsi_hz`. Without it the IWDG is a register latch and `tick_elapsed` \
+         returns at once (`advance` bails on `countdown == None`), so the false \
+         branch is inert in every reachable state; with it the walk is always on.",
+    ),
+    (
         "peripherals/exti.rs",
         "Exti",
         "`!matches!(self, Self::Ch32v003(_)) && !self.scheduler_mode()`: the STM32 \

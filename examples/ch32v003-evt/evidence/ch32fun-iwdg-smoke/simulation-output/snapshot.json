@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      684,
+      536872948,
+      536871932,
+      0,
+      0,
+      17,
+      0,
+      1073812480,
+      1073811456,
+      72570025,
+      1,
+      1114112,
+      65536,
+      3758157824,
+      4289897268,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 256,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 562,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 539999998,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 540000000,
+  "cycles": 1440000092,
+  "instructions": 540000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 540000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 540000000
+    }
+  },
+  "limits": {
+    "max_steps": 600000000,
+    "max_cycles": 540000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 900000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "c510f94558a28a94911e5d6b2464f32d75d3a8e5c1b32e7d2d74562d019d2cdf",
+  "config": {
+    "firmware": "examples/ch32v003-evt/ch32fun/iwdg.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-ch32fun-iwdg-smoke.yaml",
+    "script": "examples/ch32v003-evt/ch32fun-iwdg-smoke.yaml"
+  }
+}

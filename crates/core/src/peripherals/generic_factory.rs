@@ -1208,7 +1208,16 @@ pub fn try_build(
         "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
         "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
         "rtc_v3" => Box::new(crate::peripherals::rtc_v3::RtcV3::new()),
-        "iwdg" => Box::new(crate::peripherals::iwdg::Iwdg::new()),
+        "iwdg" => {
+            // `config: { lsi_hz: N }` turns on the counting watchdog that
+            // resets the core on time-out; without it the IWDG only latches
+            // its registers (see the model's header).
+            let iwdg = crate::peripherals::iwdg::Iwdg::new();
+            match p_cfg.config.get("lsi_hz").and_then(|v| v.as_u64()) {
+                Some(hz) if hz > 0 => Box::new(iwdg.with_lsi_hz(hz)),
+                _ => Box::new(iwdg),
+            }
+        }
         "wwdg" => Box::new(crate::peripherals::wwdg::Wwdg::new()),
         "dac" => Box::new(crate::peripherals::dac::Dac::new()),
         "lptim" => Box::new(crate::peripherals::lptim::Lptim::new()),

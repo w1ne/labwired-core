@@ -2772,6 +2772,22 @@ impl crate::Peripheral for GpioPort {
             g.in_latch = in_latch;
             self.sync_pin_cells();
         }
+        // WCH CH32V003: CFGLR back to floating input and OUTDR to 0 (RM
+        // §7.3), so a pad the firmware drove high is released by a watchdog
+        // or software reset instead of staying lit across the reboot. The
+        // pins the outside world holds stay held.
+        if self.wch_single_config_register {
+            self.mutate_pads(|s| {
+                if let GpioFamily::Stm32F1(g) = &mut s.family {
+                    let (external, idr) = (g.external, g.idr);
+                    *g = F1Gpio::new();
+                    g.external = external;
+                    g.idr = idr & external;
+                }
+            });
+            self.sync_wire_inputs();
+            self.refresh_console_af();
+        }
     }
     /// Not in the per-cycle walk: this model overrides neither `tick()` nor
     /// `tick_elapsed()`, so every visit ran the default no-op and returned a
@@ -3500,6 +3516,28 @@ mod tests {
         wire.set_stamp(Some(300));
         wire.set_line(1, false);
         assert_eq!(edges.0.lock().unwrap().len(), 2);
+    }
+
+    /// A system reset (the IWDG time-out in ch32fun's iwdg) puts a CH32V003
+    /// port back to floating inputs with OUTDR = 0, so a lit LED goes dark,
+    /// while a level the outside world holds on a pad stays.
+    #[test]
+    fn wch_system_reset_releases_driven_pads() {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Wch);
+        // PD0 10 MHz push-pull, driven high through BSHR.
+        gpio.write_u32(0x00, 0x1).unwrap();
+        gpio.write_u32(0x10, 0x1).unwrap();
+        gpio.family.set_external_input(3, true);
+        assert_eq!(gpio.pad_level(0), Some(true));
+        gpio.on_system_reset();
+        assert_eq!(gpio.read_u32(0x00).unwrap(), 0x4444_4444);
+        assert_eq!(gpio.read_u32(0x0C).unwrap(), 0);
+        assert_eq!(
+            gpio.read_u32(0x08).unwrap() & 0x8,
+            0x8,
+            "PD3 still held high"
+        );
+        assert_ne!(gpio.pad_level(0), Some(true));
     }
 
     #[test]

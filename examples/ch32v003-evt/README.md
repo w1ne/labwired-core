@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs twelve of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs thirteen of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -171,6 +171,7 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `spi_max7219` | 16-bit SPI1 frames (PC5 SCK, PC6 MOSI) to a MAX7219 with LOAD on PD0; the panel state the init writes leave ([`max7219-state.json`](evidence/ch32fun-spi-max7219-smoke/max7219-state.json)) | 10/10: intensity 15, scan limit 7, shutdown clear, 12 of 64 LEDs lit as Code-B 7..0 |
 | `uart_tx_dma` | `Hello World!\r\n` three times on USART1 (PD5), every byte moved by DMA1 channel 4; the transfer-complete handler (PFIC 25) toggles PD6 | 5/5: 42 bytes, PD6 4 edges, CNTR4 = 0, INTFR nibble 4 = 0x5 |
 | `ws2812bdemo` | a 191-LED WS2812B strip on PC6, fed by SPI1 at 3 MHz from DMA1 channel 3 in circular mode with HT/TC refills (PFIC 24). The strip decodes PC6's pulse widths; [`check-ws2812.py`](check-ws2812.py) recomputes every LED from the demo's own colour tables and replays the driver's buffer protocol ([`check-ws2812.log`](evidence/ch32fun-ws2812-smoke/colour-check/check-ws2812.log)) | 3/3 and all 190 LEDs the driver sends match frame 9. The driver clocks out 190 of `NR_LEDS` 191: the HT refill that writes LED 190 is the one that clears CIRC, so that half is never sent. [CH32V003F4P6 status and sourcing](evidence/ch32fun-ws2812-smoke/component-status.md) |
+| `iwdg` | the independent watchdog: PD0/PD4/PC0 on 1.5 s, off 1 s, the IWDG started at /128 with RLDR 0xFFF, on 3 s, one feed, then 250 ms blinks with no further feed until the watchdog resets the chip. The smoke checks the edge counts and that PSCR is back at 0 after the reset (11.25 s, 540 M cycles). [`check-iwdg.py`](check-iwdg.py) decodes PD0 from a `--watch-gpio` run, committed as [`iwdg-capture.json.gz`](evidence/ch32fun-iwdg-smoke/iwdg-capture.json.gz) with its output in [`iwdg-check.log`](evidence/ch32fun-iwdg-smoke/iwdg-check.log) | feed at 5,500.003 ms, 17 blink edges at 250 ms, then the reset at feed + 4,095.002 ms (4095 counts of LSI/128 at 128 kHz) releases PD0, and the second boot's 1,500 ms on pulse starts 94 cycles later, as on power-up |
 
 This profile adds these to the PFIC profile:
 
@@ -255,6 +256,21 @@ This profile adds these to the PFIC profile:
   [`crates/core/tests/ch32v003_tim1_pads.rs`](../../crates/core/tests/ch32v003_tim1_pads.rs)
   pins partial and full remap and the move back to reset. The smoke uses
   [`ch32v003evt-ch32fun-tim1-complementary-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-tim1-complementary-smoke.yaml).
+- **IWDG** (`0x40003000`): the STM32 independent watchdog block
+  (CTLR/PSCR/RLDR/STATR at the KR/PR/RLR/SR offsets) with
+  `config: { lsi_hz: 128000 }`, which turns on its counting mode. Key
+  `0xCCCC` starts a 12-bit down-counter from `0xFFF` at LSI / (4 << PSCR),
+  `0xAAAA` reloads it from RLDR, and `0x5555` unlocks PSCR/RLDR. When the
+  counter reaches 0, the model asks the machine for a CPU reset (cause
+  `Watchdog`), which reboots the core through the same path as a Cortex-M
+  `SYSRESETREQ`. The reset stops the watchdog again and puts every
+  CH32V003 GPIO port back to floating input with OUTDR = 0, so an LED the
+  firmware lit goes dark across the reboot instead of staying on. Not
+  modeled: the RCC_RSTSCKR reset flags (IWDGRSTF is not recorded), the
+  PVU/RVU busy flags, the hardware-watchdog option byte, debug-halt freeze,
+  and the WWDG. Without `lsi_hz` (every STM32 descriptor today) the IWDG
+  stays a register latch that never resets. The smoke uses
+  [`ch32v003evt-ch32fun-iwdg-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-iwdg-smoke.yaml).
 - **EXTI** (`0x40010400`) and the CH32V003 **`AFIO_EXTICR`**. EXTI is the F1
   register file (INTENR/EVENR/RTENR/FTENR/SWIEVR/INTFR) over ten lines, but
   the port select is not: the CH32V003 has one `AFIO_EXTICR` at `0x08` with
