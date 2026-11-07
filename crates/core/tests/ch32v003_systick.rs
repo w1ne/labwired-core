@@ -52,7 +52,7 @@ fn pc0_edges(chip: &ChipDescriptor, want: usize, max_steps: usize) -> (Vec<u64>,
 
 #[test]
 fn ch32v003_wch_delay_ms_paces_pc0_at_one_millisecond() {
-    let chip = ChipDescriptor::from_file(&root().join("configs/chips/ch32v003f4p6.yaml"))
+    let chip = ChipDescriptor::from_file(root().join("configs/chips/ch32v003f4p6.yaml"))
         .expect("CH32V003 descriptor");
     let (edges, mcause) = pc0_edges(&chip, 4, 200_000);
     assert_eq!(edges.len(), 4, "PC0 edges: {edges:?}");
