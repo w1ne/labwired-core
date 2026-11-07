@@ -116,11 +116,10 @@ boards:
     led_min_edges: 2
     family: wch
     notes: "QingKe V2A RV32EC: PFIC, STK, HPE, XW compressed insns"
-    sketches_skip: [L3_i2c_sensor, L4_spi_sensor, L5_adc, L6_pwm, L7_timer, L8_can]
+    sketches_skip: [L3_i2c_sensor, L4_spi_sensor, L6_pwm, L7_timer, L8_can]
     sketches_skip_reason:
       L3_i2c_sensor: "No CH32V003 I2C1 model yet"
       L4_spi_sensor: "No CH32V003 SPI1 model yet"
-      L5_adc: "No CH32V003 ADC1 model yet"
       L6_pwm: "No CH32V003 TIM1/TIM2 model yet"
       # Measured 2026-11-07: LW_L7_FAIL t0=1991 t1=3999 t2=3778 t3=4999.
       L7_timer: >-

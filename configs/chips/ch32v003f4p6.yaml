@@ -100,6 +100,22 @@ peripherals:
     size: "1KB"
     clock: { reg: "apb2pcenr", bit: 14 }
 
+  # ADC1 (ch32v00x.h): ADC1_BASE = APB2PERIPH_BASE + 0x2400, RCC_ADC1EN =
+  # APB2PCENR bit 9, ADC_IRQn = 29. ADC_TypeDef is the F1 block (STATR, CTLR1,
+  # CTLR2, SAMPTR1-2, IOFR1-4, WDHTR, WDLTR, RSQR1-3, ISQR, IDATAR1-4, RDATAR)
+  # plus DLYR; the `ch32v00x` profile runs the F1 engine with a 10-bit
+  # converter and 10 channels. IN0..IN7 = PA2, PA1, PC4, PD2, PD3, PD5, PD6,
+  # PD4 (arduino_core_ch32 variant_CH32V003F4 PinMap_ADC). Unseeded pads
+  # convert 0; IN8 V_REFINT / IN9 V_CAL are not modelled.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    irq: 29
+    clock: { reg: "apb2pcenr", bit: 9 }
+    config:
+      profile: "ch32v00x"
+
   # FLASH interface (ch32v00x.h): FLASH_R_BASE = AHBPERIPH_BASE + 0x2000.
   # FLASH_TypeDef is ACTLR, KEYR, OBKEYR, STATR, CTLR, ADDR, -, OBR, WPR at
   # 4-byte strides, the STM32F1 FLASH layout (ACR, KEYR, OPTKEYR, SR, CR, AR,

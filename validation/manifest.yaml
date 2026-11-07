@@ -1781,7 +1781,12 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 10990f764c5137ecc790872e7e5239640264022c9d72abda24aac26681ffc086
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 ADC1): adc.rs gains an opt-in
+    # `ch32v00x` layout on the F1 register block (10-bit codes, 10 channels,
+    # unseeded pads convert 0), gated by a flag only that layout sets. The
+    # F1/F4/L4/H5/H7/U5 paths are unchanged; their existing adc tests pass
+    # as before. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 3e38da66d27510ea2f716d81c1e7dfedb8451197f09614edc6eb5df1d804786a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3991,7 +3996,12 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 38d3392672696f059903453912b55048629f802fa3eba2f0f8398005f6c5a0b3
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 ADC1): adc.rs gains an opt-in
+    # `ch32v00x` layout on the F1 register block (10-bit codes, 10 channels,
+    # unseeded pads convert 0), gated by a flag only that layout sets. The
+    # F1/F4/L4/H5/H7/U5 paths are unchanged; their existing adc tests pass
+    # as before. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 820b1e33f31d09e21cb84cfac5c24fbfa6cc2480da9865dbf4bb9b7e2648a645
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6212,7 +6222,12 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 64ae2a154aca9fcf04bf0ceb7e394d2944afca30c6790868c43b0c63c7d82d3b
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 ADC1): adc.rs gains an opt-in
+    # `ch32v00x` layout on the F1 register block (10-bit codes, 10 channels,
+    # unseeded pads convert 0), gated by a flag only that layout sets. The
+    # F1/F4/L4/H5/H7/U5 paths are unchanged; their existing adc tests pass
+    # as before. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 42008e44a260dc2fbaa76e424921d121d7971e4a500e7718ee32a3a4ee5c48f8
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
