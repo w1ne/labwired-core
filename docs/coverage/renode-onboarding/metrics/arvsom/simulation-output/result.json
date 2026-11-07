@@ -30,6 +30,28 @@
   "assertions": [
     {
       "assertion": {
+        "memory_value": {
+          "address": 2154823680,
+          "expected_value": 3,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 2154823684,
+          "expected_value": 5,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -40,23 +62,23 @@
     "x": [
       0,
       2147484312,
-      2155872208,
-      2147486640,
+      2155872224,
+      2147486632,
       0,
       0,
       2155872256,
       0,
-      9100,
-      9084,
-      9084,
-      9100,
+      2155872256,
+      0,
+      5,
+      2154823680,
       0,
       0,
       0,
       0,
       0,
       0,
-      2147484300,
+      0,
       0,
       0,
       0,
@@ -71,7 +93,7 @@
       0,
       0
     ],
-    "pc": 2147484316,
+    "pc": 2147484324,
     "mstatus": 6144,
     "mie": 0,
     "mtvec": 2147483976,
@@ -125,9 +147,10 @@
       "divider": 1,
       "residue": 0
     },
+    "plic": null,
     "reservation": null
   },
-  "firmware_hash": "5cebe6c0a32232fc4bd27f53455ce30a2c14653396dc13acd603fdfda3d3c9f0",
+  "firmware_hash": "7c5a14dfd50989fa3cd36eb0e0d15bc89a4b8e0ac55a99fe21868c86758a3223",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-arvsom-rv64-cpu-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/arvsom.yaml",
@@ -162,11 +185,11 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 938,
+    "text_bytes": 936,
     "data_bytes": 0,
-    "bss_bytes": 8387664,
-    "flash_used_bytes": 938,
-    "ram_static_bytes": 8387664,
+    "bss_bytes": 8387672,
+    "flash_used_bytes": 936,
+    "ram_static_bytes": 8387672,
     "flash_total_bytes": 0,
     "ram_total_bytes": 8388608,
     "flash_used_pct": 0.0,
@@ -185,59 +208,14 @@
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 145488,
-    "memory_writes": 9088,
+    "memory_reads": 100078,
+    "memory_writes": 4,
     "peripheral_accesses": 0,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 2147484286,
-        "count": 39,
-        "symbol": "firmware_arvsom_rv64_cpu_smoke::multiply"
-      },
-      {
-        "pc": 2147484304,
-        "count": 39,
-        "symbol": "<u64>::wrapping_add"
-      },
-      {
-        "pc": 2147484308,
-        "count": 39,
-        "symbol": "main"
-      },
-      {
-        "pc": 2147484310,
-        "count": 39,
-        "symbol": "main"
-      },
-      {
-        "pc": 2147484312,
-        "count": 39,
-        "symbol": "main"
-      },
-      {
-        "pc": 2147484316,
-        "count": 39,
-        "symbol": "main"
-      },
-      {
-        "pc": 2147484320,
-        "count": 39,
-        "symbol": "main"
-      },
-      {
-        "pc": 2147484322,
-        "count": 39,
-        "symbol": "core::ptr::write_volatile"
-      },
-      {
-        "pc": 2147484326,
-        "count": 39,
-        "symbol": "main"
-      },
-      {
-        "pc": 2147484328,
-        "count": 39,
+        "pc": 2147484324,
+        "count": 390,
         "symbol": "main"
       }
     ]

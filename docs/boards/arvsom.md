@@ -13,13 +13,15 @@ peripheral behavior.
 
 ## Smoke evidence
 
-The exact imported system ran a direct-ELF integer firmware loop for 100,000
-instructions and stopped at `max_steps`. The smoke passed its stop-reason
-assertion and recorded zero peripheral accesses. The result also records two
-unmapped reads at `0x0` and `0x4`, plus an ideal-rail assumption; neither was a
-smoke blocker. This establishes execution on the bounded CPU-and-memory profile;
-it is not validation of the full SoC, board peripherals, Linux boot, Renode, or
-physical hardware.
+The exact imported system ran direct-ELF RV64IMAC firmware for 100,000
+instructions and stopped at `max_steps`. It executes `mul` on two 64-bit
+operands with nonzero high halves, then stores the result `0x0000000500000003`
+at `0x80700000`; the smoke asserts both 32-bit halves and the stop reason.
+The run recorded zero peripheral accesses. The result also records an
+ideal-rail assumption; power-on and brown-out behavior were not tested. This
+establishes execution of the asserted integer instruction on the bounded
+CPU-and-memory profile; it is not validation of the full SoC, board
+peripherals, Linux boot, Renode, or physical hardware.
 
 Evidence: `docs/coverage/renode-onboarding/metrics/arvsom/` contains the
 per-target metrics, build and run logs, simulator result, snapshot, UART capture,
