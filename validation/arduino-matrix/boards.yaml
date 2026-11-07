@@ -118,6 +118,23 @@ boards:
     sketches_skip_reason:
       L8_can: "No bxCAN/FDCAN in chip yaml"
 
+  - id: stm32f411ceu6
+    chip: stm32f411ceu6
+    system: systems/stm32f411ceu6.yaml
+    pio: { platform: ststm32, board: blackpill_f411ce, framework: arduino }
+    max_steps: 4000000
+    budget_reason: "Black Pill 100 MHz: L0~0.10M L2~0.29M L4~0.20M; L6 30x delay(1) ~2.98M"
+    led_watch: "gpioc:13"
+    led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0 (PC13 has no timer channel, so analogWrite
+    # would fall back to digitalWrite). TIM2 reaches PWM1/CC1E with PA0 on
+    # AF1, but no pwm_watch: there is no STM32 TIM OC->pad routing on main
+    # yet (PROBLEMS.md "L6 PWM edges"), so PA0 shows one edge, not a wave.
+    family: stm32
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "STM32F411 has no CAN peripheral"
+
   - id: stm32f407
     chip: stm32f407
     system: systems/stm32f407.yaml

@@ -50,6 +50,7 @@ jobs:
           - stm32f103
           - stm32f401
           - stm32f407
+          - stm32f411ceu6
           - stm32g474re
           - stm32h563
           - stm32l073

@@ -14,6 +14,10 @@
 #  elif defined(STM32U545xx)
 // NUCLEO-U545RE-Q LD2 is PA5 = DAC1_OUT2 as well; use TIM2_CH1 on PA0.
 #    define LW_PWM_PIN PA0
+#  elif defined(ARDUINO_BLACKPILL_F411CE)
+// WeAct Black Pill LED is PC13, which has no timer channel on F411, so
+// analogWrite would fall back to digitalWrite. Use TIM2_CH1 on PA0.
+#    define LW_PWM_PIN PA0
 #  elif defined(LED_BUILTIN)
 #    define LW_PWM_PIN LED_BUILTIN
 #  elif defined(ARDUINO_ARCH_ESP32)
