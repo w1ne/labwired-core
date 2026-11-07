@@ -1812,6 +1812,11 @@ boards:
     # ATtiny2313/4313 port mirror (cpu/avr.rs, exec/bitops.rs). Both sides were
     # already acked or touch no captured model; digest recomputed for the
     # merged tree. ACK, NOT A CAPTURE.
+
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2466,7 +2471,8 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: e70abcbac67ba3a43eb7668dc2c8196007873e8292b2dda27ca14f5754b806ef
+    drift_ack_digest: 75dee90ef166e309c6022694135415b4d1de8502533abb3762c6df86de1a3105
+
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4044,6 +4050,11 @@ boards:
     # ATtiny2313/4313 port mirror (cpu/avr.rs, exec/bitops.rs). Both sides were
     # already acked or touch no captured model; digest recomputed for the
     # merged tree. ACK, NOT A CAPTURE.
+
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4686,7 +4697,8 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: b9122ea912bd0e0126644ae46a6d8aeacf5dfeac5612ff3c6fbfc5b8c17f2692
+    drift_ack_digest: a9329dce0a41db0ce793d9b5abf9dee47617018f64796099d93a2736ced19f4a
+
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5190,7 +5202,11 @@ boards:
     # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
     # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
     # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
-    drift_ack_digest: 56f15caa31da32d97eb5be2af2a5a52b23a537e2dc02e4d5149f5d2f9e976951
+
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5751,6 +5767,7 @@ boards:
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
+    drift_ack_digest: 4aebc65abc994334173419722b6b0bdda8409ae3e3e6edccada6855d1f953530
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -6324,6 +6341,11 @@ boards:
     # ATtiny2313/4313 port mirror (cpu/avr.rs, exec/bitops.rs). Both sides were
     # already acked or touch no captured model; digest recomputed for the
     # merged tree. ACK, NOT A CAPTURE.
+
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6969,7 +6991,8 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: ce66df284af2bcb9cd6bddcdfb76c1cbd0208df6517fc0335ef726524a9b6c7b
+    drift_ack_digest: 7cb681d829ec23d482ca32b6a6ad45586447bb23382029aa6aec07b5875382c9
+
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7494,7 +7517,11 @@ boards:
     # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
     # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
     # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
-    drift_ack_digest: d9dc9f1e2eff59fd99e763c6b3a096ac14853d6563432d2f9e7c15a05677b3e5
+
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -8057,6 +8084,7 @@ boards:
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
+    drift_ack_digest: 85ba00081630efc724c4d70529dd606ae02f064dbfce8f6ddb8b2cf4f6135225
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other

@@ -56,6 +56,18 @@ TIM2 has no pin in this example. The prescaler is programmed directly.
 | EXTI, G0 GPIO bank | ✅ PB0 falling, `IMR1` unmasked | No pad edge in this smoke; see `g0_exti` and the customer ELF |
 | SYSCFG | ❌ | Declared window, stub only |
 
+### Stock Arduino (STM32duino, PIO `nucleo_g0b1re`)
+
+The `stm32g0b1re` row of `validation/arduino-matrix` passes L0–L8, 9/9.
+
+| Cell | What runs | Limit |
+|------|-----------|-------|
+| RCC `stm32g0b1` | `SystemClock_Config` turns on HSI48 for USB. HSI48ON (CR bit 22) latches HSI48RDY (bit 23), and CCIPR2 @0x58 holds USBSEL | With the G071 `stm32g0` layout, `HAL_RCC_OscConfig` fails and the core stops in `Error_Handler` |
+| LPUART1 | `Serial` (instance 101, PA2/PA3 AF6, the ST-Link VCP) | No baud check |
+| I2C1 / SPI1 / ADC1 | L3 INA219 and L4 MAX31855 via Wire/SPI; L5 `analogRead` | Register models shared with the G071 |
+| TIM2 | L6 `analogWrite(PA0)`: TIM2 CEN, CH1 PWM1, CC1E, PA0 AF2 (register probe) | PA5/LD4 is DAC1_OUT2 and DAC1 is not modelled. No pad waveform |
+| FDCAN1 | L8 register-level internal loopback (TEST.LBCK) | FDCAN2 reads 0. CRS (0x40006C00) holds the model's message RAM. SRAMCAN mirrors only the FDCAN1 section |
+
 ## Exact IO-Link operating-point extension
 
 The original smoke above remains the 16 MHz UART-console prerequisite.
