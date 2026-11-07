@@ -1,0 +1,116 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /dev/shm/renode-round338/examples/h735-telematics-lab/Cargo.toml
+workspace: /dev/shm/renode-round338/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /dev/shm/renode-round338/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /dev/shm/renode-round338/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /dev/shm/renode-round338/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /dev/shm/renode-round338/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /dev/shm/renode-round338/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /dev/shm/renode-round338/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /dev/shm/renode-round338/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /dev/shm/renode-round338/Cargo.toml
+   Compiling num_enum v0.5.11
+   Compiling paste v1.0.15
+   Compiling wat v1.250.0
+   Compiling crc32fast v1.5.0
+   Compiling pio-parser v0.2.2
+   Compiling signature v2.2.0
+   Compiling ring v0.17.14
+   Compiling inout v0.1.4
+   Compiling scroll_derive v0.11.1
+   Compiling arrayvec v0.7.6
+   Compiling static_assertions v1.1.0
+   Compiling human-size v0.4.3
+   Compiling libm v0.2.16
+   Compiling bitflags v2.11.1
+   Compiling labwired-config v0.25.0 (/dev/shm/renode-round338/crates/config)
+   Compiling twox-hash v1.6.3
+   Compiling pio v0.2.1
+   Compiling scroll v0.11.0
+   Compiling cipher v0.4.4
+   Compiling ecdsa v0.16.9
+   Compiling flate2 v1.1.9
+   Compiling labwired-core v0.25.0 (/dev/shm/renode-round338/crates/core)
+   Compiling icu_properties_data v2.2.0
+   Compiling icu_normalizer_data v2.2.0
+   Compiling primeorder v0.13.6
+   Compiling sha2 v0.10.9
+   Compiling num-integer v0.1.47
+   Compiling lalrpop-util v0.19.12
+   Compiling rustls-pki-types v1.14.1
+   Compiling derive_more v0.99.20
+   Compiling plain v0.2.3
+   Compiling byteorder v1.5.0
+   Compiling utf8parse v0.2.2
+   Compiling cpp_demangle v0.4.5
+   Compiling anstyle-parse v1.0.0
+   Compiling ruzstd v0.5.0
+   Compiling goblin v0.7.1
+   Compiling num-bigint v0.4.8
+   Compiling p256 v0.13.2
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling aes v0.8.4
+   Compiling sha1 v0.10.6
+   Compiling getrandom v0.2.17
+   Compiling memmap2 v0.9.10
+   Compiling labwired-hw-trace v0.25.0 (/dev/shm/renode-round338/crates/hw-trace)
+   Compiling bincode v1.3.3
+   Compiling md-5 v0.10.6
+   Compiling proc-macro2 v1.0.106
+   Compiling anstyle-query v1.1.5
+   Compiling colorchoice v1.0.5
+   Compiling nrf-softdevice-hle v0.25.0 (/dev/shm/renode-round338/crates/nrf-softdevice-hle)
+   Compiling anstyle v1.0.14
+   Compiling unicode-ident v1.0.24
+   Compiling untrusted v0.9.0
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling fallible-iterator v0.3.0
+   Compiling gimli v0.28.1
+   Compiling anstream v1.0.0
+   Compiling idna_adapter v1.2.2
+   Compiling object v0.32.2
+   Compiling memmap2 v0.5.10
+   Compiling quote v1.0.45
+   Compiling managed v0.8.0
+   Compiling strsim v0.11.1
+   Compiling rustc-demangle v0.1.27
+   Compiling rustls v0.23.40
+   Compiling percent-encoding v2.3.2
+   Compiling heck v0.5.0
+   Compiling pastey v0.2.2
+   Compiling clap_lex v1.1.0
+   Compiling clap_builder v4.6.0
+   Compiling gdbstub v0.7.10
+   Compiling clap_derive v4.6.1
+   Compiling form_urlencoded v1.2.2
+   Compiling addr2line v0.21.0
+   Compiling idna v1.1.0
+   Compiling rustls-webpki v0.103.13
+   Compiling webpki-roots v1.0.7
+   Compiling lazy_static v1.5.0
+   Compiling sharded-slab v0.1.7
+   Compiling webpki-roots v0.26.11
+   Compiling url v2.5.8
+   Compiling syn v2.0.117
+   Compiling labwired-loader v0.25.0 (/dev/shm/renode-round338/crates/loader)
+   Compiling clap v4.6.1
+   Compiling gdbstub_arch v0.3.3
+   Compiling tracing-log v0.2.0
+   Compiling matchers v0.2.0
+   Compiling thread_local v1.1.9
+   Compiling base64 v0.22.1
+   Compiling nu-ansi-term v0.50.3
+   Compiling tracing-subscriber v0.3.23
+   Compiling ureq v2.12.1
+   Compiling labwired-gdbstub v0.25.0 (/dev/shm/renode-round338/crates/gdbstub)
+   Compiling svd-ingestor v0.25.0 (/dev/shm/renode-round338/crates/svd-ingestor)
+   Compiling labwired-fuzz v0.25.0 (/dev/shm/renode-round338/crates/labwired-fuzz)
+   Compiling labwired-codegen v0.25.0 (/dev/shm/renode-round338/crates/codegen)
+   Compiling vcd v0.7.0
+   Compiling labwired-cli v0.25.0 (/dev/shm/renode-round338/crates/cli)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 8m 32s

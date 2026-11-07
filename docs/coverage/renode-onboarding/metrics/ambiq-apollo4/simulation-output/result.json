@@ -94,7 +94,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "511e6f3d0dec91b1c7b3eed5520508f9fe3d555e17b6ddac87e6de25e5f8727d",
+  "firmware_hash": "676b33fa3eb5a23d10f48c44f4acc77f110c700b9431372879093199216b0301",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-apollo4p-evb-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/ambiq-apollo4.yaml",
@@ -134,13 +134,6 @@
         "name": "cpu",
         "kind": "native",
         "base": 1207959552,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "sync_read",
-        "kind": "native",
-        "base": 1207894016,
         "registers": [],
         "artifacts": []
       },

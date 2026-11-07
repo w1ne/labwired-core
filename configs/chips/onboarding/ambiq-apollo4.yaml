@@ -55,9 +55,3 @@ peripherals:
     type: apollo4_cpu
     base_address: 0x48000000
     size: 4KB
-  # The HAL's bus write-flush is a dummy read of SYNC_READ. Writes are not
-  # queued in this profile, so this one 32-bit read window returns zero.
-  - id: sync_read
-    type: stub
-    base_address: 0x47FF0000
-    size: 4B

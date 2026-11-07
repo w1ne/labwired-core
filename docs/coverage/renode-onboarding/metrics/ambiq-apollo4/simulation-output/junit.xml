@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.213950">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.182829">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="511e6f3d0dec91b1c7b3eed5520508f9fe3d555e17b6ddac87e6de25e5f8727d"/>
+    <property name="firmware_hash" value="676b33fa3eb5a23d10f48c44f4acc77f110c700b9431372879093199216b0301"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.213950">
+  <testcase classname="labwired" name="run" time="0.182829">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: APOLLO4P EVB SMOKE" time="0.000000">
   </testcase>
