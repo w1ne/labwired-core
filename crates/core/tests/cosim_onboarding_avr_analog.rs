@@ -46,8 +46,13 @@
 //! there the highest pad is PC2/ADC11, reached with MUX3:0 alone, and it
 //! checks REFS = 10 selecting the internal 1.1 V, MUX 0x0F GND, that 0x0C..0x0E
 //! have no input, and that ADLAR is ADCSRB bit 3 (not the x4's bit 4, nor
-//! ADMUX bit 5, which is REFEN here). Every result is read back with LDS
-//! ADCL/ADCH.
+//! ADMUX bit 5, which is REFEN here). The ATmega16M1/64M1 run on the M1
+//! cores (ADC0..10 on PE2, PD4..PD6, PB7, PB2, PB5, PB6, PC4..PC6, MUX4:0,
+//! no MUX5); there the highest pad is PC6/ADC10 and it checks the internal
+//! 2.56 V reference, the MUX 0x11 1.1 V bandgap, MUX 0x0C VCC/4, MUX 0x12
+//! GND, that the 328P (0x0E) and mega (0x1E) bandgap codes have no input,
+//! and that ADCSRB bits 3 and 5 (MUX5 on the 2560 and 32U4) do not move the
+//! channel. Every result is read back with LDS ADCL/ADCH.
 //!
 //! For each covered part the generic Beta NTC divider and the unrelated
 //! Shockley diode route through the descriptor's `analog_pins`, to the lowest
@@ -91,6 +96,7 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-atmega128rfr2", AvrModel::Atmega128Rf, "pf0", "pf7"),
     ("simavr-atmega16", AvrModel::Atmega16, "pa0", "pa7"),
     ("simavr-atmega164", AvrModel::Atmega164, "pa0", "pa7"),
+    ("simavr-atmega16m1", AvrModel::Atmega16m1, "pe2", "pc6"),
     ("simavr-atmega168", AvrModel::Atmega328p, "pc0", "pc5"),
     ("simavr-atmega2560", AvrModel::Atmega2560, "pf0", "pk7"),
     ("simavr-atmega32", AvrModel::Atmega32, "pa0", "pa7"),
@@ -99,6 +105,7 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-atmega32u4", AvrModel::Atmega32u4, "pf0", "pb6"),
     ("simavr-atmega48", AvrModel::Atmega328p, "pc0", "pc5"),
     ("simavr-atmega644", AvrModel::Atmega644, "pa0", "pa7"),
+    ("simavr-atmega64m1", AvrModel::Atmega64m1, "pe2", "pc6"),
     ("simavr-atmega8", AvrModel::Atmega8, "pc0", "pc5"),
     ("simavr-atmega88", AvrModel::Atmega328p, "pc0", "pc5"),
     ("simavr-attiny13", AvrModel::Attiny13, "pb5", "pb3"),
@@ -149,16 +156,8 @@ const COMPARATOR_COVERED: &[(&str, AvrModel, u16, &str, &str)] = &[
 const UNCOVERED: &[(&str, &str)] = &[
     ("simavr-atmega169p", "LCD-controller part, no 169P core"),
     (
-        "simavr-atmega16m1",
-        "ADMUX MUX4:0 maps ADC0..10 differently",
-    ),
-    (
         "simavr-atmega328pb",
         "no avr-libc header to check PE2/PE3 against",
-    ),
-    (
-        "simavr-atmega64m1",
-        "ADMUX MUX4:0 maps ADC0..10 differently",
     ),
 ];
 
@@ -724,6 +723,43 @@ fn assert_avr_converts_generic_analog(
             (1100 * 1024 / AVCC_MV) as u16,
             "{board}: MUX 0x1E converts the 1.1 V bandgap"
         );
+    }
+    if core.is_m1() {
+        // MUX4:0 reaches ADC10 directly and ADCSRB has no MUX5: bit 3 (the
+        // 2560's MUX5) and bit 5 (the 32U4's; AREFEN here) leave ADC10.
+        let mv = (expected_diode_v * 1000.0).round() as u32;
+        let code = expected_code(core, expected_diode_v);
+        for adcsrb in [1 << 3, 1 << 5] {
+            assert_eq!(
+                convert_raw(chip, &mut bus, adcsrb, 0x40 | diode_channel),
+                code,
+                "{board}: ADCSRB {adcsrb:#04x} is not MUX5 on the M1"
+            );
+        }
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0xC0, diode_channel),
+            (mv * 1024 / 2560) as u16,
+            "{board}: the diode converts against the internal 2.56 V reference"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, 0x11),
+            (1100 * 1024 / AVCC_MV) as u16,
+            "{board}: MUX 0x11 converts the 1.1 V bandgap"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, 0x0C),
+            (AVCC_MV / 4 * 1024 / AVCC_MV) as u16,
+            "{board}: MUX 0x0C converts VCC/4"
+        );
+        // 0x12 is GND; 0x0E (the 328P's bandgap code) is AMP0 and 0x1E (the
+        // megas') is reserved here.
+        for mux in [0x12, 0x0E, 0x1E] {
+            assert_eq!(
+                convert_mux(chip, &mut bus, 0x40, mux),
+                0,
+                "{board}: MUX {mux:#04x} has no modelled input"
+            );
+        }
     }
     if core.is_classic() || core.is_mega128() {
         // REFS = 11 is the classic parts' internal 2.56 V, not the 328P's 1.1 V.
