@@ -241,7 +241,9 @@ peripherals:
       debug_schema: "../peripherals/stm32l073/i2c3.yaml"
       profile: "stm32l4"
 
-  # --- ADC (12-bit SAR; L0 layout approximated by the l4 ADC model) ---------
+  # --- ADC (12-bit SAR; the F0/L0 "v2" block, RM0367 §14) -----------------
+  # Channels are a CHSELR @ 0x28 bitmap, not L4 SQRx sequences; the
+  # debug schema's offsets (CHSELR 0x28, CALFACT 0xB4, CCR 0x308) are this map.
   - id: "adc1"
     type: "adc"
     base_address: 0x40012400
@@ -249,7 +251,7 @@ peripherals:
     irq: 12
     config:
       debug_schema: "../peripherals/stm32l073/adc.yaml"
-      profile: "stm32l4"
+      profile: "stm32l0"
     # ADC1 is clocked from RCC_APB2ENR.ADCEN (bit 9). Unclocked out of reset
     # (RM0367 §7.3.13) — the converter is dead until the clock is enabled.
     clock: { reg: "apb2enr", bit: 9 }
@@ -468,3 +470,24 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32l073/dbgmcu.yaml"
       idcode: "0x20086447"
+
+# Regular ADC inputs by pad, from the STM32L073xZ datasheet (DS10685), LQFP64
+# pinout: ADC_IN0..IN7 on PA0..PA7, IN8/IN9 on PB0/PB1, IN10..IN15 on PC0..PC5.
+# Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }
+  PC0: { peripheral: "adc1", channel: 10 }
+  PC1: { peripheral: "adc1", channel: 11 }
+  PC2: { peripheral: "adc1", channel: 12 }
+  PC3: { peripheral: "adc1", channel: 13 }
+  PC4: { peripheral: "adc1", channel: 14 }
+  PC5: { peripheral: "adc1", channel: 15 }

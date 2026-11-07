@@ -50,6 +50,7 @@
 # so they are recorded rather than fixed in a collision commit.
 name: atsamd21j17d-aft
 arch: arm
+core: cortex-m0+
 flash:
   base: 134217728
   size: 262144B

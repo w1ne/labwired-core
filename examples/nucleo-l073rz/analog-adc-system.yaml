@@ -1,0 +1,40 @@
+# Generic Beta NTC divider and Shockley diode for the NUCLEO-L073RZ ADC.
+# The NTC solves onto PA0 (ADC_IN0) and the diode onto PC5 (ADC_IN15), the
+# lowest and highest pads `analog_pins:` in stm32l073.yaml assigns; firmware
+# selects each through CHSELR and reads ADC_DR.
+name: nucleo-l073rz-analog-adc
+chip: ../../configs/chips/stm32l073.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: ntc_divider
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      temperature: ui.ntc.temperature_c
+    outputs:
+      v_sense: board.analog.pa0_volts
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rpull vcc sense 10k
+        Rntc sense 0 10k beta=3950 tnom=25 temp=25
+      probes:
+        v_sense: v(sense)
+      sources:
+        temperature: Rntc
+      vdd: 3.3
+  - id: diode_load_line
+    adapter: analog
+    step_ns: 1000
+    outputs:
+      v_diode: board.analog.pc5_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: v(sense)
+      vdd: 3.3

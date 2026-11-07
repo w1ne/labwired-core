@@ -43,6 +43,11 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
     ("nrf52840_gpio", 0x510, "nRF52840 PS §6.9.2 IN"),
     ("sam4s_pio", 0x3C, "SAM4S DS §31.7 PIO_PDSR"),
     ("miv_coregpio", 0x90, "CoreGPIO handbook InputRegister"),
+    (
+        "efr32s2_gpioport",
+        0x14,
+        "efr32mg24_gpio_port.h / efr32bg22_gpio_port.h GPIO_P_DIN",
+    ),
     // The AVR CPU answers an IN/LDS of PINx with this mirror's input bits.
     (
         "avr_gpio",
@@ -87,24 +92,18 @@ const PLACEHOLDER_TYPES: &[&str] = &[
 /// but where a firmware load from the port's input register does not see it.
 /// Fixing one has to move it out of this list.
 const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
-    // Cortex-M33 parts with GPIO at 0x4202_xxxx: the bus answers that window
-    // as the Cortex-M3/M4 peripheral bit-band alias, which the M33 lacks.
-    ("nucleo_wba52cg", "bit-band alias shadows GPIOA"),
-    ("ramn", "bit-band alias shadows GPIOA"),
-    ("stm32l552", "bit-band alias shadows GPIOA"),
-    ("stm32wba52", "bit-band alias shadows GPIOA"),
     // i.MX 8M Plus: every load in the GPIO1 window returns 0xFFFF_FFFF.
     ("nxp-frdm-imx8mplus", "GPIO1 window reads all ones"),
     ("nxp-mimx8ml", "GPIO1 window reads all ones"),
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 151;
+const COVERED: usize = 161;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 49;
+const SILICON_REGISTER: usize = 59;
 /// Profiles whose descriptor declares no GPIO input and no convertible ADC:
 /// nothing analog can reach them yet.
-const NO_ANALOG_ENDPOINT: usize = 94;
+const NO_ANALOG_ENDPOINT: usize = 84;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -204,6 +203,33 @@ fn input_register(chip: &ChipDescriptor, port: &str, base: u64) -> (u64, bool) {
     (base + PLACEHOLDER_INPUT_OFFSET, false)
 }
 
+/// Cortex-M3/M4 peripheral bit-band alias window (ARMv7-M ARM §B3.1).
+const BIT_BAND_ALIAS: std::ops::Range<u64> = 0x4200_0000..0x4400_0000;
+
+/// A part that decodes real peripherals in the alias window cannot also
+/// bit-band it: the bus would translate their registers onto 0x4000_xxxx.
+/// The Cortex-M33 (STM32L552, STM32WBA52, RAMN), Cortex-M7 (i.MX RT1064 fast
+/// GPIO6..9) and Cortex-M55 (Alif Ensemble LPGPIO) have no bit-band, so their
+/// descriptors must name the core. Renode's own `bitbanding` entry is the
+/// alias itself and is the one type allowed there.
+fn assert_no_peripheral_behind_bit_band(board: &str, chip: &ChipDescriptor, bus: &SystemBus) {
+    if !bus.bit_band_enabled {
+        return;
+    }
+    for p in &chip.peripherals {
+        if p.r#type.eq_ignore_ascii_case("bitbanding") {
+            continue;
+        }
+        let base = p.base_address;
+        assert!(
+            !BIT_BAND_ALIAS.contains(&base),
+            "{board}: {} ({}) at {base:#x} sits in the bit-band alias window; declare the core",
+            p.id,
+            p.r#type
+        );
+    }
+}
+
 /// What firmware writes before the pins read as inputs.
 fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base: u64) {
     let kind = chip
@@ -217,6 +243,13 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
             bus.write_u32(base + 4 * u64::from(pin), 1 << 1)
                 .expect("CoreGPIO CONFIG_X.INREG");
         }
+    }
+    if kind.as_deref() == Some("efr32s2_gpioport") {
+        // Series 2 resets every pin DISABLED; emlib's GPIO_PinModeSet writes
+        // the pin's MODEL nibble to INPUT (_GPIO_P_MODEL_MODE0_INPUT = 1).
+        let model = (1 << (4 * NTC_PIN)) | (1 << (4 * DIODE_PIN));
+        bus.write_u32(base + 0x04, model)
+            .expect("Series-2 GPIO_P_MODEL INPUT");
     }
 }
 
@@ -312,15 +345,6 @@ fn assert_port_routes_generic_analog(
             !register_tracked,
             "{tag}: the input register at {register:#x} now tracks the pins; remove it from INPUT_REGISTER_UNREACHED"
         );
-        if INPUT_REGISTER_UNREACHED
-            .iter()
-            .any(|(b, why)| *b == board && why.starts_with("bit-band"))
-        {
-            assert!(
-                bus.bit_band_enabled && (0x4200_0000..0x4400_0000).contains(&register),
-                "{tag}: diagnosis is the bit-band alias over {register:#x}"
-            );
-        }
     } else {
         assert!(
             register_tracked,
@@ -354,6 +378,7 @@ fn every_onboarding_profile_with_a_gpio_input_takes_routed_ntc_and_diode_levels(
             .get_or_insert(GpioInputThresholds { vil: 0.3, vih: 0.7 });
         let probe = SystemBus::from_config(&chip, &profile)
             .unwrap_or_else(|e| panic!("build {board} bus: {e}"));
+        assert_no_peripheral_behind_bit_band(&board, &chip, &probe);
         let Some(port_index) = first_input_port(&probe) else {
             no_endpoint += 1;
             continue;
