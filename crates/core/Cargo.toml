@@ -190,6 +190,10 @@ required-features = ["event-scheduler"]
 name = "esp32_classic_ahb_fifo_wakes_uart"
 required-features = ["event-scheduler"]
 
+[[test]]
+name = "esp32_classic_irq_resettle"
+required-features = ["event-scheduler"]
+
 # #![cfg(feature = "event-scheduler")]
 [[test]]
 name = "xtensa_poll_loop_skip"

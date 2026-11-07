@@ -1,0 +1,4 @@
+# STM32F401RB bare-chip smoke manifest. USART2 PA2/PA3 banner.
+name: "stm32f401rb-smoke"
+chip: "../../configs/chips/stm32f401rb.yaml"
+external_devices: []

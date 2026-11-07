@@ -848,7 +848,7 @@ pub fn abort_halt(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
             // Dump a window of TCB words for affinity/core fields.
             let mut line = String::new();
             for w in 0..16u32 {
-                line.push_str(&format!(" {:08x}", read32(tcb + w * 4)));
+                line.push_str(&format!(" {:08x}", read32(tcb.wrapping_add(w * 4))));
             }
             eprintln!("[abort_halt] {label} words:{line}");
         }
@@ -882,33 +882,33 @@ pub fn abort_halt(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
                 // Notify state: search for non-zero in a wider TCB window
                 let mut nline = String::new();
                 for w in 16..32u32 {
-                    nline.push_str(&format!(" {:08x}", read32(tcb + w * 4)));
+                    nline.push_str(&format!(" {:08x}", read32(tcb.wrapping_add(w * 4))));
                 }
                 eprintln!("[abort_halt] {label} tcb+64:{nline}");
             }
         }
         // Walk suspended list (max 8)
-        let mut it = read32(susp + 12);
-        let end = susp + 8;
+        let mut it = read32(susp.wrapping_add(12));
+        let end = susp.wrapping_add(8);
         for i in 0..8 {
             if it == 0 || it == end {
                 break;
             }
-            let owner = read32(it + 12);
-            let _cont = read32(it + 16);
-            let next = read32(it + 4);
-            let name_ptr = owner + 52;
+            let owner = read32(it.wrapping_add(12));
+            let _cont = read32(it.wrapping_add(16));
+            let next = read32(it.wrapping_add(4));
+            let name_ptr = owner.wrapping_add(52);
             let mut name = Vec::new();
             for off in 0..12u32 {
-                match bus.read_u8((name_ptr + off) as u64) {
+                match bus.read_u8(name_ptr.wrapping_add(off) as u64) {
                     Ok(b) if (0x20..0x7f).contains(&b) => name.push(b),
                     _ => break,
                 }
             }
             let name_s = String::from_utf8_lossy(&name);
             let top = read32(owner);
-            let stack_base = read32(owner + 48);
-            let core_id = read32(owner + 68) as i32;
+            let stack_base = read32(owner.wrapping_add(48));
+            let core_id = read32(owner.wrapping_add(68)) as i32;
             eprintln!(
                 "[abort_halt] susp[{i}] item={it:#010x} tcb={owner:#010x} top={top:#010x} stack={stack_base:#010x} core={core_id} name≈{name_s:?}"
             );
