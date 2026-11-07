@@ -1282,6 +1282,7 @@ pub fn try_build(
                 None | Some("legacy") => crate::peripherals::dma::Dma1::new(),
                 Some("stm32g0") => crate::peripherals::dma::Dma1::new_stm32g0(),
                 Some("ch32v003") => crate::peripherals::dma::Dma1::new_ch32v003(),
+                Some("ch32v20x") => crate::peripherals::dma::Dma1::new_ch32v20x(),
                 Some(profile) => {
                     anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
                 }

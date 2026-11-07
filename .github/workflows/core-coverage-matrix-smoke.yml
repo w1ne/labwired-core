@@ -573,6 +573,13 @@ jobs:
           - id: ch32v203c8t6-ch32fun-exti
             script: examples/weact-bluepill-plus-ch32v203/ch32fun-exti-blink-smoke.yaml
             system: configs/systems/weact-bluepill-plus-ch32v203-ch32fun-exti-smoke.yaml
+          # ch32fun's examples_v20x/spidmatest, unmodified: SPI2 TX on PB13/PB15
+          # fed by DMA1 channel 5 (circular). It passes only if the channel 5
+          # HT/TC flags reach DMA1_Channel5_IRQHandler as PFIC 31 (`dma`
+          # `profile: ch32v20x`): the handler rewrites both buffer halves.
+          - id: ch32v203c8t6-ch32fun-spidmatest
+            script: examples/weact-bluepill-plus-ch32v203/ch32fun-spidmatest-smoke.yaml
+            system: configs/systems/weact-bluepill-plus-ch32v203-ch32fun-spi-smoke.yaml
 
     steps:
       - uses: actions/checkout@v4

@@ -153,6 +153,7 @@ enum DmaProfile {
     Legacy,
     Stm32g0,
     Ch32v003,
+    Ch32v20x,
 }
 
 impl DmaProfile {
@@ -161,7 +162,14 @@ impl DmaProfile {
             Self::Legacy => "legacy",
             Self::Stm32g0 => "stm32g0",
             Self::Ch32v003 => "ch32v003",
+            Self::Ch32v20x => "ch32v20x",
         }
+    }
+
+    /// A WCH QingKe part: channel lines are PFIC levels, and a CNTR store
+    /// on an enabled channel re-arms it.
+    fn is_qingke(self) -> bool {
+        matches!(self, Self::Ch32v003 | Self::Ch32v20x)
     }
 }
 
@@ -258,6 +266,17 @@ impl Dma1 {
         Self {
             g0_channel_irqs: Some([22, 23, 24, 25, 26, 27, 28]),
             profile: DmaProfile::Ch32v003,
+            ..Self::default()
+        }
+    }
+
+    /// CH32V20x DMA1: the CH32V003 semantics above with the V20x PFIC
+    /// numbers, `DMA1_ChannelN_IRQn` = 26 + N (27..33, ch32fun's
+    /// ch32v20xhw.h; the F1 vector numbers plus the 16 QingKe core lines).
+    pub fn new_ch32v20x() -> Self {
+        Self {
+            g0_channel_irqs: Some([27, 28, 29, 30, 31, 32, 33]),
+            profile: DmaProfile::Ch32v20x,
             ..Self::default()
         }
     }
@@ -489,10 +508,10 @@ impl Dma1 {
                         0x04 | 0x08 | 0x0c
                             if self.locks_config_while_enabled
                                 && self.channels[chan_idx].ccr & 1 != 0 => {}
-                        0x04 if self.profile == DmaProfile::Ch32v003
+                        0x04 if self.profile.is_qingke()
                             && self.channels[chan_idx].ccr & 1 != 0 =>
                         {
-                            // CH32V003: a CNTR store on an enabled channel
+                            // CH32V003/V20x: a CNTR store on an enabled channel
                             // re-arms it from the programmed addresses, as
                             // EN 0->1 does. ch32fun's WS2812 driver depends
                             // on it: it enables channel 3 once with CNTR = 0
@@ -881,8 +900,8 @@ impl Peripheral for Dma1 {
         &mut self,
         pfic: std::sync::Arc<crate::peripherals::qingke_pfic::QingkePficState>,
     ) {
-        // Only the CH32V003 profile's channel lines are PFIC numbers.
-        if self.profile == DmaProfile::Ch32v003 {
+        // Only the QingKe profiles' channel lines are PFIC numbers.
+        if self.profile.is_qingke() {
             self.pfic = Some(pfic);
             self.publish_pfic();
         }

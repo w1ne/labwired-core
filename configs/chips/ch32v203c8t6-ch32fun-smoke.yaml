@@ -12,8 +12,12 @@
 # CH32V20x (x16 on the F1); the model does not derive SYSCLK from it, and
 # cpu_hz states the 144 MHz ch32fun configures.
 #
-# Not modeled here: USART/SPI/I2C/timers/ADC/DMA/USB/CAN/RTC (the narrow
-# ch32v203c8t6-smoke profile carries USART1 TX), PFIC interrupt nesting and
+# SPI2 + DMA1 carry the spidmatest smoke: SPI2 TX on the F1 default pads
+# (PB13 SCK, PB15 MOSI), fed by DMA1 channel 5 with the channel interrupts
+# as PFIC levels 27..33. USART1 is here because ch32fun's UART printf setup
+# programs it; nothing in these smokes asserts its output.
+#
+# Not modeled here: SPI1/I2C/timers/ADC/USB/CAN/RTC, PFIC interrupt nesting and
 # the V4 priority grouping, the VTF table beyond the V2 channels, HSE,
 # low-power modes, and physical-board parity.
 name: ch32v203c8t6-ch32fun-smoke
@@ -47,6 +51,10 @@ pins:
   PA7: { gpio: gpioa, bit: 7 }
   PA10: { gpio: gpioa, bit: 10 }
   PB2: { gpio: gpiob, bit: 2 }
+  PB12: { gpio: gpiob, bit: 12 }
+  PB13: { gpio: gpiob, bit: 13 }
+  PB14: { gpio: gpiob, bit: 14 }
+  PB15: { gpio: gpiob, bit: 15 }
 
 peripherals:
   - id: rcc
@@ -135,3 +143,33 @@ peripherals:
     clock: { reg: apb2enr, bit: 5 }
     config:
       profile: stm32f1
+
+  # FUNCONF_USE_UARTPRINTF examples program USART1 (TX on PA9) in SystemInit.
+  - id: usart1
+    type: uart
+    base_address: 0x40013800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 14 }
+    config:
+      profile: stm32f1
+
+  # SPI2: the F1 register block (CTLR1.DFF, BIDIMODE/BIDIOE, CTLR2.TXDMAEN).
+  # HSCR at 0x24 (the V20x high-speed bit): writes are accepted, it reads 0
+  # and has no effect.
+  - id: spi2
+    type: spi
+    base_address: 0x40003800
+    size: 1KB
+    clock: { reg: apb1enr, bit: 14 }
+
+  - id: dma1
+    type: dma
+    base_address: 0x40020000
+    size: 1KB
+    clock: { reg: ahbenr, bit: 0 }
+    config:
+      profile: ch32v20x
+      # Fixed request mapping, CH32V20x RM DMA1 request table (the F1 one;
+      # ch32fun spidmatest: "DMA1_Channel5 is for SPI2TX").
+      requests:
+        spi2_tx: 5

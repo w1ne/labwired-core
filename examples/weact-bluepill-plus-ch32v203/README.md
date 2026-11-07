@@ -94,12 +94,17 @@ It adds what those examples need and the narrow profile above lacks:
 - **EXTI on the PFIC** (`profile: ch32v20x`). The sixteen GPIO lines drive
   PFIC 22..26, 39 and 56 as level requests, and AFIO_EXTICR1..4 select the port.
 - **The WCH-LinkE debug printf channel** at 0xE0000380.
+- **DMA1 on the PFIC** (`profile: ch32v20x`). Channel N's flags are PFIC
+  level 26 + N, and a CNTR store on an enabled channel re-arms it, as on the
+  CH32V003. SPI2 is the F1 register block on the F1 default pads (PB13 SCK,
+  PB15 MOSI); `spi2_tx` is wired to channel 5.
 
 | Smoke | ch32fun example | What it proves | Result |
 | --- | --- | --- | --- |
 | [`ch32fun-blink-smoke.yaml`](ch32fun-blink-smoke.yaml) | `examples_v20x/blink` | PA0/PA2/PA4/PA7 edges 36,000,015 cycles apart, i.e. 250.0001 ms at 144 MHz; RCC CFGR0 SWS=PLL, PLLMUL ×18 | 6/6 |
 | [`ch32fun-exti-blink-smoke.yaml`](ch32fun-exti-blink-smoke.yaml) | `examples_v20x/exti_blink` | each rising PA1 edge enters EXTI1_IRQHandler (PFIC 23), which toggles PA10 ~30 cycles later; the release does nothing | 9/9 |
 | [`ch32fun-debugprintf-smoke.yaml`](ch32fun-debugprintf-smoke.yaml) | `examples_v20x/debugprintfdemo` | `+0`, `-1[`, … `-5[` on the debug-printf terminal; the probe took every request | 5/5 |
+| [`ch32fun-spidmatest-smoke.yaml`](ch32fun-spidmatest-smoke.yaml) | `examples_v20x/spidmatest` | SPI2 (16-bit, 1-line TX, 72 MHz) fed by DMA1 channel 5, circular: [`check-spidmatest.py`](check-spidmatest.py) decodes PB13/PB15 from the first SCK edge as 256 × `0xAAAA`, then 814 × `0x0AAF` (3.18 laps), the half-buffer refill DMA1_Channel5_IRQHandler (PFIC 31) writes on HT and TC | 8/8 |
 
 Negative controls (committed with their logs):
 - `evidence/ch32fun-blink-smoke/negative-control/`: with `core: rv32imac`,
@@ -108,6 +113,10 @@ Negative controls (committed with their logs):
 - `evidence/ch32fun-exti-blink-smoke/negative-control/`: with the EXTI on the
   STM32F1 profile, INTFR latches but no PFIC request is raised, and PA10
   never toggles (7/9).
+- `evidence/ch32fun-spidmatest-smoke/negative-control/`: with DMA1 on the
+  CH32V003 profile (channel lines 22..28), channel 5's HT/TC never reach
+  PFIC 31, `sendbuff` keeps 0xAAAA (4/8), and the second lap on the wire is
+  0xAAAA again.
 
 ```bash
 examples/weact-bluepill-plus-ch32v203/build-ch32fun-examples.sh   # optional: ELFs are committed
@@ -115,7 +124,9 @@ cargo run -q -p labwired-cli -- test \
   --script examples/weact-bluepill-plus-ch32v203/ch32fun-exti-blink-smoke.yaml
 ```
 
-**Not modelled in this profile:** USART/SPI/I2C/timers/ADC/DMA/USB/CAN/RTC,
+**Not modelled in this profile:** SPI1, I2C, timers, ADC, USB, CAN, RTC,
+the SPI2 HSCR high-speed bit (accepted, reads 0, no effect), USART1 output (configured
+by ch32fun's UART printf setup, not asserted),
 PFIC nesting and V4 priority grouping, HSE, low-power modes, host-to-target
 debug input, and physical-board parity. The PD0/PC0 toggles in
 debugprintfdemo are not asserted: on LQFP48, PD0 is OSC_IN and PC0 is not

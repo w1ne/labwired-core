@@ -701,8 +701,8 @@ fn every_shipped_descriptor_is_ratcheted() {
         // catalog board or physical-silicon differential.
         "ch32v203c8t6-smoke",
         // The ch32fun profile adds the QingKe V4 PFIC, 64-bit SysTick, EXTI
-        // and the debug-printf channel and runs three unmodified ch32fun
-        // CH32V20x examples; same gap.
+        // and the debug-printf channel, plus SPI2 + DMA1 on the PFIC, and
+        // runs four unmodified ch32fun CH32V20x examples; same gap.
         "ch32v203c8t6-ch32fun-smoke",
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
         "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)

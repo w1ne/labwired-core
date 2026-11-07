@@ -4135,7 +4135,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: ebcf557120a489c4b23548885ed31b65fea668005f75e0ad16d36e7ef84ab09a
+    drift_ack_digest: 6aa61a23a2125207ec2c7c06891a9f02870a0b8ffc245d63ef8c1ed39778f77d
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4811,6 +4811,10 @@ boards:
     #   `profile: ch32v003`. The existing PWR structs are unchanged.
     #   ACK, NOT A SILICON CAPTURE.
     drift_ack: 2026-11-07
+    # 2026-11-07 (CH32V203 spidmatest, hw-onboarding): dma.rs adds a
+    # `ch32v20x` profile (the CH32V003 channel semantics with PFIC 27..33),
+    # selected only by `profile: ch32v20x`. Legacy/G0 DMA paths unchanged.
+    # Reviewed model-drift acknowledgment, NOT a new silicon capture.
     # 2026-11-07 (CH32V203 ch32fun, hw-onboarding): exti.rs adds a CH32V20x
     # QingKe EXTI routing; the L4 bank arms are unchanged. Reviewed
     # model-drift acknowledgment, NOT a new silicon capture.
@@ -5342,7 +5346,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 2bad327c724c26289d7a784b883ccd89528c239936d33deaed77dcf5366aaf3b
+    drift_ack_digest: 75e202859d0452426436ff873500fd34bd3d6b65c5e6361440bbc19f7ec85e3a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5947,6 +5951,10 @@ boards:
     #   in its APB1 mask. No STM32 layout is touched.
     #   ACK, NOT A SILICON CAPTURE.
     drift_ack: 2026-11-07
+    # 2026-11-07 (CH32V203 spidmatest, hw-onboarding): dma.rs adds a
+    # `ch32v20x` profile (the CH32V003 channel semantics with PFIC 27..33),
+    # selected only by `profile: ch32v20x`. Legacy/G0 DMA paths unchanged.
+    # Reviewed model-drift acknowledgment, NOT a new silicon capture.
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6540,7 +6548,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 0aae0c5cbb8c968e692adda8312222aed31ef36d9d6af1375e4bc5b0198192e1
+    drift_ack_digest: 7049bc43aa3ae222b4a5214b986e5b3197d6bf5d9ee93dbead6eeb7e95b9a2d9
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7217,6 +7225,10 @@ boards:
     #   flags shared with the QingKe PFIC). F1/L4/G0/U5/L0 paths are untouched.
     #   ACK, NOT A SILICON CAPTURE.
     drift_ack: 2026-11-07
+    # 2026-11-07 (CH32V203 spidmatest, hw-onboarding): dma.rs adds a
+    # `ch32v20x` profile (the CH32V003 channel semantics with PFIC 27..33),
+    # selected only by `profile: ch32v20x`. Legacy/G0 DMA paths unchanged.
+    # Reviewed model-drift acknowledgment, NOT a new silicon capture.
     # 2026-11-07 (CH32V203 ch32fun, hw-onboarding): exti.rs adds a CH32V20x
     # QingKe EXTI routing (layout `ch32v20x`; the CH32V003 variant is renamed
     # Exti::Qingke and keeps its behavior). The Stm32F1 arms are unchanged.
@@ -7770,7 +7782,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 170379d583bf3441439779ca0f6ae0bac7590048aac1b5ccbc100704539095f5
+    drift_ack_digest: b10a3d992a9c37750c131bba93440ef421f77c9e4121c7253c53b3b87f73ea9d
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -8377,6 +8389,10 @@ boards:
     #   in its APB1 mask. No STM32 layout is touched.
     #   ACK, NOT A SILICON CAPTURE.
     drift_ack: 2026-11-07
+    # 2026-11-07 (CH32V203 spidmatest, hw-onboarding): dma.rs adds a
+    # `ch32v20x` profile (the CH32V003 channel semantics with PFIC 27..33),
+    # selected only by `profile: ch32v20x`. Legacy/G0 DMA paths unchanged.
+    # Reviewed model-drift acknowledgment, NOT a new silicon capture.
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are

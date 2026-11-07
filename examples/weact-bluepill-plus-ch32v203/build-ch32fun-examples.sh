@@ -47,7 +47,7 @@ ld="${out_dir}/generated_ch32v203.ld"
 "${prefix}gcc" -E -P -x c -DTARGET_MCU=CH32V203 -DMCU_PACKAGE=1 -DTARGET_MCU_LD=2 \
   -DTARGET_MCU_MEMORY_SPLIT= "${src}/ch32fun/ch32fun.ld" > "${ld}"
 
-for example in blink exti_blink debugprintfdemo; do
+for example in blink exti_blink debugprintfdemo spidmatest; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples_v20x/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

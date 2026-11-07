@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="9" failures="0" errors="0" time="0.039500">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxCycles"/>
+    <property name="firmware_hash" value="4c0513300cbde2e00d646828bf59bef0cc9f3e6197e6e317908df0ae2d2464dd"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.039500">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x20000000=0xaaf" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x200000fe=0xaaf" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x20000100=0xaaf" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x200001fe=0xaaf" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x40020058=0x35b7" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x40003800=0xcb44" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: gpio_edges: gpiob:13 &gt;= 30000 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: gpio_edges: gpiob:15 &gt;= 4000 edges" time="0.000000">
+  </testcase>
+</testsuite>

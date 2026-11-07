@@ -1,0 +1,8 @@
+# WeAct Studio BluePill-Plus-CH32 (CH32V203C8T6) running unmodified ch32fun
+# examples_v20x/spidmatest: SPI2 TX on PB13 (SCK) / PB15 (MOSI), nothing
+# attached; the smoke reads the wire through the logic capture.
+name: weact-bluepill-plus-ch32v203-ch32fun-spi-smoke
+chip: chip.yaml
+external_devices: []
+board_io:
+  - { id: blue_led, kind: led, peripheral: gpiob, pin: 2, signal: output, active_high: true }
