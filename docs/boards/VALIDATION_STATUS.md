@@ -41,6 +41,7 @@ The models column is a content digest over everything that board's `models` list
 | `atsamd21g18a` | 🔵 sim-validated (deep model, no HW diff) | — | `aedf4f43be3e7612` | no silicon capture |
 | `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `80705a8321680b90` | no silicon capture |
 | `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `b04b7fc5180eed71` | no silicon capture |
+| `stm32g431rb` | ⚪ structural | — | `80feba09236ba864` | no silicon capture |
 | `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `434d00f192d03e3c` | no silicon capture |
 | `ci-fixture-riscv` | ⚪ structural | — | `9acdcc39df138ec7` | no silicon capture |
 | `nano-33-iot` | 🟡 smoke-manual | — | `2a0c34f25d4b4d98` | no silicon capture |
@@ -351,6 +352,13 @@ The models column is a content digest over everything that board's `models` list
 - Note: STM32G474RE (Cortex-M4, RM0440). Boots UNMODIFIED upstream Zephyr hello_world (board nucleo_g474re) via firmware_survival::stm32g474_zephyr, and covered by the tier-1 fast-boot fixture (tests/fixtures/tier1/stm32g474re.elf). No G474 silicon diff — no bench part.
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::stm32g474_zephyr
+- Drift status: **no silicon capture**
+
+## `stm32g431rb` — ⚪ structural
+
+- Doc: [`docs/boards/stm32g431rb.md`](stm32g431rb.md)  ·  Chip: `configs/chips/stm32g431rb.yaml`
+- Note: STM32G431RB (Cortex-M4F, RM0440; NUCLEO-G431RB). Shares the RM0440 peripheral map with stm32g474re at the G431 geometry (128 KiB flash, 22 KiB SRAM + 10 KiB CCM). Exercised by the tier-1 fast-boot fixture (tests/fixtures/tier1/stm32g431rb.elf) via examples/stm32g431rb/{tier1-smoke,io-smoke}.yaml. No G431 silicon bench.
+- Silicon: none — not validated against real hardware.
 - Drift status: **no silicon capture**
 
 ## `stm32wb55` — 🔵 sim-validated (deep model, no HW diff)

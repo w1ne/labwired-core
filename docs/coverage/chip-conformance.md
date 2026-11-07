@@ -61,6 +61,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f103r4h | **L0** | ✓ | 31 | — | — | — |
 | stm32f103r6 | **L0** | ✓ | 31 | — | — | — |
 | stm32f103r6h | **L0** | ✓ | 31 | — | — | — |
+| stm32f103r8 | **L0** | ✓ | 31 | — | — | — |
 | stm32f103t4 | **L0** | ✓ | 31 | — | — | — |
 | stm32f103t6 | **L0** | ✓ | 31 | — | — | — |
 | stm32f401 | **L1** | ✓ | 24 | — | — | firmware_survival::test_stm32f401_blinky_survival |
@@ -88,6 +89,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f407zg | **L0** | ✓ | 34 | — | — | — |
 | stm32g0b1re | **L0** | ✓ | 15 | — | — | — |
 | stm32g474re | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32g474_zephyr_survival |
+| stm32g431rb | **L0** | ✓ | 22 | — | — | — |
 | stm32h563 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32h563_demo_survival |
 | stm32u575 | **L1** | ✓ | 43 | — | — | firmware_survival::test_stm32u575_zephyr_survival |
 | stm32u545 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32u545_blinky_survival |

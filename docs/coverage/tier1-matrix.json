@@ -496,6 +496,44 @@
       "status": "pass"
     }
   },
+  "stm32g431rb": {
+    "adc": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "pass"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "pwm": {
+      "status": "pass"
+    },
+    "rtc": {
+      "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
   "stm32g474re": {
     "adc": {
       "status": "pass"

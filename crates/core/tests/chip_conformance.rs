@@ -555,6 +555,15 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: None,
     },
     ChipConf {
+        // Medium-density x8 in LQFP64: same public engine as the C8 reference,
+        // different orderable geometry. No per-order-code silicon capture, so an
+        // honest L0 entry like the other exact F103 order codes.
+        name: "stm32f103r8",
+        yaml: "configs/chips/stm32f103r8.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32f103t4",
         yaml: "configs/chips/stm32f103t4.yaml",
         reset_oracle: None,
@@ -733,6 +742,16 @@ const CHIPS: &[ChipConf] = &[
         // Unmodified Zephyr hello_world for nucleo_g474re; asserts
         // "Hello World! nucleo_g474re" over UART (PR-run).
         behavior_gate: Some("firmware_survival::test_stm32g474_zephyr_survival"),
+    },
+    ChipConf {
+        // G431RB: same RM0440 G4 silicon family as g474re (same peripheral map,
+        // same `stm32g4` RCC profile), different memory/orderable. No silicon
+        // reset capture. Behavior gate = the TIER1 raw-register self-test
+        // firmware, which boots and reports PASS for every wired class.
+        name: "stm32g431rb",
+        yaml: "configs/chips/stm32g431rb.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
     },
     ChipConf {
         name: "stm32h563",
