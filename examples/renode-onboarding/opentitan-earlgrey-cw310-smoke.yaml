@@ -1,0 +1,14 @@
+# Direct RV32IMC firmware smoke against the bounded imported CW310 system.
+# This does not exercise the OpenTitan ROM, FPGA bitstream, or security blocks.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-opentitan-earlgrey-smoke"
+  system: "../../configs/systems/onboarding/opentitan-earlgrey-cw310.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "OPENTITAN EARLGREY SMOKE"
+  - uart_ordered:
+      - "core=rv32imc uart0=opentitan"
+      - "mul=00000143"
+  - expected_stop_reason: max_steps

@@ -1,6 +1,5 @@
 name: mars_zx3
-description: 'Enclustra Mars ZX3 System-on-Module based on Xilinx Zynq-7020. Architecture:
-  Dual ARM Cortex-A9.'
+description: 'Imported Enclustra Mars ZX3 module (Zynq-7020). The measured subset runs one Cortex-A9 PE from a 64 KiB DDR aperture at 0x00100000 and exercises polled TX on PS UART1 (Cadence). OCM, the BootROM, the second PE, SCU, GIC, timers, other PS peripherals and the PL are not modeled.'
 url: https://www.enclustra.com/en/products/system-on-modules/mars-zx3/
 family: Enclustra
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\

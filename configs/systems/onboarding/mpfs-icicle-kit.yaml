@@ -6,3 +6,4 @@
 
 name: mpfs-icicle-kit
 chip: ../../chips/onboarding/mpfs-icicle-kit.yaml
+debug_uart: mmuart1

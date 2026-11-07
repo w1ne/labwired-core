@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="1" errors="0" time="0.000469">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="bb8ec1833f5ccd05ea39493c605f24dd3907a9cee7fa45e2c0c69b359b79f74c"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000469">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: EFM32PG1 USART0 smoke" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_contains: EFM32PG1 USART0 smoke
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=100000
+stop_reason_details.observed.steps_executed=100000
+steps_executed=100000
+cycles=100000
+instructions=100000
+limits:
+  - max_steps=100000
+firmware_hash=bb8ec1833f5ccd05ea39493c605f24dd3907a9cee7fa45e2c0c69b359b79f74c
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efm32pg1-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/efm32pg1.yaml
+script=examples/renode-onboarding/efm32pg1-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;EFM32PG1 USART0 smoke&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

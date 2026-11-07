@@ -3,9 +3,13 @@
 #
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
-
+#
+# Bounded ARM7TDMI profile for the imported LPC2294 CPU and UART0 TX path.
+# Only the imported UART0 window's offset-zero transmit write is modeled here;
+# other UART registers, UART1, CAN, timer, and ADC remain outside this profile.
 name: lpc2294
 arch: arm
+core: arm7tdmi-s
 flash:
   base: 134217728
   size: 65536B
@@ -13,31 +17,11 @@ ram:
   base: 536870912
   size: 65536B
 peripherals:
-- id: can1
-  type: lpc_can
-  bus: sysbus
-  base_address: 3758374912
-- id: can2
-  type: lpc_can
-  bus: sysbus
-  base_address: 3758391296
-- id: can3
-  type: lpc_can
-  bus: sysbus
-  base_address: 3758407680
-- id: can4
-  type: lpc_can
-  bus: sysbus
-  base_address: 3758424064
 - id: uart0
-  type: ns16550
+  type: uart
   bus: sysbus
   base_address: 3758145536
-- id: uart1
-  type: ns16550
-  bus: sysbus
-  base_address: 3758161920
-- id: timer0
-  type: lpc_ctimer
-  bus: sysbus
-  base_address: 3758112768
+  size: 4
+  config:
+    profile: custom
+    tx_offset: 0

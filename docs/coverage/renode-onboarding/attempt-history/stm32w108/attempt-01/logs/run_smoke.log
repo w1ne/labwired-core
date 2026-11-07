@@ -1,0 +1,2 @@
+2026-11-04T11:29:51.288415Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32w108.yaml
+2026-11-04T11:29:51.288498Z ERROR labwired_cli::commands::test: Failed to parse Chip Descriptor YAML: missing field `peripherals` at line 7 column 1

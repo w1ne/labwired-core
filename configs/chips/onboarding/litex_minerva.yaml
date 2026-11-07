@@ -1,27 +1,20 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# Narrowed LiteX Minerva profile for the imported Renode system.
+# Minerva implements RV32I; keep the profile to its memory, LiteX UART, and
+# LiteX timer, which are exercised by the exact-system smoke below.
+# CPU ISA source: https://github.com/enjoy-digital/litex/wiki/CPUs
 
-name: litex_minerva
-arch: arm
-flash:
-  base: 537001984
-  size: 32768B
-ram:
-  base: 268435456
-  size: 262144B
+name: "litex_minerva"
+arch: "riscv"
+core: "rv32i"
+
+flash: { base: 0x20080000, size: "32KB" }
+ram: { base: 0x10000000, size: "256KB" }
 peripherals:
-- id: boot_flash
-  type: arraymemory
-  bus: sysbus
-  base_address: 539131904
-- id: uart
-  type: litex_uart
-  bus: sysbus
-  base_address: 3758102528
-- id: timer0
-  type: litex_timer
-  bus: sysbus
-  base_address: 3758106624
+  - id: "uart"
+    type: "litex_uart"
+    base_address: 0xE0001800
+    size: "2KB"
+  - id: "timer0"
+    type: "litex_timer"
+    base_address: 0xE0002800
+    size: "2KB"

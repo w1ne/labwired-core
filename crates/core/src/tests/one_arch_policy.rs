@@ -184,11 +184,68 @@ fn cortex_a7_never_routes_to_cortex_m() {
 }
 
 #[test]
+fn each_cortex_a_core_selects_its_own_model() {
+    use crate::system::arch_policy::{cortex_a_core, CortexACore};
+    let mut chip = chip_with_arch(Arch::Arm);
+    for (core, want) in [
+        ("cortex-a7", CortexACore::A7),
+        ("Cortex-A9", CortexACore::A9),
+        ("arm926ej-s", CortexACore::Arm926),
+    ] {
+        chip.core = Some(core.into());
+        assert_eq!(
+            machine_family(&chip).unwrap(),
+            MachineFamily::CortexA,
+            "{core}"
+        );
+        assert_eq!(cortex_a_core(&chip).unwrap(), want, "{core}");
+    }
+    for unsupported in [
+        "cortex-a5",
+        "cortex-a8",
+        "cortex-a15",
+        "cortex-m4",
+        "arm920t",
+    ] {
+        chip.core = Some(unsupported.into());
+        assert!(cortex_a_core(&chip).is_err(), "{unsupported}");
+    }
+    chip.core = Some("cortex-a9".into());
+    chip.arch = Arch::Aarch64;
+    assert!(cortex_a_core(&chip).is_err());
+}
+
+#[test]
 fn cortex_r_never_routes_to_cortex_m() {
     let mut chip = chip_with_arch(Arch::Arm);
-    chip.core = Some("cortex-r5f".into());
-    assert_eq!(machine_family(&chip).unwrap(), MachineFamily::CortexR);
-    for unsupported in ["cortex-r5", "cortex-r52", "cortex-r8"] {
+    for supported in ["cortex-r5f", "cortex-r52"] {
+        chip.core = Some(supported.into());
+        assert_eq!(machine_family(&chip).unwrap(), MachineFamily::CortexR);
+    }
+    for unsupported in ["cortex-r5", "cortex-r82", "cortex-r8"] {
+        chip.core = Some(unsupported.into());
+        assert!(machine_family(&chip).is_err(), "{unsupported}");
+    }
+}
+
+#[test]
+fn a_named_non_cortex_m_arm_core_never_routes_to_cortex_m() {
+    let mut chip = chip_with_arch(Arch::Arm);
+    for core in ["cortex-m0+", "cortex-m4f", "Cortex-M33"] {
+        chip.core = Some(core.into());
+        assert_eq!(
+            machine_family(&chip).unwrap(),
+            MachineFamily::CortexM,
+            "{core}"
+        );
+    }
+    for unsupported in [
+        "arm920t",
+        "arm946e-s",
+        "arm1176jzf-s",
+        "cortex-a15",
+        "sparc-v8",
+    ] {
         chip.core = Some(unsupported.into());
         assert!(machine_family(&chip).is_err(), "{unsupported}");
     }
@@ -285,4 +342,82 @@ fn the_scan_is_not_vacuous() {
         stripped.contains("EM_ARM") && !stripped.contains("EM_XTENSA"),
         "the scan must read code and ignore comments; got {stripped:?}"
     );
+}
+
+/// Renode imports that named no core and so would have run as a Cortex-M.
+/// Each is read from the shipped file: non-ARM ISAs and ARM cores without an
+/// adapter must be refused, and the ARMv8-A application parts must be AArch64.
+#[test]
+fn imported_non_cortex_m_platforms_never_route_to_cortex_m() {
+    let root = repo_root();
+    let load = |name: &str| -> ChipDescriptor {
+        let rel = format!("configs/chips/onboarding/{name}.yaml");
+        serde_yaml::from_str(&read(&root, &rel)).unwrap_or_else(|e| panic!("{rel}: {e}"))
+    };
+    for name in [
+        "x86",
+        "acrn_x86_64",
+        "up_squared_x86_64",
+        "quark-c1000",
+        "quark_c1000-cc2520",
+        "arduino_101-shield",
+        "leon3",
+        "gr712rc",
+        "gr716",
+        "gr716-devboard",
+        "mpc5567",
+        "litex_microwatt",
+        "xtensa-sample-controller",
+        "litex_common",
+        "at91rm9200",
+    ] {
+        assert!(
+            machine_family(&load(name)).is_err(),
+            "{name} must be refused"
+        );
+    }
+    assert_eq!(
+        machine_family(&load("a20")).unwrap(),
+        MachineFamily::CortexA
+    );
+    let versatile = load("versatile");
+    assert_eq!(machine_family(&versatile).unwrap(), MachineFamily::CortexA);
+    assert_eq!(
+        crate::system::arch_policy::cortex_a_core(&versatile).unwrap(),
+        crate::system::arch_policy::CortexACore::Arm926
+    );
+    for name in [
+        "vexpress",
+        "tegra2",
+        "tegra3",
+        "zynq-7000",
+        "zedboard",
+        "mars_zx3",
+    ] {
+        let chip = load(name);
+        assert_eq!(
+            machine_family(&chip).unwrap(),
+            MachineFamily::CortexA,
+            "{name}"
+        );
+        assert_eq!(
+            crate::system::arch_policy::cortex_a_core(&chip).unwrap(),
+            crate::system::arch_policy::CortexACore::A9,
+            "{name}"
+        );
+    }
+    for name in [
+        "fsl_lx2160ardb",
+        "zynqmp",
+        "zynqmp-zcu102-revA",
+        "zynqmp-zcu102-revB",
+        "zynqmp-zcu104",
+        "zynqmp-zcu106-vcu",
+    ] {
+        assert_eq!(
+            machine_family(&load(name)).unwrap(),
+            MachineFamily::Aarch64,
+            "{name}"
+        );
+    }
 }

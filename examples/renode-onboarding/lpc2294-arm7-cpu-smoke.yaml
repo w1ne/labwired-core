@@ -1,0 +1,11 @@
+# ARMv4T integer loop against the bounded imported LPC2294 CPU profile. This
+# checks instruction execution only; no LPC2294 peripherals or board I/O are
+# asserted.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/lpc2294-arm7-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/lpc2294.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

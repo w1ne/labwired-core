@@ -2,7 +2,7 @@
 
 The LiteX **VexRiscv** soft-core SoC: a 32-bit RISC-V CPU (`rv32im_zicsr_zifencei` — no compressed, no atomic extension) in a LiteX SoC, as built for FPGA carrier boards such as the Digilent Arty A7. LabWired's target runs a bare-metal ELF from the SoC's integrated SRAM and captures the LiteX UART console.
 
-This is an **L1 (smoke)** target: boot, the UART byte path and the timer one-shot are proven by a committed smoke fixture and an `io-smoke.yaml`. The CPU, memory map, UART and the LiteX countdown timer are modelled; everything else is *declared, not faked* — unmodelled CSR windows are `type: stub` and answer zeros, and the smoke prints one of those readbacks (`spi=00000000`) so the omission is visible on the wire. No silicon capture exists: **SIM-DERIVED**, no executing-fidelity differential yet.
+This is an **L1 (smoke)** target: boot, the UART byte path and the timer one-shot are proven by a committed smoke fixture and an `io-smoke.yaml`. The CPU, memory map, UART and the LiteX countdown timer are modelled, as is the SPI-flash bitbang controller with an MT25Q READ ID / status responder (the smoke prints `spi id=20bb19 sr=00 wel=02`); everything else is *declared, not faked* — unmodelled CSR windows are `type: stub` and answer zeros. No silicon capture exists: **SIM-DERIVED**, no executing-fidelity differential yet.
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:
@@ -31,7 +31,7 @@ This is an **L1 (smoke)** target: boot, the UART byte path and the timer one-sho
 |--------|------|------|-------|
 | Integrated ROM | `0x0000_0000` | 256 KiB | mapped; contents (LiteX BIOS) **not modelled** |
 | Integrated SRAM | `0x1000_0000` | 256 KiB | modelled — the smoke links and runs here |
-| SPI-flash window | `0x2000_0000` | 32 MiB | mapped; reads `0xFF` untouched, no flash controller behind it |
+| SPI-flash window | `0x2000_0000` | 32 MiB | mapped plain flash memory; separate CSR bitbang model answers MT25Q ID/status commands but does not load XIP data |
 | Main RAM (DDR) | `0x4000_0000` | 256 MiB on the SoC | **not mapped** — the engine allocates memory regions densely and a 256 MiB window is not useful to the smoke |
 | CSR space | `0x6000_0000` | — | modelled blocks below; the `0xE000_0000` shadow window is documented, not modelled |
 
@@ -41,7 +41,7 @@ This is an **L1 (smoke)** target: boot, the UART byte path and the timer one-sho
 |-------|---------|-------|
 | LiteX UART | `0x6000_1800` | modelled — `rxtx` @ +0x00, `txfull` @ +0x04 (polled console path) |
 | LiteX timer | `0x6000_2800` | modelled — 32-bit countdown (`load`/`reload`/`en`/`update_value`/`value`) + zero-event `ev_status`/`ev_pending`/`ev_enable` |
-| LiteX SPI-flash controller | `0x6000_5000` | `type: stub` — answers zeros |
+| LiteX SPI-flash controller | `0x6000_5000` | modelled — bitbang/miso/bitbang_en CSRs + MT25Q READ ID, READ STATUS, WREN/WRDI; array read/program/erase not modelled |
 | LiteX Ethernet MAC | `0x6000_7800` | `type: stub` |
 | LiteX MMCM | `0xE000_4800` | `type: stub` |
 

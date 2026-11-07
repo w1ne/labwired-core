@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f429",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 800000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-stm32f429-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/stm32f429-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f429.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T14:50:11Z",
+  "finished_at_utc": "2026-11-05T14:50:12Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 964,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.305,
+    "build_firmware": 0.181,
+    "run_smoke": 0.467
+  },
+  "stages_ms": {
+    "build_cli": 305,
+    "build_firmware": 181,
+    "run_smoke": 467
+  }
+}

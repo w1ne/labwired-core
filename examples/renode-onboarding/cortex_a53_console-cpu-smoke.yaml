@@ -1,0 +1,10 @@
+# CPU-only AArch64 smoke against the bounded imported Cortex-A53 console profile.
+# The shared integer-loop fixture performs no MMIO or console interaction.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/imx8mplus-a53-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/cortex_a53_console.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

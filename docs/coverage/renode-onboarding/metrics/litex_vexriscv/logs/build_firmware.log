@@ -1,0 +1,23 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+   Compiling riscv-rt v0.12.2
+   Compiling riscv v0.11.1
+   Compiling embedded-hal v1.0.0
+   Compiling critical-section v1.2.0
+   Compiling riscv-rt-macros v0.2.2
+   Compiling firmware-litex-vexriscv-smoke v0.1.0 (/home/andrii/worktrees/labwired-core/renode/crates/firmware-litex-vexriscv-smoke)
+   Compiling panic-halt v0.2.0
+    Finished `release` profile [optimized + debuginfo] target(s) in 2.20s

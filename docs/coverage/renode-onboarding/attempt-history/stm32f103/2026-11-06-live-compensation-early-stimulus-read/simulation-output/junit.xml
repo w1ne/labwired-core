@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="35" failures="3" errors="0" time="0.427738">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="d17338011afbf02ac0d4612579b95bab72441068680651a89043a4d964edc7bd"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.427738">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: F103 I2C" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: I2C_NACK_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: I2C_IDLE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: TMP102=00001900" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: TMP102_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: uart_contains: TMP102_CONFIG=0000FFF0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: uart_contains: TMP102_CONFIG_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: uart_contains: TMP102_TLOW=00003450" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: uart_contains: TMP102_TLOW_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: uart_contains: TMP102_THIGH=00006788" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: uart_contains: TMP102_THIGH_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 12: uart_contains: TMP102_TLOW_SHORT=00002250" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 13: uart_contains: TMP102_TLOW_SHORT_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 14: uart_contains: BME280_ID=00000060" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 15: uart_contains: BME280_ID_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 16: uart_contains: BME280_T2=00006743" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 17: uart_contains: BME280_CALIBRATION_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 18: uart_contains: BME280_CALIBRATION_MAP_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 19: uart_contains: BME280_PRESS_RAW=0005883F" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 20: uart_contains: BME280_TEMP_RAW=0008E910" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 21: uart_contains: BME280_HUM_RAW=0000853F" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 22: uart_contains: BME280_SEEDED_ENVIRONMENT_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 23: uart_contains: BME280_SEEDED_COMPENSATION_OK" time="0.000000">
+    <failure message="assertion failed">assertion 23: uart_contains: BME280_SEEDED_COMPENSATION_OK
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=50000000
+stop_reason_details.observed.steps_executed=50000000
+steps_executed=50000000
+cycles=50000000
+instructions=50000000
+limits:
+  - max_steps=50000000
+firmware_hash=d17338011afbf02ac0d4612579b95bab72441068680651a89043a4d964edc7bd
+firmware=examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml
+script=examples/renode-onboarding/stm32f103-i2c-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;F103 I2C&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;I2C_NACK_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;I2C_IDLE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102=00001900&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_CONFIG=0000FFF0&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_CONFIG_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW=00003450&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_THIGH=00006788&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_THIGH_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW_SHORT=00002250&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW_SHORT_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_ID=00000060&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_ID_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_T2=00006743&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_CALIBRATION_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_CALIBRATION_MAP_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_PRESS_RAW=0005883F&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_TEMP_RAW=0008E910&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_HUM_RAW=0000853F&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_SEEDED_ENVIRONMENT_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_SEEDED_COMPENSATION_OK&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_TEMP_RAW=0009A510&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_TEMPERATURE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_TEMP_COMPENSATION_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_HUM_RAW=0000837C&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_HUMIDITY_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_HUM_COMPENSATION_OK&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_PRESS_RAW=0005BE33&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_PRESSURE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_PRESS_COMPENSATION_OK&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;DONE&quot; }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 24: uart_contains: BME280_DYNAMIC_TEMP_RAW=0009A510" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 25: uart_contains: BME280_DYNAMIC_TEMPERATURE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 26: uart_contains: BME280_DYNAMIC_TEMP_COMPENSATION_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 27: uart_contains: BME280_DYNAMIC_HUM_RAW=0000837C" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 28: uart_contains: BME280_DYNAMIC_HUMIDITY_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 29: uart_contains: BME280_DYNAMIC_HUM_COMPENSATION_OK" time="0.000000">
+    <failure message="assertion failed">assertion 29: uart_contains: BME280_DYNAMIC_HUM_COMPENSATION_OK
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=50000000
+stop_reason_details.observed.steps_executed=50000000
+steps_executed=50000000
+cycles=50000000
+instructions=50000000
+limits:
+  - max_steps=50000000
+firmware_hash=d17338011afbf02ac0d4612579b95bab72441068680651a89043a4d964edc7bd
+firmware=examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml
+script=examples/renode-onboarding/stm32f103-i2c-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;F103 I2C&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;I2C_NACK_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;I2C_IDLE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102=00001900&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_CONFIG=0000FFF0&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_CONFIG_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW=00003450&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_THIGH=00006788&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_THIGH_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW_SHORT=00002250&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW_SHORT_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_ID=00000060&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_ID_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_T2=00006743&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_CALIBRATION_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_CALIBRATION_MAP_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_PRESS_RAW=0005883F&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_TEMP_RAW=0008E910&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_HUM_RAW=0000853F&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_SEEDED_ENVIRONMENT_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_SEEDED_COMPENSATION_OK&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_TEMP_RAW=0009A510&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_TEMPERATURE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_TEMP_COMPENSATION_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_HUM_RAW=0000837C&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_HUMIDITY_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_HUM_COMPENSATION_OK&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_PRESS_RAW=0005BE33&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_PRESSURE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_PRESS_COMPENSATION_OK&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;DONE&quot; }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 30: uart_contains: BME280_DYNAMIC_PRESS_RAW=0005BE33" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 31: uart_contains: BME280_DYNAMIC_PRESSURE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 32: uart_contains: BME280_DYNAMIC_PRESS_COMPENSATION_OK" time="0.000000">
+    <failure message="assertion failed">assertion 32: uart_contains: BME280_DYNAMIC_PRESS_COMPENSATION_OK
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=50000000
+stop_reason_details.observed.steps_executed=50000000
+steps_executed=50000000
+cycles=50000000
+instructions=50000000
+limits:
+  - max_steps=50000000
+firmware_hash=d17338011afbf02ac0d4612579b95bab72441068680651a89043a4d964edc7bd
+firmware=examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml
+script=examples/renode-onboarding/stm32f103-i2c-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;F103 I2C&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;I2C_NACK_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;I2C_IDLE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102=00001900&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_CONFIG=0000FFF0&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_CONFIG_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW=00003450&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_THIGH=00006788&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_THIGH_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW_SHORT=00002250&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW_SHORT_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_ID=00000060&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_ID_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_T2=00006743&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_CALIBRATION_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_CALIBRATION_MAP_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_PRESS_RAW=0005883F&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_TEMP_RAW=0008E910&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_HUM_RAW=0000853F&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_SEEDED_ENVIRONMENT_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_SEEDED_COMPENSATION_OK&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_TEMP_RAW=0009A510&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_TEMPERATURE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_TEMP_COMPENSATION_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_HUM_RAW=0000837C&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_HUMIDITY_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_HUM_COMPENSATION_OK&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_PRESS_RAW=0005BE33&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_PRESSURE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_DYNAMIC_PRESS_COMPENSATION_OK&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;DONE&quot; }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 33: uart_contains: DONE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 34: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

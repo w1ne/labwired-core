@@ -1,0 +1,13 @@
+# Smoke against the imported Mi-V RV32 Renode system descriptor.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-miv-rv32-smoke"
+  system: "../../configs/systems/onboarding/miv_rv32.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "MIV RV32 SMOKE"
+  - uart_ordered:
+      - "cpu=rv32im uart=coreuart"
+      - "mul=00000143"
+  - expected_stop_reason: max_steps

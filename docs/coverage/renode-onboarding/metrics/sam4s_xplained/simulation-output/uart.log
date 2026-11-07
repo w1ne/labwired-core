@@ -1,0 +1,12 @@
+SAM4S XPLAINED SMOKE
+cpu=cortex-m4 uart=uart0
+led=on odsr=00000400
+led=off odsr=00000000
+btn=1
+hb=0 odsr=00000000 btn=1
+hb=1 odsr=00000000 btn=1
+hb=2 odsr=00000000 btn=1
+hb=3 odsr=00000000 btn=1
+hb=4 odsr=00000000 btn=1
+hb=5 odsr=00000000 btn=1
+hb=6 odsr=00000000 btn=1

@@ -1,0 +1,38 @@
+{
+  "target_id": "renesas_rz_g2l",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.yaml",
+  "system": "configs/systems/onboarding/renesas_rz_g2l.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-07T09:43:00Z",
+  "finished_at_utc": "2026-11-07T09:44:36Z",
+  "elapsed_seconds": 96,
+  "elapsed_ms": 95819,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 95.517,
+    "build_firmware": null,
+    "run_smoke": 0.292
+  },
+  "stages_ms": {
+    "build_cli": 95517,
+    "build_firmware": null,
+    "run_smoke": 292
+  },
+  "prebuilt_firmware": "tests/fixtures/rzg2l-cm33-cpu-smoke.elf"
+}

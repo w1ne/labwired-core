@@ -1,0 +1,11 @@
+# AArch64 UART smoke against the imported zynqmp-zcu102-revA system: one Cortex-A53 PE
+# writes a banner to PS UART0 (Cadence) and spins. No GIC, timer or clocks.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/zynqmp-a53-uart-smoke.elf"
+  system: "../../configs/systems/onboarding/zynqmp-zcu102-revA.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "ZYNQMP A53 UART SMOKE"
+  - expected_stop_reason: max_steps

@@ -1,0 +1,271 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "SAM E70 RENODE PROFILE SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "cpu=cortex-m7 uart=usart1",
+          "pmc pcsr0=00005000",
+          "led=off odsr=00000100",
+          "led=on odsr=00000000",
+          "led=off odsr=00000100"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1074663992,
+          "expected_value": 256,
+          "mask": 256,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      10,
+      1073905684,
+      48,
+      0,
+      1073905684,
+      1074660968,
+      1074663992,
+      541458416,
+      0,
+      0,
+      0,
+      0,
+      0,
+      541458416,
+      4198729,
+      4198760
+    ],
+    "pc": 4198760,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 4194304,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "4f68c895bb8507afd4bc6b94dc980db14be6d1fe1a226e64c5d33b3438db8aff",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam-e70-renode-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam_e70.yaml",
+    "script": "examples/renode-onboarding/sam_e70-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "pmc",
+        "kind": "native",
+        "base": 1074660864,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioC",
+        "kind": "native",
+        "base": 1074663936,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073905664,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "read"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "SAM E70 RENODE PROFILE SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cpu=cortex-m7 uart=usart1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "pmc pcsr0=00005000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=off odsr=00000100",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=on odsr=00000000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=off odsr=00000100",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 4844,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 4844,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 2097152,
+    "ram_total_bytes": 393216,
+    "flash_used_pct": 0.23,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 393216,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 393192,
+    "main_stack_base": 541065216,
+    "main_stack_top": 541458432,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 393216,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 393192,
+    "heap_base": 541065216,
+    "heap_top": 541458432
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 742,
+    "memory_writes": 14,
+    "peripheral_accesses": 293,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 4198760,
+        "count": 15625,
+        "symbol": "firmware_sam_e70_renode_smoke::__cortex_m_rt_main"
+      }
+    ]
+  }
+}

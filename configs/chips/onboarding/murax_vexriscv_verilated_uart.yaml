@@ -5,7 +5,11 @@
 # See the LICENSE file in the project root for full license information.
 
 name: murax_vexriscv_verilated_uart
-arch: arm
+# Narrowed from the Renode co-simulation profile to LabWired's local RV32IM
+# execution path and modeled Murax UART. The external Verilated CPU, UART
+# co-simulation, GPIO, and timer are not represented by this profile.
+arch: riscv
+core: "rv32im_zicsr_zifencei"
 flash:
   base: 2147483648
   size: 262144B
@@ -14,14 +18,6 @@ ram:
   size: 262144B
 peripherals:
 - id: uart
-  type: cosimulateduart
+  type: murax_uart
   bus: sysbus
   base_address: 4026597376
-- id: gpioA
-  type: murax_gpio
-  bus: sysbus
-  base_address: 4026531840
-- id: timer
-  type: murax_timer
-  bus: sysbus
-  base_address: 4026662912

@@ -1,0 +1,19 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "firmware-sam-e70-renode-smoke"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-sam-e70-renode-smoke"
+path = "src/main.rs"
+test = false
+bench = false

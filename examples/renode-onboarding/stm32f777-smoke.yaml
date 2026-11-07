@@ -1,0 +1,15 @@
+# Cortex-M7 register smoke against the imported STM32F777 profile.
+# The shared STM32F746 binary uses only the common F7 RCC, USART1, and GPIOI
+# register sequence; its 64 KiB linker region fits inside this profile's DTCM.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f746-demo"
+  system: "../../configs/systems/onboarding/stm32f777.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpioPortI:1"
+      min_edges: 1
+  - expected_stop_reason: max_steps

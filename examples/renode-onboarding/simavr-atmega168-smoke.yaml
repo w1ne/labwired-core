@@ -1,0 +1,17 @@
+# USART0 + PORTB/PORTD smoke for the imported ATmega168 profile.
+# Firmware: tests/fixtures/avr/megax8-io-smoke.c built with -mmcu=atmega168.
+# result_bits (0x7F) = UBRR0L and UCSR0B read back, UDRE0 idle, DDRB reads
+# back, PINB5 follows PORTB5 high then low, PIND2 driven independently.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/atmega168-io-smoke.elf"
+  system: "../../configs/systems/onboarding/simavr-atmega168.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "M168 IO bits=7F"
+  - memory_value: {address: 0x0122, expected_value: 0x7F, size: 1}
+  - gpio_edges:
+      pin: "portb:5"
+      min_edges: 2
+  - expected_stop_reason: max_steps

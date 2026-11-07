@@ -15,10 +15,202 @@ on:
       - main
     paths:
       - "configs/chips/**"
+      - "configs/onboarding/renesas_rz_g2l.yaml"
+      - "configs/onboarding/cortex-a78.yaml"
+      - "configs/onboarding/fsl_lx2160ardb.yaml"
+      - "configs/onboarding/zynqmp.yaml"
+      - "configs/onboarding/zynqmp-zcu102-revA.yaml"
+      - "configs/onboarding/zynqmp-zcu102-revB.yaml"
+      - "configs/onboarding/zynqmp-zcu104.yaml"
+      - "configs/onboarding/zynqmp-zcu106-vcu.yaml"
+      - "configs/onboarding/simavr-atmega1280.yaml"
+      - "configs/onboarding/simavr-atmega128.yaml"
+      - "configs/onboarding/simavr-atmega1281.yaml"
+      - "configs/onboarding/simavr-atmega168.yaml"
+      - "configs/onboarding/simavr-atmega16.yaml"
+      - "configs/onboarding/simavr-attiny13.yaml"
+      - "configs/onboarding/simavr-attiny2313.yaml"
+      - "configs/onboarding/simavr-attiny2313a.yaml"
+      - "configs/onboarding/simavr-attiny4313.yaml"
+      - "configs/onboarding/simavr-attiny24.yaml"
+      - "configs/onboarding/simavr-attiny44.yaml"
+      - "configs/onboarding/simavr-attiny84.yaml"
+      - "configs/onboarding/simavr-attiny1634.yaml"
+      - "configs/onboarding/simavr-attiny25.yaml"
+      - "configs/onboarding/simavr-attiny45.yaml"
+      - "configs/onboarding/simavr-attiny85.yaml"
+      - "configs/onboarding/simavr-atmega8.yaml"
+      - "configs/onboarding/simavr-atmega48.yaml"
+      - "configs/onboarding/simavr-atmega88.yaml"
+      - "configs/onboarding/simavr-atmega32.yaml"
+      - "configs/onboarding/simavr-atmega164.yaml"
+      - "configs/onboarding/simavr-atmega324.yaml"
+      - "configs/onboarding/simavr-atmega644.yaml"
+      - "configs/onboarding/simavr-atmega169p.yaml"
+      - "configs/onboarding/simavr-atmega16m1.yaml"
+      - "configs/onboarding/simavr-atmega64m1.yaml"
+      - "configs/onboarding/simavr-atmega128rfa1.yaml"
+      - "configs/onboarding/simavr-atmega128rfr2.yaml"
+      - "configs/onboarding/simavr-at90usb162.yaml"
       - "configs/systems/**"
       - "examples/**"
       - "crates/core/**"
+      - "crates/firmware-stm32f746-demo/**"
       - "crates/firmware-stm32u575-demo/**"
+      - "crates/firmware-stm32h743-smoke/**"
+      - "crates/firmware-stm32f429-smoke/**"
+      - "crates/firmware-stm32f042-smoke/**"
+      - "crates/firmware-stm32f072-smoke/**"
+      - "crates/firmware-samd21-j17d-smoke/**"
+      - "crates/firmware-stm32l071-smoke/**"
+      - "crates/firmware-stm32l072-smoke/**"
+      - "crates/firmware-stm32l151-smoke/**"
+      - "crates/firmware-apollo4p-evb-smoke/**"
+      - "crates/firmware-ft9001-smoke/**"
+      - "crates/firmware-efm32g222-smoke/**"
+      - "crates/firmware-efm32g842-smoke/**"
+      - "crates/firmware-efm32tg840-smoke/**"
+      - "crates/firmware-efm32lg942-smoke/**"
+      - "crates/firmware-efm32lg995-smoke/**"
+      - "crates/firmware-efr32mg26-smoke/**"
+      - "crates/firmware-efr32xg26-smoke/**"
+      - "crates/firmware-efr32mg24-smoke/**"
+      - "examples/renode-onboarding/brd4186c-smoke.yaml"
+      - "examples/renode-onboarding/brd4162a-smoke.yaml"
+      - "examples/renode-onboarding/brd4402a-smoke.yaml"
+      - "crates/firmware-efr32xg22-smoke/**"
+      - "crates/firmware-efr32mg12-smoke/**"
+      - "crates/firmware-efr32mg1-smoke/**"
+      - "crates/firmware-sifive-fu540-smoke/**"
+      - "crates/firmware-sifive-fu740-smoke/**"
+      - "crates/firmware-starfive-jh7100-smoke/**"
+      - "crates/firmware-arvsom-rv64-cpu-smoke/**"
+      - "crates/firmware-ut32m0r500-smoke/**"
+      - "examples/renode-onboarding/ut32m0r500-smoke.yaml"
+      - "crates/firmware-kendryte-k210-smoke/**"
+      - "crates/firmware-efm32wg995-smoke/**"
+      - "crates/firmware-ezr32hg320-smoke/**"
+      - "crates/firmware-ezr32-330-smoke/**"
+      - "crates/firmware-ezr32-wonder-gecko-smoke/**"
+      - "examples/renode-onboarding/slwstk6220a-smoke.yaml"
+      - "crates/firmware-efm32-stk-m3-smoke/**"
+      - "crates/firmware-efm32pg12-smoke/**"
+      - "crates/firmware-efm32pg1-smoke/**"
+      - "crates/firmware-eos-s3-smoke/**"
+      - "crates/firmware-nucleo-wba52cg-demo/**"
+      - "crates/firmware-imxrt1064-demo/**"
+      - "crates/firmware-sam4s-smoke/**"
+      - "examples/renode-onboarding/sam4s-smoke.yaml"
+      - "crates/firmware-ek-ra8m1-smoke/**"
+      - "crates/firmware-ek-ra6m5-smoke/**"
+      - "configs/peripherals/r7fa6m5bh/**"
+      - "configs/peripherals/r7fa8m1ah/**"
+      - "configs/systems/ek-ra6m5.yaml"
+      - "configs/systems/ek-ra8m1.yaml"
+      - "examples/renode-onboarding/renesas-r7fa6m5bh-tier1-smoke.yaml"
+      - "examples/renode-onboarding/renesas-r7fa8m1ah-tier1-smoke.yaml"
+      - "crates/firmware-stm32w108-boot-smoke/**"
+      - "crates/firmware-renesas-r7fa6m5b-boot-smoke/**"
+      - "crates/firmware-renesas-ek-ra2e1-smoke/**"
+      - "crates/firmware-renesas-r7fa2l1a-smoke/**"
+      - "crates/firmware-renesas-r7fa2e1a9-smoke/**"
+      - "crates/firmware-renesas-r7fa8m1a-smoke/**"
+      - "crates/firmware-renesas-da14592-smoke/**"
+      - "crates/firmware-renesas-ck-ra6m5-smoke/**"
+      - "crates/firmware-s32k388-onboarding-smoke/**"
+      - "tests/fixtures/s32k388-evb-smoke.elf"
+      - "crates/firmware-s32k118-smoke/**"
+      - "crates/firmware-nuvoton-npcx9-smoke/**"
+      - "crates/firmware-mimxrt700-evk-smoke/**"
+      - "crates/firmware-mimxrt798s-smoke/**"
+      - "crates/firmware-mimxrt595-evk-smoke/**"
+      - "crates/firmware-litex-minerva-smoke/**"
+      - "crates/firmware-litex-tock-smoke/**"
+      - "crates/firmware-litex-zephyr-i2s-smoke/**"
+      - "crates/firmware-litex-vexriscv-smp-smoke/**"
+      - "crates/firmware-litex-vexriscv-tftp-smoke/**"
+      - "crates/firmware-opentitan-earlgrey-smoke/**"
+      - "crates/firmware-murax-vexriscv-smoke/**"
+      - "crates/firmware-picosoc-smoke/**"
+      - "crates/firmware-cv32e40p-smoke/**"
+      - "crates/firmware-riscv-virt-smoke/**"
+      - "crates/firmware-riscv-verilated-uartlite-smoke/**"
+      - "crates/firmware-andes-ae350-n25-smoke/**"
+      - "crates/firmware-tock-veer-el2-smoke/**"
+      - "crates/firmware-fomu-smoke/**"
+      - "crates/firmware-zolertia-firefly-smoke/**"
+      - "crates/firmware-ramn-smoke/**"
+      - "examples/renode-onboarding/zolertia-firefly-smoke.yaml"
+      - "examples/renode-onboarding/ramn-smoke.yaml"
+      - "examples/renode-onboarding/ambiq-apollo4-smoke.yaml"
+      - "examples/renode-onboarding/focaltech_ft9001-smoke.yaml"
+      - "examples/renode-onboarding/nxp-k6xf-smoke.yaml"
+      - "scripts/run_renode_onboarding_inventory.py"
+      - "examples/renode-onboarding/fomu-smoke.yaml"
+      - "scripts/onboarding_smoke.sh"
+      - "tests/fixtures/mpfs-zephyr-hello.elf"
+      - "tests/fixtures/frdm-k64f-smoke.elf"
+      - "tests/fixtures/imx8mplus-a53-cpu-smoke.elf"
+      - "tests/fixtures/lpc2294-arm7-uart-smoke.elf"
+      - "examples/renode-onboarding/lpc2294-arm7-uart-smoke.S"
+      - "examples/renode-onboarding/lpc2294-arm7-uart-smoke.ld"
+      - "scripts/build_lpc2294_arm7_uart_smoke.sh"
+      - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.S"
+      - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.ld"
+      - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml"
+      - "examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.S"
+      - "examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.ld"
+      - "examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.yaml"
+      - "scripts/build_colibri_vf61_cortex_m4_smoke.sh"
+      - "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf"
+      - "examples/renode-onboarding/vybrid-cortex-m4-smoke.yaml"
+      - "scripts/build_imx8mplus_a53_cpu_smoke.sh"
+      - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.S"
+      - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.ld"
+      - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.yaml"
+      - "scripts/build_rzg2l_cm33_cpu_smoke.sh"
+      - "tests/fixtures/rzg2l-cm33-cpu-smoke.elf"
+      - "tests/fixtures/cortex-r52-uart-smoke.elf"
+      - "tests/fixtures/rz-t2m-r52-sci-smoke.elf"
+      - "examples/renode-onboarding/cortex-r52-uart-smoke.S"
+      - "examples/renode-onboarding/cortex-r52-uart-smoke.ld"
+      - "examples/renode-onboarding/rz-t2m-r52-sci-smoke.S"
+      - "examples/renode-onboarding/rz-t2m-r52-sci-smoke.ld"
+      - "scripts/build_cortex_r52_uart_smokes.sh"
+      - "examples/renode-onboarding/cortex-r52-uart-smoke.yaml"
+      - "examples/renode-onboarding/cortex-r52_smp-r52-uart-smoke.yaml"
+      - "examples/renode-onboarding/cortex-r52_smp_4-r52-uart-smoke.yaml"
+      - "examples/renode-onboarding/renesas_rz_t2m-r52-sci-smoke.yaml"
+      - "examples/renode-onboarding/renesas-rz_t2m_rsk-r52-sci-smoke.yaml"
+      - "tests/fixtures/avr/arduino-uno-blinky.elf"
+      - "tests/fixtures/avr/atmega1284p-cpu-smoke.c"
+      - "tests/fixtures/avr/atmega1284p-cpu-smoke.elf"
+      - "scripts/build_atmega1284p_cpu_smoke.sh"
+      - "tests/fixtures/avr/atmega1280-cpu-smoke.c"
+      - "tests/fixtures/avr/atmega1280-cpu-smoke.elf"
+      - "scripts/build_atmega1280_cpu_smoke.sh"
+      - "tests/fixtures/avr/atmega128-cpu-smoke.c"
+      - "tests/fixtures/avr/atmega128-cpu-smoke.elf"
+      - "scripts/build_atmega128_cpu_smoke.sh"
+      - "tests/fixtures/avr/atmega1281-cpu-smoke.c"
+      - "tests/fixtures/avr/atmega1281-cpu-smoke.elf"
+      - "scripts/build_atmega1281_cpu_smoke.sh"
+      - "tests/fixtures/avr/atmega16-cpu-smoke.c"
+      - "tests/fixtures/avr/atmega16-cpu-smoke.elf"
+      - "scripts/build_atmega16_cpu_smoke.sh"
+      - "tests/fixtures/avr/attiny-x5-cpu-smoke.c"
+      - "tests/fixtures/avr/attiny13-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny2313-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny2313a-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny4313-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny24-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny44-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny84-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny1634-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny25-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny45-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny85-cpu-smoke.elf"
+      - "scripts/build_attiny_x5_cpu_smoke.sh"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -38,6 +230,295 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
+          # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
+          - id: zynq-7000
+            prebuilt_firmware: tests/fixtures/zynq7000-a9-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/zynq-7000-a9-uart-smoke.yaml
+            system: configs/systems/onboarding/zynq-7000.yaml
+          # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
+          # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
+          - id: zedboard
+            prebuilt_firmware: tests/fixtures/zynq7000-a9-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/zedboard-a9-uart-smoke.yaml
+            system: configs/systems/onboarding/zedboard.yaml
+          # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
+          # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
+          - id: mars_zx3
+            prebuilt_firmware: tests/fixtures/zynq7000-a9-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/mars_zx3-a9-uart-smoke.yaml
+            system: configs/systems/onboarding/mars_zx3.yaml
+          # One ARM926EJ-S, a bounded SDRAM aperture and one polled PL011 TX;
+          # VIC/SIC, timers, Thumb execution and other peripherals are not modeled.
+          - id: versatile
+            prebuilt_firmware: tests/fixtures/versatile-arm926-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/versatile-arm926-uart-smoke.yaml
+            system: configs/systems/onboarding/versatile.yaml
+          # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
+          # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
+          - id: vexpress
+            prebuilt_firmware: tests/fixtures/vexpress-a9-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/vexpress-a9-uart-smoke.yaml
+            system: configs/systems/onboarding/vexpress.yaml
+          # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
+          # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
+          - id: tegra2
+            prebuilt_firmware: tests/fixtures/tegra-a9-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/tegra2-a9-uart-smoke.yaml
+            system: configs/systems/onboarding/tegra2.yaml
+          # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
+          # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
+          - id: tegra3
+            prebuilt_firmware: tests/fixtures/tegra-a9-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/tegra3-a9-uart-smoke.yaml
+            system: configs/systems/onboarding/tegra3.yaml
+          # One A20 Cortex-A7 PE, a bounded DDR aperture and UART0 polled TX;
+          # the BROM, multicore boot and other SoC peripherals are not modeled.
+          - id: a20
+            prebuilt_firmware: tests/fixtures/a20-a7-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/a20-a7-uart-smoke.yaml
+            system: configs/systems/onboarding/a20.yaml
+          # ARM7TDMI CPU execution plus only the imported UART0 TX write path;
+          # no other LPC2294 peripheral registers are claimed by this smoke.
+          - id: lpc2294
+            prebuilt_firmware: tests/fixtures/lpc2294-arm7-uart-smoke.elf
+            cli_features: qemu-arm-system
+            cli_profile: native-system
+            script: examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml
+            system: configs/systems/onboarding/lpc2294.yaml
+          # This imported STM32W108 profile is intentionally CPU-only: its
+          # imported timer windows are not covered by this instruction smoke.
+          - id: stm32w108
+            crate: firmware-stm32w108-boot-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/stm32w108-boot-smoke.yaml
+            system: configs/systems/onboarding/stm32w108.yaml
+          # The imported Apollo4 boot-ROM scaffold was superseded by a sourced
+          # M4F profile. This smoke covers UART0, GPIO, PWRCTRL and memories;
+          # the SBL and every other Apollo4 peripheral remain outside scope.
+          - id: ambiq-apollo4
+            crate: firmware-apollo4p-evb-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/ambiq-apollo4-smoke.yaml
+            system: configs/systems/onboarding/ambiq-apollo4.yaml
+          # FT9001: corrected flash/SRAM map and the polled USART2 path that
+          # Renode's FT9001_USART exposes; interrupts and other blocks are
+          # outside scope.
+          - id: focaltech_ft9001
+            crate: firmware-ft9001-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/focaltech_ft9001-smoke.yaml
+            system: configs/systems/onboarding/focaltech_ft9001.yaml
+          # EOS S3 smokes cover only the corrected M4 code/SRAM windows and
+          # the model-backed PL011; generated peripheral claims are omitted.
+          - id: eos-s3
+            crate: firmware-eos-s3-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/eos-s3-smoke.yaml
+            system: configs/systems/onboarding/eos-s3.yaml
+          - id: eos-s3-qomu
+            crate: firmware-eos-s3-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/eos-s3-qomu-smoke.yaml
+            system: configs/systems/onboarding/eos-s3-qomu.yaml
+          - id: eos-s3-quickfeather
+            crate: firmware-eos-s3-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/eos-s3-quickfeather-smoke.yaml
+            system: configs/systems/onboarding/eos-s3-quickfeather.yaml
+          # RA2E1's imported descriptor had stale flash/SRAM bounds and
+          # generated peripheral claims. This smoke covers its sourced M23
+          # core, code flash, and SRAM only.
+          - id: renesas-ek_ra2e1
+            crate: firmware-renesas-ek-ra2e1-smoke
+            target: thumbv8m.base-none-eabi
+            script: examples/renode-onboarding/renesas-ek_ra2e1-smoke.yaml
+            system: configs/systems/onboarding/renesas-ek_ra2e1.yaml
+          # RA2L1 is limited to Renode's Cortex-M23, code flash and SRAM map;
+          # generated peripheral claims are omitted from this instruction smoke.
+          - id: renesas-r7fa2l1a
+            crate: firmware-renesas-r7fa2l1a-smoke
+            target: thumbv8m.base-none-eabi
+            script: examples/renode-onboarding/renesas-r7fa2l1a-smoke.yaml
+            system: configs/systems/onboarding/renesas-r7fa2l1a.yaml
+          # The standalone RA2E1 profile is restricted to its sourced M23
+          # core, 128 KiB code flash, and 16 KiB SRAM; generated peripherals
+          # are omitted until their models have been validated.
+          - id: renesas-r7fa2e1a9
+            crate: firmware-renesas-r7fa2e1a9-smoke
+            target: thumbv8m.base-none-eabi
+            script: examples/renode-onboarding/renesas-r7fa2e1a9-smoke.yaml
+            system: configs/systems/onboarding/renesas-r7fa2e1a9.yaml
+          # R7FA8M1A is restricted to the model-backed M85 CPU and memory map;
+          # the imported peripheral claims remain omitted for this smoke.
+          - id: renesas-r7fa8m1a
+            crate: firmware-renesas-r7fa8m1a-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-r7fa8m1a-smoke.yaml
+            system: configs/systems/onboarding/renesas-r7fa8m1a.yaml
+          # One AArch32 Cortex-R52 PE (tlib arm64 target), a bounded RAM window and
+          # one polled UART TX; GIC, generic timer, TCM and other PEs are not modeled.
+          - id: renesas_rz_t2m
+            prebuilt_firmware: tests/fixtures/rz-t2m-r52-sci-smoke.elf
+            cli_features: qemu-arm-system
+            cli_profile: native-system
+            script: examples/renode-onboarding/renesas_rz_t2m-r52-sci-smoke.yaml
+            system: configs/systems/onboarding/renesas_rz_t2m.yaml
+          # One AArch32 Cortex-R52 PE (tlib arm64 target), a bounded RAM window and
+          # one polled UART TX; GIC, generic timer, TCM and other PEs are not modeled.
+          - id: renesas-rz_t2m_rsk
+            prebuilt_firmware: tests/fixtures/rz-t2m-r52-sci-smoke.elf
+            cli_features: qemu-arm-system
+            cli_profile: native-system
+            script: examples/renode-onboarding/renesas-rz_t2m_rsk-r52-sci-smoke.yaml
+            system: configs/systems/onboarding/renesas-rz_t2m_rsk.yaml
+          # One AArch32 Cortex-R52 PE (tlib arm64 target), a bounded RAM window and
+          # one polled UART TX; GIC, generic timer, TCM and other PEs are not modeled.
+          - id: cortex-r52
+            prebuilt_firmware: tests/fixtures/cortex-r52-uart-smoke.elf
+            cli_features: qemu-arm-system
+            cli_profile: native-system
+            script: examples/renode-onboarding/cortex-r52-uart-smoke.yaml
+            system: configs/systems/onboarding/cortex-r52.yaml
+          # One AArch32 Cortex-R52 PE (tlib arm64 target), a bounded RAM window and
+          # one polled UART TX; GIC, generic timer, TCM and other PEs are not modeled.
+          - id: cortex-r52_smp
+            prebuilt_firmware: tests/fixtures/cortex-r52-uart-smoke.elf
+            cli_features: qemu-arm-system
+            cli_profile: native-system
+            script: examples/renode-onboarding/cortex-r52_smp-r52-uart-smoke.yaml
+            system: configs/systems/onboarding/cortex-r52_smp.yaml
+          # One AArch32 Cortex-R52 PE (tlib arm64 target), a bounded RAM window and
+          # one polled UART TX; GIC, generic timer, TCM and other PEs are not modeled.
+          - id: cortex-r52_smp_4
+            prebuilt_firmware: tests/fixtures/cortex-r52-uart-smoke.elf
+            cli_features: qemu-arm-system
+            cli_profile: native-system
+            script: examples/renode-onboarding/cortex-r52_smp_4-r52-uart-smoke.yaml
+            system: configs/systems/onboarding/cortex-r52_smp_4.yaml
+          # DA14592 is scoped to the primary M33 core, exact flash/SRAM map,
+          # and model-backed DA UART0. The M0+ CMAC core and other peripherals
+          # are not claimed by this smoke.
+          - id: renesas-da14592
+            crate: firmware-renesas-da14592-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-da14592-smoke.yaml
+            system: configs/systems/onboarding/renesas-da14592.yaml
+          # CK-RA6M5 is limited to its sourced M33 core, code flash, and SRAM.
+          - id: renesas-ck_ra6m5
+            crate: firmware-renesas-ck-ra6m5-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-ck_ra6m5-smoke.yaml
+            system: configs/systems/onboarding/renesas-ck_ra6m5.yaml
+          # S32K388 runs the S32K388EVB smoke image against the narrowed
+          # imported profile: real SIUL2 and LPUART2 models; SWT_0 and MC_ME
+          # are write-accepting stubs. No other imported peripheral is claimed.
+          - id: nxp-s32k388
+            prebuilt_firmware: tests/fixtures/s32k388-evb-smoke.elf
+            script: examples/renode-onboarding/nxp-s32k388-smoke.yaml
+            system: configs/systems/onboarding/nxp-s32k388.yaml
+          # The imported S32K388EVB alias uses the same narrowed profile.
+          - id: nxp-s32k388evb
+            prebuilt_firmware: tests/fixtures/s32k388-evb-smoke.elf
+            script: examples/renode-onboarding/nxp-s32k388evb-smoke.yaml
+            system: configs/systems/onboarding/nxp-s32k388evb.yaml
+          # Reuse the EK-RA6M5 smoke image against the narrowed imported RA6M5
+          # profile: SYSTEM, MSTP, PFS, PORT0 and SCI0 only; no stubs.
+          - id: renesas-r7fa6m5b
+            prebuilt_firmware: tests/fixtures/ek-ra6m5-smoke.elf
+            script: examples/renode-onboarding/renesas-r7fa6m5b-smoke.yaml
+            system: configs/systems/onboarding/renesas-r7fa6m5b.yaml
+          # Reuse the FRDM-K64F smoke image against the imported K6x system.
+          # SIM, WDOG, and PORT are explicit stubs; only CPU/UART/GPIO are claimed.
+          - id: nxp-k6xf
+            prebuilt_firmware: tests/fixtures/frdm-k64f-smoke.elf
+            script: examples/renode-onboarding/nxp-k6xf-smoke.yaml
+            system: configs/systems/onboarding/nxp-k6xf.yaml
+          # S32K118 is bounded to Renode's Cortex-M0+ CPU, 256 KiB program
+          # flash, and the 0x5800-byte upper SRAM window; no peripherals are
+          # claimed by this instruction and memory smoke.
+          - id: s32k118
+            crate: firmware-s32k118-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/s32k118-smoke.yaml
+            system: configs/systems/onboarding/s32k118.yaml
+          # UT32M0R500 is bounded to its sourced M0+ core, code flash, SRAM,
+          # and modeled Gaisler UART0. The other imported peripheral windows
+          # are omitted from this profile.
+          - id: ut32m0r500
+            crate: firmware-ut32m0r500-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/ut32m0r500-smoke.yaml
+            system: configs/systems/onboarding/ut32m0r500.yaml
+          # RAMN is STM32L552: this bounded smoke checks one Cortex-M33 core,
+          # its imported code flash, and the sourced 256 KiB SRAM range only.
+          - id: ramn
+            crate: firmware-ramn-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/ramn-smoke.yaml
+            system: configs/systems/onboarding/ramn.yaml
+          # The imported imxrt500 scaffold is narrowed to the MIMXRT595S
+          # Cortex-M33, XIP/SRAM, modeled clock/reset/pin control, GPIO, and
+          # FLEXCOMM0 path exercised by this exact-system smoke.
+          - id: imxrt500
+            crate: firmware-mimxrt595-evk-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/imxrt500-smoke.yaml
+            system: configs/systems/onboarding/imxrt500.yaml
+          # MIMXRT700 uses the Cortex-M33 CPU0, Renode's XIP0 mapping, and its
+          # bounded CPU0 SRAM window. CPU1, DSP, and peripheral paths are not
+          # part of this instruction and memory smoke.
+          - id: mimxrt700_evk
+            crate: firmware-mimxrt700-evk-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+            system: configs/systems/onboarding/mimxrt700_evk.yaml
+          # MIMXRT798S is bounded to Renode's Cortex-M33 CPU0, its XIP1 memory
+          # map and non-secure SRAM window; CPU1, DSPs and peripherals are not
+          # part of this instruction and memory smoke.
+          - id: mimxrt798s
+            crate: firmware-mimxrt798s-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/mimxrt798s-smoke.yaml
+            system: configs/systems/onboarding/mimxrt798s.yaml
+          # The imported EK-RA8M1 profile uses the accurate RA8M1 memory map
+          # and limits its claim to the modeled Cortex-M85, SYSTEM, GPIO/PFS,
+          # and SCI_B paths, plus R_MSTP readback (SVD register file). Module-
+          # stop gating itself is not modelled.
+          - id: renesas-ek_ra8m1
+            crate: firmware-ek-ra8m1-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-ek_ra8m1-smoke.yaml
+            system: configs/systems/onboarding/renesas-ek_ra8m1.yaml
+          # Tier-1 EK-RA8M1 / EK-RA6M5 systems: SVD-derived R_MSTP register
+          # readback (reset values plus a stored MSTPB clear). Module-stop
+          # gating itself is not modelled.
+          - id: r7fa8m1ah-tier1
+            crate: firmware-ek-ra8m1-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-r7fa8m1ah-tier1-smoke.yaml
+            system: configs/systems/ek-ra8m1.yaml
+          - id: r7fa6m5bh-tier1
+            crate: firmware-ek-ra6m5-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-r7fa6m5bh-tier1-smoke.yaml
+            system: configs/systems/ek-ra6m5.yaml
           - id: stm32f401cdu6
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi
@@ -71,6 +552,1149 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/rp2040-pio/io-smoke.yaml
             system: examples/rp2040-pio/system.yaml
+          # Imported Renode Cortex-M systems. These exercise representative
+          # M0/M3/M4/M7 firmware against the exact imported system descriptors.
+          # The SAMD51 profile uses the silicon memory map and only its modeled
+          # MCLK, GCLK, PORTA, and SERCOM3 path.
+          # CC2538 uses its accurate promoted Cortex-M3 profile and checks the
+          # existing model-backed UART0, SYS_CTRL clock, and GPIO readback path.
+          - id: cc2538
+            crate: firmware-cc2538dk-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/cc2538-smoke.yaml
+            system: configs/systems/onboarding/cc2538.yaml
+          # Zolertia Firefly is a CC2538 Cortex-M3 plus CC1200 radio. This
+          # bounded profile tests direct code execution and UART0 only; the
+          # radio and unmodeled peripheral windows are omitted.
+          - id: zolertia-firefly
+            crate: firmware-zolertia-firefly-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/zolertia-firefly-smoke.yaml
+            system: configs/systems/onboarding/zolertia-firefly.yaml
+          - id: atsamd51g19a
+            crate: firmware-atsamd51-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/atsamd51g19a-smoke.yaml
+            system: configs/systems/onboarding/atsamd51g19a.yaml
+          # The SAMD21 J17D profile uses its actual 128 KiB/16 KiB memory map
+          # and only the register windows used by this M0+ bring-up smoke.
+          - id: atsamd21j17d-aft
+            crate: firmware-samd21-j17d-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/atsamd21j17d-aft-smoke.yaml
+            system: configs/systems/onboarding/atsamd21j17d-aft.yaml
+          - id: stm32f072b_discovery
+            crate: firmware-stm32f072b-disco-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/stm32f072b_discovery-smoke.yaml
+            system: configs/systems/onboarding/stm32f072b_discovery.yaml
+          - id: stm32f103
+            crate: firmware-f103-i2c-demo
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/stm32f103-i2c-smoke.yaml
+            system: configs/systems/onboarding/stm32f103.yaml
+          # The EFM32G210 import is narrowed to its Cortex-M3, memory, and
+          # model-backed USART0 path exercised by this firmware.
+          - id: efm32g210
+            crate: firmware-efm32g210-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32g210-smoke.yaml
+            system: configs/systems/onboarding/efm32g210.yaml
+          # The JG1 import keeps its core variant unspecified and exposes only
+          # imported memory plus the modeled USART0 path exercised here.
+          - id: efm32jg1
+            crate: firmware-efm32jg1-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/efm32jg1-smoke.yaml
+            system: configs/systems/onboarding/efm32jg1.yaml
+          # JG12 retains its imported memory map and only the modeled USART0
+          # window exercised by this Cortex-M3-targeted smoke.
+          - id: efm32jg12
+            crate: firmware-efm32jg12-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32jg12-smoke.yaml
+            system: configs/systems/onboarding/efm32jg12.yaml
+          # HG350 is bounded to its Cortex-M0+ memory map and model-backed USART0.
+          - id: efm32hg350
+            crate: firmware-efm32hg350-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/efm32hg350-smoke.yaml
+            system: configs/systems/onboarding/efm32hg350.yaml
+          # EZR32HG320 exposes only its imported Cortex-M0+ memory and modeled USART0.
+          - id: ezr32hg320
+            crate: firmware-ezr32hg320-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/ezr32hg320-smoke.yaml
+            system: configs/systems/onboarding/ezr32hg320.yaml
+          # The EFM32ZG222 import keeps only its declared memory and modeled
+          # USART1 surface; other generated peripherals are not claimed.
+          - id: efm32zg222
+            crate: firmware-efm32zg222-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/efm32zg222-smoke.yaml
+            system: configs/systems/onboarding/efm32zg222.yaml
+          # The G232 smoke links its firmware at the imported 0x08000000 flash base.
+          - id: efm32g232
+            crate: firmware-efm32g232-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32g232-smoke.yaml
+            system: configs/systems/onboarding/efm32g232.yaml
+          # G222 is bounded to its Cortex-M3 memory map and model-backed USART0.
+          - id: efm32g222
+            crate: firmware-efm32g222-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32g222-smoke.yaml
+            system: configs/systems/onboarding/efm32g222.yaml
+          # G842 is bounded to its Cortex-M3 memory map and model-backed USART0.
+          - id: efm32g842
+            crate: firmware-efm32g842-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32g842-smoke.yaml
+            system: configs/systems/onboarding/efm32g842.yaml
+          # TG840's imported profile is limited to its memory and modeled USART0.
+          - id: efm32tg840
+            crate: firmware-efm32tg840-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32tg840-smoke.yaml
+            system: configs/systems/onboarding/efm32tg840.yaml
+          # LG995 is a Cortex-M3 Leopard Gecko import. This smoke measures its
+          # imported memory and model-backed USART0 path only.
+          - id: efm32lg995
+            crate: firmware-efm32lg995-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32lg995-smoke.yaml
+            system: configs/systems/onboarding/efm32lg995.yaml
+          # LG942 is bounded to its imported Cortex-M3 memory and modeled USART0.
+          - id: efm32lg942
+            crate: firmware-efm32lg942-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32lg942-smoke.yaml
+            system: configs/systems/onboarding/efm32lg942.yaml
+          # The imported MG26 profile exposes only its Cortex-M33 memory map,
+          # real Series-2 CMU and model-backed USART1 path exercised here.
+          - id: efr32mg26
+            crate: firmware-efr32mg26-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/efr32mg26-smoke.yaml
+            system: configs/systems/onboarding/efr32mg26.yaml
+          # The five BRD41xx radio boards use the xG26 Cortex-M33 platform.
+          # Each profile is narrowed to the main core, memory, CMU and USART0.
+          - id: brd4116a
+            crate: firmware-efr32xg26-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4116a-smoke.yaml
+            system: configs/systems/onboarding/brd4116a.yaml
+          - id: brd4117a
+            crate: firmware-efr32xg26-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4117a-smoke.yaml
+            system: configs/systems/onboarding/brd4117a.yaml
+          - id: brd4118a
+            crate: firmware-efr32xg26-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4118a-smoke.yaml
+            system: configs/systems/onboarding/brd4118a.yaml
+          - id: brd4120a
+            crate: firmware-efr32xg26-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4120a-smoke.yaml
+            system: configs/systems/onboarding/brd4120a.yaml
+          - id: brd4121a
+            crate: firmware-efr32xg26-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4121a-smoke.yaml
+            system: configs/systems/onboarding/brd4121a.yaml
+          # MG1 follows the imported M4F flash/SRAM map and model-backed USART0;
+          # other generated peripherals are omitted until they are exercised.
+          - id: efr32mg1
+            crate: firmware-efr32mg1-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/efr32mg1-smoke.yaml
+            system: configs/systems/onboarding/efr32mg1.yaml
+          # SLTB001A inherits Renode's EFR32MG1 profile; the imported board is
+          # narrowed to the M4F memory map and model-backed USART0 smoke path.
+          - id: sltb001a
+            crate: firmware-efr32mg1-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sltb001a-smoke.yaml
+            system: configs/systems/onboarding/sltb001a.yaml
+          # MG24 follows the xG24 REPL's M33/memory map and uses the modeled
+          # Series-2 CMU and USART0; generated stub peripherals are omitted.
+          - id: efr32mg24
+            crate: firmware-efr32mg24-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/efr32mg24-smoke.yaml
+            system: configs/systems/onboarding/efr32mg24.yaml
+          # BRD4186C uses the same EFR32MG24 SoC; the imported profile is
+          # narrowed to the model-backed CMU and USART0 used by this smoke.
+          - id: brd4186c
+            crate: firmware-efr32mg24-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4186c-smoke.yaml
+            system: configs/systems/onboarding/brd4186c.yaml
+          # BRD4162A uses the EFR32MG12. Its imported profile is narrowed to
+          # the M4F, code/sequence memory, and USART0 used by this smoke.
+          - id: brd4162a
+            crate: firmware-efr32mg12-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/brd4162a-smoke.yaml
+            system: configs/systems/onboarding/brd4162a.yaml
+          # BRD4402A uses the xG22 MCU. Its imported profile exposes only the
+          # model-backed CMU and USART0 used by the exact-system smoke.
+          - id: brd4402a
+            crate: firmware-efr32xg22-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4402a-smoke.yaml
+            system: configs/systems/onboarding/brd4402a.yaml
+          # xG22 follows the sourced M33/flash/SRAM map and exercises the
+          # modeled Series-2 CMU and USART0; radio and sequencer are omitted.
+          - id: efr32xg22
+            crate: firmware-efr32xg22-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/efr32xg22-smoke.yaml
+            system: configs/systems/onboarding/efr32xg22.yaml
+          # G890 is bounded to its Cortex-M3 memory map and model-backed USART0.
+          - id: efm32g890
+            crate: firmware-efm32g842-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32g890-smoke.yaml
+            system: configs/systems/onboarding/efm32g890.yaml
+          # GG942 keeps its accurate Cortex-M3 memory map and modeled USART0.
+          - id: efm32gg942
+            crate: firmware-efm32g842-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32gg942-smoke.yaml
+            system: configs/systems/onboarding/efm32gg942.yaml
+          # GG995 is bounded to its accurate Cortex-M3 memory map and modeled USART0.
+          - id: efm32gg995
+            crate: firmware-efm32g842-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32gg995-smoke.yaml
+            system: configs/systems/onboarding/efm32gg995.yaml
+          # The WG995 profile exercises the modeled UART0 subset on its M4
+          # instruction profile; this smoke does not exercise the FPU.
+          - id: efm32wg995
+            crate: firmware-efm32wg995-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32wg995-smoke.yaml
+            system: configs/systems/onboarding/efm32wg995.yaml
+          # EZR32LG330 and WG330 retain only imported memory and modeled UART0.
+          - id: ezr32lg330
+            crate: firmware-ezr32-330-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/ezr32lg330-smoke.yaml
+            system: configs/systems/onboarding/ezr32lg330.yaml
+          - id: ezr32wg330
+            crate: firmware-ezr32-330-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/ezr32wg330-smoke.yaml
+            system: configs/systems/onboarding/ezr32wg330.yaml
+          # The imported SLWSTK6220A profile is bounded to its Cortex-M4F
+          # memory windows and the modeled UART0 path used by this smoke.
+          - id: slwstk6220a
+            crate: firmware-ezr32-wonder-gecko-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/slwstk6220a-smoke.yaml
+            system: configs/systems/onboarding/slwstk6220a.yaml
+          # STK3600 and STK3700 are narrowed to their imported Cortex-M3 memory
+          # windows and the modeled UART0 surface exercised by the shared smoke.
+          - id: stk3600
+            crate: firmware-efm32-stk-m3-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/stk3600-smoke.yaml
+            system: configs/systems/onboarding/stk3600.yaml
+          - id: stk3700
+            crate: firmware-efm32-stk-m3-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/stk3700-smoke.yaml
+            system: configs/systems/onboarding/stk3700.yaml
+          # STK3200/STK3800 retain only the Renode EFM32ZG222/EFM32WG995
+          # execution memory and the existing UART models exercised by smoke.
+          - id: stk3200
+            crate: firmware-stk3200-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/stk3200-smoke.yaml
+            system: configs/systems/onboarding/stk3200.yaml
+          - id: stk3800
+            crate: firmware-stk3800-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stk3800-smoke.yaml
+            system: configs/systems/onboarding/stk3800.yaml
+          # The PG12 profile is limited to its Cortex-M4F memory and USART0 path.
+          - id: efm32pg12
+            crate: firmware-efm32pg12-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/efm32pg12-smoke.yaml
+            system: configs/systems/onboarding/efm32pg12.yaml
+          # The MG12 smoke is restricted to Renode's flash, sequence SRAM, and
+          # the modeled Series-1 USART0 register surface.
+          - id: efr32mg12
+            crate: firmware-efr32mg12-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/efr32mg12-smoke.yaml
+            system: configs/systems/onboarding/efr32mg12.yaml
+          # SLTB004A uses the EFR32MG12 M4F map and its model-backed USART0;
+          # the board's other imported devices are omitted from this smoke.
+          - id: sltb004a
+            crate: firmware-efr32mg12-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sltb004a-smoke.yaml
+            system: configs/systems/onboarding/sltb004a.yaml
+          # The PG1 profile is limited to its 256 KiB flash, 32 KiB RAM, and
+          # model-backed USART0 bring-up path.
+          - id: efm32pg1
+            crate: firmware-efm32pg1-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/efm32pg1-smoke.yaml
+            system: configs/systems/onboarding/efm32pg1.yaml
+          # The Nano 33 BLE imported profile exposes only its actual nRF52840
+          # memory, UARTE0, and GPIO0 smoke surface.
+          - id: arduino_nano_33_ble
+            crate: firmware-arduino-nano-33-ble-smoke
+            target: thumbv7em-none-eabihf
+            script: examples/renode-onboarding/arduino_nano_33_ble-smoke.yaml
+            system: configs/systems/onboarding/arduino_nano_33_ble.yaml
+          # The imported simavr ATmega328 profile keeps the modeled USART0 and
+          # GPIOB surfaces exercised by the existing Arduino Uno fixture.
+          - id: simavr-atmega328
+            prebuilt_firmware: tests/fixtures/avr/arduino-uno-blinky.elf
+            script: examples/renode-onboarding/simavr-atmega328-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega328.yaml
+          # The ATmega328PB import is limited to its polled USART1 path.
+          - id: simavr-atmega328pb
+            prebuilt_firmware: tests/fixtures/avr/atmega328pb-usart1.elf
+            script: examples/renode-onboarding/simavr-atmega328pb-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega328pb.yaml
+          # The Mega import maps the GPIO ports driven by the fixture and the
+          # USART0/ADC paths it checks; PB7/D13 is the observed LED output.
+          - id: simavr-atmega2560
+            prebuilt_firmware: tests/fixtures/avr/arduino-mega-2560-io.elf
+            script: examples/renode-onboarding/simavr-atmega2560-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega2560.yaml
+          # The ATmega32U4 profile covers only the AVR core and exercised GPIOC.
+          - id: simavr-atmega32u4
+            prebuilt_firmware: tests/fixtures/avr/atmega32u4-gpio-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega32u4-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega32u4.yaml
+          # ATmega1284P is measured only for CPU instruction execution and SRAM;
+          # the profile makes no peripheral or board-I/O claims.
+          - id: simavr-atmega1284p
+            prebuilt_firmware: tests/fixtures/avr/atmega1284p-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega1284p-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega1284p.yaml
+          # The ATmega1280 smoke covers only its shared ATmega1281-class AVR8
+          # core geometry and SRAM execution; no peripherals are declared.
+          - id: simavr-atmega1280
+            prebuilt_firmware: tests/fixtures/avr/atmega1280-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega1280-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega1280.yaml
+          # ATmega128 is measured only for its imported AVR8 CPU and SRAM;
+          # the profile makes no peripheral or board-I/O claims.
+          - id: simavr-atmega128
+            prebuilt_firmware: tests/fixtures/avr/atmega128-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega128-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega128.yaml
+          # ATmega1281 is measured only for its imported AVR8 CPU and SRAM;
+          # the profile makes no peripheral or board-I/O claims.
+          - id: simavr-atmega1281
+            prebuilt_firmware: tests/fixtures/avr/atmega1281-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega1281-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega1281.yaml
+          # ATmega168 maps PORTB/C/D and USART0 (328P register summary); the
+          # smoke asserts polled TX, register readback and PB5 edges.
+          - id: simavr-atmega168
+            prebuilt_firmware: tests/fixtures/avr/atmega168-io-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega168-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega168.yaml
+          # ATmega16 is measured only for its bounded AVR8 CPU and SRAM path;
+          # the imported profile declares no peripherals.
+          - id: simavr-atmega16
+            prebuilt_firmware: tests/fixtures/avr/atmega16-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega16-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega16.yaml
+          # Classic tinyAVR parts are measured only for their bounded AVR8 CPU
+          # and SRAM path; the imported profiles declare no peripherals.
+          - id: simavr-attiny13
+            prebuilt_firmware: tests/fixtures/avr/attiny13-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny13-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny13.yaml
+          - id: simavr-attiny2313
+            prebuilt_firmware: tests/fixtures/avr/attiny2313-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny2313-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny2313.yaml
+          - id: simavr-attiny2313a
+            prebuilt_firmware: tests/fixtures/avr/attiny2313a-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny2313a-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny2313a.yaml
+          - id: simavr-attiny4313
+            prebuilt_firmware: tests/fixtures/avr/attiny4313-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny4313-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny4313.yaml
+          - id: simavr-attiny24
+            prebuilt_firmware: tests/fixtures/avr/attiny24-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny24-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny24.yaml
+          - id: simavr-attiny44
+            prebuilt_firmware: tests/fixtures/avr/attiny44-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny44-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny44.yaml
+          - id: simavr-attiny84
+            prebuilt_firmware: tests/fixtures/avr/attiny84-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny84-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny84.yaml
+          - id: simavr-attiny1634
+            prebuilt_firmware: tests/fixtures/avr/attiny1634-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny1634-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny1634.yaml
+          - id: simavr-attiny25
+            prebuilt_firmware: tests/fixtures/avr/attiny25-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny25-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny25.yaml
+          - id: simavr-attiny45
+            prebuilt_firmware: tests/fixtures/avr/attiny45-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny45-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny45.yaml
+          - id: simavr-attiny85
+            prebuilt_firmware: tests/fixtures/avr/attiny85-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny85-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny85.yaml
+          - id: simavr-atmega8
+            prebuilt_firmware: tests/fixtures/avr/atmega8-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega8-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega8.yaml
+          # ATmega48/88 share the ATmega168 x8-family IO smoke (USART0 + PORTB/D).
+          - id: simavr-atmega48
+            prebuilt_firmware: tests/fixtures/avr/atmega48-io-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega48-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega48.yaml
+          - id: simavr-atmega88
+            prebuilt_firmware: tests/fixtures/avr/atmega88-io-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega88-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega88.yaml
+          - id: simavr-atmega32
+            prebuilt_firmware: tests/fixtures/avr/atmega32-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega32-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega32.yaml
+          - id: simavr-atmega164
+            prebuilt_firmware: tests/fixtures/avr/atmega164-io-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega164-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega164.yaml
+          - id: simavr-atmega324
+            prebuilt_firmware: tests/fixtures/avr/atmega324-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega324-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega324.yaml
+          - id: simavr-atmega644
+            prebuilt_firmware: tests/fixtures/avr/atmega644-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega644-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega644.yaml
+          - id: simavr-atmega169p
+            prebuilt_firmware: tests/fixtures/avr/atmega169p-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega169p-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega169p.yaml
+          - id: simavr-atmega16m1
+            prebuilt_firmware: tests/fixtures/avr/atmega16m1-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega16m1-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega16m1.yaml
+          - id: simavr-atmega64m1
+            prebuilt_firmware: tests/fixtures/avr/atmega64m1-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega64m1-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega64m1.yaml
+          - id: simavr-atmega128rfa1
+            prebuilt_firmware: tests/fixtures/avr/atmega128rfa1-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega128rfa1-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega128rfa1.yaml
+          - id: simavr-atmega128rfr2
+            prebuilt_firmware: tests/fixtures/avr/atmega128rfr2-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega128rfr2-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega128rfr2.yaml
+          - id: simavr-at90usb162
+            prebuilt_firmware: tests/fixtures/avr/at90usb162-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-at90usb162-smoke.yaml
+            system: configs/systems/onboarding/simavr-at90usb162.yaml
+          # The Uno R4 import keeps the model-backed RA4M1 system, PORT1/PFS,
+          # SysTick, and SCI2 profile exercised by its UART and D13 smoke.
+          - id: arduino_uno_r4_minima
+            crate: firmware-ra4m1-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/arduino_uno_r4_minima-smoke.yaml
+            system: configs/systems/onboarding/arduino_uno_r4_minima.yaml
+          # Reuse the bounded RA4M1 UART/GPIO fixture against the imported
+          # generic Renode target after narrowing it to the same modeled core.
+          - id: renesas-r7fa4m1a
+            crate: firmware-ra4m1-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/renesas-r7fa4m1a-smoke.yaml
+            system: configs/systems/onboarding/renesas-r7fa4m1a.yaml
+          - id: stm32f4_discovery
+            crate: firmware-f4-discovery-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f4_discovery-smoke.yaml
+            system: configs/systems/onboarding/stm32f4_discovery.yaml
+          # Exercise the same bounded F4 smoke surface on the imported generic
+          # STM32F4 system, whose profile omits its untested peripherals.
+          - id: stm32f4
+            crate: firmware-f4-discovery-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f4-smoke.yaml
+            system: configs/systems/onboarding/stm32f4.yaml
+          # The Discovery Kit profile exposes only the F4 RCC, USART2, and
+          # GPIO A/D paths asserted by this exact-import smoke.
+          - id: stm32f4_discovery-kit
+            crate: firmware-f4-discovery-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f4_discovery-kit-smoke.yaml
+            system: configs/systems/onboarding/stm32f4_discovery-kit.yaml
+          - id: stm32f746
+            crate: firmware-stm32f746-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f746-smoke.yaml
+            system: configs/systems/onboarding/stm32f746.yaml
+          # The shared F7 bare-register smoke exercises this imported F777
+          # profile's modeled RCC, GPIOI, and USART1 blocks.
+          - id: stm32f777
+            crate: firmware-stm32f746-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f777-smoke.yaml
+            system: configs/systems/onboarding/stm32f777.yaml
+          - id: stm32f401cdu6-blackpill
+            crate: firmware-f401cdu6-blackpill-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f401cdu6-blackpill-smoke.yaml
+            system: configs/systems/onboarding/stm32f401cdu6-blackpill.yaml
+          - id: stm32l552
+            crate: firmware-l552ze-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/stm32l552-smoke.yaml
+            system: configs/systems/onboarding/stm32l552.yaml
+          # The WBA52 profile is limited to the modeled Cortex-M33, RCC,
+          # GPIOA/GPIOB and USART1 surfaces exercised by this smoke.
+          - id: nucleo_wba52cg
+            crate: firmware-nucleo-wba52cg-demo
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/nucleo_wba52cg-smoke.yaml
+            system: configs/systems/onboarding/nucleo_wba52cg.yaml
+          # Exercise the same bounded WBA52 register surface on the generic
+          # imported MCU system as well as the NUCLEO board profile.
+          - id: stm32wba52
+            crate: firmware-nucleo-wba52cg-demo
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/stm32wba52-smoke.yaml
+            system: configs/systems/onboarding/stm32wba52.yaml
+          # The imported H743 profile is limited to H7 RCC, GPIOA/GPIOD,
+          # USART3, and the memory used by the shared H7 register smoke.
+          - id: stm32h743
+            crate: firmware-stm32h743-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32h743-smoke.yaml
+            system: configs/systems/onboarding/stm32h743.yaml
+          # The generic H7 import now uses the sourced Cortex-M7 memory map and
+          # exposes only the RCC, GPIOB/GPIOD, and USART3 paths in the shared smoke.
+          - id: stm32h7
+            crate: firmware-stm32h743-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32h7-smoke.yaml
+            system: configs/systems/onboarding/stm32h7.yaml
+          # The H753 descriptor keeps only the same modeled H7 surfaces as the
+          # shared smoke; its imported system is exercised directly.
+          - id: stm32h753
+            crate: firmware-stm32h743-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32h753-smoke.yaml
+            system: configs/systems/onboarding/stm32h753.yaml
+          # The H747 Discovery profile runs only its Cortex-M7 core and keeps
+          # the bounded H7 RCC, GPIOB/GPIOD, and USART3 smoke surface.
+          - id: stm32h747-disco
+            crate: firmware-stm32h743-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32h747-disco-smoke.yaml
+            system: configs/systems/onboarding/stm32h747-disco.yaml
+          # The generic imported H747 chip descriptor uses the same bounded
+          # Cortex-M7, H7 RCC, GPIOB/GPIOD, and USART3 smoke surface.
+          - id: stm32h747
+            crate: firmware-stm32h743-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32h747-smoke.yaml
+            system: configs/systems/onboarding/stm32h747.yaml
+          # Reuse the H7 register fixture on the imported NUCLEO-H753ZI board.
+          # The smoke also asserts its imported GreenLED attachment at GPIOB.0.
+          - id: nucleo_h753zi
+            crate: firmware-stm32h743-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nucleo_h753zi-smoke.yaml
+            system: configs/systems/onboarding/nucleo_h753zi.yaml
+          # The STM32F746G Discovery fixture is limited to the imported
+          # Cortex-M7, bounded memory, RCC, GPIOI, and USART1 smoke surface.
+          - id: stm32f7_discovery-bb
+            crate: firmware-stm32f746-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f7_discovery-bb-smoke.yaml
+            system: configs/systems/onboarding/stm32f7_discovery-bb.yaml
+          # The L071 smoke exercises the shared STM32L0 RCC/GPIO/USART2 model
+          # surface with a Cortex-M0+ binary built for the ARMv6-M ISA.
+          - id: stm32l071
+            crate: firmware-stm32l071-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/stm32l071-smoke.yaml
+            system: configs/systems/onboarding/stm32l071.yaml
+          # The L072 smoke exercises its imported system's bounded STM32L0 RCC,
+          # GPIOA, and USART2 profile with an ARMv6-M Cortex-M0+ binary.
+          - id: stm32l072
+            crate: firmware-stm32l072-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/stm32l072-smoke.yaml
+            system: configs/systems/onboarding/stm32l072.yaml
+          # The L151 import is limited to its Cortex-M3, bounded memory
+          # windows, and modeled USART1 path exercised by this fixture.
+          - id: stm32l151
+            crate: firmware-stm32l151-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/stm32l151-smoke.yaml
+            system: configs/systems/onboarding/stm32l151.yaml
+          # The F042 profile is limited to its modeled F0 RCC, GPIOA, and
+          # modern USART1 surfaces exercised by this ARMv6-M fixture.
+          - id: stm32f042
+            crate: firmware-stm32f042-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/stm32f042-smoke.yaml
+            system: configs/systems/onboarding/stm32f042.yaml
+          # The F072 smoke exercises the shared F0 RCC, GPIOA and modern
+          # USART1 models against the exact imported generic F072 system.
+          - id: stm32f072
+            crate: firmware-stm32f072-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/stm32f072-smoke.yaml
+            system: configs/systems/onboarding/stm32f072.yaml
+          # The shared F4 smoke exercises this imported F429 profile's RCC,
+          # GPIOA/GPIOD and classic USART2 subset.
+          - id: stm32f429
+            crate: firmware-stm32f429-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f429-smoke.yaml
+            system: configs/systems/onboarding/stm32f429.yaml
+          # Reuse the F4 register fixture against the exact imported F412
+          # system, with a separate bounded profile and measured assertions.
+          - id: stm32f412
+            crate: firmware-stm32f429-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f412-smoke.yaml
+            system: configs/systems/onboarding/stm32f412.yaml
+          - id: nrf52840
+            crate: firmware-nrf52840-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nrf52840-smoke.yaml
+            system: configs/systems/onboarding/nrf52840.yaml
+          # The imported DK profile keeps only its modeled P0, LED0 and UARTE0
+          # path; the same fixture asserts UART output and a P0.13 transition.
+          - id: nrf52840dk_nrf52840
+            crate: firmware-nrf52840-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nrf52840dk_nrf52840-smoke.yaml
+            system: configs/systems/onboarding/nrf52840dk_nrf52840.yaml
+          # Both imported MAX32652 profiles expose only their model-backed
+          # UART0 and memory windows; generated stub and unsupported GPIO
+          # declarations are omitted until those models exist.
+          - id: max32652
+            crate: firmware-max32652-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/max32652-smoke.yaml
+            system: configs/systems/onboarding/max32652.yaml
+          - id: max32652-evkit
+            crate: firmware-max32652-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/max32652-evkit-smoke.yaml
+            system: configs/systems/onboarding/max32652-evkit.yaml
+          # The NPCX9 imports retain only their mapped ROM execution window,
+          # data RAM and model-backed UART1. Boot-ROM handoff, clocks, GPIO,
+          # timers, SMBus and other generated peripherals are not claimed.
+          - id: nuvoton_npcx9
+            crate: firmware-nuvoton-npcx9-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nuvoton_npcx9-smoke.yaml
+            system: configs/systems/onboarding/nuvoton_npcx9.yaml
+          - id: nuvoton_npcx9m6fb_evb
+            crate: firmware-nuvoton-npcx9-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nuvoton_npcx9m6fb_evb-smoke.yaml
+            system: configs/systems/onboarding/nuvoton_npcx9m6fb_evb.yaml
+          - id: nucleo_f767zi
+            crate: firmware-stm32f746-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nucleo_f767zi-smoke.yaml
+            system: configs/systems/onboarding/nucleo_f767zi.yaml
+          # The imported RT1064 slice includes only the modeled CCM, GPIO2,
+          # LPUART6 and DTCM windows exercised by the M7 fixture.
+          - id: imxrt1064
+            crate: firmware-imxrt1064-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/imxrt1064-smoke.yaml
+            system: configs/systems/onboarding/imxrt1064.yaml
+          # The imported EVK profile exposes the same modeled DTCM, CCM,
+          # GPIO2, and LPUART6 execution surface as the RT1064 smoke.
+          - id: mimxrt1064_evk
+            crate: firmware-imxrt1064-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/mimxrt1064_evk-smoke.yaml
+            system: configs/systems/onboarding/mimxrt1064_evk.yaml
+          - id: sam4s_xplained
+            crate: firmware-sam4s-xplained-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sam4s_xplained-smoke.yaml
+            system: configs/systems/onboarding/sam4s_xplained.yaml
+          # Generic SAM4S is bounded to the smallest-family memory windows,
+          # Cortex-M4, the modeled PMC status, and the UART0 smoke path.
+          - id: sam4s
+            crate: firmware-sam4s-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sam4s-smoke.yaml
+            system: configs/systems/onboarding/sam4s.yaml
+          # SAM4S16C retains only its bounded execution memory, modeled PMC,
+          # and the UART0 path exercised by its exact-import smoke.
+          - id: sam4s16c
+            crate: firmware-sam4s16c-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sam4s16c-smoke.yaml
+            system: configs/systems/onboarding/sam4s16c.yaml
+          # SAM4S8B keeps only its exact flash/SRAM, modeled PMC and UART0
+          # execution path; generated stub and unexercised peripheral claims
+          # are omitted from this bounded profile.
+          - id: sam4s8b
+            crate: firmware-sam4s8b-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sam4s8b-smoke.yaml
+            system: configs/systems/onboarding/sam4s8b.yaml
+          # Narrowed SAM E70 import: only its existing PMC, PIOC, and USART1
+          # models remain in the execution profile.
+          - id: sam_e70
+            crate: firmware-sam-e70-renode-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sam_e70-smoke.yaml
+            system: configs/systems/onboarding/sam_e70.yaml
+          # Imported RISC-V systems narrowed to modeled CPU, memory and
+          # peripheral surfaces before these smokes run.
+          # CrossLink-NX EVN is limited to RV32IM direct-ELF execution and its
+          # imported ROM/SRAM windows; LiteX peripherals and reset are omitted.
+          - id: crosslink-nx-evn
+            crate: firmware-andes-ae350-n25-smoke
+            features: crosslink-nx-evn
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/crosslink-nx-evn-smoke.yaml
+            system: configs/systems/onboarding/crosslink-nx-evn.yaml
+          - id: litex_vexriscv
+            crate: firmware-litex-vexriscv-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv.yaml
+          # The imported Nexys Video Linux-capable VexRiscv platform is
+          # narrowed to the implemented bare-metal RV32IM, ROM/SRAM, UART and
+          # LiteX timer subset; this smoke does not boot Linux or use DDR.
+          - id: litex_nexys_video_vexriscv_linux
+            crate: firmware-litex-vexriscv-linux-smoke
+            features: nexys-video-sram
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_nexys_video_vexriscv_linux-smoke.yaml
+            system: configs/systems/onboarding/litex_nexys_video_vexriscv_linux.yaml
+          # The SD-card Linux platform is narrowed to its sourced RV32IMA CPU,
+          # 256 MiB DDR, and modeled LiteX UART; this is not a Linux/SD-card boot.
+          - id: litex_linux_vexriscv_sdcard
+            crate: firmware-litex-vexriscv-linux-smoke
+            features: sdcard-ddr-profile
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_linux_vexriscv_sdcard-smoke.yaml
+            system: configs/systems/onboarding/litex_linux_vexriscv_sdcard.yaml
+          # This Zephyr imported target shares the LiteX VexRiscv SoC. Its
+          # smoke omits the unmodelled SPI window and covers UART plus timer.
+          - id: litex_vexriscv_zephyr
+            crate: firmware-litex-vexriscv-smoke
+            features: no-unmodelled-spi-probe
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv_zephyr-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv_zephyr.yaml
+          # The MicroPython alias inherits the same modeled LiteX/VexRiscv
+          # CPU, memory, UART, and timer. This smoke runs a bare-metal fixture,
+          # not the MicroPython interpreter image.
+          - id: litex_vexriscv_micropython
+            crate: firmware-litex-vexriscv-smoke
+            features: no-unmodelled-spi-probe
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv_micropython-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv_micropython.yaml
+          # The imported platform uses an external CoSimulatedUART. Run the
+          # local RV32IM + LiteX UART CSR/timer subset instead.
+          - id: litex_vexriscv_verilated_liteuart
+            crate: firmware-litex-vexriscv-smoke
+            features: no-unmodelled-spi-probe,verilated-liteuart-profile
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv_verilated_liteuart-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv_verilated_liteuart.yaml
+          # The imported CFU profile runs the local RV32IM, memory, LiteX UART,
+          # and timer subset; external CFU co-simulation is not included.
+          - id: litex_vexriscv_verilated_cfu
+            crate: firmware-litex-vexriscv-smoke
+            features: no-unmodelled-spi-probe,verilated-cfu-profile
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv_verilated_cfu-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv_verilated_cfu.yaml
+          - id: litex_ibex
+            crate: firmware-litex-ibex-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/litex_ibex-smoke.yaml
+            system: configs/systems/onboarding/litex_ibex.yaml
+          # This imported descriptor is narrowed to LabWired's RV32IMC path,
+          # modeled LiteX UART and timer; the external Verilated CPU is excluded.
+          - id: verilated_ibex
+            crate: firmware-litex-ibex-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/verilated_ibex-smoke.yaml
+            system: configs/systems/onboarding/verilated_ibex.yaml
+          # Direct RV32IMC firmware exercises the imported Earl Grey's
+          # implemented UART0 without claiming OpenTitan ROM boot or stubs.
+          - id: opentitan-earlgrey
+            crate: firmware-opentitan-earlgrey-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/opentitan-earlgrey-smoke.yaml
+            system: configs/systems/onboarding/opentitan-earlgrey.yaml
+          # CW310 reuses Earl Grey's core and base memory/peripheral map. This
+          # direct-ELF smoke measures only the bounded RV32IMC + UART0 profile.
+          - id: opentitan-earlgrey-cw310
+            crate: firmware-opentitan-earlgrey-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/opentitan-earlgrey-cw310-smoke.yaml
+            system: configs/systems/onboarding/opentitan-earlgrey-cw310.yaml
+          - id: litex_picorv32
+            crate: firmware-litex-picorv32-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/litex_picorv32-smoke.yaml
+            system: configs/systems/onboarding/litex_picorv32.yaml
+          # Minerva is RV32I; this fixture exercises its base integer path,
+          # LiteX UART, and LiteX timer on the imported exact system.
+          - id: litex_minerva
+            crate: firmware-litex-minerva-smoke
+            target: riscv32i-unknown-none-elf
+            script: examples/renode-onboarding/litex_minerva-smoke.yaml
+            system: configs/systems/onboarding/litex_minerva.yaml
+          # The imported SMP platform has four RV32IMA harts. This engine
+          # profile checks one RV32IM-compatible hart and LiteX UART only.
+          - id: litex_vexriscv_smp
+            crate: firmware-litex-vexriscv-smp-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv_smp-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv_smp.yaml
+          # LiteX/VexRiscv TFTP platform, bounded to ROM/SRAM, UART, and timer.
+          - id: litex_vexriscv_tftp
+            crate: firmware-litex-vexriscv-tftp-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv_tftp-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv_tftp.yaml
+          # Tock's LiteX profile checks RV32IMAC arithmetic and its modeled
+          # UART over the imported platform's flash and SRAM windows.
+          - id: litex_tock
+            crate: firmware-litex-tock-smoke
+            target: riscv32imac-unknown-none-elf
+            script: examples/renode-onboarding/litex_tock-smoke.yaml
+            system: configs/systems/onboarding/litex_tock.yaml
+          # The Zephyr/I2S import is bounded to its RV32IMAC core, RAM, and
+          # modeled LiteX UART; this direct-ELF smoke does not boot Zephyr or
+          # exercise I2S, Ethernet, or the timer.
+          - id: litex_zephyr_vexriscv_i2s
+            crate: firmware-litex-zephyr-i2s-smoke
+            target: riscv32imac-unknown-none-elf
+            script: examples/renode-onboarding/litex_zephyr_vexriscv_i2s-smoke.yaml
+            system: configs/systems/onboarding/litex_zephyr_vexriscv_i2s.yaml
+          - id: arty_litex_vexriscv
+            crate: firmware-arty-litex-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/arty_litex_vexriscv-smoke.yaml
+            system: configs/systems/onboarding/arty_litex_vexriscv.yaml
+          - id: vegaboard_ri5cy
+            crate: firmware-vegaboard-ri5cy-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/vegaboard_ri5cy-smoke.yaml
+            system: configs/systems/onboarding/vegaboard_ri5cy.yaml
+          # The generic RI5CY import uses the same upstream core, memory map,
+          # and LPUART0, but is tested through its own exact imported system.
+          - id: ri5cy
+            crate: firmware-vegaboard-ri5cy-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/ri5cy-smoke.yaml
+            system: configs/systems/onboarding/ri5cy.yaml
+          # Imported SiFive FE310 narrowed to RV32IMAC memory and uart0.
+          - id: sifive-fe310
+            crate: firmware-sifive-fe310-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/sifive-fe310-smoke.yaml
+            system: configs/systems/onboarding/sifive-fe310.yaml
+          # One RV64IMAC hart from the imported FU540 platform; other harts
+          # and unmodeled peripherals stay outside this UART0 smoke profile.
+          - id: sifive-fu540
+            crate: firmware-sifive-fu540-smoke
+            target: riscv64imac-unknown-none-elf
+            script: examples/renode-onboarding/sifive-fu540-smoke.yaml
+            system: configs/systems/onboarding/sifive-fu540.yaml
+          # FU740's S7 hart and UART0 are measured; four U74 harts and other
+          # peripherals are outside this bounded imported profile.
+          - id: sifive-fu740
+            crate: firmware-sifive-fu740-smoke
+            target: riscv64imac-unknown-none-elf
+            script: examples/renode-onboarding/sifive-fu740-smoke.yaml
+            system: configs/systems/onboarding/sifive-fu740.yaml
+          # JH7100 is narrowed to one RV64IMAC U74, on-chip memory, and UART0.
+          - id: starfive-jh7100
+            crate: firmware-starfive-jh7100-smoke
+            target: riscv64imac-unknown-none-elf
+            script: examples/renode-onboarding/starfive-jh7100-smoke.yaml
+            system: configs/systems/onboarding/starfive-jh7100.yaml
+          - id: beaglev_starlight
+            crate: firmware-starfive-jh7100-smoke
+            target: riscv64imac-unknown-none-elf
+            script: examples/renode-onboarding/beaglev_starlight-smoke.yaml
+            system: configs/systems/onboarding/beaglev_starlight.yaml
+          # K210 is narrowed to one RV64IMAC hart, its mapped memory window,
+          # and the model-backed SiFive UART; the second hart and K210-specific
+          # peripherals are outside this smoke.
+          - id: kendryte_k210
+            crate: firmware-kendryte-k210-smoke
+            target: riscv64imac-unknown-none-elf
+            script: examples/renode-onboarding/kendryte_k210-smoke.yaml
+            system: configs/systems/onboarding/kendryte_k210.yaml
+          # Mi-V profile follows Renode's CPU/memory map and keeps only the
+          # CoreUART path exercised by the smoke.
+          - id: miv_rv32
+            crate: firmware-miv-rv32-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/miv_rv32-smoke.yaml
+            system: configs/systems/onboarding/miv_rv32.yaml
+          # The imported Mi-V fragment uses the same Renode RV32 CPU/memory
+          # map; only its modeled CoreUART is retained for this smoke.
+          - id: miv
+            crate: firmware-miv-rv32-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/miv-smoke.yaml
+            system: configs/systems/onboarding/miv.yaml
+          # The imported miv-board profile uses Renode's documented RV32 Mi-V
+          # memory map and only retains the CoreUART path exercised here.
+          - id: miv-board
+            crate: firmware-miv-rv32-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/miv-board-smoke.yaml
+            system: configs/systems/onboarding/miv-board.yaml
+          # This imported variant exercises the base CoreUART and both added
+          # CoreUART instances on the same bounded Mi-V CPU/memory profile.
+          - id: miv-board-additional-uarts
+            crate: firmware-miv-rv32-smoke
+            features: additional-uarts
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/miv-board-additional-uarts-smoke.yaml
+            system: configs/systems/onboarding/miv-board-additional-uarts.yaml
+          # Murax uses the modeled VexRiscv RV32IM core and UART; this smoke
+          # checks UART output and an explicit M-extension multiply result.
+          - id: murax_vexriscv
+            crate: firmware-murax-vexriscv-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/murax_vexriscv-smoke.yaml
+            system: configs/systems/onboarding/murax_vexriscv.yaml
+          # PicoSoC's imported profile follows Renode's PicoRV32, SRAM/flash,
+          # and SimpleUART map; the smoke checks the modeled UART path.
+          - id: picosoc
+            crate: firmware-picosoc-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/picosoc-smoke.yaml
+            system: configs/systems/onboarding/picosoc.yaml
+          # CV32E40P is imported with a corrected RV32IMC identity and a
+          # CPU-and-memory profile. The smoke executes from the imported code
+          # window and makes no PULP peripheral claim.
+          - id: A2_CV32E40P
+            crate: firmware-cv32e40p-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/A2_CV32E40P-smoke.yaml
+            system: configs/systems/onboarding/A2_CV32E40P.yaml
+          # CORE-V MCU uses the same CV32E40P execution profile and memory
+          # windows; only its exact imported system is under test here.
+          - id: core-v-mcu
+            crate: firmware-cv32e40p-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/core-v-mcu-smoke.yaml
+            system: configs/systems/onboarding/core-v-mcu.yaml
+          # riscv_virt is RV32IMAC with DRAM and NS16550 in Renode. The
+          # imported profile exposes only the bounded DRAM aperture used by
+          # this smoke plus NS16550 polling TX; it does not claim the full
+          # 2 GiB, PLIC, CLINT, or UART interrupt path.
+          - id: riscv_virt
+            crate: firmware-riscv-virt-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/riscv_virt-smoke.yaml
+            system: configs/systems/onboarding/riscv_virt.yaml
+          # Local RV32IM and RAM only; Renode's RiscV32 implementation,
+          # interrupt controllers, and external UART co-sim are not exercised.
+          - id: riscv_verilated_uartlite
+            crate: firmware-riscv-verilated-uartlite-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/riscv_verilated_uartlite-smoke.yaml
+            system: configs/systems/onboarding/riscv_verilated_uartlite.yaml
+          # The AE350 profile is narrowed to the RV32IM and bounded DRAM path;
+          # its wide-register UART and Andes-specific ISA extensions are not claimed.
+          - id: andes_ae350_n25
+            crate: firmware-andes-ae350-n25-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/andes_ae350_n25-smoke.yaml
+            system: configs/systems/onboarding/andes_ae350_n25.yaml
+          # ET171 is narrowed to the generic RV32IM and Renode-mapped SRAM;
+          # the Andes Xandes extensions and imported peripheral claims are out of scope.
+          - id: egis_et171
+            crate: firmware-andes-ae350-n25-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/egis_et171-smoke.yaml
+            system: configs/systems/onboarding/egis_et171.yaml
+          # Tock VeeR EL2 is narrowed to generic RV32IMC execution and the
+          # code/RAM windows exercised by this direct-ELF memory smoke.
+          - id: tock_veer_el2_sim
+            crate: firmware-tock-veer-el2-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/tock_veer_el2_sim-smoke.yaml
+            system: configs/systems/onboarding/tock_veer_el2_sim.yaml
+          # Fomu's VexRiscv is bounded here to RV32IM, its boot ROM, and SRAM.
+          # USB, SPI flash, and board I/O are not claimed.
+          - id: fomu
+            crate: firmware-fomu-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/fomu-smoke.yaml
+            system: configs/systems/onboarding/fomu.yaml
+          # The iCE40 MDP imports the same Fomu VexRiscv CPU profile. Limit it
+          # to the sourced RV32IM subset, boot ROM, and SRAM; peripherals stay
+          # outside the claim.
+          - id: ice40up5k-mdp-evn
+            crate: firmware-fomu-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/ice40up5k-mdp-evn-smoke.yaml
+            system: configs/systems/onboarding/ice40up5k-mdp-evn.yaml
+          # Run the committed MSS GPIO firmware against the exact imported
+          # Icicle Kit system. It exercises GPIO_0..2 register readbacks and
+          # prints the observed values on MMUART1; PLIC/I2C/SPI remain stubs.
+          - id: mpfs-icicle-kit
+            prebuilt_firmware: tests/fixtures/mpfs-gpio-smoke.elf
+            script: examples/renode-onboarding/mpfs-icicle-kit-mss-gpio-smoke.yaml
+            system: configs/systems/onboarding/mpfs-icicle-kit.yaml
+          # BeagleV-Fire exercises the same MSS GPIO banks against its own
+          # imported system profile.
+          - id: beaglev-fire
+            prebuilt_firmware: tests/fixtures/mpfs-gpio-smoke.elf
+            script: examples/renode-onboarding/beaglev-fire-mss-gpio-smoke.yaml
+            system: configs/systems/onboarding/beaglev-fire.yaml
+          # Exercise GPIO_0..2 on the corrected imported PolarFire SoC profile.
+          - id: polarfire-soc
+            prebuilt_firmware: tests/fixtures/mpfs-gpio-smoke.elf
+            script: examples/renode-onboarding/polarfire-soc-mss-gpio-smoke.yaml
+            system: configs/systems/onboarding/polarfire-soc.yaml
+          # ARV-SOM is narrowed to the engine's RV64IMAC CPU subset and a
+          # bounded DDR window; no board peripherals or Linux boot are claimed.
+          - id: arvsom
+            crate: firmware-arvsom-rv64-cpu-smoke
+            target: riscv64imac-unknown-none-elf
+            script: examples/renode-onboarding/arvsom-rv64-cpu-smoke.yaml
+            system: configs/systems/onboarding/arvsom.yaml
+          # One Cortex-A53 PE and DDR from the imported FRDM i.MX 8M Plus
+          # profile. The CPU-only fixture avoids claiming the other cores,
+          # peripherals, or boot flow.
+          - id: nxp-frdm-imx8mplus
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml
+            system: configs/systems/onboarding/nxp-frdm-imx8mplus.yaml
+          # The imported i.MX 8M Plus fragment is bounded to one A53 PE and
+          # DDR; the remaining cores, peripherals, and boot flow are omitted.
+          - id: nxp-mimx8ml
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/nxp-mimx8ml-a53-cpu-smoke.yaml
+            system: configs/systems/onboarding/nxp-mimx8ml.yaml
+          # NXP LX2160A-RDB: one Cortex-A72 PE, DDR and the PL011 console
+          # UART (polled TX). The smoke asserts the UART banner; no GIC,
+          # timer, second UART or I2C is exercised or declared.
+          - id: fsl_lx2160ardb
+            prebuilt_firmware: tests/fixtures/lx2160a-a72-uart-smoke.elf
+            script: examples/renode-onboarding/fsl_lx2160ardb-a72-uart-smoke.yaml
+            system: configs/systems/onboarding/fsl_lx2160ardb.yaml
+          # Zynq UltraScale+ MPSoC: one Cortex-A53 PE, low DDR and PS UART0
+          # (Cadence, polled TX). The smoke asserts the UART banner; no GIC,
+          # timer, RPU or other PS peripheral is exercised or declared.
+          - id: zynqmp
+            prebuilt_firmware: tests/fixtures/zynqmp-a53-uart-smoke.elf
+            script: examples/renode-onboarding/zynqmp-a53-uart-smoke.yaml
+            system: configs/systems/onboarding/zynqmp.yaml
+          - id: zynqmp-zcu102-revA
+            prebuilt_firmware: tests/fixtures/zynqmp-a53-uart-smoke.elf
+            script: examples/renode-onboarding/zynqmp-zcu102-revA-a53-uart-smoke.yaml
+            system: configs/systems/onboarding/zynqmp-zcu102-revA.yaml
+          - id: zynqmp-zcu102-revB
+            prebuilt_firmware: tests/fixtures/zynqmp-a53-uart-smoke.elf
+            script: examples/renode-onboarding/zynqmp-zcu102-revB-a53-uart-smoke.yaml
+            system: configs/systems/onboarding/zynqmp-zcu102-revB.yaml
+          - id: zynqmp-zcu104
+            prebuilt_firmware: tests/fixtures/zynqmp-a53-uart-smoke.elf
+            script: examples/renode-onboarding/zynqmp-zcu104-a53-uart-smoke.yaml
+            system: configs/systems/onboarding/zynqmp-zcu104.yaml
+          - id: zynqmp-zcu106-vcu
+            prebuilt_firmware: tests/fixtures/zynqmp-a53-uart-smoke.elf
+            script: examples/renode-onboarding/zynqmp-zcu106-vcu-a53-uart-smoke.yaml
+            system: configs/systems/onboarding/zynqmp-zcu106-vcu.yaml
+          # One Cortex-A53 PE and imported DDR only. The CPU-only fixture does
+          # not exercise the named GICv2 or the omitted timer/UART/RTC blocks.
+          - id: cortex-a53-gicv2
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/cortex-a53-gicv2-cpu-smoke.yaml
+            system: configs/systems/onboarding/cortex-a53-gicv2.yaml
+          # One Cortex-A53 PE and DDR only. The CPU-only fixture does not
+          # exercise the named GICv3 or the omitted timer/UART/RTC blocks.
+          - id: cortex-a53-gicv3
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/cortex-a53-gicv3-cpu-smoke.yaml
+            system: configs/systems/onboarding/cortex-a53-gicv3.yaml
+          # The imported SMP descriptor is narrowed to one A53 PE and DDR;
+          # multicore, GICv3, timer, UART, and RTC behavior are omitted.
+          - id: cortex-a53-gicv3_smp
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/cortex-a53-gicv3_smp-cpu-smoke.yaml
+            system: configs/systems/onboarding/cortex-a53-gicv3_smp.yaml
+          # A bounded AArch64 integer smoke against the Cortex-A78 import.
+          # A78-specific features, boot firmware, and peripherals are omitted.
+          - id: cortex-a78
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/cortex-a78-cpu-smoke.yaml
+            system: configs/systems/onboarding/cortex-a78.yaml
+          # One Cortex-A53 PE and DDR only. The imported timer, PL011, and
+          # virtio console are not exercised by this direct-ELF integer smoke.
+          - id: cortex_a53_console
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/cortex_a53_console-cpu-smoke.yaml
+            system: configs/systems/onboarding/cortex_a53_console.yaml
+          # One Cortex-A53 PE and DDR only. The CPU-only fixture does not
+          # exercise the imported timer, PL011, or virtio entropy device.
+          - id: cortex_a53_virtio
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/cortex_a53_virtio-cpu-smoke.yaml
+            system: configs/systems/onboarding/cortex_a53_virtio.yaml
+          # Cortex-M4 in the imported VF61 profile: polled UART0 TX/C2/S1 and
+          # GPIO1 PSOR/PCOR/PTOR. A5, IRQ routing (MSCM) and reset boot are out.
+          - id: colibri-vf61
+            prebuilt_firmware: tests/fixtures/colibri-vf61-cortex-m4-smoke.elf
+            script: examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.yaml
+            system: configs/systems/onboarding/colibri-vf61.yaml
+          # The imported Vybrid M4: same UART0 + GPIO1 smoke as colibri-vf61.
+          # A5, IRQ routing (MSCM) and reset boot are out.
+          - id: vybrid
+            prebuilt_firmware: tests/fixtures/colibri-vf61-cortex-m4-smoke.elf
+            script: examples/renode-onboarding/vybrid-cortex-m4-smoke.yaml
+            system: configs/systems/onboarding/vybrid.yaml
+          # One Cortex-M55 with local ITCM/DTCM: polled UART0 TX, LCR/DLAB
+          # divisor latches on UART0 and UART7, LSR idle. No IRQs, GPIO, I2C,
+          # CAN, Helium, other cores, or boot flow.
+          - id: alif_ae822fa0e5597bs0
+            prebuilt_firmware: tests/fixtures/alif-e8-m55-cpu-smoke.elf
+            script: examples/renode-onboarding/alif-e8-m55-cpu-smoke.yaml
+            system: configs/systems/onboarding/alif_ae822fa0e5597bs0.yaml
+          # Only the imported M33 core and its code/data SRAM windows;
+          # excludes the A55 cluster, other memory aliases, and peripherals.
+          - id: renesas_rz_g2l
+            prebuilt_firmware: tests/fixtures/rzg2l-cm33-cpu-smoke.elf
+            script: examples/renode-onboarding/rzg2l-cm33-cpu-smoke.yaml
+            system: configs/systems/onboarding/renesas_rz_g2l.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +1702,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,thumbv8m.base-none-eabi,riscv32i-unknown-none-elf,riscv32im-unknown-none-elf,riscv32imc-unknown-none-elf,riscv64imac-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -93,7 +1717,11 @@ jobs:
           scripts/onboarding_smoke.sh \
             --target-id "${{ matrix.id }}" \
             --crate "${{ matrix.crate }}" \
+            --features "${{ matrix.features }}" \
             --target "${{ matrix.target }}" \
+            --cli-features "${{ matrix.cli_features }}" \
+            --cli-profile "${{ matrix.cli_profile }}" \
+            --prebuilt-firmware "${{ matrix.prebuilt_firmware }}" \
             --script "${{ matrix.script }}" \
             --system "${{ matrix.system }}" \
             --out-dir "out/onboarding-smoke/${{ matrix.id }}" \

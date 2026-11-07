@@ -1,0 +1,10 @@
+# CPU-only AArch64 smoke against the bounded imported Cortex-A78 profile.
+# The shared AArch64 integer loop performs no MMIO and does not test A78 features.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/imx8mplus-a53-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/cortex-a78.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

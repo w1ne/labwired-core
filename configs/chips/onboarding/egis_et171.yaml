@@ -1,53 +1,15 @@
+# Bounded profile for Renode's Egis ET171 fragment. The execution smoke uses
+# the generic RV32IM subset and on-chip SRAM only; the upstream Andes D25F's
+# rv32gc_xandes extensions, reset flow, and all peripherals remain unclaimed.
+# Memory windows follow Renode's platforms/cpus/egis_et171.repl.
 name: egis_et171
-arch: arm
+arch: riscv
+core: rv32im
+flash_boot_alias: false
 flash:
-  base: 1879048192
-  size: 65536B
+  base: 0x80000000
+  size: 1MiB
 ram:
-  base: 1073741824
-  size: 262144
-peripherals:
-- id: mtimer
-  type: riscvmachinetimer
-  bus: sysbus
-  base_address: 3858759680
-- id: uart0
-  type: ns16550
-  bus: sysbus
-  base_address: 4028629024
-- id: pit0
-  type: andesatcpit100
-  bus: sysbus
-  base_address: 4030726144
-- id: gpio0
-  type: andesatcgpio100
-  bus: sysbus
-  base_address: 4033871872
-- id: watchdog
-  type: andesatcwdt200_watchdog
-  bus: sysbus
-  base_address: 4031774720
-- id: spi0
-  type: andesatcspi200
-  bus: sysbus
-  base_address: 4038066176
-- id: spi1
-  type: andesatcspi200
-  bus: sysbus
-  base_address: 4042260480
-- id: rtc0
-  type: andesatcrtc100
-  bus: sysbus
-  base_address: 4032823296
-- id: syscon
-  type: egiset171_aosmu
-  bus: sysbus
-  base_address: 4027580416
-- id: smu2
-  type: egiset171_smu2
-  bus: sysbus
-  base_address: 4041211904
-- id: crypto
-  type: egiset171_crypto
-  bus: sysbus
-  base_address: 3892314112
+  base: 0x00000000
+  size: 384KB
+peripherals: []

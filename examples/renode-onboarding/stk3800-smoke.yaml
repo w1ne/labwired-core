@@ -1,0 +1,10 @@
+# Cortex-M4F UART0 smoke against the narrowed imported STK3800 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stk3800-smoke"
+  system: "../../configs/systems/onboarding/stk3800.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "STK3800 EFM32WG995 UART0 smoke"
+  - expected_stop_reason: max_steps

@@ -21,7 +21,8 @@
 #
 # Modelled: CPU + memory + LiteX UART + LiteX timer + the Control-and-Status
 # block (LED drive/readback, switch/button levels, pending/enable interrupts).
-# Declared stubs: SPI-flash / Ethernet / MMCM CSRs. Fast boot: the ELF is
+# + the LiteX SPI-flash bitbang controller (MT25Q ID/status responder).
+# Declared stubs: Ethernet / MMCM CSRs. Fast boot: the ELF is
 # loaded directly; the LiteX BIOS and the SPI-flash load are not modelled.
 #
 # Tier: L1 smoke — boot + UART + timer one-shot + LED/switch/button CSR path.
@@ -55,8 +56,11 @@ peripherals:
     size: "2KB"
     config:
       buttons_active_low: true
+  # LiteX SPI-flash bitbang CSRs + Micron MT25Q READ ID / status responder
+  # (Renode litex_common.repl `spi` + `flash`). Array reads, program and
+  # erase are not modelled; the XIP window above is plain flash memory.
   - id: "spi_flash_ctrl"
-    type: "stub"
+    type: "litex_spi_flash"
     base_address: 0x60005000
     size: "2KB"
     irq: 9

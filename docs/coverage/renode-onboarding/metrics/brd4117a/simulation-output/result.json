@@ -1,0 +1,197 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "EFR32xG26 Cortex-M33 USART0 smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1074397208,
+      35,
+      2147483648,
+      10,
+      0,
+      0,
+      0,
+      537395184,
+      0,
+      0,
+      0,
+      0,
+      134219968,
+      537395184,
+      134219961,
+      134219950
+    ],
+    "pc": 134219950,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "4a411c33abbaa26fb061e876c8cd005c6d0b17979d1e5c7ad6498c6c2633f499",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-efr32xg26-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/brd4117a.yaml",
+    "script": "examples/renode-onboarding/brd4117a-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "cmu",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 1074397184,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "EFR32xG26 Cortex-M33 USART0 smoke",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2276,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 2276,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 3268608,
+    "ram_total_bytes": 524288,
+    "flash_used_pct": 0.07,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 524288,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 524272,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537395200,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 524288,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 524272,
+    "heap_base": 536870912,
+    "heap_top": 537395200
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 104,
+    "memory_writes": 6,
+    "peripheral_accesses": 74,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134219950,
+        "count": 390,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      }
+    ]
+  }
+}

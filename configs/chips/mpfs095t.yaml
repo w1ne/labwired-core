@@ -14,10 +14,10 @@
 #   mtime counts at 1 MHz.
 #
 # Modelled: one U54 hart (mhartid 1) as an RV64IMAC M-mode core with the
-# CLINT inside the core (crates/core/src/cpu/riscv64.rs), the five MMUARTs as
-# 16550s (DLAB divisor latches, polled TX), L2-LIM and the DDR window as RAM.
-# Declared, not modelled (`type: stub`): PLIC (no external interrupts are
-# delivered yet), the GPIO/I2C/SPI/QSPI blocks and the system controller
+# CLINT and PLIC inside the core (crates/core/src/cpu/riscv64.rs and
+# riscv64_plic.rs), the five MMUARTs as 16550s (DLAB divisor latches, polled
+# TX), MSS GPIO_0..2, I2C0/1 and SPI1 (master), L2-LIM and the DDR window as
+# RAM. Declared, not modelled (`type: stub`): QSPI and the system controller
 # mailbox. Not modelled in the core: F/D, S/U modes, Sv39, the E51 and the
 # other three U54s.
 
@@ -74,39 +74,57 @@ peripherals:
     irq: 94
     config:
       profile: "dw_apb_uart"
-  # PLIC: priorities / pending / enables / threshold+claim. Stubbed until the
-  # core takes external interrupts.
-  - id: "plic"
-    type: "stub"
-    base_address: 0x0C000000
-    size: "65536KB"
-  # MSS GPIO_0..2. Named `mss_gpio*`, not `gpio*`: the bus reads a `gpio0` /
-  # `gpio1` peripheral as a Nordic GPIOTE port and keeps a per-cycle service
-  # pass for it, which these stubs do not need.
+  # PLIC (0x0C000000): modelled inside the core, as the CLINT is — priorities,
+  # pending, enables, threshold and claim/complete for 186 sources and 9
+  # contexts, with this hart's M-mode context (1) driving MEIP. A
+  # peripheral's `irq` is its PLIC source ID.
+  # MSS GPIO_0..2: CoreGPIO semantics on the mss_gpio.h register map
+  # (crates/core/src/peripherals/miv.rs). `ports` is the bank width
+  # (NB_OF_GPIO_GPIO0/1/2 = 14/24/32 in Microchip's mss_gpio.c). `irq` is
+  # each bank's OR'd non-direct line, PLIC sources 51/52/53
+  # (PLIC_GPIO*_NON_DIRECT_INT_OFFSET in mss_plic.h). The per-pin direct
+  # sources 13-50 are not wired. Named `mss_gpio*`, not `gpio*`: the bus reads
+  # a `gpio0` / `gpio1` peripheral as a Nordic GPIOTE port.
   - id: "mss_gpio0"
-    type: "stub"
+    type: "mpfs_gpio"
     base_address: 0x20120000
     size: "4KB"
+    irq: 51
+    config:
+      ports: 14
   - id: "mss_gpio1"
-    type: "stub"
+    type: "mpfs_gpio"
     base_address: 0x20121000
     size: "4KB"
+    irq: 52
+    config:
+      ports: 24
   - id: "mss_gpio2"
-    type: "stub"
+    type: "mpfs_gpio"
     base_address: 0x20122000
     size: "4KB"
+    irq: 53
+    config:
+      ports: 32
+  # MSS I2C0/1: CoreI2C master state machine (crates/core/src/peripherals/
+  # mpfs_i2c.rs); slave mode, SMBus and bit timing are not modelled.
   - id: "i2c0"
-    type: "stub"
+    type: "mpfs_i2c"
     base_address: 0x2010A000
     size: "4KB"
+    irq: 58
   - id: "i2c1"
-    type: "stub"
+    type: "mpfs_i2c"
     base_address: 0x2010B000
     size: "4KB"
+    irq: 61
+  # MSS SPI1: CoreSPI master (crates/core/src/peripherals/mpfs_spi.rs); slave
+  # mode, TX FIFO, SPI modes and timing are not modelled. SPI0 is not declared.
   - id: "spi1"
-    type: "stub"
+    type: "mpfs_spi"
     base_address: 0x20109000
     size: "4KB"
+    irq: 55
   - id: "qspi"
     type: "stub"
     base_address: 0x21000000

@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1074659332,
+      10,
+      1740,
+      0,
+      0,
+      0,
+      0,
+      537753584,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537753584,
+      1733,
+      1720
+    ],
+    "pc": 1720,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "e00db0959dac160a0a0c15812b894e06743b4d4549805926589cc2315b91aa20",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/nuvoton_npcx9m6fb_evb.yaml",
+    "script": "examples/renode-onboarding/nuvoton_npcx9m6fb_evb-smoke.yaml"
+  }
+}

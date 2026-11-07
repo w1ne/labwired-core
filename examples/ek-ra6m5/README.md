@@ -129,8 +129,9 @@ hb=0 podr=0040 s1=1 s2=1
 - **Clock generation.** The SYSTEM window models only `HOCOCR`/`OSCSF`.
   `SCKDIVCR`, `SCKSCR` and `PRCR` read 0 and drop writes, so the simulator
   neither checks the PRCR key nor applies the divider.
-- **Module stop.** `MSTP` is a stub: SCI0 runs whether or not `MSTPB31` is
-  cleared.
+- **Module stop.** The SVD-derived MSTP register file reads reset values and
+  stores writes; the exact-system smoke checks `MSTPCRB.MSTPB31` readback.
+  Module gating is not modelled, so SCI0 also runs while the bit is set.
 - **SCI interrupts.** SCI0 raises RXI/TXI/TEI through the ICU, but not ERI
   or the receive error flags. RXI comes once per character a frame apart,
   not at `FCR.RTRG` or 15 ETU after the last stop bit, and `SSR_FIFO.DR`

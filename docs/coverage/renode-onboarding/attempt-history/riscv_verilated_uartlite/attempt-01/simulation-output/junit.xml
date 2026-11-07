@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="2" errors="0" time="0.000378">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MemoryViolation"/>
+    <property name="firmware_hash" value="7084dc25c098429dfba1c028ee6068ab54acd0f151e89b7f5fc232ab2cae388a"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000378">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x60001000=0x143" time="0.000000">
+    <failure message="assertion failed">assertion 1: memory_value: @0x60001000=0x143
+
+result_schema_version=1.0
+stop_reason=MemoryViolation
+stop_reason_details.triggered_stop_condition=MemoryViolation
+steps_executed=0
+cycles=192
+instructions=49
+limits:
+  - max_steps=100000
+firmware_hash=7084dc25c098429dfba1c028ee6068ab54acd0f151e89b7f5fc232ab2cae388a
+firmware=examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-riscv-verilated-uartlite-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/riscv_verilated_uartlite.yaml
+script=examples/renode-onboarding/riscv_verilated_uartlite-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1610616832, expected_value: 323, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+    <failure message="assertion failed">assertion 2: expected_stop_reason: MaxSteps
+
+result_schema_version=1.0
+stop_reason=MemoryViolation
+stop_reason_details.triggered_stop_condition=MemoryViolation
+steps_executed=0
+cycles=192
+instructions=49
+limits:
+  - max_steps=100000
+firmware_hash=7084dc25c098429dfba1c028ee6068ab54acd0f151e89b7f5fc232ab2cae388a
+firmware=examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-riscv-verilated-uartlite-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/riscv_verilated_uartlite.yaml
+script=examples/renode-onboarding/riscv_verilated_uartlite-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1610616832, expected_value: 323, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+</testsuite>

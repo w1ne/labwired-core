@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      323,
+      536887296,
+      2152,
+      0,
+      0,
+      0,
+      0,
+      536903672,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536903672,
+      2087,
+      2142
+    ],
+    "pc": 2142,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "772d79a9d06169b8d270c16d6bade6f2dc86e57c8b578151593251e342518c3a",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv8m.base-none-eabi/release/firmware-renesas-r7fa2e1a9-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-r7fa2e1a9.yaml",
+    "script": "examples/renode-onboarding/renesas-r7fa2e1a9-smoke.yaml"
+  }
+}

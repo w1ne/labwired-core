@@ -14,8 +14,8 @@ This page covers the public models. For every chip we model — public and priva
 | arty-litex-vexriscv | **L1** | ✓ | 6 | — | — | firmware_survival::test_arty_litex_smoke_survival |
 | vegaboard-ri5cy | **L1** | ✓ | 9 | — | — | firmware_survival::test_vegaboard_ri5cy_smoke_survival |
 | stm32l552 | **L1** | ✓ | 50 | — | — | firmware_survival::test_nucleo_l552ze_q_smoke_survival |
-| cc2538sf53 | **L1** | ✓ | 28 | — | — | firmware_survival::test_cc2538dk_smoke_survival |
-| mpfs095t | **L1** | ✓ | 14 | — | — | firmware_survival::test_mpfs_disco_kit_zephyr_survival |
+| cc2538sf53 | **L1** | ✓ | 27 | — | — | firmware_survival::test_cc2538dk_smoke_survival |
+| mpfs095t | **L1** | ✓ | 13 | — | — | firmware_survival::test_mpfs_disco_kit_zephyr_survival |
 | am6234 | **L1** | ✓ | 9 | — | — | firmware_survival::test_sk_am62_zephyr_survival |
 | r5f52618bgfp | **L1** | ✓ | 10 | — | — | firmware_survival::test_ek_rx261_zephyr_survival |
 | pic32mz2048efm144 | **L1** | ✓ | 10 | — | — | firmware_survival::test_curiosity_pic32mz_nuttx_survival |

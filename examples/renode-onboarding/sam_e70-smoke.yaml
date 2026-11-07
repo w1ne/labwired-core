@@ -1,0 +1,20 @@
+# SAM E70 narrowed imported profile: PMC, PIOC latch, and USART1 smoke.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam-e70-renode-smoke"
+  system: "../../configs/systems/onboarding/sam_e70.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "SAM E70 RENODE PROFILE SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m7 uart=usart1"
+      - "pmc pcsr0=00005000"
+      - "led=off odsr=00000100"
+      - "led=on odsr=00000000"
+      - "led=off odsr=00000100"
+  - memory_value:
+      address: 0x400E1238
+      mask: 0x00000100
+      expected_value: 0x00000100
+  - expected_stop_reason: max_steps

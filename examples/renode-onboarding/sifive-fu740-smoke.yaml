@@ -1,0 +1,10 @@
+# One RV64IMAC S7 hart and UART0 on the narrowed imported SiFive FU740 profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv64imac-unknown-none-elf/release/firmware-sifive-fu740-smoke"
+  system: "../../configs/systems/onboarding/sifive-fu740.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "RV64 FU740 UART0 smoke; mul=0000001100000011"
+  - expected_stop_reason: max_steps

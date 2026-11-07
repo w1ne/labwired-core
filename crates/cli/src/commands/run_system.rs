@@ -223,6 +223,16 @@ pub(crate) fn run_firmware_with_system(
         );
         return ExitCode::from(EXIT_CONFIG_ERROR);
     }
+    if family == MachineFamily::Arm7Tdmi {
+        emit_error(
+            json,
+            "ConfigError",
+            "ARM7TDMI runs through `labwired test --system <manifest>` on a native --features qemu-arm-system build".into(),
+            None,
+            EXIT_CONFIG_ERROR,
+        );
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
     if family == MachineFamily::CortexA && program.arch != labwired_core::Arch::Arm {
         emit_error(json, "ConfigError", "Cortex-A7 requires a 32-bit ARM ELF; firmware architecture does not match the declared chip".into(), None, EXIT_CONFIG_ERROR);
         return ExitCode::from(EXIT_CONFIG_ERROR);
@@ -230,7 +240,9 @@ pub(crate) fn run_firmware_with_system(
     let cpu: Box<dyn Cpu> = if family == MachineFamily::CortexA {
         #[cfg(feature = "qemu-arm")]
         {
-            match labwired_core::cpu::CortexA7::new() {
+            match labwired_core::system::arch_policy::cortex_a_core(&chip)
+                .and_then(|core| Ok(labwired_core::cpu::CortexA7::with_core(core)?))
+            {
                 Ok(cpu) => Box::new(cpu),
                 Err(error) => {
                     emit_error(

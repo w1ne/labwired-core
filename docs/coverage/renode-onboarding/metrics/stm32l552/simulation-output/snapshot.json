@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      134080,
+      24,
+      8,
+      3,
+      1073774620,
+      3,
+      32,
+      537067464,
+      537067492,
+      87,
+      98,
+      429496730,
+      134224505,
+      537067464,
+      134222049,
+      134223414
+    ],
+    "pc": 134223414,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 2000000,
+  "cycles": 2000000,
+  "instructions": 2000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000000
+    }
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "b177acb4a309a91747fea1eabd9e6cc0bedce84cb10a382b494a9bf1ae7b8f16",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-l552ze-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l552.yaml",
+    "script": "examples/renode-onboarding/stm32l552-smoke.yaml"
+  }
+}

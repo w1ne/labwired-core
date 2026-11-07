@@ -6,3 +6,17 @@
 
 name: stm32f103
 chip: ../../chips/onboarding/stm32f103.yaml
+external_devices:
+  - id: tmp102
+    type: tmp102
+    connection: i2c1
+    config:
+      i2c_address: 0x48
+  - id: bme280
+    type: bme280
+    connection: i2c1
+    config:
+      i2c_address: 0x76
+      temperature: 40.0
+      humidity: 80.0
+      pressure: 950.0

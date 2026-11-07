@@ -5,23 +5,11 @@
 # See the LICENSE file in the project root for full license information.
 
 name: cortex_a53_virtio
-arch: arm
-flash:
-  base: 134217728
-  size: 67108864B
+arch: aarch64
+core: cortex-a53
+flash: { base: 0, size: 0 }
 ram:
   base: 1073741824
-  size: 134217728B
-peripherals:
-- id: timer
-  type: arm_generictimer
-  bus: cpu0
-  base_address: 15
-- id: uart0
-  type: pl011
-  bus: sysbus
-  base_address: 150994944
-- id: virtio_entropy
-  type: virtiommioentropy
-  bus: sysbus
-  base_address: 167772160
+  size: 128MiB
+flash_boot_alias: false
+peripherals: []

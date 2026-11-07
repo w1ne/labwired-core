@@ -6,6 +6,7 @@
 
 name: efr32mg26
 arch: arm
+core: cortex-m33
 flash:
   base: 134217728
   size: 3268608B
@@ -13,7 +14,15 @@ ram:
   base: 536870912
   size: 524288B
 peripherals:
-- id: DCDC_IF
-  type: pythonperipheral
+- id: cmu
+  type: efr32s2_cmu
   bus: sysbus
-  base_address: 1342799912
+  base_address: 1073774592
+  size: 4KB
+- id: usart1
+  type: efr32s2_usart
+  bus: sysbus
+  base_address: 1074413568
+  size: 4KB
+  clock: { reg: clken2, bit: 7 }
+  irq: 17

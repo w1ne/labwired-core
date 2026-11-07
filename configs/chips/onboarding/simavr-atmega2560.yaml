@@ -1,3 +1,9 @@
+# Imported simavr ATmega2560 profile narrowed to the Arduino Mega I/O smoke.
+# It exercises the 256 KiB flash, 8 KiB SRAM, GPIO ports B/E/F/G/H, USART0,
+# and ADC channels 0, 8, and 9. The smoke observes only GPIOB pin 7; timers
+# remain part of the AVR CPU model.
+# SPI, TWI, other USARTs, and other peripherals are outside this profile.
+#
 # LabWired - Firmware Simulation Platform
 # Copyright (C) 2026 Andrii Shylenko
 #
@@ -7,13 +13,46 @@
 name: simavr-atmega2560
 arch: avr
 core: avr8
+cpu_hz: 16000000
 flash:
   base: 0
   size: 256KB
 ram:
   base: 512
   size: 8KB
-peripherals: []
+peripherals:
+  - id: portb
+    type: avr_gpio
+    base_address: 0x00010023
+    size: 3
+  - id: porte
+    type: avr_gpio
+    base_address: 0x0001002C
+    size: 3
+  - id: portf
+    type: avr_gpio
+    base_address: 0x0001002F
+    size: 3
+  - id: portg
+    type: avr_gpio
+    base_address: 0x00010032
+    size: 3
+  - id: porth
+    type: avr_gpio
+    base_address: 0x00010100
+    size: 3
+  - id: usart0
+    type: uart
+    base_address: 0x000100C0
+    size: 8
+    config:
+      profile: avr
+  - id: adc
+    type: avr_adc
+    base_address: 0x00010200
+    size: 32
+    config:
+      channels: 16
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

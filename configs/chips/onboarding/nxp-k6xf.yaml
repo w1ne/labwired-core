@@ -4,38 +4,69 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# SUPERSEDED: staged onboarding descriptor. The promoted K64F part is
-# configs/chips/mk64f12.yaml (board: configs/systems/frdm-k64f.yaml).
+# Imported Renode execution profile narrowed to the model-backed K64F CPU,
+# memory, UART0, and GPIOB/E surface used by the onboarding smoke. Ethernet,
+# USB, RNG, and clock behavior are outside this profile. SIM, WDOG, and
+# PORTB/E are declarative register files generated from the NXP MK64F12 SVD:
+# they read back what was written and reset to silicon values, but no clock is
+# gated, no watchdog runs and no pad is muxed.
 name: nxp-k6xf
 arch: arm
+core: cortex-m4
 flash:
-  base: 134217728
+  base: 0x00000000
   size: 1048576B
 ram:
-  base: 536805376
-  size: 65536B
+  base: 0x20000000
+  size: 196608B
 peripherals:
 - id: uart0
-  type: k6xf_uart
+  type: uart
   bus: sysbus
-  base_address: 1074176000
-- id: mcg
-  type: k6xf_mcg
+  base_address: 0x4006A000
+  size: 1024B
+  irq: 31
+  config:
+    profile: k6xf
+- id: gpiob
+  type: gpio
   bus: sysbus
-  base_address: 1074151424
+  base_address: 0x400FF040
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpioe
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF100
+  size: 64B
+  config:
+    profile: kinetis
 - id: sim
-  type: k6xf_sim
+  type: declarative
   bus: sysbus
-  base_address: 1074032640
-- id: eth
-  type: k6xf_ethernet
+  base_address: 0x40047000
+  size: 8192B
+  config:
+    path: ../../peripherals/mk64f12/sim.yaml
+- id: wdog
+  type: declarative
   bus: sysbus
-  base_address: 1074528256
-- id: phy
-  type: ethernetphysicallayer
-  bus: eth
-  base_address: 0
-- id: rng
-  type: k6xf_rng
+  base_address: 0x40052000
+  size: 32B
+  config:
+    path: ../../peripherals/mk64f12/wdog.yaml
+- id: portb
+  type: declarative
   bus: sysbus
-  base_address: 1073909760
+  base_address: 0x4004A000
+  size: 1024B
+  config:
+    path: ../../peripherals/mk64f12/port.yaml
+- id: porte
+  type: declarative
+  bus: sysbus
+  base_address: 0x4004D000
+  size: 1024B
+  config:
+    path: ../../peripherals/mk64f12/port.yaml

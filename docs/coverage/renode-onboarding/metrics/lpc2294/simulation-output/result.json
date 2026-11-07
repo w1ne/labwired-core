@@ -1,0 +1,140 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "LPC2294_UART0_TX_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm7_tdmi",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      134217788,
+      0,
+      3758145536,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      134217756
+    ],
+    "pc": 134217756,
+    "cpsr": 1610613203
+  },
+  "firmware_hash": "b9d53733c8d10e4f14d91966279cbcaf3271e35d56c7e8064cdfa007378c7124",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/lpc2294-arm7-uart-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/lpc2294.yaml",
+    "script": "examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 3758145536,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "LPC2294_UART0_TX_OK",
+        "cycle_lo": 0,
+        "cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 60,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 60,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 65536,
+    "ram_total_bytes": 65536,
+    "flash_used_pct": 0.09,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "stack_ram_region_unknown",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 31,
+    "memory_writes": 0,
+    "peripheral_accesses": 19,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134217756,
+        "count": 390
+      }
+    ]
+  }
+}

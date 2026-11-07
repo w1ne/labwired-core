@@ -1,337 +1,63 @@
 # LabWired - Firmware Simulation Platform
 # Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
 #
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# Narrowed profile for the imported S32K388EVB descriptor.
+#
+# The imported Renode peripheral list was mostly zero-answering windows. This
+# profile keeps the sourced CM7_0 core and memory map (configs/chips/s32k388.yaml)
+# and only the blocks the onboarding smoke exercises: the real SIUL2 GPIO and
+# LPUART2 models, SysTick, and two explicit stubs (SWT_0, MC_ME) that accept the
+# watchdog-disable and clock-gate writes. Those stubs never fire a watchdog
+# and gate nothing; this profile claims no other S32K388 peripheral.
+name: "nxp-s32k388evb"
+arch: "arm"
+core: "cortex-m7"
+cpu_hz: 48_000_000
 
-# SUPERSEDED: staged onboarding descriptor (a generic UART fixture on the
-# Renode-derived map with 256 KiB of RAM and no S32K3 SIUL2 model). The
-# promoted S32K388 part is configs/chips/s32k388.yaml (board:
-# configs/systems/s32k388-evb.yaml).
-name: nxp-s32k388evb
-arch: arm
 flash:
-  base: 4194304
-  size: 8388608B
+  base: 0x00400000
+  size: "8192KB"
 ram:
-  base: 541065216
-  size: 262144B
+  base: 0x20400000
+  size: "768KB"
+memory_regions:
+  - name: "itcm"
+    base: 0x00000000
+    size: "32KB"
+  - name: "dtcm"
+    base: 0x20000000
+    size: "64KB"
+flash_boot_alias: false
+reset_vector_offset: 0x1000
+pins:
+  PTA1: { gpio: "siul2", bit: 1 }
+  PTF17: { gpio: "siul2", bit: 177 }
+  PTF18: { gpio: "siul2", bit: 178 }
+  PTF19: { gpio: "siul2", bit: 179 }
+  PTF22: { gpio: "siul2", bit: 182 }
+  PTF23: { gpio: "siul2", bit: 183 }
+  PTF24: { gpio: "siul2", bit: 184 }
 peripherals:
-- id: userButton0
-  type: button
-  bus: siul2
-  base_address: 1
-- id: userButton1
-  type: button
-  bus: siul2
-  base_address: 28
-- id: led2_red
-  type: led
-  bus: siul2
-  base_address: 177
-- id: led2_green
-  type: led
-  bus: siul2
-  base_address: 178
-- id: led2_blue
-  type: led
-  bus: siul2
-  base_address: 179
-- id: led1_red
-  type: led
-  bus: siul2
-  base_address: 182
-- id: led1_green
-  type: led
-  bus: siul2
-  base_address: 183
-- id: led1_blue
-  type: led
-  bus: siul2
-  base_address: 184
-- id: dwt
-  type: dwt
-  bus: sysbus
-  base_address: 3758100480
-- id: mscm
-  type: s32k3xx_miscellaneoussystemcontrolmodule
-  bus: sysbus
-  base_address: 1076232192
-- id: siul2
-  type: s32k3xx_systemintegrationunitlite2
-  bus: sysbus
-  base_address: 1076428800
-- id: mc_me
-  type: s32kxx_modeentrymodule
-  bus: sysbus
-  base_address: 1076740096
-- id: swt0
-  type: s32k3xx_softwarewatchdogtimer
-  bus: sysbus
-  base_address: 1076297728
-- id: swt1
-  type: s32k3xx_softwarewatchdogtimer
-  bus: sysbus
-  base_address: 1078378496
-- id: swt2
-  type: s32k3xx_softwarewatchdogtimer
-  bus: sysbus
-  base_address: 1078394880
-- id: swt3
-  type: s32k3xx_softwarewatchdogtimer
-  bus: sysbus
-  base_address: 1074200576
-- id: stm0
-  type: s32k3xx_systemtimermodule
-  bus: sysbus
-  base_address: 1076314112
-- id: stm1
-  type: s32k3xx_systemtimermodule
-  bus: sysbus
-  base_address: 1078411264
-- id: stm2
-  type: s32k3xx_systemtimermodule
-  bus: sysbus
-  base_address: 1078427648
-- id: stm3
-  type: s32k3xx_systemtimermodule
-  bus: sysbus
-  base_address: 1078444032
-- id: pit0
-  type: s32k3xx_periodicinterrupttimer
-  bus: sysbus
-  base_address: 1074462720
-- id: pit1
-  type: s32k3xx_periodicinterrupttimer
-  bus: sysbus
-  base_address: 1074479104
-- id: pit2
-  type: s32k3xx_periodicinterrupttimer
-  bus: sysbus
-  base_address: 1076871168
-- id: pit3
-  type: s32k3xx_periodicinterrupttimer
-  bus: sysbus
-  base_address: 1076887552
-- id: rtc
-  type: s32k3xx_realtimeclock
-  bus: sysbus
-  base_address: 1076396032
-- id: lpi2c0
-  type: s32k3xx_lowpowerinterintegratedcircuit
-  bus: sysbus
-  base_address: 1077215232
-- id: lpi2c1
-  type: s32k3xx_lowpowerinterintegratedcircuit
-  bus: sysbus
-  base_address: 1077231616
-- id: lpspi0
-  type: stub
-  renode_type: imxrt_lpspi
-  bus: sysbus
-  base_address: 1077248000
-- id: lpspi1
-  type: stub
-  renode_type: imxrt_lpspi
-  bus: sysbus
-  base_address: 1077264384
-- id: lpspi2
-  type: stub
-  renode_type: imxrt_lpspi
-  bus: sysbus
-  base_address: 1077280768
-- id: lpspi3
-  type: stub
-  renode_type: imxrt_lpspi
-  bus: sysbus
-  base_address: 1077297152
-- id: lpspi4
-  type: stub
-  renode_type: imxrt_lpspi
-  bus: sysbus
-  base_address: 1078706176
-- id: lpspi5
-  type: stub
-  renode_type: imxrt_lpspi
-  bus: sysbus
-  base_address: 1078722560
-- id: flex_io
-  type: stub
-  renode_type: s32k3xx_flexio
-  bus: sysbus
-  base_address: 1077035008
-- id: lpuart0
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1077051392
-- id: lpuart1
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1077067776
-- id: lpuart2
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1077084160
-- id: lpuart3
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1077100544
-- id: lpuart4
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1077116928
-- id: lpuart5
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1077133312
-- id: lpuart6
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1077149696
-- id: lpuart7
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1077166080
-- id: lpuart8
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1078509568
-- id: lpuart9
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1078525952
-- id: lpuart10
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1078542336
-- id: lpuart11
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1078558720
-- id: lpuart12
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1078575104
-- id: lpuart13
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1078591488
-- id: lpuart14
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1078607872
-- id: lpuart15
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1078624256
-- id: mc_cgm_mux_0_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076724484
-- id: mc_cgm_mux_1_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076724548
-- id: mc_cgm_mux_2_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076724612
-- id: mc_cgm_mux_3_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076724676
-- id: mc_cgm_mux_4_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076724740
-- id: mc_cgm_mux_5_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076724804
-- id: mc_cgm_mux_6_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076724868
-- id: mc_cgm_mux_7_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076724932
-- id: mc_cgm_mux_8_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076724996
-- id: mc_cgm_mux_9_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076725060
-- id: mc_cgm_mux_10_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076725124
-- id: mc_cgm_mux_11_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076725188
-- id: mc_cgm_mux_12_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076725252
-- id: mc_cgm_mux_13_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076725316
-- id: mc_cgm_mux_14_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076725380
-- id: mc_cgm_mux_15_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076725444
-- id: mc_cgm_mux_16_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076725508
-- id: mc_cgm_mux_17_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076725572
-- id: mc_cgm_mux_18_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076725636
-- id: mc_cgm_mux_19_css
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1076725700
-- id: gmac0
-  type: stub
-  renode_type: s32k3xx_gmac
-  bus: sysbus
-  base_address: 1078476800
-- id: gmac1
-  type: stub
-  renode_type: s32k3xx_gmac
-  bus: sysbus
-  base_address: 1078493184
-- id: dma_channels0_11
-  type: nxp_edma_channels
-  bus: sysbus
-  base_address: 1075904512
-- id: dma_channels12_32
-  type: nxp_edma_channels
-  bus: sysbus
-  base_address: 1078001664
-- id: dma_mux0
-  type: s32k3xx_dmamux
-  bus: sysbus
-  base_address: 1076363264
-- id: dma_mux1
-  type: s32k3xx_dmamux
-  bus: sysbus
-  base_address: 1076379648
-- id: xrdc
-  type: stub
-  renode_type: nxp_xrdc
-  bus: sysbus
-  base_address: 1076330496
+  - id: "swt0"
+    type: "stub"
+    base_address: 0x40270000
+    size: "16KB"
+  - id: "siul2"
+    type: "s32k3_siul2"
+    base_address: 0x40290000
+    size: "16KB"
+  - id: "mc_me"
+    type: "stub"
+    base_address: 0x402DC000
+    size: "16KB"
+  - id: "lpuart2"
+    type: "imxrt_lpuart"
+    base_address: 0x40330000
+    size: "16KB"
+    irq: 143
+    config: { clock_hz: 24000000 }
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: 16

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.001187">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="c1d21af48ff429778936a818c8f5ea7e14157bf1309ef430f6a5e645d07f193b"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.001187">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: SAM4S16C UART0 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073790992,
+      1,
+      134218960,
+      0,
+      0,
+      0,
+      0,
+      536903624,
+      0,
+      0,
+      0,
+      0,
+      1208,
+      536903624,
+      4294967289,
+      134218932
+    ],
+    "pc": 134218932,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "bb8ec1833f5ccd05ea39493c605f24dd3907a9cee7fa45e2c0c69b359b79f74c",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efm32pg1-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32pg1.yaml",
+    "script": "examples/renode-onboarding/efm32pg1-smoke.yaml"
+  }
+}

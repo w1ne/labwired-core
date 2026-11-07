@@ -1,23 +1,18 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Narrowed from Renode's Andes AE350 N25 profile. The measured engine profile
+# covers the generic RV32IM instruction path and a 128 KiB DRAM aperture only.
+# The upstream CPU advertises rv32gc_xandes; this profile does not claim its
+# Andes-specific, floating-point, or compressed instruction extensions.
+# Renode's wide-register NS16550 is omitted because this engine's ns16550 model
+# uses byte-spaced registers.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/andes_ae350_n25.repl
 name: andes_ae350_n25
 arch: riscv
+core: rv32im
+flash_boot_alias: false
 flash:
   base: 0
-  size: 1073741824B
+  size: 0B
 ram:
   base: 0
-  size: 1073741824B
-peripherals:
-- id: uart1
-  type: ns16550
-  bus: sysbus
-  base_address: 4029677600
-provenance:
-  generated_by: scripts/onboard_hw_targets.py
-  parse_fallbacks:
-  - flash=dram
+  size: 128KB
+peripherals: []

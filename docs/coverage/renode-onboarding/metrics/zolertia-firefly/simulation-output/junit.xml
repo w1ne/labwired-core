@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.024986">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="9a32f57073e75386cd69ff7fe0f5dc86b7f780ee646d222b84e349f5d64564f8"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.024986">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: ZOLERTIA FIREFLY CC2538 Cortex-M3 UART0 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: fidelity_clean: true" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

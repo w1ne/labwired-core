@@ -1,0 +1,10 @@
+# Cortex-M3-targeted USART0 smoke against the narrowed imported EFM32JG12 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-efm32jg12-smoke"
+  system: "../../configs/systems/onboarding/efm32jg12.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "EFM32JG12 USART0 smoke"
+  - expected_stop_reason: max_steps

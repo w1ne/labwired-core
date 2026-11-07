@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.000316">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="23b09c74cd71a093e4c66d9dfdb050df925b5993df2bedaf236aed3bb3ade4dd"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000316">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: VF61 M4 SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;uart0 c2=0c&quot;, &quot;gpio1 pdor=00000041&quot;, &quot;pass=1f&quot;]" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x3f07fff0=0x5f61001f" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

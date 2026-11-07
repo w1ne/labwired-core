@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      2147484322,
+      2147614688,
+      2147486744,
+      0,
+      0,
+      2147614720,
+      0,
+      268435456,
+      0,
+      268435456,
+      10,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 2147484548,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 2147483960,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 100000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 100000,
+  "cycles": 200260,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "d8d12e9559481bb1dbf18d92cacfe62605b4a3d77353c4f543ab669f7411bf16",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-riscv-virt-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/riscv_virt.yaml",
+    "script": "examples/renode-onboarding/riscv_virt-smoke.yaml"
+  }
+}

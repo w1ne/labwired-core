@@ -1,0 +1,14 @@
+# ATmega32U4 CPU/GPIO smoke against the narrowed imported simavr profile.
+# It asserts GPIOC7 output transitions; other peripherals and pins are outside
+# this profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/atmega32u4-gpio-smoke.elf"
+  system: "../../configs/systems/onboarding/simavr-atmega32u4.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - gpio_edges:
+      pin: "portc:7"
+      min_edges: 2
+  - expected_stop_reason: max_steps

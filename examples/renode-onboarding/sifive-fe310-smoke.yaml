@@ -1,0 +1,13 @@
+# Smoke against the imported SiFive FE310 Renode system descriptor.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-sifive-fe310-smoke"
+  system: "../../configs/systems/onboarding/sifive-fe310.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "SIFIVE FE310 SMOKE"
+  - uart_ordered:
+      - "cpu=rv32im uart=sifive"
+      - "mul=00000143"
+  - expected_stop_reason: max_steps

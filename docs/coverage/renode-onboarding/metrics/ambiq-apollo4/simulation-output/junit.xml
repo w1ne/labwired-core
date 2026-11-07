@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.213950">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="511e6f3d0dec91b1c7b3eed5520508f9fe3d555e17b6ddac87e6de25e5f8727d"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.213950">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: APOLLO4P EVB SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=cortex-m4f uart=uart0&quot;, &quot;pwr perf=lp uart0_pwr=1&quot;, &quot;uart0 clksel=1 clk=24000000 ibrd=13 fbrd=1&quot;, &quot;l…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

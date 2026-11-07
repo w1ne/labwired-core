@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.019011">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="8bd65d7654b4fe14024ce7dbed199d31f158148d98bcceeb0c4a5bd88ff28cf8"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.019011">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: PB_USART1_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: portb:5 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

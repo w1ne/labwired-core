@@ -45,8 +45,8 @@
 #   the reset MOCO 8 MHz even after Zephyr switches ICLK to the 200 MHz PLL
 #   (the SysTick-based Zephyr timebase counts cycles, so it is unaffected).
 #   The PRCR key is not checked.
-# - Module stop (MSTP): declared stub. MSTPCRB.MSTPB31 is cleared by the
-#   firmware as silicon requires, but SCI0 works whether or not it is.
+# - Module stop (MSTP): SVD-derived registers read back reset values and
+#   firmware writes. Clearing MSTPCRB.MSTPB31 does not gate SCI0.
 # - ICU: the IELSR block is `ra_icu` (an ELC event sets IELSRn.IR of every
 #   line linked to it and drives NVIC line n as a level). SCI0 RXI/TXI/TEI
 #   reach it as events (ERI is never raised). The external IRQ pins raise
@@ -125,11 +125,13 @@ peripherals:
     type: "ra6_sysc"
     base_address: 0x4001E000
     size: "1792B"
-  # R_MSTP @ 0x40084000: MSTPCRB +0x04 .. MSTPCRE +0x10 (R7FA6M5BH.h).
+  # R_MSTP @ 0x40084000: SVD-derived register file; module gating is not modeled.
   - id: "mstp"
-    type: "stub"
+    type: "declarative"
     base_address: 0x40084000
     size: "64B"
+    config:
+      path: ../peripherals/r7fa6m5bh/mstp.yaml
   # ICU @ 0x40006000 (R7FA6M5BH.h R_ICU_Type): IRQCRn +0x000, NMI +0x100,
   # WUPEN +0x1A0, IELSR0-95 at +0x300 link ELC events to NVIC lines 0-95;
   # IELSRn.IR drives line n (ra_icu). Unlike the RA8M1 the whole block sits

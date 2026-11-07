@@ -1,0 +1,1 @@
+[2m2026-11-06T15:43:15.982902Z[0m [31mERROR[0m [2mlabwired_cli::commands::test[0m[2m:[0m 'uart_injections' require schema_version '1.2' (got '1.0')

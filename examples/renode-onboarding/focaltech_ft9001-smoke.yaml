@@ -1,0 +1,28 @@
+# Imported FocalTech FT9001 USART2 smoke.
+# Exercises only the Cortex-M4F, memory and USART2 polled-register profile
+# declared by configs/systems/onboarding/focaltech_ft9001.yaml. "AB" is in the
+# RX FIFO from the start; "Z" arrives at 1,000,000 cycles.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-ft9001-smoke"
+  system: "../../configs/systems/onboarding/focaltech_ft9001.yaml"
+limits:
+  max_steps: 4000000
+uart_injections:
+  - uart: "usart2"
+    bytes: "AB"
+  - uart: "usart2"
+    bytes: "Z"
+    trigger: !after_cycles { cycles: 1000000 }
+assertions:
+  # The 'X' written before CR2.TE was set must not precede the banner.
+  - uart_regex: "^FT9001 SMOKE\r\n"
+  - uart_ordered:
+      - "cpu=cortex-m4f uart=usart2"
+      - "cr2=0c cr1=00 bdh=01 bdl=56 brdf=1a fcr=c0"
+      - "rx fsr=64 drl=A fsr=64"
+      - "rxfclr fsr=45 drl=00 fcr2=00"
+      - "late drl=Z fsr=45"
+      - "te=off|te=on"
+      - "FT9001 SMOKE DONE"
+  - expected_stop_reason: max_steps

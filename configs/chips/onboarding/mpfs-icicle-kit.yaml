@@ -1,233 +1,79 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
+# Bounded imported profile for one PolarFire SoC U54 hart.
 #
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
-name: mpfs-icicle-kit
-arch: arm
-flash:
-  base: 16777216
-  size: 8192B
-ram:
-  base: 134217728
-  size: 33554432B
+# The MPFS MSS map follows configs/chips/mpfs095t.yaml, which is sourced from
+# Microchip's PolarFire SoC MSS manual and Zephyr's mpfs_icicle U54 devicetree.
+# This imported profile retains only the RV64IMAC M-mode core, memory windows,
+# its in-core CLINT and PLIC, model-backed MMUART0/1 and MSS GPIO_0..2,
+# master-mode MSS I2C0/1 (PLIC 58/61; `mpfs_i2c`, no slave mode), and
+# master-mode MSS SPI1 (PLIC 55; `mpfs_spi`, no slave mode or TX FIFO).
+# The E51 and other U54 harts, DMA, storage, and other MSS peripherals are
+# outside this profile.
+name: "mpfs-icicle-kit"
+arch: "riscv"
+core: "rv64imac"
+cpu_hz: 600_000_000
+flash: { base: 0x20220000, size: "128KiB" }
+ram: { base: 0x80000000, size: "8MiB" }
+flash_boot_alias: false
+memory_regions:
+  - { name: "l2lim", base: 0x08000000, size: "512KiB" }
 peripherals:
-- id: led0
-  type: led
-  bus: gpio2
-  base_address: 16
-- id: led1
-  type: led
-  bus: gpio2
-  base_address: 17
-- id: led2
-  type: led
-  bus: gpio2
-  base_address: 18
-- id: led3
-  type: led
-  bus: gpio2
-  base_address: 19
-- id: button1
-  type: button
-  bus: gpio2
-  base_address: 30
-- id: button2
-  type: button
-  bus: gpio2
-  base_address: 31
-- id: button3
-  type: button
-  bus: gpio2
-  base_address: 28
-- id: pac1934
-  type: pac1934
-  bus: i2c1
-  base_address: 65536
-- id: qspi
-  type: stub
-  renode_type: mpfs_qspi
-  bus: sysbus
-  base_address: 553648128
-- id: sysServices
-  type: stub
-  renode_type: mpfs_systemservices
-  bus: sysbus
-  base_address: 922877952
-- id: syscontroller_qspi
-  type: stub
-  renode_type: mpfs_qspi
-  bus: sysbus
-  base_address: 922878208
-- id: pdma
-  type: mpfs_pdma
-  bus: sysbus
-  base_address: 50331648
-- id: mmuart0
-  type: ns16550
-  bus: sysbus
-  base_address: 536870912
-- id: mmuart1
-  type: ns16550
-  bus: sysbus
-  base_address: 537919488
-- id: mmuart2
-  type: ns16550
-  bus: sysbus
-  base_address: 537927680
-- id: mmuart3
-  type: ns16550
-  bus: sysbus
-  base_address: 537935872
-- id: mmuart4
-  type: ns16550
-  bus: sysbus
-  base_address: 537944064
-- id: mmc
-  type: mpfs_sdcontroller
-  bus: sysbus
-  base_address: 536903680
-- id: spi0
-  type: stub
-  renode_type: mpfs_spi
-  bus: sysbus
-  base_address: 537952256
-- id: spi1
-  type: stub
-  renode_type: mpfs_spi
-  bus: sysbus
-  base_address: 537956352
-- id: i2c0
-  type: stub
-  renode_type: mpfs_i2c
-  bus: sysbus
-  base_address: 537960448
-- id: i2c1
-  type: stub
-  renode_type: mpfs_i2c
-  bus: sysbus
-  base_address: 537964544
-- id: can0
-  type: stub
-  renode_type: mpfs_can
-  bus: sysbus
-  base_address: 537968640
-- id: can1
-  type: stub
-  renode_type: mpfs_can
-  bus: sysbus
-  base_address: 537972736
-- id: gpio0
-  type: mpfs_gpio
-  bus: sysbus
-  base_address: 538050560
-- id: gpio1
-  type: mpfs_gpio
-  bus: sysbus
-  base_address: 538054656
-- id: gpio2
-  type: mpfs_gpio
-  bus: sysbus
-  base_address: 538058752
-- id: wdog0
-  type: stub
-  renode_type: mpfs_watchdog
-  bus: sysbus
-  base_address: 536875008
-- id: wdog1
-  type: stub
-  renode_type: mpfs_watchdog
-  bus: sysbus
-  base_address: 537923584
-- id: wdog2
-  type: stub
-  renode_type: mpfs_watchdog
-  bus: sysbus
-  base_address: 537931776
-- id: wdog3
-  type: stub
-  renode_type: mpfs_watchdog
-  bus: sysbus
-  base_address: 537939968
-- id: wdog4
-  type: stub
-  renode_type: mpfs_watchdog
-  bus: sysbus
-  base_address: 537948160
-- id: rtc
-  type: stub
-  renode_type: mpfs_rtc
-  bus: sysbus
-  base_address: 538066944
-- id: mstimer
-  type: mpfs_timer
-  bus: sysbus
-  base_address: 538071040
-- id: envmCfg
-  type: stub
-  renode_type: mpfs_envm
-  bus: sysbus
-  base_address: 538968064
-- id: usb
-  type: stub
-  renode_type: mpfs_usb
-  bus: sysbus
-  base_address: 538972160
-- id: pcie0
-  type: stub
-  renode_type: mpfs_pcie
-  bus: sysbus
-  base_address: 1392525312
-- id: pcieRC0
-  type: stub
-  renode_type: pcierootcomplex
-  bus: pcie0
-  base_address: 0
-- id: pcieRC1
-  type: stub
-  renode_type: pcierootcomplex
-  bus: pcie1
-  base_address: 0
-- id: pcieMem
-  type: stub
-  renode_type: pciememory
-  bus: pcie1
-  base_address: 1
-- id: mailbox
-  type: arraymemory
-  bus: sysbus
-  base_address: 922880000
-- id: ioscb
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 923271168
-- id: DDR_CTRLR
-  type: stub
-  renode_type: mpfs_ddrmock
-  bus: sysbus
-  base_address: 1040191488
-- id: DDR_PHY
-  type: stub
-  renode_type: mpfs_ddrmock
-  bus: sysbus
-  base_address: 536899584
-- id: SCB_DDR_PLL
-  type: stub
-  renode_type: mpfs_ddrmock
-  bus: sysbus
-  base_address: 1040252928
-- id: DDRCFG
-  type: stub
-  renode_type: mpfs_ddrmock
-  bus: sysbus
-  base_address: 537395200
-- id: CacheConfig_WayEnable
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 33619976
-- id: TopSystemRegisters
-  type: stub
-  renode_type: mpfs_sysreg
-  bus: sysbus
-  base_address: 536879104
+  # The PLIC at 0x0C000000 is in the RV64 core, like the CLINT
+  # (crates/core/src/cpu/riscv64_plic.rs): 186 sources, 9 contexts, this hart
+  # on M-mode context 1. A peripheral's `irq` is its PLIC source ID.
+  # MSS GPIO_0..2: CoreGPIO semantics on the mss_gpio.h register map
+  # (crates/core/src/peripherals/miv.rs). `ports` is the bank width
+  # (NB_OF_GPIO_GPIO0/1/2 = 14/24/32 in Microchip's mss_gpio.c). `irq` is
+  # each bank's OR'd non-direct line, PLIC sources 51/52/53
+  # (PLIC_GPIO*_NON_DIRECT_INT_OFFSET in mss_plic.h; Renode polarfire-soc.repl
+  # `IRQ -> plic@51..53`). The per-pin direct sources 13-50 are not wired.
+  - id: "mss_gpio0"
+    type: "mpfs_gpio"
+    base_address: 0x20120000
+    size: "4KB"
+    irq: 51
+    config:
+      ports: 14
+  - id: "mss_gpio1"
+    type: "mpfs_gpio"
+    base_address: 0x20121000
+    size: "4KB"
+    irq: 52
+    config:
+      ports: 24
+  - id: "mss_gpio2"
+    type: "mpfs_gpio"
+    base_address: 0x20122000
+    size: "4KB"
+    irq: 53
+    config:
+      ports: 32
+  - id: "i2c0"
+    type: "mpfs_i2c"
+    base_address: 0x2010A000
+    size: "4KB"
+    irq: 58
+  - id: "i2c1"
+    type: "mpfs_i2c"
+    base_address: 0x2010B000
+    size: "4KB"
+    irq: 61
+  - id: "spi1"
+    type: "mpfs_spi"
+    base_address: 0x20109000
+    size: "4KB"
+    irq: 55
+  - id: "mmuart0"
+    type: "uart"
+    base_address: 0x20000000
+    size: "4KB"
+    irq: 90
+    config:
+      profile: "dw_apb_uart"
+  - id: "mmuart1"
+    type: "uart"
+    base_address: 0x20100000
+    size: "4KB"
+    irq: 91
+    config:
+      profile: "dw_apb_uart"

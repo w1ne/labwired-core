@@ -1,0 +1,5 @@
+2026-11-05T10:39:41.732775Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/zolertia-firefly.yaml
+2026-11-05T10:39:41.733839Z  INFO labwired_loader: ELF Entry Point: 0x200401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  2/2 checks · zolertia-firefly-smoke · 100000 steps · 0.02s

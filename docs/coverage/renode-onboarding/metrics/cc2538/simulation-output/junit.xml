@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.192755">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="2ffcb0b7a3e604830e72242ff865768e75c394e660c0ca5e73329a3a151725ef"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.192755">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: CC2538DK SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=cortex-m3 uart=uart0&quot;, &quot;clk osc=hfrc16 sys_div=1 io_div=1 sysclk=16000000&quot;, &quot;uart0 rcgc=1 ibrd=8 fb…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

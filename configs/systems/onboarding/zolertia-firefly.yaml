@@ -6,3 +6,5 @@
 
 name: zolertia-firefly
 chip: ../../chips/onboarding/zolertia-firefly.yaml
+cpu_hz: 16000000
+external_devices: []

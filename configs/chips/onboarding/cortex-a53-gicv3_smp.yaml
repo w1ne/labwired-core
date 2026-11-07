@@ -3,37 +3,14 @@
 #
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
+#
+# Bounded Renode import: one AArch64 Cortex-A53 processing element and DDR.
+# SMP, GICv3, generic timers, PL011, and PL031 remain outside this profile.
 
 name: cortex-a53-gicv3_smp
-arch: arm
-flash:
-  base: 134217728
-  size: 134217728B
-ram:
-  base: 1073741824
-  size: 2147483648B
-peripherals:
-- id: timer1
-  type: arm_generictimer
-  bus: cpu1
-  base_address: 15
-- id: timer2
-  type: arm_generictimer
-  bus: cpu2
-  base_address: 15
-- id: timer3
-  type: arm_generictimer
-  bus: cpu3
-  base_address: 15
-- id: timer
-  type: arm_generictimer
-  bus: cpu
-  base_address: 15
-- id: uart0
-  type: pl011
-  bus: sysbus
-  base_address: 150994944
-- id: rtc
-  type: pl031
-  bus: sysbus
-  base_address: 151060480
+arch: aarch64
+core: cortex-a53
+flash: { base: 0, size: 0 }
+ram: { base: 0x40000000, size: 2GiB }
+flash_boot_alias: false
+peripherals: []

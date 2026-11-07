@@ -1,0 +1,38 @@
+{
+  "target_id": "simavr-atmega64m1",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/simavr-atmega64m1-smoke.yaml",
+  "system": "configs/systems/onboarding/simavr-atmega64m1.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T17:35:00Z",
+  "finished_at_utc": "2026-11-06T17:35:01Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 628,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.303,
+    "build_firmware": null,
+    "run_smoke": 0.317
+  },
+  "stages_ms": {
+    "build_cli": 303,
+    "build_firmware": null,
+    "run_smoke": 317
+  },
+  "prebuilt_firmware": "tests/fixtures/avr/atmega64m1-cpu-smoke.elf"
+}

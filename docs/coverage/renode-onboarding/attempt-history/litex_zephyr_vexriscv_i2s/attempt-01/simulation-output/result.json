@@ -1,0 +1,32 @@
+{
+  "result_schema_version": "1.0",
+  "status": "error",
+  "steps_executed": 0,
+  "cycles": 0,
+  "instructions": 0,
+  "stop_reason": "config_error",
+  "stop_reason_details": {
+    "triggered_stop_condition": "config_error",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "message": "Failed to parse Chip Descriptor YAML: missing field `flash` at line 4 column 1",
+  "assertions": [],
+  "firmware_hash": "16fea689c090cfa01720c41a6cf4da5a8e52344bb32758e23379f5fb30d4ace2",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/riscv32imac-unknown-none-elf/release/firmware-litex-zephyr-i2s-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_zephyr_vexriscv_i2s.yaml",
+    "script": "examples/renode-onboarding/litex_zephyr_vexriscv_i2s-smoke.yaml"
+  }
+}

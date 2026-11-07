@@ -145,6 +145,41 @@ def test_a_chip_with_no_gate_fails(tmp_path):
     assert "stm32f042" in out and "NO CI gate executes firmware" in out
 
 
+def test_an_onboarding_profile_is_a_valid_ci_target_not_a_shipped_chip(tmp_path):
+    build_tree(
+        tmp_path,
+        chips=[],
+        arduino_boards=[],
+        matrix_ids=[],
+        ledger=EMPTY_LEDGER,
+        scripts=(
+            (
+                "core-onboarding-smoke.yml",
+                "examples/onboarding/example-smoke.yaml",
+                "configs/systems/onboarding/example.yaml",
+                "example",
+            ),
+        ),
+    )
+    onboarding_dir = tmp_path / "configs/chips/onboarding"
+    onboarding_dir.mkdir(parents=True)
+    (onboarding_dir / "example.yaml").write_text("name: example\n")
+    (tmp_path / "configs/systems/onboarding/example.yaml").write_text(
+        'chip: "../../chips/onboarding/example.yaml"\n'
+    )
+
+    previous_root = cc.REPO_ROOT
+    try:
+        cc.set_root(tmp_path)
+        assert cc.shipped_chips() == []
+        assert cc.known_ci_chip_descriptors() == {"example"}
+    finally:
+        cc.set_root(previous_root)
+
+    code, out = run_gate(tmp_path)
+    assert code == 0, out
+
+
 def test_a_boards_yaml_entry_the_workflow_never_names_is_not_coverage(tmp_path):
     """The h735 shape: declared in the manifest, run by nothing."""
     build_tree(

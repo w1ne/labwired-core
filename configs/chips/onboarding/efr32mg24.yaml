@@ -1,19 +1,33 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Narrow profile for the imported EFR32MG24 system, following Renode's
+# platforms/cpus/silabs/efr32s2/efr32xg24.repl
+# (https://github.com/renode/renode/blob/master/platforms/cpus/silabs/efr32s2/efr32xg24.repl).
+# This exposes the primary
+# Cortex-M33, code-fetch flash window, SRAM, real Series-2 CMU, and USART0.
+# The REPL's halted radio sequencer and generated peripherals are omitted;
+# in particular, the imported DCDC_IF Python stub is not advertised here.
+# Flash is a mapped execution window in this engine, not an MSC programming
+# model. USART0 and CMU behavior are the only peripheral claims in this profile.
 name: efr32mg24
 arch: arm
+core: cortex-m33
+cpu_hz: 39000000
+atomic_register_aliases: efr32s2
 flash:
-  base: 134217728
-  size: 1564672B
+  base: 0x08000000
+  size: 0x180000
 ram:
-  base: 536870912
-  size: 262144B
+  base: 0x20000000
+  size: 0x40000
 peripherals:
-- id: DCDC_IF
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1342783528
+  - id: cmu
+    type: efr32s2_cmu
+    bus: sysbus
+    base_address: 0x40008000
+    size: 4KB
+  - id: usart0
+    type: efr32s2_usart
+    bus: sysbus
+    base_address: 0x4005C000
+    size: 4KB
+    clock: { reg: clken0, bit: 9 }
+    irq: 10

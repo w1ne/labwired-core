@@ -1,135 +1,75 @@
 # LabWired - Firmware Simulation Platform
 # Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# SPDX-License-Identifier: MIT
 
+# Narrow NUCLEO-L552ZE-Q profile for the exact-import onboarding smoke. This
+# profile claims only the memory, clock/power, GPIO and LPUART blocks exercised
+# by firmware-l552ze-smoke; the other imported STM32L552 peripherals are not
+# represented here.
 name: stm32l552
 arch: arm
+core: cortex-m33
 flash:
-  base: 134217728
-  size: 524288B
+  base: 0x08000000
+  size: 512KB
 ram:
-  base: 536870912
-  size: 196608B
+  base: 0x20000000
+  size: 192KB
+memory_regions:
+  - name: sram2
+    base: 0x20030000
+    size: 64KB
+pins:
+  PA9: { gpio: gpioa, bit: 9 }
+  PB7: { gpio: gpiob, bit: 7 }
+  PC7: { gpio: gpioc, bit: 7 }
+  PC13: { gpio: gpioc, bit: 13 }
+  PG7: { gpio: gpiog, bit: 7 }
+  PG8: { gpio: gpiog, bit: 8 }
 peripherals:
-- id: spi1
-  type: stm32spi
-  bus: sysbus
-  base_address: 1073819648
-- id: spi2
-  type: stm32spi
-  bus: sysbus
-  base_address: 1073756160
-- id: spi3
-  type: stm32spi
-  bus: sysbus
-  base_address: 1073757184
-- id: usart1
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073821696
-- id: usart2
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073759232
-- id: usart3
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073760256
-- id: uart4
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073761280
-- id: uart5
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073762304
-- id: lpuart1
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073774592
-- id: gpioPortA
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107427328
-- id: gpioPortB
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107428352
-- id: gpioPortC
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107429376
-- id: gpioPortD
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107430400
-- id: gpioPortE
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107431424
-- id: gpioPortF
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107432448
-- id: gpioPortG
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107433472
-- id: gpioPortH
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107434496
-- id: dma1
-  type: stm32ldma
-  bus: sysbus
-  base_address: 1073872896
-- id: i2c1
-  type: stm32f1_i2c
-  bus: sysbus
-  base_address: 1073763328
-- id: timer1
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073818624
-- id: timer2
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073741824
-- id: timer3
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073742848
-- id: timer4
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073743872
-- id: timer5
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073744896
-- id: timer6
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073745920
-- id: timer7
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073746944
-- id: timer8
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073820672
-- id: timer15
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073823744
-- id: timer16
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073824768
-- id: timer17
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073825792
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 1KB
+    config:
+      profile: stm32l5
+  - id: pwr
+    type: pwr
+    base_address: 0x40007000
+    size: 1KB
+    clock: { reg: apb1enr1, bit: 28 }
+  - id: gpioa
+    type: gpio
+    base_address: 0x42020000
+    size: 1KB
+    clock: { reg: ahb2enr, bit: 0 }
+    config:
+      profile: stm32v2
+  - id: gpiob
+    type: gpio
+    base_address: 0x42020400
+    size: 1KB
+    clock: { reg: ahb2enr, bit: 1 }
+    config:
+      profile: stm32v2
+  - id: gpioc
+    type: gpio
+    base_address: 0x42020800
+    size: 1KB
+    clock: { reg: ahb2enr, bit: 2 }
+    config:
+      profile: stm32v2
+  - id: gpiog
+    type: gpio
+    base_address: 0x42021800
+    size: 1KB
+    clock: { reg: ahb2enr, bit: 6 }
+    config:
+      profile: stm32v2
+  - id: lpuart1
+    type: uart
+    base_address: 0x40008000
+    size: 1KB
+    clock: { reg: apb1enr2, bit: 0 }
+    config:
+      profile: stm32v2

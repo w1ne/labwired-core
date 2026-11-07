@@ -1,55 +1,19 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# Bounded imported Mi-V board profile based on Renode's platforms/cpus/miv.repl.
+# The smoke exercises the RV32IMAF CPU, documented flash/DDR windows, and
+# model-backed CoreUART. GPIOs, timers, CLINT, and PLIC are omitted because
+# this run does not exercise them.
+# Renode map reference: https://github.com/renode/renode-docs/blob/master/source/basic/machines.md#loading-platforms
 
-name: miv-board
-arch: arm
-flash:
-  base: 4096
-  size: 61440B
-ram:
-  base: 2147483648
-  size: 67108864B
+name: "miv-board"
+arch: "riscv"
+core: "rv32imaf_zicsr_zifencei"
+cpu_hz: 66_000_000
+
+flash: { base: 0x60000000, size: "256KiB" }
+ram: { base: 0x80000000, size: "64MiB" }
+flash_boot_alias: false
 peripherals:
-- id: led0
-  type: led
-  bus: gpioOutputs
-  base_address: 0
-- id: led1
-  type: led
-  bus: gpioOutputs
-  base_address: 1
-- id: user_switch_0
-  type: button
-  bus: gpioInputs
-  base_address: 0
-- id: user_switch_1
-  type: button
-  bus: gpioInputs
-  base_address: 1
-- id: user_switch_2
-  type: button
-  bus: gpioInputs
-  base_address: 2
-- id: uart
-  type: miv_coreuart
-  bus: sysbus
-  base_address: 1879052288
-- id: gpioInputs
-  type: miv_coregpio
-  bus: sysbus
-  base_address: 1879056384
-- id: gpioOutputs
-  type: miv_coregpio
-  bus: sysbus
-  base_address: 1879068672
-- id: timer0
-  type: miv_coretimer
-  bus: sysbus
-  base_address: 1879060480
-- id: timer1
-  type: miv_coretimer
-  bus: sysbus
-  base_address: 1879064576
+  - id: "uart"
+    type: "miv_coreuart"
+    base_address: 0x70001000
+    size: "24B"

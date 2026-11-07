@@ -9,6 +9,12 @@ edition = "2021"
 authors = ["LabWired Team"]
 license = "MIT"
 
+[features]
+default = []
+no-unmodelled-spi-probe = []
+verilated-liteuart-profile = []
+verilated-cfu-profile = []
+
 [dependencies]
 riscv-rt = "0.12"
 panic-halt = "0.2"

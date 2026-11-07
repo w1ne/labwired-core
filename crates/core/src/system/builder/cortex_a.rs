@@ -23,7 +23,8 @@ pub(super) fn build(
         bus.attach_host_console_echo(console.tapped(), sink.clone(), req.options.echo_uart_stdout)
             .map_err(|error| anyhow::anyhow!(error))?;
         let rx = super::wire_host_streams(&mut bus, &req.options)?;
-        let machine = crate::system::cortex_a::load_elf(bus, elf)?;
+        let core = crate::system::arch_policy::cortex_a_core(req.chip)?;
+        let machine = crate::system::cortex_a::load_elf_for_core(bus, elf, core)?;
         Ok(BuiltMachine {
             machine: Box::new(machine),
             uart: UartWires { sink, rx },

@@ -391,12 +391,20 @@ pub const MODEL_TYPES: &[&str] = &[
     "litex_timer",
     // LiteX Control-and-Status (LED/switch/button CSR block).
     "litex_controlandstatus",
+    // LiteX SPI-flash bitbang controller with its MT25Q responder.
+    "litex_spi_flash",
     // Microchip Mi-V reference-design peripherals. MUST be listed: without
     // membership the fuzzy fallbacks would coerce `miv_coregpio` onto the
     // STM32 GPIO map (it was doing exactly that for the staged descriptors)
     // and `miv_coretimer` onto the STM32 timer map — silently wrong models.
     "miv_coregpio",
     "miv_coretimer",
+    // PolarFire SoC MSS GPIO (CoreGPIO semantics, MSS register map).
+    "mpfs_gpio",
+    // PolarFire SoC MSS I2C0/1 (CoreI2C-family master).
+    "mpfs_i2c",
+    // PolarFire SoC MSS SPI0/1 (CoreSPI-family master).
+    "mpfs_spi",
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
@@ -408,8 +416,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "armv8m_mpu",
     // TI CC2538: the PL061-style GPIO port (address-masked GPIO_DATA),
     // SYS_CTRL, the 802.15.4 RF core, the sleep timer, the flash controller, the AES/SHA-256
-    // cryptoprocessor and the µDMA. Deliberately not `cc2538_gpio`: that
-    // spelling belongs to the staged onboarding/cc2538 descriptor, which keeps its placeholder.
+    // cryptoprocessor, the µDMA, the SSI, the GPTimers and the I2C master. Deliberately not
+    // `cc2538_gpio`/`cc2538_ssi`: those spellings belong to the staged
+    // onboarding/cc2538 descriptor, which keeps its placeholders.
     "cc2538_pl061_gpio",
     "cc2538_sys_ctrl",
     "cc2538_rfcore",
@@ -417,6 +426,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "cc2538_flash_ctrl",
     "cc2538_aes",
     "cc2538_udma",
+    "cc2538_pl022_ssi",
+    "cc2538_gptimer",
+    "cc2538_i2cm",
     // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
     // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
@@ -1785,9 +1797,31 @@ pub fn try_build(
                     .with_buttons_active_low(active_low),
             )
         }
+        // LiteX SPI-flash bitbang CSRs + Micron MT25Q ID/status responder
+        // (Renode `LiteX_SPI_Flash` + `Micron_MT25Q`).
+        "litex_spi_flash" => Box::new(crate::peripherals::litex_spi_flash::LitexSpiFlash::new()),
         // Microchip Mi-V reference-design peripherals.
         "miv_coregpio" => Box::new(crate::peripherals::miv::MivCoreGpio::new()),
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
+        // PolarFire SoC MSS GPIO_0..2: `ports` is the bank width (14, 24
+        // or 32, `NB_OF_GPIO_GPIO*` in Microchip's mss_gpio.c).
+        "mpfs_gpio" => {
+            let ports = p_cfg
+                .config
+                .get("ports")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(32);
+            if !(1..=32).contains(&ports) {
+                anyhow::bail!("mpfs_gpio `ports` must be 1..=32, got {ports}");
+            }
+            Box::new(crate::peripherals::miv::MivCoreGpio::mpfs(ports as u32))
+        }
+        // PolarFire SoC MSS I2C0/1: master mode; devices attach through
+        // `external_devices:`.
+        "mpfs_i2c" => Box::new(crate::peripherals::mpfs_i2c::MpfsI2c::new()),
+        // PolarFire SoC MSS SPI0/1: master mode; devices attach through
+        // `external_devices:` and follow SLAVE_SELECT.
+        "mpfs_spi" => Box::new(crate::peripherals::mpfs_spi::MpfsSpi::new()),
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
         "cortex_m7_cache" => {
@@ -1879,6 +1913,19 @@ pub fn try_build(
         }
         "cc2538_aes" => Box::new(crate::peripherals::cc2538::aes::Cc2538Aes::new()),
         "cc2538_udma" => Box::new(crate::peripherals::cc2538::udma::Cc2538Udma::new()),
+        // SSI0/1: master-mode SPI; devices attach through `external_devices:`.
+        "cc2538_pl022_ssi" => Box::new(crate::peripherals::cc2538::ssi::Cc2538Ssi::new()),
+        // I2CM master at 0x4002_0000; external devices attach through
+        // `external_devices:`. I2CS remains a separate stub window.
+        "cc2538_i2cm" => Box::new(crate::peripherals::cc2538::i2cm::Cc2538I2cm::new()),
+        // GPTIMER0-3: timer A pends the entry's `irq:`, timer B `irq_b`.
+        "cc2538_gptimer" => Box::new(crate::peripherals::cc2538::gptimer::Cc2538GpTimer::new(
+            p_cfg
+                .config
+                .get("irq_b")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32),
+        )),
         "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
         "apollo4_cpu" => Box::new(crate::peripherals::apollo4::Apollo4Cpu::new()),

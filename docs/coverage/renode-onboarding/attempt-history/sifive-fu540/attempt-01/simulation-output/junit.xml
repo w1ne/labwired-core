@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="2" errors="0" time="0.000571">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="Exception"/>
+    <property name="firmware_hash" value="21221d86799eba74f003131cf323b8da4fae75b1fb5c9a09e775ed4feee59272"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000571">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: RV64 FU540 UART0 smoke; mul=0000001100000011" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_contains: RV64 FU540 UART0 smoke; mul=0000001100000011
+
+result_schema_version=1.0
+stop_reason=Exception
+stop_reason_details.triggered_stop_condition=Exception
+steps_executed=0
+cycles=0
+instructions=0
+limits:
+  - max_steps=100000
+firmware_hash=21221d86799eba74f003131cf323b8da4fae75b1fb5c9a09e775ed4feee59272
+firmware=examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-sifive-fu540-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/sifive-fu540.yaml
+script=examples/renode-onboarding/sifive-fu540-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;RV64 FU540 UART0 smoke; mul=0000001100000011&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+    <failure message="assertion failed">assertion 2: expected_stop_reason: MaxSteps
+
+result_schema_version=1.0
+stop_reason=Exception
+stop_reason_details.triggered_stop_condition=Exception
+steps_executed=0
+cycles=0
+instructions=0
+limits:
+  - max_steps=100000
+firmware_hash=21221d86799eba74f003131cf323b8da4fae75b1fb5c9a09e775ed4feee59272
+firmware=examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-sifive-fu540-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/sifive-fu540.yaml
+script=examples/renode-onboarding/sifive-fu540-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;RV64 FU540 UART0 smoke; mul=0000001100000011&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+</testsuite>

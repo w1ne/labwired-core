@@ -1,6 +1,8 @@
 name: stm32f072b_discovery
-description: 'STMicroelectronics 32F072BDISCOVERY evaluation board featuring the STM32F072
-  MCU. Architecture: ARMv6-M.'
+description: >-
+  Imported STM32F072B-DISCO profile bounded to a Cortex-M0, 128 KiB flash,
+  16 KiB SRAM, F0 RCC, GPIOA, GPIOC, and USART1. The whole platform and other
+  peripherals remain unverified.
 family: STM32F0
 url: https://www.st.com/en/evaluation-tools/32f072bdiscovery.html
 code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
@@ -9,17 +11,23 @@ code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#inclu
   \    while (1) {\n        gpio_pin_toggle_dt(&led);\n        k_msleep(500);\n  \
   \  }\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/stm32f072b_discovery.yaml
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-exact-import-smoke
+  reason: bounded Cortex-M0, USART1 and GPIOA/GPIOC register smoke; whole platform remains unverified
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-10-18T14:40:25.618215+00:00'
+    cortex_m0_smoke: true
+    usart1_tx: true
+    gpioc_odr_readback: true
+    gpioa_pa0_pullup_readback: true
+    button_electrical_behavior: false
+    whole_platform: false
+    other_peripherals: false
+  timestamp_utc: '2026-11-06T05:18:10Z'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/stm32f072b_discovery.md
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/stm32f072b_discovery/
 provenance:
   generated_by: scripts/onboard_hw_targets.py

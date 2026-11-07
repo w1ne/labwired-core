@@ -1,0 +1,14 @@
+# Direct RV32IM integer smoke on the imported ET171 SRAM profile.
+# This does not exercise the D25F's Xandes extensions, reset flow, or peripherals.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-andes-ae350-n25-smoke"
+  system: "../../configs/systems/onboarding/egis_et171.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - memory_value:
+      address: 0x1000
+      expected_value: 0x00000143
+      size: 4
+  - expected_stop_reason: max_steps

@@ -1,7 +1,7 @@
 // LabWired - Firmware Simulation Platform
 // SPDX-License-Identifier: MIT
-//! Optional privileged Cortex-A7. Physical RAM remains owned by the Bus;
-//! translation, banked registers and exception entry remain native.
+//! Optional native ARM CPU models. Physical RAM remains owned by the Bus;
+//! translation, banked registers and exception entry remain in pinned tlib.
 use crate::snapshot::{CortexACpuSnapshot, CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
 pub use labwired_arm_system::ArmModel;
@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 fn native_error(message: String) -> SimulationError {
-    SimulationError::Other(format!("Cortex-A7 system: {message}"))
+    SimulationError::Other(format!("native ARM system: {message}"))
 }
 struct State {
     cpu: ArmCpu,
@@ -19,20 +19,18 @@ struct State {
 }
 /// Owns a single isolated native engine. Infallible Cpu register methods keep
 /// their first failure for the next fallible execution instead of discarding it.
-pub struct CortexA7System {
+pub struct ArmSystem {
     state: RefCell<State>,
+    model: ArmModel,
     waiting: bool,
     halted: bool,
     cp15_written: bool,
 }
-impl CortexA7System {
+impl ArmSystem {
     pub fn new() -> SimResult<Self> {
         Self::with_model(ArmModel::CortexA7)
     }
-    /// The same privileged ARMv7 engine built as another pinned tlib model.
-    /// `CortexR5F` is PMSAv7 (16-region MPU, no MMU) with VFPv3-D16, as on the
-    /// Zynq UltraScale+ RPU; the bus-owned memory and IRQ/FIQ contract is
-    /// unchanged.
+    /// Construct the pinned tlib model with the shared physical-bus contract.
     pub fn with_model(model: ArmModel) -> SimResult<Self> {
         let mut cpu = ArmCpu::with_model(model).map_err(native_error)?;
         let mut registers = [0; 17];
@@ -45,6 +43,7 @@ impl CortexA7System {
                 registers,
                 pending_error: None,
             }),
+            model,
             waiting: false,
             halted: false,
             cp15_written: false,
@@ -63,6 +62,11 @@ impl CortexA7System {
     /// remain off from a freshly created native engine. Failures are returned
     /// immediately so callers can keep RAM unchanged.
     pub fn initialize_linux(&mut self, entry: u32, dtb: u32) -> SimResult<()> {
+        if self.model == ArmModel::Arm7Tdmi {
+            return Err(native_error(
+                "ARM7TDMI does not support the privileged Linux entry path".into(),
+            ));
+        }
         // Reset privileged state synchronously, even when the caller has used
         // the CPU before. Linux requires MMU/cache off at this entry point.
         self.state.get_mut().cpu.reset().map_err(native_error)?;
@@ -173,7 +177,7 @@ impl PhysicalBus for Physical<'_> {
         self.result(result)
     }
 }
-impl Cpu for CortexA7System {
+impl Cpu for ArmSystem {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
         let s = self.state.get_mut();
         s.cpu.reset().map_err(native_error)?;
@@ -329,7 +333,7 @@ impl Cpu for CortexA7System {
     }
     fn set_exception_pending(&mut self, n: u32) {
         self.defer(SimulationError::NotImplemented(format!(
-            "NVIC exception {n} cannot be delivered to Cortex-A7; use ARM IRQ/FIQ bus levels"
+            "NVIC exception {n} cannot be delivered to native ARM; use ARM IRQ/FIQ bus levels"
         )));
     }
     fn get_register(&self, id: u8) -> u32 {
@@ -358,20 +362,25 @@ impl Cpu for CortexA7System {
         }
     }
     fn snapshot(&self) -> CpuSnapshot {
-        CpuSnapshot::CortexA(CortexACpuSnapshot {
+        let snapshot = CortexACpuSnapshot {
             registers: (0..16).map(|n| self.get_register(n)).collect(),
             pc: self.get_pc(),
             cpsr: self.get_register(16),
-        })
+        };
+        if self.model == ArmModel::Arm7Tdmi {
+            CpuSnapshot::Arm7Tdmi(snapshot)
+        } else {
+            CpuSnapshot::CortexA(snapshot)
+        }
     }
     fn apply_snapshot(&mut self, _: &CpuSnapshot) {
         self.defer(SimulationError::NotImplemented(
-            "Cortex-A7 snapshot is diagnostic; hidden/banked CP15 state cannot be restored".into(),
+            "native ARM snapshot is diagnostic; hidden/banked CPU state cannot be restored".into(),
         ));
     }
     fn try_apply_snapshot(&mut self, _: &CpuSnapshot) -> SimResult<()> {
         Err(SimulationError::NotImplemented(
-            "Cortex-A7 snapshot is diagnostic; hidden/banked CP15 state cannot be restored".into(),
+            "native ARM snapshot is diagnostic; hidden/banked CPU state cannot be restored".into(),
         ))
     }
     fn uses_elf_entry_point(&self) -> bool {

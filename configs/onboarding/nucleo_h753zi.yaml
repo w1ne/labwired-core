@@ -1,6 +1,8 @@
 name: nucleo_h753zi
-description: 'STMicroelectronics NUCLEO-H753ZI development board with STM32H753ZI
-  high-performance MCU. Architecture: ARMv7E-M.'
+description: >-
+  Imported NUCLEO-H753ZI profile bounded to Cortex-M7 execution, 1 MiB flash,
+  128 KiB SRAM, H7 RCC, GPIOB/GPIOD, and USART3. The whole board and other
+  peripherals remain unverified.
 family: STM32 Nucleo-144
 url: https://www.st.com/en/evaluation-tools/nucleo-h753zi.html
 code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
@@ -9,17 +11,22 @@ code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#inclu
   \    while (1) {\n        gpio_pin_toggle_dt(&led);\n        k_msleep(500);\n  \
   \  }\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/nucleo_h753zi.yaml
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-exact-import-smoke
+  reason: bounded Cortex-M7, USART3 transmission, and GPIOB.0 edge smoke; whole platform remains unverified
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-10-18T14:40:07.647356+00:00'
+    cortex_m7_smoke: true
+    usart3_tx: true
+    gpiob0_edges: true
+    whole_platform: false
+    other_peripherals: false
+    memory_density: false
+  timestamp_utc: '2026-11-06T06:58:58Z'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/nucleo_h753zi.md
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/nucleo_h753zi/
 provenance:
   generated_by: scripts/onboard_hw_targets.py

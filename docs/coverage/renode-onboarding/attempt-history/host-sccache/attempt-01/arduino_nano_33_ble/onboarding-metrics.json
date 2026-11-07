@@ -1,0 +1,33 @@
+{
+  "target_id": "arduino_nano_33_ble",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": "firmware-arduino-nano-33-ble-smoke",
+  "target_triple": "thumbv7em-none-eabihf",
+  "script": "examples/renode-onboarding/arduino_nano_33_ble-smoke.yaml",
+  "system": "configs/systems/onboarding/arduino_nano_33_ble.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T00:51:17Z",
+  "finished_at_utc": "2026-11-04T00:51:17Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 118,
+  "failure_stage": "build_cli",
+  "first_error_signature": "error: could not execute process `/home/andrii/.cargo/bin/sccache rustc -vV` (never executed)",
+  "failure_hint": "Fix host toolchain first: run `rustup show` and ensure CLI dependencies build on this runner.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.106,
+    "build_firmware": null,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": 106,
+    "build_firmware": null,
+    "run_smoke": null
+  }
+}

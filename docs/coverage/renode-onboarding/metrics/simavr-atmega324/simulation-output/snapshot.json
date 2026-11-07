@@ -1,0 +1,75 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      202,
+      55,
+      2,
+      1,
+      255,
+      8,
+      0,
+      0
+    ],
+    "pc": 176,
+    "sp": 2301,
+    "sreg": 0
+  },
+  "steps_executed": 100000,
+  "cycles": 185705,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "6916af0fe215d8916188b0d9ee47025f1d788c1dd90c7bd1a414748064c9983c",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega324-cpu-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-atmega324.yaml",
+    "script": "examples/renode-onboarding/simavr-atmega324-smoke.yaml"
+  }
+}

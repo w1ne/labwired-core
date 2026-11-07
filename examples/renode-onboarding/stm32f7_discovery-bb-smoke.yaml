@@ -1,0 +1,13 @@
+# Cortex-M7 GPIOI/USART1 smoke against the exact imported STM32F7 Discovery system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f746-demo"
+  system: "../../configs/systems/onboarding/stm32f7_discovery-bb.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpioPortI:1"
+      min_edges: 1
+  - expected_stop_reason: max_steps

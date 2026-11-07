@@ -1,0 +1,13 @@
+# Cortex-M7 smoke against the exact imported i.MX RT1064 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-imxrt1064-demo"
+  system: "../../configs/systems/onboarding/imxrt1064.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpio2:3"
+      min_edges: 1
+  - expected_stop_reason: max_steps

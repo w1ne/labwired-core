@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="54" failures="0" errors="0" time="1.095230">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="fecb2d6be9781d7b9072e5c722e105f51889cc932e1cd90dea25a608a72bbe93"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="1.095230">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: F103 I2C" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: I2C_NACK_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: I2C_IDLE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: TMP102=00001900" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: TMP102_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: uart_contains: TMP102_CONFIG=0000FFF0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: uart_contains: TMP102_CONFIG_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: uart_contains: TMP102_TLOW=00003450" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: uart_contains: TMP102_TLOW_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: uart_contains: TMP102_THIGH=00006788" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: uart_contains: TMP102_THIGH_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 12: uart_contains: TMP102_TLOW_SHORT=00002250" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 13: uart_contains: TMP102_TLOW_SHORT_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 14: uart_contains: BME280_ID=00000060" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 15: uart_contains: BME280_ID_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 16: uart_contains: BME280_T2=00006743" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 17: uart_contains: BME280_CALIBRATION_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 18: uart_contains: BME280_CALIBRATION_MAP_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 19: uart_contains: BME280_SKIPPED_PRESS_RAW=00080000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 20: uart_contains: BME280_SKIPPED_TEMP_RAW=00080000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 21: uart_contains: BME280_SKIPPED_HUM_RAW=00008000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 22: uart_contains: BME280_OVERSAMPLING_SKIP_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 23: uart_contains: BME280_MEASUREMENT_SETUP_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 24: uart_contains: BME280_PRESS_RAW=0005883F" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 25: uart_contains: BME280_TEMP_RAW=0008E910" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 26: uart_contains: BME280_HUM_RAW=0000853F" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 27: uart_contains: BME280_SEEDED_ENVIRONMENT_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 28: uart_contains: BME280_SEEDED_TEMP_CENTI=00000FA0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 29: uart_contains: BME280_SEEDED_PRESS_Q8=01731804" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 30: uart_contains: BME280_SEEDED_HUM_Q10=00014005" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 31: uart_contains: BME280_SEEDED_COMPENSATION_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 32: uart_contains: BME280_DYNAMIC_TEMP_RAW=0009A510" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 33: uart_contains: BME280_DYNAMIC_TEMPERATURE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 34: uart_contains: BME280_DYNAMIC_TEMP_CENTI=0000157C" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 35: uart_contains: BME280_DYNAMIC_TEMP_COMPENSATION_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 36: uart_contains: BME280_DYNAMIC_HUMIDITY_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 37: uart_contains: BME280_DYNAMIC_HUM_RAW=000064D2" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 38: uart_contains: BME280_HUM_TEMP_CENTI=0000157C" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 39: uart_contains: BME280_HUM_PRESS_Q8=0173180D" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 40: uart_contains: BME280_HUM_Q10=00008BFD" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 41: uart_contains: BME280_DYNAMIC_HUM_COMPENSATION_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 42: uart_contains: BME280_DYNAMIC_PRESSURE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 43: uart_contains: BME280_DYNAMIC_PRESS_RAW=0005305F" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 44: uart_contains: BME280_PRESS_TEMP_CENTI=0000157C" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 45: uart_contains: BME280_PRESS_Q8=018B81EE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 46: uart_contains: BME280_PRESS_HUM_Q10=00008BFD" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 47: uart_contains: BME280_DYNAMIC_PRESS_COMPENSATION_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 48: uart_contains: BME280_CTRL_HUM_STORAGE=00000001" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 49: uart_contains: BME280_CTRL_HUM_STORAGE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 50: uart_contains: BME280_CTRL_MEAS_STORAGE=00000027" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 51: uart_contains: BME280_CTRL_MEAS_STORAGE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 52: uart_contains: DONE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 53: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

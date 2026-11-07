@@ -1,0 +1,10 @@
+# CPU-only AArch64 smoke against the imported cortex-a53-gicv3 system.
+# Reuses the deterministic integer loop fixture; it performs no MMIO.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/imx8mplus-a53-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/cortex-a53-gicv3.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

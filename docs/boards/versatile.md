@@ -1,46 +1,44 @@
-# Validation Report: versatile
+# Arm Versatile/PB imported profile
 
-**Architecture:** ARMv7-A.
+## Measured profile
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+LabWired's onboarding profile for the imported Renode `versatile` target is
+narrowed to one ARM926EJ-S on the native ARM926 CPU model (ARMv5TEJ, MIDR
+`0x41069265`), a 64 KiB SDRAM aperture at `0x00000000`, and UART0 (PL011) at
+`0x101F1000` (polled TX only). The 64 KiB aperture starts at the SDRAM base; it
+is a simulator limit, not the SDRAM size.
 
-```text
-[2m2026-10-18T14:40:36.886074Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:40:36.886466Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/versatile.yaml
-[2m2026-10-18T14:40:37.151231Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:40:37.151317Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:40:37.151326Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:40:37.151330Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:40:37.152206Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:40:37.152214Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:40:37.152223Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:40:37.156605Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Progress: 10000 steps, current IPS: 1898063.37
-[2m2026-10-18T14:40:37.160686Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:40:37.160764Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x466
-[2m2026-10-18T14:40:37.160793Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 19999
-[2m2026-10-18T14:40:37.160819Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 20002
-[2m2026-10-18T14:40:37.160844Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2103035.38
-```
+Not modeled and omitted from the descriptor: the VIC/SIC interrupt
+controllers, SP804 timers, system controller, UART1, CLCD (PL110), SMC91x
+Ethernet, KMI (PL050), PCI/ISP1761 USB with its hub, mouse and keyboard, and
+flash. Thumb execution on this core is refused by the adapter, as is the ARMv5
+CP15 wait-for-interrupt. Interrupts, baud/framing timing and RX are outside
+the smoke.
 
+The earlier report on this page described a 2026-10-18 run of a Thumb
+Cortex-M fixture (`uart-ok-thumbv7m.elf`) against the unnarrowed import. That
+run never executed ARM926 code and is withdrawn.
 
-## Hardware Coverage Report
+## Smoke evidence
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `usbEhci` | `0x00000001` | `isp1761` |
-| `usbHub` | `0x00000001` | `usbhub` |
-| `lcd` | `0x10120000` | `pl110` |
-| `controller` | `0x20000000` | `emulatorcontroller` |
-| `usbMouse` | `0x00000002` | `usbmouse` |
-| `usbKeyboard` | `0x00000001` | `usbkeyboard` |
-| `uart0` | `0x101f1000` | `pl011` |
-| `uart1` | `0x101f2000` | `pl011` |
-| `sysctl` | `0x10000000` | `armsysctl` |
-| `timer1` | `0x101e2000` | `arm_sp804_timer` |
-| `timer2` | `0x101e3000` | `arm_sp804_timer` |
-| `smc91x` | `0x10010000` | `smc91x` |
-| `kmi0` | `0x10006000` | `pl050` |
-| `kmi1` | `0x10007000` | `pl050` |
+The committed A32 fixture `tests/fixtures/versatile-arm926-uart-smoke.elf` is
+linked at `0x00000000`, injected directly into the SDRAM aperture, sets
+`UARTCR.UARTEN|TXE`, polls `UARTFR.TXFF` and writes
+`VERSATILE ARM926 UART SMOKE` to `UARTDR`, and then spins. It ran **100,000
+ARM926EJ-S instructions** and passed the UART banner and bounded `max_steps`
+assertions (JUnit: 3 cases, 0 failures). With UART0 removed from the
+descriptor, the same fixture stops with a memory violation at `0x101F1030`
+(`UARTCR`) and passes 0/2 checks. The fixture does not boot through a boot ROM
+or exercise MMU, caches, interrupts or Thumb code.
 
-**Total Peripherals:** 14
+The exact system manifest is `configs/systems/onboarding/versatile.yaml`, the
+smoke script is `examples/renode-onboarding/versatile-arm926-uart-smoke.yaml`,
+and the build recipe is
+[`scripts/build_arm926_uart_smoke.sh`](../../scripts/build_arm926_uart_smoke.sh).
+Per-target metrics, JUnit, UART output, simulator result, snapshot and logs are
+under `docs/coverage/renode-onboarding/metrics/versatile/`.
+
+This is local CLI simulation evidence for the smoke assertions, not whole-SoC
+coverage, Renode equivalence, or hardware confirmation. See the
+[generated scoreboard](../coverage/renode-onboarding-scoreboard.md) for the
+current global totals.

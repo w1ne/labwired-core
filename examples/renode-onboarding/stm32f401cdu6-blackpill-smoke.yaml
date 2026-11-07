@@ -1,0 +1,10 @@
+# Cortex-M4 smoke against the imported Renode STM32F401 Black Pill system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-demo"
+  system: "../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml"
+limits:
+  max_steps: 64
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps

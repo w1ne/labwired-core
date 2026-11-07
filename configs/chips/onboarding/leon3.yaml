@@ -5,7 +5,9 @@
 # See the LICENSE file in the project root for full license information.
 
 name: leon3
-arch: arm
+# Renode models this as a SPARC V8 (LEON3) platform. The engine has no core for it,
+# so the chip is refused rather than run as a Cortex-M.
+arch: unknown
 flash:
   base: 134217728
   size: 1073741824B

@@ -274,6 +274,53 @@ fn clint_timer_interrupt_vectors_and_mret_restores_mie() {
 }
 
 #[test]
+fn plic_source_reaches_meip_and_claim_complete_through_loads() {
+    const PLIC: u64 = 0x0C00_0000;
+    let mut m = machine(&[
+        s(0, 3, 1, 2),           // sw x3, 0(x1)   priority[51] = 2
+        s(4, 5, 6, 2),           // sw x5, 4(x6)   context-1 enable word 1
+        csr(0b001, 0, 0x304, 7), // csrw mie, x7 (MEIE)
+        csr(0b110, 0, 0x300, 8), // csrsi mstatus, MIE
+        addi(10, 10, 1),
+    ]);
+    m.cpu.plic = Some(Plic::new(PlicParams {
+        base: PLIC,
+        num_sources: 187,
+        num_contexts: 9,
+        priority_bits: 3,
+        context: 1,
+    }));
+    m.cpu.mtvec = RAM + 0x100;
+    m.cpu.x[1] = PLIC + 4 * 51;
+    m.cpu.x[3] = 2;
+    m.cpu.x[5] = 1 << (51 - 32);
+    m.cpu.x[6] = PLIC + 0x2080;
+    m.cpu.x[7] = MIP_MEIP;
+    m.cpu.set_exception_pending(51);
+    run(&mut m, 3);
+    assert_eq!(m.cpu.read_csr(0x344).unwrap() & MIP_MEIP, MIP_MEIP);
+    assert_eq!(m.cpu.pc, RAM + 12, "MIE is still clear");
+    run(&mut m, 1); // csrsi retires, MEIP taken after it
+    assert_eq!(m.cpu.mcause, (1 << 63) | 11);
+    assert_eq!(m.cpu.pc, RAM + 0x100);
+    // Handler: lw x11, claim; sw x11, complete.
+    let claim = PLIC + 0x20_1004;
+    m.cpu.x[12] = claim;
+    m.bus.ram.data[0x100..0x104].copy_from_slice(&i(0, 12, 2, 11, 0x03).to_le_bytes());
+    m.bus.ram.data[0x104..0x108].copy_from_slice(&s(0, 11, 12, 2).to_le_bytes());
+    run(&mut m, 1);
+    assert_eq!(m.cpu.x[11], 51);
+    assert_eq!(m.cpu.read_csr(0x344).unwrap() & MIP_MEIP, 0);
+    run(&mut m, 1);
+    m.cpu.set_exception_pending(51);
+    assert_eq!(
+        m.cpu.read_csr(0x344).unwrap() & MIP_MEIP,
+        MIP_MEIP,
+        "completed: re-pends"
+    );
+}
+
+#[test]
 fn clint_registers_read_back_through_loads() {
     let mut m = machine(&[
         i(0, 1, 3, 2, 0x03), // ld x2, 0(x1) (mtime)
@@ -348,6 +395,12 @@ fn mpfs_chip_selects_the_first_u54_and_the_mss_clint() {
     assert_eq!(p.hart_id, 1);
     assert_eq!(p.clint_base, Some(0x0200_0000));
     assert_eq!(p.mtime_divider, 600);
+    let plic = p.plic.expect("MPFS has a PLIC");
+    assert_eq!(
+        (plic.base, plic.num_sources, plic.context),
+        (0x0C00_0000, 187, 1)
+    );
+    assert_eq!(Rv64Params::for_chip_name("sifive-fu540", 1).plic, None);
 }
 
 #[test]

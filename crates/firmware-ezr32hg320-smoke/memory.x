@@ -1,0 +1,6 @@
+/* Imported EZR32HG320 profile: 64 KiB flash and 8 KiB SRAM. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x08000000, LENGTH = 64K
+  RAM   : ORIGIN = 0x20000000, LENGTH = 8K
+}

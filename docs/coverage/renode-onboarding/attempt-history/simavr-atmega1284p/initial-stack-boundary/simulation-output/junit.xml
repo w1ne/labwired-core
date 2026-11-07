@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="2" failures="1" errors="0" time="0.000295">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MemoryViolation"/>
+    <property name="firmware_hash" value="8dfe4d1aa7b5f5ea6699370a1a2cd985856ffd3976acaffa388f3e24f9e15ad5"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000295">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: expected_stop_reason: MaxSteps" time="0.000000">
+    <failure message="assertion failed">assertion 1: expected_stop_reason: MaxSteps
+
+result_schema_version=1.0
+stop_reason=MemoryViolation
+stop_reason_details.triggered_stop_condition=MemoryViolation
+steps_executed=0
+cycles=29
+instructions=23
+limits:
+  - max_steps=100000
+firmware_hash=8dfe4d1aa7b5f5ea6699370a1a2cd985856ffd3976acaffa388f3e24f9e15ad5
+firmware=examples/renode-onboarding/../../tests/fixtures/avr/atmega1284p-cpu-smoke.elf
+system=examples/renode-onboarding/../../configs/systems/onboarding/simavr-atmega1284p.yaml
+script=examples/renode-onboarding/simavr-atmega1284p-smoke.yaml
+assertions:
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+</testsuite>

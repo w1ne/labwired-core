@@ -7,13 +7,26 @@
 name: simavr-atmega328pb
 arch: avr
 core: avr8
+cpu_hz: 16000000
 flash:
   base: 0
   size: 32KB
 ram:
   base: 256
   size: 2KB
-peripherals: []
+peripherals:
+  # The smoke exercises PORTB (PB5 output) and the second USART only.
+  # Other GPIO ports, USART0, timers, ADC, SPI and TWI remain out of scope.
+  - id: portb
+    type: avr_gpio
+    base_address: 0x00010023
+    size: 3
+  - id: usart1
+    type: uart
+    base_address: 0x000100C8
+    size: 8
+    config:
+      profile: avr
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

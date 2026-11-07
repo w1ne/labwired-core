@@ -1,23 +1,34 @@
 name: alif_ae822fa0e5597bs0
-description: 'alif_ae822fa0e5597bs0 (root platform, Alif Ensemble). Architecture:
-  ARM Cortex-M.'
+description: >-
+  Alif Ensemble E8 AE822FA0E5597BS0, measured as one Cortex-M55 core with
+  local ITCM and DTCM and polled UART0-7 (DW_apb_uart 16550). GPIO, I2C, CAN,
+  interrupts, the other cores, Helium, MRAM and boot firmware are not covered.
+url: https://alifsemi.com/ensemble-e8-series/
 family: Alif Ensemble
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/alif_ae822fa0e5597bs0.yaml
 provenance:
   generated_by: scripts/onboard_hw_targets.py
   parse_fallbacks:
   - flash=itcm
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-focused-smoke
+  reason: cortex-m55-tcm-uart0-uart7-polled; whole_platform_not_verified
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-10-18T14:39:50.002038+00:00'
+    cortex_m55_integer_smoke: true
+    uart0_polled_tx: true
+    uart_divisor_latches: true
+    interrupts: false
+    gpio: false
+    whole_platform: false
+    other_cores: false
+    helium: false
+    other_peripherals: false
+    boot_firmware: false
+  timestamp_utc: '2026-11-07T09:30:00+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/alif_ae822fa0e5597bs0.md

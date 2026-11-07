@@ -1,0 +1,6 @@
+/* EFR32xG22: 0x7E000 bytes of application flash and 32 KiB SRAM. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x00000000, LENGTH = 0x7E000
+  RAM   : ORIGIN = 0x20000000, LENGTH = 0x8000
+}

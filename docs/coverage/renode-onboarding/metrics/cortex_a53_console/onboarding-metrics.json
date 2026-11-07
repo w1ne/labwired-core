@@ -1,0 +1,38 @@
+{
+  "target_id": "cortex_a53_console",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/cortex_a53_console-cpu-smoke.yaml",
+  "system": "configs/systems/onboarding/cortex_a53_console.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T04:19:04Z",
+  "finished_at_utc": "2026-11-06T04:19:12Z",
+  "elapsed_seconds": 8,
+  "elapsed_ms": 7996,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 7.696,
+    "build_firmware": null,
+    "run_smoke": 0.289
+  },
+  "stages_ms": {
+    "build_cli": 7696,
+    "build_firmware": null,
+    "run_smoke": 289
+  },
+  "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf"
+}

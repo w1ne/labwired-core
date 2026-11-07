@@ -1,0 +1,38 @@
+{
+  "target_id": "zynqmp",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/zynqmp-a53-uart-smoke.yaml",
+  "system": "configs/systems/onboarding/zynqmp.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T18:24:18Z",
+  "finished_at_utc": "2026-11-06T18:28:24Z",
+  "elapsed_seconds": 247,
+  "elapsed_ms": 246519,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 246.197,
+    "build_firmware": null,
+    "run_smoke": 0.313
+  },
+  "stages_ms": {
+    "build_cli": 246197,
+    "build_firmware": null,
+    "run_smoke": 313
+  },
+  "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf"
+}

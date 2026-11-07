@@ -1,0 +1,18 @@
+# Cortex-M4 UART0 + GPIO1 smoke against the exact imported Vybrid system.
+# Firmware: examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.S (built by
+# scripts/build_colibri_vf61_cortex_m4_smoke.sh). Polled UART0 TX behind
+# S1.TDRE, C2 readback, and GPIO1 PSOR/PCOR/PTOR against PDOR.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/colibri-vf61-cortex-m4-smoke.elf"
+  system: "../../configs/systems/onboarding/vybrid.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "VF61 M4 SMOKE"
+  - uart_ordered:
+      - "uart0 c2=0c"
+      - "gpio1 pdor=00000041"
+      - "pass=1f"
+  - memory_value: {address: 0x3F07FFF0, expected_value: 0x5F61001F}
+  - expected_stop_reason: max_steps

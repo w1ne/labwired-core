@@ -1,164 +1,20 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Bounded OpenTitan Earl Grey CW310 profile for a direct RV32IMC smoke. The
+# upstream CW310 REPL includes Earl Grey's Ibex core, 1 MiB flash alias at
+# 0x20000000, 128 KiB main SRAM at 0x10000000, and UART0. This profile omits
+# ROM boot, the flash/SRAM controllers, and all unexercised peripherals; it does
+# not claim the Ibex A/B extensions or OpenTitan security functions.
 name: opentitan-earlgrey-cw310
-arch: arm
+arch: riscv
+core: rv32imc_zicsr_zifencei
 flash:
-  base: 32768
-  size: 32768B
+  base: 0x20000000
+  size: 1MiB
 ram:
-  base: 1080033280
-  size: 4096B
+  base: 0x10000000
+  size: 128KiB
+flash_boot_alias: false
 peripherals:
-- id: rom_ctrl
-  type: opentitan_romcontroller
-  bus: sysbus
-  base_address: 1092485120
-- id: sram_ctrl
-  type: opentitan_sramcontroller
-  bus: sysbus
-  base_address: 1092354048
-- id: flash_ctrl
-  type: opentitan_flashcontroller
-  bus: sysbus
-  base_address: 1090519040
-- id: uart0
-  type: opentitan_uart
-  bus: sysbus
-  base_address: 1073741824
-- id: uart1
-  type: opentitan_uart
-  bus: sysbus
-  base_address: 1073807360
-- id: uart2
-  type: opentitan_uart
-  bus: sysbus
-  base_address: 1073872896
-- id: uart3
-  type: opentitan_uart
-  bus: sysbus
-  base_address: 1073938432
-- id: i2c0
-  type: stub
-  renode_type: opentitan_i2c
-  bus: sysbus
-  base_address: 1074266112
-- id: i2c1
-  type: stub
-  renode_type: opentitan_i2c
-  bus: sysbus
-  base_address: 1074331648
-- id: i2c2
-  type: stub
-  renode_type: opentitan_i2c
-  bus: sysbus
-  base_address: 1074397184
-- id: spi_device
-  type: stub
-  renode_type: opentitan_spidevice
-  bus: sysbus
-  base_address: 1074069504
-- id: gpio
-  type: opentitan_gpio
-  bus: sysbus
-  base_address: 1074003968
-- id: aes
-  type: stub
-  renode_type: opentitan_aes
-  bus: sysbus
-  base_address: 1091567616
-- id: keymgr
-  type: stub
-  renode_type: opentitan_keymanager
-  bus: sysbus
-  base_address: 1091829760
-- id: csrng
-  type: stub
-  renode_type: opentitan_csrng
-  bus: sysbus
-  base_address: 1091895296
-- id: hmac
-  type: stub
-  renode_type: opentitan_hmac
-  bus: sysbus
-  base_address: 1091633152
-- id: kmac
-  type: stub
-  renode_type: opentitan_kmac
-  bus: sysbus
-  base_address: 1091698688
-- id: rv_timer
-  type: opentitan_timer
-  bus: sysbus
-  base_address: 1074790400
-- id: timer_aon
-  type: opentitan_aontimer
-  bus: sysbus
-  base_address: 1078394880
-- id: pwrmgr_aon
-  type: stub
-  renode_type: opentitan_powermanager
-  bus: sysbus
-  base_address: 1077936128
-- id: rstmgr_aon
-  type: stub
-  renode_type: opentitan_resetmanager
-  bus: sysbus
-  base_address: 1078001664
-- id: otp_ctrl
-  type: stub
-  renode_type: opentitan_onetimeprogrammablememorycontroller
-  bus: sysbus
-  base_address: 1074987008
-- id: lc_ctrl
-  type: stub
-  renode_type: opentitan_lifecyclecontroller
-  bus: sysbus
-  base_address: 1075052544
-- id: swteststatus
-  type: stub
-  renode_type: opentitan_verilatorswteststatus
-  bus: sysbus
-  base_address: 1092550784
-- id: entropy_src
-  type: stub
-  renode_type: opentitan_entropysource
-  bus: sysbus
-  base_address: 1091960832
-- id: edn0
-  type: stub
-  renode_type: opentitan_entropydistributionnetwork
-  bus: sysbus
-  base_address: 1092026368
-- id: edn1
-  type: stub
-  renode_type: opentitan_entropydistributionnetwork
-  bus: sysbus
-  base_address: 1092091904
-- id: alert_handler
-  type: stub
-  renode_type: opentitan_alerthandler
-  bus: sysbus
-  base_address: 1075118080
-- id: otbn
-  type: stub
-  renode_type: opentitan_bignumberaccelerator
-  bus: sysbus
-  base_address: 1091764224
-- id: sysrst_ctrl
-  type: stub
-  renode_type: opentitan_systemresetcontrol
-  bus: sysbus
-  base_address: 1078132736
-- id: clock_manager
-  type: stub
-  renode_type: opentitan_clockmanager
-  bus: sysbus
-  base_address: 1078067200
-- id: RV_CORE_IBEX_RND_DATA
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1092550744
+  - id: uart0
+    type: opentitan_uart
+    base_address: 0x40000000
+    size: 4KiB

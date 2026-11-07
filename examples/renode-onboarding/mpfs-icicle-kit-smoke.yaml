@@ -1,0 +1,13 @@
+# Exact imported-system smoke using stock Zephyr v4.1.0 for the MPFS U54.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/mpfs-zephyr-hello.elf"
+  system: "../../configs/systems/onboarding/mpfs-icicle-kit.yaml"
+limits:
+  max_steps: 2000000
+  max_cycles: 60000000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.1.0 ***"
+      - "Hello World! mpfs_icicle/polarfire/u54"
+  - expected_stop_reason: max_steps

@@ -1,0 +1,13 @@
+# Direct RV32IMC firmware smoke against the bounded imported OpenTitan system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-opentitan-earlgrey-smoke"
+  system: "../../configs/systems/onboarding/opentitan-earlgrey.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "OPENTITAN EARLGREY SMOKE"
+  - uart_ordered:
+      - "core=rv32imc uart0=opentitan"
+      - "mul=00000143"
+  - expected_stop_reason: max_steps

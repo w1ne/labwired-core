@@ -1,0 +1,719 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870912,
+          "expected_value": 323,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1074282496,
+          "expected_value": 4290772862,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1074282500,
+          "expected_value": 4294967295,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1074282512,
+          "expected_value": 4294967295,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      323,
+      536870912,
+      2148,
+      0,
+      0,
+      0,
+      0,
+      537395192,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537395192,
+      2087,
+      2136
+    ],
+    "pc": 2136,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "f870c6c34e651dd5e0e01d039323df15af5cb40617d419d597419f6013ca5bce",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-renesas-ck-ra6m5-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-ck_ra6m5.yaml",
+    "script": "examples/renode-onboarding/renesas-ck_ra6m5-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "mstp",
+        "kind": "declarative",
+        "base": 1074282496,
+        "registers": [
+          {
+            "name": "MSTPCRA",
+            "offset": 0,
+            "size": 32,
+            "value": 4290772862,
+            "fields": [
+              {
+                "name": "MSTPA0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSTPA7",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSTPA22",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MSTPCRB",
+            "offset": 4,
+            "size": 32,
+            "value": 4294967295,
+            "fields": [
+              {
+                "name": "MSTPB3",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB6",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB7",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB8",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB9",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB11",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB12",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB15",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB16",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB18",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB19",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB22",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB23",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB24",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB25",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB26",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB27",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB28",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB29",
+                "bits": [
+                  29,
+                  29
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB30",
+                "bits": [
+                  30,
+                  30
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB31",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MSTPCRC",
+            "offset": 8,
+            "size": 32,
+            "value": 4294967295,
+            "fields": [
+              {
+                "name": "MSTPC0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC3",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC8",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC12",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC13",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC14",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC27",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC31",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MSTPCRD",
+            "offset": 12,
+            "size": 32,
+            "value": 4294967295,
+            "fields": [
+              {
+                "name": "MSTPD0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD2",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD3",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD11",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD12",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD13",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD14",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD15",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD16",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD20",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD22",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MSTPCRE",
+            "offset": 16,
+            "size": 32,
+            "value": 4294967295,
+            "fields": [
+              {
+                "name": "MSTPE14",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE15",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE22",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE23",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE24",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE25",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE26",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE27",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE28",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE29",
+                "bits": [
+                  29,
+                  29
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE30",
+                "bits": [
+                  30,
+                  30
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE31",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2148,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 2148,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 2097152,
+    "ram_total_bytes": 524288,
+    "flash_used_pct": 0.1,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 524288,
+    "main_stack_high_water_bytes": 8,
+    "main_stack_free_min_bytes": 524276,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537395200,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 524288,
+    "heap_high_water_bytes": 4,
+    "heap_free_min_bytes": 524276,
+    "heap_base": 536870912,
+    "heap_top": 537395200
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 34,
+    "memory_writes": 5,
+    "peripheral_accesses": 0,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 2136,
+        "count": 390,
+        "symbol": "firmware_renesas_ck_ra6m5_smoke::__cortex_m_rt_main"
+      }
+    ]
+  }
+}

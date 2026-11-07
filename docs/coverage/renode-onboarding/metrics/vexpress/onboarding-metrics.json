@@ -1,0 +1,38 @@
+{
+  "target_id": "vexpress",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/vexpress-a9-uart-smoke.yaml",
+  "system": "configs/systems/onboarding/vexpress.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T19:51:03Z",
+  "finished_at_utc": "2026-11-06T19:51:04Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1062,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.297,
+    "build_firmware": null,
+    "run_smoke": 0.756
+  },
+  "stages_ms": {
+    "build_cli": 297,
+    "build_firmware": null,
+    "run_smoke": 756
+  },
+  "prebuilt_firmware": "tests/fixtures/vexpress-a9-uart-smoke.elf"
+}

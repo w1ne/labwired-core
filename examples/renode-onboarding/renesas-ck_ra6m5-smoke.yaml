@@ -1,0 +1,17 @@
+# Cortex-M33 instruction and SRAM smoke against the exact imported CK-RA6M5.
+# It does not exercise the board's SCI, GPIO, or any other peripherals.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-renesas-ck-ra6m5-smoke"
+  system: "../../configs/systems/onboarding/renesas-ck_ra6m5.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - memory_value:
+      address: 0x20000000
+      expected_value: 0x00000143
+      size: 4
+  - memory_value: {address: 0x40084000, expected_value: 0xFFBFFF7E}  # MSTPCRA reset
+  - memory_value: {address: 0x40084004, expected_value: 0xFFFFFFFF}  # MSTPCRB reset; this fixture does not write it
+  - memory_value: {address: 0x40084010, expected_value: 0xFFFFFFFF}  # MSTPCRE reset
+  - expected_stop_reason: max_steps

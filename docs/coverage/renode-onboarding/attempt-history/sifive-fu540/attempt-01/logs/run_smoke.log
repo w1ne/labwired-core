@@ -1,0 +1,8 @@
+2026-11-04T15:41:00.853210Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sifive-fu540.yaml
+2026-11-04T15:41:00.871920Z  INFO labwired_loader: ELF Entry Point: 0x20000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-04T15:41:00.872501Z ERROR labwired_cli::execute: Simulation error at step 0: not implemented: eight-byte physical access at 0x20000010 requires RAM; MMIO64 is unsupported
+2026-11-04T15:41:00.872979Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "RV64 FU540 UART0 smoke; mul=0000001100000011" }) (captured len=0)
+2026-11-04T15:41:00.872995Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }) (captured len=0)
+FAIL  0/2 checks · sifive-fu540-smoke · 0 steps · 0.00s

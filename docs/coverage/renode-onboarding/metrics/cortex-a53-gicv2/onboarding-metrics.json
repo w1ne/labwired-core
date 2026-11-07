@@ -1,0 +1,38 @@
+{
+  "target_id": "cortex-a53-gicv2",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/cortex-a53-gicv2-cpu-smoke.yaml",
+  "system": "configs/systems/onboarding/cortex-a53-gicv2.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T23:36:56Z",
+  "finished_at_utc": "2026-11-05T23:37:09Z",
+  "elapsed_seconds": 13,
+  "elapsed_ms": 12566,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 12.204,
+    "build_firmware": null,
+    "run_smoke": 0.348
+  },
+  "stages_ms": {
+    "build_cli": 12204,
+    "build_firmware": null,
+    "run_smoke": 348
+  },
+  "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf"
+}

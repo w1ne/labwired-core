@@ -1,0 +1,177 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536887296,
+          "expected_value": 323,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      323,
+      536887296,
+      2152,
+      0,
+      0,
+      0,
+      0,
+      536903672,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536903672,
+      2087,
+      2142
+    ],
+    "pc": 2142,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "40d435e2eb979f7d4caefb2f6aa99b75f136265dfd9d1a3987e3b6616ac30ef2",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv8m.base-none-eabi/release/firmware-renesas-ek-ra2e1-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-ek_ra2e1.yaml",
+    "script": "examples/renode-onboarding/renesas-ek_ra2e1-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2152,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 2152,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 131072,
+    "ram_total_bytes": 16384,
+    "flash_used_pct": 1.64,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 16384,
+    "main_stack_high_water_bytes": 8,
+    "main_stack_free_min_bytes": 16372,
+    "main_stack_base": 536887296,
+    "main_stack_top": 536903680,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 16384,
+    "heap_high_water_bytes": 4,
+    "heap_free_min_bytes": 16372,
+    "heap_base": 536887296,
+    "heap_top": 536903680
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 36,
+    "memory_writes": 5,
+    "peripheral_accesses": 0,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 2142,
+        "count": 390,
+        "symbol": "firmware_renesas_ek_ra2e1_smoke::__cortex_m_rt_main"
+      }
+    ]
+  }
+}

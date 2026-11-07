@@ -1,49 +1,36 @@
-# Validation Report: colibri-vf61
+# Toradex Colibri VF61 imported profile
 
-**Architecture:** ARM Cortex-A5 / Cortex-M4.
+## Measured scope
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+Toradex identifies the Colibri VF61 as a Vybrid VF6xx system-on-module with a
+Cortex-A5 and a secondary Cortex-M4. Renode's [Vybrid platform description](https://github.com/renode/renode/blob/master/platforms/cpus/vybrid.repl)
+maps `cpuM4` as a Cortex-M4 and on-chip OCRAM at `0x3F000000` with a 512 KiB
+window. The LabWired profile includes one Cortex-M4 execution context and this
+OCRAM window. UART0-2 and the GPIO0-4 data blocks are also mapped. The A5, OCRAM aliases,
+boot ROM, DDR, other peripherals, and reset-vector boot are outside the
+measured profile. See Toradex's [Colibri VF61 page](https://developer.toradex.com/hardware/colibri-som-family/modules/colibri-vf61/)
+for the module overview.
 
-```text
-[2m2026-10-18T14:39:51.849349Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:39:51.852553Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/colibri-vf61.yaml
-[2m2026-10-18T14:39:51.854016Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:39:51.854098Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:39:51.854117Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:39:51.854121Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:39:51.855030Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:39:51.855043Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:39:51.855049Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:39:51.855121Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:39:51.855144Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:39:51.855148Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:39:51.855152Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:39:51.855155Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:39:51.855160Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 1932.98
-```
+## Smoke evidence
 
+The smoke firmware (`examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.S`,
+built by `scripts/build_colibri_vf61_cortex_m4_smoke.sh`) is loaded directly
+into OCRAM. It sets UART0 C2 to TE|RE and reads it back. It checks the S1 idle
+flags (TDRE|TC). It drives GPIO1 PDOR through PSOR, PCOR and PTOR
+(`0xF0 -> 0xC0 -> 0x41`) and transmits the results on UART0, polling
+S1.TDRE. The exact imported system ran 100,000 instructions and passed 4/4
+assertions. These are the UART0 lines `VF61 M4 SMOKE`, `uart0 c2=0c`,
+`gpio1 pdor=00000041` and `pass=1f`, plus the result word `0x5F61001F` at
+`0x3F07FFF0` and the `max_steps` stop. Negative control: the same firmware on
+the previous CPU-only chip profile fails 0/4 with a BusFault at UART0 C2
+(`0x40027003`).
 
-## Hardware Coverage Report
+UART0-2 use the Kinetis 8-bit UART model, which has the Vybrid UART register
+layout. GPIO0-4 use the Kinetis GPIO data-register model. The model also has a
+PDDR register at `0x14` that Vybrid lacks (direction lives in IOMUXC).
+Interrupts are not claimed: the MSCM IRQ router that feeds the M4 NVIC is not
+modelled. This is local LabWired CLI evidence. It does not cover reset-vector
+boot, the A5, baud timing, FIFOs, DMA, Renode execution or hardware.
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `usbHub` | `0x00000001` | `usbhub` |
-| `mouse` | `0x00000005` | `usbmouse` |
-| `fusion` | `0x00000010` | `fusionf0710a` |
-| `uart0` | `0x40027000` | `imxuart` |
-| `uart1` | `0x40028000` | `imxuart` |
-| `uart2` | `0x40029000` | `imxuart` |
-| `eDma0` | `0x40018000` | `vybriddma` |
-| `eDma1` | `0x40098000` | `vybriddma` |
-| `fb` | `0x40058000` | `vybriddcu` |
-| `usbEhci0` | `0x40034000` | `ehcihostcontroller` |
-| `usbEhci1` | `0x400b4000` | `ehcihostcontroller` |
-| `i2c0` | `0x40066000` | `vybridi2c` |
-| `i2c1` | `0x40067000` | `vybridi2c` |
-| `timers` | `0x40037000` | `periodicinterrupttimer` |
-| `globalTimer` | `0x40002200` | `arm_globaltimer` |
-| `sema4` | `0x4001d000` | `sema4` |
-| `nand` | `0x400e0000` | `fslnand` |
-
-**Total Peripherals:** 17
+Evidence: `docs/coverage/renode-onboarding/metrics/colibri-vf61/` contains the
+per-target metric, JUnit result, simulator result, snapshot, and run log.

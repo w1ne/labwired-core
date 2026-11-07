@@ -264,9 +264,38 @@ impl Bme280 {
         (self.temperature_c, self.humidity_pct, self.pressure_hpa)
     }
 
-    /// Raw ADC words the part currently reports (`adc_T`, `adc_P`, `adc_H`).
+    /// Raw ADC words the register map currently reports (`adc_T`, `adc_P`, `adc_H`).
+    /// Channels with oversampling disabled return the BME280 skip codes.
     pub fn raw(&self) -> (i32, i32, i32) {
-        (self.adc_t, self.adc_p, self.adc_h)
+        (
+            self.reported_adc_t(),
+            self.reported_adc_p(),
+            self.reported_adc_h(),
+        )
+    }
+
+    fn reported_adc_t(&self) -> i32 {
+        if self.ctrl_meas & 0xE0 == 0 {
+            0x8_0000
+        } else {
+            self.adc_t
+        }
+    }
+
+    fn reported_adc_p(&self) -> i32 {
+        if self.ctrl_meas & 0x1C == 0 {
+            0x8_0000
+        } else {
+            self.adc_p
+        }
+    }
+
+    fn reported_adc_h(&self) -> i32 {
+        if self.ctrl_hum & 0x07 == 0 {
+            0x8_000
+        } else {
+            self.adc_h
+        }
     }
 
     /// Recompute every raw ADC word from the requested engineering values.
@@ -341,14 +370,14 @@ impl Bme280 {
 
             // Raw measurement registers (msb, lsb, xlsb) — 20-bit P and T are
             // left-aligned across three bytes; H is a plain 16-bit word.
-            0xF7 => ((self.adc_p >> 12) & 0xFF) as u8,
-            0xF8 => ((self.adc_p >> 4) & 0xFF) as u8,
-            0xF9 => ((self.adc_p << 4) & 0xF0) as u8,
-            0xFA => ((self.adc_t >> 12) & 0xFF) as u8,
-            0xFB => ((self.adc_t >> 4) & 0xFF) as u8,
-            0xFC => ((self.adc_t << 4) & 0xF0) as u8,
-            0xFD => ((self.adc_h >> 8) & 0xFF) as u8,
-            0xFE => (self.adc_h & 0xFF) as u8,
+            0xF7 => ((self.reported_adc_p() >> 12) & 0xFF) as u8,
+            0xF8 => ((self.reported_adc_p() >> 4) & 0xFF) as u8,
+            0xF9 => ((self.reported_adc_p() << 4) & 0xF0) as u8,
+            0xFA => ((self.reported_adc_t() >> 12) & 0xFF) as u8,
+            0xFB => ((self.reported_adc_t() >> 4) & 0xFF) as u8,
+            0xFC => ((self.reported_adc_t() << 4) & 0xF0) as u8,
+            0xFD => ((self.reported_adc_h() >> 8) & 0xFF) as u8,
+            0xFE => (self.reported_adc_h() & 0xFF) as u8,
 
             _ => {
                 crate::census_reg!("components.bme280:Bme280", reg, "read");
@@ -359,7 +388,7 @@ impl Bme280 {
 
     fn write_register(&mut self, reg: u8, value: u8) {
         match reg {
-            0xF2 => self.ctrl_hum = value,
+            0xF2 => self.ctrl_hum = value & 0x07,
             0xF4 => self.ctrl_meas = value,
             0xF5 => self.config = value,
             0xE0 => { /* soft reset 0xB6 — ignore */ }
@@ -486,7 +515,10 @@ static BME280_METADATA: KitMetadata = KitMetadata {
              silicon; the firmware driver recovers engineering units by running Bosch's \
              compensation formulas. Stimulus takes °C / %RH / hPa and inverts that same \
              compensation against the same coefficients, so a real driver reads back what \
-             was set. Defaults to 25 °C / 50 %RH / 1013.25 hPa.",
+             was set. Disabled oversampling returns the documented skip codes. CTRL_HUM and \
+             CTRL_MEAS are stored, but humidity latching, conversion timing, operating modes, \
+             filtering and status transitions are not modeled. Defaults to 25 °C / 50 %RH / \
+             1013.25 hPa.",
     ),
     transport: Transport::I2c,
     category: Category::I2c,
@@ -635,6 +667,16 @@ mod tests {
     /// Read the raw ADC words out of the measurement registers the way a
     /// driver does: one 8-byte burst from 0xF7.
     fn read_raw_via_i2c(dev: &mut Bme280) -> (i32, i32, i32) {
+        // Measurement registers return the skip codes after reset until the
+        // firmware enables the corresponding oversampling fields.
+        dev.stop();
+        dev.write(0xF2);
+        dev.write(0x01); // humidity x1
+        dev.stop();
+        dev.write(0xF4);
+        dev.write(0x27); // temperature x1, pressure x1, normal mode
+        dev.stop();
+
         let d = read_regs(dev, 0xF7, 8);
         let adc_p = ((d[0] as i32) << 12) | ((d[1] as i32) << 4) | ((d[2] as i32) >> 4);
         let adc_t = ((d[3] as i32) << 12) | ((d[4] as i32) << 4) | ((d[5] as i32) >> 4);
@@ -780,5 +822,15 @@ mod tests {
         dev.write(0x27);
         dev.stop();
         assert_eq!(read_regs(&mut dev, 0xF4, 1)[0], 0x27);
+    }
+
+    #[test]
+    fn disabled_oversampling_reports_skip_codes() {
+        let mut dev = Bme280::default();
+        assert_eq!(
+            read_regs(&mut dev, 0xF7, 8),
+            [0x80, 0x00, 0x00, 0x80, 0x00, 0x00, 0x80, 0x00]
+        );
+        assert_eq!(dev.raw(), (0x8_0000, 0x8_0000, 0x8_000));
     }
 }

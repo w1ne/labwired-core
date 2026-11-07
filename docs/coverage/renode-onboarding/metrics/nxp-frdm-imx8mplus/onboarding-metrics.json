@@ -1,0 +1,38 @@
+{
+  "target_id": "nxp-frdm-imx8mplus",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml",
+  "system": "configs/systems/onboarding/nxp-frdm-imx8mplus.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T23:17:16Z",
+  "finished_at_utc": "2026-11-05T23:17:25Z",
+  "elapsed_seconds": 9,
+  "elapsed_ms": 8747,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 8.452,
+    "build_firmware": null,
+    "run_smoke": 0.286
+  },
+  "stages_ms": {
+    "build_cli": 8452,
+    "build_firmware": null,
+    "run_smoke": 286
+  },
+  "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf"
+}

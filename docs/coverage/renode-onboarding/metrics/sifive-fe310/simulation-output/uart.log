@@ -1,0 +1,3 @@
+SIFIVE FE310 SMOKE
+cpu=rv32im uart=sifive
+mul=00000143

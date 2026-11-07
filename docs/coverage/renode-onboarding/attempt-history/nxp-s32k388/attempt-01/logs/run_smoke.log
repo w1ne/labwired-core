@@ -1,0 +1,8 @@
+2026-11-04T12:15:41.664945Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nxp-s32k388.yaml
+2026-11-04T12:15:41.670036Z  INFO labwired_loader: ELF Entry Point: 0x0
+2026-11-04T12:15:41.670601Z  WARN labwired_core: Failed to load segment at 0x10000 - outside of memory map
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-04T12:15:41.671327Z ERROR labwired_cli::execute: Simulation error at step 10000: Memory access violation at 0x8000
+2026-11-04T12:15:41.671471Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }) (captured len=0)
+FAIL  0/1 checks · nxp-s32k388-smoke · 10000 steps · 0.00s

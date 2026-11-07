@@ -1,0 +1,11 @@
+# ARM7TDMI execution and the offset-zero TX write path of the imported UART0
+# window. The custom UART profile deliberately exposes no other registers.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/lpc2294-arm7-uart-smoke.elf"
+  system: "../../configs/systems/onboarding/lpc2294.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "LPC2294_UART0_TX_OK"
+  - expected_stop_reason: max_steps

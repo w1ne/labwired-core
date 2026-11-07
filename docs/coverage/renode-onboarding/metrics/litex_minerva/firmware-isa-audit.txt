@@ -1,0 +1,12 @@
+Minerva firmware ISA audit
+
+Build target: riscv32i-unknown-none-elf
+
+`readelf -A target/riscv32i-unknown-none-elf/release/firmware-litex-minerva-smoke`
+reported:
+
+    Tag_RISCV_arch: "rv32i2p1"
+
+An ELF executable-section scan checked all 558 aligned 32-bit instruction
+words for the RISC-V M/Zmmul opcode encoding (OP/OP-32 with funct7=1). It
+found zero matches.

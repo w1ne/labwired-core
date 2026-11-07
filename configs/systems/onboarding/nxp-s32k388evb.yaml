@@ -4,9 +4,17 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# SUPERSEDED: staged onboarding descriptor (a generic UART fixture on the
-# Renode-derived map with 256 KiB of RAM and no S32K3 SIUL2 model). The
-# promoted S32K388 part is configs/chips/s32k388.yaml (board:
-# configs/systems/s32k388-evb.yaml).
+# Exact imported board system, bounded to the narrowed chip profile (real
+# SIUL2 and LPUART2 models; SWT_0 and MC_ME write-accepting stubs). PTF23 is
+# the green LED as in configs/systems/s32k388-evb.yaml.
 name: nxp-s32k388evb
 chip: ../../chips/onboarding/nxp-s32k388evb.yaml
+debug_uart: "lpuart2"
+external_devices: []
+board_io:
+  - id: "led1_green"
+    kind: "led"
+    peripheral: "siul2"
+    pin: 183
+    signal: "output"
+    active_high: true

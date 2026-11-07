@@ -28,11 +28,25 @@ fn arm_test_family(
     let family = machine_family(&chip)?;
     if !matches!(
         family,
-        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR
+        MachineFamily::CortexM
+            | MachineFamily::CortexA
+            | MachineFamily::CortexR
+            | MachineFamily::Arm7Tdmi
     ) {
         anyhow::bail!("ARM ELF does not match chip '{}' ({family:?})", chip.name);
     }
     Ok(family)
+}
+
+/// The declared Cortex-A core for a [`arm_test_family`] `CortexA` run.
+#[cfg(feature = "qemu-arm")]
+fn arm_test_cortex_a_core(
+    system: Option<&labwired_config::ResolvedSystem>,
+    plugins: &[&dyn labwired_core::plugin::ChipPlugin],
+) -> anyhow::Result<labwired_core::system::arch_policy::CortexACore> {
+    let system = system.ok_or_else(|| anyhow::anyhow!("Cortex-A run needs a system manifest"))?;
+    let chip = system.chip_with_plugins(&crate::plugin_chip_yaml(plugins))?;
+    labwired_core::system::arch_policy::cortex_a_core(&chip)
 }
 
 /// Turn on scheduler-safe CPU idle fast-forward for this `labwired test` run.
@@ -1870,6 +1884,34 @@ pub(crate) fn run_test(
         #[cfg(not(feature = "qemu-arm-system"))]
         let _ = chip;
     }
+    #[cfg(feature = "qemu-arm-system")]
+    let mut arm7_cpu = None;
+    if let Some(chip) = resolved_system
+        .as_ref()
+        .and_then(|s| s.chip_with_plugins(&crate::plugin_chip_yaml(plugins)).ok())
+        .filter(|chip| {
+            labwired_core::system::arch_policy::machine_family(chip).ok()
+                == Some(labwired_core::system::arch_policy::MachineFamily::Arm7Tdmi)
+        })
+    {
+        #[cfg(feature = "qemu-arm-system")]
+        match labwired_core::system::arm7::attach(&mut bus, &chip) {
+            Ok(cpu) => arm7_cpu = Some(cpu),
+            Err(error) => {
+                write_config_error_outputs(
+                    &args,
+                    Some(&firmware_path),
+                    system_path.as_ref(),
+                    Some(&firmware_bytes),
+                    Some(&resolved_limits),
+                    format!("{error:#}"),
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        }
+        #[cfg(not(feature = "qemu-arm-system"))]
+        let _ = chip;
+    }
 
     let rom_boot_path =
         args.rom_boot || args.capture_app_entry.is_some() || args.resume_snapshot.is_some();
@@ -1996,7 +2038,8 @@ pub(crate) fn run_test(
         match declaration {
             Ok(
                 labwired_core::system::arch_policy::MachineFamily::CortexA
-                | labwired_core::system::arch_policy::MachineFamily::CortexR,
+                | labwired_core::system::arch_policy::MachineFamily::CortexR
+                | labwired_core::system::arch_policy::MachineFamily::Arm7Tdmi,
             ) if program.arch != labwired_core::Arch::Arm => {
                 write_config_error_outputs(
                     &args,
@@ -2569,6 +2612,37 @@ pub(crate) fn run_test(
                     );
                     ExitCode::from(EXIT_CONFIG_ERROR)
                 }
+            } else if family == MachineFamily::Arm7Tdmi {
+                if args.rom_boot || args.resume_snapshot.is_some() {
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        "ARM7TDMI boot ROM and snapshot resume are not implemented; use a bare-metal ELF without --rom-boot or --resume-snapshot".into(),
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                #[cfg(feature = "qemu-arm-system")]
+                {
+                    let cpu = arm7_cpu
+                        .take()
+                        .expect("ARM7TDMI CPU is prepared with the bus");
+                    setup_and_run!(cpu)
+                }
+                #[cfg(not(feature = "qemu-arm-system"))]
+                {
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        "ARM7TDMI needs a native build with --features qemu-arm-system".into(),
+                    );
+                    ExitCode::from(EXIT_CONFIG_ERROR)
+                }
             } else if family == MachineFamily::CortexA {
                 if args.rom_boot || args.resume_snapshot.is_some() {
                     write_config_error_outputs(
@@ -2583,7 +2657,9 @@ pub(crate) fn run_test(
                 }
                 #[cfg(feature = "qemu-arm")]
                 {
-                    let cpu = match labwired_core::cpu::CortexA7::new() {
+                    let cpu = match arm_test_cortex_a_core(resolved_system.as_ref(), plugins)
+                        .and_then(|core| Ok(labwired_core::cpu::CortexA7::with_core(core)?))
+                    {
                         Ok(cpu) => cpu,
                         Err(error) => {
                             write_config_error_outputs(

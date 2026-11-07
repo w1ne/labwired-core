@@ -1,0 +1,37 @@
+{
+  "target_id": "picosoc",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-picosoc-smoke",
+  "target_triple": "riscv32imc-unknown-none-elf",
+  "script": "examples/renode-onboarding/picosoc-smoke.yaml",
+  "system": "configs/systems/onboarding/picosoc.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T08:48:07Z",
+  "finished_at_utc": "2026-11-04T08:48:22Z",
+  "elapsed_seconds": 16,
+  "elapsed_ms": 15131,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-04T08:48:22.352212Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: \"PICOSOC RV32IMC SIMPLEUART SMOKE\" }) (captured len=0)",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 13.978,
+    "build_firmware": 0.653,
+    "run_smoke": 0.484
+  },
+  "stages_ms": {
+    "build_cli": 13978,
+    "build_firmware": 653,
+    "run_smoke": 484
+  }
+}

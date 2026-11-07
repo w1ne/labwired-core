@@ -1,0 +1,13 @@
+# Cortex-M4 smoke against the narrowed imported Renode SAMD51G19A system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-atsamd51-demo"
+  system: "../../configs/systems/onboarding/atsamd51g19a.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "porta:16"
+      min_edges: 1
+  - expected_stop_reason: max_steps

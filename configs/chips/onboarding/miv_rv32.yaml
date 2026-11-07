@@ -1,35 +1,21 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
+# LabWired - narrowed Mi-V RV32 profile for the imported Renode system.
 #
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# The memory map and CPU ISA follow Renode's platforms/cpus/miv.repl:
+# 256 KiB flash at 0x60000000, 64 MiB DDR at 0x80000000, and an
+# rv32imaf_zicsr_zifencei CPU. This measured profile claims only the flash,
+# DDR, CPU and CoreUART path exercised by the smoke; GPIO, timers, CLINT and
+# PLIC are omitted from this run profile.
 
-name: miv_rv32
-arch: arm
-flash:
-  base: 1610612736
-  size: 262144B
-ram:
-  base: 1610612736
-  size: 262144B
+name: "miv_rv32"
+arch: "riscv"
+core: "rv32imaf_zicsr_zifencei"
+cpu_hz: 66_000_000
+
+flash: { base: 0x60000000, size: "256KiB" }
+ram: { base: 0x80000000, size: "64MiB" }
+flash_boot_alias: false
 peripherals:
-- id: uart
-  type: miv_coreuart
-  bus: sysbus
-  base_address: 1879052288
-- id: gpioInputs
-  type: miv_coregpio
-  bus: sysbus
-  base_address: 1879056384
-- id: timer0
-  type: miv_coretimer
-  bus: sysbus
-  base_address: 1879060480
-- id: timer1
-  type: miv_coretimer
-  bus: sysbus
-  base_address: 1879064576
-- id: gpioOutputs
-  type: miv_coregpio
-  bus: sysbus
-  base_address: 1879068672
+  - id: "uart"
+    type: "miv_coreuart"
+    base_address: 0x70001000
+    size: "24B"

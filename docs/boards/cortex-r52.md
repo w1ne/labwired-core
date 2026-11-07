@@ -1,34 +1,37 @@
-# Validation Report: cortex-r52
+# Cortex-R52 validation status
 
-**Architecture:** ARMv8-R.
+## Current result
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+The imported Cortex-R52 descriptor is present, but its previous generated
+`verified: true` report was not R52 evidence. It loaded a Thumb Cortex-M
+fixture and ran it through LabWired's Cortex-M fallback.
+
+The descriptor now identifies `core: cortex-r52` and keeps only its generic
+flash and RAM windows. The imported PL011 and generic-timer windows were
+removed from this bounded profile. The whole-platform descriptor remains
+unverified.
+
+The one-target onboarding smoke attempted a direct ARM-state integer loop at
+`0x20000000`. The runner rejected the chip before executing any instructions:
 
 ```text
-[2m2026-10-18T14:39:52.867133Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:39:52.867401Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/cortex-r52.yaml
-[2m2026-10-18T14:39:52.922693Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:39:52.922781Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:39:52.922790Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:39:52.922794Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:39:52.923342Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:39:52.923350Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:39:52.923359Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:39:52.927636Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Progress: 10000 steps, current IPS: 2071913.48
-[2m2026-10-18T14:39:52.931668Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:39:52.931688Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x454
-[2m2026-10-18T14:39:52.931693Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 20000
-[2m2026-10-18T14:39:52.931697Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 20004
-[2m2026-10-18T14:39:52.931702Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2247976.54
+chip 'cortex-r52': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter
 ```
 
+The current scoreboard records this as `fail`, `run_attempted: true`,
+`booted: false`, and `smoke_passed: false`. The result reports
+`stop_reason: config_error` and zero executed instructions. Evidence, including
+the exact result JSON, JUnit error, snapshot, and stage logs, is under
+[`docs/coverage/renode-onboarding/metrics/cortex-r52/`](../coverage/renode-onboarding/metrics/cortex-r52/).
 
-## Hardware Coverage Report
+## Scope
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `timer` | `0x0000000f` | `arm_generictimer` |
-| `uart0` | `0x9c090000` | `pl011` |
+This is local LabWired CLI evidence of an unsupported CPU core. It does not
+show a Cortex-R52 boot, instruction support, peripheral behavior, Renode
+execution, hosted `labwired_verify` model verification, or hardware behavior.
+No CPU or peripheral stub was added. A real Cortex-R52 adapter is required
+before the imported platform can boot.
 
-**Total Peripherals:** 2
+The two earlier descriptor-schema attempts are retained under
+[`attempt-history/cortex-r52/`](../coverage/renode-onboarding/attempt-history/cortex-r52/);
+the current scoreboard row comes from the final, schema-valid run.

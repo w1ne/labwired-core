@@ -4,16 +4,16 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# Bounded local execution profile for Renode's imported RISC-V UARTLite target.
+# The upstream REPL declares RV32G, PLIC, CLINT, 100 MiB RAM at 0x60000000,
+# and an external CoSimulatedUART at 0x70000000. This engine smoke exercises
+# only its RV32IM CPU path and the imported RAM window. It does not claim the
+# full ISA, interrupt controllers, or external UART co-simulation.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/verilated/riscv_verilated_uartlite.repl
 name: riscv_verilated_uartlite
-arch: arm
-flash:
-  base: 1610612736
-  size: 104857600B
-ram:
-  base: 1610612736
-  size: 104857600B
-peripherals:
-- id: uart
-  type: cosimulateduart
-  bus: sysbus
-  base_address: 1879048192
+arch: riscv
+core: rv32im
+flash: { base: 0x00000000, size: 0 }
+ram: { base: 0x60000000, size: "100MiB" }
+flash_boot_alias: false
+peripherals: []

@@ -1,0 +1,15 @@
+# Cortex-M4 smoke against the imported Renode STM32F4-Discovery system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke"
+  system: "../../configs/systems/onboarding/stm32f4_discovery.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "F4-DISCO SMOKE"
+  - uart_ordered:
+      - "hb=0 ld4=on odr=00001000"
+      - "hb=1 ld4=off odr=00000000"
+      - "hb=2 ld3=on odr=00002000"
+      - "hb=3 ld3=off odr=00000000"
+  - expected_stop_reason: max_steps

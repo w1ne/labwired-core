@@ -1,20 +1,23 @@
 name: cortex_a53_virtio
-description: 'cortex_a53_virtio (root platform, Generic). Architecture: ARMv8-A (AArch64).'
+description: 'Imported Cortex-A53 VirtIO target. Measured profile covers one AArch64 PE and DDR only; timer, PL011, and virtio behavior are not modeled.'
 family: Generic
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/cortex_a53_virtio.yaml
 provenance:
   generated_by: scripts/onboard_hw_targets.py
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-aarch64-cpu-smoke
+  reason: bounded AArch64 integer and DDR smoke; whole platform and imported peripherals are unverified
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-10-18T14:39:53.636784+00:00'
+    aarch64_integer_smoke: true
+    whole_platform: false
+    peripherals: false
+    reset_vector_boot: false
+  timestamp_utc: '2026-11-06T04:31:55Z'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/cortex_a53_virtio.md
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/cortex_a53_virtio/

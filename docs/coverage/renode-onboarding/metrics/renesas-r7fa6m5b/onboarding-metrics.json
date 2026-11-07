@@ -1,0 +1,38 @@
+{
+  "target_id": "renesas-r7fa6m5b",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/renesas-r7fa6m5b-smoke.yaml",
+  "system": "configs/systems/onboarding/renesas-r7fa6m5b.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-07T09:00:05Z",
+  "finished_at_utc": "2026-11-07T09:00:14Z",
+  "elapsed_seconds": 9,
+  "elapsed_ms": 8999,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 8.655,
+    "build_firmware": null,
+    "run_smoke": 0.333
+  },
+  "stages_ms": {
+    "build_cli": 8655,
+    "build_firmware": null,
+    "run_smoke": 333
+  },
+  "prebuilt_firmware": "tests/fixtures/ek-ra6m5-smoke.elf"
+}

@@ -1,8 +1,14 @@
+# Bounded to generic RV32IMC execution and the memory windows used by the
+# direct-ELF smoke. The Renode platform also declares ROM0, a second flash
+# window, CLINT, the VeeR PIC, and HTIF; this engine profile does not claim them.
+# Memory map source: https://github.com/renode/renode/blob/master/platforms/cpus/tock_veer_el2_sim.repl
 name: tock_veer_el2_sim
-arch: arm
+arch: riscv
+core: "rv32imc"
+flash_boot_alias: false
 flash:
   base: 536870912
-  size: 1048576
+  size: 3145728B
 ram:
   base: 543162368
   size: 3145728B

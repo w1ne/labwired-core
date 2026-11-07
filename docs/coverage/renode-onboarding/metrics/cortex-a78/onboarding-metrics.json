@@ -1,0 +1,38 @@
+{
+  "target_id": "cortex-a78",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/cortex-a78-cpu-smoke.yaml",
+  "system": "configs/systems/onboarding/cortex-a78.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T02:23:21Z",
+  "finished_at_utc": "2026-11-06T02:23:29Z",
+  "elapsed_seconds": 8,
+  "elapsed_ms": 7642,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 7.356,
+    "build_firmware": null,
+    "run_smoke": 0.277
+  },
+  "stages_ms": {
+    "build_cli": 7356,
+    "build_firmware": null,
+    "run_smoke": 277
+  },
+  "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf"
+}

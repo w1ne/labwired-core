@@ -341,6 +341,10 @@ impl SystemBus {
             // Renesas SCI_B (RA8 series: renesasra8m1_sci, sci_b). Must
             // precede the classic `sci` arm.
             SciB
+        } else if has("scif") {
+            // Renesas SCIFA (RenesasRZG_SCIFA). Must precede the classic
+            // `sci` arm.
+            Scifa
         } else if has("sci") {
             // Renesas SCI (renesas_sci, renesasraXmY_sci).
             Sci
@@ -372,8 +376,13 @@ impl SystemBus {
             KinetisUart
         } else if has("pulp") || has("udma") {
             Pulp
-        } else if has("ft9001") || has("ft900") {
-            // Bridgetek FT9xx UART is 16550-compatible.
+        } else if has("ft9001") {
+            // FocalTech FT9001 USART (Renode `UART.FT9001_USART`) — a byte
+            // register block of its own, not a 16550. Checked before `ft900`,
+            // which it contains.
+            Ft9001
+        } else if has("ft900") {
+            // Bridgetek FT900 UART is 16550-compatible.
             Ns16550
         } else if has("cosimulated") {
             // Co-simulation stub with no fixed register map — default to 16550.

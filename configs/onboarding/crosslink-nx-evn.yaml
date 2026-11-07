@@ -1,23 +1,25 @@
 name: crosslink-nx-evn
-description: 'Lattice Semiconductor CrossLink-NX Evaluation Board. Architecture: Soft
-  RISC-V / FPGA.'
+description: >-
+  CrossLink-NX EVN imported RISC-V profile, narrowed to RV32IM integer execution
+  and the Renode ROM/SRAM windows. The imported LiteX peripherals and board
+  reset flow are not covered by this measurement.
 url: https://www.latticesemi.com/products/developmentboardsandkits/crosslink-nxevaluationboard
 family: Lattice CrossLink-NX
-code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
-  \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 100
 verified: false
 system: systems/onboarding/crosslink-nx-evn.yaml
 validation:
-  method: ci-structural
-  reason: structural-ok
+  method: renode-onboarding-rv32im-smoke
+  reason: one RV32IM direct-ELF integer run and SRAM readback; whole platform unverified
   checks:
     system_manifest: true
     chip_descriptor: true
-    flash_base_present: true
-    ram_base_present: true
-  timestamp_utc: '2026-10-18T14:39:53.743060+00:00'
+    rv32im_integer_smoke: true
+    sram_readback: true
+    peripherals: false
+    reset_vector_boot: false
+    whole_platform: false
+  timestamp_utc: '2026-11-06T03:44:41Z'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/crosslink-nx-evn.md
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/crosslink-nx-evn/
 provenance:
   generated_by: scripts/onboard_hw_targets.py

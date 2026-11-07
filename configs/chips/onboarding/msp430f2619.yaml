@@ -5,7 +5,9 @@
 # See the LICENSE file in the project root for full license information.
 
 name: msp430f2619
-arch: arm
+# The simulator has no MSP430 CPU adapter. Keep this architecture explicit as
+# unsupported rather than routing this 16-bit MCU through the Cortex-M engine.
+arch: unknown
 flash:
   base: 3072
   size: 1024B
@@ -13,10 +15,6 @@ ram:
   base: 512
   size: 2048B
 peripherals:
-- id: mpy
-  type: msp430f2xxx_mpy
-  bus: sysbus
-  base_address: 304
 - id: boot
   type: arraymemory
   bus: sysbus

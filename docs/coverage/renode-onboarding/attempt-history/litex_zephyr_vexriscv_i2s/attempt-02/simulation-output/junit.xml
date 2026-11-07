@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="1" errors="0" time="0.016230">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="16fea689c090cfa01720c41a6cf4da5a8e52344bb32758e23379f5fb30d4ace2"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.016230">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: LITEX ZEPHYR RV32IMAC UART mul=323 amo=19" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_contains: LITEX ZEPHYR RV32IMAC UART mul=323 amo=19
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=100000
+stop_reason_details.observed.steps_executed=100000
+steps_executed=100000
+cycles=200450
+instructions=100000
+limits:
+  - max_steps=100000
+firmware_hash=16fea689c090cfa01720c41a6cf4da5a8e52344bb32758e23379f5fb30d4ace2
+firmware=examples/renode-onboarding/../../target/riscv32imac-unknown-none-elf/release/firmware-litex-zephyr-i2s-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/litex_zephyr_vexriscv_i2s.yaml
+script=examples/renode-onboarding/litex_zephyr_vexriscv_i2s-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;LITEX ZEPHYR RV32IMAC UART mul=323 amo=19&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

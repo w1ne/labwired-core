@@ -1,0 +1,37 @@
+{
+  "target_id": "sifive-fe310",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-sifive-fe310-smoke",
+  "target_triple": "riscv32im-unknown-none-elf",
+  "script": "examples/renode-onboarding/sifive-fe310-smoke.yaml",
+  "system": "configs/systems/onboarding/sifive-fe310.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T14:49:46Z",
+  "finished_at_utc": "2026-11-05T14:49:47Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1355,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.311,
+    "build_firmware": 0.679,
+    "run_smoke": 0.351
+  },
+  "stages_ms": {
+    "build_cli": 311,
+    "build_firmware": 679,
+    "run_smoke": 351
+  }
+}

@@ -1,27 +1,21 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
+# LabWired - narrowed SiFive FE310 profile for the imported Renode system.
 #
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# Renode's platforms/cpus/sifive-fe310.repl identifies the RV32IMAC CPU,
+# QSPI XIP at 0x20000000, DTIM at 0x80000000, and uart0 at 0x10013000.
+# The imported YAML had an ARM label and mistook mask ROM/OTP for flash/RAM.
+# Keep the runnable HiFive1 Rev B memory ranges and the UART used by the smoke;
+# unexercised uart1, GPIO, PLIC, CLINT, mask ROM and OTP are not claimed here.
 
-name: sifive-fe310
-arch: arm
-flash:
-  base: 4096
-  size: 4096B
-ram:
-  base: 131072
-  size: 8192B
+name: "sifive-fe310"
+arch: "riscv"
+core: "rv32imac_zicsr_zifencei"
+cpu_hz: 62000000
+
+flash: { base: 0x20000000, size: "4MiB" }
+ram: { base: 0x80000000, size: "16KiB" }
 peripherals:
-- id: uart0
-  type: sifive_uart
-  bus: sysbus
-  base_address: 268513280
-- id: uart1
-  type: sifive_uart
-  bus: sysbus
-  base_address: 268578816
-- id: gpioInputs
-  type: sifive_gpio
-  bus: sysbus
-  base_address: 268509184
+  - id: "uart0"
+    type: "sifive_uart"
+    base_address: 0x10013000
+    size: "4KB"
+    irq: 3

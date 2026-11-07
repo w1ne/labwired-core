@@ -104,6 +104,12 @@ pub enum UartRegisterLayout {
     /// `R7FA8M1AH.h` (`R_SCI_B0_Type`). TX is gated on CCR0.TE; the control
     /// registers read back what firmware wrote.
     SciB,
+    /// Renesas SCIFA (RZ/G2L, RZ/V2L; Renode `RenesasRZG_SCIFA`): 16-bit
+    /// register block SMR@0x00, BRR@0x02, SCR@0x04, FTDR@0x06, FSR@0x08
+    /// (TDFE bit 5, TEND bit 6, RDF bit 1, DR bit 0), FRDR@0x0A, FCR@0x0C,
+    /// FDR@0x0E, SPTR@0x10, LSR@0x12, SEMR@0x14, FTCR@0x16. TX is dropped
+    /// while SCR.TE is clear. Interrupts are not modelled.
+    Scifa,
     /// Gaisler APBUART (LEON/GRLIB) — DATA@0x00, STATUS@0x04.
     Gaisler,
     /// Nuvoton NPCX — UTBUF@0x00, URBUF@0x02, readiness in UICTRL@0x04.
@@ -142,6 +148,12 @@ pub enum UartRegisterLayout {
     /// PicoSoC simpleuart — reg_dat@0x04 (write=TX, read=RX), no status register
     /// (TX blocks in HW; RX reads -1 when empty). Estate-level.
     PicoUart,
+    /// FocalTech FT9001 USART (Renode `UART.FT9001_USART`): byte registers
+    /// BDL@0x00, BDH@0x01, CR2@0x02 (TE bit 3), CR1@0x03, DRL@0x06,
+    /// BRDF@0x0A, FCR@0x0E, FSR@0x11 (REMPTY bit 0, TEMPTY bit 2, RFTS bit 5,
+    /// FTC bit 6), FCR2@0x13 (RXFCLR bit 0), FSR2@0x15. TX is dropped while
+    /// CR2.TE is clear. Interrupts are not modelled.
+    Ft9001,
     /// Microchip AVR USART0 (ATmega328P), mirrored from the CPU: UCSR0A@0x00,
     /// UCSR0B@0x01, UCSR0C@0x02, UBRR0@0x04/0x05, UDR0@0x06. The AVR core keeps
     /// the registers firmware reads back; this model hosts the stream peers and
@@ -179,6 +191,7 @@ impl FromStr for UartRegisterLayout {
             "leuart" => Ok(Self::Leuart),
             "sci" | "renesas_sci" | "sh_sci" => Ok(Self::Sci),
             "sci_b" | "renesas_sci_b" | "ra8_sci" => Ok(Self::SciB),
+            "scifa" | "renesas_scifa" | "rzg_scifa" => Ok(Self::Scifa),
             "gaisler" | "apbuart" | "grlib" => Ok(Self::Gaisler),
             "npcx" | "nuvoton" => Ok(Self::Npcx),
             "max32650" | "maxim" => Ok(Self::Max32650),
@@ -194,13 +207,14 @@ impl FromStr for UartRegisterLayout {
             "pulp" | "udma" => Ok(Self::Pulp),
             "esci" | "mpc5567" => Ok(Self::Esci),
             "picosoc" | "simpleuart" => Ok(Self::PicoUart),
+            "ft9001" | "ft9001_usart" | "focaltech" => Ok(Self::Ft9001),
             "avr" | "atmega" | "usart0" => Ok(Self::Avr),
             "custom" | "generic" | "offsets" => Ok(Self::Custom),
             _ => Err(format!(
                 "unsupported UART register layout '{}'; supported: stm32f1, stm32v2, nrf52, \
                  lpuart, ns16550, dw_apb_uart, pl011, cadence, efm32, efr32, efr32s2, leuart, sci, \
-                 sci_b, gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
-                 coreuart, k6xf, pulp, custom",
+                 sci_b, scifa, gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
+                 coreuart, k6xf, pulp, esci, picosoc, ft9001, avr, custom",
                 value
             )),
         }
@@ -496,6 +510,24 @@ impl UartRegisterLayout {
                 rx_present_set: 1 << 31,            // RDRF
                 rx_present_clear: 0,
             },
+            // Renesas SCIFA (RZ/G2L). FTDR@0x06, FRDR@0x0A, FSR@0x08 (16-bit):
+            // TDFE(5)|TEND(6) at idle (Renode resets FSR to 0x60), a waiting
+            // byte sets RDF(1)|DR(0). TX leaves at once, so TDFE/TEND never
+            // drop; firmware's clear-after-read writes to FSR are accepted
+            // and ignored. The control registers live in `Uart::scifa_regs`.
+            UartRegisterLayout::Scifa => UartRegMap {
+                status: SCIFA_FSR,
+                tx: SCIFA_FTDR,
+                rx: SCIFA_FRDR,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 2,
+                status_idle: 0x60,    // TDFE | TEND
+                rx_present_set: 0x03, // RDF | DR
+                rx_present_clear: 0,
+            },
             // Gaisler APBUART (LEON/GRLIB). DATA@0x00, STATUS@0x04: TS(1)|TE(2)
             // ready, DR(0) set on data. Reset 0x06.
             UartRegisterLayout::Gaisler => UartRegMap {
@@ -733,6 +765,23 @@ impl UartRegisterLayout {
                 rx_present_set: 0,
                 rx_present_clear: 0,
             },
+            // FocalTech FT9001 USART. DRL@0x06 is both data registers;
+            // FSR@0x11 (8-bit): REMPTY(0)|TEMPTY(2)|FTC(6) at idle, and a
+            // waiting byte clears REMPTY and sets RFTS(5). Matches Renode's
+            // FT9001_USART, whose TX queue is never full.
+            UartRegisterLayout::Ft9001 => UartRegMap {
+                status: FT9001_FSR,
+                tx: FT9001_DRL,
+                rx: FT9001_DRL,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 1,
+                status_idle: 0x45,        // REMPTY | TEMPTY | FTC
+                rx_present_set: 1 << 5,   // RFTS
+                rx_present_clear: 1 << 0, // REMPTY
+            },
             // AVR USART0: UCSR0A is the status byte (UDRE0 bit 5 idle, RXC0
             // bit 7 when a byte waits), UDR0@0x06 is both data registers. No
             // TX interrupt: the model never holds a byte in UDR0.
@@ -818,6 +867,51 @@ const SCI_SSR_FIFO_TDFE: u8 = 1 << 7;
 const SCI_SSR_FIFO_RDF: u8 = 1 << 6;
 const SCI_SSR_FIFO_TEND: u8 = 1 << 2;
 const SCI_SSR_FIFO_DR: u8 = 1 << 0;
+
+/// FocalTech FT9001 USART byte registers (Renode `FT9001_USART`).
+const FT9001_CR2: u64 = 0x02;
+const FT9001_DRL: u64 = 0x06;
+const FT9001_FSR: u64 = 0x11;
+const FT9001_FCR2: u64 = 0x13;
+const FT9001_CR2_TE: u8 = 1 << 3;
+const FT9001_FCR2_RXFCLR: u8 = 1 << 0;
+/// Stored control registers and the bits that read back: BDL, BDH, CR2
+/// (RE|TE), CR1 (PT|PE|M), BRDF, FCR (RX/TX levels, TFEN, RFEN), FCR2
+/// (every enable except the write-only RXFCLR and reserved bit 6).
+const FT9001_CTRL: [(u64, u8); 7] = [
+    (0x00, 0xFF),
+    (0x01, 0xFF),
+    (FT9001_CR2, 0x0C),
+    (0x03, 0x23),
+    (0x0A, 0xFF),
+    (0x0E, 0xCF),
+    (FT9001_FCR2, 0xBE),
+];
+
+/// Renesas SCIFA 16-bit registers (Renode `RenesasRZG_SCIFA`, RZ/G2L
+/// R01UH0914 "Serial Communication Interface with FIFO").
+const SCIFA_BRR: u64 = 0x02;
+const SCIFA_SCR: u64 = 0x04;
+const SCIFA_FTDR: u64 = 0x06;
+const SCIFA_FSR: u64 = 0x08;
+const SCIFA_FRDR: u64 = 0x0A;
+const SCIFA_FCR: u64 = 0x0C;
+const SCIFA_FDR: u64 = 0x0E;
+const SCIFA_REGS: usize = 12;
+/// SCR: RE bit 4, TE bit 5.
+const SCIFA_SCR_RE: u16 = 1 << 4;
+const SCIFA_SCR_TE: u16 = 1 << 5;
+/// FCR: RFRST bit 1 empties the RX FIFO; RFRST/TFRST read back 0.
+const SCIFA_FCR_RFRST: u16 = 1 << 1;
+/// Bits that read back, indexed by offset / 2: SMR (CKS, STOP, PM, PE, CHR,
+/// C/A), BRR, SCR, -, -, -, FCR (LOOP, MCE, TTRG, RTRG, RSTRG), -, SPTR,
+/// LSR (error counts never set), SEMR (ABCS0, NFEN, DIR, MDDRS, BRME, BGDM),
+/// FTCR (TFTC, TTRGS, RFTC, RTRGS). FTDR/FSR/FRDR/FDR are handled apart.
+const SCIFA_MASK: [u16; SCIFA_REGS] = [
+    0x00FB, 0x00FF, 0x00FF, 0, 0, 0, 0x07F9, 0, 0x00FF, 0, 0x00BD, 0x9F9F,
+];
+/// Reset values: BRR 0xFF and FTCR 0x1F1F (Renode defaults).
+const SCIFA_RESET: [u16; SCIFA_REGS] = [0, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1F1F];
 
 /// Minimal UART mock with selectable register layout.
 #[derive(serde::Serialize)]
@@ -1078,6 +1172,12 @@ pub struct Uart {
     /// The last transmitted byte went onto an RS-485 bus (driver enabled). The
     /// AVR core reads it to keep frames off its console.
     last_tx_on_bus: bool,
+    /// FT9001 layout: control registers as firmware wrote them, indexed by
+    /// offset (see [`FT9001_CTRL`]).
+    ft9001_regs: [u8; 0x14],
+    /// SCIFA layout: 16-bit registers as firmware wrote them, indexed by
+    /// offset / 2 (see [`SCIFA_MASK`]).
+    scifa_regs: [u16; SCIFA_REGS],
 }
 
 impl core::fmt::Debug for Uart {
@@ -1172,6 +1272,8 @@ impl Uart {
             sci_fcr: 0,
             sci_scr: 0,
             last_tx_on_bus: false,
+            ft9001_regs: [0; 0x14],
+            scifa_regs: SCIFA_RESET,
         }
     }
 
@@ -1425,9 +1527,94 @@ impl Uart {
         true
     }
 
+    /// FT9001 control register at `offset`, masked to its readable bits.
+    fn ft9001_ctrl_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::Ft9001) {
+            return None;
+        }
+        let (_, mask) = FT9001_CTRL.iter().find(|(o, _)| *o == offset)?;
+        Some(self.ft9001_regs[offset as usize] & mask)
+    }
+
+    /// SCIFA register byte at `offset`, other than FSR/FRDR (shared path).
+    /// FDR.R (bits 4:0) is the RX queue length capped at the 16-byte FIFO;
+    /// FDR.T reads 0 because a written byte leaves at once.
+    fn scifa_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::Scifa) {
+            return None;
+        }
+        let index = (offset / 2) as usize;
+        if index >= SCIFA_REGS {
+            return None;
+        }
+        let word = if offset & !1 == SCIFA_FDR {
+            let len = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0);
+            len.min(SCI_FIFO_DEPTH) as u16
+        } else {
+            self.scifa_regs[index] & SCIFA_MASK[index]
+        };
+        Some((word >> ((offset & 1) * 8)) as u8)
+    }
+
+    /// SCIFA register write other than FTDR. Returns false for FTDR (and on
+    /// other layouts) so the shared TX path transmits it. BRR only takes a
+    /// write while TE and RE are both clear, as in Renode. FCR.RFRST empties
+    /// the RX FIFO.
+    fn scifa_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Scifa) || offset & !1 == SCIFA_FTDR {
+            return false;
+        }
+        let index = (offset / 2) as usize;
+        if index >= SCIFA_REGS {
+            return true;
+        }
+        let scr = self.scifa_regs[(SCIFA_SCR / 2) as usize];
+        if offset & !1 == SCIFA_BRR && scr & (SCIFA_SCR_TE | SCIFA_SCR_RE) != 0 {
+            return true;
+        }
+        let shift = (offset & 1) * 8;
+        let v = u16::from(value) << shift;
+        if offset & !1 == SCIFA_FCR && v & SCIFA_FCR_RFRST != 0 {
+            if let Ok(mut guard) = self.rx_buf.lock() {
+                guard.clear();
+            }
+        }
+        let reg = &mut self.scifa_regs[index];
+        *reg = (*reg & !(0xFFu16 << shift)) | v;
+        true
+    }
+
+    /// FT9001 register write other than DRL. Returns false for DRL (and on
+    /// other layouts) so the shared TX path transmits it. RXFCLR empties the
+    /// RX FIFO; FSR is read-only and FSR2's error flags never set here.
+    fn ft9001_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Ft9001) || offset == FT9001_DRL {
+            return false;
+        }
+        if offset == FT9001_FCR2 && value & FT9001_FCR2_RXFCLR != 0 {
+            if let Ok(mut guard) = self.rx_buf.lock() {
+                guard.clear();
+            }
+        }
+        if FT9001_CTRL.iter().any(|(o, _)| *o == offset) {
+            self.ft9001_regs[offset as usize] = value;
+        }
+        true
+    }
+
     fn tx_enabled(&self) -> bool {
+        if matches!(self.layout, UartRegisterLayout::Ft9001)
+            && self.ft9001_regs[FT9001_CR2 as usize] & FT9001_CR2_TE == 0
+        {
+            return false;
+        }
         if matches!(self.layout, UartRegisterLayout::SciB)
             && self.sci_b_regs[0] & SCI_B_CCR0_TE == 0
+        {
+            return false;
+        }
+        if matches!(self.layout, UartRegisterLayout::Scifa)
+            && self.scifa_regs[(SCIFA_SCR / 2) as usize] & SCIFA_SCR_TE == 0
         {
             return false;
         }
@@ -2466,6 +2653,12 @@ impl crate::Peripheral for Uart {
             }
             return Ok(0x00);
         }
+        if let Some(b) = self.ft9001_ctrl_byte(offset) {
+            return Ok(b);
+        }
+        if let Some(b) = self.scifa_byte(offset) {
+            return Ok(b);
+        }
         // F1 config registers (BRR/CR1/CR2/CR3/GTPR), masked read-back.
         if matches!(self.layout, UartRegisterLayout::Stm32F1) {
             if let Some(b) = self.f1_config_byte(offset) {
@@ -2578,6 +2771,9 @@ impl crate::Peripheral for Uart {
                 0x06 => self.push_tx(value),
                 _ => {}
             }
+            return Ok(());
+        }
+        if self.ft9001_write(offset, value) || self.scifa_write(offset, value) {
             return Ok(());
         }
         if self.lcr_dlab_write(offset, value) {
@@ -3396,6 +3592,48 @@ mod tests {
         );
     }
 
+    #[test]
+    fn scifa_matches_the_renode_rzg_register_block() {
+        // Renode `RenesasRZG_SCIFA`: FTDR@0x06, FSR@0x08 resets to 0x60,
+        // FRDR@0x0A, SCR.TE (0x04 bit 5) gates TX, BRR locks while TE|RE.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Scifa);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+        assert_eq!(
+            "renesas_scifa".parse::<UartRegisterLayout>().unwrap(),
+            UartRegisterLayout::Scifa
+        );
+        assert_eq!(uart.read_u16(0x08).unwrap(), 0x60, "TDFE|TEND idle");
+        assert_eq!(uart.read(0x02).unwrap(), 0xFF, "BRR reset");
+        assert_eq!(uart.read_u16(0x16).unwrap(), 0x1F1F, "FTCR reset");
+
+        uart.write(0x06, b'x').unwrap();
+        assert!(sink.lock().unwrap().is_empty(), "TE clear drops TX");
+
+        uart.write_u16(0x00, 0xFFFF).unwrap();
+        uart.write(0x02, 0x1A).unwrap();
+        uart.write_u16(0x0C, 0xFFFF).unwrap();
+        assert_eq!(uart.read_u16(0x00).unwrap(), 0x00FB, "SMR readable bits");
+        assert_eq!(uart.read(0x02).unwrap(), 0x1A, "BRR reads back");
+        assert_eq!(uart.read_u16(0x0C).unwrap(), 0x07F9, "RFRST/TFRST read 0");
+
+        uart.write_u16(0x04, 0x0030).unwrap();
+        assert_eq!(uart.read_u16(0x04).unwrap(), 0x0030, "SCR keeps TE|RE");
+        uart.write(0x02, 0x55).unwrap();
+        assert_eq!(uart.read(0x02).unwrap(), 0x1A, "BRR locked while TE|RE");
+        uart.write(0x06, b'Q').unwrap();
+        assert_eq!(sink.lock().unwrap().clone(), vec![b'Q']);
+        assert_eq!(uart.read_u16(0x08).unwrap(), 0x60, "TX leaves at once");
+
+        uart.rx_buffer().lock().unwrap().extend([b'A', b'B']);
+        assert_eq!(uart.read_u16(0x08).unwrap(), 0x63, "RDF|DR on RX");
+        assert_eq!(uart.read_u16(0x0E).unwrap(), 2, "FDR.R counts RX");
+        assert_eq!(uart.read(0x0A).unwrap(), b'A');
+        uart.write_u16(0x0C, 0x0002).unwrap(); // FCR.RFRST
+        assert_eq!(uart.read_u16(0x08).unwrap(), 0x60, "RFRST emptied RX");
+        assert_eq!(uart.read_u16(0x0E).unwrap(), 0);
+    }
+
     /// YAML `profile: custom`: TX at a declared data-register offset reaches
     /// the UART capture sink; optional enable_mask gates TX until set.
     /// Offsets are synthetic (0x10/0x14/0x18) — not a vendor fingerprint.
@@ -3561,6 +3799,37 @@ mod tests {
         let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
         uart.write_u32(0x08, 1 << 19).unwrap();
         assert!(!uart.tick().irq, "TE alone must not pend");
+    }
+
+    #[test]
+    fn ft9001_usart_matches_the_renode_register_block() {
+        // Renode `FT9001_USART`: DRL@0x06, FSR@0x11, CR2.TE (0x02 bit 3)
+        // gates TX, FCR2.RXFCLR (0x13 bit 0) empties the RX FIFO.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Ft9001);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+        assert_eq!(uart.read(0x11).unwrap(), 0x45, "REMPTY|TEMPTY|FTC idle");
+
+        uart.write(0x06, b'x').unwrap();
+        assert!(sink.lock().unwrap().is_empty(), "TE clear drops TX");
+
+        uart.write(0x02, 0xFF).unwrap();
+        uart.write(0x03, 0xFF).unwrap();
+        uart.write(0x00, 0x5A).unwrap();
+        uart.write(0x13, 0xFF).unwrap();
+        assert_eq!(uart.read(0x02).unwrap(), 0x0C, "CR2 keeps RE|TE");
+        assert_eq!(uart.read(0x03).unwrap(), 0x23, "CR1 keeps PT|PE|M");
+        assert_eq!(uart.read(0x00).unwrap(), 0x5A, "BDL reads back");
+        assert_eq!(uart.read(0x13).unwrap(), 0xBE, "RXFCLR is write-only");
+        uart.write(0x06, b'Q').unwrap();
+        assert_eq!(sink.lock().unwrap().clone(), vec![b'Q']);
+
+        uart.rx_buffer().lock().unwrap().extend([b'A', b'B']);
+        assert_eq!(uart.read(0x11).unwrap(), 0x64, "RFTS set, REMPTY clear");
+        assert_eq!(uart.read(0x06).unwrap(), b'A');
+        uart.write(0x13, 0x01).unwrap();
+        assert_eq!(uart.read(0x11).unwrap(), 0x45, "RXFCLR emptied the FIFO");
+        assert_eq!(uart.read(0x06).unwrap(), 0, "empty DRL reads 0");
     }
 
     #[test]

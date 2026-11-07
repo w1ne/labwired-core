@@ -1,0 +1,14 @@
+# Cortex-M0+ instruction and bounded upper-SRAM smoke on the exact imported
+# S32K118 system. This does not exercise S32K118 peripherals.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-s32k118-smoke"
+  system: "../../configs/systems/onboarding/s32k118.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - memory_value:
+      address: 0x20000000
+      expected_value: 0x00000143
+      size: 4
+  - expected_stop_reason: max_steps

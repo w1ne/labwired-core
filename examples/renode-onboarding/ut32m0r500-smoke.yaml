@@ -1,0 +1,10 @@
+# Exact-system smoke for the narrowed UT32M0R500 Cortex-M0+ profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-ut32m0r500-smoke"
+  system: "../../configs/systems/onboarding/ut32m0r500.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "UT32M0R500 Cortex-M0+ UART0 smoke"
+  - expected_stop_reason: max_steps

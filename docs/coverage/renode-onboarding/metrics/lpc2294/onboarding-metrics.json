@@ -1,0 +1,38 @@
+{
+  "target_id": "lpc2294",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml",
+  "system": "configs/systems/onboarding/lpc2294.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T08:41:13Z",
+  "finished_at_utc": "2026-11-06T08:42:30Z",
+  "elapsed_seconds": 78,
+  "elapsed_ms": 77804,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 77.466,
+    "build_firmware": null,
+    "run_smoke": 0.329
+  },
+  "stages_ms": {
+    "build_cli": 77466,
+    "build_firmware": null,
+    "run_smoke": 329
+  },
+  "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-uart-smoke.elf"
+}

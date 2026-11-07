@@ -1,0 +1,13 @@
+NUCLEO-L552ZE-Q SMOKE
+cpu=cortex-m33 uart=lpuart1
+led=ld1 odr=00000080
+led=ld1_off odr=00000000
+led=ld2 odr=00000080
+led=ld2_off odr=00000000
+led=ld3 odr=00000200
+led=ld3_off odr=00000000
+btn=0
+hb=0 odr=00000080 btn=0
+hb=1 odr=00000080 btn=0
+hb=2 odr=00000080 btn=0
+hb=3 odr=00000080 btn=0

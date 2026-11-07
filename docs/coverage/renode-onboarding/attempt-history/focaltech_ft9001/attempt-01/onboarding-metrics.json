@@ -1,0 +1,37 @@
+{
+  "target_id": "focaltech_ft9001",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "config_error"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-ft9001-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/focaltech_ft9001-smoke.yaml",
+  "system": "configs/systems/onboarding/focaltech_ft9001.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T15:41:24Z",
+  "finished_at_utc": "2026-11-06T15:43:16Z",
+  "elapsed_seconds": 112,
+  "elapsed_ms": 111195,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "'uart_injections' require schema_version '1.2' (got '1.0')",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 110.669,
+    "build_firmware": 0.188,
+    "run_smoke": 0.296
+  },
+  "stages_ms": {
+    "build_cli": 110669,
+    "build_firmware": 188,
+    "run_smoke": 296
+  }
+}

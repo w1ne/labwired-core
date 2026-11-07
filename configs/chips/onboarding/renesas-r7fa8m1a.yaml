@@ -1,73 +1,25 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Narrow execution profile for the imported Renode R7FA8M1A system.
+# These CPU and memory windows match the model-backed RA8M1 profile in
+# configs/chips/r7fa8m1ah.yaml. Peripherals are omitted until exercised here.
 name: renesas-r7fa8m1a
 arch: arm
+core: cortex-m85
+cpu_hz: 8000000
 flash:
-  base: 134217728
-  size: 65536B
+  base: 0x02000000
+  size: 2048KB
 ram:
-  base: 805306368
-  size: 65536B
-peripherals:
-- id: gpt
-  type: renesasra_gpt
-  bus: sysbus
-  base_address: 1077026816
-- id: gpt_ns
-  type: renesasra_gpt
-  bus: sysbus
-  base_address: 1345462272
-- id: agt0
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1075974144
-- id: agt1
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1075974400
-- id: sci0
-  type: renesasra8m1_sci
-  bus: sysbus
-  base_address: 1077248000
-- id: sci1
-  type: renesasra8m1_sci
-  bus: sysbus
-  base_address: 1077248256
-- id: sci2
-  type: renesasra8m1_sci
-  bus: sysbus
-  base_address: 1077248512
-- id: sci3
-  type: renesasra8m1_sci
-  bus: sysbus
-  base_address: 1077248768
-- id: sci4
-  type: renesasra8m1_sci
-  bus: sysbus
-  base_address: 1077249024
-- id: sci9
-  type: renesasra8m1_sci
-  bus: sysbus
-  base_address: 1077250304
-- id: portMisc
-  type: renesasra_gpiomisc
-  bus: sysbus
-  base_address: 1077939456
-- id: SYSC_SCICKCR
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073864789
-- id: iic0
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1076224000
-- id: iic1
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1076224256
+  base: 0x22000000
+  size: 896KB
+memory_regions:
+  - name: itcm
+    base: 0x00000000
+    size: 64KB
+  - name: dtcm
+    base: 0x20000000
+    size: 64KB
+  - name: data_flash
+    base: 0x27000000
+    size: 12KB
+    erased: true
+peripherals: []

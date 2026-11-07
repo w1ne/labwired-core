@@ -1,0 +1,21 @@
+# Cortex-M33 SCIFA smoke against the imported RZ/G2L M33 profile.
+# Firmware: examples/renode-onboarding/rzg2l-cm33-cpu-smoke.S (built by
+# scripts/build_rzg2l_cm33_cpu_smoke.sh). SCIF2/SCIF0 register readback
+# (FSR reset, BRR lock under TE|RE, SCR, FCR write-1 resets, FTCR reset) and
+# polled SCIF2 TX behind FSR.TDFE. The anchored regex also proves the byte
+# written before SCR.TE was dropped. Neither the A55 cluster, interrupts nor
+# the boot flow is tested.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/rzg2l-cm33-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/renesas_rz_g2l.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_regex: "^RZ/G2L M33 SCIFA SMOKE\n"
+  - uart_ordered:
+      - "scif2 brr=1a"
+      - "scif2 scr=0030"
+      - "pass=3f"
+  - memory_value: {address: 0x2001FFF0, expected_value: 0x2620003F}
+  - expected_stop_reason: max_steps

@@ -1,0 +1,11 @@
+# CPU-only direct-ELF smoke against the narrowed imported ARV-SOM profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv64imac-unknown-none-elf/release/firmware-arvsom-rv64-cpu-smoke"
+  system: "../../configs/systems/onboarding/arvsom.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - memory_value: {address: 0x80700000, expected_value: 0x00000003}
+  - memory_value: {address: 0x80700004, expected_value: 0x00000005}
+  - expected_stop_reason: max_steps

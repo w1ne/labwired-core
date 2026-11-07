@@ -1,0 +1,10 @@
+# Cortex-M0+ USART1 smoke against the narrowed imported STK3200 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-stk3200-smoke"
+  system: "../../configs/systems/onboarding/stk3200.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "STK3200 EFM32ZG222 USART1 smoke"
+  - expected_stop_reason: max_steps

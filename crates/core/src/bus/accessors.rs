@@ -482,17 +482,19 @@ impl crate::Bus for SystemBus {
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_read(addr);
         }
+        let (base, end, data) = self.plain_memory_slice_at(addr).ok_or_else(|| {
+            SimulationError::NotImplemented(format!(
+                "eight-byte physical access at {addr:#x} requires mapped memory; MMIO64 is unsupported"
+            ))
+        })?;
         let offset =
-            addr.checked_sub(self.ram.base_addr)
-                .and_then(|v| usize::try_from(v).ok())
-                .filter(|v| *v < self.ram.data.len())
-                .ok_or_else(|| {
-                    SimulationError::NotImplemented(format!(
-                "eight-byte physical access at {addr:#x} requires RAM; MMIO64 is unsupported"))
-                })?;
+            usize::try_from(addr - base).map_err(|_| SimulationError::MemoryViolation(addr))?;
+        let end_offset =
+            usize::try_from(end - base).map_err(|_| SimulationError::MemoryViolation(addr))?;
         let bytes = offset
             .checked_add(8)
-            .and_then(|end| self.ram.data.get(offset..end))
+            .filter(|finish| *finish <= end_offset)
+            .and_then(|finish| data.get(offset..finish))
             .ok_or(SimulationError::MemoryViolation(addr))?;
         self.note_memory_read();
         Ok(u64::from_le_bytes(bytes.try_into().unwrap()))
@@ -587,7 +589,12 @@ impl crate::Bus for SystemBus {
     }
 
     fn arm_code_identity(&self) -> Option<u64> {
-        self.irq_fabric.armv7.as_ref().map(|f| f.code_identity())
+        Some(
+            self.irq_fabric
+                .armv7
+                .as_ref()
+                .map_or(self.native_code_identity, |fabric| fabric.code_identity()),
+        )
     }
     fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
         self.irq_fabric.armv7.as_ref().map(|f| {

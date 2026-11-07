@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      10,
+      1073905684,
+      48,
+      0,
+      1073905684,
+      1074660968,
+      1074663992,
+      541458416,
+      0,
+      0,
+      0,
+      0,
+      0,
+      541458416,
+      4198729,
+      4198760
+    ],
+    "pc": 4198760,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 4194304,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "4f68c895bb8507afd4bc6b94dc980db14be6d1fe1a226e64c5d33b3438db8aff",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam-e70-renode-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam_e70.yaml",
+    "script": "examples/renode-onboarding/sam_e70-smoke.yaml"
+  }
+}

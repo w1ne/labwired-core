@@ -1,0 +1,6 @@
+/* Imported EFM32TG840 execution map: flash @ 0x08000000, 4 KiB SRAM @ 0x20000000. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x08000000, LENGTH = 32K
+  RAM   : ORIGIN = 0x20000000, LENGTH = 4K
+}

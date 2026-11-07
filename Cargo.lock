@@ -1151,6 +1151,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-andes-ae350-n25-smoke"
+version = "0.1.0"
+
+[[package]]
 name = "firmware-apollo4p-evb-smoke"
 version = "0.1.0"
 dependencies = [
@@ -1176,6 +1180,14 @@ dependencies = [
 
 [[package]]
 name = "firmware-arty-litex-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-arvsom-rv64-cpu-smoke"
 version = "0.1.0"
 dependencies = [
  "panic-halt",
@@ -1235,6 +1247,186 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-cv32e40p-smoke"
+version = "0.1.0"
+
+[[package]]
+name = "firmware-efm32-stk-m3-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32g210-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32g222-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32g232-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32g842-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32hg350-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32jg1-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32jg12-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32lg942-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32lg995-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32pg1-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32pg12-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32tg840-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32wg995-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efm32zg222-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efr32mg1-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efr32mg12-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efr32mg13-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efr32mg24-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efr32mg26-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efr32xg22-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-efr32xg26-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-ek-ra6m5-smoke"
 version = "0.1.0"
 dependencies = [
@@ -1244,6 +1436,14 @@ dependencies = [
 
 [[package]]
 name = "firmware-ek-ra8m1-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-eos-s3-smoke"
 version = "0.1.0"
 dependencies = [
  "cortex-m-rt",
@@ -1266,6 +1466,30 @@ dependencies = [
  "panic-halt",
  "riscv 0.10.1",
  "riscv-rt",
+]
+
+[[package]]
+name = "firmware-ezr32-330-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-ezr32-wonder-gecko-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-ezr32hg320-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
 ]
 
 [[package]]
@@ -1321,7 +1545,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-fomu-smoke"
+version = "0.1.0"
+
+[[package]]
 name = "firmware-frdm-k64f-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-ft9001-smoke"
 version = "0.1.0"
 dependencies = [
  "cortex-m-rt",
@@ -1374,6 +1610,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-kendryte-k210-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-kw41z-demo"
 version = "0.1.0"
 dependencies = [
@@ -1414,11 +1658,75 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-litex-ibex-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-litex-minerva-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-litex-picorv32-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-litex-tock-smoke"
+version = "0.1.0"
+
+[[package]]
+name = "firmware-litex-vexriscv-linux-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-litex-vexriscv-smoke"
 version = "0.1.0"
 dependencies = [
  "panic-halt",
  "riscv-rt",
+]
+
+[[package]]
+name = "firmware-litex-vexriscv-smp-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-litex-vexriscv-tftp-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-litex-zephyr-i2s-smoke"
+version = "0.1.0"
+
+[[package]]
+name = "firmware-max32652-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
 ]
 
 [[package]]
@@ -1473,6 +1781,38 @@ version = "0.1.0"
 dependencies = [
  "cortex-m-rt",
  "panic-halt",
+]
+
+[[package]]
+name = "firmware-mimxrt700-evk-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-mimxrt798s-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-miv-rv32-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-murax-vexriscv-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
 ]
 
 [[package]]
@@ -1693,6 +2033,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nuvoton-npcx9-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-opentitan-earlgrey-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-perf-spin"
 version = "0.25.0"
 dependencies = [
@@ -1709,12 +2065,100 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-picosoc-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-ra4m1-demo"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "panic-halt",
+]
+
+[[package]]
+name = "firmware-ramn-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-renesas-ck-ra6m5-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-renesas-da14592-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-renesas-ek-ra2e1-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-renesas-r7fa2e1a9-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-renesas-r7fa2l1a-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-renesas-r7fa6m5b-boot-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-renesas-r7fa8m1a-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-riscv-verilated-uartlite-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-riscv-virt-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
 ]
 
 [[package]]
@@ -1745,7 +2189,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-s32k118-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-s32k388-evb-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-s32k388-onboarding-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-sam-e70-renode-smoke"
 version = "0.1.0"
 dependencies = [
  "cortex-m-rt",
@@ -1761,7 +2229,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-sam4s-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-sam4s-xplained-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-sam4s16c-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-sam4s8b-smoke"
 version = "0.1.0"
 dependencies = [
  "cortex-m-rt",
@@ -1778,6 +2270,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-samd21-j17d-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-semihost-smoke"
 version = "0.1.0"
 dependencies = [
@@ -1786,7 +2287,79 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-sifive-fe310-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-sifive-fu540-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-sifive-fu740-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-starfive-jh7100-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-stk3200-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-stk3800-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-stm32f042-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-stm32f072-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-stm32f072b-disco-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-stm32f429-smoke"
 version = "0.1.0"
 dependencies = [
  "cortex-m-rt",
@@ -1829,6 +2402,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-stm32h743-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-stm32l071-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-stm32l072-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-stm32l151-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-stm32u575-demo"
 version = "0.25.0"
 dependencies = [
@@ -1836,10 +2441,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-stm32w108-boot-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-tock-veer-el2-smoke"
+version = "0.1.0"
+
+[[package]]
 name = "firmware-uart-echo-fixture"
 version = "0.25.0"
 dependencies = [
  "cortex-m",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-ut32m0r500-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
  "panic-halt",
 ]
 
@@ -1853,6 +2478,14 @@ dependencies = [
 
 [[package]]
 name = "firmware-xiao-nrf52840-sense-demo"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-zolertia-firefly-smoke"
 version = "0.1.0"
 dependencies = [
  "cortex-m-rt",
