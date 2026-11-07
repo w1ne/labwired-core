@@ -33,6 +33,8 @@ mod common;
 use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+use labwired_core::plugin::ChipPlugin;
+use labwired_core::system::mips::Pic32GpioPlugin;
 use labwired_core::Bus;
 use std::path::PathBuf;
 
@@ -60,11 +62,11 @@ struct ChipConf {
 const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[
     (
         "rv1103",
-        "Normal descriptor is CPU/memory only. Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate.",
+        "Normal descriptor is CPU/memory plus a simulation-only `input_pin_bank` analog co-sim seam (no RV1103 register model). Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate.",
     ),
     (
         "xck26-rpu",
-        "Generic descriptor is CPU/memory only. The native Cortex-R5F (qemu-arm-system) installs the descriptor's native_rpu_peripherals (RPU GIC, Cadence UART0/1, TTC0) and runs stock Zephyr v4.1.0 kv260_r5 hello_world, synchronization and tests/kernel/common (crates/core/tests/kv260_r5_zephyr.rs, examples/kv260-r5). No APU, PMU/CSU/FSBL boot, PL or other PS peripherals; no physical qualification.",
+        "Generic descriptor is CPU/memory plus a simulation-only `input_pin_bank` analog co-sim seam (no ZynqMP register model). The native Cortex-R5F (qemu-arm-system) installs the descriptor's native_rpu_peripherals (RPU GIC, Cadence UART0/1, TTC0) and runs stock Zephyr v4.1.0 kv260_r5 hello_world, synchronization and tests/kernel/common (crates/core/tests/kv260_r5_zephyr.rs, examples/kv260-r5). No APU, PMU/CSU/FSBL boot, PL or other PS peripherals; no physical qualification.",
     ),
 ];
 
@@ -1856,7 +1858,15 @@ fn measure(c: &ChipConf) -> Record {
     let chip =
         ChipDescriptor::from_file(&abs).unwrap_or_else(|e| panic!("{}: load chip: {e}", c.name));
     let peripherals = chip.peripherals.len();
-    let bus = SystemBus::from_config(&chip, &dummy_manifest(&abs_str))
+    // The MIPS machine builder always installs the PIC32 GPIO plugin
+    // (`system/builder/mips.rs`); measure the bus that machine would run.
+    let pic32_gpio = Pic32GpioPlugin;
+    let plugins: Vec<&dyn ChipPlugin> = if matches!(chip.arch, labwired_config::Arch::Mips) {
+        vec![&pic32_gpio]
+    } else {
+        Vec::new()
+    };
+    let bus = SystemBus::from_config_with_plugins(&chip, &dummy_manifest(&abs_str), &plugins)
         .unwrap_or_else(|e| panic!("{}: build bus: {e}", c.name));
 
     // Estate: every wired peripheral's base reads without a bus fault.
@@ -1988,20 +1998,30 @@ fn level(r: &Record) -> u8 {
     }
 }
 
+/// No peripheral beyond simulation-only `input_pin_bank` seams. Those carry
+/// routed analog levels into the generic co-simulation path
+/// (`cosim_luckfox_pico_mini_a_analog.rs`, `cosim_kv260_r5_analog.rs`); they
+/// are not a register model of the part, so they claim no conformance.
+fn only_cosim_seams(chip: &ChipDescriptor) -> bool {
+    chip.peripherals
+        .iter()
+        .all(|p| p.r#type.eq_ignore_ascii_case("input_pin_bank"))
+}
+
 fn is_declared_only_prototype(name: &str, chip: &ChipDescriptor) -> bool {
     match name {
         "rv1103" => {
             chip.name == "rv1103"
                 && matches!(chip.arch, labwired_config::Arch::Arm)
                 && chip.core.as_deref() == Some("cortex-a7")
-                && chip.peripherals.is_empty()
+                && only_cosim_seams(chip)
                 && chip.flash.size == 0
         }
         "xck26-rpu" => {
             chip.name == "xck26-rpu"
                 && matches!(chip.arch, labwired_config::Arch::Arm)
                 && chip.core.as_deref() == Some("cortex-r5f")
-                && chip.peripherals.is_empty()
+                && only_cosim_seams(chip)
                 && chip.flash.size == 0
         }
         _ => false,
@@ -2040,7 +2060,7 @@ fn declared_only_classification_rejects_other_chips_or_modeled_platforms() {
 fn rv1103_declaration_is_visible_without_model_conformance() {
     let chip = ChipDescriptor::from_file(root("configs/chips/rv1103.yaml")).unwrap();
     assert_eq!(chip.core.as_deref(), Some("cortex-a7"));
-    assert!(chip.peripherals.is_empty());
+    assert!(only_cosim_seams(&chip));
     assert!(!CHIPS.iter().any(|chip| chip.name == "rv1103"));
     let board = std::fs::read_to_string(root("docs/coverage/chip-conformance.md")).unwrap();
     assert!(board.contains("| rv1103 | Declared only |"));
