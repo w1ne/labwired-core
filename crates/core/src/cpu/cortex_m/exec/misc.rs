@@ -70,6 +70,45 @@ impl CortexM {
         Some(PcAdvance::Add4)
     }
 
+    /// Execute a p0 instruction on the RP2350 GPIO coprocessor, as the
+    /// equivalent SIO GPIO register accesses. `Ok(None)` = not a GPIOC
+    /// instruction (or no GPIOC on this chip): the caller faults.
+    #[cold]
+    #[inline(never)]
+    fn exec_rp2350_gpioc<B: Bus + ?Sized>(
+        &mut self,
+        bus: &mut B,
+        h1: u16,
+        h2: u16,
+    ) -> SimResult<Option<PcAdvance>> {
+        use super::super::rp2350_gpioc::{decode, GpiocOp, SIO_BASE};
+        if !bus.rp2350_gpioc() {
+            return Ok(None);
+        }
+        let Some(op) = decode(h1, h2, |r| self.get_register(r)) else {
+            return Ok(None);
+        };
+        let at = |off: u32| (SIO_BASE + off) as u64;
+        match op {
+            GpiocOp::Write(writes) => {
+                for (off, v) in writes {
+                    bus.write_u32(at(off), v)?;
+                }
+            }
+            GpiocOp::Read1 { off, rt } => {
+                let v = bus.read_u32(at(off))?;
+                self.set_register(rt, v);
+            }
+            GpiocOp::Read2 { off, rt, rt2 } => {
+                let lo = bus.read_u32(at(off))?;
+                let hi = bus.read_u32(at(off + 4))?;
+                self.set_register(rt, lo);
+                self.set_register(rt2, hi);
+            }
+        }
+        Ok(Some(PcAdvance::Add4))
+    }
+
     #[inline(always)]
     pub(in crate::cpu::cortex_m) fn exec_unknown32<B: Bus + ?Sized>(
         &mut self,
@@ -83,6 +122,12 @@ impl CortexM {
         // step dispatcher), and the state lives on the bus, not in CortexM.
         if (h1 & 0xEC00) == 0xEC00 && (h2 >> 9) & 0x7 == 2 {
             if let Some(adv) = self.exec_rp2350_dcp(bus, h1, h2) {
+                return Ok(adv);
+            }
+        }
+        // RP2350 GPIO coprocessor: p0.
+        if (h1 & 0xEC00) == 0xEC00 && (h2 >> 8) & 0xF == 0 {
+            if let Some(adv) = self.exec_rp2350_gpioc(bus, h1, h2)? {
                 return Ok(adv);
             }
         }

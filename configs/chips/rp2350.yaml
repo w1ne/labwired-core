@@ -49,7 +49,10 @@ memory_regions:
 # security state) and p5 (Non-secure) — datasheet 3.6.2. pico-sdk enables
 # it in runtime_init_per_core_enable_coprocessors and routes double
 # arithmetic/conversions/compares through it (pico_double, dcp_canned).
-coprocessors: [rp2350_dcp]
+# GPIO coprocessor, p0 (datasheet 3.6.1): pico-sdk's gpio_put/gpio_set_dir
+# (gpio_coproc.h) and so arduino-pico's pinMode/digitalWrite; executed as
+# the equivalent SIO GPIO accesses.
+coprocessors: [rp2350_dcp, rp2350_gpioc]
 # Atomic SET/CLR/XOR aliases, same scheme as RP2040 (rp2350 addressmap.h
 # REG_ALIAS_*_BITS).
 atomic_register_aliases: true
@@ -134,10 +137,15 @@ peripherals:
     irq: 8
     config:
       debug_schema: "../peripherals/rp2350/pwm.yaml"
+  # TIMER0. The RP2040 timer model with the RP2350 map: LOCKED/SOURCE at
+  # 0x34/0x38 push INTR/INTE/INTF/INTS to 0x3c..0x48 (pico-sdk rp2350
+  # hardware_regs/timer.h). TIMER0_IRQ_0..3 are NVIC 0..3, as on the RP2040.
   - id: "timer0"
     type: "rp2040_timer"
     base_address: 0x400B0000
     size: "4KB"
+    config:
+      profile: "rp2350"
   # XIP_CTRL (flash cache control) — declarative storage, as on RP2040.
   - id: "xip_ctrl"
     type: "declarative"
@@ -197,12 +205,15 @@ peripherals:
     size: "4KB"
   # SIO (single-cycle IO) — GPIO out/oe + readback. CPUID reads 0 (core 0;
   # core 1 is not modeled yet).
+  # SIO with the RP2350 GPIO map (each register has a HI twin at +4, so
+  # OUT_SET is 0x18 and OE is 0x30, not the RP2040's 0x14 / 0x20).
   - id: "sio"
     type: "rp2040_sio"
     base_address: 0xD0000000
     size: "4KB"
     config:
       debug_schema: "../peripherals/rp2350/sio.yaml"
+      profile: "rp2350"
   # Cortex-M33 SCS ACTLR (0xE000E008), a plain register: pico-sdk's
   # spinlock_set_extexclall() sets EXTEXCLALL during runtime init.
   - id: "actlr"
