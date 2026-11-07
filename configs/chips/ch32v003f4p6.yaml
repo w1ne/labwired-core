@@ -129,6 +129,22 @@ peripherals:
     irq: 33
     clock: { reg: "apb2pcenr", bit: 12 }
 
+  # I2C1 (ch32v00x.h): I2C1_BASE = APB1PERIPH_BASE + 0x5400,
+  # RCC_APB1Periph_I2C1 = APB1PCENR bit 21 (ch32v00x_rcc.h), I2C1_EV_IRQn = 30,
+  # I2C1_ER_IRQn = 31. I2C_TypeDef is CTLR1, CTLR2, OADDR1, OADDR2, DATAR,
+  # STAR1, STAR2, CKCFGR: the STM32F1 I2C block (CR1..CCR) at the F1 offsets,
+  # without TRISE at 0x20, so the F1 `i2c` engine serves it. WCH's Wire
+  # (libraries/Wire/src/utility/twi.c) is interrupt-driven on both lines.
+  # Pads: SDA PC1, SCL PC2 (arduino_core_ch32 variant_CH32V003F4 PinMap_I2C_*).
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 30
+    clock: { reg: "apb1pcenr", bit: 21 }
+    config:
+      irq_error: 31
+
   # AFIO (ch32v00x.h): AFIO_BASE = APB2PERIPH_BASE + 0x0000, RCC_APB2Periph_AFIO
   # = APB2PCENR bit 0. AFIO_TypeDef is RESERVED0, PCFR1, EXTICR, so the
   # `wch` profile, not the F1 map. WCH's pinmap calls GPIO_PinRemapConfig

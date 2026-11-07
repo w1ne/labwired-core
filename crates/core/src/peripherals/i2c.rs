@@ -748,7 +748,13 @@ impl F1I2c {
             if self.cycles_remaining == 0 {
                 match self.state {
                     I2cState::StartPending => {
+                        // The START also makes the interface master and the
+                        // bus busy (RM0008 §26.3.3: MSL set "as soon as the
+                        // Start condition is generated"). EV5 is BUSY|MSL|SB =
+                        // 0x0003_0001, which SPL `I2C_CheckEvent` (STM32 SPL,
+                        // WCH's Arduino Wire) waits for exactly.
                         self.sr1 = 0x0001; // Only SB set
+                        self.sr2 |= 0x0003;
                         self.cr1 &= !0x0100; // auto-clear START request
                         self.state = I2cState::Idle;
                     }
@@ -2670,6 +2676,21 @@ impl crate::Peripheral for I2c {
         let b2 = self.read(offset + 2)? as u32;
         let b3 = self.read(offset + 3)? as u32;
         Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+    }
+
+    /// Atomic halfword writes on the F1 block, whose registers are 16 bits wide.
+    /// WCH's `I2C_TypeDef` declares them `uint16_t`, so GCC emits `sh`; the
+    /// default byte-slicing would apply a DR store as two DR writes and put a
+    /// stray data byte on the wire once the controller is master.
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        match self {
+            Self::Stm32F1(i) => i.write_reg(offset & !1, value),
+            _ => {
+                self.write(offset, (value & 0xFF) as u8)?;
+                self.write(offset + 1, (value >> 8) as u8)?;
+            }
+        }
+        Ok(())
     }
 
     /// Atomic word writes: STM32 HAL stores CR2 as a single STR (START, NBYTES,
