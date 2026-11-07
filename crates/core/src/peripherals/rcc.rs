@@ -2765,12 +2765,12 @@ impl RccModel for U3Rcc {
 }
 
 /// APB2PCENR gates of the CH32V003 blocks this engine models: AFIO bit 0,
-/// GPIOA bit 2, GPIOC bit 4, GPIOD bit 5, ADC1 bit 9, SPI1 bit 12, USART1
-/// bit 14 (ch32fun's `RCC_APB2Periph_*`). A gate for a block with no model
-/// reads back 0, so firmware cannot believe it clocked hardware that is not
-/// there. Add the bit when the block gets a model.
+/// GPIOA bit 2, GPIOC bit 4, GPIOD bit 5, ADC1 bit 9, TIM1 bit 11, SPI1 bit
+/// 12, USART1 bit 14 (ch32fun's `RCC_APB2Periph_*`). A gate for a block with
+/// no model reads back 0, so firmware cannot believe it clocked hardware that
+/// is not there. Add the bit when the block gets a model.
 const WCH_APB2PCENR_MODELED: u32 =
-    (1 << 0) | (1 << 2) | (1 << 4) | (1 << 5) | (1 << 9) | (1 << 12) | (1 << 14);
+    (1 << 0) | (1 << 2) | (1 << 4) | (1 << 5) | (1 << 9) | (1 << 11) | (1 << 12) | (1 << 14);
 /// APB1PCENR gates of the modeled blocks: TIM2 bit 0, I2C1 bit 21
 /// (`RCC_APB1Periph_TIM2` 0x0000_0001, `RCC_APB1Periph_I2C1` 0x0020_0000).
 const WCH_APB1PCENR_MODELED: u32 = (1 << 0) | (1 << 21);
@@ -4620,11 +4620,11 @@ mod tests {
     }
 
     /// WCH's focused APB2PCENR/APB1PCENR gates include AFIO, GPIOA, GPIOC,
-    /// GPIOD, ADC1, SPI1 (APB2 bit 12), USART1, TIM2 (APB1 bit 0) and I2C1
-    /// (APB1 bit 21, not bit 1). The narrow
+    /// GPIOD, ADC1, TIM1 (APB2 bit 11), SPI1 (APB2 bit 12), USART1, TIM2
+    /// (APB1 bit 0) and I2C1 (APB1 bit 21, not bit 1). The narrow
     /// profile must not inherit unrelated STM32F1 gates.
     #[test]
-    fn ch32v003_models_only_the_smoked_gpio_adc_spi_usart_tim2_and_i2c_clock_gates() {
+    fn ch32v003_models_only_the_smoked_gpio_adc_tim_spi_usart_and_i2c_clock_gates() {
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Wch);
         assert_eq!(
             "ch32v003".parse::<RccRegisterLayout>().unwrap(),
@@ -4640,7 +4640,14 @@ mod tests {
         rcc.write_u32(0x1C, u32::MAX).unwrap();
         assert_eq!(
             rcc.read_u32(0x18).unwrap(),
-            (1 << 0) | (1 << 2) | (1 << 4) | (1 << 5) | (1 << 9) | (1 << 12) | (1 << 14)
+            (1 << 0)
+                | (1 << 2)
+                | (1 << 4)
+                | (1 << 5)
+                | (1 << 9)
+                | (1 << 11)
+                | (1 << 12)
+                | (1 << 14)
         );
         assert_eq!(rcc.read_u32(0x1C).unwrap(), (1 << 0) | (1 << 21));
     }

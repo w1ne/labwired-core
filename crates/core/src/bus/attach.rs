@@ -2722,7 +2722,7 @@ impl SystemBus {
     ///   NOT imply this map — L4/G4/H5/U5 move several of these pads — so a
     ///   V2 part without the declaration is routed nowhere, fail-closed.
     pub(crate) fn wire_stm32_timer_capture_pads(&mut self) {
-        // (timer, port, pin, channel 0-based, func)
+        // (timer, port, pin, wire line: channel 0-based, or 4.. for CHxN, func)
         const F1: &[(&str, char, u8, u8, &str)] = &[
             ("tim1", 'a', 8, 0, "TIM1_CH1"),
             ("tim1", 'a', 9, 1, "TIM1_CH2"),
@@ -2888,7 +2888,19 @@ impl SystemBus {
         // examples/tim2_pwm lists the same pads). The register block is the F1
         // general-purpose timer; only the pads differ, so the table is picked
         // from the chip's RCC profile like the CH32V003 I²C1 pads.
+        //
+        // TIM1 at PCFR1.TIM1_RM = 00 (reset), CH32V003 DS pin table and
+        // ch32fun's examples/tim1_pwm_complementary_outputs: T1CH1/CH1N
+        // PD2/PD0, T1CH2/CH2N PA1/PA2, T1CH3/CH3N PC3/PD1, T1CH4 PC4. The
+        // complementary outputs are wire lines 4..6 (`complementary_line`).
         const CH32V003: &[(&str, char, u8, usize, &str)] = &[
+            ("tim1", 'd', 2, 0, "TIM1_CH1"),
+            ("tim1", 'a', 1, 1, "TIM1_CH2"),
+            ("tim1", 'c', 3, 2, "TIM1_CH3"),
+            ("tim1", 'c', 4, 3, "TIM1_CH4"),
+            ("tim1", 'd', 0, 4, "TIM1_CH1N"),
+            ("tim1", 'a', 2, 5, "TIM1_CH2N"),
+            ("tim1", 'd', 1, 6, "TIM1_CH3N"),
             ("tim2", 'd', 4, 0, "TIM2_CH1"),
             ("tim2", 'd', 3, 1, "TIM2_CH2"),
             ("tim2", 'c', 0, 2, "TIM2_CH3"),

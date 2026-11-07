@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build ten unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build eleven unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -37,6 +37,11 @@
 #                    bits, 1000 or 1110) moved by DMA1 channel 3 in circular
 #                    mode, its half/complete interrupts (PFIC 24) refilling
 #                    a 48-halfword buffer from WS2812BLEDCallback().
+#   tim1_pwm.elf     examples/tim1_pwm: TIM1 (advanced-control) PWM mode 1,
+#                    ARR 255, MOE set, on the complementary output CH1N
+#                    (PD0, CC1NE|CC1NP with CC1E clear) and on CH4 (PC4,
+#                    CC4E|CC4P); CH1's compare steps one count every
+#                    Delay_Ms(5), CH4's 128 counts ahead.
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V003 (rv32ec/ilp32e, -Os -flto, generated_ch32v003.ld),
@@ -74,7 +79,7 @@ ld="${out_dir}/generated_ch32v003.ld"
   -DTARGET_MCU_MEMORY_SPLIT= "${src}/ch32fun/ch32fun.ld" > "${ld}"
 
 for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr \
-    spi_max7219 uart_tx_dma ws2812bdemo; do
+    spi_max7219 uart_tx_dma ws2812bdemo tim1_pwm; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

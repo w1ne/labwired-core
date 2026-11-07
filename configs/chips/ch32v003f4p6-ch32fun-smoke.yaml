@@ -9,7 +9,8 @@
 # tim2_pwm, and EXTI with its AFIO_EXTICR port select for ch32fun's
 # exti_pin_change_isr, and SPI1 (PC5 SCK, PC6 MOSI, PC7 MISO) for ch32fun's
 # spi_max7219, and DMA1 with USART1 TX on channel 4 for ch32fun's
-# uart_tx_dma and SPI1 TX on channel 3 for ch32fun's ws2812bdemo.
+# uart_tx_dma and SPI1 TX on channel 3 for ch32fun's ws2812bdemo, and TIM1
+# with its complementary outputs for ch32fun's tim1_pwm.
 #
 # Sources:
 # - ch32fun ch32v003hw.h (register map, DMDATA0/DMDATA1/sentinel at
@@ -40,6 +41,21 @@
 # TIM2 remaps (PCFR1 is storage only, so a remapped pad does not move), the
 # RCC_APB1PRSTR reset (dropped, as for I2C1), PD7's NRST option byte (the
 # pad is treated as GPIO), encoder/slave modes, DMA and TIM2 interrupts.
+#
+# TIM1 is the engine's advanced-control timer (`advanced: true`: the F1
+# general-purpose block plus RCR/BDTR, same offsets as ch32fun's
+# ch32v003hw.h), counting at HCLK. Its outputs drive the PCFR1.TIM1_RM = 00
+# pads while the pad is an alternate-function output: T1CH1..4 on PD2, PA1,
+# PC3, PC4 and the complementary T1CH1N..3N on PD0, PA2, PD1. BDTR.MOE gates
+# them all. With MOE set, CCxE alone gives OCx = OCxREF, CCxNE alone gives
+# OCxN = OCxREF, and both give OCx/!OCxREF with each rising edge delayed by
+# the DTG dead time in tDTS (CK_INT x CTLR1.CKD) units; CCxP/CCxNP invert and
+# OSSR drives the disabled half of a pair at its inactive level. With MOE
+# clear, OSSI holds enabled outputs at CTLR2.OISx/OISxN. Not modeled on TIM1:
+# the AFIO PCFR1 TIM1 remaps (storage only), the break input (BKIN on PC2)
+# and BDTR.AOE/LOCK, center-aligned and down counting, the repetition counter
+# as an update divider, encoder/slave modes, input capture on TIM1 pads,
+# DMA, the TIM1 interrupts, and the RCC_APB2PRSTR reset (dropped).
 #
 # EXTI keeps the F1 register file (INTENR/EVENR/RTENR/FTENR/SWIEVR/INTFR)
 # over its ten lines. A rising or falling edge on a pad whose port
@@ -77,7 +93,7 @@
 # no CPU cycles), and RCC_AHBPCENR's SRAM/flash enables.
 #
 # Not modeled: debug-printf input from the host, a detached probe, the rest
-# of the RISC-V debug module, TIM1, OPA, the
+# of the RISC-V debug module, OPA, the
 # watchdogs, sleep/standby, the HSE, the option bytes, and everything listed
 # as not modeled in ch32v003f4p6-pfic-smoke.yaml.
 name: ch32v003f4p6-ch32fun-smoke
@@ -98,10 +114,13 @@ pins:
   PC0: { gpio: gpioc, bit: 0, functions: [{ type: timer, peripheral: tim2, channel: 3 }] }
   PC1: { gpio: gpioc, bit: 1, functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
   PC2: { gpio: gpioc, bit: 2, functions: [{ type: i2c, peripheral: i2c1, role: scl }] }
+  PC3: { gpio: gpioc, bit: 3, functions: [{ type: timer, peripheral: tim1, channel: 3 }] }
+  PC4: { gpio: gpioc, bit: 4, functions: [{ type: timer, peripheral: tim1, channel: 4 }] }
   PC5: { gpio: gpioc, bit: 5, functions: [{ type: spi, peripheral: spi1, role: sck }] }
   PC6: { gpio: gpioc, bit: 6, functions: [{ type: spi, peripheral: spi1, role: mosi }] }
   PC7: { gpio: gpioc, bit: 7, functions: [{ type: spi, peripheral: spi1, role: miso }] }
   PD0: { gpio: gpiod, bit: 0 }
+  PD2: { gpio: gpiod, bit: 2, functions: [{ type: timer, peripheral: tim1, channel: 1 }] }
   PD3: { gpio: gpiod, bit: 3, functions: [{ type: timer, peripheral: tim2, channel: 2 }] }
   PD4: { gpio: gpiod, bit: 4, functions: [{ type: timer, peripheral: tim2, channel: 1 }] }
   PD5: { gpio: gpiod, bit: 5 }
@@ -218,6 +237,15 @@ peripherals:
     clock: { reg: apb1pcenr, bit: 21 }
     config:
       profile: stm32f1
+
+  # TIM1 at 0x40012C00; RCC_APB2PCENR.TIM1EN is bit 11 (ch32v003hw.h).
+  - id: tim1
+    type: timer
+    base_address: 0x40012C00
+    size: 1KB
+    clock: { reg: apb2enr, bit: 11 }
+    config:
+      advanced: true
 
   - id: tim2
     type: timer

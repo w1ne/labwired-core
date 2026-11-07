@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs ten of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs eleven of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -165,6 +165,7 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `adc_polled` | a potentiometer on PD4 (AIN7) is turned 50 % → 25 % → 100 %; the printed codes must be `511`, `511`, `255`, `255`, `1023` | `Count: 0 adc: 511` .. `Count: 4 adc: 1023`, one sample every 200 ms |
 | `i2c_oled` | a 128x32 SSD1306 at 0x3C on I2C1 (PC1/PC2); after the half-lit "buffer fill with binary" frame, mode 1 must leave exactly the two diagonals `(x, x/4)` and `(x, 31 - x/4)` lit: 256 of 4096 pixels, corners, centre crossing and two empty bands checked | 12/12; every packet completes with no `ssd1306_i2c_error` timeout |
 | `tim2_pwm` | TIM2 PWM on CH1 (PD4), CH2 (PD3) and CH4 (PD7), with an LED on each; debug-printf banner and the TIM2 setup left behind (ATRLR, CEN/ARPE, CHCTLR1/2, CCER). [`check-tim2-pwm.py`](check-tim2-pwm.py) decodes the waveform of a `--watch-gpio` run, committed as [`pwm-capture.json.gz`](evidence/ch32fun-tim2-pwm-smoke/pwm-capture.json.gz) with its output in [`pwm-check.log`](evidence/ch32fun-tim2-pwm-smoke/pwm-check.log) | 11,546 whole 256-cycle periods (187.5 kHz); CH1 low for `count`/256 and CH2 low, CH4 high for `(count + 128) & 255`/256, through CH2's 255 → 0 wrap; `count` steps by 1 every 937.5 periods, i.e. `Delay_Ms(5)` |
+| `tim1_pwm` | TIM1, the advanced-control timer: PWM on the complementary output CH1N (PD0) and on CH4 (PC4), MOE set, an LED on each; debug-printf banner and the TIM1 setup left behind (ATRLR, CEN, CHCTLR1/2, CCER, BDTR.MOE). [`check-tim1-pwm.py`](check-tim1-pwm.py) decodes a `--watch-gpio` run, committed as [`pwm-capture.json.gz`](evidence/ch32fun-tim1-pwm-smoke/pwm-capture.json.gz) with its output in [`pwm-check.log`](evidence/ch32fun-tim1-pwm-smoke/pwm-check.log) | 16,851 whole 256-cycle periods (187.5 kHz); CH1N low for `count`/256 and CH4 low for `(count + 128) & 255`/256 through CH4's wrap; `count` steps by 1 every 937.5 periods, i.e. `Delay_Ms(5)` |
 | `exti_pin_change_isr` | a button on PD3 is pressed, released and pressed again; the EXTI7_0 handler blips PC1. The smoke checks PC1 edges and the EXTI/AFIO/PFIC state left behind; the `--watch-gpio` run is committed as [`pc1-capture.json`](evidence/ch32fun-exti-smoke/pc1-capture.json) | PD3 rises at 200,001 and 600,001 and PC1 blips at 200,007-200,009 and 600,007-600,009: exactly 4 PC1 edges, none at the release (falling edge, FTENR clear) at 400,001 |
 | `spi_max7219` | 16-bit SPI1 frames (PC5 SCK, PC6 MOSI) to a MAX7219 with LOAD on PD0; the panel state the init writes leave ([`max7219-state.json`](evidence/ch32fun-spi-max7219-smoke/max7219-state.json)) | 10/10: intensity 15, scan limit 7, shutdown clear, 12 of 64 LEDs lit as Code-B 7..0 |
 | `uart_tx_dma` | `Hello World!\r\n` three times on USART1 (PD5), every byte moved by DMA1 channel 4; the transfer-complete handler (PFIC 25) toggles PD6 | 5/5: 42 bytes, PD6 4 edges, CNTR4 = 0, INTFR nibble 4 = 0x5 |
@@ -220,6 +221,24 @@ This profile adds these to the PFIC profile:
   CH2/CH4 can take the new count one period after CH1, because the loop
   stores CH1CVR before the other two and the compare registers are
   preloaded. The waveform check allows exactly that one period.
+- **TIM1** (`0x40012C00`): the engine's advanced-control timer
+  (`advanced: true`), counting at HCLK. Three changes made `tim1_pwm`
+  drive its pins. The CH32V003 RCC model dropped TIM1EN (`APB2PCENR` bit
+  11), so every TIM1 register read back 0; it now keeps it. The timer model
+  stored `BDTR` but never generated the complementary outputs, and the
+  example's only channel besides CH4 is CH1N on PD0. The model now
+  generates OC1N..OC3N (RM0008 Table 83): with `MOE` set, `CCxNE` alone puts
+  `OCxREF` itself on the pad (`tim1_pwm` sets `CC1NE|CC1NP` with `CC1E`
+  clear, so PD0 is `OC1REF` inverted); `CCxE|CCxNE` gives the complementary
+  pair, each rising edge delayed by the `DTG` dead time in CK_INT x `CKD`
+  cycles; `OSSR`/`OSSI` with `OISx`/`OISxN` give the off and idle levels.
+  The F1 timer pad router gains the CH32V003 TIM1 reset mapping: T1CH1..4
+  on PD2, PA1, PC3, PC4 and T1CH1N..3N on PD0, PA2, PD1. The unit tests in
+  `timer.rs` pin the pair inversion, the lone-`CCxNE` rule, dead time at a
+  prescaler that does not divide it, `CKD`, and the idle/off levels;
+  [`crates/core/tests/ch32v003_tim1_pads.rs`](../../crates/core/tests/ch32v003_tim1_pads.rs)
+  pins all seven routes. The smoke uses
+  [`ch32v003evt-ch32fun-tim1-pwm-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-tim1-pwm-smoke.yaml).
 - **EXTI** (`0x40010400`) and the CH32V003 **`AFIO_EXTICR`**. EXTI is the F1
   register file (INTENR/EVENR/RTENR/FTENR/SWIEVR/INTFR) over ten lines, but
   the port select is not: the CH32V003 has one `AFIO_EXTICR` at `0x08` with
@@ -257,7 +276,7 @@ Read these results correctly:
   cycles on silicon. Line contents and order are exact; their timing is not.
 - Not modeled: input from the host over the debug channel (ch32fun's
   `handle_debug_input`), a detached probe as a configuration, and every
-  peripheral the other ch32fun examples need (TIM1, OPA, watchdogs,
+  peripheral the other ch32fun examples need (OPA, watchdogs,
   standby; SPI1 slave mode and its interrupt; DMA requests other than
   SPI1 TX and USART1 TX).
 - On WS2812: the strip latches a frame when the next frame's first rising
@@ -285,6 +304,17 @@ Read these results correctly:
   external triggers, the analog watchdog, DMA, the internal V_REFINT/V_CAL
   channels and calibration offsets are not modeled. Codes are ideal (no
   offset, gain or noise error) against a 3.3 V reference.
+- On TIM1: the AFIO `PCFR1` TIM1 remaps are stored only, so ch32fun's
+  `tim1_pwm_complementary_outputs` (partial remap 1, PC6/PC3) does not yet
+  reach its pads. Also not modeled: the break input (BKIN) and
+  `BDTR.AOE`/`LOCK`, center-aligned and down counting, the repetition
+  counter as an update divider, input capture on TIM1 pads, DMA, the TIM1
+  interrupts and the `RCC_APB2PRSTR` reset. `tim1_pwm` does not set
+  `OCxPE`, so on silicon a compare write takes effect mid-period; the model
+  applies every duty change at the next period boundary, which the waveform
+  check sees as at most one period of lag on CH4. The capture window is
+  `count` 116 to 134; dead time is checked by unit tests, not by this
+  example, which never enables both halves of a pair.
 - On TIM2: the AFIO `PCFR1` TIM2 remaps (stored only, so a remapped
   output stays on its reset pad), the `RCC_APB1PRSTR` reset, PD7's NRST
   option byte (the pad is treated as GPIO, as after `minichlink -d`),
@@ -471,7 +501,7 @@ cargo run -q -p labwired-cli -- test \
 
 # ch32fun ELFs are committed; this rebuilds them byte-identically.
 examples/ch32v003-evt/build-ch32fun-examples.sh
-for t in blink uartdemo systick-irq adc-polled i2c-oled tim2-pwm exti; do
+for t in blink uartdemo systick-irq adc-polled i2c-oled tim2-pwm tim1-pwm exti; do
   cargo run -q -p labwired-cli -- test \
     --script examples/ch32v003-evt/ch32fun-$t-smoke.yaml \
     --output-dir /tmp/ch32v003-ch32fun-$t
@@ -482,6 +512,12 @@ cargo run -q -p labwired-cli -- test \
   --output-dir /tmp/ch32v003-tim2-pwm \
   --watch-gpio gpiod:4 --watch-gpio gpiod:3 --watch-gpio gpiod:7
 python3 examples/ch32v003-evt/check-tim2-pwm.py /tmp/ch32v003-tim2-pwm/result.json
+# tim1_pwm's waveform: CH1N on PD0 and CH4 on PC4.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003-evt/ch32fun-tim1-pwm-smoke.yaml \
+  --output-dir /tmp/ch32v003-tim1-pwm \
+  --watch-gpio gpiod:0 --watch-gpio gpioc:4
+python3 examples/ch32v003-evt/check-tim1-pwm.py /tmp/ch32v003-tim1-pwm/result.json
 # exti_pin_change_isr: the PD3 presses and the PC1 blips they cause.
 cargo run -q -p labwired-cli -- test \
   --script examples/ch32v003-evt/ch32fun-exti-smoke.yaml \
