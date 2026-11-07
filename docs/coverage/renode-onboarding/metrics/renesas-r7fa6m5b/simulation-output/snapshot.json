@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      536870912,
-      536870912,
-      2136,
-      0,
-      0,
-      0,
-      0,
-      537395192,
-      0,
-      0,
-      0,
-      0,
-      0,
-      537395192,
-      2087,
-      2126
+      68673,
+      4294967172,
+      4,
+      61,
+      429496730,
+      115,
+      1074888708,
+      537395144,
+      32,
+      87,
+      537395172,
+      24,
+      24,
+      537395144,
+      6323,
+      7902
     ],
-    "pc": 2126,
-    "xpsr": 1627389952,
+    "pc": 7902,
+    "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 4000000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 4000000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 4000000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,10 +59,10 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "7ad4a4806c9716dc8a1033c46702e547aa5c84e6c119f1b1f3dc3050f30a51c3",
+  "firmware_hash": "8665976e31c8430d6038477dcd1693b99d2c20d092c3681df405f39ae63e8895",
   "config": {
-    "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-renesas-r7fa6m5b-boot-smoke",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/ek-ra6m5-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-r7fa6m5b.yaml",
-    "script": "examples/renode-onboarding/renesas-r7fa6m5b-boot-smoke.yaml"
+    "script": "examples/renode-onboarding/renesas-r7fa6m5b-smoke.yaml"
   }
 }

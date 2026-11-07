@@ -324,9 +324,8 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/eos-s3-quickfeather-smoke.yaml",
     },
     "renesas-r7fa6m5b": {
-        "crate": "firmware-renesas-r7fa6m5b-boot-smoke",
-        "target": "thumbv8m.main-none-eabi",
-        "script": "examples/renode-onboarding/renesas-r7fa6m5b-boot-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/ek-ra6m5-smoke.elf",
+        "script": "examples/renode-onboarding/renesas-r7fa6m5b-smoke.yaml",
     },
     "renesas-ek_ra2e1": {
         "crate": "firmware-renesas-ek-ra2e1-smoke",

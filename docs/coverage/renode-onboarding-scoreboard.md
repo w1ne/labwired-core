@@ -9,8 +9,8 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `4/224`
-- pass_observable_assertions: `180/224`
-- pass_stop_reason_only: `44/224`
+- pass_observable_assertions: `181/224`
+- pass_stop_reason_only: `43/224`
 - pass_depth_unknown: `0/224`
 - median_elapsed_ms: `1223`
 - median_elapsed_seconds: `1.223`
@@ -163,7 +163,7 @@
 | `renesas-r7fa2e1a9` | `pass` | `True` | `yes` | `yes` | `1332` | `1.332` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `renesas-r7fa2l1a` | `pass` | `True` | `yes` | `yes` | `1366` | `1.366` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `renesas-r7fa4m1a` | `pass` | `True` | `yes` | `yes` | `942` | `0.942` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `renesas-r7fa6m5b` | `pass` | `True` | `yes` | `yes` | `1295` | `1.295` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `renesas-r7fa6m5b` | `pass` | `True` | `yes` | `yes` | `8999` | `8.999` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `renesas-r7fa8m1a` | `pass` | `True` | `yes` | `yes` | `1267` | `1.267` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `renesas-rz_t2m_rsk` | `pass` | `True` | `yes` | `yes` | `676` | `0.676` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `renesas_rz_g2l` | `pass` | `True` | `yes` | `yes` | `7765` | `7.765` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |

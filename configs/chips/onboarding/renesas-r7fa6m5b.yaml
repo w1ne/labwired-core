@@ -4,9 +4,16 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# Imported Renode execution profile. The generated import used the data-flash
-# base for code flash and listed unrelated peripherals. This profile retains
-# only the model-backed CPU and memory required by the instruction smoke.
+# Narrowed profile for the imported Renode RA6M5 descriptor.
+#
+# The generated import used the data-flash base for code flash and listed
+# unrelated peripherals. This profile keeps the sourced R7FA6M5BH core and
+# memory map (configs/chips/r7fa6m5bh.yaml) and only the model-backed blocks
+# the onboarding smoke exercises: R_SYSTEM (ra6_sysc), the SVD-derived R_MSTP
+# register file, the ICU, PORT0, PFS, SysTick and SCI0. Module-stop gating is
+# not modeled. No stubs are declared; every other RA6M5 peripheral (DMAC/DTC,
+# ELC, RTC, WDTs, IIC, SPI, AGT, GPT, ADC, DAC, CAN, Ethernet, USB) is
+# unmapped and not claimed by this profile.
 name: renesas-r7fa6m5b
 arch: arm
 core: cortex-m33
@@ -16,4 +23,55 @@ flash:
 ram:
   base: 0x20000000
   size: "512KB"
-peripherals: []
+pins:
+  P410: { gpio: port4, bit: 10, functions: [{ type: uart, peripheral: sci0, role: rx }] }
+  P411: { gpio: port4, bit: 11, functions: [{ type: uart, peripheral: sci0, role: tx }] }
+  P006: { gpio: port0, bit: 6, functions: [{ type: gpio, peripheral: port0 }] }
+  P007: { gpio: port0, bit: 7, functions: [{ type: gpio, peripheral: port0 }] }
+  P008: { gpio: port0, bit: 8, functions: [{ type: gpio, peripheral: port0 }] }
+  P005: { gpio: port0, bit: 5, functions: [{ type: gpio, peripheral: port0 }] }
+  P004: { gpio: port0, bit: 4, functions: [{ type: gpio, peripheral: port0 }] }
+peripherals:
+  - id: "ra_sysc"
+    type: "ra6_sysc"
+    base_address: 0x4001E000
+    size: "1792B"
+  - id: "mstp"
+    type: "declarative"
+    base_address: 0x40084000
+    size: "64B"
+    config:
+      path: ../../peripherals/r7fa6m5bh/mstp.yaml
+  - id: "icu"
+    type: "ra_icu"
+    base_address: 0x40006000
+    size: "2KB"
+    config:
+      pfs_base: 0x40080800
+      irq_pins: [[0, 4, 9], [0, 5, 10]]
+  - id: "port0"
+    type: "gpio"
+    base_address: 0x40080000
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 0, swapped_half_aliases: true }
+  - id: "port4"
+    type: "gpio"
+    base_address: 0x40080080
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 4, swapped_half_aliases: true }
+  - id: "pfs"
+    type: "ra_pfs"
+    base_address: 0x40080800
+    size: "1536B"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "sci0"
+    type: "uart"
+    base_address: 0x40118000
+    size: "256B"
+    config:
+      profile: "sci"
+      elc_event: 384
+      clock_hz: 200000000
+      baud: 115200

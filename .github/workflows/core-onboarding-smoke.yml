@@ -342,14 +342,6 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/eos-s3-quickfeather-smoke.yaml
             system: configs/systems/onboarding/eos-s3-quickfeather.yaml
-          # The imported RA6M5 descriptor had a stale code-flash base and
-          # generated peripheral claims. This smoke checks M33 instruction
-          # execution only on the corrected memory profile.
-          - id: renesas-r7fa6m5b
-            crate: firmware-renesas-r7fa6m5b-boot-smoke
-            target: thumbv8m.main-none-eabi
-            script: examples/renode-onboarding/renesas-r7fa6m5b-boot-smoke.yaml
-            system: configs/systems/onboarding/renesas-r7fa6m5b.yaml
           # RA2E1's imported descriptor had stale flash/SRAM bounds and
           # generated peripheral claims. This smoke covers its sourced M23
           # core, code flash, and SRAM only.
@@ -446,6 +438,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/s32k388-evb-smoke.elf
             script: examples/renode-onboarding/nxp-s32k388evb-smoke.yaml
             system: configs/systems/onboarding/nxp-s32k388evb.yaml
+          # Reuse the EK-RA6M5 smoke image against the narrowed imported RA6M5
+          # profile: SYSTEM, MSTP, PFS, PORT0 and SCI0 only; no stubs.
+          - id: renesas-r7fa6m5b
+            prebuilt_firmware: tests/fixtures/ek-ra6m5-smoke.elf
+            script: examples/renode-onboarding/renesas-r7fa6m5b-smoke.yaml
+            system: configs/systems/onboarding/renesas-r7fa6m5b.yaml
           # Reuse the FRDM-K64F smoke image against the imported K6x system.
           # SIM, WDOG, and PORT are explicit stubs; only CPU/UART/GPIO are claimed.
           - id: nxp-k6xf
