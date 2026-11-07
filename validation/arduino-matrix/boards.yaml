@@ -270,6 +270,17 @@ boards:
     led_min_edges: 2
     family: stm32
 
+  - id: stm32g0b1re
+    chip: stm32g0b1re
+    system: systems/stm32g0b1re.yaml
+    pio: { platform: ststm32, board: nucleo_g0b1re, framework: arduino }
+    max_steps: 20000000
+    budget_reason: "NUCLEO-G0B1RE 64 MHz: L0~0.07M L2~0.20M; L3 Wire.begin i2c_computeTiming ~11M; L5 ~5.9M; L6 ~2.0M"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0, not LD4/PA5 (DAC1_OUT2), see the L6 sketch.
+    family: stm32
+
   - id: atmega328p
     chip: atmega328p
     system: systems/atmega328p.yaml

@@ -58,6 +58,7 @@ jobs:
           - stm32l476
           - stm32u575
           - stm32u545
+          - stm32g0b1re
           - stm32wb55
           - stm32wba52
           - atmega328p
