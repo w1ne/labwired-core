@@ -49,15 +49,11 @@ fn u5a5_hash_saes_and_pka_execute_register_level_operations() {
     ];
     bus.write_u32(SAES, 1 | (2 << 1)).unwrap();
     for (index, word) in key.as_chunks::<4>().0.iter().enumerate() {
-        bus.write_u32(
-            SAES + 0x10 + index as u64 * 4,
-            u32::from_le_bytes(*word),
-        )
-        .unwrap();
+        bus.write_u32(SAES + 0x10 + index as u64 * 4, u32::from_le_bytes(*word))
+            .unwrap();
     }
     for word in plaintext.as_chunks::<4>().0 {
-        bus.write_u32(SAES + 8, u32::from_le_bytes(*word))
-            .unwrap();
+        bus.write_u32(SAES + 8, u32::from_le_bytes(*word)).unwrap();
     }
     let mut ciphertext = Vec::new();
     for _ in 0..4 {

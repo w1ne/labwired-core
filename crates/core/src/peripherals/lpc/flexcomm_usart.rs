@@ -585,11 +585,7 @@ mod tests {
         enable_tx(&mut u);
         let s = u.read_u32(FIFOSTAT).unwrap();
         assert_eq!(s, FIFOSTAT_TXEMPTY | FIFOSTAT_TXNOTFULL);
-        u.uart_rx_source()
-            .unwrap()
-            .lock()
-            .unwrap()
-            .extend(*b"ab");
+        u.uart_rx_source().unwrap().lock().unwrap().extend(*b"ab");
         let s = u.read_u32(FIFOSTAT).unwrap();
         assert_ne!(s & FIFOSTAT_RXNOTEMPTY, 0);
         assert_eq!((s >> 16) & 0x1F, 2);
