@@ -110,7 +110,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | atsamd21 | open | L1 | 7 | 895.0 | 1.4 | ≥1× (CI) | — |
 | atsamd51 | open | L1 | 27 | 1240.0 | 1.4 | ≥1× (CI) | — |
 | atsamd51-pybadge | open | L0 | 28 | 1251.8 | 1.5 | ≥1× (CI) | — |
-| ra4m1 | open | L1 | 7 | 895.0 | 1.4 | ≥1× (CI) | — |
+| ra4m1 | open | L1 | 32 | 895.0 | 1.4 | ≥1× (CI) | — |
 | imxrt1064 | open | L1 | 6 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/imxrt1064.md) |
 | stm32f746 | open | L1 | 17 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/stm32f746.md) |
 | stm32g071 | open | L1 | 41 | 937.4 | 1.6 | ≥1× (CI) | — |

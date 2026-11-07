@@ -1,0 +1,23 @@
+# Arduino matrix system — Arduino UNO R4 WiFi (R7FA4M1AB).
+# On the WiFi board `Serial` is _UART1_ = SCI9 on P109/P110, the UART to the
+# ESP32-S3 USB bridge (ArduinoCore-renesas variants/UNOWIFIR4), so the
+# console is SCI9, not USB CDC.
+name: "arduino-matrix-uno-r4-wifi"
+chip: "../../../configs/chips/ra4m1.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on `Wire` = IIC1 (A4/A5).
+  - id: "ina219"
+    type: "ina219"
+    connection: "iic1"
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on `SPI` = RSPI SPI0 (D11/D12/D13); CS is
+  # D10 (P103), driven by digitalWrite.
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi0"
+board_io: []
+connectors:
+  - type: "uart"
+    peripheral: "sci9"
+    endpoint: "host_console"

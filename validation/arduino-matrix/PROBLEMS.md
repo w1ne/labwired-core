@@ -164,3 +164,24 @@ python3 validation/arduino-matrix/run_matrix.py --boards stm32f407,nrf52832
 
 50. **arduino-pico sketch quirks (silicon behaviour, not twin bugs)** — (a) `Serial` is USB CDC and drops writes until the host asserts DTR, so the sketches `while (!Serial)` on arduino-pico only. (b) `SPI.begin()` applies a 0 Hz default without `spi_init()`, so SSE stays 0 and a bare `SPI.transfer()` blocks in `spi_write_read_blocking`. L4 calls `beginTransaction` on arduino-pico. Both are guarded `ARDUINO_ARCH_RP2040 && !ARDUINO_ARCH_MBED`, so the Mbed rp2040 row is untouched.
 
+## UNO R4 WiFi (Renesas RA4M1, `uno-r4-wifi`)
+
+Stock ArduinoCore-renesas 1.6.0 (`renesas-ra@1.9.0`). First run: L0 fell into
+empty flash. Eight of nine cells now pass; L8 (no CAN) is the only skip. What
+the first runs found, each a real model gap:
+
+| Symptom | Cause | Fixed by |
+|---------|-------|----------|
+| Reset fetched SP = `0x464C457F` ("\x7fELF") and ran off the end of flash | The sketch is linked at 0x4000 behind the DFU bootloader, and the ELF's first LOAD segment carries its own header at 0 | `reset_vector_offset: 0x4000` (the pybadge precedent) |
+| BusFault on PRCR (R_SYSTEM+0x3FE) in `SystemInit` | `ra_sysc` was a 256-byte HOCOCR/OSCSF window | `ra4_sysc`: the full R_SYSTEM file (0x700 bytes) |
+| `SystemInit` spun forever on VBTSR (+0x4B1) | FSP waits for VBTSR.VBTRVLD after setting VBTCR1.BPWSWSTP | VBTRVLD follows BPWSWSTP in the RA4 layout |
+| BusFault at 0x4005C200 in `r_adc_open_sub` | `main()` -> `analogReference()` opens a second ADC unit the RA4M1 does not have; silicon ignores it | declared stub over the reserved window |
+| `analogRead` of 2.5 V gave 127, not 511 | the core converts at ADCER.ADPRC = 3 (14-bit, ADC14 only) and shifts down; the model treated 3 as 12-bit | `adc14: true` on the RA4M1 unit |
+| L6 HardFault in `gpt_hardware_initialize` | no GPT | `ra_gpt` with `events_per_channel: 8` (the RA4M1 stride) and GTIOC2B on P102 |
+| L4 hung after `LW_L4_BOOT` (SPI0 was a 512 B stub, so SPSR.SPRF never rose) | `SPI.transfer` writes SPDR_BY and polls SPRF directly, with no FSP driver | `profile: ra_rspi` on the shared SPI model: SPI0/SPI1, SPB frame width, LSBF, BYSW, TXMD, OVRF; frames only with SPCR.SPE+MSTR |
+
+Controls: L2/L6 watching the wrong pin (P111 / P103) fail; L3 with no INA219
+prints `LW_L3_FAIL nack`; L4 with no MAX31855 prints
+`LW_L4_FAIL frame=0x00000000`, and on the old SPI stub hangs after BOOT; L0 on the old `ra_sysc` or without the reset offset
+faults. L5's oracle accepts equal samples (0/0), so it was proved separately:
+2.5 V on A0 (AN009) reads 511/511, and 127/127 without `adc14`.
