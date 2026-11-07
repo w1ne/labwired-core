@@ -653,6 +653,8 @@ impl std::fmt::Debug for Avr {
 /// Where the chip descriptor maps the bus-side mirror of the CPU's IO
 /// registers: data-space address `a` is mirrored at `AVR_IO_MIRROR_BASE + a`.
 pub const AVR_IO_MIRROR_BASE: u64 = 0x0001_0000;
+/// `PINA` data-space address; `DDRA`/`PORTA` follow it.
+pub const AVR_PINA: u16 = 0x0020;
 /// `MCUCR` in data space (I/O 0x35), ATmega328P datasheet §14.4.1.
 pub const ADDR_MCUCR: u16 = 0x0055;
 /// MCU Status Register in data space (I/O 0x34), reset flags are write-zero-clear.
@@ -926,12 +928,15 @@ impl Avr {
                 matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
-            AvrModel::Atmega16 | AvrModel::Atmega128 | AvrModel::Atmega1284p => false,
-            AvrModel::Atmega8
-            | AvrModel::Atmega32
-            | AvrModel::Atmega164
+            AvrModel::Atmega164
             | AvrModel::Atmega324
             | AvrModel::Atmega644
+            | AvrModel::Atmega1284p => {
+                matches!(addr, AVR_PINA | AVR_PINB | AVR_PINC | AVR_PIND)
+            }
+            AvrModel::Atmega16 | AvrModel::Atmega128 => false,
+            AvrModel::Atmega8
+            | AvrModel::Atmega32
             | AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
@@ -979,12 +984,13 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
-            AvrModel::Atmega16 | AvrModel::Atmega128 | AvrModel::Atmega1284p => false,
-            AvrModel::Atmega8
-            | AvrModel::Atmega32
-            | AvrModel::Atmega164
+            AvrModel::Atmega164
             | AvrModel::Atmega324
             | AvrModel::Atmega644
+            | AvrModel::Atmega1284p => (AVR_PINA..=AVR_PIND + 2).contains(&addr),
+            AvrModel::Atmega16 | AvrModel::Atmega128 => false,
+            AvrModel::Atmega8
+            | AvrModel::Atmega32
             | AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
@@ -1557,6 +1563,19 @@ impl Avr {
                     bus.set_pull_ups_disabled(value & MCUCR_PUD != 0);
                 }
                 let _mirror = bus.write_u8(addr as u64, value);
+                Ok(())
+            }
+            a if self.is_pin_reg(a) => {
+                // PINx is write-one-to-toggle on classic megaAVR. The CPU
+                // owns the port latch, so update its PORT shadow and publish
+                // the resulting latch through the DDR/PORT window; writing
+                // the PIN input window would change the bus-side input level
+                // instead of toggling the output.
+                let port_addr = a + 2;
+                let port_index = usize::from(port_addr - 0x20);
+                self.io[port_index] ^= value;
+                let pad = self.port_pad_value(port_addr, self.io[port_index]);
+                let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + u64::from(port_addr), pad);
                 Ok(())
             }
             0x0020..=0x00FF => {
@@ -4299,6 +4318,36 @@ mod tests {
                 .unwrap();
             assert_eq!(cpu.data_read(AVR_PINB, &bus).unwrap() & 0x20, 0x20);
             assert_eq!(cpu.data_read(AVR_PIND, &bus).unwrap() & 0x04, 0x04);
+        }
+    }
+
+    /// ATmega164/324/644/1284P expose ports A-D at the low megaAVR IO map.
+    /// Check that GPIOA reaches the bus mirror and PINx reads combine the
+    /// output latch with the outside input level for every supported model.
+    #[test]
+    fn mega164_family_mirrors_port_a_and_pin_toggle() {
+        for model in [
+            AvrModel::Atmega164,
+            AvrModel::Atmega324,
+            AvrModel::Atmega644,
+            AvrModel::Atmega1284p,
+        ] {
+            let mut bus = MockBus::new();
+            let mut cpu = Avr::new_model(model);
+
+            cpu.data_write(0x21, 0x01, &mut bus).unwrap(); // DDRA: PA0 out
+            cpu.data_write(0x22, 0x01, &mut bus).unwrap(); // PORTA: PA0 high
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x21).unwrap(), 0x01);
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x22).unwrap(), 0x01);
+            assert_eq!(cpu.data_read(AVR_PINA, &bus).unwrap() & 0x01, 0x01);
+
+            cpu.data_write(AVR_PINA, 0x01, &mut bus).unwrap(); // Toggle PA0 low.
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x22).unwrap(), 0x00);
+            assert_eq!(cpu.data_read(AVR_PINA, &bus).unwrap() & 0x01, 0x00);
+
+            bus.write_u8(AVR_IO_MIRROR_BASE + u64::from(AVR_PINA), 0x02)
+                .unwrap(); // PA1 is externally high.
+            assert_eq!(cpu.data_read(AVR_PINA, &bus).unwrap() & 0x02, 0x02);
         }
     }
 

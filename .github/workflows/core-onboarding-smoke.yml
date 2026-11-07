@@ -976,7 +976,7 @@ jobs:
             script: examples/renode-onboarding/simavr-atmega32-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega32.yaml
           - id: simavr-atmega164
-            prebuilt_firmware: tests/fixtures/avr/atmega164-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/atmega164-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega164-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega164.yaml
           - id: simavr-atmega324

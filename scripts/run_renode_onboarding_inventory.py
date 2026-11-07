@@ -511,7 +511,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/simavr-atmega32-smoke.yaml",
     },
     "simavr-atmega164": {
-        "prebuilt_firmware": "tests/fixtures/avr/atmega164-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/atmega164-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega164-smoke.yaml",
     },
     "simavr-atmega324": {

@@ -6,9 +6,10 @@
 
 name: simavr-atmega164
 description: >-
-  ATmega164 (Atmel AVR). Imported profile measured for bounded AVR8 CPU and SRAM
-  execution only; it declares no peripheral models and makes no board-I/O claim.
-  Memory geometry: flash 16KB @ 0x0, ram 1KB @ 0x100. Aliases: atmega164, atmega164p, atmega164pa.
+  ATmega164 (Atmel AVR). Imported profile measured for bounded AVR8 execution,
+  GPIOA and polled USART0 output. Other peripheral ranges are omitted from this
+  profile. Memory geometry: flash 16KB @ 0x0, ram 1KB @ 0x100. Aliases:
+  atmega164, atmega164p, atmega164pa.
 family: Atmel AVR
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
   \    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
