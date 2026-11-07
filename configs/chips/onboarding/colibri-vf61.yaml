@@ -1,10 +1,29 @@
-# Bounded imported Colibri VF61 Cortex-M4 profile. Renode's Vybrid platform
-# maps on-chip OCRAM at 0x3F000000; the Cortex-A5, boot ROM, aliases, DDR, and
-# peripherals are omitted. Firmware is loaded directly into OCRAM.
+# Bounded imported Colibri VF61 Cortex-M4 profile. Renode's Vybrid platform maps
+# 512 KiB OCRAM at 0x3F000000, UART0-2 (0x40027000/0x40028000/0x40029000) and
+# GPIO0-4 (data blocks at 0x400FF000 + n*0x40). Those are modelled here:
+#   - UART0-2: the Kinetis 8-bit UART layout (BDH/BDL/C1/C2/S1/S2/C3/D), which
+#     is the Vybrid UART register map (VF6xx RM, UART chapter; Linux drives it
+#     with fsl_lpuart "fsl,vf610-lpuart"). Polled only: no irq is declared,
+#     because Vybrid routes peripheral IRQs to the M4 NVIC through the MSCM
+#     IRSPRC router, which is not modelled. FIFO, DMA, baud timing not claimed.
+#   - GPIO0-4 (ids vf_gpioN: a bare gpio0/gpio1 id turns on the Nordic edge
+#     service): PDOR/PSOR/PCOR/PTOR/PDIR. Vybrid has no PDDR (direction is in
+#     IOMUXC); the Kinetis model's extra PDDR at 0x14 is an over-approximation.
+#     The PORT interrupt blocks at 0x40049000.. and IOMUXC are not mapped.
+# Cortex-A5, GIC, MSCM, boot ROM, TCM, DDR, aliases, eDMA, DCU, USB, I2C, PIT,
+# SEMA4, NAND and reset-vector boot are omitted. Firmware loads into OCRAM.
 name: colibri-vf61
 arch: arm
 core: cortex-m4
 flash: { base: 0, size: 0 }
 ram: { base: 0x3F000000, size: 512KiB }
 flash_boot_alias: false
-peripherals: []
+peripherals:
+  - { id: uart0, type: uart, base_address: 0x40027000, size: 4KB, config: { profile: k6xf } }
+  - { id: uart1, type: uart, base_address: 0x40028000, size: 4KB, config: { profile: k6xf } }
+  - { id: uart2, type: uart, base_address: 0x40029000, size: 4KB, config: { profile: k6xf } }
+  - { id: vf_gpio0, type: gpio, base_address: 0x400FF000, size: 64B, config: { profile: kinetis } }
+  - { id: vf_gpio1, type: gpio, base_address: 0x400FF040, size: 64B, config: { profile: kinetis } }
+  - { id: vf_gpio2, type: gpio, base_address: 0x400FF080, size: 64B, config: { profile: kinetis } }
+  - { id: vf_gpio3, type: gpio, base_address: 0x400FF0C0, size: 64B, config: { profile: kinetis } }
+  - { id: vf_gpio4, type: gpio, base_address: 0x400FF100, size: 64B, config: { profile: kinetis } }

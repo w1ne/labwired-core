@@ -1,8 +1,9 @@
 name: colibri-vf61
 description: >-
   Toradex Colibri VF61 with NXP Vybrid. This measured profile covers one
-  Cortex-M4 integer subset using on-chip OCRAM; Cortex-A5, peripherals, and
-  reset-vector boot are not covered.
+  Cortex-M4 subset using on-chip OCRAM, polled UART0 and GPIO data registers;
+  Cortex-A5, IRQ routing, other peripherals, and reset-vector boot are not
+  covered.
 url: https://www.toradex.com/computer-on-modules/colibri-arm-family/nxp-freescale-vybrid-vf6xx
 family: Toradex Colibri
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -11,14 +12,17 @@ verified: false
 system: systems/onboarding/colibri-vf61.yaml
 validation:
   method: renode-onboarding-focused-smoke
-  reason: cortex-m4-ocram-only; whole_platform_not_verified
+  reason: cortex-m4-ocram-uart0-gpio1-polled; whole_platform_not_verified
   checks:
     system_manifest: true
     chip_descriptor: true
     cortex_m4_integer_smoke: true
+    uart0_polled_tx: true
+    gpio1_data_registers: true
+    interrupts: false
     whole_platform: false
     cortex_a5: false
-    peripherals: false
+    other_peripherals: false
     reset_vector_boot: false
   timestamp_utc: '2026-11-06T01:41:01+00:00'
   run_url: ''

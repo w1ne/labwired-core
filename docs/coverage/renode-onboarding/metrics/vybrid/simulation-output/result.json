@@ -30,6 +30,33 @@
   "assertions": [
     {
       "assertion": {
+        "uart_contains": "VF61 M4 SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "uart0 c2=0c",
+          "gpio1 pdor=00000041",
+          "pass=1f"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1057488880,
+          "expected_value": 1600192543,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -38,25 +65,25 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      38,
-      39,
+      1600192543,
+      1057488880,
+      0,
+      0,
+      1073901568,
+      1074786368,
+      65,
+      31,
       0,
       0,
       0,
       0,
       0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      536870912,
-      4294967295,
-      1056964616
+      1057488640,
+      1056964741,
+      1056964750
     ],
-    "pc": 1056964616,
-    "xpsr": 16777216,
+    "pc": 1056964750,
+    "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -68,7 +95,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "e18c6e119014b05de0d4d8c6d16ba381b37c9b80232a18727c01cd90cc8834dd",
+  "firmware_hash": "23b09c74cd71a093e4c66d9dfdb050df925b5993df2bedaf236aed3bb3ade4dd",
   "config": {
     "firmware": "examples/renode-onboarding/../../tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/vybrid.yaml",
@@ -76,6 +103,62 @@
   },
   "inspect": {
     "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1073901568,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 1073905664,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart2",
+        "kind": "native",
+        "base": 1073909760,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "vf_gpio0",
+        "kind": "native",
+        "base": 1074786304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "vf_gpio1",
+        "kind": "native",
+        "base": 1074786368,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "vf_gpio2",
+        "kind": "native",
+        "base": 1074786432,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "vf_gpio3",
+        "kind": "native",
+        "base": 1074786496,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "vf_gpio4",
+        "kind": "native",
+        "base": 1074786560,
+        "registers": [],
+        "artifacts": []
+      },
       {
         "name": "scb",
         "kind": "native",
@@ -130,12 +213,41 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "VF61 M4 SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "uart0 c2=0c",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "gpio1 pdor=00000041",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "pass=1f",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 12,
+    "text_bytes": 297,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 12,
+    "flash_used_bytes": 297,
     "ram_static_bytes": 0,
     "flash_total_bytes": 0,
     "ram_total_bytes": 524288,
@@ -155,13 +267,13 @@
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 6,
-    "memory_writes": 0,
-    "peripheral_accesses": 0,
+    "memory_reads": 179,
+    "memory_writes": 18,
+    "peripheral_accesses": 119,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1056964616,
+        "pc": 1056964750,
         "count": 390
       }
     ]

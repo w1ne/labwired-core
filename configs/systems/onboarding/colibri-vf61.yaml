@@ -6,3 +6,4 @@
 
 name: colibri-vf61
 chip: ../../chips/onboarding/colibri-vf61.yaml
+debug_uart: "uart0"

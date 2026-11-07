@@ -9,11 +9,11 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `4/224`
-- pass_observable_assertions: `181/224`
-- pass_stop_reason_only: `43/224`
+- pass_observable_assertions: `183/224`
+- pass_stop_reason_only: `41/224`
 - pass_depth_unknown: `0/224`
-- median_elapsed_ms: `1223`
-- median_elapsed_seconds: `1.223`
+- median_elapsed_ms: `1195`
+- median_elapsed_seconds: `1.195`
 - threshold_seconds: `3600`
 - threshold_met: `224/224`
 
@@ -46,7 +46,7 @@
 | `brd4186c` | `pass` | `True` | `yes` | `yes` | `1007` | `1.007` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `brd4402a` | `pass` | `True` | `yes` | `yes` | `985` | `0.985` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `cc2538` | `pass` | `True` | `yes` | `yes` | `113644` | `113.644` | `True` | `observable` | 7: `ioc:stub`, `ana_regs:stub`, `soc_adc:stub`, `i2cs:stub`, `usb:stub`, `pka:stub`, `cctest:stub` | `n/a` | n/a | n/a |
-| `colibri-vf61` | `pass` | `True` | `yes` | `yes` | `7802` | `7.802` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `colibri-vf61` | `pass` | `True` | `yes` | `yes` | `10349` | `10.349` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `core-v-mcu` | `pass` | `True` | `yes` | `yes` | `764` | `0.764` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `cortex-a53-gicv2` | `pass` | `True` | `yes` | `yes` | `12566` | `12.566` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `cortex-a53-gicv3` | `pass` | `True` | `yes` | `yes` | `10155` | `10.155` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
@@ -255,7 +255,7 @@
 | `verilated_ibex` | `pass` | `True` | `yes` | `yes` | `757` | `0.757` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `versatile` | `pass` | `True` | `yes` | `yes` | `154313` | `154.313` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `vexpress` | `pass` | `True` | `yes` | `yes` | `1062` | `1.062` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `vybrid` | `pass` | `True` | `yes` | `yes` | `7594` | `7.594` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `vybrid` | `pass` | `True` | `yes` | `yes` | `1044` | `1.044` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `x86` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 1: `hpet:hpet` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no IA-32 (x86) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `xtensa-sample-controller` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 0 | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no Xtensa sample controller (not ESP32) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `zedboard` | `pass` | `True` | `yes` | `yes` | `1906` | `1.906` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

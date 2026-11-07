@@ -1669,14 +1669,14 @@ jobs:
             prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
             script: examples/renode-onboarding/cortex_a53_virtio-cpu-smoke.yaml
             system: configs/systems/onboarding/cortex_a53_virtio.yaml
-          # Cortex-M4 execution in the imported VF61 profile; A5 and devices
-          # are outside this direct-ELF OCRAM smoke.
+          # Cortex-M4 in the imported VF61 profile: polled UART0 TX/C2/S1 and
+          # GPIO1 PSOR/PCOR/PTOR. A5, IRQ routing (MSCM) and reset boot are out.
           - id: colibri-vf61
             prebuilt_firmware: tests/fixtures/colibri-vf61-cortex-m4-smoke.elf
             script: examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.yaml
             system: configs/systems/onboarding/colibri-vf61.yaml
-          # The imported Vybrid M4 and OCRAM only; A5, devices and reset boot
-          # are outside the shared direct-ELF integer smoke.
+          # The imported Vybrid M4: same UART0 + GPIO1 smoke as colibri-vf61.
+          # A5, IRQ routing (MSCM) and reset boot are out.
           - id: vybrid
             prebuilt_firmware: tests/fixtures/colibri-vf61-cortex-m4-smoke.elf
             script: examples/renode-onboarding/vybrid-cortex-m4-smoke.yaml

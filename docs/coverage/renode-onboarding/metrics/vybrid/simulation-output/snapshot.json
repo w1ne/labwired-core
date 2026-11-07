@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      38,
-      39,
+      1600192543,
+      1057488880,
+      0,
+      0,
+      1073901568,
+      1074786368,
+      65,
+      31,
       0,
       0,
       0,
       0,
       0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      536870912,
-      4294967295,
-      1056964616
+      1057488640,
+      1056964741,
+      1056964750
     ],
-    "pc": 1056964616,
-    "xpsr": 16777216,
+    "pc": 1056964750,
+    "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "e18c6e119014b05de0d4d8c6d16ba381b37c9b80232a18727c01cd90cc8834dd",
+  "firmware_hash": "23b09c74cd71a093e4c66d9dfdb050df925b5993df2bedaf236aed3bb3ade4dd",
   "config": {
     "firmware": "examples/renode-onboarding/../../tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/vybrid.yaml",
