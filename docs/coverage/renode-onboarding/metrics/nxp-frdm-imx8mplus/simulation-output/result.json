@@ -30,6 +30,12 @@
   "assertions": [
     {
       "assertion": {
+        "uart_contains": "IMX8MP A53 MXCUART SMOKE USR1=OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -41,12 +47,12 @@
       515,
       1,
       514,
+      816185344,
+      1074266258,
       0,
-      0,
-      0,
-      0,
-      0,
-      0,
+      8256,
+      1,
+      8192,
       0,
       0,
       0,
@@ -76,8 +82,8 @@
       0,
       0
     ],
-    "pc": 1074266128,
-    "nzcv": 0,
+    "pc": 1074266204,
+    "nzcv": 1610612736,
     "daif": 960,
     "el": 3,
     "spsel": true,
@@ -594,14 +600,22 @@
     },
     "cycles": 100000
   },
-  "firmware_hash": "35c0621ecf8c7e891e2835b57427601e5173a944ef1dd6db37c63e53f5706a9f",
+  "firmware_hash": "754e871489ebf48320544c593ed5b3563e7038170647d8047efd1dc9ce3e2105",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/imx8mp-a53-uart4-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nxp-frdm-imx8mplus.yaml",
-    "script": "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml"
+    "script": "examples/renode-onboarding/nxp-frdm-imx8mplus-mxcuart-smoke.yaml"
   },
   "inspect": {
-    "peripherals": [],
+    "peripherals": [
+      {
+        "name": "uart4",
+        "kind": "native",
+        "base": 816185344,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
     "devices": []
   },
   "fidelity": [
@@ -613,12 +627,23 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "IMX8MP A53 MXCUART SMOKE USR1=OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 24,
+    "text_bytes": 169,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 24,
+    "flash_used_bytes": 169,
     "ram_static_bytes": 0,
     "flash_total_bytes": 0,
     "ram_total_bytes": 3221225472,
@@ -638,13 +663,13 @@
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 100000,
+    "memory_reads": 100034,
     "memory_writes": 0,
-    "peripheral_accesses": 0,
+    "peripheral_accesses": 69,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1074266128,
+        "pc": 1074266204,
         "count": 390
       }
     ]

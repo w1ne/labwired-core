@@ -150,21 +150,23 @@ on:
       - "scripts/onboarding_smoke.sh"
       - "tests/fixtures/mpfs-zephyr-hello.elf"
       - "tests/fixtures/frdm-k64f-smoke.elf"
-      - "tests/fixtures/imx8mplus-a53-cpu-smoke.elf"
+      - "tests/fixtures/imx8mp-a53-uart2-smoke.elf"
+      - "tests/fixtures/imx8mp-a53-uart4-smoke.elf"
       - "tests/fixtures/lpc2294-arm7-uart-smoke.elf"
       - "examples/renode-onboarding/lpc2294-arm7-uart-smoke.S"
       - "examples/renode-onboarding/lpc2294-arm7-uart-smoke.ld"
       - "scripts/build_lpc2294_arm7_uart_smoke.sh"
-      - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.S"
-      - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.ld"
-      - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml"
+      - "examples/renode-onboarding/imx8mp-a53-mxcuart-smoke.S"
+      - "examples/renode-onboarding/imx8mp-a53-mxcuart-smoke.ld"
+      - "examples/renode-onboarding/nxp-frdm-imx8mplus-mxcuart-smoke.yaml"
+      - "examples/renode-onboarding/nxp-mimx8ml-mxcuart-smoke.yaml"
       - "examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.S"
       - "examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.ld"
       - "examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.yaml"
       - "scripts/build_colibri_vf61_cortex_m4_smoke.sh"
       - "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf"
       - "examples/renode-onboarding/vybrid-cortex-m4-smoke.yaml"
-      - "scripts/build_imx8mplus_a53_cpu_smoke.sh"
+      - "scripts/build_imx8mp_a53_mxcuart_smoke.sh"
       - "examples/renode-onboarding/virt-a53-pl011-smoke.S"
       - "examples/renode-onboarding/virt-a53-pl011-smoke.ld"
       - "scripts/build_virt_a53_pl011_smoke.sh"
@@ -1601,18 +1603,19 @@ jobs:
             target: riscv64imac-unknown-none-elf
             script: examples/renode-onboarding/arvsom-rv64-cpu-smoke.yaml
             system: configs/systems/onboarding/arvsom.yaml
-          # One Cortex-A53 PE and DDR from the imported FRDM i.MX 8M Plus
-          # profile. The CPU-only fixture avoids claiming the other cores,
-          # peripherals, or boot flow.
+          # One Cortex-A53 PE, DDR and the UART4 console (i.MX UART, polled
+          # TX) from the imported FRDM i.MX 8M Plus profile. Other cores,
+          # peripherals and the boot flow are not claimed.
           - id: nxp-frdm-imx8mplus
-            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
-            script: examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml
+            prebuilt_firmware: tests/fixtures/imx8mp-a53-uart4-smoke.elf
+            script: examples/renode-onboarding/nxp-frdm-imx8mplus-mxcuart-smoke.yaml
             system: configs/systems/onboarding/nxp-frdm-imx8mplus.yaml
-          # The imported i.MX 8M Plus fragment is bounded to one A53 PE and
-          # DDR; the remaining cores, peripherals, and boot flow are omitted.
+          # The imported i.MX 8M Plus fragment is bounded to one A53 PE, DDR
+          # and the UART2 console (i.MX UART, polled TX); the remaining cores,
+          # peripherals and boot flow are omitted.
           - id: nxp-mimx8ml
-            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
-            script: examples/renode-onboarding/nxp-mimx8ml-a53-cpu-smoke.yaml
+            prebuilt_firmware: tests/fixtures/imx8mp-a53-uart2-smoke.elf
+            script: examples/renode-onboarding/nxp-mimx8ml-mxcuart-smoke.yaml
             system: configs/systems/onboarding/nxp-mimx8ml.yaml
           # NXP LX2160A-RDB: one Cortex-A72 PE, DDR and the PL011 console
           # UART (polled TX). The smoke asserts the UART banner; no GIC,

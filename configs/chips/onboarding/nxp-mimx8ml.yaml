@@ -1,5 +1,6 @@
 # Imported NXP i.MX 8M Plus fragment, narrowed to one Cortex-A53 PE and DDR.
-# The Cortex-M7, other A53 cores, peripherals, and boot flow are not modeled.
+# The Cortex-M7, other A53 cores, boot flow and every peripheral except the
+# UART2 console are not modeled.
 
 name: nxp-mimx8ml
 arch: aarch64
@@ -7,6 +8,16 @@ core: cortex-a53
 flash: { base: 0, size: 0 }
 ram: { base: 0x40000000, size: 3GiB }
 flash_boot_alias: false
-peripherals: []
+peripherals:
+# UART2 only: the imported MxcUart at 0x30890000, which Renode's
+# nxp-imx8mplus_linux.resc uses as the console (showAnalyzer uart2).
+# Polled TX through UTXD/USR1.TRDY; USR2/UTS, FIFOs, baud generator and the
+# interrupt line are not claimed. Other UARTs and peripherals stay omitted.
+- id: uart2
+  type: uart
+  base_address: 0x30890000
+  size: 65536
+  config:
+    profile: "imx"
 provenance:
   generated_by: scripts/onboard_hw_targets.py

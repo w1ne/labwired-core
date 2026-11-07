@@ -1,8 +1,8 @@
 name: nxp-mimx8ml
 description: >-
   Imported NXP i.MX 8M Plus fragment, narrowed to one Cortex-A53 processing
-  element and the imported DDR window. Other cores, peripherals, and boot flow
-  are not covered by this measurement.
+  element, the imported DDR window and the UART2 console (polled TX). Other
+  cores, other peripherals, and boot flow are not covered by this measurement.
 family: NXP i.MX 8M Plus (imported fragment)
 url: https://www.nxp.com/part/MIMX8ML8CVNKZAB
 verified: false
@@ -10,16 +10,17 @@ system: systems/onboarding/nxp-mimx8ml.yaml
 provenance:
   generated_by: scripts/onboard_hw_targets.py
 validation:
-  method: renode-onboarding-aarch64-cpu-smoke
-  reason: one Cortex-A53 processing element and DDR only; whole platform unverified
+  method: renode-onboarding-aarch64-mxcuart-smoke
+  reason: bounded AArch64 + i.MX UART (UART2) polled-TX smoke; whole platform, other cores and other imported peripherals are unverified
   checks:
     system_manifest: true
     chip_descriptor: true
-    aarch64_integer_smoke: true
-    whole_platform: false
+    simulation: true
+    uart2_polled_tx: true
     other_cores: false
-    peripherals: false
+    other_peripherals: false
     reset_vector_boot: false
-  timestamp_utc: '2026-11-06T02:37:24Z'
+    whole_platform: false
+  timestamp_utc: '2026-11-07T17:42:37+00:00'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/nxp-mimx8ml/
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/nxp-mimx8ml.md

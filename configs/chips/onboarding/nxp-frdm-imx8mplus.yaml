@@ -1,9 +1,10 @@
 # LabWired - NXP FRDM i.MX 8M Plus imported onboarding profile.
 #
-# This measured profile exposes one Cortex-A53 PE and DDR only. The board has
-# four A53s, a Cortex-M7 and many peripherals; none of those are claimed here.
-# The imported peripheral list contained generated placeholders and is omitted
-# until each model can be exercised with a board-specific firmware smoke.
+# This measured profile exposes one Cortex-A53 PE, DDR and the UART4 console
+# only. The board has four A53s, a Cortex-M7 and many peripherals; none of the
+# others are claimed here. The rest of the imported peripheral list contained
+# generated placeholders and stays omitted until each model can be exercised
+# with a board-specific firmware smoke.
 # NXP's FRDM board page specifies four Cortex-A53 cores up to 1.8 GHz; the
 # retained 3 GiB DDR window is the imported profile's bounded address range.
 # Source: https://www.nxp.com/design/design-center/development-boards-and-designs/FRDM-IMX8MPLUS
@@ -14,4 +15,15 @@ cpu_hz: 1800000000
 flash: { base: 0, size: 0 }
 ram: { base: 0x40000000, size: 3GiB }
 flash_boot_alias: false
-peripherals: []
+peripherals:
+# UART4 only: the imported MxcUart at 0x30A60000, which Renode's
+# nxp-imx8mplus_zephyr.resc uses as the console (showAnalyzer uart4).
+# Polled TX through UTXD/USR1.TRDY; USR2/UTS, FIFOs, baud generator and the
+# interrupt line are not claimed. Other UARTs and peripherals stay omitted.
+- id: uart4
+  type: uart
+  base_address: 0x30A60000
+  size: 65536
+  config:
+    profile: "imx"
+

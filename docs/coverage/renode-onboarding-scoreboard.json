@@ -8,11 +8,11 @@
     "pass": 224,
     "fail": 0,
     "pass_loading_zero_answering_windows": 4,
-    "pass_observable_assertions": 208,
-    "pass_stop_reason_only": 16,
+    "pass_observable_assertions": 210,
+    "pass_stop_reason_only": 14,
     "pass_depth_unknown": 0,
-    "median_elapsed_ms": 1131,
-    "median_elapsed_seconds": 1.131,
+    "median_elapsed_ms": 1107,
+    "median_elapsed_seconds": 1.107,
     "threshold_seconds": 3600,
     "threshold_met": 224,
     "descriptors_present": 245,
@@ -5440,35 +5440,36 @@
       "smoke_passed": true,
       "crate": null,
       "target_triple": null,
-      "script": "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml",
+      "script": "examples/renode-onboarding/nxp-frdm-imx8mplus-mxcuart-smoke.yaml",
       "system": "configs/systems/onboarding/nxp-frdm-imx8mplus.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T23:17:16Z",
-      "finished_at_utc": "2026-11-05T23:17:25Z",
-      "elapsed_seconds": 9,
-      "elapsed_ms": 8747,
+      "started_at_utc": "2026-11-07T17:42:13Z",
+      "finished_at_utc": "2026-11-07T17:42:13Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 533,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 8.452,
+        "build_cli": 0.259,
         "build_firmware": null,
-        "run_smoke": 0.286
+        "run_smoke": 0.266
       },
       "stages_ms": {
-        "build_cli": 8452,
+        "build_cli": 259,
         "build_firmware": null,
-        "run_smoke": 286
+        "run_smoke": 266
       },
-      "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/imx8mp-a53-uart4-smoke.elf",
       "_artifact_path": "nxp-frdm-imx8mplus",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "uart_contains",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "nxp-k6xf",
@@ -5531,35 +5532,36 @@
       "smoke_passed": true,
       "crate": null,
       "target_triple": null,
-      "script": "examples/renode-onboarding/nxp-mimx8ml-a53-cpu-smoke.yaml",
+      "script": "examples/renode-onboarding/nxp-mimx8ml-mxcuart-smoke.yaml",
       "system": "configs/systems/onboarding/nxp-mimx8ml.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T02:37:16Z",
-      "finished_at_utc": "2026-11-06T02:37:24Z",
-      "elapsed_seconds": 9,
-      "elapsed_ms": 8193,
+      "started_at_utc": "2026-11-07T17:41:55Z",
+      "finished_at_utc": "2026-11-07T17:42:03Z",
+      "elapsed_seconds": 8,
+      "elapsed_ms": 7206,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 7.852,
+        "build_cli": 6.934,
         "build_firmware": null,
-        "run_smoke": 0.332
+        "run_smoke": 0.263
       },
       "stages_ms": {
-        "build_cli": 7852,
+        "build_cli": 6934,
         "build_firmware": null,
-        "run_smoke": 332
+        "run_smoke": 263
       },
-      "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/imx8mp-a53-uart2-smoke.elf",
       "_artifact_path": "nxp-mimx8ml",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "uart_contains",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "nxp-s32k388",

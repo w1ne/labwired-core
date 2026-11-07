@@ -166,12 +166,12 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/polarfire-soc-mss-gpio-smoke.yaml",
     },
     "nxp-frdm-imx8mplus": {
-        "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-        "script": "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/imx8mp-a53-uart4-smoke.elf",
+        "script": "examples/renode-onboarding/nxp-frdm-imx8mplus-mxcuart-smoke.yaml",
     },
     "nxp-mimx8ml": {
-        "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-        "script": "examples/renode-onboarding/nxp-mimx8ml-a53-cpu-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/imx8mp-a53-uart2-smoke.elf",
+        "script": "examples/renode-onboarding/nxp-mimx8ml-mxcuart-smoke.yaml",
     },
     "fsl_lx2160ardb": {
         "prebuilt_firmware": "tests/fixtures/lx2160a-a72-uart-smoke.elf",

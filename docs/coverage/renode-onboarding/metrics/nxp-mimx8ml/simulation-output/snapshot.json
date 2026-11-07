@@ -6,12 +6,12 @@
       515,
       1,
       514,
+      814284800,
+      1074266258,
       0,
-      0,
-      0,
-      0,
-      0,
-      0,
+      8256,
+      1,
+      8192,
       0,
       0,
       0,
@@ -41,8 +41,8 @@
       0,
       0
     ],
-    "pc": 1074266128,
-    "nzcv": 0,
+    "pc": 1074266204,
+    "nzcv": 1610612736,
     "daif": 960,
     "el": 3,
     "spsel": true,
@@ -585,10 +585,10 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "35c0621ecf8c7e891e2835b57427601e5173a944ef1dd6db37c63e53f5706a9f",
+  "firmware_hash": "8515c5f253b07712e686d533f4b9d5e54d47e07e11416cb1423cb81509ee7403",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/imx8mp-a53-uart2-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nxp-mimx8ml.yaml",
-    "script": "examples/renode-onboarding/nxp-mimx8ml-a53-cpu-smoke.yaml"
+    "script": "examples/renode-onboarding/nxp-mimx8ml-mxcuart-smoke.yaml"
   }
 }
