@@ -1795,6 +1795,10 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2445,7 +2449,7 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: 3ec7b3058fe1407aa69afd1d967c9b98eaf95a06ca25c21f11340f85ed02dffd
+    drift_ack_digest: 0b15627c2430b4f9648b9ccf51cb1c7ddbe81c58d0ded0149a5caa3634382e01
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4006,6 +4010,10 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4644,7 +4652,7 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: caf8ca0a86727e20014661888e1c6ed1baaff3f1f30a567dbf3fbe97bf3d01cc
+    drift_ack_digest: c4ba36d3403880a297e074d0deb559a48b16416112d237148a11729c21fc27b1
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5136,7 +5144,11 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 1bc8ec567dfd5ae0e4a344c5dd06f7bba3ac1929722deac90a2400ad897db687
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: cebbbe9008015b9f08d66a4e20ed44e69e3d20b31811af9cb8a779e7dc65cb9d
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6249,6 +6261,10 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6890,7 +6906,7 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: 86544ff26e438fdddd45dabf12c53595886fe2bbb4e36ae729e13f437a46af85
+    drift_ack_digest: 402b5c45b9da61455ba6fa30f5ff5ac0ae7ba841c37d538cf9575ff09f2a6ca4
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7403,7 +7419,11 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: dfbd13c1bfecf356a1f70791fb0b4cca25c8b61f95f491eaa791af71942c7695
+    # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
+    # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
+    # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
+    # does not use it. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 3de47073fff66fe71b85c44dbfeb453f75094010c982f3f7ee55f208aca3794b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -10095,15 +10115,6 @@ boards:
       - crates/core/src/peripherals/ra_clock.rs
       - crates/core/src/peripherals/ra_pfs.rs
       - crates/core/src/peripherals/uart.rs
-      # 2026-11-07: ra4m1.yaml grew the ICU event link, AGT, RIIC, GPT and
-      # ADC14 for the stock-Arduino UNO R4 WiFi matrix row.
-      - crates/core/src/peripherals/ra_icu.rs
-      - crates/core/src/peripherals/ra_agt.rs
-      - crates/core/src/peripherals/ra_iic.rs
-      - crates/core/src/peripherals/ra_gpt.rs
-      - crates/core/src/peripherals/ra_adc12.rs
-      # 2026-11-07: SPI0/SPI1 on the shared SPI model (`profile: ra_rspi`).
-      - crates/core/src/peripherals/spi.rs
       - configs/chips/ra4m1.yaml
       - configs/systems/arduino-uno-r4-minima.yaml
       # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that

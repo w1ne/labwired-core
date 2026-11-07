@@ -45,6 +45,7 @@ This is the product bar beyond unit tests and UART-only CI fixtures.
 | stm32l476 | ✅ L0–L4 | ✅ | ✅ Arduino | |
 | stm32u575 | ✅ L0–L8 (9 pass / 0 skip) | ✅ L0–L3 | ✅ both | U5 RCC ready bits + CRS; Zephyr `nucleo_u575zi_q` |
 | stm32u545 | ✅ L0–L8 | ❌ | ✅ Arduino | Generic `U545RETxQ` variant with NUCLEO-U545RE-Q pin overrides; Zephyr not validated |
+| stm32g0b1re | ✅ L0–L8 (9 pass / 0 skip) | ❌ | ✅ Arduino | NUCLEO-G0B1RE; RCC `stm32g0b1` (HSI48), Serial = LPUART1, L6 on PA0 TIM2_CH1 (pad edges not routed), L8 FDCAN1 register-level loopback |
 | stm32wb55 | ✅ L0–L4 | ✅ | ✅ Arduino | |
 | stm32wba52 | ✅ L0–L4 | ✅ | ✅ Arduino | Custom PIO board JSON |
 | atmega328p | ✅ L0–L4 | ❌ | ✅ Arduino TWI | Nano: USART+PORT+Timer0+TWI+SPI on CPU |
