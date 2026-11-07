@@ -81,10 +81,12 @@
 #   temperature, the CSP-clocked RNG and the comparator's PA5 edge/IRQ.
 # - CCTEST and ANA_REGS: register storage only; no pad, observation-output,
 #   temperature-gate, USB PHY or bias effect.
-# - PKA engine, I2CS slave, USB: declared stubs (the PKA
-#   SRAM window is plain RAM). I2CM is a
-#   synchronous byte-command master; it has no clock stretching, bus timing,
-#   arbitration or loopback.
+# - PKA engine (0x4400_4000) and USB controller (0x4008_9000): not mapped.
+#   Neither has a model, so the profile does not declare their windows; a
+#   load or store there is an unmapped-access error instead of a silent zero.
+#   The PKA SRAM window is plain RAM. I2CM is a synchronous byte-command
+#   master; its I2CS slave is reachable only over LPBK. Neither side has
+#   clock stretching on writes, bus timing or arbitration.
 #
 # Supersedes the staged configs/chips/onboarding/cc2538.yaml, whose memory map
 # (flash at 0x08000000/128 KiB, 256 KiB RAM) did not match Table 4-1.
@@ -137,7 +139,7 @@ memory_regions:
   # PKA engine RAM (Table 4-1: 0x4400_6000-0x4400_67FF, 2 KiB). Plain
   # word-addressable SRAM from the CPU side: operands and results the PKA
   # sequencer reads and writes. Mapped as RAM so stores read back; the PKA
-  # engine itself (0x4400_4000) is still a stub, so nothing here is ever
+  # engine itself (0x4400_4000) is not mapped, so nothing here is ever
   # computed. The RCGCSEC.PKA clock gate is not enforced (as for every gate).
   - name: "pka_sram"
     base: 0x44006000
@@ -336,10 +338,6 @@ peripherals:
     irq: 141
     config:
       clock_hz: 16000000
-  - id: "usb"
-    type: "stub"
-    base_address: 0x40089000
-    size: "4KB"
   # AES/SHA-256 cryptoprocessor (Table 4-1: 0x4008_B000-0x4008_BFFF).
   # AES interrupt, IRQ 143 in the regular map (Table 5-2).
   - id: "aes"
@@ -354,10 +352,6 @@ peripherals:
     base_address: 0x400FF000
     size: "4KB"
     irq: 46
-  - id: "pka"
-    type: "stub"
-    base_address: 0x44004000
-    size: "4KB"
   # CCTEST / CC_TESTCTRL (§23.16.4, Table 23-11): IO, OBSSEL0-7, TR0 and
   # USBCTRL storage (crates/core/src/peripherals/cc2538/cctest.rs). Table 4-1
   # gives 0x4401_0000-0x4401_0030, but Table 23-11 places TR0 at 0x34 and

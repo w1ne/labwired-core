@@ -9,7 +9,8 @@ modelled, the flash controller (Contiki-NG CFS/Coffee) and the AES/SHA-256
 cryptoprocessor (the Contiki-NG crypto suite), and a **three-node Contiki-NG
 RPL-UDP network** on a shared 802.15.4 air (RF core RX/TX, AUTOACK, µDMA).
 SSI0/1, GPTimer0-3, the I2C master and SOC_ADC (ADC, RNG, comparator) are
-modelled; PKA, the I2C slave and USB remain stubs. The onboarding smoke attaches a virtual
+modelled, with the I2C slave reachable over I2CM loopback; the PKA engine and USB
+controller are not mapped. The onboarding smoke attaches a virtual
 TMP102 as an explicit I2C test fixture; it is not fitted to the CC2538DK.
 
 ## What runs here
@@ -199,6 +200,8 @@ hb=0 yellow=1 green=0 orange=0
 - **SOC_ADC** conversions complete inside the ADCCON3/ADCCON1 write; the
   temperature channel is a fixed 25 °C level. STSEL free-run/timer starts,
   IOC channel skipping and ADC DMA are not modelled.
-- **PKA, USB, I2CS, ANA_REGS and CCTEST** are declared stubs.
+- **PKA engine and USB controller** are not mapped: the profile declares no
+  window for them, so an access is an unmapped-access error, not a zero read.
+  ANA_REGS and CCTEST are register storage only.
 
 See `VALIDATION.md` for the tier table.

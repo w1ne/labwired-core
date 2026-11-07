@@ -7,7 +7,7 @@
     "not_run": 21,
     "pass": 224,
     "fail": 0,
-    "pass_loading_zero_answering_windows": 1,
+    "pass_loading_zero_answering_windows": 0,
     "pass_observable_assertions": 217,
     "pass_stop_reason_only": 7,
     "pass_depth_unknown": 0,
@@ -1097,30 +1097,27 @@
       "script": "examples/renode-onboarding/cc2538-smoke.yaml",
       "system": "configs/systems/onboarding/cc2538.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-07T22:40:01Z",
-      "finished_at_utc": "2026-11-07T22:43:03Z",
-      "elapsed_seconds": 183,
-      "elapsed_ms": 182537,
+      "started_at_utc": "2026-11-07T22:55:54Z",
+      "finished_at_utc": "2026-11-07T22:59:00Z",
+      "elapsed_seconds": 187,
+      "elapsed_ms": 186459,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 178.453,
-        "build_firmware": 2.098,
-        "run_smoke": 1.973
+        "build_cli": 184.377,
+        "build_firmware": 0.202,
+        "run_smoke": 1.863
       },
       "stages_ms": {
-        "build_cli": 178453,
-        "build_firmware": 2098,
-        "run_smoke": 1973
+        "build_cli": 184377,
+        "build_firmware": 202,
+        "run_smoke": 1863
       },
       "_artifact_path": "cc2538",
-      "zero_answering_windows": [
-        "usb:stub",
-        "pka:stub"
-      ],
+      "zero_answering_windows": [],
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",

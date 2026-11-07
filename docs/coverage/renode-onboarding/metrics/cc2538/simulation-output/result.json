@@ -261,13 +261,6 @@
         "artifacts": []
       },
       {
-        "name": "usb",
-        "kind": "native",
-        "base": 1074302976,
-        "registers": [],
-        "artifacts": []
-      },
-      {
         "name": "aes",
         "kind": "native",
         "base": 1074311168,
@@ -278,13 +271,6 @@
         "name": "udma",
         "kind": "native",
         "base": 1074786304,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "pka",
-        "kind": "native",
-        "base": 1140867072,
         "registers": [],
         "artifacts": []
       },
