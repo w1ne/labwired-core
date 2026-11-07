@@ -69,9 +69,12 @@ ELFs are not run. No wider Renode parity claim is made.
 | CCA in the smoke image | pinned | the loader enters the smoke at its flash-base table; `test_cc2538dk_smoke_customer_configuration_area_boots` pins its 44 bytes |
 | SSI0/SSI1 master mode: TX-FIFO queueing while disabled, LBM loopback, 4..16-bit frames, 8-deep RX FIFO overrun (RORRIS) and ICR clear, FIFO-level RIS/MIS and IRQ 7/34 | unit-tested; exercised | `cargo test -p labwired-core --lib cc2538::ssi` (10 tests); the smoke's `ssi0 ...` lines in `io-smoke.yaml` |
 | SSI slave mode, RX timeout, TI SSF / MICROWIRE formats, bit timing, µDMA requests | **not modelled** | `crates/core/src/peripherals/cc2538/ssi.rs` |
-| PKA, I2C, GPTimers, USB, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
+| GPTimer0 A: 32-bit periodic down-count, three time-outs, ICR clears, NVIC pending IRQ 19, disabled-count hold | unit-tested; smoke-exercised | `cc2538::gptimer` (9 tests with legacy tick and event-scheduler); `io-smoke.yaml` UART line `gpt0 to=3 nvic19=1 held=1` |
+| GPTimer1 B: split 16-bit one-shot up-count, ÷16 prescale, match + timeout status, NVIC pending IRQ 22 | unit-tested; smoke-exercised | `cc2538::gptimer`; `io-smoke.yaml` UART line `gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16004` |
+| GPTimer RTC, capture/PWM edge handling, synchronization, ADC trigger, deferred reload, prescaler extension and CCP output | **not modelled** | `crates/core/src/peripherals/cc2538/gptimer.rs` |
+| PKA, I2C, USB, SoC ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
 
-## Commands and evidence (verified 2026-10-30)
+## Commands and evidence (updated 2026-11-07)
 
 ```bash
 # from the repository root
@@ -106,6 +109,11 @@ cargo test -p labwired-core --features event-scheduler --test cc2538_sleep_timer
 cargo test -p labwired-core --test cc2538_rom
 cargo test -p labwired-core --features event-scheduler --test cc2538_rom
 #   12 passed each
+cargo +1.95.0 test -p labwired-core --lib peripherals::cc2538::gptimer
+cargo +1.95.0 test -p labwired-core --lib --features event-scheduler peripherals::cc2538::gptimer
+#   9 passed each (legacy tick / scheduled events)
+cargo +1.95.0 clippy -p labwired-core --lib -- -D warnings
+#   clean
 cargo test -p labwired-core --test firmware_survival cc2538
 #   test_cc2538dk_smoke_survival, test_cc2538dk_contiki_hello_survival,
 #   test_cc2538dk_contiki_flash_test_survival,

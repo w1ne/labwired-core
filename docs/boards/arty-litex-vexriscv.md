@@ -2,7 +2,7 @@
 
 The **Digilent Arty A7-35T** (Artix-7 XC7A35T) running a **LiteX VexRiscv** soft-core SoC: a 32-bit RISC-V CPU (`rv32im_zicsr_zifencei`), 100 MHz system clock, integrated SRAM, and a Control-and-Status CSR for the board's user I/O. LabWired runs a bare-metal ELF from the SoC's SRAM and captures the LiteX UART console.
 
-This is an **L1 (smoke)** target on the `litex-vexriscv` SoC family: boot, the UART byte path, the timer one-shot, and the LED/switch/button CSR path are proven by a committed smoke fixture and an `io-smoke.yaml`. The CPU, memory map, UART, timer and CAS block are modelled; the SPI-flash controller, Ethernet MAC and MMCM are declared stubs. No bitstream capture exists: **SIM-DERIVED**, no executing-fidelity differential yet.
+This is an **L1 (smoke)** target on the `litex-vexriscv` SoC family: boot, the UART byte path, the timer one-shot, and the LED/switch/button CSR path are proven by a committed smoke fixture and an `io-smoke.yaml`. The CPU, memory map, UART, timer, CAS block and limited SPI-flash bitbang/MT25Q ID-status path are modelled; Ethernet MAC and MMCM are declared stubs. No bitstream capture exists: **SIM-DERIVED**, no executing-fidelity differential yet.
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:
@@ -31,7 +31,7 @@ This is an **L1 (smoke)** target on the `litex-vexriscv` SoC family: boot, the U
 |--------|------|------|-------|
 | Integrated ROM | `0x0000_0000` | 256 KiB | mapped; contents (LiteX BIOS) **not modelled** |
 | Integrated SRAM | `0x1000_0000` | 256 KiB | modelled — the smoke links and runs here |
-| SPI-flash window | `0x2000_0000` | 32 MiB | mapped; reads `0xFF` untouched, no flash controller behind it |
+| SPI-flash window | `0x2000_0000` | 32 MiB | mapped plain flash memory; separate CSR bitbang model answers MT25Q ID/status commands but does not load XIP data |
 | Main RAM (DDR) | `0x4000_0000` | 256 MiB on the SoC | **not mapped** |
 | CSR space | `0x6000_0000` | — | modelled blocks below; the `0xE000_0000` shadow is documented, not modelled |
 

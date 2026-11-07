@@ -9,7 +9,10 @@
 # GPIO_DATA stores and prints the pin and the whole LED nibble it read back.
 # LED1 (PC0) shares the USB D+ pull-up and is never driven. SSI0 then runs an
 # internal-loopback self-test: TX-FIFO queueing while disabled, 8- and 16-bit
-# frames, and the RX overrun flag with its ICR clear.
+# frames, and the RX overrun flag with its ICR clear. GPTimer0 then
+# times out three times as a 32-bit periodic timer (pending IRQ 19) and
+# GPTimer1B runs one ÷16 one-shot up-count with a match (pending IRQ 22),
+# timed against GPTimer0.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke"
@@ -31,6 +34,8 @@ assertions:
       - "keys select=1 left=1 right=1 up=1 down=1"
       - "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c"
       - "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08"
+      - "gpt0 to=3 nvic19=1 held=1"
+      - "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok"
       - "hb=0 yellow=1 green=0 orange=0"
       - "hb=1 yellow=1 green=0 orange=0"
   - expected_stop_reason: max_steps

@@ -10238,9 +10238,9 @@ boards:
     # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
     # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity
     # differential: the modelled surface is CPU + memory + the LiteX UART
-    # console path and the LiteX countdown timer; the SPI-flash, Ethernet and
-    # MMCM CSR windows are declared stubs (the smoke prints one of those
-    # readbacks). See
+    # console path, countdown timer and SPI-flash bitbang/MT25Q ID-status
+    # responder. Ethernet and MMCM CSR windows are declared stubs (the smoke
+    # prints one of those readbacks). See
     # docs/boards/litex-vexriscv.md and examples/litex-vexriscv/VALIDATION.md.
     doc: docs/boards/litex-vexriscv.md
     chip: configs/chips/litex-vexriscv.yaml
@@ -10252,6 +10252,7 @@ boards:
       - crates/core/src/decoder/riscv.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/litex_timer.rs
+      - crates/core/src/peripherals/litex_spi_flash.rs
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/bus/profiles.rs
@@ -10353,8 +10354,12 @@ boards:
     # unmodified Contiki-NG v4.9 examples/rpl-udp, the topology of Renode's
     # cc2538_rpl-udp.robot: the RF core's RX FIFO, FIFOP IRQ 141 and the
     # µDMA (cc2538_udma: software basic/auto transfers, CHIS + IRQ 46).
-    # IOC, PKA, SSI, I2C, GPTimers, USB and ADC are declared
-    # stubs. SIM-DERIVED — no CC2538 bench part. See docs/boards/cc2538dk.md
+    # 2026-11-07: SSI0/1 master mode and GPTimer0-3's timeout/match path
+    # (cc2538_pl022_ssi, cc2538_gptimer): loopback/FIFO/IRQ checks and split
+    # one-shot/prescale/match checks in io-smoke.yaml. GPTimer RTC, capture,
+    # PWM, synchronization and ADC trigger remain outside the model. IOC, PKA,
+    # I2C, USB and SoC ADC remain declared stubs. SIM-DERIVED — no CC2538
+    # bench part. See docs/boards/cc2538dk.md
     # and examples/cc2538dk/VALIDATION.md.
     doc: docs/boards/cc2538dk.md
     chip: configs/chips/cc2538sf53.yaml
@@ -10368,6 +10373,8 @@ boards:
       - "cc2538_rom (12 tests: ROM utility API incl. PageErase/ProgramFlash through FLASH_CTRL + CCA boot on the CPU model)"
       - "cc2538_sleep_timer_irq (compare -> SM Timer IRQ 145 -> handler)"
       - "cc2538_rpl_udp (3 nodes, stock Contiki-NG rpl-udp: 3 round trips per client; event-scheduler)"
+      - "cc2538::gptimer (9 tests: periodic down timeout, split up one-shot/prescale/match, A/B IRQ routes; legacy + event-scheduler)"
+      - "cc2538dk io-smoke (GPTimer0 periodic timeout/hold and GPTimer1B split one-shot/prescale/match on IRQ 19/22)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -10377,6 +10384,8 @@ boards:
       - crates/core/src/peripherals/cc2538/flash_ctrl.rs
       - crates/core/src/peripherals/cc2538/aes.rs
       - crates/core/src/peripherals/cc2538/udma.rs
+      - crates/core/src/peripherals/cc2538/ssi.rs
+      - crates/core/src/peripherals/cc2538/gptimer.rs
       - crates/core/src/peripherals/ieee802154_air.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
@@ -10480,6 +10489,7 @@ boards:
       - crates/core/src/peripherals/ra_clock.rs
       - crates/core/src/peripherals/ra_icu.rs
       - crates/core/src/peripherals/ra_agt.rs
+      - crates/core/src/peripherals/declarative.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
@@ -10545,6 +10555,7 @@ boards:
       - crates/core/src/peripherals/ra_clock.rs
       - crates/core/src/peripherals/ra_icu.rs
       - crates/core/src/peripherals/ra_agt.rs
+      - crates/core/src/peripherals/declarative.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
@@ -10828,6 +10839,7 @@ boards:
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/litex_timer.rs
       - crates/core/src/peripherals/litex_control_status.rs
+      - crates/core/src/peripherals/litex_spi_flash.rs
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/bus/profiles.rs

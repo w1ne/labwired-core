@@ -31,7 +31,7 @@ This is an **L1 (smoke)** target: boot, the UART byte path and the timer one-sho
 |--------|------|------|-------|
 | Integrated ROM | `0x0000_0000` | 256 KiB | mapped; contents (LiteX BIOS) **not modelled** |
 | Integrated SRAM | `0x1000_0000` | 256 KiB | modelled — the smoke links and runs here |
-| SPI-flash window | `0x2000_0000` | 32 MiB | mapped; reads `0xFF` untouched, no flash controller behind it |
+| SPI-flash window | `0x2000_0000` | 32 MiB | mapped plain flash memory; separate CSR bitbang model answers MT25Q ID/status commands but does not load XIP data |
 | Main RAM (DDR) | `0x4000_0000` | 256 MiB on the SoC | **not mapped** — the engine allocates memory regions densely and a 256 MiB window is not useful to the smoke |
 | CSR space | `0x6000_0000` | — | modelled blocks below; the `0xE000_0000` shadow window is documented, not modelled |
 

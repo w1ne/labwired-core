@@ -4,7 +4,8 @@
 //
 //! CC2538DK (CC2538SF53, Cortex-M3) L1 smoke: UART0 console, a walk over the
 //! SmartRF06 LEDs with GPIO_DATA readback, the keys' pad levels, an SSI0
-//! loopback self-test and a heartbeat, in bare registers.
+//! loopback self-test, a GPTimer0/1 self-test and a heartbeat, in bare
+//! registers.
 //!
 //! Board facts (Contiki-NG `cc2538dk` dev/board.h; RIOT `cc2538dk`):
 //!   LED1 red    PC0 (active high) — shared with the USB D+ pull-up, NOT driven
@@ -124,6 +125,44 @@ const SSI_SR_RNE: u32 = 1 << 2;
 const SSI_ICR_RORIC: u32 = 1 << 0;
 /// The SSI FIFOs are eight frames deep (§19.2).
 const SSI_FIFO_DEPTH: u32 = 8;
+
+// ── GPTimer (SWRU319C §11; GPTIMER0/1 at 0x4003_0000/0x4003_1000) ──────────
+const SYS_CTRL_RCGCGPT: u32 = SYS_CTRL + 0x08;
+/// RCGCGPT.GPT0/GPT1 (bits 0/1).
+const RCGCGPT_GPT01: u32 = 0x3;
+const GPT0: u32 = 0x4003_0000;
+const GPT1: u32 = 0x4003_1000;
+const GPT_CFG: u32 = 0x000;
+const GPT_TAMR: u32 = 0x004;
+const GPT_TBMR: u32 = 0x008;
+const GPT_CTL: u32 = 0x00C;
+const GPT_IMR: u32 = 0x018;
+const GPT_RIS: u32 = 0x01C;
+const GPT_ICR: u32 = 0x024;
+const GPT_TAILR: u32 = 0x028;
+const GPT_TBILR: u32 = 0x02C;
+const GPT_TBMATCHR: u32 = 0x034;
+const GPT_TBPR: u32 = 0x03C;
+const GPT_TAR: u32 = 0x048;
+/// CFG = 4: two 16-bit timers.
+const GPT_CFG_16BIT: u32 = 0x4;
+/// TnMR: TnMR = 1 one-shot / 2 periodic, TnCDIR (bit 4) up, TnMIE (bit 5).
+const GPT_MR_ONE_SHOT: u32 = 0x1;
+const GPT_MR_PERIODIC: u32 = 0x2;
+const GPT_MR_UP: u32 = 1 << 4;
+const GPT_MR_MIE: u32 = 1 << 5;
+/// CTL.TAEN (bit 0), CTL.TBEN (bit 8).
+const GPT_CTL_TAEN: u32 = 1 << 0;
+const GPT_CTL_TBEN: u32 = 1 << 8;
+/// IMR/RIS: TATO (bit 0), TBTO (bit 8), TBM (bit 11).
+const GPT_INT_TATO: u32 = 1 << 0;
+const GPT_INT_TBTO: u32 = 1 << 8;
+const GPT_INT_TBM: u32 = 1 << 11;
+/// Table 5-2 regular map: GPTimer0A = IRQ 19, GPTimer1B = IRQ 22.
+const IRQ_GPT0A: u32 = 19;
+const IRQ_GPT1B: u32 = 22;
+const NVIC_ISPR0: u32 = 0xE000_E200;
+const NVIC_ICPR0: u32 = 0xE000_E280;
 
 /// Customer Configuration Area (SWRU319C §8.6, Tables 8-3 to 8-6), placed at
 /// 0x0027_FFD4 by memory.x. The ROM boot code reads it at reset: a valid image
@@ -253,6 +292,99 @@ fn ssi0_selftest() {
     wr(SSI_CR1, 0);
 }
 
+fn put_hex16(value: u32) {
+    put_hex8(value >> 8);
+    put_hex8(value);
+}
+
+/// Poll `addr` until a bit of `mask` reads 1; false after a bounded wait.
+fn wait_set(addr: u32, mask: u32) -> bool {
+    for _ in 0..100_000 {
+        if rd(addr) & mask != 0 {
+            return true;
+        }
+    }
+    false
+}
+
+/// GPTimer self-test (§11), polled with the NVIC lines left disabled so the
+/// pends show in ISPR without a handler.
+/// 1. GPT0 as one 32-bit periodic down-counter, TAILR = 1999: three
+///    time-outs, each cleared through ICR, pend GPTimer0A; disabling holds
+///    the count.
+/// 2. GPT1 split, timer B a one-shot up-counter ÷16 with TBILR = 1000 and
+///    TBMATCHR = 500: match then time-out (RIS = 0x0900), TBEN clears, the
+///    match pends GPTimer1B, and GPT0 (re-armed as a free 32-bit up-counter)
+///    measures the 16 000-cycle span.
+fn gpt_selftest() {
+    wr(SYS_CTRL_RCGCGPT, rd(SYS_CTRL_RCGCGPT) | RCGCGPT_GPT01);
+    wr(NVIC_ICPR0, (1 << IRQ_GPT0A) | (1 << IRQ_GPT1B));
+
+    wr(GPT0 + GPT_CTL, 0);
+    wr(GPT0 + GPT_CFG, 0);
+    wr(GPT0 + GPT_TAMR, GPT_MR_PERIODIC);
+    wr(GPT0 + GPT_TAILR, 1999);
+    wr(GPT0 + GPT_IMR, GPT_INT_TATO);
+    wr(GPT0 + GPT_CTL, GPT_CTL_TAEN);
+    let mut timeouts = 0;
+    for _ in 0..3 {
+        if !wait_set(GPT0 + GPT_RIS, GPT_INT_TATO) {
+            break;
+        }
+        wr(GPT0 + GPT_ICR, GPT_INT_TATO);
+        timeouts += 1;
+    }
+    let pend0a = (rd(NVIC_ISPR0) >> IRQ_GPT0A) & 1;
+    wr(GPT0 + GPT_CTL, 0);
+    let held = rd(GPT0 + GPT_TAR);
+    spin(100);
+    puts(b"gpt0 to=");
+    put_dec32(timeouts);
+    puts(b" nvic19=");
+    put_dec32(pend0a);
+    puts(b" held=");
+    put_dec32(u32::from(rd(GPT0 + GPT_TAR) == held && held <= 1999));
+    putc(b'\n');
+
+    // GPT0 as a free-running 32-bit up-counter: the time base for the span.
+    wr(GPT0 + GPT_IMR, 0);
+    wr(GPT0 + GPT_ICR, 0xFFFF);
+    wr(GPT0 + GPT_TAMR, GPT_MR_PERIODIC | GPT_MR_UP);
+    wr(GPT0 + GPT_TAILR, 0xFFFF_FFFF);
+    wr(GPT0 + GPT_CTL, GPT_CTL_TAEN);
+
+    wr(GPT1 + GPT_CTL, 0);
+    wr(GPT1 + GPT_CFG, GPT_CFG_16BIT);
+    wr(GPT1 + GPT_TBMR, GPT_MR_ONE_SHOT | GPT_MR_UP | GPT_MR_MIE);
+    wr(GPT1 + GPT_TBPR, 15);
+    wr(GPT1 + GPT_TBILR, 1000);
+    wr(GPT1 + GPT_TBMATCHR, 500);
+    wr(GPT1 + GPT_IMR, GPT_INT_TBM);
+    let t0 = rd(GPT0 + GPT_TAR);
+    wr(GPT1 + GPT_CTL, GPT_CTL_TBEN);
+    let done = wait_set(GPT1 + GPT_RIS, GPT_INT_TBTO);
+    let span = rd(GPT0 + GPT_TAR).wrapping_sub(t0);
+    puts(b"gpt1b ris=");
+    put_hex16(rd(GPT1 + GPT_RIS));
+    puts(b" ctl=");
+    put_hex16(rd(GPT1 + GPT_CTL));
+    puts(b" nvic22=");
+    put_dec32((rd(NVIC_ISPR0) >> IRQ_GPT1B) & 1);
+    // 1000 counts x 16 cycles, plus the poll loop and prescaler phase.
+    puts(if done && (15_900..16_500).contains(&span) {
+        b" span=ok "
+    } else {
+        b" span=bad "
+    });
+    put_dec32(span);
+    putc(b'\n');
+
+    wr(GPT0 + GPT_CTL, 0);
+    wr(GPT1 + GPT_CTL, 0);
+    wr(GPT1 + GPT_ICR, 0xFFFF);
+    wr(NVIC_ICPR0, (1 << IRQ_GPT0A) | (1 << IRQ_GPT1B));
+}
+
 /// System clock from CLOCK_STA: 32 MHz >> SYS_DIV.
 fn system_clock_hz(clock_sta: u32) -> u32 {
     32_000_000 >> (clock_sta & CLOCK_STA_SYS_DIV)
@@ -371,6 +503,7 @@ fn main() -> ! {
     putc(b'\n');
 
     ssi0_selftest();
+    gpt_selftest();
 
     // Leave yellow lit; the heartbeat reports the three driven pad levels.
     led_set(LED_YELLOW, true);

@@ -1,6 +1,7 @@
 # CC2538 Cortex-M3 smoke against the imported Renode system path. Exercises the
 # model-backed UART0, SYS_CTRL clock reads, GPIO register readback and an
-# SSI0 loopback self-test.
+# SSI0 loopback self-test and
+# GPTimer0/1 time-out, match, one-shot and prescaler checks.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke"
@@ -22,6 +23,8 @@ assertions:
       - "keys select=1 left=1 right=1 up=1 down=1"
       - "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c"
       - "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08"
+      - "gpt0 to=3 nvic19=1 held=1"
+      - "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok"
       - "hb=0 yellow=1 green=0 orange=0"
       - "hb=1 yellow=1 green=0 orange=0"
   - expected_stop_reason: max_steps
