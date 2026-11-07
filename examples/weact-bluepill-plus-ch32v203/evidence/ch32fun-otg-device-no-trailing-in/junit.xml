@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="150.804071">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxCycles"/>
+    <property name="firmware_hash" value="2a6a4d847d517b2b1662aca6942ada95ca4f65b352bdf771bba7e425134970c3"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="150.804071">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: peripheral_log: usbfs.host contains &quot;control a1 01 03aa 0000 00ff ok aa 01 02&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: peripheral_log: usbfs.host contains &quot;in 1 00 00 00 00&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: peripheral_log: usbfs.host contains &quot;in 3 00 00 00 00&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: peripheral_log: usbfs.host contains &quot;note in 1 timed out: the device kept NAKing&quot;" time="0.000000">
+  </testcase>
+</testsuite>

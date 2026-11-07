@@ -23,7 +23,7 @@ offsets and bit positions. This is not a claim that the CH32V203 clock tree
 or other peripherals are STM32F1-compatible.
 
 **Not modeled:** PFIC/interrupts, PLL/HSE clock setup (WCH's `SystemInit`
-raises the clock to 96/144 MHz), the PA0 user key, USB-C, CAN (see the
+raises the clock to 96/144 MHz), the PA0 user key, USB-C and CAN (both: see the
 ch32fun profile below), timers, ADC,
 RTC, the unplaced SPI flash, WCH SDI debug, and physical-board parity.
 
@@ -105,6 +105,18 @@ It adds what those examples need and the narrow profile above lacks:
   level 26 + N, and a CNTR store on an enabled channel re-arms it, as on the
   CH32V003. SPI2 is the F1 register block on the F1 default pads (PB13 SCK,
   PB15 MOSI); `spi2_tx` is wired to channel 5.
+- **USBFS (USBOTG_FS) in device mode** (`wch_usbfs` at 0x50000000, PFIC 59,
+  AHBPCENR bit 12) with a scripted full-speed host on the cable. The
+  controller is a bus master, as on silicon: SETUP and OUT packets are
+  written to the endpoint buffers that `UEPn_DMA` points at in SRAM, and
+  IN packets are read from them, under the `UEPn_TX/RX_CTRL` handshakes.
+  The host enumerates the way an OS does. Its class requests and report
+  polls come from the system manifest's `host_steps`, and everything it
+  saw is the `usbfs` peripheral's `host` log. DATA0/DATA1 is checked: a
+  wrong-PID IN packet is ACKed and discarded (USB 2.0 §8.6.4). ch32fun
+  relies on this, because its control reads send a stale DATA0 packet
+  first (see below). The RCC runs the F1 map under a `ch32v20x` profile
+  that keeps AHBPCENR.OTG_FSEN; the F103 mask drops that bit.
 
 | Smoke | ch32fun example | What it proves | Result |
 | --- | --- | --- | --- |
@@ -112,6 +124,7 @@ It adds what those examples need and the narrow profile above lacks:
 | [`ch32fun-exti-blink-smoke.yaml`](ch32fun-exti-blink-smoke.yaml) | `examples_v20x/exti_blink` | each rising PA1 edge enters EXTI1_IRQHandler (PFIC 23), which toggles PA10 ~30 cycles later; the release does nothing | 9/9 |
 | [`ch32fun-debugprintf-smoke.yaml`](ch32fun-debugprintf-smoke.yaml) | `examples_v20x/debugprintfdemo` | `+0`, `-1[`, … `-5[` on the debug-printf terminal; the probe took every request | 5/5 |
 | [`ch32fun-spidmatest-smoke.yaml`](ch32fun-spidmatest-smoke.yaml) | `examples_v20x/spidmatest` | SPI2 (16-bit, 1-line TX, 72 MHz) fed by DMA1 channel 5, circular: [`check-spidmatest.py`](check-spidmatest.py) decodes PB13/PB15 from the first SCK edge as 256 × `0xAAAA`, then 814 × `0x0AAF` (3.18 laps), the half-buffer refill DMA1_Channel5_IRQHandler (PFIC 31) writes on HT and TC | 8/8 |
+| [`ch32fun-otg-device-smoke.yaml`](ch32fun-otg-device-smoke.yaml) | `examples_v20x/otg_device` | full-speed composite HID device on USBFS. The host enumerates it from the firmware's own tables: 1209:d035, address 5, 3 HID interfaces, the strings "CNLohr" / "ch32fun ch32v20x test" / "CUSTOMDEVICE000", SET_CONFIGURATION 1, and the three report descriptors. One round of the example's `testtop.hidapi`: a 255-byte feature report 0xAA goes out by SET_REPORT (4 OUT packets) and comes back byte-identical by GET_REPORT. Then the interrupt reports, including the one-shot mouse step `00 01 01 00` after SysTick bit 23 rises (466 ms) | 23/23 |
 | [`can-network/test.yaml`](can-network/test.yaml) | `examples_v20x/canbus_network` (two nodes) | the README's two-node network on one timed CAN bus: node `rx` runs the example as committed (TRANSMIT 0), node `tx` the same source with TRANSMIT 1. `rx` prints `FIFO: 1/3: 8 bytes from 0x0BADC0DE: FE 7A BE E5 C0 FF EE 45`; `tx` TSTATR has RQCP0 + TXOK0; both ESRs are 0 | 7/7 |
 
 Negative controls (committed with their logs):
@@ -134,6 +147,45 @@ Negative controls (committed with their logs):
   the `timeout == 0` branch never runs. That is a ch32fun bug, not a model
   artifact. Not reported upstream.
 
+- `evidence/ch32fun-otg-device-no-trailing-in/`
+  ([`ch32fun-otg-device-no-trailing-in.yaml`](ch32fun-otg-device-no-trailing-in.yaml),
+  4/4): the same host script without the keyboard-LED SET_REPORT after
+  GET_REPORT. After the 470 ms wait, endpoint 1 is never re-armed and the
+  host times out, so the mouse step is lost.
+
+**Two ch32fun USB behaviours the model exposes.** Both are in
+`examples_v20x/otg_device/otgusb.c` as committed. Neither is a model
+artifact.
+
+1. *Every control read starts with a discarded packet.* The SETUP handler
+   arms EP0 with `T_TOG` clear and does not copy the descriptor, so the
+   first IN carries the SETUP bytes as DATA0. The host ACKs it and throws
+   it away, because the first data packet must be DATA1. The IN interrupt
+   then copies the descriptor and flips `T_TOG`, and the second IN carries
+   it as DATA1. The host log counts these (`discarded 0 11`, one per
+   GET_DESCRIPTOR). A host that did not check the PID would read the SETUP
+   bytes as the device descriptor.
+2. *After a control read, the interrupt endpoints stop until the next
+   control transfer with an IN status stage.* The status OUT of every
+   control read sets `USBOTG_errata_dont_send_endpoint_in_window`. Only an
+   EP0 IN completion clears it, and while it is set `USBOTG_SendEndpoint`
+   refuses to arm any endpoint. A Linux host's keyboard-LED SET_REPORT
+   clears it, and so does testtop's next SET_REPORT. A host that stops
+   after a GET_DESCRIPTOR or GET_REPORT gets no more reports (negative
+   control above).
+
+The firmware also fills endpoint 0x81 (declared as the keyboard's) with
+the 4-byte mouse report, and 0x82 (declared as the mouse's) with the 8-byte
+keyboard report. The host log records what was sent. These USB behaviours
+are not reported upstream.
+
+The USB host is a script, not an OS: it does what Linux usbhid and
+testtop.hidapi do on the wire. Bus reset and attach debounce are shortened
+(1 ms, 2 ms), and SOF and suspend are not modelled. `AUTO_TOG` is stored
+but toggles nothing. WCH's EVT says it toggles endpoints 1..3, but ch32fun
+sets it and also toggles by hand, which only works if it does nothing. Real
+silicon has to settle which is right.
+
 **CAN bit rate on the CH32V203.** canbus_network's `BAUD_25kbps` table assumes
 PCLK1 = 144 MHz. That holds for its own Makefile target, the CH32V208
 (`CH32V20x_D8`: ch32fun's SystemInit sets PPRE1 /1). On the CH32V203, SystemInit
@@ -151,7 +203,8 @@ cargo run -q -p labwired-cli -- test \
   --script examples/weact-bluepill-plus-ch32v203/ch32fun-exti-blink-smoke.yaml
 ```
 
-**Not modelled in this profile:** SPI1, I2C, timers, ADC, USB, CAN2, the
+**Not modelled in this profile:** SPI1, I2C, timers, ADC, the USBD block
+at 0x40005C00, USBFS double buffering / isochronous / host mode / OTG, CAN2, the
 CAN interrupts (the example polls), RTC,
 the SPI2 HSCR high-speed bit (accepted, reads 0, no effect), USART1 output (configured
 by ch32fun's UART printf setup, not asserted),

@@ -22,6 +22,10 @@
 #                        the code with TRANSMIT 1 on one device and TRANSMIT 0
 #                        on the other"): extended ID 0xBADC0DE, 8 bytes,
 #                        every Delay_Ms(1000).
+#   otg_device.elf       examples_v20x/otg_device: the USBOTG_FS controller at
+#                        0x50000000 as a full-speed HID device (vendor feature
+#                        report 0xAA, keyboard, mouse), descriptors and EP0
+#                        payloads copied by DMA1 channel 7 memory-to-memory.
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V203 with TARGET_MCU_PACKAGE=CH32V203C8T6 (rv32imac/ilp32,
@@ -69,7 +73,7 @@ sed 's/^#define TRANSMIT 0 /#define TRANSMIT 1 /' \
   > "${tx_dir}/canbus_network_tx/canbus_network_tx.c"
 grep -q '^#define TRANSMIT 1 ' "${tx_dir}/canbus_network_tx/canbus_network_tx.c"
 
-for example in blink exti_blink debugprintfdemo spidmatest canbus_network canbus_network_tx; do
+for example in blink exti_blink debugprintfdemo spidmatest canbus_network canbus_network_tx otg_device; do
   example_dir="${src}/examples_v20x/${example}"
   [[ "${example}" == canbus_network_tx ]] && example_dir="${tx_dir}/${example}"
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \

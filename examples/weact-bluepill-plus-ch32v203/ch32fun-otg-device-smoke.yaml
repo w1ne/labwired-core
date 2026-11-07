@@ -1,0 +1,69 @@
+# ch32fun examples_v20x/otg_device, unmodified (build-ch32fun-examples.sh):
+# the CH32V203's USBFS controller as a full-speed composite HID device
+# (vendor feature report 0xAA, keyboard, mouse), enumerated by the scripted
+# host in configs/systems/weact-bluepill-plus-ch32v203-ch32fun-usb-smoke.yaml.
+# Every byte the host reads came out of the firmware's descriptor tables or
+# SRAM through the controller's endpoint buffers; the host is given no
+# descriptor.
+#
+# What the run shows:
+# - enumeration as an OS does it: device descriptor 1209:d035, SET_ADDRESS 5
+#   (the device takes the address only after the status stage, so the next
+#   SETUP goes to address 5), configuration (3 HID interfaces, endpoints
+#   0x83/0x81/0x82), the three strings, SET_CONFIGURATION 1;
+# - the usbhid probe: SET_IDLE and the report descriptor of each interface;
+# - one round of the example's testtop.hidapi: the 255-byte feature report
+#   0xAA written by SET_REPORT (four 64-byte OUT packets) comes back
+#   byte-identical from GET_REPORT, and lands in `scratchpad` (0x20000004);
+# - the keyboard LED SET_REPORT a Linux host sends, whose IN status stage
+#   re-enables ch32fun's interrupt endpoints (see the system manifest);
+# - interrupt IN reports from all three endpoints, and the one-shot mouse
+#   step 00 01 01 00 once SysTick CNT bit 23 rises (466 ms);
+# - 11 discarded DATA0 packets on EP0, one per GET_DESCRIPTOR: ch32fun arms
+#   the first IN of a control read with T_TOG clear over the stale SETUP
+#   bytes and sends the descriptor as DATA1 from the IN interrupt.
+#
+# The firmware's main loop fills endpoint 2 (the mouse interface's 0x82)
+# with the 8-byte keyboard report and endpoint 1 (the keyboard interface's
+# 0x81) with the 4-byte mouse report; the descriptor declares them the other
+# way round. The log records what the firmware sent.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/otg_device.elf"
+  system: "../../configs/systems/weact-bluepill-plus-ch32v203-ch32fun-usb-smoke.yaml"
+limits:
+  max_cycles: 100000000
+  max_steps: 120000000
+  wall_time_ms: 600000
+assertions:
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "resets 1" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "device 1209:d035 class 00/00/00 usb 0200 ep0 64" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "address 5" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "interface 0 alt 0 class 03/00/ff endpoints 1" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "interface 1 alt 0 class 03/01/01 endpoints 1" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "interface 2 alt 0 class 03/01/02 endpoints 1" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "string 1 \"CNLohr\"" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "string 2 \"ch32fun ch32v20x test\"" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "string 3 \"CUSTOMDEVICE000\"" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "control 00 09 0001 0000 0000 ok" }
+  # The three report descriptors, whole (their lengths are the HID
+  # descriptors' wDescriptorLength).
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "control 81 06 2200 0000 0019 ok 05 ff 09 00 75 08 a1 02 95 fe 85 aa 09 01 b1 02 95 3f 85 ab 09 01 b1 02 c0" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "control 81 06 2200 0001 003e ok 05 01 09 06 a1 01" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "control 81 06 2200 0002 0034 ok 05 01 09 02 a1 01" }
+  # testtop.hidapi: what went out by SET_REPORT comes back by GET_REPORT.
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "control 21 09 03aa 0000 00ff ok aa 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37 38 39 3a 3b 3c 3d 3e 3f 40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f 50 51 52 53 54 55 56 57 58 59 5a 5b 5c 5d 5e 5f 60 61 62 63 64 65 66 67 68 69 6a 6b 6c 6d 6e 6f 70 71 72 73 74 75 76 77 78 79 7a 7b 7c 7d 7e 7f 80 81 82 83 84 85 86 87 88 89 8a 8b 8c 8d 8e 8f 90 91 92 93 94 95 96 97 98 99 9a 9b 9c 9d 9e 9f a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 aa ab ac ad ae af b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 ba bb bc bd be bf c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 ca cb cc cd ce cf d0 d1 d2 d3 d4 d5 d6 d7 d8 d9 da db dc dd de df e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 ea eb ec ed ee ef f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 fa fb fc fd fe" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "control a1 01 03aa 0000 00ff ok aa 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37 38 39 3a 3b 3c 3d 3e 3f 40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f 50 51 52 53 54 55 56 57 58 59 5a 5b 5c 5d 5e 5f 60 61 62 63 64 65 66 67 68 69 6a 6b 6c 6d 6e 6f 70 71 72 73 74 75 76 77 78 79 7a 7b 7c 7d 7e 7f 80 81 82 83 84 85 86 87 88 89 8a 8b 8c 8d 8e 8f 90 91 92 93 94 95 96 97 98 99 9a 9b 9c 9d 9e 9f a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 aa ab ac ad ae af b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 ba bb bc bd be bf c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 ca cb cc cd ce cf d0 d1 d2 d3 d4 d5 d6 d7 d8 d9 da db dc dd de df e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 ea eb ec ed ee ef f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 fa fb fc fd fe" }
+  - memory_value: { address: 0x20000004, size: 32, expected_value: 0x030201AA }
+  # scratchpad[252..254]. scratchpad[255] is not checked: DMA7FastCopy
+  # moves whole words, so the 63-byte last OUT packet also copies the stale
+  # 64th byte of the EP0 buffer.
+  - memory_value: { address: 0x20000100, size: 32, mask: 0x00FFFFFF, expected_value: 0x00FEFDFC }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "control 21 09 0200 0001 0001 ok 00" }
+  # Interrupt IN: keyboard-sized zeros on 0x82, the mouse step on 0x81.
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "in 2 00 00 00 00 00 00 00 00" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "in 3 00 00 00 00" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "in 1 00 01 01 00", min_count: 1 }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "discarded 0 11 (wrong DATA PID)" }
+  # DEV_ADDR as the device left it.
+  - memory_value: { address: 0x50000003, size: 8, expected_value: 5 }

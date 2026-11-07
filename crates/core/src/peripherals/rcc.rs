@@ -133,6 +133,9 @@ pub enum RccRegisterLayout {
     /// RCC_AHB2ENR1@0x8C bit 0 (GPIOAEN) is modeled for the NUCLEO-U3C5ZI-Q
     /// GPIO smoke; the U3 clock tree and other RCC registers are out of scope.
     Stm32U3,
+    /// WCH CH32V20x: the [`Self::Stm32F1`] register map (the CH32V20x RCC
+    /// shares its offsets and bits) with the AHBPCENR OTG_FSEN gate writable.
+    Ch32v20x,
 }
 
 impl FromStr for RccRegisterLayout {
@@ -159,8 +162,9 @@ impl FromStr for RccRegisterLayout {
             "stm32c5" | "c5" => Ok(Self::Stm32C5),
             "stm32u0" | "u0" => Ok(Self::Stm32U0),
             "stm32u3" | "u3" => Ok(Self::Stm32U3),
+            "ch32v20x" => Ok(Self::Ch32v20x),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32f0, stm32c0, stm32c5, stm32u0, stm32u3",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32f0, stm32c0, stm32c5, stm32u0, stm32u3, ch32v20x",
                 value
             )),
         }
@@ -227,6 +231,9 @@ pub struct F1Rcc {
     ahbrstr: u32,  // 0x28
     bdcr: u32,     // 0x20 — RTC/LSE backup domain control
     csr: u32,      // 0x24 — LSION bit0 → LSIRDY bit1
+    /// AHBENR writable bits: the F103 silicon mask, or the CH32V20x's.
+    #[serde(skip)]
+    ahb_mask: u32,
 }
 
 impl F1Rcc {
@@ -242,7 +249,18 @@ impl F1Rcc {
             // RCC_AHBENR after ORing CRCEN returned 0x54 = 0x14 | (1<<6)
             // (stm32f1_exec_oracle::crc32_two_words). RM0008 §7.3.6.
             ahbenr: 0x0000_0014,
+            ahb_mask: 0x0000_0055,
             ..Default::default()
+        }
+    }
+
+    /// CH32V20x (WCH CH32V20x RM, RCC_AHBPCENR): the F1 map and reset values,
+    /// plus OTG_FSEN (bit 12, the USBFS clock; ch32fun `RCC_USBFS` 0x1000)
+    /// writable, which the F103 mask would discard.
+    fn new_ch32v20x() -> Self {
+        Self {
+            ahb_mask: 0x0000_0055 | (1 << 12),
+            ..Self::new()
         }
     }
 }
@@ -288,7 +306,7 @@ impl RccModel for F1Rcc {
             0x08 => self.cir = value & 0x0000_1F00,
             0x0C => self.apb2rstr = value,
             0x10 => self.apb1rstr = value,
-            0x14 => self.ahbenr = value & 0x0000_0055, // DMA1/SRAM/FLITF/CRC
+            0x14 => self.ahbenr = value & self.ahb_mask, // F103: DMA1/SRAM/FLITF/CRC
             0x18 => self.apb2enr = value & 0x0000_5E7D,
             0x1C => self.apb1enr = value & 0x1AE6_4807,
             // BDCR: LSEON (bit0) → LSERDY (bit1); the rest is RTC/backup storage.
@@ -3059,6 +3077,7 @@ impl Rcc {
     pub fn new_with_layout(layout: RccRegisterLayout) -> Self {
         match layout {
             RccRegisterLayout::Stm32F1 => Self::Stm32F1(F1Rcc::new()),
+            RccRegisterLayout::Ch32v20x => Self::Stm32F1(F1Rcc::new_ch32v20x()),
             RccRegisterLayout::Stm32F4 => Self::Stm32F4(F4Rcc::new()),
             RccRegisterLayout::Stm32V2 => Self::Stm32V2(V2Rcc::new_u5()),
             RccRegisterLayout::Stm32H5 => Self::Stm32H5(H5Rcc::new()),
@@ -4673,6 +4692,20 @@ mod tests {
             rcc.read_u32(0x1C).unwrap(),
             (1 << 0) | (1 << 21) | (1 << 28)
         );
+    }
+
+    /// ch32fun otg_device `USBOTGSetup`: `RCC->AHBPCENR |= RCC_USBFS |
+    /// RCC_AHBPeriph_DMA1`. The CH32V20x layout keeps OTG_FSEN (bit 12); the
+    /// F103 mask drops it.
+    #[test]
+    fn ch32v20x_ahbpcenr_keeps_otg_fsen_the_f103_mask_drops() {
+        let mut v20x = Rcc::new_with_layout("ch32v20x".parse().unwrap());
+        let mut f103 = Rcc::new_with_layout(RccRegisterLayout::Stm32F1);
+        for rcc in [&mut v20x, &mut f103] {
+            rcc.write_u32(0x14, 0x14 | (1 << 12) | 1).unwrap();
+        }
+        assert_eq!(v20x.read_u32(0x14).unwrap(), 0x1015);
+        assert_eq!(f103.read_u32(0x14).unwrap(), 0x15);
     }
 
     /// ch32fun standby_autowake: `RCC->RSTSCKR |= RCC_LSION` then polls

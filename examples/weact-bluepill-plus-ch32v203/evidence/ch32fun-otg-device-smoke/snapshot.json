@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      2278,
+      536891376,
+      536871932,
+      0,
+      4,
+      0,
+      0,
+      1342177280,
+      0,
+      536871173,
+      1,
+      65792,
+      536871172,
+      2,
+      1342177336,
+      536871236,
+      8388608,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3758157824,
+      2,
+      1,
+      8388608
+    ],
+    "pc": 2398,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 2466,
+    "mcause": 2147483707,
+    "mtval": 0,
+    "mtime": 99999922,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 100000000,
+  "cycles": 315380952,
+  "instructions": 100000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 100000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 100000000
+    }
+  },
+  "limits": {
+    "max_steps": 120000000,
+    "max_cycles": 100000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "2a6a4d847d517b2b1662aca6942ada95ca4f65b352bdf771bba7e425134970c3",
+  "config": {
+    "firmware": "examples/weact-bluepill-plus-ch32v203/ch32fun/otg_device.elf",
+    "system": "examples/weact-bluepill-plus-ch32v203/../../configs/systems/weact-bluepill-plus-ch32v203-ch32fun-usb-smoke.yaml",
+    "script": "examples/weact-bluepill-plus-ch32v203/ch32fun-otg-device-smoke.yaml"
+  }
+}

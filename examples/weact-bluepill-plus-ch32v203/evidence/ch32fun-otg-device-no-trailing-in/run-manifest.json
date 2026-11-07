@@ -1,0 +1,49 @@
+{
+  "manifest_schema_version": "1.0",
+  "engine_version": "0.25.0",
+  "seed": 0,
+  "nondeterminism": "none",
+  "firmware": {
+    "path": "otg_device.elf",
+    "sha256": "2a6a4d847d517b2b1662aca6942ada95ca4f65b352bdf771bba7e425134970c3"
+  },
+  "configs": [
+    {
+      "path": "ch32fun-otg-device-no-trailing-in.yaml",
+      "sha256": "3fdbd70c5f94cfcaca8cbc8779c5990f649a8f55e9b6add83df24a40af2fcd47"
+    },
+    {
+      "path": "weact-bluepill-plus-ch32v203-ch32fun-usb-no-trailing-in-smoke.yaml",
+      "sha256": "2aecea16c379b011467a5a3e089481d3a66dd0a939f470d317ce737f34501ada"
+    }
+  ],
+  "results": {
+    "status": "pass",
+    "stop_reason": "MaxCycles",
+    "steps_executed": 200000000,
+    "cycles": 624627828,
+    "instructions": 200000000,
+    "assertions": [
+      {
+        "assertion": "PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: \"usbfs\", log: \"host\", contains: \"control a1 01 03aa 0000 00ff ok aa 01 02\", min_count: 1, node: None } })",
+        "passed": true
+      },
+      {
+        "assertion": "PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: \"usbfs\", log: \"host\", contains: \"in 1 00 00 00 00\", min_count: 1, node: None } })",
+        "passed": true
+      },
+      {
+        "assertion": "PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: \"usbfs\", log: \"host\", contains: \"in 3 00 00 00 00\", min_count: 1, node: None } })",
+        "passed": true
+      },
+      {
+        "assertion": "PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: \"usbfs\", log: \"host\", contains: \"note in 1 timed out: the device kept NAKing\", min_count: 1, node: None } })",
+        "passed": true
+      }
+    ],
+    "cpu_state_digest": "c55ba307e62219fb36728d9a51d7b3d319b55e99cce51fa0e6cafcf76d2bed6b"
+  },
+  "coverage": null,
+  "fault_injections": [],
+  "digest": "6b0f24dcf2e67d590903db384a044ddd1fee9b448e9938774ddba01b0aaa5fda"
+}

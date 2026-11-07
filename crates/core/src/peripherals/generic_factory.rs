@@ -423,6 +423,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "qingke_v2_systick",
     // WCH QingKe V4 STK (CH32V20x/V30x): 64-bit CNT/CMP, up or down.
     "qingke_v4_systick",
+    // WCH USBFS / USBOTG_FS device controller + scripted host (CH32V20x).
+    "wch_usbfs",
     // WCH QingKe V2 PFIC (CH32V003 interrupt controller at 0xE000E000). Its
     // banks sit at NVIC offsets but number interrupts from 0, not 16.
     "qingke_pfic",
@@ -1835,6 +1837,20 @@ pub fn try_build(
         "qingke_v2_systick" => Box::new(crate::peripherals::qingke_systick::QingkeV2Systick::new()),
         // WCH QingKe V4 STK: 64-bit CNTL/CNTH, CMPLR/CMPHR (CH32V20x/V30x).
         "qingke_v4_systick" => Box::new(crate::peripherals::qingke_systick::QingkeV4Systick::new()),
+        "wch_usbfs" => {
+            let mut usb = crate::peripherals::wch_usbfs::WchUsbfs::new();
+            // `host: false` leaves the port unplugged (no enumeration).
+            if p_cfg.config.get("host").and_then(|v| v.as_bool()) == Some(false) {
+                usb.set_host_enabled(false);
+            }
+            // `host_steps:` run after enumeration (usb_host::parse_host_steps).
+            if let Some(steps) = p_cfg.config.get("host_steps") {
+                let steps = crate::peripherals::usb_host::parse_host_steps(steps)
+                    .map_err(|e| anyhow::anyhow!("wch_usbfs host_steps: {e}"))?;
+                usb.queue_host_steps(steps);
+            }
+            Box::new(usb)
+        }
         // WCH QingKe V2 PFIC; `configure_riscv` shares its state with the core.
         "qingke_pfic" => Box::new(crate::peripherals::qingke_pfic::QingkePfic::new()),
         // WCH-LinkE debug printf channel, probe attached (`minichlink -T`).
