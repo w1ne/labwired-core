@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="8" failures="0" errors="0" time="0.000299">
+<testsuite name="labwired" tests="10" failures="0" errors="0" time="0.000440">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="5f77d34eae8525b0af2033341db1a85ebab229be0a1e5e37c7f99b16908e9bb6"/>
+    <property name="firmware_hash" value="7b7e146f38bfc9f7e9cd807b7d13860189a31689e3ec73e296997ad4346ea254"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.000299">
+  <testcase classname="labwired" name="run" time="0.000440">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: MPFS MSS GPIO SMOKE" time="0.000000">
   </testcase>
@@ -19,6 +19,10 @@
   </testcase>
   <testcase classname="labwired" name="assertion 6: memory_value: @0x2012103c=0x5" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 7: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 7: uart_contains: plic prio=00000007 claim0=00000000 id=00000033 mcause=800000000000000b pending=00000000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: memory_value: @0x20120080=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

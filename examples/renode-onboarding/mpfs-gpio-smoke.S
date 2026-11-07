@@ -12,13 +12,35 @@
  *   GPIO_1 (24 ports): CFG_BYTE[1] = OUTPUT_MODE, GPIO_OUT = all ones
  *                      -> only ports 8..15 are outputs: OUT 0xFF00
  *
- * A zero-answering stub prints 00000000 for all three. No interrupt, PLIC or
- * other peripheral is exercised.
+ * A zero-answering stub prints 00000000 for all three.
+ *
+ * Then the PLIC (mss_plic.h PLIC_TypeDef, U54_1 = M-mode context 1) takes
+ * GPIO_0's non-direct line, source 51 (PLIC_GPIO0_NON_DIRECT_INT_OFFSET):
+ *
+ *   SOURCE_PRIORITY[51] = 0xFF  -> reads 7 (three priority bits), then 2
+ *   HART1_MMODE_ENA bit 51, threshold 0; claim with nothing pending -> 0
+ *   GPIO_0 port 0 = OUT|IN|OUTBUFF|INT_ENABLE|edge-positive, OUT 0 -> 1
+ *   -> MEIP traps with mcause 0x800000000000000b; the handler claims (51),
+ *      clears GPIO_IRQ bit 0, completes; afterwards the pending word is 0.
+ *   Restore CFG_ALL / GPIO_OUT with interrupts disabled; GPIO_IN is 0x3FFF
+ *   again at the final memory assertion.
+ *
+ * Without a PLIC (or with the old zero-answering window) the trap never
+ * comes and the line reads "plic ... id=00000000 ...".
  */
 .equ GPIO0, 0x20120000
 .equ GPIO1, 0x20121000
 .equ GPIO2, 0x20122000
 .equ UART1, 0x20100000
+.equ PLIC, 0x0C000000
+
+.equ PLIC_PRIO51, 4 * 51
+.equ PLIC_PENDING1, 0x1004
+.equ PLIC_ENA_CTX1_W1, 0x2084
+.equ PLIC_PAGE1, 0x1000
+.equ PLIC_PAGE2, 0x2000
+.equ PLIC_CTX1, 0x201000
+.equ GPIO_IRQ, 0x80
 
 .equ GPIO_IN, 0x84
 .equ GPIO_OUT, 0x88
@@ -76,9 +98,85 @@ _start:
     jal ra, puthex
     la a0, newline
     jal ra, puts
+
+    /* --- PLIC: GPIO_0 non-direct line, source 51 --- */
+    la t0, trap
+    csrw mtvec, t0
+    li s7, 0            /* claimed ID, written by the handler */
+    li s8, 0            /* mcause seen by the handler */
+    li s9, PLIC
+    li s10, PLIC + PLIC_CTX1
+    li t0, 0xFF
+    sw t0, PLIC_PRIO51(s9)
+    lw s3, PLIC_PRIO51(s9)
+    li t0, 2
+    sw t0, PLIC_PRIO51(s9)
+    li t0, 1 << (51 - 32)
+    li t5, PLIC + PLIC_PAGE2
+    sw t0, PLIC_ENA_CTX1_W1 - PLIC_PAGE2(t5)
+    sw zero, 0(s10)     /* threshold */
+    lw s4, 4(s10)       /* claim, nothing pending */
+    li t0, 1 << 11
+    csrs mie, t0        /* MEIE */
+    csrsi mstatus, 1 << 3
+
+    sw zero, GPIO_OUT(s1)
+    li t0, 0x4F         /* OUT|IN|OUTBUFF|INT_ENABLE, INTTYPE 2 (rising) */
+    sw t0, 0(s1)
+    li t0, 1
+    sw t0, GPIO_OUT(s1) /* rising edge on port 0 */
+    li t0, 1000
+6:
+    bnez s7, 7f
+    addi t0, t0, -1
+    bnez t0, 6b
+7:
+    csrci mstatus, 1 << 3
+    /* Restore GPIO_0's all-ports output state with edge IRQs disabled. */
+    li t0, 0x7
+    sw t0, GPIO_CFG_ALL(s1)
+    li t0, -1
+    sw t0, GPIO_OUT(s1)
+    li t5, PLIC + PLIC_PAGE1
+    lw s5, PLIC_PENDING1 - PLIC_PAGE1(t5)
+
+    la a0, label_prio
+    jal ra, puts
+    mv a0, s3
+    jal ra, puthex
+    la a0, label_claim0
+    jal ra, puts
+    mv a0, s4
+    jal ra, puthex
+    la a0, label_id
+    jal ra, puts
+    mv a0, s7
+    jal ra, puthex
+    la a0, label_mcause
+    jal ra, puts
+    srli a0, s8, 32
+    jal ra, puthex
+    mv a0, s8
+    jal ra, puthex
+    la a0, label_pend
+    jal ra, puts
+    mv a0, s5
+    jal ra, puthex
+    la a0, newline
+    jal ra, puts
 1:
     wfi
     j 1b
+
+/* Machine trap handler: claim, clear the GPIO latch, complete. */
+.balign 4
+trap:
+    csrr s8, mcause
+    lw s7, 4(s10)
+    li t4, 1
+    sw t4, GPIO_IRQ(s1)
+    sw s7, 4(s10)
+    mret
 
 /* putc: t1 = byte. Clobbers t2. */
 putc:
@@ -125,3 +223,8 @@ label2:  .asciz "gpio2.out="
 label0:  .asciz " gpio0.in="
 label1:  .asciz " gpio1.out="
 newline: .asciz "\r\n"
+label_prio:   .asciz "plic prio="
+label_claim0: .asciz " claim0="
+label_id:     .asciz " id="
+label_mcause: .asciz " mcause="
+label_pend:   .asciz " pending="

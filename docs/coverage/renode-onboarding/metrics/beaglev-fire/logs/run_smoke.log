@@ -1,18 +1,7 @@
-warning: method `census_name` is never used
-   --> crates/core/src/peripherals/miv.rs:123:8
-    |
-108 | impl CoreGpioLayout {
-    | ------------------- method in this implementation
-...
-123 |     fn census_name(self) -> &'static str {
-    |        ^^^^^^^^^^^
-    |
-    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-2026-11-07T01:11:12.167336Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/beaglev-fire.yaml
-2026-11-07T01:11:12.168794Z  INFO labwired_loader: ELF Entry Point: 0x80000000
+2026-11-07T02:24:15.110372Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/beaglev-fire.yaml
+2026-11-07T02:24:15.111918Z  INFO labwired_loader: ELF Entry Point: 0x80000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-2026-11-07T01:11:12.170201Z  INFO labwired_cli::execute: core parked with no wake source at cycle 109058; ending at max_steps
-labwired-cli test: idle_ff skipped 108116 of 109058 device cycles (942 interpreted)
-PASS  7/7 checks · beaglev-fire-mss-gpio-smoke · 100000 steps · 0.00s
+2026-11-07T02:24:15.113456Z  INFO labwired_cli::execute: core parked with no wake source at cycle 107898; ending at max_steps
+labwired-cli test: idle_ff skipped 105796 of 107898 device cycles (2102 interpreted)
+PASS  9/9 checks · beaglev-fire-mss-gpio-smoke · 100000 steps · 0.00s

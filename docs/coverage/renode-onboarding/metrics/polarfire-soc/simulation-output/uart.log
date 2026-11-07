@@ -1,2 +1,3 @@
 MPFS MSS GPIO SMOKE
 gpio2.out=0001a5a4 gpio0.in=00003fff gpio1.out=0000ff00
+plic prio=00000007 claim0=00000000 id=00000033 mcause=800000000000000b pending=00000000

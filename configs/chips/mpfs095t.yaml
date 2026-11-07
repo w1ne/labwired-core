@@ -14,10 +14,10 @@
 #   mtime counts at 1 MHz.
 #
 # Modelled: one U54 hart (mhartid 1) as an RV64IMAC M-mode core with the
-# CLINT inside the core (crates/core/src/cpu/riscv64.rs), the five MMUARTs as
-# 16550s (DLAB divisor latches, polled TX), L2-LIM and the DDR window as RAM.
-# Declared, not modelled (`type: stub`): PLIC (no external interrupts are
-# delivered yet), the GPIO/I2C/SPI/QSPI blocks and the system controller
+# CLINT and PLIC inside the core (crates/core/src/cpu/riscv64.rs and
+# riscv64_plic.rs), the five MMUARTs as 16550s (DLAB divisor latches, polled
+# TX), L2-LIM and the DDR window as RAM. Declared, not modelled
+# (`type: stub`): the GPIO/I2C/SPI/QSPI blocks and the system controller
 # mailbox. Not modelled in the core: F/D, S/U modes, Sv39, the E51 and the
 # other three U54s.
 
@@ -74,12 +74,10 @@ peripherals:
     irq: 94
     config:
       profile: "dw_apb_uart"
-  # PLIC: priorities / pending / enables / threshold+claim. Stubbed until the
-  # core takes external interrupts.
-  - id: "plic"
-    type: "stub"
-    base_address: 0x0C000000
-    size: "65536KB"
+  # PLIC (0x0C000000): modelled inside the core, as the CLINT is — priorities,
+  # pending, enables, threshold and claim/complete for 186 sources and 9
+  # contexts, with this hart's M-mode context (1) driving MEIP. A
+  # peripheral's `irq` is its PLIC source ID.
   # MSS GPIO_0..2. Named `mss_gpio*`, not `gpio*`: the bus reads a `gpio0` /
   # `gpio1` peripheral as a Nordic GPIOTE port and keeps a per-cycle service
   # pass for it, which these stubs do not need.

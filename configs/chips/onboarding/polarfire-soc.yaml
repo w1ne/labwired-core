@@ -3,9 +3,9 @@
 # The original machine-imported profile was mislabeled ARM and exposed broad,
 # mostly zero-answering MSS windows. This profile follows the sourced MPFS MSS
 # map and claims only one RV64IMAC U54, the memory windows used by the firmware,
-# the model-backed MMUART0/1, the model-backed MSS GPIO_0..2 banks, and
-# explicit startup stubs reached by Zephyr. Those stubs do not model PLIC,
-# I2C, or SPI behavior. The E51, other U54
+# the model-backed MMUART0/1, the model-backed MSS GPIO_0..2 banks, the
+# in-core CLINT and PLIC, and explicit startup stubs reached by Zephyr. Those
+# stubs do not model I2C or SPI behavior. The E51, other U54
 # harts, F/D extensions, supervisor mode, DMA, storage, and remaining MSS
 # peripherals are outside this profile.
 # Sources: configs/chips/mpfs095t.yaml; Microchip PolarFire SoC MSS TRM;
@@ -36,30 +36,34 @@ peripherals:
     irq: 91
     config:
       profile: "dw_apb_uart"
-  - id: "plic"
-    type: "stub"
-    base_address: 0x0C000000
-    size: "65536KB"
+  # The PLIC at 0x0C000000 is in the RV64 core, like the CLINT
+  # (crates/core/src/cpu/riscv64_plic.rs): 186 sources, 9 contexts, this hart
+  # on M-mode context 1. A peripheral's `irq` is its PLIC source ID.
   # MSS GPIO_0..2: CoreGPIO semantics on the mss_gpio.h register map
   # (crates/core/src/peripherals/miv.rs). `ports` is the bank width
-  # (NB_OF_GPIO_GPIO0/1/2 = 14/24/32 in Microchip's mss_gpio.c). Their
-  # interrupt lines are not delivered: the RV64 core has no PLIC yet.
+  # (NB_OF_GPIO_GPIO0/1/2 = 14/24/32 in Microchip's mss_gpio.c). `irq` is
+  # each bank's OR'd non-direct line, PLIC sources 51/52/53
+  # (PLIC_GPIO*_NON_DIRECT_INT_OFFSET in mss_plic.h; Renode polarfire-soc.repl
+  # `IRQ -> plic@51..53`). The per-pin direct sources 13-50 are not wired.
   - id: "mss_gpio0"
     type: "mpfs_gpio"
     base_address: 0x20120000
     size: "4KB"
+    irq: 51
     config:
       ports: 14
   - id: "mss_gpio1"
     type: "mpfs_gpio"
     base_address: 0x20121000
     size: "4KB"
+    irq: 52
     config:
       ports: 24
   - id: "mss_gpio2"
     type: "mpfs_gpio"
     base_address: 0x20122000
     size: "4KB"
+    irq: 53
     config:
       ports: 32
   - id: "i2c0"
