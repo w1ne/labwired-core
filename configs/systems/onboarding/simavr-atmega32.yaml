@@ -6,3 +6,10 @@
 
 name: simavr-atmega32
 chip: ../../chips/onboarding/simavr-atmega32.yaml
+board_io:
+  - id: status_led
+    kind: led
+    peripheral: porta
+    pin: 0
+    signal: output
+    active_high: true

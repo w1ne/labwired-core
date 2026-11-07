@@ -6,8 +6,9 @@
 
 name: simavr-atmega32
 description: >-
-  ATmega32 (Atmel AVR). Imported profile measured for bounded AVR8 CPU and SRAM
-  execution only; it declares no peripheral models and makes no board-I/O claim.
+  ATmega32 (Atmel AVR). Imported profile measured for bounded AVR8 execution,
+  GPIOA and polled USART output. Other peripheral ranges are omitted from this
+  profile.
   Memory geometry: flash 32KB @ 0x0, ram 2KB @ 0x60.
 family: Atmel AVR
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
@@ -15,6 +16,21 @@ code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // 
 pass_rate: 0
 verified: false
 system: systems/onboarding/simavr-atmega32.yaml
+validation:
+  method: renode-onboarding-exact-import-smoke
+  reason: bounded AVR8 execution, GPIOA (PA0) and polled USART TX only; ideal rail assumed; whole platform remains unverified
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    avr8_cpu_sram_smoke: true
+    gpio: true
+    uart0_polled_tx: true
+    whole_platform: false
+    other_peripherals: false
+    board_io: true
+  timestamp_utc: '2026-11-07T12:29:36Z'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/simavr-atmega32.validation.md
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

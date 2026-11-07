@@ -9,11 +9,11 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `4/224`
-- pass_observable_assertions: `196/224`
-- pass_stop_reason_only: `28/224`
+- pass_observable_assertions: `197/224`
+- pass_stop_reason_only: `27/224`
 - pass_depth_unknown: `0/224`
-- median_elapsed_ms: `1195`
-- median_elapsed_seconds: `1.195`
+- median_elapsed_ms: `1223`
+- median_elapsed_seconds: `1.223`
 - threshold_seconds: `3600`
 - threshold_met: `224/224`
 
@@ -193,7 +193,7 @@
 | `simavr-atmega169p` | `pass` | `True` | `yes` | `yes` | `87484` | `87.484` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega16m1` | `pass` | `True` | `yes` | `yes` | `607` | `0.607` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega2560` | `pass` | `True` | `yes` | `yes` | `11541` | `11.541` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `simavr-atmega32` | `pass` | `True` | `yes` | `yes` | `607` | `0.607` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `simavr-atmega32` | `pass` | `True` | `yes` | `yes` | `92624` | `92.624` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega324` | `pass` | `True` | `yes` | `yes` | `12120` | `12.12` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega328` | `pass` | `True` | `yes` | `yes` | `14574` | `14.574` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega328pb` | `pass` | `True` | `yes` | `yes` | `9330` | `9.33` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

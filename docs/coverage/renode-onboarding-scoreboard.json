@@ -8,11 +8,11 @@
     "pass": 224,
     "fail": 0,
     "pass_loading_zero_answering_windows": 4,
-    "pass_observable_assertions": 196,
-    "pass_stop_reason_only": 28,
+    "pass_observable_assertions": 197,
+    "pass_stop_reason_only": 27,
     "pass_depth_unknown": 0,
-    "median_elapsed_ms": 1195,
-    "median_elapsed_seconds": 1.195,
+    "median_elapsed_ms": 1223,
+    "median_elapsed_seconds": 1.223,
     "threshold_seconds": 3600,
     "threshold_met": 224,
     "descriptors_present": 245,
@@ -7648,32 +7648,35 @@
       "script": "examples/renode-onboarding/simavr-atmega32-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-atmega32.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T17:13:13Z",
-      "finished_at_utc": "2026-11-06T17:13:13Z",
-      "elapsed_seconds": 1,
-      "elapsed_ms": 607,
+      "started_at_utc": "2026-11-07T12:26:13Z",
+      "finished_at_utc": "2026-11-07T12:27:45Z",
+      "elapsed_seconds": 93,
+      "elapsed_ms": 92624,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.302,
+        "build_cli": 92.308,
         "build_firmware": null,
-        "run_smoke": 0.295
+        "run_smoke": 0.306
       },
       "stages_ms": {
-        "build_cli": 302,
+        "build_cli": 92308,
         "build_firmware": null,
-        "run_smoke": 295
+        "run_smoke": 306
       },
-      "prebuilt_firmware": "tests/fixtures/avr/atmega32-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/atmega32-io-smoke.elf",
       "_artifact_path": "simavr-atmega32",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "uart_contains",
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega324",

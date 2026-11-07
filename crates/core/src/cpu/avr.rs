@@ -991,10 +991,11 @@ impl Avr {
                 matches!(addr, AVR_PINA | AVR_PINB | AVR_PINC | AVR_PIND)
             }
             // Classic layout: PINx/DDRx/PORTx descend from PORTA at 0x3B.
-            AvrModel::Atmega16 => matches!(addr, 0x0030 | 0x0033 | 0x0036 | 0x0039),
+            AvrModel::Atmega16 | AvrModel::Atmega32 => {
+                matches!(addr, 0x0030 | 0x0033 | 0x0036 | 0x0039)
+            }
             AvrModel::Atmega128 => false,
             AvrModel::Atmega8
-            | AvrModel::Atmega32
             | AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
@@ -1046,10 +1047,9 @@ impl Avr {
             | AvrModel::Atmega324
             | AvrModel::Atmega644
             | AvrModel::Atmega1284p => (AVR_PINA..=AVR_PIND + 2).contains(&addr),
-            AvrModel::Atmega16 => (0x0030..=0x003B).contains(&addr),
+            AvrModel::Atmega16 | AvrModel::Atmega32 => (0x0030..=0x003B).contains(&addr),
             AvrModel::Atmega128 => false,
             AvrModel::Atmega8
-            | AvrModel::Atmega32
             | AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
@@ -4531,24 +4531,26 @@ mod tests {
         assert!(cpu.serial_tx.is_empty());
     }
 
-    /// ATmega16 ports descend from PORTA 0x3B: PINx/DDRx/PORTx at 0x39/0x3A/
-    /// 0x3B .. 0x30/0x31/0x32. PORTC (0x35) is a latch, not the 328P TIFR0.
+    /// ATmega16/32 ports descend from PORTA 0x3B: PINx/DDRx/PORTx at 0x39/
+    /// 0x3A/0x3B .. 0x30/0x31/0x32. PORTC (0x35) is a latch, not the 328P TIFR0.
     #[test]
     fn atmega16_classic_ports_mirror_and_read_only_pin() {
-        let mut bus = MockBus::new();
-        let mut cpu = Avr::new_model(AvrModel::Atmega16);
-        cpu.data_write(0x3A, 0x01, &mut bus).unwrap(); // DDRA
-        cpu.data_write(0x3B, 0x01, &mut bus).unwrap(); // PORTA
-        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x3B).unwrap(), 0x01);
-        assert_eq!(cpu.data_read(0x39, &bus).unwrap() & 1, 1);
-        cpu.data_write(0x39, 0x01, &mut bus).unwrap(); // PINA is read-only
-        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x3B).unwrap(), 0x01);
-        cpu.data_write(0x3B, 0x00, &mut bus).unwrap();
-        assert_eq!(cpu.data_read(0x39, &bus).unwrap() & 1, 0);
-        cpu.data_write(0x35, 0x5A, &mut bus).unwrap(); // PORTC
-        assert_eq!(cpu.data_read(0x35, &bus).unwrap(), 0x5A);
-        bus.write_u8(AVR_IO_MIRROR_BASE + 0x30, 0x04).unwrap(); // PD2 high
-        assert_eq!(cpu.data_read(0x30, &bus).unwrap() & 0x04, 0x04);
+        for model in [AvrModel::Atmega16, AvrModel::Atmega32] {
+            let mut bus = MockBus::new();
+            let mut cpu = Avr::new_model(model);
+            cpu.data_write(0x3A, 0x01, &mut bus).unwrap(); // DDRA
+            cpu.data_write(0x3B, 0x01, &mut bus).unwrap(); // PORTA
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x3B).unwrap(), 0x01);
+            assert_eq!(cpu.data_read(0x39, &bus).unwrap() & 1, 1);
+            cpu.data_write(0x39, 0x01, &mut bus).unwrap(); // PINA is read-only
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x3B).unwrap(), 0x01);
+            cpu.data_write(0x3B, 0x00, &mut bus).unwrap();
+            assert_eq!(cpu.data_read(0x39, &bus).unwrap() & 1, 0);
+            cpu.data_write(0x35, 0x5A, &mut bus).unwrap(); // PORTC
+            assert_eq!(cpu.data_read(0x35, &bus).unwrap(), 0x5A);
+            bus.write_u8(AVR_IO_MIRROR_BASE + 0x30, 0x04).unwrap(); // PD2 high
+            assert_eq!(cpu.data_read(0x30, &bus).unwrap() & 0x04, 0x04);
+        }
     }
 
     /// SBI/CBI on ATmega16 PORTA (I/O 0x1B) are read-modify-write: the 328P
