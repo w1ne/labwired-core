@@ -569,7 +569,7 @@ cosim_models:
         V1 in 0 dc 1
         R1 in out 1k
         D1 out 0 vendor
-        .model vendor D(IS=2n CJO=4p)
+        .model vendor D(IS=2n XTI=3)
       probes: { out: "v(out)" }
 "#;
     std::fs::write(&system, manifest).unwrap();
@@ -581,7 +581,7 @@ cosim_models:
     assert!(!output.status.success(), "unsupported model must not run");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("vendor_circuit") && stderr.contains("CJO") && stderr.contains("ngspice"),
+        stderr.contains("vendor_circuit") && stderr.contains("XTI") && stderr.contains("ngspice"),
         "{stderr}"
     );
 }
