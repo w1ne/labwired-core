@@ -176,8 +176,9 @@ hb=0 yellow=1 green=0 orange=0
   but no peripheral is gated by them. Oscillator start-up timing, power modes
   and software reset are not modelled. `SYNC_32K` is a 32 768-Hz square wave
   from the cycle count.
-- **IOC** pin muxing and pad overrides are a stub. The firmware writes them as
-  §18.5 requires, but the console model does not depend on them.
+- **IOC** pin muxing and pad overrides are stored and read back at their
+  Table 9-7 reset values and field widths, but not applied: no SEL/INPUT_SEL
+  value routes a peripheral to a pad and no OVER value changes a pad's pull.
 - **GPIO interrupts** (`GPIO_RIS`/`GPIO_MIS`) are never raised; the AFSEL commit
   lock is not enforced.
 - **RF core:** the radio is alone in an empty channel. Nothing is ever

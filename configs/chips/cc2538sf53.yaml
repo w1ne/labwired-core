@@ -62,9 +62,10 @@
 # - SYS_CTRL clock gating: the gates are stored and read back, but no
 #   peripheral is gated by them. No oscillator start-up timing, no PM1-3, no
 #   software reset.
-# - IOC pin muxing/pad overrides (IOC_Pxx_SEL / IOC_Pxx_OVER /
-#   IOC_UARTRXD_UART0): the IOC window is a stub. The firmware writes it as
-#   silicon requires; the console model does not depend on it.
+# - IOC routing: the Table 9-7 registers (IOC_Pxx_SEL / IOC_Pxx_OVER /
+#   input selects) are stored and read back at their reset values and field
+#   widths, but no SEL/INPUT_SEL value connects a peripheral to a pad and no
+#   OVER value changes a pad's pull or output enable.
 # - GPIO interrupts (RIS/MIS never set) and the AFSEL commit lock.
 # - RF: path loss, range and collisions on the air (lossless, every node
 #   hears every other), the CSP, the MAC timer count, source matching and the
@@ -212,11 +213,11 @@ peripherals:
     base_address: 0x400D2000
     size: "4KB"
 
-  # --- Declared, not modelled (honest L1 boundary) -----------------------
-  # I/O muxing (IOC_Pxx_SEL / IOC_Pxx_OVER / IOC_UARTRXD_UART0): written by
-  # the smoke as §18.5 requires; not enforced by the console model.
+  # I/O control (§9.3.2, Table 9-7): Pxx_SEL / Pxx_OVER / input-select
+  # register file at its reset values (OVER = 0x4, pull-up). Storage only:
+  # the routing it describes is not applied to pads or peripherals.
   - id: "ioc"
-    type: "stub"
+    type: "cc2538_ioc"
     base_address: 0x400D4000
     size: "4KB"
   # Flash controller (§8.10, Table 8-10): page erase and the FCTL/FADDR/

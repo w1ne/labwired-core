@@ -25,6 +25,7 @@ ELFs are not run. No wider Renode parity claim is made.
 | UART0 (PL011-compatible) TX @ 115200 from 16 MHz, `IBRD 8` / `FBRD 44` | smoke-tested | `uart0 … ibrd=8 fbrd=44` + heartbeat lines on the console sink |
 | GPIO address-masked `GPIO_DATA` write + read | smoke-tested | `led=yellow on pin=1 leds=02` … (one masked store per LED; the nibble read proves no other pin moved); unit tests cover the SWRU319C Figure 9-2/9-3 examples |
 | GPIO `GPIO_DIR` / `GPIO_AFSEL` | smoke-tested | LEDs driven only after DIR; PA0/PA1 handed to UART0 |
+| IOC register file (Table 9-7): written routing, `PD7_OVER` reset 0x4, `IOC_GPT3OCP2` field mask | smoke-tested | `ioc pa1_sel=00 pa1_over=08 pa0_over=00 rx0=00 pd7_over=04 gpt3ocp2=1f restored=00`; unit tests in `crates/core/src/peripherals/cc2538/ioc.rs` |
 | Key inputs at the reset IOC pull-up | smoke-tested | `keys select=1 left=1 right=1 up=1 down=1` |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
@@ -64,7 +65,7 @@ ELFs are not run. No wider Renode parity claim is made.
 | ROM serial boot loader | **not modelled** | ROM parks in WFI |
 | Flash: CPU stall while executing from flash during an operation, flash DMA trigger, flash interrupt, the 8-writes-per-word limit, mass erase | **not modelled** | `crates/core/src/peripherals/cc2538/flash_ctrl.rs` |
 | Watchdog, sleep-timer capture | **not modelled** | `WDCTL`/`STCC`/`STCS` are storage |
-| IOC pin mux / pad overrides | **not modelled** | the IOC window is a stub |
+| IOC pin mux / pad overrides applied to pads | **not modelled** | the registers are stored; GPIO pulls come from `pull_up_mask` |
 | GPIO interrupts, AFSEL commit lock | **not modelled** | `GPIO_RIS`/`GPIO_MIS` read 0 |
 | CCA in the smoke image | pinned | the loader enters the smoke at its flash-base table; `test_cc2538dk_smoke_customer_configuration_area_boots` pins its 44 bytes |
 | SSI0/SSI1 master mode: TX-FIFO queueing while disabled, LBM loopback, 4..16-bit frames, 8-deep RX FIFO overrun (RORRIS) and ICR clear, FIFO-level RIS/MIS and IRQ 7/34 | unit-tested; exercised | `cargo test -p labwired-core --lib cc2538::ssi` (10 tests); the smoke's `ssi0 ...` lines in `io-smoke.yaml` |

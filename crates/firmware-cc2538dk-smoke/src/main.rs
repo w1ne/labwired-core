@@ -58,6 +58,10 @@ const IOC_PA1_SEL: u32 = IOC + 0x004;
 const IOC_PA0_OVER: u32 = IOC + 0x080;
 const IOC_PA1_OVER: u32 = IOC + 0x084;
 const IOC_UARTRXD_UART0: u32 = IOC + 0x100;
+/// Untouched by this firmware: still at its Table 9-7 reset value (PUE).
+const IOC_PD7_OVER: u32 = IOC + 0x0FC;
+/// Last Table 9-7 register; INPUT_SEL is bits [4:0], the rest reserved.
+const IOC_GPT3OCP2: u32 = IOC + 0x150;
 /// Table 9-1: peripheral output select 0x0 = UART0 TXD.
 const IOC_SEL_UART0_TXD: u32 = 0x0;
 /// IOC_Pxx_OVER: 0x8 = output enable, 0x0 = no override (input, no pull).
@@ -255,6 +259,30 @@ fn put_hex8(value: u32) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     putc(HEX[((value >> 4) & 0xF) as usize]);
     putc(HEX[(value & 0xF) as usize]);
+}
+
+/// IOC register read-back (SWRU319C Table 9-7): the pad routing written at
+/// start-up, an untouched OVER register at its 0x4 reset, and a masked write
+/// to IOC_GPT3OCP2 (all ones keeps INPUT_SEL[4:0] only), restored afterwards.
+fn ioc_selftest() {
+    wr(IOC_GPT3OCP2, 0xFFFF_FFFF);
+    let gpt3ocp2 = rd(IOC_GPT3OCP2);
+    wr(IOC_GPT3OCP2, 0);
+    puts(b"ioc pa1_sel=");
+    put_hex8(rd(IOC_PA1_SEL));
+    puts(b" pa1_over=");
+    put_hex8(rd(IOC_PA1_OVER));
+    puts(b" pa0_over=");
+    put_hex8(rd(IOC_PA0_OVER));
+    puts(b" rx0=");
+    put_hex8(rd(IOC_UARTRXD_UART0));
+    puts(b" pd7_over=");
+    put_hex8(rd(IOC_PD7_OVER));
+    puts(b" gpt3ocp2=");
+    put_hex8(gpt3ocp2);
+    puts(b" restored=");
+    put_hex8(rd(IOC_GPT3OCP2));
+    putc(b'\n');
 }
 
 fn ssi_drain() {
@@ -605,6 +633,7 @@ fn main() -> ! {
     put_dec32(pin(GPIO_C, KEY_DOWN));
     putc(b'\n');
 
+    ioc_selftest();
     ssi0_selftest();
     i2cm_selftest();
     pka_sram_selftest();

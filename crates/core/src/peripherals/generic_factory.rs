@@ -429,6 +429,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "cc2538_pl022_ssi",
     "cc2538_gptimer",
     "cc2538_i2cm",
+    "cc2538_ioc",
     // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
     // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
@@ -1922,6 +1923,8 @@ pub fn try_build(
         // I2CM master at 0x4002_0000; external devices attach through
         // `external_devices:`. I2CS remains a separate stub window.
         "cc2538_i2cm" => Box::new(crate::peripherals::cc2538::i2cm::Cc2538I2cm::new()),
+        // IOC pad mux / override / input-select register file (storage only).
+        "cc2538_ioc" => Box::new(crate::peripherals::cc2538::ioc::Cc2538Ioc::new()),
         // GPTIMER0-3: timer A pends the entry's `irq:`, timer B `irq_b`.
         "cc2538_gptimer" => Box::new(crate::peripherals::cc2538::gptimer::Cc2538GpTimer::new(
             p_cfg

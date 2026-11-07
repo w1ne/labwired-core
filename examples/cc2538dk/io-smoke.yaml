@@ -7,6 +7,8 @@
 # clock (16-MHz HF-RC, SYS_DIV 001), derives IBRD/FBRD for 115200 8N1 from it,
 # then walks LED2-LED4 (PC1-PC3, active high) with single address-masked
 # GPIO_DATA stores and prints the pin and the whole LED nibble it read back.
+# It reads the IOC registers back (written routing, PD7_OVER reset 0x4, a
+# masked IOC_GPT3OCP2 write).
 # LED1 (PC0) shares the USB D+ pull-up and is never driven. SSI0 then runs an
 # internal-loopback self-test: TX-FIFO queueing while disabled, 8- and 16-bit
 # frames, and the RX overrun flag with its ICR clear. GPTimer0 then
@@ -34,6 +36,7 @@ assertions:
       - "led=orange on pin=1 leds=08"
       - "led=orange off pin=0 leds=00"
       - "keys select=1 left=1 right=1 up=1 down=1"
+      - "ioc pa1_sel=00 pa1_over=08 pa0_over=00 rx0=00 pd7_over=04 gpt3ocp2=1f restored=00"
       - "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c"
       - "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08"
       - "gpt0 to=3 nvic19=1 held=1"
