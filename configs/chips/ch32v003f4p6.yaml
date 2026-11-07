@@ -116,6 +116,19 @@ peripherals:
     config:
       profile: "ch32v00x"
 
+  # SPI1 (ch32v00x.h): SPI1_BASE = APB2PERIPH_BASE + 0x3000, RCC_APB2Periph_SPI1
+  # = APB2PCENR bit 12 (ch32v00x_rcc.h), SPI1_IRQn = 33. SPI_TypeDef is CTLR1,
+  # CTLR2, STATR, DATAR, CRCR, RCRCR, TCRCR at the F1 offsets, then HSCR at
+  # 0x24 (no I2S words), so the classic `stm32` layout serves it. HSCR
+  # (high-speed read mode) is not modelled and reads 0. Pads: SCK PC5,
+  # MOSI PC6, MISO PC7 (arduino_core_ch32 variant_CH32V003F4 PinMap_SPI_*).
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 33
+    clock: { reg: "apb2pcenr", bit: 12 }
+
   # AFIO (ch32v00x.h): AFIO_BASE = APB2PERIPH_BASE + 0x0000, RCC_APB2Periph_AFIO
   # = APB2PCENR bit 0. AFIO_TypeDef is RESERVED0, PCFR1, EXTICR, so the
   # `wch` profile, not the F1 map. WCH's pinmap calls GPIO_PinRemapConfig

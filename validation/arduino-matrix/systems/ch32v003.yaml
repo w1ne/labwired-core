@@ -1,6 +1,14 @@
-# Arduino matrix system — CH32V003F4P6 bare chip. No kit devices: the chip
-# has no I2C/SPI model yet, so L3/L4 are skipped in boards.yaml.
+# Arduino matrix system — CH32V003F4P6 bare chip plus the L4 SPI kit.
+# No I2C1 model yet, so L3 is skipped in boards.yaml.
 name: "arduino-matrix-ch32v003"
 chip: "../../../configs/chips/ch32v003f4p6.yaml"
-external_devices: []
+external_devices:
+  # Matrix L4_spi_sensor: MAX31855 on the variant's default SPI (spi1).
+  # PIN_SPI_SS is PC4 (variant_CH32V003F4.h). Single-device bus: CS is
+  # soft-ignored by SpiDevice v1 broadcast.
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PC4"
 board_io: []

@@ -122,10 +122,9 @@ boards:
     pwm_min_edges: 4
     family: wch
     notes: "QingKe V2A RV32EC: PFIC, STK, HPE, XW compressed insns"
-    sketches_skip: [L3_i2c_sensor, L4_spi_sensor, L7_timer, L8_can]
+    sketches_skip: [L3_i2c_sensor, L7_timer, L8_can]
     sketches_skip_reason:
       L3_i2c_sensor: "No CH32V003 I2C1 model yet"
-      L4_spi_sensor: "No CH32V003 SPI1 model yet"
       # Measured 2026-11-07: LW_L7_FAIL t0=1991 t1=3999 t2=3778 t3=4999.
       L7_timer: >-
         Upstream core bug, not a model gap: getCurrentMicros() (ch32/clock.c)
