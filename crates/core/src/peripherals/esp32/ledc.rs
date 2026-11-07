@@ -18,6 +18,9 @@
 //!   * Implements the `CONF1.DUTY_START` strobe: the staged `DUTY` value
 //!     (Q-format, 4 fractional bits) is latched into the channel's
 //!     `DUTY_R` shadow on the write, so `ledc_get_duty()` reads it back.
+//!     The bit self-clears when the new shape takes effect (the next
+//!     overflow of a running timer, at once on a stopped one). ESP-IDF 5's
+//!     `ledc_ll_set_duty_start` spins on it before setting it again.
 //!   * Computes the live **duty fraction** and **PWM frequency** for a
 //!     channel ([`Ledc::channel_duty_fraction`] / [`Ledc::channel_freq_hz`]).
 //!   * Implements `INT_CLR` write-1-to-clear against `INT_RAW`.
@@ -113,7 +116,8 @@ const CH_CONF1: u64 = 0x0C;
 const CH_DUTY_R: u64 = 0x10;
 
 /// CONF1.DUTY_START — bit 31. Setting it commits the staged DUTY into the
-/// live DUTY_R shadow (one-shot on silicon; we latch on the write).
+/// live DUTY_R shadow (latched on the write). It reads back set until the
+/// new shape applies, then self-clears.
 const CONF1_DUTY_START_BIT: u32 = 1 << 31;
 /// CONF0.SIG_OUT_EN — bit 2. Channel output enable.
 const CONF0_SIG_OUT_EN_BIT: u32 = 1 << 2;
@@ -346,6 +350,39 @@ impl Ledc {
         self.regs.insert(Self::ch_reg(ch, CH_DUTY_R), staged);
     }
 
+    /// Self-clear channel `ch`'s CONF1.DUTY_START: its shape has applied.
+    fn clear_duty_start(&mut self, ch: usize) {
+        if let Some(w) = self.regs.get_mut(&Self::ch_reg(ch as u64, CH_CONF1)) {
+            *w &= !CONF1_DUTY_START_BIT;
+        }
+    }
+
+    /// Whether channel `ch`'s latched shape is still waiting for its overflow
+    /// at cycle `c`. Reads are not synced, so a poll between wakes needs this
+    /// to see DUTY_START clear on the cycle silicon clears it.
+    fn duty_start_pending_at(&self, ch: usize, c: u64) -> bool {
+        let Some((_, from)) = self.wave.pending[ch] else {
+            return false;
+        };
+        match self.wave.timers[self.channel_timer(ch as u64) as usize] {
+            Some(run) => c < run.start || run.tick_at(c) < from,
+            None => false,
+        }
+    }
+
+    /// The word at `word_off` as a read sees it at the current cycle.
+    fn read_word(&self, word_off: u64) -> u32 {
+        let w = self.word(word_off);
+        if w & CONF1_DUTY_START_BIT != 0 {
+            if let Some(ch) = Self::channel_of(word_off, CH_CONF1) {
+                if !self.duty_start_pending_at(ch as usize, self.now()) {
+                    return w & !CONF1_DUTY_START_BIT;
+                }
+            }
+        }
+        w
+    }
+
     /// Which timer (global index 0..7) channel `ch` is bound to, per its
     /// CONF0.TIMER_SEL field and speed mode.
     fn channel_timer(&self, ch: u64) -> u64 {
@@ -529,6 +566,7 @@ impl Ledc {
             if due {
                 self.wave.active[ch] = shape;
                 self.wave.pending[ch] = None;
+                self.clear_duty_start(ch);
             }
         }
     }
@@ -587,6 +625,7 @@ impl Ledc {
             if self.channel_timer(ch as u64) == tmr {
                 if let Some((shape, _)) = self.wave.pending[ch].take() {
                     self.wave.active[ch] = shape;
+                    self.clear_duty_start(ch);
                 }
             }
         }
@@ -607,6 +646,7 @@ impl Ledc {
             _ => {
                 self.wave.active[ch as usize] = shape;
                 self.wave.pending[ch as usize] = None;
+                self.clear_duty_start(ch as usize);
             }
         }
     }
@@ -618,9 +658,8 @@ impl Ledc {
     fn apply_write_side_effects(&mut self, word_off: u64, now: u64) {
         if let Some(ch) = Self::channel_of(word_off, CH_CONF1) {
             // DUTY_START strobe latches the staged duty into the live
-            // shadow. We do NOT clear DUTY_START (silicon self-clears it
-            // after the next timer overflow; firmware treats it as a
-            // fire-and-forget command and re-asserts on each update).
+            // shadow. The bit stays set until the shape applies (see
+            // `commit_pending` / `schedule_shape`).
             if self.word(word_off) & CONF1_DUTY_START_BIT != 0 {
                 self.latch_duty(ch);
                 self.schedule_shape(ch, now);
@@ -637,6 +676,7 @@ impl Ledc {
             // A timer re-bind has no common overflow with the old timer.
             if let Some((shape, _)) = self.wave.pending[ch as usize].take() {
                 self.wave.active[ch as usize] = shape;
+                self.clear_duty_start(ch as usize);
             }
         } else if let Some(tmr) = Self::timer_of_conf(word_off) {
             self.reconfigure_timer(tmr, now);
@@ -783,7 +823,7 @@ impl Peripheral for Ledc {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
-        let word = self.word(word_off);
+        let word = self.read_word(word_off);
         Ok(((word >> byte_off) & 0xFF) as u8)
     }
 
@@ -800,7 +840,7 @@ impl Peripheral for Ledc {
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
-        Ok(self.word(offset & !3))
+        Ok(self.read_word(offset & !3))
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
@@ -1010,9 +1050,11 @@ mod tests {
 
     #[test]
     fn unknown_offsets_round_trip() {
+        // 0x1F0 is reserved (between CONF 0x190 and DATE 0x1FC). 0x0C0 used
+        // to stand in here, but it is LSCH1_CONF1, whose DUTY_START self-clears.
         let mut p = Ledc::new(Ledc::BASE);
-        write_u32(&mut p, 0x0C0, 0xCAFE_BABE);
-        assert_eq!(read_u32(&p, 0x0C0), 0xCAFE_BABE);
+        write_u32(&mut p, 0x1F0, 0xCAFE_BABE);
+        assert_eq!(read_u32(&p, 0x1F0), 0xCAFE_BABE);
     }
 
     #[test]
@@ -1180,6 +1222,69 @@ mod tests {
         // … frame 2 has the new one: 512 ticks = 1536 cycles.
         assert!(level_at(&mut p, &lines, 0, 6144 + 1535));
         assert!(!level_at(&mut p, &lines, 0, 6144 + 1536));
+    }
+
+    #[test]
+    fn duty_start_self_clears_at_once_on_a_stopped_timer() {
+        let mut p = Ledc::new(Ledc::BASE);
+        write_u32(&mut p, Ledc::ch_reg(0, CH_DUTY), 512 << 4);
+        write_u32(
+            &mut p,
+            Ledc::ch_reg(0, CH_CONF1),
+            CONF1_DUTY_START_BIT | 0x5,
+        );
+        assert_eq!(read_u32(&p, Ledc::ch_reg(0, CH_DUTY_R)), 512 << 4);
+        // The strobe has applied; the other CONF1 fields are kept.
+        assert_eq!(read_u32(&p, Ledc::ch_reg(0, CH_CONF1)), 0x5);
+    }
+
+    #[test]
+    fn duty_start_reads_set_until_the_next_overflow_then_clears() {
+        // ESP-IDF 5 `ledc_ll_set_duty_start` spins on DUTY_START before it
+        // sets it, and reads are not synced, so the bit must drop on the
+        // overflow cycle as seen through the clock alone.
+        let (mut p, _lines) = wave(0, timer_conf(10, 256, true), 256);
+        let clock = CycleClock::default();
+        p.attach_cycle_clock(clock.clone());
+        clock.publish(3072 + 100);
+        p.sync_to(3072 + 100);
+        assert_eq!(read_u32(&p, Ledc::ch_reg(0, CH_CONF1)), 0);
+        write_u32(&mut p, Ledc::ch_reg(0, CH_DUTY), 512 << 4);
+        write_u32(&mut p, Ledc::ch_reg(0, CH_CONF1), CONF1_DUTY_START_BIT);
+        let conf1 = Ledc::ch_reg(0, CH_CONF1);
+        assert_eq!(
+            read_u32(&p, conf1) & CONF1_DUTY_START_BIT,
+            CONF1_DUTY_START_BIT
+        );
+        clock.publish(6143);
+        assert_ne!(read_u32(&p, conf1) & CONF1_DUTY_START_BIT, 0, "frame 1");
+        clock.publish(6144);
+        assert_eq!(read_u32(&p, conf1) & CONF1_DUTY_START_BIT, 0, "overflow");
+        // The stored bit is cleared too once time reaches the model.
+        p.sync_to(6144);
+        assert_eq!(p.word(conf1) & CONF1_DUTY_START_BIT, 0);
+    }
+
+    #[test]
+    fn idf5_back_to_back_duty_updates_do_not_spin_forever() {
+        // `while (conf1.duty_start);` then `conf1 |= DUTY_START`, twice, as
+        // ledc_channel_config followed by ledcWrite does on IDF 5.
+        let (mut p, _lines) = wave(0, timer_conf(10, 256, true), 256);
+        let conf1 = Ledc::ch_reg(0, CH_CONF1);
+        let mut cycle = 0u64;
+        for duty in [128u32, 640] {
+            let mut polls = 0;
+            while read_u32(&p, conf1) & CONF1_DUTY_START_BIT != 0 {
+                cycle += 100;
+                p.sync_to(cycle);
+                polls += 1;
+                assert!(polls < 1000, "DUTY_START never self-cleared");
+            }
+            write_u32(&mut p, Ledc::ch_reg(0, CH_DUTY), duty << 4);
+            let v = read_u32(&p, conf1) | CONF1_DUTY_START_BIT;
+            write_u32(&mut p, conf1, v);
+        }
+        assert_eq!(read_u32(&p, Ledc::ch_reg(0, CH_DUTY_R)), 640 << 4);
     }
 
     #[test]
