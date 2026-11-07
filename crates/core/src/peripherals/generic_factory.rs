@@ -44,6 +44,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "pic24_gpio",
     "rcc",
     "systick",
+    "wch_stk",
+    "wch_pfic",
     "timer",
     "i2c",
     "spi",
@@ -621,6 +623,12 @@ pub fn try_build(
                 None => Box::new(crate::peripherals::systick::Systick::new()),
             }
         }
+        // WCH QingKe V2 STK (CH32V003 SysTick): its own register file and an
+        // up-counter, not the ARMv7-M SysTick layout.
+        "wch_stk" => Box::new(crate::peripherals::wch_stk::WchStk::new()),
+        // WCH QingKe V2 PFIC (CH32V003 interrupt controller). The QingKe core
+        // takes interrupts from its state; see `configure_riscv`.
+        "wch_pfic" => Box::new(crate::peripherals::wch_pfic::WchPfic::new()),
         // Silicon Labs Series-2 GPIO external interrupts — the `attachInterrupt`
         // block, in the GPIO head at `GPIO_S_BASE + 0x400`. A separate window
         // from the four port structs, which keep their own model.
@@ -1203,7 +1211,16 @@ pub fn try_build(
                 layout, line_mask,
             ))
         }
-        "afio" => Box::new(crate::peripherals::afio::Afio::new()),
+        "afio" => match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+            None | Some("stm32f1") => Box::new(crate::peripherals::afio::Afio::new()),
+            Some("wch") => Box::new(crate::peripherals::afio::Afio::new_wch()),
+            Some(other) => {
+                return Err(anyhow::anyhow!(
+                    "afio '{}': unknown profile '{other}' (supported: stm32f1, wch)",
+                    p_cfg.id
+                ))
+            }
+        },
         // Channel-based DMA (F1/L0/L4/G0). `config: { requests: { spi1_tx: 3,
         // spi1_rx: [2, 1] } }` hard-wires a peripheral request to a channel
         // (F1), or — `[channel, selector]` — to a channel while its L4

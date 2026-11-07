@@ -5,6 +5,7 @@ example_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$example_dir/../.." && pwd)
 output="$repo_root/tests/fixtures/ch32v003f4p6-blink.elf"
 hello_output="$repo_root/tests/fixtures/ch32v003f4p6-uart-hello.elf"
+stk_output="$repo_root/tests/fixtures/ch32v003f4p6-systick-blink.elf"
 
 if [ -n "${RISCV_CC:-}" ]; then
     cc=$RISCV_CC
@@ -41,3 +42,14 @@ printf 'Built %s\n' "$output"
     "$example_dir/start.S" "$example_dir/uart_hello.c"
 
 printf 'Built %s\n' "$hello_output"
+
+# The SysTick blink paces PC0 with WCH's own Delay_Ms, which polls STK SR.CNTIF.
+"$cc" \
+    -march=rv32ec -mabi=ilp32e -Os \
+    -ffreestanding -fno-builtin -fno-pic -fno-pie \
+    -nostdlib -nostartfiles \
+    -Wl,-T,"$example_dir/link.x" -Wl,--no-relax \
+    -o "$stk_output" \
+    "$example_dir/start.S" "$example_dir/systick_blink.c"
+
+printf 'Built %s\n' "$stk_output"

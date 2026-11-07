@@ -1078,8 +1078,10 @@ const CHIPS: &[ChipConf] = &[
         // WCH CH32V003F4P6 (QingKe RV32EC). SIM-DERIVED: nothing here has been
         // diffed against a real CH32V003 over SDI, so no reset_oracle. This
         // slice models the RV32E register window, the WCH clock tree and
-        // GPIO A/C/D and polled USART1 TX (ch32v003_compiled_firmware.rs);
-        // I2C/SPI/ADC are not modelled yet (their bases are in the memory map
+        // GPIO A/C/D, polled USART1 TX (ch32v003_compiled_firmware.rs), the
+        // QingKe STK polled by WCH's Delay_Ms (ch32v003_systick.rs), and the
+        // FLASH interface, PFIC and STK interrupt that WCH's Arduino core
+        // boots through (ch32v003_arduino.rs); I2C/SPI/ADC are not modelled yet (their bases are in the memory map
         // but no peripheral descriptor consumes them). The
         // gate is the compiled RV32E blink below, which boots a real ELF and
         // asserts PC0 toggles — not a register-state assertion.

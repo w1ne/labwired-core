@@ -13,5 +13,15 @@ pub fn configure_riscv(bus: &mut SystemBus) -> RiscV {
     // profile, an ESP32 part keeps the C3's vendor CSR set, and a descriptor
     // without a `core:` keeps the historical C3 default. Every caller — CLI,
     // browser, debugger, tests — shares this one resolution.
-    RiscV::new_for(bus.riscv_profile)
+    let mut cpu = RiscV::new_for(bus.riscv_profile);
+    // A WCH QingKe chip declares its PFIC (`wch_pfic`). The core takes
+    // interrupts from that state, and `bus.nvic` points at the same state so
+    // the bus's existing pend and level-reconcile paths drive it: a
+    // peripheral's `irq:` line pends the PFIC bit of that number.
+    let pfic = bus.peripherals.iter().find_map(|p| p.dev.wch_pfic_state());
+    if let Some(state) = pfic {
+        bus.nvic = Some(state.clone());
+        cpu.set_pfic(state);
+    }
+    cpu
 }

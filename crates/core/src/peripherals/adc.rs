@@ -182,6 +182,22 @@ pub enum AdcRegisterLayout {
     /// 0x01FF_FFFF; `GCOMP` @ 0x70 and `CALFACT2` @ 0xC8. The H7 map differs in
     /// all of those, so the alias is a separate layout rather than a flavour.
     Stm32U5,
+    /// WCH CH32V00x (CH32V003 reference manual, `ch32v00x.h` `ADC_TypeDef`).
+    /// WCH's block is the F1 block register for register — STATR/CTLR1/CTLR2/
+    /// SAMPTR1-2/IOFR1-4/WDHTR/WDLTR/RSQR1-3/ISQR/IDATAR1-4/RDATAR at the F1
+    /// offsets, SWSTART at CTLR2 bit 22 with EXTSEL=111 as the software
+    /// trigger (`ADC_ExternalTrigConv_None = 0x000E0000`) — plus a trailing
+    /// `DLYR`. It runs the F1 engine. What differs is the converter:
+    ///
+    /// * 10-bit, not 12. `RDATAR` holds a 0..=1023 code, and an injected
+    ///   level converts against the 3.3 V rail at that width.
+    /// * 10 channels: IN0..IN7 on pads, IN8 = V_REFINT, IN9 = V_CAL.
+    /// * An unseeded pad converts 0. The F1 profile's "DR+1 per conversion"
+    ///   feedback is a model invention that this profile does not inherit.
+    /// * IN8/IN9 are not modelled and convert 0. The F1 temperature-sensor
+    ///   path (IN16/IN17 behind TSVREFE) does not apply: the part has no
+    ///   temperature sensor.
+    Ch32v00x,
 }
 
 impl FromStr for AdcRegisterLayout {
@@ -203,8 +219,9 @@ impl FromStr for AdcRegisterLayout {
             "stm32h7" | "h7" => Ok(Self::Stm32H7),
             "stm32h5" | "h5" => Ok(Self::Stm32H5),
             "stm32u5" | "u5" => Ok(Self::Stm32U5),
+            "ch32v00x" | "ch32v003" | "wch" => Ok(Self::Ch32v00x),
             _ => Err(format!(
-                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32h5, stm32h7, stm32u5",
+                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32h5, stm32h7, stm32u5, ch32v00x",
                 value
             )),
         }
@@ -367,7 +384,7 @@ pub struct Adc {
     converting: bool,
     cycles_remaining: u32,
     conversion_time: u32,
-    /// Per-channel injected values (12-bit counts). 0xFFFF = "no injection".
+    /// Per-channel injected values (12-bit counts; 10-bit on CH32V00x). 0xFFFF = "no injection".
     /// Sized for the widest family (H7, 20 channels); [`Self::channel_count`]
     /// is how many of them this layout has.
     channel_inputs: [u16; MAX_CHANNELS],
@@ -409,6 +426,11 @@ pub struct Adc {
     /// not serialized (keeps snapshot shapes identical).
     #[serde(skip)]
     ambient_temp_c: f64,
+    /// WCH CH32V00x converter on the F1 register block: 10-bit codes, 10
+    /// channels, unseeded pads convert 0. See [`AdcRegisterLayout::Ch32v00x`].
+    /// Not a register, so not serialized.
+    #[serde(skip)]
+    wch_v00x: bool,
 }
 
 impl Adc {
@@ -421,7 +443,11 @@ impl Adc {
         // (bit 29) and JQDIS set in CFGR (bit 31) — verified on NUCLEO-L476RG.
         // F1 reset is all-zeros.
         let regs = match layout {
-            AdcRegisterLayout::Stm32F1 => AdcRegs::Stm32F1(F1AdcRegs::default()),
+            // CH32V00x reset is all-zeros too (CH32V003 RM, ADC register
+            // reset values), on the same block.
+            AdcRegisterLayout::Stm32F1 | AdcRegisterLayout::Ch32v00x => {
+                AdcRegs::Stm32F1(F1AdcRegs::default())
+            }
             AdcRegisterLayout::Stm32F4 => AdcRegs::Stm32F4(F1AdcRegs::default()),
             AdcRegisterLayout::Stm32L4 | AdcRegisterLayout::Stm32H5 => {
                 AdcRegs::Stm32L4(L4AdcRegs {
@@ -475,6 +501,7 @@ impl Adc {
             f1_rstcal_live: false,
             f1_cal_live: false,
             ambient_temp_c: DEFAULT_AMBIENT_TEMPERATURE_C,
+            wch_v00x: layout == AdcRegisterLayout::Ch32v00x,
         }
     }
 
@@ -504,7 +531,7 @@ impl Adc {
     /// reference are disconnected from the converter (RM0008 §11.10, "The
     /// TSVREFE bit must be set to enable both internal channels").
     fn f1_internal_channel_mv(&self, ch: usize, cr2: u32) -> Option<f64> {
-        if !matches!(self.regs, AdcRegs::Stm32F1(_)) || !(16..=17).contains(&ch) {
+        if self.wch_v00x || !matches!(self.regs, AdcRegs::Stm32F1(_)) || !(16..=17).contains(&ch) {
             return None;
         }
         if cr2 & F1_CR2_TSVREFE == 0 {
@@ -556,6 +583,8 @@ impl Adc {
                     self.dr = self.channel_inputs[ch] as u32;
                 } else if let Some(mv) = self.f1_internal_channel_mv(ch, cr2) {
                     self.dr = Self::f1_code_for_mv(mv);
+                } else if self.wch_v00x {
+                    self.dr = 0;
                 } else {
                     self.dr = (self.dr + 1) & 0xFFF;
                 }
@@ -596,7 +625,12 @@ impl Adc {
     ///   IN17/IN18 are the temperature sensor and V_BAT.
     /// * H7 — 0..=19, the `PCSEL` bitmap's width.
     /// * U5 — 0..=19, the `PCSEL` bitmap's width.
+    /// * CH32V00x — 0..=9: IN0..IN7 on pads, IN8 V_REFINT, IN9 V_CAL
+    ///   (`ADC_Channel_Vrefint`/`ADC_Channel_Vcalint` in `ch32v00x_adc.h`).
     pub fn channel_count(&self) -> u8 {
+        if self.wch_v00x {
+            return 10;
+        }
         match &self.regs {
             AdcRegs::Stm32F1(_) | AdcRegs::Stm32F4(_) | AdcRegs::Stm32L4(_) => 19,
             AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => 20,
@@ -605,7 +639,10 @@ impl Adc {
 
     pub fn set_channel_input(&mut self, channel: u8, millivolts: u16) {
         if channel < self.channel_count() {
-            let count = ((millivolts as u32 * 4095) / 3300).min(4095) as u16;
+            // Code at the converter's width against the 3.3 V rail: 12-bit
+            // everywhere else, 10-bit on CH32V00x.
+            let full_scale = if self.wch_v00x { 1023 } else { 4095 };
+            let count = ((millivolts as u32 * full_scale) / 3300).min(full_scale) as u16;
             self.channel_inputs[channel as usize] = count;
         }
     }
@@ -1217,7 +1254,9 @@ impl Peripheral for Adc {
         // Only the F1 layout models its temperature sensor; the other
         // families' internal channels are not this sensor and keep their own
         // documented behaviour.
-        matches!(self.regs, AdcRegs::Stm32F1(_)) && Adc::set_ambient_temperature_c(self, celsius)
+        !self.wch_v00x
+            && matches!(self.regs, AdcRegs::Stm32F1(_))
+            && Adc::set_ambient_temperature_c(self, celsius)
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
@@ -1460,6 +1499,95 @@ mod tests {
         let base = F1_CR2_ADON | F1_CR2_EXTSEL | extra_cr2;
         adc.write_u32(0x08, base).unwrap();
         adc.write_u32(0x08, base | F1_CR2_SWSTART).unwrap();
+    }
+
+    /// WCH's `adc_read_value` (arduino_core_ch32 `ch32/analog.cpp`) on a
+    /// CH32V00x, as register writes: `ADC_Init` (CTLR1 = 0, CTLR2 = EXTSEL
+    /// None = 0x000E0000), `STATR = 0`, `ADC_Cmd` (ADON), the rank-1 channel in
+    /// RSQR3, then `ADC_SoftwareStartConvCmd` (CTLR2 |= 0x0050_0000), poll
+    /// STATR.EOC and read RDATAR (0x4C).
+    fn wch_arduino_read(adc: &mut Adc, channel: u32) -> u32 {
+        adc.write_u32(0x04, 0).unwrap();
+        adc.write_u32(0x08, 0x000E_0000).unwrap();
+        adc.write_u32(0x00, 0).unwrap();
+        adc.write_u32(0x08, 0x000E_0001).unwrap();
+        adc.write_u32(0x34, channel).unwrap();
+        adc.write_u32(0x08, 0x000E_0001 | 0x0050_0000).unwrap();
+        for _ in 0..64 {
+            if adc.read_u32(0x00).unwrap() & 0x2 != 0 {
+                let v = adc.read_u32(0x4C).unwrap();
+                adc.write_u32(0x08, 0x000E_0000).unwrap(); // ADC_Cmd(DISABLE)
+                return v;
+            }
+            adc.tick();
+        }
+        panic!("EOC never set");
+    }
+
+    #[test]
+    fn ch32v00x_profile_names_parse() {
+        for name in ["ch32v00x", "ch32v003", "wch"] {
+            assert_eq!(
+                name.parse::<AdcRegisterLayout>().unwrap(),
+                AdcRegisterLayout::Ch32v00x
+            );
+        }
+    }
+
+    /// The F1 profile's "DR + 1 per unseeded conversion" is a model invention;
+    /// the CH32V00x profile must not inherit it. Same sequence on both shows
+    /// the difference.
+    #[test]
+    fn ch32v00x_unseeded_pad_converts_zero_not_the_f1_increment() {
+        let mut wch = Adc::new_with_layout(AdcRegisterLayout::Ch32v00x);
+        assert_eq!(wch_arduino_read(&mut wch, 0), 0);
+        assert_eq!(wch_arduino_read(&mut wch, 0), 0);
+
+        let mut f1 = Adc::new_with_layout(AdcRegisterLayout::Stm32F1);
+        assert_eq!(wch_arduino_read(&mut f1, 0), 1);
+        assert_eq!(wch_arduino_read(&mut f1, 0), 2);
+    }
+
+    /// CH32V00x is a 10-bit converter: an injected level comes back as a
+    /// 0..=1023 code on the selected channel, and full scale saturates at 1023
+    /// (an F1 would return 4095).
+    #[test]
+    fn ch32v00x_injected_level_converts_at_ten_bits() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Ch32v00x);
+        adc.set_channel_input(5, 1650);
+        adc.set_channel_input(7, 3300);
+        assert_eq!(wch_arduino_read(&mut adc, 5), 511); // 1650 * 1023 / 3300
+        assert_eq!(wch_arduino_read(&mut adc, 7), 1023);
+        assert_eq!(wch_arduino_read(&mut adc, 0), 0); // unseeded neighbour
+
+        let mut f1 = Adc::new_with_layout(AdcRegisterLayout::Stm32F1);
+        f1.set_channel_input(7, 3300);
+        assert_eq!(wch_arduino_read(&mut f1, 7), 4095);
+    }
+
+    /// IN0..IN9 only. A level aimed past IN9 is dropped, and the F1
+    /// temperature-sensor channels (IN16/IN17 behind TSVREFE) do not exist.
+    #[test]
+    fn ch32v00x_has_ten_channels_and_no_temperature_sensor() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Ch32v00x);
+        assert_eq!(adc.channel_count(), 10);
+        adc.set_channel_input(10, 1000);
+        assert_eq!(adc.channel_input_count(10), 0xFFFF);
+        assert!(!Peripheral::set_ambient_temperature_c(&mut adc, 50.0));
+
+        adc.write_u32(0x08, F1_CR2_ADON | F1_CR2_EXTSEL | F1_CR2_TSVREFE)
+            .unwrap();
+        adc.write_u32(0x34, 16).unwrap();
+        adc.write_u32(
+            0x08,
+            F1_CR2_ADON | F1_CR2_EXTSEL | F1_CR2_TSVREFE | F1_CR2_SWSTART,
+        )
+        .unwrap();
+        for _ in 0..16 {
+            adc.tick();
+        }
+        assert_ne!(adc.sr & 0x2, 0);
+        assert_eq!(adc.dr, 0);
     }
 
     #[test]

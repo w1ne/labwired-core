@@ -1781,7 +1781,16 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 10990f764c5137ecc790872e7e5239640264022c9d72abda24aac26681ffc086
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 ADC1): adc.rs gains an opt-in
+    # `ch32v00x` layout on the F1 register block (10-bit codes, 10 channels,
+    # unseeded pads convert 0), gated by a flag only that layout sets. The
+    # F1/F4/L4/H5/H7/U5 paths are unchanged; their existing adc tests pass
+    # as before. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 I2C1): i2c.rs changed only in the
+    # F1 engine (SR2.MSL|BUSY at START; atomic halfword stores on the F1 block).
+    # The L4-generation engine this board runs is untouched; the i2c lib tests
+    # pass. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 97162d87d74614e0493ecdd1fa7c73d54020f0801e01a5aac9d8ae1242c89295
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2647,7 +2656,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 1b66043f16a4f5b4aa270889ae766e40e74e7fa94dfdf2995d27ed0ce91342e0
+    drift_ack_digest: a5bae5a30bbe5bb94355f631f97a3f94b22599ec592cd1eaa22b14dd3e4ed054
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3509,7 +3518,21 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-06
+    # 2026-11-07 (feat/ch32v003-pfic): watched cpu/riscv.rs and
+    # decoder/riscv.rs moved for the WCH QingKe core. Behaviour-preserving
+    # for THIS part:
+    #   riscv.rs — every new path (INTSYSCR 0x804, PFIC take, mode-3 vector
+    #     fetch, HPE, the XW decode fallback, the mret IACTR clear, the
+    #     `set_exception_pending` early return) is gated on `self.pfic`, which
+    #     only `configure_riscv` sets, and only when the chip declares a
+    #     `wch_pfic`. The C3 declares none, so `pfic_next_irq()` is `None` and
+    #     the three pending checks it was OR-ed into are unchanged.
+    #   decoder/riscv.rs — adds `decode_wch_xw`, a separate function the base
+    #     decoder never calls; `decode_rv32` is byte-identical.
+    # Evidence: labwired-core --lib 5443 pass / 0 fail on this head;
+    # firmware_survival esp32c3/esp32c6/litex/arty/ri5cy 5/5. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
 
   - id: nucleo-l476rg
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
@@ -3977,7 +4000,16 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 38d3392672696f059903453912b55048629f802fa3eba2f0f8398005f6c5a0b3
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 ADC1): adc.rs gains an opt-in
+    # `ch32v00x` layout on the F1 register block (10-bit codes, 10 channels,
+    # unseeded pads convert 0), gated by a flag only that layout sets. The
+    # F1/F4/L4/H5/H7/U5 paths are unchanged; their existing adc tests pass
+    # as before. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 I2C1): i2c.rs changed only in the
+    # F1 engine (SR2.MSL|BUSY at START; atomic halfword stores on the F1 block).
+    # The L4-generation engine this board runs is untouched; the i2c lib tests
+    # pass. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: fd553633d8aeca24158646439d4dc771c4871b5500ea1849ee3e70c872290fd9
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5092,7 +5124,11 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 582770eb8df8ec6e3326098b9fe083891fe3002fd590dcc6b516fc0e074a450e
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 I2C1): i2c.rs changed only in the
+    # F1 engine (SR2.MSL|BUSY at START; atomic halfword stores on the F1 block).
+    # The L4-generation engine this board runs is untouched; the i2c lib tests
+    # pass. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 1dc18a488c6f8a0bc8c5e8644ad42ed7b08ecc07bb22f5da722fac4bba88139b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6198,7 +6234,26 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 64ae2a154aca9fcf04bf0ceb7e394d2944afca30c6790868c43b0c63c7d82d3b
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 ADC1): adc.rs gains an opt-in
+    # `ch32v00x` layout on the F1 register block (10-bit codes, 10 channels,
+    # unseeded pads convert 0), gated by a flag only that layout sets. The
+    # F1/F4/L4/H5/H7/U5 paths are unchanged; their existing adc tests pass
+    # as before. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 TIM2 PWM): afio.rs gains an
+    # opt-in `wch` profile (RESERVED0, PCFR1, one 2-bit-field EXTICR) behind a
+    # flag only that profile sets; the F1 EVCR/MAPR/EXTICR1-4 path is unchanged.
+    # bus/attach.rs adds a WCH TIM2 pad table and binds each timer pad row only
+    # onto a port of its own register layout; F1 ports report Stm32F1, so every
+    # F103 row binds as before. afio and stm32f1_timer_outputs tests pass
+    # unchanged. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 I2C1): i2c.rs F1 engine. START
+    # now also sets SR2.MSL|BUSY with SR1.SB (RM0008 §26.3.3, EV5 =
+    # 0x0003_0001), which SPL I2C_CheckEvent needs; STOP clears them as before.
+    # A halfword store to the F1 block is now one register write, not two byte
+    # writes (word stores were already atomic; STM32 CMSIS uses word stores).
+    # Arduino matrix L3 still passes on stm32f103 (exact INA219 regs) and
+    # stm32f401/f407; the i2c lib tests pass. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 229c8a9d1ad2cdd4e8ad6b042c9d63171efee39163148855bf5db7cf97862a54
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7337,7 +7392,14 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: f1f9b4fc4f09f118c40355c4a733269c6cce085f73e42ff1b467edb97d2dbaed
+    # 2026-11-07 (feat/ch32v003-pfic, CH32V003 I2C1): i2c.rs F1 engine. START
+    # now also sets SR2.MSL|BUSY with SR1.SB (RM0008 §26.3.3, EV5 =
+    # 0x0003_0001), which SPL I2C_CheckEvent needs; STOP clears them as before.
+    # A halfword store to the F1 block is now one register write, not two byte
+    # writes (word stores were already atomic; STM32 CMSIS uses word stores).
+    # Arduino matrix L3 still passes on stm32f103 (exact INA219 regs) and
+    # stm32f401/f407; the i2c lib tests pass. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 84e45e01878d3c055829a4c74b0cea2f224524982088e61fa25f08901fdffda0
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
