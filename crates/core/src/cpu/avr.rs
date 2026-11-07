@@ -994,9 +994,10 @@ impl Avr {
             AvrModel::Atmega16 | AvrModel::Atmega32 => {
                 matches!(addr, 0x0030 | 0x0033 | 0x0036 | 0x0039)
             }
+            // ATmega8 has no port A: PINB/PINC/PIND at 0x36/0x33/0x30.
+            AvrModel::Atmega8 => matches!(addr, 0x0030 | 0x0033 | 0x0036),
             AvrModel::Atmega128 => false,
-            AvrModel::Atmega8
-            | AvrModel::Atmega169
+            AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
             | AvrModel::Atmega128rfa1
@@ -1048,9 +1049,9 @@ impl Avr {
             | AvrModel::Atmega644
             | AvrModel::Atmega1284p => (AVR_PINA..=AVR_PIND + 2).contains(&addr),
             AvrModel::Atmega16 | AvrModel::Atmega32 => (0x0030..=0x003B).contains(&addr),
+            AvrModel::Atmega8 => (0x0030..=0x0038).contains(&addr),
             AvrModel::Atmega128 => false,
-            AvrModel::Atmega8
-            | AvrModel::Atmega169
+            AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
             | AvrModel::Atmega128rfa1
@@ -4551,6 +4552,27 @@ mod tests {
             bus.write_u8(AVR_IO_MIRROR_BASE + 0x30, 0x04).unwrap(); // PD2 high
             assert_eq!(cpu.data_read(0x30, &bus).unwrap() & 0x04, 0x04);
         }
+    }
+
+    /// ATmega8 ports B-D: PINB/DDRB/PORTB at 0x36/0x37/0x38 down to PIND
+    /// 0x30. 0x39..0x3B (PORTA on the 16/32) are not port registers here.
+    #[test]
+    fn atmega8_classic_ports_b_to_d_mirror_and_read_only_pin() {
+        let mut bus = MockBus::new();
+        let mut cpu = Avr::new_model(AvrModel::Atmega8);
+        cpu.data_write(0x37, 0x01, &mut bus).unwrap(); // DDRB
+        cpu.data_write(0x38, 0x01, &mut bus).unwrap(); // PORTB
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x38).unwrap(), 0x01);
+        assert_eq!(cpu.data_read(0x36, &bus).unwrap() & 1, 1);
+        cpu.data_write(0x36, 0x01, &mut bus).unwrap(); // PINB is read-only
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x38).unwrap(), 0x01);
+        cpu.data_write(0x38, 0x00, &mut bus).unwrap();
+        assert_eq!(cpu.data_read(0x36, &bus).unwrap() & 1, 0);
+        bus.write_u8(AVR_IO_MIRROR_BASE + 0x30, 0x04).unwrap(); // PD2 high
+        assert_eq!(cpu.data_read(0x30, &bus).unwrap() & 0x04, 0x04);
+        cpu.data_write(0x3B, 0x5A, &mut bus).unwrap(); // GICR, not PORTA
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x3B).unwrap(), 0x00);
+        assert_eq!(cpu.data_read(0x3B, &bus).unwrap(), 0x5A);
     }
 
     /// SBI/CBI on ATmega16 PORTA (I/O 0x1B) are read-modify-write: the 328P

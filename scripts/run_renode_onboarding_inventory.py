@@ -495,7 +495,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/simavr-attiny85-smoke.yaml",
     },
     "simavr-atmega8": {
-        "prebuilt_firmware": "tests/fixtures/avr/atmega8-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/atmega8-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega8-smoke.yaml",
     },
     "simavr-atmega48": {

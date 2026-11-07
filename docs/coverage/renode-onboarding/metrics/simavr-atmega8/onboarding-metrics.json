@@ -15,24 +15,24 @@
   "script": "examples/renode-onboarding/simavr-atmega8-smoke.yaml",
   "system": "configs/systems/onboarding/simavr-atmega8.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T17:11:45Z",
-  "finished_at_utc": "2026-11-06T17:13:11Z",
-  "elapsed_seconds": 87,
-  "elapsed_ms": 86394,
+  "started_at_utc": "2026-11-07T12:48:43Z",
+  "finished_at_utc": "2026-11-07T12:50:43Z",
+  "elapsed_seconds": 121,
+  "elapsed_ms": 120400,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 86.078,
+    "build_cli": 120.071,
     "build_firmware": null,
-    "run_smoke": 0.308
+    "run_smoke": 0.32
   },
   "stages_ms": {
-    "build_cli": 86078,
+    "build_cli": 120071,
     "build_firmware": null,
-    "run_smoke": 308
+    "run_smoke": 320
   },
-  "prebuilt_firmware": "tests/fixtures/avr/atmega8-cpu-smoke.elf"
+  "prebuilt_firmware": "tests/fixtures/avr/atmega8-io-smoke.elf"
 }

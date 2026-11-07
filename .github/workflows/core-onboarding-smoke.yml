@@ -200,6 +200,8 @@ on:
       - "tests/fixtures/avr/atmega16-io-smoke.c"
       - "tests/fixtures/avr/atmega16-io-smoke.elf"
       - "tests/fixtures/avr/atmega32-io-smoke.elf"
+      - "tests/fixtures/avr/atmega8-io-smoke.c"
+      - "tests/fixtures/avr/atmega8-io-smoke.elf"
       - "scripts/build_atmega16_cpu_smoke.sh"
       - "tests/fixtures/avr/attiny-x5-cpu-smoke.c"
       - "tests/fixtures/avr/attiny13-cpu-smoke.elf"
@@ -962,7 +964,7 @@ jobs:
             script: examples/renode-onboarding/simavr-attiny85-smoke.yaml
             system: configs/systems/onboarding/simavr-attiny85.yaml
           - id: simavr-atmega8
-            prebuilt_firmware: tests/fixtures/avr/atmega8-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/atmega8-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega8-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega8.yaml
           # ATmega48/88 share the ATmega168 x8-family IO smoke (USART0 + PORTB/D).
