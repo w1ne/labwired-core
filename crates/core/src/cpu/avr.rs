@@ -467,7 +467,7 @@ impl AvrModel {
     }
 
     /// Classic-I/O-file models whose PINx is implemented as write-one-to-toggle
-    /// (ATtiny2313/4313 and the measured ATtiny13/24/44/84/25/45/85 profiles);
+    /// (ATtiny2313/4313 and the measured ATtiny13/24/44/84/25/45/85/1634 profiles);
     /// ATmega8/16/32/128 PINx is modeled as read-only.
     pub const fn has_classic_pin_toggle(self) -> bool {
         matches!(
@@ -481,6 +481,7 @@ impl AvrModel {
                 | AvrModel::Attiny25
                 | AvrModel::Attiny45
                 | AvrModel::Attiny85
+                | AvrModel::Attiny1634
         )
     }
 
@@ -1030,6 +1031,9 @@ impl Avr {
             AvrModel::Attiny13 | AvrModel::Attiny25 | AvrModel::Attiny45 | AvrModel::Attiny85 => {
                 addr == 0x0036
             }
+            // ATtiny1634: PINC 0x27, PINB 0x2B, PINA 0x2F; each port's PUEx
+            // pull-up register sits after PORTx (0x2A/0x2E/0x32).
+            AvrModel::Attiny1634 => matches!(addr, 0x0027 | 0x002B | 0x002F),
             AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
@@ -1050,8 +1054,7 @@ impl Avr {
             | AvrModel::Attiny461
             | AvrModel::Attiny861
             | AvrModel::Attiny48
-            | AvrModel::Attiny88
-            | AvrModel::Attiny1634 => false,
+            | AvrModel::Attiny88 => false,
         }
     }
 
@@ -1086,6 +1089,12 @@ impl Avr {
             AvrModel::Attiny13 | AvrModel::Attiny25 | AvrModel::Attiny45 | AvrModel::Attiny85 => {
                 (0x0036..=0x0038).contains(&addr)
             }
+            // PUEC/PUEB/PUEA at 0x2A/0x2E/0x32 stay CPU-local stored bytes.
+            AvrModel::Attiny1634 => {
+                (0x0027..=0x0029).contains(&addr)
+                    || (0x002B..=0x002D).contains(&addr)
+                    || (0x002F..=0x0031).contains(&addr)
+            }
             AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
@@ -1106,8 +1115,7 @@ impl Avr {
             | AvrModel::Attiny461
             | AvrModel::Attiny861
             | AvrModel::Attiny48
-            | AvrModel::Attiny88
-            | AvrModel::Attiny1634 => false,
+            | AvrModel::Attiny88 => false,
         }
     }
 
@@ -4718,6 +4726,40 @@ mod tests {
             );
             assert_eq!(cpu.data_read(0x3B, &bus).unwrap(), 0x5A);
         }
+    }
+
+    /// ATtiny1634 ports C/B/A at 0x27/0x2B/0x2F (PINx, DDRx, PORTx), each
+    /// followed by a PUEx byte that is not part of the mirrored port window.
+    /// PINx is write-one-to-toggle; SBI PINB,0 toggles PB0 only.
+    #[test]
+    fn attiny1634_ports_mirror_and_pin_toggle() {
+        let mut bus = MockBus::new();
+        let mut cpu = Avr::new_model(AvrModel::Attiny1634);
+        cpu.data_write(0x2C, 0x09, &mut bus).unwrap(); // DDRB
+        cpu.data_write(0x2D, 0x09, &mut bus).unwrap(); // PORTB
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x2D).unwrap(), 0x09);
+        cpu.data_write(0x2B, 0x01, &mut bus).unwrap(); // PINB toggles PB0
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x2D).unwrap(), 0x08);
+        assert_eq!(cpu.data_read(0x2B, &bus).unwrap() & 0x09, 0x08);
+        // SBI PINB,0 (I/O 0x0B): PB0 back high, PB3 untouched.
+        cpu.load_words(0x40, &[0x9A58, 0xCFFF]);
+        cpu.set_pc(0x40);
+        cpu.step(&mut bus, &[], &SimulationConfig::default())
+            .unwrap();
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x2D).unwrap(), 0x09);
+        // An undriven input reads the external level.
+        bus.write_u8(AVR_IO_MIRROR_BASE + 0x2B, 0x04).unwrap();
+        assert_eq!(cpu.data_read(0x2B, &bus).unwrap() & 0x04, 0x04);
+        // Ports A and C mirror and toggle too.
+        cpu.data_write(0x31, 0x80, &mut bus).unwrap(); // PORTA
+        cpu.data_write(0x2F, 0x81, &mut bus).unwrap(); // PINA toggles PA7, PA0
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x31).unwrap(), 0x01);
+        cpu.data_write(0x29, 0x20, &mut bus).unwrap(); // PORTC
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x29).unwrap(), 0x20);
+        // PUEB is a CPU-local byte, not a port mirror write.
+        cpu.data_write(0x2E, 0x5A, &mut bus).unwrap();
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x2E).unwrap(), 0x00);
+        assert_eq!(cpu.data_read(0x2E, &bus).unwrap(), 0x5A);
     }
 
     /// SBI/CBI on ATmega16 PORTA (I/O 0x1B) are read-modify-write: the 328P

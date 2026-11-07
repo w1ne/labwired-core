@@ -24,7 +24,12 @@ fn write_one_register(data_addr: u16, model: AvrModel) -> bool {
             AvrModel::Attiny24 | AvrModel::Attiny44 | AvrModel::Attiny84 => {
                 matches!(data_addr, 0x36 | 0x39)
             }
-            _ => data_addr == 0x36,
+            AvrModel::Attiny13 | AvrModel::Attiny25 | AvrModel::Attiny45 | AvrModel::Attiny85 => {
+                data_addr == 0x36
+            }
+            // ATtiny1634: PINC 0x27, PINB 0x2B, PINA 0x2F.
+            AvrModel::Attiny1634 => matches!(data_addr, 0x27 | 0x2B | 0x2F),
+            _ => false,
         }
     } else if model.has_classic_io_file() || model == AvrModel::Atmega128 {
         // Classic layout: 0x35..0x3B are PORTC..PORTA/DDRx/PINx (read-only

@@ -479,7 +479,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/simavr-attiny84-smoke.yaml",
     },
     "simavr-attiny1634": {
-        "prebuilt_firmware": "tests/fixtures/avr/attiny1634-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/attiny1634-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-attiny1634-smoke.yaml",
     },
     "simavr-attiny25": {

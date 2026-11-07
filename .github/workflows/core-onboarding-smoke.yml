@@ -219,7 +219,7 @@ on:
       - "tests/fixtures/avr/attiny24-io-smoke.elf"
       - "tests/fixtures/avr/attiny44-io-smoke.elf"
       - "tests/fixtures/avr/attiny84-io-smoke.elf"
-      - "tests/fixtures/avr/attiny1634-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny1634-io-smoke.elf"
       - "tests/fixtures/avr/attiny25-io-smoke.elf"
       - "tests/fixtures/avr/attiny45-io-smoke.elf"
       - "tests/fixtures/avr/attiny85-io-smoke.elf"
@@ -958,7 +958,7 @@ jobs:
             script: examples/renode-onboarding/simavr-attiny84-smoke.yaml
             system: configs/systems/onboarding/simavr-attiny84.yaml
           - id: simavr-attiny1634
-            prebuilt_firmware: tests/fixtures/avr/attiny1634-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/attiny1634-io-smoke.elf
             script: examples/renode-onboarding/simavr-attiny1634-smoke.yaml
             system: configs/systems/onboarding/simavr-attiny1634.yaml
           - id: simavr-attiny25

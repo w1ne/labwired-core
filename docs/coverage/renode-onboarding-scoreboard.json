@@ -8,11 +8,11 @@
     "pass": 224,
     "fail": 0,
     "pass_loading_zero_answering_windows": 0,
-    "pass_observable_assertions": 217,
-    "pass_stop_reason_only": 7,
+    "pass_observable_assertions": 218,
+    "pass_stop_reason_only": 6,
     "pass_depth_unknown": 0,
-    "median_elapsed_ms": 1097,
-    "median_elapsed_seconds": 1.097,
+    "median_elapsed_ms": 1125,
+    "median_elapsed_seconds": 1.125,
     "threshold_seconds": 3600,
     "threshold_met": 224,
     "descriptors_present": 245,
@@ -8154,32 +8154,34 @@
       "script": "examples/renode-onboarding/simavr-attiny1634-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-attiny1634.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T16:56:18Z",
-      "finished_at_utc": "2026-11-06T16:56:19Z",
-      "elapsed_seconds": 1,
-      "elapsed_ms": 656,
+      "started_at_utc": "2026-11-07T23:48:46Z",
+      "finished_at_utc": "2026-11-07T23:50:54Z",
+      "elapsed_seconds": 128,
+      "elapsed_ms": 127948,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.348,
+        "build_cli": 127.608,
         "build_firmware": null,
-        "run_smoke": 0.3
+        "run_smoke": 0.328
       },
       "stages_ms": {
-        "build_cli": 348,
+        "build_cli": 127608,
         "build_firmware": null,
-        "run_smoke": 300
+        "run_smoke": 328
       },
-      "prebuilt_firmware": "tests/fixtures/avr/attiny1634-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/attiny1634-io-smoke.elf",
       "_artifact_path": "simavr-attiny1634",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-attiny2313",

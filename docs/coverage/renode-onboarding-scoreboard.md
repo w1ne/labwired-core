@@ -9,11 +9,11 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `0/224`
-- pass_observable_assertions: `217/224`
-- pass_stop_reason_only: `7/224`
+- pass_observable_assertions: `218/224`
+- pass_stop_reason_only: `6/224`
 - pass_depth_unknown: `0/224`
-- median_elapsed_ms: `1097`
-- median_elapsed_seconds: `1.097`
+- median_elapsed_ms: `1125`
+- median_elapsed_seconds: `1.125`
 - threshold_seconds: `3600`
 - threshold_met: `224/224`
 
@@ -204,7 +204,7 @@
 | `simavr-atmega8` | `pass` | `True` | `yes` | `yes` | `120400` | `120.4` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega88` | `pass` | `True` | `yes` | `yes` | `1058` | `1.058` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny13` | `pass` | `True` | `yes` | `yes` | `78119` | `78.119` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `simavr-attiny1634` | `pass` | `True` | `yes` | `yes` | `656` | `0.656` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `simavr-attiny1634` | `pass` | `True` | `yes` | `yes` | `127948` | `127.948` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny2313` | `pass` | `True` | `yes` | `yes` | `661` | `0.661` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny2313a` | `pass` | `True` | `yes` | `yes` | `673` | `0.673` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny24` | `pass` | `True` | `yes` | `yes` | `591` | `0.591` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

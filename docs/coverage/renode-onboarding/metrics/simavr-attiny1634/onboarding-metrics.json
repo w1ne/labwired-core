@@ -15,24 +15,24 @@
   "script": "examples/renode-onboarding/simavr-attiny1634-smoke.yaml",
   "system": "configs/systems/onboarding/simavr-attiny1634.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T16:56:18Z",
-  "finished_at_utc": "2026-11-06T16:56:19Z",
-  "elapsed_seconds": 1,
-  "elapsed_ms": 656,
+  "started_at_utc": "2026-11-07T23:48:46Z",
+  "finished_at_utc": "2026-11-07T23:50:54Z",
+  "elapsed_seconds": 128,
+  "elapsed_ms": 127948,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.348,
+    "build_cli": 127.608,
     "build_firmware": null,
-    "run_smoke": 0.3
+    "run_smoke": 0.328
   },
   "stages_ms": {
-    "build_cli": 348,
+    "build_cli": 127608,
     "build_firmware": null,
-    "run_smoke": 300
+    "run_smoke": 328
   },
-  "prebuilt_firmware": "tests/fixtures/avr/attiny1634-cpu-smoke.elf"
+  "prebuilt_firmware": "tests/fixtures/avr/attiny1634-io-smoke.elf"
 }

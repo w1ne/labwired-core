@@ -1,5 +1,5 @@
-// GPIO smoke for the imported ATtiny13, 24/44/84 and 25/45/85 profiles. These
-// parts have no USART, so the result is a byte in SRAM plus PB0 edges.
+// GPIO smoke for the imported ATtiny13, 24/44/84, 25/45/85 (and 1634) profiles.
+// The result is a byte in SRAM plus PB0 edges; no USART is used.
 // Classic 64-byte I/O file: PINB/DDRB/PORTB at 0x36..0x38 (x4 adds
 // PINA/DDRA/PORTA at 0x39..0x3B), write-one-to-toggle PINx, SRAM from 0x60.
 // Build with scripts/build_attiny_portb_io_smoke.sh.
@@ -57,3 +57,6 @@ int main(void) {
         }
     }
 }
+
+// ATtiny1634: PINB/DDRB/PORTB at 0x2B..0x2D and PINA/DDRA/PORTA at 0x2F..0x31
+// (each port followed by a PUEx pull-up register), SRAM from 0x100.
