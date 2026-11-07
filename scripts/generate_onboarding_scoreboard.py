@@ -74,6 +74,58 @@ def annotate_zero_answering_windows(metrics: list[dict]) -> None:
         m["zero_answering_windows"] = zero_answering_windows(m.get("system"), stub_types)
 
 
+def _load_script(text: str):
+    """safe_load that tolerates the script schema's local tags (`!after_cycles`)."""
+
+    class ScriptLoader(yaml.SafeLoader):
+        pass
+
+    def untagged(loader, _suffix, node):
+        if isinstance(node, yaml.MappingNode):
+            return loader.construct_mapping(node)
+        if isinstance(node, yaml.SequenceNode):
+            return loader.construct_sequence(node)
+        return loader.construct_scalar(node)
+
+    ScriptLoader.add_multi_constructor("!", untagged)
+    return yaml.load(text, Loader=ScriptLoader)
+
+
+def smoke_assertion_kinds(script: str | None) -> list[str] | None:
+    """Assertion kinds a target's smoke script checks, in script order.
+
+    None means the script could not be read; an empty list means it names no
+    assertion at all.
+    """
+    if yaml is None or not script:
+        return None
+    try:
+        doc = _load_script((REPO_ROOT / script).read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    kinds: list[str] = []
+    for assertion in doc.get("assertions") or []:
+        if isinstance(assertion, dict):
+            kinds.extend(k for k in assertion if k not in kinds)
+    return kinds
+
+
+def smoke_depth(kinds: list[str] | None) -> str:
+    """`stop_reason_only` passes prove the CPU stepped to the budget and nothing else."""
+    if kinds is None:
+        return "unknown"
+    if not set(kinds) - {"expected_stop_reason"}:
+        return "stop_reason_only"
+    return "observable"
+
+
+def annotate_smoke_depth(metrics: list[dict]) -> None:
+    for m in metrics:
+        kinds = smoke_assertion_kinds(m.get("script"))
+        m["smoke_assertion_kinds"] = kinds
+        m["smoke_depth"] = smoke_depth(kinds)
+
+
 def summarize(metrics: list[dict], threshold_seconds: int) -> dict:
     def did_run(m: dict) -> bool:
         default = m.get("status") == "pass" or m.get("failure_stage") == "run_smoke"
@@ -98,6 +150,9 @@ def summarize(metrics: list[dict], threshold_seconds: int) -> dict:
     passed_with_zero_windows = sum(
         1 for m in metrics if m.get("status") == "pass" and m.get("zero_answering_windows")
     )
+    def passed_with_depth(depth: str) -> int:
+        return sum(1 for m in metrics if m.get("status") == "pass" and m.get("smoke_depth") == depth)
+
     return {
         "targets_total": len(metrics),
         "run_attempted": attempted,
@@ -109,6 +164,9 @@ def summarize(metrics: list[dict], threshold_seconds: int) -> dict:
         "pass": passing,
         "fail": failing,
         "pass_loading_zero_answering_windows": passed_with_zero_windows,
+        "pass_observable_assertions": passed_with_depth("observable"),
+        "pass_stop_reason_only": passed_with_depth("stop_reason_only"),
+        "pass_depth_unknown": passed_with_depth("unknown"),
         "median_elapsed_ms": median_elapsed_ms,
         "median_elapsed_seconds": round(median_elapsed_ms / 1000.0, 3),
         "threshold_seconds": threshold_seconds,
@@ -137,15 +195,18 @@ def build_markdown(
         f"- pass: `{summary['pass']}`",
         f"- fail: `{summary['fail']}`",
         f"- pass_loading_zero_answering_windows: `{summary['pass_loading_zero_answering_windows']}/{summary['pass']}`",
+        f"- pass_observable_assertions: `{summary['pass_observable_assertions']}/{summary['pass']}`",
+        f"- pass_stop_reason_only: `{summary['pass_stop_reason_only']}/{summary['pass']}`",
+        f"- pass_depth_unknown: `{summary['pass_depth_unknown']}/{summary['pass']}`",
         f"- median_elapsed_ms: `{median_elapsed_ms}`",
         f"- median_elapsed_seconds: `{median_elapsed_seconds}`",
         f"- threshold_seconds: `{threshold_seconds}`",
         f"- threshold_met: `{threshold_hits}/{summary['run_attempted']}`",
         "",
-        "> `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor. `Zero Windows` lists the peripherals in the chip the target's system actually loads that are allowlisted stubs (`crates/core/src/bus/known_stubs.rs`) and answer reads with zeros; a pass with zero windows did not exercise those blocks.",
+        "> `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor. `Zero Windows` lists the peripherals in the chip the target's system actually loads that are allowlisted stubs (`crates/core/src/bus/known_stubs.rs`) and answer reads with zeros; a pass with zero windows did not exercise those blocks. `Smoke Depth` is `stop_reason_only` when the script asserts nothing but `expected_stop_reason` (the CPU stepped to its budget without faulting; no UART, memory or GPIO result is checked) and `observable` when it also checks a UART, memory, GPIO or fidelity result.",
         "",
-        "| Target | Status | Run Attempted | Booted | Smoke Passed | Elapsed (ms) | Elapsed (s) | Threshold Met | Zero Windows | Failure Stage | Hint | Signature |",
-        "|---|---|---|---|---|---:|---:|---|---|---|---|---|",
+        "| Target | Status | Run Attempted | Booted | Smoke Passed | Elapsed (ms) | Elapsed (s) | Threshold Met | Smoke Depth | Zero Windows | Failure Stage | Hint | Signature |",
+        "|---|---|---|---|---|---:|---:|---|---|---|---|---|---|",
     ]
     if descriptors_present is not None:
         lines.insert(2, f"- descriptors_present: `{descriptors_present}`")
@@ -171,11 +232,12 @@ def build_markdown(
         windows_label = (
             "n/a" if windows is None else "0" if not windows else f"{len(windows)}: " + ", ".join(f"`{w}`" for w in windows)
         )
+        depth_label = m.get("smoke_depth", "unknown") if run_attempted else "n/a"
         failure_stage = m.get("failure_stage") or "n/a"
         hint = (m.get("failure_hint") or "n/a").replace("|", "/")
         signature = (m.get("first_error_signature") or "n/a").replace("|", "/")
         lines.append(
-            f"| `{target}` | `{status}` | `{run_attempted}` | `{booted_label}` | `{smoke_label}` | `{elapsed_ms}` | `{elapsed_seconds}` | `{threshold_label}` | {windows_label} | `{failure_stage}` | {hint} | {signature} |"
+            f"| `{target}` | `{status}` | `{run_attempted}` | `{booted_label}` | `{smoke_label}` | `{elapsed_ms}` | `{elapsed_seconds}` | `{threshold_label}` | `{depth_label}` | {windows_label} | `{failure_stage}` | {hint} | {signature} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -195,6 +257,7 @@ def main() -> int:
 
     metrics = load_metrics(args.metrics_root)
     annotate_zero_answering_windows(metrics)
+    annotate_smoke_depth(metrics)
     summary = summarize(metrics, args.soft_threshold_seconds)
     descriptors_present = len(list(args.descriptor_root.glob("*.yaml"))) if args.descriptor_root else None
     summary["descriptors_present"] = descriptors_present

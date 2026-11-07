@@ -8,6 +8,9 @@
     "pass": 224,
     "fail": 0,
     "pass_loading_zero_answering_windows": 2,
+    "pass_observable_assertions": 177,
+    "pass_stop_reason_only": 47,
+    "pass_depth_unknown": 0,
     "median_elapsed_ms": 1223,
     "median_elapsed_seconds": 1.223,
     "threshold_seconds": 3600,
@@ -53,7 +56,12 @@
         "run_smoke": 405
       },
       "_artifact_path": "A2_CV32E40P",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "a20",
@@ -93,7 +101,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/a20-a7-uart-smoke.elf",
       "_artifact_path": "a20",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "acrn_x86_64",
@@ -130,7 +143,9 @@
       "_artifact_path": "acrn_x86_64",
       "zero_answering_windows": [
         "hpet:hpet"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "alif_ae822fa0e5597bs0",
@@ -170,7 +185,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/alif-e8-m55-cpu-smoke.elf",
       "_artifact_path": "alif_ae822fa0e5597bs0",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "ambiq-apollo4",
@@ -211,7 +230,13 @@
       "_artifact_path": "ambiq-apollo4",
       "zero_answering_windows": [
         "sync_read:stub"
-      ]
+      ],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "andes_ae350_n25",
@@ -250,7 +275,12 @@
         "run_smoke": 286
       },
       "_artifact_path": "andes_ae350_n25",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "arduino_101-shield",
@@ -293,7 +323,9 @@
         "spi1:stub",
         "pwm:stub",
         "scss:stub"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "arduino_nano_33_ble",
@@ -332,7 +364,13 @@
         "run_smoke": 1606
       },
       "_artifact_path": "arduino_nano_33_ble",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "arduino_uno_r4_minima",
@@ -371,7 +409,13 @@
         "run_smoke": 279
       },
       "_artifact_path": "arduino_uno_r4_minima",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "arty_litex_vexriscv",
@@ -410,7 +454,13 @@
         "run_smoke": 2209
       },
       "_artifact_path": "arty_litex_vexriscv",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "arvsom",
@@ -449,7 +499,11 @@
         "run_smoke": 297
       },
       "_artifact_path": "arvsom",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "at91rm9200",
@@ -489,7 +543,9 @@
         "ckgrPllar:pythonperipheral",
         "ckgrPllbr:pythonperipheral",
         "pmcMkcr:pythonperipheral"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "atsamd21j17d-aft",
@@ -528,7 +584,12 @@
         "run_smoke": 308
       },
       "_artifact_path": "atsamd21j17d-aft",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "atsamd51g19a",
@@ -567,7 +628,13 @@
         "run_smoke": 272
       },
       "_artifact_path": "atsamd51g19a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "beaglev-fire",
@@ -607,7 +674,13 @@
       },
       "prebuilt_firmware": "tests/fixtures/mpfs-gpio-smoke.elf",
       "_artifact_path": "beaglev-fire",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "beaglev_starlight",
@@ -646,7 +719,12 @@
         "run_smoke": 279
       },
       "_artifact_path": "beaglev_starlight",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "brd4116a",
@@ -685,7 +763,12 @@
         "run_smoke": 274
       },
       "_artifact_path": "brd4116a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "brd4117a",
@@ -724,7 +807,12 @@
         "run_smoke": 281
       },
       "_artifact_path": "brd4117a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "brd4118a",
@@ -763,7 +851,12 @@
         "run_smoke": 280
       },
       "_artifact_path": "brd4118a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "brd4120a",
@@ -802,7 +895,12 @@
         "run_smoke": 272
       },
       "_artifact_path": "brd4120a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "brd4121a",
@@ -841,7 +939,12 @@
         "run_smoke": 285
       },
       "_artifact_path": "brd4121a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "brd4162a",
@@ -880,7 +983,12 @@
         "run_smoke": 277
       },
       "_artifact_path": "brd4162a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "brd4186c",
@@ -919,7 +1027,12 @@
         "run_smoke": 274
       },
       "_artifact_path": "brd4186c",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "brd4402a",
@@ -958,7 +1071,12 @@
         "run_smoke": 266
       },
       "_artifact_path": "brd4402a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "cc2538",
@@ -1005,7 +1123,13 @@
         "usb:stub",
         "pka:stub",
         "cctest:stub"
-      ]
+      ],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "colibri-vf61",
@@ -1045,7 +1169,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",
       "_artifact_path": "colibri-vf61",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "core-v-mcu",
@@ -1084,7 +1212,12 @@
         "run_smoke": 288
       },
       "_artifact_path": "core-v-mcu",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "cortex-a53-gicv2",
@@ -1124,7 +1257,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
       "_artifact_path": "cortex-a53-gicv2",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "cortex-a53-gicv3",
@@ -1164,7 +1301,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
       "_artifact_path": "cortex-a53-gicv3",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "cortex-a53-gicv3_smp",
@@ -1204,7 +1345,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
       "_artifact_path": "cortex-a53-gicv3_smp",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "cortex-a78",
@@ -1244,7 +1389,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
       "_artifact_path": "cortex-a78",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "cortex-r52",
@@ -1284,7 +1433,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
       "_artifact_path": "cortex-r52",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "cortex-r52_smp",
@@ -1324,7 +1478,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
       "_artifact_path": "cortex-r52_smp",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "cortex-r52_smp_4",
@@ -1364,7 +1523,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
       "_artifact_path": "cortex-r52_smp_4",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "cortex_a53_console",
@@ -1404,7 +1568,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
       "_artifact_path": "cortex_a53_console",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "cortex_a53_virtio",
@@ -1444,7 +1612,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
       "_artifact_path": "cortex_a53_virtio",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "crosslink-nx-evn",
@@ -1483,7 +1655,12 @@
         "run_smoke": 298
       },
       "_artifact_path": "crosslink-nx-evn",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32g210",
@@ -1522,7 +1699,12 @@
         "run_smoke": 281
       },
       "_artifact_path": "efm32g210",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32g222",
@@ -1561,7 +1743,12 @@
         "run_smoke": 271
       },
       "_artifact_path": "efm32g222",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32g232",
@@ -1600,7 +1787,12 @@
         "run_smoke": 278
       },
       "_artifact_path": "efm32g232",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32g842",
@@ -1639,7 +1831,12 @@
         "run_smoke": 269
       },
       "_artifact_path": "efm32g842",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32g890",
@@ -1678,7 +1875,12 @@
         "run_smoke": 270
       },
       "_artifact_path": "efm32g890",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32gg942",
@@ -1717,7 +1919,12 @@
         "run_smoke": 269
       },
       "_artifact_path": "efm32gg942",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32gg995",
@@ -1756,7 +1963,12 @@
         "run_smoke": 301
       },
       "_artifact_path": "efm32gg995",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32hg350",
@@ -1795,7 +2007,12 @@
         "run_smoke": 269
       },
       "_artifact_path": "efm32hg350",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32jg1",
@@ -1834,7 +2051,12 @@
         "run_smoke": 268
       },
       "_artifact_path": "efm32jg1",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32jg12",
@@ -1873,7 +2095,12 @@
         "run_smoke": 277
       },
       "_artifact_path": "efm32jg12",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32lg942",
@@ -1912,7 +2139,12 @@
         "run_smoke": 274
       },
       "_artifact_path": "efm32lg942",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32lg995",
@@ -1951,7 +2183,12 @@
         "run_smoke": 270
       },
       "_artifact_path": "efm32lg995",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32pg1",
@@ -1990,7 +2227,12 @@
         "run_smoke": 270
       },
       "_artifact_path": "efm32pg1",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32pg12",
@@ -2029,7 +2271,12 @@
         "run_smoke": 280
       },
       "_artifact_path": "efm32pg12",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32tg840",
@@ -2068,7 +2315,12 @@
         "run_smoke": 278
       },
       "_artifact_path": "efm32tg840",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32wg995",
@@ -2107,7 +2359,12 @@
         "run_smoke": 268
       },
       "_artifact_path": "efm32wg995",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efm32zg222",
@@ -2146,7 +2403,12 @@
         "run_smoke": 274
       },
       "_artifact_path": "efm32zg222",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efr32mg1",
@@ -2185,7 +2447,12 @@
         "run_smoke": 269
       },
       "_artifact_path": "efr32mg1",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efr32mg12",
@@ -2224,7 +2491,12 @@
         "run_smoke": 269
       },
       "_artifact_path": "efr32mg12",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efr32mg13",
@@ -2263,7 +2535,12 @@
         "run_smoke": 263
       },
       "_artifact_path": "efr32mg13",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efr32mg24",
@@ -2302,7 +2579,12 @@
         "run_smoke": 275
       },
       "_artifact_path": "efr32mg24",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efr32mg26",
@@ -2341,7 +2623,12 @@
         "run_smoke": 273
       },
       "_artifact_path": "efr32mg26",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "efr32xg22",
@@ -2380,7 +2667,12 @@
         "run_smoke": 265
       },
       "_artifact_path": "efr32xg22",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "egis_et171",
@@ -2419,7 +2711,12 @@
         "run_smoke": 288
       },
       "_artifact_path": "egis_et171",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "eos-s3",
@@ -2458,7 +2755,12 @@
         "run_smoke": 273
       },
       "_artifact_path": "eos-s3",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "eos-s3-qomu",
@@ -2497,7 +2799,12 @@
         "run_smoke": 273
       },
       "_artifact_path": "eos-s3-qomu",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "eos-s3-quickfeather",
@@ -2536,7 +2843,12 @@
         "run_smoke": 273
       },
       "_artifact_path": "eos-s3-quickfeather",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "ezr32hg320",
@@ -2575,7 +2887,12 @@
         "run_smoke": 276
       },
       "_artifact_path": "ezr32hg320",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "ezr32lg330",
@@ -2614,7 +2931,12 @@
         "run_smoke": 287
       },
       "_artifact_path": "ezr32lg330",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "ezr32wg330",
@@ -2653,7 +2975,12 @@
         "run_smoke": 272
       },
       "_artifact_path": "ezr32wg330",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "focaltech_ft9001",
@@ -2692,7 +3019,13 @@
         "run_smoke": 412
       },
       "_artifact_path": "focaltech_ft9001",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_regex",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "fomu",
@@ -2731,7 +3064,12 @@
         "run_smoke": 304
       },
       "_artifact_path": "fomu",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "fsl_lx2160ardb",
@@ -2771,7 +3109,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/lx2160a-a72-uart-smoke.elf",
       "_artifact_path": "fsl_lx2160ardb",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "gr712rc",
@@ -2813,7 +3156,9 @@
         "ahbInfo:gaislerahbplugandplayinfo",
         "apb1Controller:gaislerapbcontroller",
         "apb2Controller:gaislerapbcontroller"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "gr716",
@@ -2848,7 +3193,9 @@
         "run_smoke": null
       },
       "_artifact_path": "gr716",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "gr716-devboard",
@@ -2888,7 +3235,9 @@
         "switch1:button",
         "switch2:button",
         "switch3:button"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "ice40up5k-mdp-evn",
@@ -2927,7 +3276,12 @@
         "run_smoke": 281
       },
       "_artifact_path": "ice40up5k-mdp-evn",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "imxrt1064",
@@ -2966,7 +3320,13 @@
         "run_smoke": 271
       },
       "_artifact_path": "imxrt1064",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "imxrt500",
@@ -3005,7 +3365,13 @@
         "run_smoke": 343
       },
       "_artifact_path": "imxrt500",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "kendryte_k210",
@@ -3044,7 +3410,12 @@
         "run_smoke": 269
       },
       "_artifact_path": "kendryte_k210",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "leon3",
@@ -3086,7 +3457,9 @@
         "eth:gaislereth",
         "phy:ethernetphysicallayer",
         "led:led"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "litex_common",
@@ -3123,7 +3496,9 @@
       "_artifact_path": "litex_common",
       "zero_answering_windows": [
         "phy:ethernetphysicallayer"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "litex_ibex",
@@ -3162,7 +3537,13 @@
         "run_smoke": 290
       },
       "_artifact_path": "litex_ibex",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_linux_vexriscv_sdcard",
@@ -3201,7 +3582,12 @@
         "run_smoke": 745
       },
       "_artifact_path": "litex_linux_vexriscv_sdcard",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_microwatt",
@@ -3236,7 +3622,9 @@
         "run_smoke": null
       },
       "_artifact_path": "litex_microwatt",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "litex_minerva",
@@ -3275,7 +3663,13 @@
         "run_smoke": 300
       },
       "_artifact_path": "litex_minerva",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_nexys_video_vexriscv_linux",
@@ -3314,7 +3708,12 @@
         "run_smoke": 1452
       },
       "_artifact_path": "litex_nexys_video_vexriscv_linux",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_picorv32",
@@ -3353,7 +3752,13 @@
         "run_smoke": 1523
       },
       "_artifact_path": "litex_picorv32",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_tock",
@@ -3392,7 +3797,12 @@
         "run_smoke": 305
       },
       "_artifact_path": "litex_tock",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_vexriscv",
@@ -3431,7 +3841,13 @@
         "run_smoke": 1639
       },
       "_artifact_path": "litex_vexriscv",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_vexriscv_linux",
@@ -3470,7 +3886,12 @@
         "run_smoke": 1543
       },
       "_artifact_path": "litex_vexriscv_linux",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_vexriscv_micropython",
@@ -3509,7 +3930,13 @@
         "run_smoke": 1644
       },
       "_artifact_path": "litex_vexriscv_micropython",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_vexriscv_smp",
@@ -3548,7 +3975,12 @@
         "run_smoke": 285
       },
       "_artifact_path": "litex_vexriscv_smp",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_vexriscv_tftp",
@@ -3587,7 +4019,12 @@
         "run_smoke": 1552
       },
       "_artifact_path": "litex_vexriscv_tftp",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_vexriscv_verilated_cfu",
@@ -3626,7 +4063,13 @@
         "run_smoke": 1512
       },
       "_artifact_path": "litex_vexriscv_verilated_cfu",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_vexriscv_verilated_liteuart",
@@ -3665,7 +4108,13 @@
         "run_smoke": 1612
       },
       "_artifact_path": "litex_vexriscv_verilated_liteuart",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_vexriscv_zephyr",
@@ -3704,7 +4153,13 @@
         "run_smoke": 1524
       },
       "_artifact_path": "litex_vexriscv_zephyr",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "litex_zephyr_vexriscv_i2s",
@@ -3743,7 +4198,12 @@
         "run_smoke": 310
       },
       "_artifact_path": "litex_zephyr_vexriscv_i2s",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "lpc2294",
@@ -3783,7 +4243,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-uart-smoke.elf",
       "_artifact_path": "lpc2294",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "mars_zx3",
@@ -3823,7 +4288,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/zynq7000-a9-uart-smoke.elf",
       "_artifact_path": "mars_zx3",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "max32652",
@@ -3862,7 +4332,12 @@
         "run_smoke": 290
       },
       "_artifact_path": "max32652",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "max32652-evkit",
@@ -3901,7 +4376,12 @@
         "run_smoke": 280
       },
       "_artifact_path": "max32652-evkit",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "microwatt",
@@ -3938,7 +4418,9 @@
       "_artifact_path": "microwatt",
       "zero_answering_windows": [
         "uart:stub"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "mimxrt1064_evk",
@@ -3977,7 +4459,13 @@
         "run_smoke": 274
       },
       "_artifact_path": "mimxrt1064_evk",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "mimxrt700_evk",
@@ -4016,7 +4504,12 @@
         "run_smoke": 406
       },
       "_artifact_path": "mimxrt700_evk",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "mimxrt798s",
@@ -4055,7 +4548,12 @@
         "run_smoke": 390
       },
       "_artifact_path": "mimxrt798s",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "miv",
@@ -4094,7 +4592,13 @@
         "run_smoke": 307
       },
       "_artifact_path": "miv",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "miv-board",
@@ -4133,7 +4637,13 @@
         "run_smoke": 312
       },
       "_artifact_path": "miv-board",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "miv-board-additional-uarts",
@@ -4172,7 +4682,12 @@
         "run_smoke": 288
       },
       "_artifact_path": "miv-board-additional-uarts",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "miv_rv32",
@@ -4211,7 +4726,13 @@
         "run_smoke": 281
       },
       "_artifact_path": "miv_rv32",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "mpc5567",
@@ -4250,7 +4771,9 @@
         "fec:fastethernetcontroller",
         "emios:emios",
         "fmpllSynsr:pythonperipheral"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "mpfs-icicle-kit",
@@ -4290,7 +4813,13 @@
       },
       "prebuilt_firmware": "tests/fixtures/mpfs-gpio-smoke.elf",
       "_artifact_path": "mpfs-icicle-kit",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "msp430f2619",
@@ -4330,7 +4859,9 @@
         "ram_extended:arraymemory",
         "code:arraymemory",
         "info_mem:arraymemory"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "mspsim-msp430f149",
@@ -4365,7 +4896,9 @@
         "run_smoke": null
       },
       "_artifact_path": "mspsim-msp430f149",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "mspsim-msp430f1611",
@@ -4400,7 +4933,9 @@
         "run_smoke": null
       },
       "_artifact_path": "mspsim-msp430f1611",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "mspsim-msp430f2617",
@@ -4435,7 +4970,9 @@
         "run_smoke": null
       },
       "_artifact_path": "mspsim-msp430f2617",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "mspsim-msp430f5437",
@@ -4470,7 +5007,9 @@
         "run_smoke": null
       },
       "_artifact_path": "mspsim-msp430f5437",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "murax_vexriscv",
@@ -4509,7 +5048,12 @@
         "run_smoke": 292
       },
       "_artifact_path": "murax_vexriscv",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "murax_vexriscv_verilated_uart",
@@ -4548,7 +5092,12 @@
         "run_smoke": 287
       },
       "_artifact_path": "murax_vexriscv_verilated_uart",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "nrf52840",
@@ -4587,7 +5136,13 @@
         "run_smoke": 1871
       },
       "_artifact_path": "nrf52840",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "nrf52840dk_nrf52840",
@@ -4626,7 +5181,13 @@
         "run_smoke": 1649
       },
       "_artifact_path": "nrf52840dk_nrf52840",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "nucleo_f767zi",
@@ -4665,7 +5226,13 @@
         "run_smoke": 268
       },
       "_artifact_path": "nucleo_f767zi",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "nucleo_h753zi",
@@ -4704,7 +5271,13 @@
         "run_smoke": 1558
       },
       "_artifact_path": "nucleo_h753zi",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "nucleo_wba52cg",
@@ -4743,7 +5316,14 @@
         "run_smoke": 1293
       },
       "_artifact_path": "nucleo_wba52cg",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "nuvoton_npcx9",
@@ -4782,7 +5362,12 @@
         "run_smoke": 314
       },
       "_artifact_path": "nuvoton_npcx9",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "nuvoton_npcx9m6fb_evb",
@@ -4821,7 +5406,12 @@
         "run_smoke": 319
       },
       "_artifact_path": "nuvoton_npcx9m6fb_evb",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "nxp-frdm-imx8mplus",
@@ -4861,7 +5451,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
       "_artifact_path": "nxp-frdm-imx8mplus",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "nxp-k6xf",
@@ -4901,7 +5495,14 @@
       },
       "prebuilt_firmware": "tests/fixtures/frdm-k64f-smoke.elf",
       "_artifact_path": "nxp-k6xf",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "nxp-mimx8ml",
@@ -4941,7 +5542,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
       "_artifact_path": "nxp-mimx8ml",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "nxp-s32k388",
@@ -4980,7 +5585,11 @@
         "run_smoke": 303
       },
       "_artifact_path": "nxp-s32k388",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "nxp-s32k388evb",
@@ -5019,7 +5628,11 @@
         "run_smoke": 282
       },
       "_artifact_path": "nxp-s32k388evb",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "opentitan-earlgrey",
@@ -5058,7 +5671,13 @@
         "run_smoke": 289
       },
       "_artifact_path": "opentitan-earlgrey",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "opentitan-earlgrey-cw310",
@@ -5097,7 +5716,13 @@
         "run_smoke": 337
       },
       "_artifact_path": "opentitan-earlgrey-cw310",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "picosoc",
@@ -5136,7 +5761,12 @@
         "run_smoke": 358
       },
       "_artifact_path": "picosoc",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "polarfire-soc",
@@ -5176,7 +5806,13 @@
       },
       "prebuilt_firmware": "tests/fixtures/mpfs-gpio-smoke.elf",
       "_artifact_path": "polarfire-soc",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "quark-c1000",
@@ -5216,7 +5852,9 @@
         "spi1:stub",
         "pwm:stub",
         "scss:stub"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "quark_c1000-cc2520",
@@ -5260,7 +5898,9 @@
         "spi1:stub",
         "pwm:stub",
         "scss:stub"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "ramn",
@@ -5299,7 +5939,12 @@
         "run_smoke": 352
       },
       "_artifact_path": "ramn",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "renesas-ck_ra6m5",
@@ -5338,7 +5983,12 @@
         "run_smoke": 422
       },
       "_artifact_path": "renesas-ck_ra6m5",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "renesas-da14592",
@@ -5377,7 +6027,13 @@
         "run_smoke": 337
       },
       "_artifact_path": "renesas-da14592",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "renesas-ek_ra2e1",
@@ -5416,7 +6072,12 @@
         "run_smoke": 292
       },
       "_artifact_path": "renesas-ek_ra2e1",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "renesas-ek_ra8m1",
@@ -5455,7 +6116,14 @@
         "run_smoke": 358
       },
       "_artifact_path": "renesas-ek_ra8m1",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "renesas-r7fa2e1a9",
@@ -5494,7 +6162,12 @@
         "run_smoke": 309
       },
       "_artifact_path": "renesas-r7fa2e1a9",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "renesas-r7fa2l1a",
@@ -5533,7 +6206,12 @@
         "run_smoke": 336
       },
       "_artifact_path": "renesas-r7fa2l1a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "renesas-r7fa4m1a",
@@ -5572,7 +6250,13 @@
         "run_smoke": 404
       },
       "_artifact_path": "renesas-r7fa4m1a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "renesas-r7fa6m5b",
@@ -5611,7 +6295,11 @@
         "run_smoke": 289
       },
       "_artifact_path": "renesas-r7fa6m5b",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "renesas-r7fa8m1a",
@@ -5650,7 +6338,12 @@
         "run_smoke": 336
       },
       "_artifact_path": "renesas-r7fa8m1a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "renesas-rz_t2m_rsk",
@@ -5690,7 +6383,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/rz-t2m-r52-sci-smoke.elf",
       "_artifact_path": "renesas-rz_t2m_rsk",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "renesas_rz_g2l",
@@ -5730,7 +6428,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/rzg2l-cm33-cpu-smoke.elf",
       "_artifact_path": "renesas_rz_g2l",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "renesas_rz_t2m",
@@ -5770,7 +6472,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/rz-t2m-r52-sci-smoke.elf",
       "_artifact_path": "renesas_rz_t2m",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "ri5cy",
@@ -5809,7 +6516,13 @@
         "run_smoke": 994
       },
       "_artifact_path": "ri5cy",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "riscv_verilated_uartlite",
@@ -5848,7 +6561,12 @@
         "run_smoke": 380
       },
       "_artifact_path": "riscv_verilated_uartlite",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "riscv_virt",
@@ -5887,7 +6605,13 @@
         "run_smoke": 340
       },
       "_artifact_path": "riscv_virt",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "s32k118",
@@ -5926,7 +6650,12 @@
         "run_smoke": 355
       },
       "_artifact_path": "s32k118",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "sam4s",
@@ -5965,7 +6694,12 @@
         "run_smoke": 332
       },
       "_artifact_path": "sam4s",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "sam4s16c",
@@ -6004,7 +6738,12 @@
         "run_smoke": 303
       },
       "_artifact_path": "sam4s16c",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "sam4s8b",
@@ -6043,7 +6782,12 @@
         "run_smoke": 283
       },
       "_artifact_path": "sam4s8b",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "sam4s_xplained",
@@ -6082,7 +6826,13 @@
         "run_smoke": 409
       },
       "_artifact_path": "sam4s_xplained",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "sam_e70",
@@ -6121,7 +6871,14 @@
         "run_smoke": 296
       },
       "_artifact_path": "sam_e70",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "sifive-fe310",
@@ -6160,7 +6917,13 @@
         "run_smoke": 351
       },
       "_artifact_path": "sifive-fe310",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "sifive-fu540",
@@ -6199,7 +6962,12 @@
         "run_smoke": 444
       },
       "_artifact_path": "sifive-fu540",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "sifive-fu740",
@@ -6238,7 +7006,12 @@
         "run_smoke": 372
       },
       "_artifact_path": "sifive-fu740",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-at90usb162",
@@ -6278,7 +7051,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/at90usb162-cpu-smoke.elf",
       "_artifact_path": "simavr-at90usb162",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega128",
@@ -6318,7 +7095,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega128-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega128",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega1280",
@@ -6358,7 +7139,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega1280-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega1280",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega1281",
@@ -6398,7 +7183,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega1281-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega1281",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega1284p",
@@ -6438,7 +7227,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega1284p-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega1284p",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega128rfa1",
@@ -6478,7 +7271,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega128rfa1-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega128rfa1",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega128rfr2",
@@ -6518,7 +7315,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega128rfr2-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega128rfr2",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega16",
@@ -6558,7 +7359,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega16-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega16",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega164",
@@ -6598,7 +7403,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega164-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega164",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega168",
@@ -6638,7 +7447,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega168-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega168",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega169p",
@@ -6678,7 +7491,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega169p-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega169p",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega16m1",
@@ -6718,7 +7535,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega16m1-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega16m1",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega2560",
@@ -6758,7 +7579,13 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/arduino-mega-2560-io.elf",
       "_artifact_path": "simavr-atmega2560",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega32",
@@ -6798,7 +7625,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega32-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega32",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega324",
@@ -6838,7 +7669,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega324-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega324",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega328",
@@ -6878,7 +7713,13 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/arduino-uno-blinky.elf",
       "_artifact_path": "simavr-atmega328",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega328pb",
@@ -6918,7 +7759,13 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega328pb-usart1.elf",
       "_artifact_path": "simavr-atmega328pb",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega32u4",
@@ -6958,7 +7805,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega32u4-gpio-smoke.elf",
       "_artifact_path": "simavr-atmega32u4",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega48",
@@ -6998,7 +7850,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega48-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega48",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega644",
@@ -7038,7 +7894,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega644-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega644",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega64m1",
@@ -7078,7 +7938,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega64m1-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega64m1",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega8",
@@ -7118,7 +7982,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega8-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega8",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-atmega88",
@@ -7158,7 +8026,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega88-cpu-smoke.elf",
       "_artifact_path": "simavr-atmega88",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-attiny13",
@@ -7198,7 +8070,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny13-cpu-smoke.elf",
       "_artifact_path": "simavr-attiny13",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-attiny1634",
@@ -7238,7 +8114,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny1634-cpu-smoke.elf",
       "_artifact_path": "simavr-attiny1634",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-attiny2313",
@@ -7278,7 +8158,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny2313-cpu-smoke.elf",
       "_artifact_path": "simavr-attiny2313",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-attiny2313a",
@@ -7318,7 +8202,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny2313a-cpu-smoke.elf",
       "_artifact_path": "simavr-attiny2313a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-attiny24",
@@ -7358,7 +8246,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny24-cpu-smoke.elf",
       "_artifact_path": "simavr-attiny24",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-attiny25",
@@ -7398,7 +8290,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny25-cpu-smoke.elf",
       "_artifact_path": "simavr-attiny25",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-attiny4313",
@@ -7438,7 +8334,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny4313-cpu-smoke.elf",
       "_artifact_path": "simavr-attiny4313",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-attiny44",
@@ -7478,7 +8378,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny44-cpu-smoke.elf",
       "_artifact_path": "simavr-attiny44",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-attiny45",
@@ -7518,7 +8422,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny45-cpu-smoke.elf",
       "_artifact_path": "simavr-attiny45",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-attiny84",
@@ -7558,7 +8466,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny84-cpu-smoke.elf",
       "_artifact_path": "simavr-attiny84",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "simavr-attiny85",
@@ -7598,7 +8510,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny85-cpu-smoke.elf",
       "_artifact_path": "simavr-attiny85",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "sltb001a",
@@ -7637,7 +8553,12 @@
         "run_smoke": 288
       },
       "_artifact_path": "sltb001a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "sltb004a",
@@ -7676,7 +8597,12 @@
         "run_smoke": 282
       },
       "_artifact_path": "sltb004a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "slwstk6220a",
@@ -7715,7 +8641,12 @@
         "run_smoke": 373
       },
       "_artifact_path": "slwstk6220a",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "starfive-jh7100",
@@ -7754,7 +8685,12 @@
         "run_smoke": 281
       },
       "_artifact_path": "starfive-jh7100",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stk3200",
@@ -7793,7 +8729,12 @@
         "run_smoke": 314
       },
       "_artifact_path": "stk3200",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stk3600",
@@ -7832,7 +8773,12 @@
         "run_smoke": 308
       },
       "_artifact_path": "stk3600",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stk3700",
@@ -7871,7 +8817,12 @@
         "run_smoke": 335
       },
       "_artifact_path": "stk3700",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stk3800",
@@ -7910,7 +8861,12 @@
         "run_smoke": 329
       },
       "_artifact_path": "stk3800",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f042",
@@ -7949,7 +8905,13 @@
         "run_smoke": 352
       },
       "_artifact_path": "stm32f042",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f072",
@@ -7988,7 +8950,13 @@
         "run_smoke": 371
       },
       "_artifact_path": "stm32f072",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f072b_discovery",
@@ -8027,7 +8995,13 @@
         "run_smoke": 365
       },
       "_artifact_path": "stm32f072b_discovery",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f103",
@@ -8066,7 +9040,12 @@
         "run_smoke": 1523
       },
       "_artifact_path": "stm32f103",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f4",
@@ -8105,7 +9084,13 @@
         "run_smoke": 1419
       },
       "_artifact_path": "stm32f4",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f401cdu6-blackpill",
@@ -8144,7 +9129,12 @@
         "run_smoke": 275
       },
       "_artifact_path": "stm32f401cdu6-blackpill",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f412",
@@ -8183,7 +9173,13 @@
         "run_smoke": 484
       },
       "_artifact_path": "stm32f412",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f429",
@@ -8222,7 +9218,13 @@
         "run_smoke": 467
       },
       "_artifact_path": "stm32f429",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f4_discovery",
@@ -8261,7 +9263,13 @@
         "run_smoke": 1428
       },
       "_artifact_path": "stm32f4_discovery",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f4_discovery-kit",
@@ -8300,7 +9308,13 @@
         "run_smoke": 1464
       },
       "_artifact_path": "stm32f4_discovery-kit",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f746",
@@ -8339,7 +9353,13 @@
         "run_smoke": 290
       },
       "_artifact_path": "stm32f746",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f777",
@@ -8378,7 +9398,13 @@
         "run_smoke": 277
       },
       "_artifact_path": "stm32f777",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32f7_discovery-bb",
@@ -8417,7 +9443,13 @@
         "run_smoke": 275
       },
       "_artifact_path": "stm32f7_discovery-bb",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32h7",
@@ -8456,7 +9488,13 @@
         "run_smoke": 1464
       },
       "_artifact_path": "stm32h7",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32h743",
@@ -8495,7 +9533,13 @@
         "run_smoke": 1440
       },
       "_artifact_path": "stm32h743",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32h747",
@@ -8534,7 +9578,13 @@
         "run_smoke": 1430
       },
       "_artifact_path": "stm32h747",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32h747-disco",
@@ -8573,7 +9623,13 @@
         "run_smoke": 1471
       },
       "_artifact_path": "stm32h747-disco",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32h753",
@@ -8612,7 +9668,13 @@
         "run_smoke": 1500
       },
       "_artifact_path": "stm32h753",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32l071",
@@ -8651,7 +9713,13 @@
         "run_smoke": 298
       },
       "_artifact_path": "stm32l071",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32l072",
@@ -8690,7 +9758,13 @@
         "run_smoke": 302
       },
       "_artifact_path": "stm32l072",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32l151",
@@ -8729,7 +9803,12 @@
         "run_smoke": 274
       },
       "_artifact_path": "stm32l151",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32l552",
@@ -8768,7 +9847,13 @@
         "run_smoke": 1137
       },
       "_artifact_path": "stm32l552",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "stm32w108",
@@ -8807,7 +9892,11 @@
         "run_smoke": 272
       },
       "_artifact_path": "stm32w108",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "stm32wba52",
@@ -8846,7 +9935,14 @@
         "run_smoke": 1349
       },
       "_artifact_path": "stm32wba52",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "gpio_edges",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "tegra2",
@@ -8886,7 +9982,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/tegra-a9-uart-smoke.elf",
       "_artifact_path": "tegra2",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "tegra3",
@@ -8926,7 +10027,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/tegra-a9-uart-smoke.elf",
       "_artifact_path": "tegra3",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "tock_veer_el2_sim",
@@ -8965,7 +10071,12 @@
         "run_smoke": 284
       },
       "_artifact_path": "tock_veer_el2_sim",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "memory_value",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "up_squared_x86_64",
@@ -9003,7 +10114,9 @@
       "zero_answering_windows": [
         "hpet:hpet",
         "pci:pythonperipheral"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "ut32m0r500",
@@ -9042,7 +10155,12 @@
         "run_smoke": 270
       },
       "_artifact_path": "ut32m0r500",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "vegaboard_ri5cy",
@@ -9081,7 +10199,13 @@
         "run_smoke": 933
       },
       "_artifact_path": "vegaboard_ri5cy",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "verilated_ibex",
@@ -9120,7 +10244,13 @@
         "run_smoke": 292
       },
       "_artifact_path": "verilated_ibex",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "uart_ordered",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "versatile",
@@ -9160,7 +10290,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/versatile-arm926-uart-smoke.elf",
       "_artifact_path": "versatile",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "vexpress",
@@ -9200,7 +10335,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/vexpress-a9-uart-smoke.elf",
       "_artifact_path": "vexpress",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "vybrid",
@@ -9240,7 +10380,11 @@
       },
       "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",
       "_artifact_path": "vybrid",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "stop_reason_only"
     },
     {
       "target_id": "x86",
@@ -9277,7 +10421,9 @@
       "_artifact_path": "x86",
       "zero_answering_windows": [
         "hpet:hpet"
-      ]
+      ],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "xtensa-sample-controller",
@@ -9312,7 +10458,9 @@
         "run_smoke": null
       },
       "_artifact_path": "xtensa-sample-controller",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": null,
+      "smoke_depth": "unknown"
     },
     {
       "target_id": "zedboard",
@@ -9352,7 +10500,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/zynq7000-a9-uart-smoke.elf",
       "_artifact_path": "zedboard",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "zolertia-firefly",
@@ -9391,7 +10544,13 @@
         "run_smoke": 295
       },
       "_artifact_path": "zolertia-firefly",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "fidelity_clean",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "zynq-7000",
@@ -9431,7 +10590,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/zynq7000-a9-uart-smoke.elf",
       "_artifact_path": "zynq-7000",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "zynqmp",
@@ -9471,7 +10635,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
       "_artifact_path": "zynqmp",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "zynqmp-zcu102-revA",
@@ -9511,7 +10680,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
       "_artifact_path": "zynqmp-zcu102-revA",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "zynqmp-zcu102-revB",
@@ -9551,7 +10725,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
       "_artifact_path": "zynqmp-zcu102-revB",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "zynqmp-zcu104",
@@ -9591,7 +10770,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
       "_artifact_path": "zynqmp-zcu104",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     },
     {
       "target_id": "zynqmp-zcu106-vcu",
@@ -9631,7 +10815,12 @@
       },
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
       "_artifact_path": "zynqmp-zcu106-vcu",
-      "zero_answering_windows": []
+      "zero_answering_windows": [],
+      "smoke_assertion_kinds": [
+        "uart_contains",
+        "expected_stop_reason"
+      ],
+      "smoke_depth": "observable"
     }
   ]
 }
