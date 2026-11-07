@@ -1,0 +1,57 @@
+{
+  "_about": "Committed allow-list of undecoded MMIO register accesses that the shipped corpus actually performs. Enforced by crates/core/tests/undecoded_register_ratchet.rs. This list may only SHRINK: remove an entry when the model grows the register or the firmware stops writing it, and lower max_entries to match. Adding an entry is a deliberate act that must carry a reason and a classification.",
+  "_source": "Measured by the silent-path census, counter (c). See docs/coverage/silent-path-census.md: 11 raw hits, 5 distinct (peripheral, offset, kind), in 5 of 68 runs. Every entry below is one of those 5.",
+  "_classification": {
+    "guard_reject": "NOT a modelling gap. The offset IS decoded, but its match arm carries a guard (an unlock bit, a mode bit) that was false, so control fell to the catch-all. Dropping the write is the silicon-correct behaviour. The census cannot distinguish this from an unmapped offset, because a guarded arm and a missing arm reach the same `_`. Present here so the count is honest, not because anything is wrong.",
+    "not_a_register": "The offset does not exist on this peripheral in the vendor spec. Firmware wrote to it anyway; the model is right to ignore it. What deserves attention is the firmware, not the model.",
+    "unmodelled_register": "A real register in the vendor spec that the model does not implement. This is the actionable class — the WB55 shape, where a configuration write is silently swallowed and the sim stays green while silicon would not."
+  },
+  "max_entries": 5,
+  "entries": [
+    {
+      "peripheral": "iwdg:Iwdg",
+      "offset": "0x0008",
+      "kind": "write",
+      "classification": "guard_reject",
+      "register": "RLR (Reload)",
+      "seen_in": "examples/stm32f411ceu6-blackpill/io-smoke.yaml",
+      "reason": "iwdg.rs decodes 0x08 as `0x08 if self.write_access => self.rlr = value & 0xFFF`. RLR is write-protected: without the 0x5555 unlock key in KR the write is dropped, which is what the F103 bench silicon does. The guard being false routes the access to the catch-all, so the census records it as undecoded. The register is modelled; nothing to fix."
+    },
+    {
+      "peripheral": "fdcan:Fdcan",
+      "offset": "0x0010",
+      "kind": "write",
+      "classification": "guard_reject",
+      "register": "TEST",
+      "seen_in": "examples/h563-uds-ecu/uds-smoke.yaml, examples/h563-uds-ecu/uds-session-smoke.yaml",
+      "reason": "fdcan.rs decodes REG_TEST (0x010) as `REG_TEST if self.cccr & CCCR_TEST != 0`. TEST is writable only while CCCR.TEST is set; the UDS firmware writes it without entering test mode, so the guard is false and the access falls through. The register is modelled; nothing to fix."
+    },
+    {
+      "peripheral": "nrf52.twim:Nrf52Twim",
+      "offset": "0x0510",
+      "kind": "write",
+      "classification": "not_a_register",
+      "register": "none — 0x510 is unassigned on TWIM",
+      "seen_in": "examples/seeed-xiao-nrf52840-sense/uart-gpio-spi-smoke.yaml",
+      "reason": "The nRF52840 Product Specification v1.11 TWIM register overview (p.791) runs ENABLE 0x500, PSEL.SCL 0x508, PSEL.SDA 0x50C, FREQUENCY 0x524 — there is no 0x510. 0x510 is PSEL.MOSI on SPIM (p.728) and PSEL.MISO on SPI (p.718); nRF52840 shares one address block between SPIM/SPIS/TWIM/TWIS per instance, so this is a driver writing the SPI pin-select layout at a TWIM-modelled instance. Ignoring it matches silicon. Do NOT add a 0x510 arm to the TWIM model to silence this."
+    },
+    {
+      "peripheral": "nrf54l.twim:Nrf54lTwim",
+      "offset": "0x0508",
+      "kind": "write",
+      "classification": "unmodelled_register",
+      "register": "legacy PSEL.SCL offset; on nRF54L the register lives at 0x600",
+      "seen_in": "examples/nrf54l15-smart-ring/io-smoke.yaml",
+      "reason": "Two defects meet here. (1) The nRF54L15 datasheet v1.0 TWIM register overview (p.660, detail p.679 §8.23.10.29) puts PSEL.SCL at 0x600 — the 0x508 of the nRF52 generation was moved. Firmware writing 0x508 is using the old map, and on real nRF54L silicon that write lands on reserved space and the pin is never selected. (2) nrf54l/twim.rs models neither offset: it has no OFF_PSEL_* constant at all, so even a correct write to 0x600 would be swallowed. The model must grow PSEL.SCL/PSEL.SDA at 0x600/0x604 before this entry can be judged; removing it requires fixing the firmware too."
+    },
+    {
+      "peripheral": "nrf54l.twim:Nrf54lTwim",
+      "offset": "0x050c",
+      "kind": "write",
+      "classification": "unmodelled_register",
+      "register": "legacy PSEL.SDA offset; on nRF54L the register lives at 0x604",
+      "seen_in": "examples/nrf54l15-smart-ring/io-smoke.yaml",
+      "reason": "The SDA half of the 0x508 entry above, and the same two defects. nRF54L15 datasheet v1.0 p.660 puts PSEL.SDA at 0x604."
+    }
+  ]
+}

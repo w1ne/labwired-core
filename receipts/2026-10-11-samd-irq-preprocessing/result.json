@@ -1,0 +1,1502 @@
+{
+  "activeCallProof": false,
+  "boundary": "Separate -E diagnostics with frozen remapped flags; spelling observations include declarations/definitions/string tokens and are not calls, retention, balance, assembly, notices, runtime admission or guest evidence",
+  "inputSha256": "f504376d05fec3c5963a7f01af035688586f85bd6f6e0bfcfc74047e308165e0",
+  "runtimeAdmission": false,
+  "runtimeBuildSelection": false,
+  "schema": 1,
+  "status": "SELECTED_PREPROCESSOR_PASS",
+  "units": [
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "02d0b3d82db596dc74813009d06226bdf4768a5dd88cb9839296666dca81ae0b",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "4e99b760b8367c40e5331040debc1e24f9a4259cc6a9bb89014d88c27a79478d",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-core/source/JACDAC/JACDAC.cpp",
+      "sourceSha256": "37519d61403d9a13b71828fd81b8046da978e14aacefc560259941ce953e948d",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JACDAC.cpp",
+          "line": 83,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JACDAC.cpp",
+          "line": 87,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JACDAC.cpp",
+          "line": 90,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JACDAC.cpp",
+          "line": 101,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JACDAC.cpp",
+          "line": 110,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "7e8bb6510e1b4ac3a0d2c0c8ec4a5ab5b9df370b45d855f89b2b4d9dc519858c",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "38eac5163cb13b6aa9ca085b57873877d228146affc98e89ca17488a81771215",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+      "sourceSha256": "0dc5dcf7836d57ff20ce2f49133dd59abddd50fa8b7311a7f49c5913eeb08c1d",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 264,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 274,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 281,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 287,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 324,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 348,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 354,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 848,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 853,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 884,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 886,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 916,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 918,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 948,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/JACDAC/JDPhysicalLayer.cpp",
+          "line": 950,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "2db27f351ff19e4a54e4110684553cbe0f308ae87c369738e53e272f8b517dc7",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "30d992719c285db2961047e953cf313c06f8dcc663101594f960482bc0fc4777",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-core/source/core/CodalDmesg.cpp",
+      "sourceSha256": "1b4d76a7549e900b41cd0909f4edf3625dc271ca90f9cfa81137b459ce21c44b",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalDmesg.cpp",
+          "line": 128,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalDmesg.cpp",
+          "line": 165,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "ff713bde59108b6ebd9508e3cbc10ce1767ce1c364c24106d52a4fee3519e21d",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "43797f42a63ffcdeff3077f87dc6374d9ba05c81551f3262822dd28f6e141cc7",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-core/source/core/CodalFiber.cpp",
+      "sourceSha256": "814cec34248f23d02345be7fc3def0eb2cc3606b44b88e5202fe03ec89e4d0fd",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalFiber.cpp",
+          "line": 95,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalFiber.cpp",
+          "line": 99,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalFiber.cpp",
+          "line": 123,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalFiber.cpp",
+          "line": 150,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalFiber.cpp",
+          "line": 165,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalFiber.cpp",
+          "line": 179,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalFiber.cpp",
+          "line": 189,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalFiber.cpp",
+          "line": 201,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalFiber.cpp",
+          "line": 211,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "da82d67328daabffa482992b7a3792365b1d96b6398bb34723604a5b53bec90e",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "9a7673af79837c766142e15aff7d46350092bfc124e3d871bcf072fb979cb10c",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-core/source/core/CodalHeapAllocator.cpp",
+      "sourceSha256": "c0f5cc8734a5216dec884da42d32ddf9281fc23afab1ea29fdbf570101bd87f4",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalHeapAllocator.cpp",
+          "line": 157,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalHeapAllocator.cpp",
+          "line": 169,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalHeapAllocator.cpp",
+          "line": 208,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalHeapAllocator.cpp",
+          "line": 251,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/CodalHeapAllocator.cpp",
+          "line": 272,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "2b62074b23d7547181197cee7307e76be776a3f6446fc69f0ddbcbfd8df32553",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "f27ab22f2003eb9feb7b9627ca3ff8dda16c26585e77b113734bc2d423359355",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-core/source/core/codal_default_target_hal.cpp",
+      "sourceSha256": "5952fb6be268ccaa0dfff5b08d10d62b74f79bdfd2729d6d524125a70338c7ef",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/core/codal_default_target_hal.cpp",
+          "line": 28,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "68bc5b5c3d8de6d00bbfe750c1b0f959706d11cd6ddc0771abe380e81beda1fc",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "f65f56affdb08ef9164654ca43556e3fb515c0ac3908c297a2ffa53c77a88fee",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-core/source/driver-models/Serial.cpp",
+      "sourceSha256": "0c7e72d551776e42c10e61cc338403967d2a0b39e143f48f2e7daaf90d21fcfa",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/driver-models/Serial.cpp",
+          "line": 437,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/driver-models/Serial.cpp",
+          "line": 482,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "32127297809719b87a7af3e4bacd54a8ee27cd955ce82a719ad007e90b24cd1e"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "413175c1c0af2f7c7e68ec020f50220d4bf31aad62990c8d1ed84691ac48fccd",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "fca81e4364c719c23dbdf9a4cee8083121d91f9a4685e6a48523b209832d6992",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-core/source/driver-models/Timer.cpp",
+      "sourceSha256": "d7d1e3ee896a0691093a5919dce389f169b3e72bc606a4cf7bd103f241ef1128",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/driver-models/Timer.cpp",
+          "line": 67,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/driver-models/Timer.cpp",
+          "line": 69,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/driver-models/Timer.cpp",
+          "line": 167,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/driver-models/Timer.cpp",
+          "line": 175,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/driver-models/Timer.cpp",
+          "line": 192,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/driver-models/Timer.cpp",
+          "line": 209,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/driver-models/Timer.cpp",
+          "line": 282,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/driver-models/Timer.cpp",
+          "line": 302,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "2b8db4f36f26805ff45d2cbe588562f01480897865c35c282d0df8ea30755c68",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "91f5dce5f6f66a014bb356413f9df39515176b18a93dceafce67b243fc11646f",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-core/source/drivers/MessageBus.cpp",
+      "sourceSha256": "5df0bfc13e3c1d7f8e9a1ce9493390ee26109d1eaf774ca0c943fb2d03cfb823",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/drivers/MessageBus.cpp",
+          "line": 182,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/drivers/MessageBus.cpp",
+          "line": 200,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/drivers/MessageBus.cpp",
+          "line": 212,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/source/drivers/MessageBus.cpp",
+          "line": 225,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "25cc65aff2f20f3cf654be8bafa739b9e2e83f909bdc8de0c4ba3113d10cfd48",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "37421205dd65875db8c19e4505de9b3970a79658e4fcb449631534c1de2d17cf",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-itsybitsy-m4/src/codal_target_hal.cpp",
+      "sourceSha256": "db423a7fad6d0940343099096fa57408820d39f6b4fc362c9c42dbc6ce2dc750",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 58,
+          "spellings": [
+            "__enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 69,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-itsybitsy-m4/src/codal_target_hal.cpp",
+          "line": 8,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-itsybitsy-m4/src/codal_target_hal.cpp",
+          "line": 13,
+          "spellings": [
+            "__enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-itsybitsy-m4/src/codal_target_hal.cpp",
+          "line": 17,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-itsybitsy-m4/src/codal_target_hal.cpp",
+          "line": 19,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-itsybitsy-m4/src/codal_target_hal.cpp",
+          "line": 75,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "8d7feeac2e8f4bd7bdb84b7cff40e5976ab76526c3f2ad5b2f24318bb367f867",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "1566306debaa185d0c471d467e6437f1f6e7ca3ed0a98eef9bc08bd2e6d6c8cd",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-samd/src/DmaInstance.cpp",
+      "sourceSha256": "ed37fd8691af5e26e57cf7c8252c8bd55508bba239f530aabf90ef9054229251",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-samd/asf4/samd51/CMSIS/Include/cmsis_gcc.h",
+          "line": 83,
+          "spellings": [
+            "__enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/asf4/samd51/CMSIS/Include/cmsis_gcc.h",
+          "line": 94,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/DmaInstance.cpp",
+          "line": 99,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/DmaInstance.cpp",
+          "line": 113,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/DmaInstance.cpp",
+          "line": 142,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/DmaInstance.cpp",
+          "line": 207,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "adbfb2ae272578450d0e8a676029a5e0757e7c7fc720ea5d63dc12b92a171924",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "397e16c2e8b6a6d46013651e7b1b75aa321cb5291a30d01538874b2d65c3afa7",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-samd/src/SAMDEIC.cpp",
+      "sourceSha256": "b8a0a1b61b86c26413b4713ed34b2e65401f09c47fa39bb08c037e2924a8f314",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-samd/asf4/samd51/CMSIS/Include/cmsis_gcc.h",
+          "line": 83,
+          "spellings": [
+            "__enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/asf4/samd51/CMSIS/Include/cmsis_gcc.h",
+          "line": 94,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/SAMDEIC.cpp",
+          "line": 55,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/SAMDEIC.cpp",
+          "line": 57,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/SAMDEIC.cpp",
+          "line": 101,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/SAMDEIC.cpp",
+          "line": 103,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/SAMDEIC.cpp",
+          "line": 112,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/SAMDEIC.cpp",
+          "line": 115,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "2c3f87de1be9ae2471df4c6d60553fa6caf74d3ea0a964dc23caa9353db35e62",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "434a21d785e56b9c833618623816f175bd567bf8a9b22396f79393c44cfc225b",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "libraries/codal-samd/src/ZPin.cpp",
+      "sourceSha256": "813dd95f55592183e74dcae8a5b8d956860bcaeffa595ac32cd14e5525a1ecee",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-samd/asf4/samd51/CMSIS/Include/cmsis_gcc.h",
+          "line": 83,
+          "spellings": [
+            "__enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/asf4/samd51/CMSIS/Include/cmsis_gcc.h",
+          "line": 94,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/ZPin.cpp",
+          "line": 145,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/ZPin.cpp",
+          "line": 167,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/ZPin.cpp",
+          "line": 760,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/src/ZPin.cpp",
+          "line": 776,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "60775740a32b262c0654bedcc3c63d09179203a8ecbb39da145655cfd4cc958c",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "6b0b85d7fe3193eec3b11eb08395cc0985d103675620fa659231cb335d1671ac",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DATASTREAM_MAXIMUM_BUFFERS": "1",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "pxtapp/core---samd/hf2.cpp",
+      "sourceSha256": "d93edef48de59e592697a1f4e43cb6fb97b33191e6aaf6c21255a077714b370e",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 58,
+          "spellings": [
+            "__enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 69,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/core---samd/hf2.cpp",
+          "line": 152,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/core---samd/hf2.cpp",
+          "line": 178,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "3d27cd4d2ec4f824489bb8fd33334a0a4540b11fdfed45a7c927723f22eb4d12",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "d6047fbaa374c2e0c8c437e403da1b27c1aaac6465cf11fe6a8f99cdbdb4a833",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DATASTREAM_MAXIMUM_BUFFERS": "1",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "pxtapp/core---samd/light.cpp",
+      "sourceSha256": "baddf347cede951872c9021f376445b09e8c401ea1a705a150e85211dd9a716a",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 58,
+          "spellings": [
+            "__enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 69,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/inc/neopixel.h",
+          "line": 66,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/inc/neopixel.h",
+          "line": 173,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "b838e022f292c73a6e2573d567564e7b7ffc1d5d021fe1a036e5da44518881aa",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "7a09c44bee152dab74a58cf6c38ac36bfda0ec35aba8321dbcf0671b1c2863ba",
+      "selectedMacros": {
+        "CODAL": "1",
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DATASTREAM_MAXIMUM_BUFFERS": "1",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "pxtapp/mixer---samd/melody.cpp",
+      "sourceSha256": "6141750cb1f4eec104e99b3e06b7557a73907903aa501a2cac5793fdbe895f1a",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 58,
+          "spellings": [
+            "__enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 69,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/mixer---samd/melody.h",
+          "line": 108,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/mixer---samd/melody.h",
+          "line": 123,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/mixer---samd/melody.cpp",
+          "line": 380,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/mixer---samd/melody.cpp",
+          "line": 394,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/mixer---samd/melody.cpp",
+          "line": 405,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/mixer---samd/melody.cpp",
+          "line": 417,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "5a84618e13def2ec3bfc4243d2cd3500ec206c2f06785fb73112157380aeae33",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "bf107f7fb779f18b1d4d4838bdea7235d3f3fbce2e8aa7bdf05c9073526e1e21",
+      "selectedMacros": {
+        "CODAL": "1",
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DATASTREAM_MAXIMUM_BUFFERS": "1",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "pxtapp/pointers.cpp",
+      "sourceSha256": "adbc46fb7e1467df0f21066a6d3cf706c63f019025c0ae425f7d0299de86d3bf",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 58,
+          "spellings": [
+            "__enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 69,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/mixer---samd/melody.h",
+          "line": 108,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/mixer---samd/melody.h",
+          "line": 123,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "e0ebb1a1f15542d01a7a11fdee1408b82ba985276b7518040dcc4d4b9ba17e75",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "fd7baff30a20bd4b7ee51e79faf3eda489d7cec7832b34b43a9a8d6af4713fe5",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "pxtapp/screen---st7735/jddisplay.cpp",
+      "sourceSha256": "8e6da62932716864990a2e30e52b9982f4f1dd061857e3b7f391b7871d1aa73b",
+      "spellingObservations": [],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "e454894268a3fe8fd8fa3d494ae12c5bef7cf4cb23c60f8523268d5f56130543",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "d7e924b5d8d072d594af6fd3fceb8647d70956766cdca5b9347f95e52638d2d6",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DATASTREAM_MAXIMUM_BUFFERS": "1",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "pxtapp/screen---st7735/panic.cpp",
+      "sourceSha256": "91476239d6c92cbeae1ef0ae5e6f65c03db1e5affcb8f747ecdc1ad44b254fb0",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 58,
+          "spellings": [
+            "__enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 69,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/screen---st7735/panic.cpp",
+          "line": 271,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/screen---st7735/panic.cpp",
+          "line": 272,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/screen---st7735/panic.cpp",
+          "line": 276,
+          "spellings": [
+            "__disable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "cff4267ba4303238f896376b49802d8a6cb8cbb9c3f74f01f8cd6fd43159d73a",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "bebe249481d7858a2dee5761923083ae60d10ef0fa0a13a13d571d9730de4959",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DATASTREAM_MAXIMUM_BUFFERS": "1",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "pxtapp/settings/RP2040Flash.cpp",
+      "sourceSha256": "5e18b04a5c003ef6fea126a8b1d72cad6f970027c6e0fafd53440f209829d985",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 58,
+          "spellings": [
+            "__enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 69,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "dependenciesMatched": true,
+      "macroOutputSha256": "f5c2b2b9609c438bd8fe71ac7d5089bec5ded4b211fe4fc70bafc14fbd6f10f5",
+      "macroStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preprocessedSha256": "afdecd0a457ef6075a483fe2e744c9c0fbc3288fb2e44e4f570ca8940301fbbf",
+      "selectedMacros": {
+        "CODAL_DEBUG": "CODAL_DEBUG_DISABLED",
+        "CODAL_DEBUG_DISABLED": "0",
+        "DATASTREAM_MAXIMUM_BUFFERS": "1",
+        "DEVICE_HEAP_ALLOCATOR": "1",
+        "DEVICE_USB": "1",
+        "DEVICE_WEBUSB": "1",
+        "SAMD51": "1",
+        "SCHEDULER_TICK_PERIOD_US": "4000",
+        "USE_RGB444": "1"
+      },
+      "source": "pxtapp/settings/SAMDFlash.cpp",
+      "sourceSha256": "5058b18a0b9d4305a04cbecda13a8d973d61d2024a0645e3107273d90b045dd8",
+      "spellingObservations": [
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 58,
+          "spellings": [
+            "__enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-samd/inc/CMSIS/cmsis_gcc.h",
+          "line": 69,
+          "spellings": [
+            "__disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 32,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        },
+        {
+          "input": "build-source/libraries/codal-core/inc/core/codal_target_hal.h",
+          "line": 34,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/settings/SAMDFlash.cpp",
+          "line": 164,
+          "spellings": [
+            "target_disable_irq"
+          ]
+        },
+        {
+          "input": "build-source/pxtapp/settings/SAMDFlash.cpp",
+          "line": 172,
+          "spellings": [
+            "target_enable_irq"
+          ]
+        }
+      ],
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

@@ -1,0 +1,188 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="60 30 300 365" width="600" height="730">
+  <title>NUCLEO-U545RE-Q pinout</title>
+  <desc>Arduino header map (Zephyr nucleo_u545re_q), LD2 PA5, B1 PC13, VCP USART1 PA9/PA10. Morpho pins are not enumerated.</desc>
+  <rect x="60" y="30" width="300" height="365" fill="#ffffff"/>
+  <rect x="74.0" y="44.0" width="277.0" height="330.0" rx="7" fill="#dfe9f2" stroke="#8fa6bb" stroke-width="1.5"/>
+  <rect x="144.0" y="340.0" width="36.0" height="42.0" rx="2" fill="#b9bec4" stroke="#555b61" />
+  <rect x="246.0" y="44.0" width="38.0" height="40.0" rx="2" fill="#b9bec4" stroke="#555b61" />
+  <circle cx="84" cy="93" r="4" fill="#fff" stroke="#8fa6bb"/>
+  <circle cx="342" cy="118" r="4" fill="#fff" stroke="#8fa6bb"/>
+  <circle cx="298" cy="357" r="4" fill="#fff" stroke="#8fa6bb"/>
+  <rect x="171.0" y="87.0" width="41.0" height="40.0" rx="2" fill="#20252a" stroke="none" />
+  <rect x="193.0" y="263.0" width="40.0" height="40.0" rx="2" fill="#20252a" stroke="none" />
+  <circle cx="199" cy="269" r="2" fill="#555b61"/>
+  <rect x="190.0" y="259.0" width="47.0" height="47.0" rx="0" fill="none" stroke="#4a5158" stroke-dasharray="1.5 1.5"/>
+  <rect x="90.0" y="104.0" width="30.0" height="30.0" rx="2" fill="#9aa3ad" stroke="#555b61" />
+  <rect x="295.0" y="101.0" width="21.0" height="51.0" rx="1" fill="#1c1f23" stroke="none" />
+  <rect x="81.0" y="54.0" width="12.0" height="24.0" rx="1" fill="#1c1f23" stroke="none" />
+  <rect x="335.0" y="54.0" width="12.0" height="24.0" rx="1" fill="#1c1f23" stroke="none" />
+  <circle cx="178.7" cy="160.7" r="10" fill="#2f6fd0" stroke="#14324f"/>
+  <circle cx="245.7" cy="161.7" r="10" fill="#2a2d31" stroke="#0d1013"/>
+  <circle cx="299" cy="64.7" r="4" fill="#e8c14a"/>
+  <circle cx="320" cy="64.7" r="4" fill="#e8c14a"/>
+  <circle cx="283" cy="157" r="3" fill="#3fbf5f" stroke="#14324f"/>
+  <rect x="256.0" y="351.0" width="26.0" height="9.0" rx="0" fill="#c9a94a" stroke="#14324f" />
+  <rect x="80.9" y="170.7" width="18.6" height="191.3" rx="1" fill="#1c1f23" stroke="none" />
+  <circle cx="85.4" cy="175.7" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="175.7" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="185.8" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="185.8" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="195.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="195.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="205.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="205.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="216.0" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="216.0" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="226.1" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="226.1" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="236.2" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="236.2" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="246.2" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="246.2" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="256.3" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="256.3" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="266.4" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="266.4" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="276.4" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="276.4" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="286.5" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="286.5" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="296.6" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="296.6" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="306.6" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="306.6" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="316.7" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="316.7" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="326.8" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="326.8" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="336.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="336.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="346.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="346.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="85.4" cy="357.0" r="2.1" fill="#c9a94a"/>
+  <circle cx="95.0" cy="357.0" r="2.1" fill="#c9a94a"/>
+  <rect x="326.9" y="170.7" width="18.6" height="191.3" rx="1" fill="#1c1f23" stroke="none" />
+  <circle cx="331.4" cy="175.7" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="175.7" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="185.8" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="185.8" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="195.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="195.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="205.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="205.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="216.0" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="216.0" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="226.1" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="226.1" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="236.2" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="236.2" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="246.2" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="246.2" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="256.3" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="256.3" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="266.4" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="266.4" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="276.4" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="276.4" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="286.5" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="286.5" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="296.6" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="296.6" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="306.6" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="306.6" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="316.7" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="316.7" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="326.8" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="326.8" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="336.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="336.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="346.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="346.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="331.4" cy="357.0" r="2.1" fill="#c9a94a"/>
+  <circle cx="341.0" cy="357.0" r="2.1" fill="#c9a94a"/>
+  <rect x="110.0" y="214.0" width="9.0" height="79.2" rx="1" fill="#1c1f23" stroke="none" />
+  <circle cx="114.5" cy="218.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="114.5" cy="228.8" r="2.1" fill="#c9a94a"/>
+  <circle cx="114.5" cy="238.8" r="2.1" fill="#c9a94a"/>
+  <circle cx="114.5" cy="248.6" r="2.1" fill="#c9a94a"/>
+  <circle cx="114.5" cy="258.6" r="2.1" fill="#c9a94a"/>
+  <circle cx="114.5" cy="268.4" r="2.1" fill="#c9a94a"/>
+  <circle cx="114.5" cy="278.3" r="2.1" fill="#c9a94a"/>
+  <circle cx="114.5" cy="288.2" r="2.1" fill="#c9a94a"/>
+  <rect x="110.0" y="299.0" width="9.0" height="58.8" rx="1" fill="#1c1f23" stroke="none" />
+  <circle cx="114.5" cy="303.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="114.5" cy="313.7" r="2.1" fill="#c9a94a"/>
+  <circle cx="114.5" cy="323.5" r="2.1" fill="#c9a94a"/>
+  <circle cx="114.5" cy="333.3" r="2.1" fill="#c9a94a"/>
+  <circle cx="114.5" cy="343.1" r="2.1" fill="#c9a94a"/>
+  <circle cx="114.5" cy="352.9" r="2.1" fill="#c9a94a"/>
+  <rect x="307.5" y="170.7" width="9.0" height="101.0" rx="1" fill="#1c1f23" stroke="none" />
+  <circle cx="312.0" cy="175.8" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="185.8" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="195.9" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="206.1" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="216.2" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="226.2" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="236.3" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="246.4" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="256.6" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="266.6" r="2.1" fill="#c9a94a"/>
+  <rect x="307.5" y="278.0" width="9.0" height="80.8" rx="1" fill="#1c1f23" stroke="none" />
+  <circle cx="312.0" cy="283.1" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="293.2" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="303.2" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="313.4" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="323.4" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="333.6" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="343.7" r="2.1" fill="#c9a94a"/>
+  <circle cx="312.0" cy="353.8" r="2.1" fill="#c9a94a"/>
+  <text x="178.7" y="182.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="middle">USER</text>
+  <text x="178.7" y="163.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#ffffff" text-anchor="middle">B1</text>
+  <text x="245.7" y="182.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="middle">RESET</text>
+  <text x="245.7" y="164.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#ffffff" text-anchor="middle">B2</text>
+  <text x="283.0" y="150.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="middle">LD2</text>
+  <text x="213.0" y="280.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="7" font-weight="bold" fill="#e8eee9" text-anchor="middle">U545RE</text>
+  <text x="265.0" y="76.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="middle">ST-LINK</text>
+  <text x="162.0" y="364.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="middle">USER</text>
+  <text x="191.5" y="109.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#e8eee9" text-anchor="middle">ST-LINK</text>
+  <text x="90.0" y="168.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="middle">CN7</text>
+  <text x="336.0" y="168.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="middle">CN10</text>
+  <text x="114.5" y="212.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="middle">CN6</text>
+  <text x="114.5" y="298.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="middle">CN8</text>
+  <text x="312.0" y="168.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="middle">CN5</text>
+  <text x="312.0" y="276.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="middle">CN9</text>
+  <text x="304.0" y="178.8" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D15 PB6</text>
+  <text x="304.0" y="188.8" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D14 PB7</text>
+  <text x="304.0" y="198.9" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">AVDD</text>
+  <text x="304.0" y="209.1" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">GND</text>
+  <text x="304.0" y="219.2" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D13 PA5</text>
+  <text x="304.0" y="229.2" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D12 PA6</text>
+  <text x="304.0" y="239.3" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D11 PA7</text>
+  <text x="304.0" y="249.4" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D10 PC9</text>
+  <text x="304.0" y="259.6" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D9 PC6</text>
+  <text x="304.0" y="269.6" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D8 PC7</text>
+  <text x="304.0" y="286.1" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D7 PA8</text>
+  <text x="304.0" y="296.2" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D6 PB10</text>
+  <text x="304.0" y="306.2" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D5 PB4</text>
+  <text x="304.0" y="316.4" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D4 PB5</text>
+  <text x="304.0" y="326.4" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D3 PB3</text>
+  <text x="304.0" y="336.6" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D2 PC8</text>
+  <text x="304.0" y="346.7" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D1 PA2</text>
+  <text x="304.0" y="356.8" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="end">D0 PA3</text>
+  <text x="122.5" y="221.9" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">NC</text>
+  <text x="122.5" y="231.8" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">IOREF</text>
+  <text x="122.5" y="241.8" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">NRST</text>
+  <text x="122.5" y="251.6" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">3V3</text>
+  <text x="122.5" y="261.6" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">5V</text>
+  <text x="122.5" y="271.4" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">GND</text>
+  <text x="122.5" y="281.3" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">GND</text>
+  <text x="122.5" y="291.2" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">VIN</text>
+  <text x="122.5" y="306.9" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">A0 PA0</text>
+  <text x="122.5" y="316.7" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">A1 PA1</text>
+  <text x="122.5" y="326.5" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">A2 PA4</text>
+  <text x="122.5" y="336.3" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">A3 PB0</text>
+  <text x="122.5" y="346.1" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">A4 PC1</text>
+  <text x="122.5" y="355.9" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="start">A5 PC0</text>
+  <text x="213.0" y="330.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="7" font-weight="bold" fill="#14324f" text-anchor="middle">LD2 PA5   B1 PC13</text>
+  <text x="213.0" y="340.0" font-family="ui-sans-serif,system-ui,sans-serif" font-size="6" font-weight="normal" fill="#14324f" text-anchor="middle">VCP USART1 PA9 TX / PA10 RX</text>
+</svg>

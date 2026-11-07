@@ -1,0 +1,69 @@
+{
+  "schema": "labwired.microbit.saadc-scan-proof.v1",
+  "date": "2026-09-30",
+  "repository": "CrispStrobe/labwired-core",
+  "pullRequest": 135,
+  "runId": 36713727900,
+  "runUrl": "https://github.com/CrispStrobe/labwired-core/actions/runs/36713727900",
+  "jobId": 109881533726,
+  "headCommit": "18a8cf70e76b9a50fb964f5bc15fd5c3ec314637",
+  "testedMergeCommit": "8d2d2c5b058cc28d3c234f7348531c8383d74d26",
+  "engine": "native Rust event-scheduler",
+  "toolchain": "1.95.0",
+  "runner": {
+    "os": "Ubuntu24.04.5",
+    "image": "ubuntu-24.04",
+    "imageVersion": "20260920.314.1",
+    "cpuModel": null,
+    "cpuModelQualification": "Not recorded by this workflow; do not infer identical-host performance."
+  },
+  "artifact": {
+    "id": 11094829794,
+    "name": "microbit-active-board-evidence",
+    "sizeBytes": 3583,
+    "digest": "sha256:2731247aecb6ad6fbda456254da2d298b0bbf0106dfcd2da03d1091b58bd41ca",
+    "retainedContents": [
+      "microbit-active-throughput.json",
+      "microbit-active-throughput.log",
+      "microbit-motion-throughput.json",
+      "microbit-motion-throughput.log"
+    ]
+  },
+  "adcGuest": {
+    "test": "guest_scans_once_per_trigger_and_latches_next_buffer_at_start",
+    "result": "passed",
+    "sourceFiles": {
+      "adc-scan.S": "9f439458d8a250b8444b263792a76a11416fd0fe0d3e2d848906e334882f8910",
+      "board-io.ld": "a701c40b9718e311a1f3e26a541cd6f5860e35532f850413f60a39015a467073"
+    },
+    "compileFlags": [
+      "-mcpu=cortex-m4",
+      "-mthumb",
+      "-nostdlib",
+      "-Wl,-T,board-io.ld"
+    ],
+    "firmwareSha256": null,
+    "firmwareArtifactRetained": false,
+    "provenanceLimitation": "The hosted test source-built and executed this guest; successful-test stdout was suppressed. Relative artifact paths wrote under crates/core while upload searched repository root, so no actual tested ADC ELF/hash was retained. No locally reconstructed hash is substituted."
+  },
+  "checks": {
+    "saadcUnitTests": 26,
+    "adcArmGuestTests": 1,
+    "easydmaTick512Tests": 4,
+    "nativeWasmRoutingTests": 3,
+    "coreFunctionalTestExecutions": 294,
+    "nativeWasmTestExecutions": 3,
+    "allPassed": true
+  },
+  "performance": {
+    "activeMedianRtx": 3.655658561168689,
+    "motionMedianRtx": 1.153235390181816,
+    "motionMinimumRtx": 1.1363883618499595,
+    "scope": "Native GPIO/display/button and selected-LSM303AGR motion benchmarks; not an ADC/audio workload or an optimization A/B."
+  },
+  "limitations": [
+    "Combined CPU134 base qualification still pending; this is the earlier base functional proof, not merged-main qualification.",
+    "No browser ADC runtime, silicon capture, microphone/audio timing, oversample/burst, timer/PPI, RUN_MIC or invalid/non-RAM DMA pointer qualification.",
+    "Functional execution count includes repeated suite selections; not a unique-test count."
+  ]
+}
