@@ -13,6 +13,7 @@
 # Sources:
 #   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/inc/ch32v00x.h
 #   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/inc/ch32v00x_rcc.h
+#   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/src/ch32v00x_usart.c
 #   https://www.wch-ic.com/downloads/CH32V003DS0_PDF.html
 #   https://www.lcsc.com/product-detail/microcontrollers-mcu-mpu-soc_wch-jiangsu-qin-heng-ch32v003f4p6_C5187096.html
 
@@ -85,3 +86,14 @@ peripherals:
     clock: { reg: "apb2pcenr", bit: 5 }
     config:
       profile: "wch"
+
+  # USART1 (ch32v00x.h): USART1_BASE = APB2PERIPH_BASE + 0x3800, RCC_USART1EN =
+  # APB2PCENR bit 14. USART_TypeDef is STATR, DATAR, BRR, CTLR1, CTLR2, CTLR3,
+  # GPR at 4-byte strides, the same layout as the STM32F1 USART, so the default
+  # `stm32f1` UART layout serves it. No `irq`: the PFIC is not modelled, so
+  # USART1_IRQn (32) has no controller to reach. TX is polled only.
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 14 }
