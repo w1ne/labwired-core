@@ -208,8 +208,7 @@ const NOP_STUBS: &[&str] = &[
     // FreeRTOS recursive mutexes used by newlib stdio locks — same
     // null-queue assertion problem. Stub since sim is effectively
     // single-threaded on the panel-render path. xQueueCreateMutexStatic
-    // gets a separate echo_arg0 thunk below (callers assert the returned
-    // handle equals the static buffer they passed in). xQueueCreateMutex is
+    // runs for real (see SPECIAL_STUBS). xQueueCreateMutex is
     // NOT stubbed — the SPI bus mutex is a real FreeRTOS object (see the
     // spiStartBus note below); faking its create returned an uninitialised
     // handle that forced faking every lock op on top of it and dropped the
@@ -251,13 +250,15 @@ const SPECIAL_STUBS: &[(&str, rom_thunks::RomThunkFn)] = &[
         "xthal_window_spill_nw",
         rom_thunks::xthal_window_spill_thunk,
     ),
-    // Returns the caller's static buffer as the handle. Callers
-    // (esp_newlib_locks_init in particular) assert the returned handle equals
-    // the buffer they passed in — a nop_return_zero stub fails that check.
-    (
-        "xQueueCreateMutexStatic",
-        rom_thunks::x_queue_create_mutex_static_echo,
-    ),
+    // NO xQueueCreateMutexStatic echo. It returned the caller's buffer
+    // without initialising it, so the queue's `xQueueLock` spinlock held
+    // whatever was in that memory. IDF 5.x (Arduino-ESP32 3.x) builds
+    // `xSemaphoreCreateMutexWithCaps` on top of it — heap_caps_malloc a
+    // StaticQueue_t, then xQueueCreateMutexStatic — and `uart_driver_install`
+    // creates its `tx_mux` that way. The first `Serial.print` then spun
+    // forever in spinlock_acquire on a garbage owner word, so a plain esp32dev
+    // sketch never printed anything. The real function initialises the queue
+    // and returns the same buffer, which is all esp_newlib_locks_init checks.
     // Arduino-ESP32's main_task self-deletes after app_main returns via
     // vTaskDelete(NULL), which depends on this getter. Reads pxCurrentTCB,
     // whose address is handed to the rom_thunks side below.
@@ -507,8 +508,21 @@ pub fn install_arduino_esp32_profile<C: Cpu>(
         }
     }
     // pxCurrentTCB's address is handed to the rom_thunks side so the
-    // xTaskGetCurrentTaskHandle stub above can read it.
-    if let Some(&addr) = symbol_addrs.get("pxCurrentTCB") {
+    // xTaskGetCurrentTaskHandle stub above can read it, and so the CPU's
+    // hybrid window preserve is keyed by the RUNNING task's TCB.
+    //
+    // IDF 5 dual-core names the array `pxCurrentTCBs` (trailing s). Looking up
+    // only the singular left the address unset on every IDF 5 sketch: the
+    // getter returned NULL, and `XtensaLx7::px_current_tcb` fell back to a
+    // hardcoded 0x3FFC_27C8 from a different firmware — for an esp32dev
+    // sketch that is a list node next to the real array (0x3FFC_27E4), so
+    // every task parked its window state under the same bogus key. The first
+    // real context switch (a print loop filling the UART FIFO) then resumed
+    // a task with another task's windows and xTaskPriorityDisinherit asserted.
+    if let Some(&addr) = symbol_addrs
+        .get("pxCurrentTCBs")
+        .or_else(|| symbol_addrs.get("pxCurrentTCB"))
+    {
         rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(Some(addr)));
     }
     // NO SPI-bus lock shims and NO SPI init fakes. GxEPD2_EPD::init() calls
@@ -522,8 +536,7 @@ pub fn install_arduino_esp32_profile<C: Cpu>(
     // real, so the byte stream actually reaches the panel (the fakes matched the
     // transaction count but dropped the payload → blank render). Mirrors the
     // proven e2e path in crates/core/tests/e2e_labwired_ereader.rs.
-    // xQueueCreateMutexStatic is still echoed above (idle-task static mutex); the
-    // SPI bus uses the dynamic xQueueCreateMutex, which is real.
+    // xQueueCreateMutexStatic and the dynamic xQueueCreateMutex both run for real.
     // No GxEPD2 _writeCommand / _writeData bypass. The real compiled
     // GxEPD2_EPD::_writeCommand/_writeData run: digitalWrite(DC=GPIO17) →
     // SPI.transfer(byte) → spiTransferByteNL writes the SPI3 FIFO/MOSI_DLEN/

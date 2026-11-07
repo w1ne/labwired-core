@@ -288,6 +288,13 @@ jobs:
           - id: esp32s3-zero
             script: examples/esp32s3-zero/tier1-smoke.yaml
             system: examples/esp32s3-zero/system.yaml
+          # STM32G431RB (demand-ordered onboarding; JetBrains 2025 "other STM32"
+          # 13%). The descriptor and the TIER1 fixture existed but no `labwired
+          # test` cell ran the part, so chip_coverage.py counted it as a shipped
+          # chip with no executing gate. Committed blob, no toolchain, 0.06s.
+          - id: stm32g431rb
+            script: examples/stm32g431rb/tier1-smoke.yaml
+            system: examples/stm32g431rb/system.yaml
           # nRF5340: real upstream Zephyr v3.7 hello_world on the application
           # core. The ELF already booted in firmware_survival.rs, but IN
           # PROCESS — no CLI ran it, which is why the chip sat in the coverage
@@ -459,6 +466,7 @@ jobs:
               - configs/systems/stm32-catalog/stm32f103r4h.yaml
               - configs/systems/stm32-catalog/stm32f103r6.yaml
               - configs/systems/stm32-catalog/stm32f103r6h.yaml
+              - configs/systems/stm32-catalog/stm32f103r8.yaml
               - configs/systems/stm32-catalog/stm32f103t4.yaml
               - configs/systems/stm32-catalog/stm32f103t6.yaml
               - configs/systems/stm32-catalog/stm32f401cb.yaml
@@ -479,6 +487,22 @@ jobs:
               - configs/systems/stm32-catalog/stm32f407vg.yaml
               - configs/systems/stm32-catalog/stm32f407ze.yaml
               - configs/systems/stm32-catalog/stm32f407zg.yaml
+          # WCH CH32V003F4P6 — the first WCH cell, and the only one here that
+          # executes RV32E code. The firmware is a committed ELF built from
+          # examples/ch32v003f4p6 (start.S/main.c, -march=rv32e -mabi=ilp32e),
+          # so the cell needs no cross toolchain on the runner.
+          #
+          # Its assertion is `gpio_edges: gpioc:0, min_edges: 2` — the compiled
+          # blink must actually toggle a pad. That is the point of the cell:
+          # a descriptor that silently fell back to the standard 32-register
+          # RV32 profile would still boot this ELF (RV32E is a subset), so a
+          # register-state check would not catch it. What distinguishes the
+          # profiles is the RV32E guard in riscv.rs, pinned separately by
+          # crates/core/src/cpu/riscv_ch32v003_tests.rs. This cell proves the
+          # chip boots real firmware end to end and drives a real peripheral.
+          - id: ch32v003f4p6-blink
+            script: examples/ch32v003f4p6/io-smoke.yaml
+            system: examples/ch32v003f4p6/system.yaml
 
     steps:
       - uses: actions/checkout@v4

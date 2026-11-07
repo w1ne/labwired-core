@@ -7,6 +7,11 @@
 
 static void logBegin() {
   Serial.begin(115200);
+#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
+  // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
+  // the host opens the port (DTR), on silicon and on the twin alike.
+  while (!Serial) delay(1);
+#endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
   Serial.setTxTimeoutMs(0);
   Serial0.begin(115200);
@@ -181,6 +186,39 @@ static bool lw_can_probe() {
       uint32_t rdl = mmio_r(can + 0x1B8);
       mmio_w(can + 0x0C, (1u << 5));
       return ((rir >> 21) & 0x7FFu) == 0x123u && (rdl & 0xFFu) == 0xA5u;
+    }
+  }
+  return false;
+}
+#define LW_HAS_CAN 1
+
+#elif defined(ARDUINO_NUCLEO_G0B1RE) || defined(STM32G0B1xx)
+// G0B1 FDCAN1 — the H5 enter_loopback sequence again. Registers at
+// 0x40006400, SRAMCAN a separate block at 0x4000B400 (stm32g0b1xx.h
+// FDCAN1_BASE / SRAMCAN_BASE). RCC APBENR1 @ 0x40021000 + 0x3C, FDCANEN bit 12
+// (RCC_APBENR1_FDCANEN_Pos).
+static bool lw_can_probe() {
+  const uint32_t fd = 0x40006400u;
+  const uint32_t ram = 0x4000B400u;
+  const uint32_t rcc = 0x40021000u;
+  mmio_w(rcc + 0x3C, mmio_r(rcc + 0x3C) | (1u << 12));
+
+  mmio_w(fd + 0x18, 0x3u);   // CCCR INIT|CCE
+  mmio_w(fd + 0x18, 0xA3u);  // + TEST | MON
+  mmio_w(fd + 0x10, 1u << 4); // TEST.LBCK
+  // TX element 0 @ SRAMCAN+0x278: std ID 0x123, DLC 1
+  mmio_w(ram + 0x278, 0x123u << 18);
+  mmio_w(ram + 0x27C, 1u << 16);
+  mmio_w(ram + 0x280, 0xA5u);
+  mmio_w(fd + 0x18, 0xA2u); // leave INIT, keep TEST|MON (CCE clears)
+  mmio_w(fd + 0x0CC, 1u);   // TXBAR buffer 0
+
+  // TX completes on a later peripheral tick — spin.
+  for (int i = 0; i < 100000; i++) {
+    if ((mmio_r(fd + 0x90) & 0x7Fu) != 0) {
+      uint32_t w0 = mmio_r(ram + 0xB0);
+      uint32_t w2 = mmio_r(ram + 0xB0 + 8);
+      return ((w0 >> 18) & 0x7FFu) == 0x123u && (w2 & 0xFFu) == 0xA5u;
     }
   }
   return false;

@@ -442,6 +442,9 @@ impl SystemBus {
                 .coprocessors
                 .contains(&labwired_config::CortexMCoprocessor::Rp2350Dcp)
                 .then(Box::default),
+            rp2350_gpioc: chip
+                .coprocessors
+                .contains(&labwired_config::CortexMCoprocessor::Rp2350Gpioc),
             ns_alias_offset: chip.ns_alias_offset,
             mem_aliases,
             pending_cpu_irqs: [0; 2],
@@ -488,6 +491,7 @@ impl SystemBus {
             device_pin_pads: Vec::new(),
             observed: Vec::new(),
             motors: Vec::new(),
+            ina219_senses: Vec::new(),
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
             analog_muxes: Vec::new(),

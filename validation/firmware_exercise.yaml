@@ -148,6 +148,14 @@ chips:
     shim: []
 
   # ── Chips with NO tier1 fixture (not in the rubric grid) ─────────────────
+  - id: ch32v003f4p6
+    arch: riscv32ec
+    headline: "No tier-1 fixture or hosted model-verification gate. A compiled RV32E/ILP32E bare-metal C fixture executes from flash, configures WCH RCC/GPIOC, and toggles PC0 in the local simulator; the matching CLI smoke and core integration test require two GPIO edges. A second, RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX; its CLI smoke and integration test assert the exact string, and a negative control asserts silence when the USART1 clock gate is not set. This is local simulator evidence, not hosted model_verified or hardware confirmation."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: nrf5340
     arch: cortex-m33
     headline: "No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). Nine peripheral blocks are benign boot stubs."
@@ -274,6 +282,14 @@ chips:
   - id: stm32f103r6h
     arch: cortex-m3
     headline: "Exact low-density x4/x6 geometry slice for stm32f103r6h; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103r8
+    arch: cortex-m3
+    headline: "Exact STM32F103R8 LQFP64 model (medium-density x8: 64 KiB flash, 20 KiB SRAM, 51 GPIOs, 16 ADC channels). Same die and peripheral map as the public stm32f103 (C8) engine, so firmware-exercise rubric claims stay on the STM32F103 family row. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`, and the exact part is executed by the `stm32-exact-catalog` arm-spin cell in core-coverage-matrix-smoke.yml."
     functional: []
     advanced_unit_only: []
     advanced_dead: []
@@ -562,6 +578,14 @@ chips:
     shim:
       - {p: "SYSCFG", ev: "configs/chips/stm32g0b1re.yaml (type: syscfg); crates/core/src/peripherals/generic_factory.rs (syscfg arm)", note: "CLOSABLE: StubPeripheral returns zero except a canned H7-style CCCSR readiness bit at 0x20, and drops writes. This is not a G0 SYSCFG behavioral model. GPIO source selection is modeled in the separate G0 EXTI-owned EXTICR registers, not through this stub."}
 
+  - id: stm32g431rb
+    arch: cortex-m4
+    headline: "All 12 declared rubric classes are driven by its committed tier-1 fixture (tests/fixtures/tier1/stm32g431rb.elf, sha256 in tests/fixtures/tier1/MANIFEST.json; fast_boot target, USART2 console), asserted by the `stm32g431rb` cell in core-coverage-matrix-smoke.yml and nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step. Same RM0440 G4 peripheral map as stm32g474re, so the beyond-rubric blocks (PWR/CRC/DBGMCU, driven there by vendor firmware) are shared with the G474 row; no G4-specific firmware drives them for the G431 die and no G431 bench capture exists, so REV_ID stays a visible placeholder rather than a claimed value."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: stm32g474re
     arch: cortex-m4
     headline: "All 12 declared rubric classes are driven by its committed tier-1 fixture (nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step (core-ci.yml:2087), fast_boot target, USART2 console), and the two PR-gated vendor firmwares cover the non-rubric blocks: the Zephyr hello's SoC init read-modify-writes DBGMCU_CR (the reason the descriptor declares DBGMCU) and the Arduino serial startup calls HAL_PWREx_ControlVoltageScaling (PWR_CR VOS + SR2.VOSF poll) plus HAL_CRC_Init (CRC_POL/INIT/CR — the reason that survival case exists), so PWR/CRC/DBGMCU are all firmware-driven and no non-rubric block is left unexercised. The CRC polynomial engine itself is still driven by no firmware: its always-run coverage is the H563 bench oracle (h563_conformance.rs:144) plus the F103 sim-only thumb oracle (stm32f1_exec_oracle.rs:300) and IDR-width masking (crc.rs:204), and no G4-specific test asserts a computed value."
@@ -648,6 +672,14 @@ chips:
   # ── example smokes run in the nightly core-full job. Beyond-rubric content
   # ── is only the SAMD zero-stub USB/QSPI windows and the atsamd21g18a
   # ── declarative SYSCTRL/NVMCTRL banks.
+  - id: atmega328pb
+    arch: avr
+    headline: "No tier-1 target. The PR-gated exact-part AVR-GCC smoke prints PB_USART1_OK through the PB-only USART1 and drives PB5 high (avr_atmega328pb_usart1::atmega328pb_firmware_uses_usart1_and_drives_pb5; examples/atmega328pb-usart1/io-smoke.yaml). No silicon capture or package-pad map exists yet. Nothing beyond the rubric is firmware-exercised in this slice."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: atmega328p
     arch: avr
     headline: "No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the PR-gated AVR golden `avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks` (core-ci.yml:688) boots the committed PlatformIO blink ELF and asserts `nano-ok` on USART0 plus a PB5 toggle (avr_nano_golden_survival.rs:100-102); strict_onboarding boots the same ELF through examples/arduino-nano-blinky/io-smoke.yaml in the nightly core-full job (cross-build-excluded from the PR shards, workspace-test-shards.json:44-48; discovery documented at strict_onboarding.rs:369), and the nightly Arduino matrix drives L0–L7 on the part — L8 CAN is skipped, the chip has no CAN controller (validation/arduino-matrix/boards.yaml:218-231); its L3/L4 cells are raw register/frame oracles (INA219 config 0x399F + bus 0x19CA, validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino:20-21,92; MAX31855 frame 0x01901600, validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino:66-67), not decoded physical values, so `functional` stays empty. Every peripheral the descriptor declares is a rubric class or kit-attach plumbing: the `spi`/`i2c` instances are parking controllers that exist only to drain attached slaves into the AVR CPU, which owns the real SPCR/SPSR/SPDR and TWI (configs/chips/atmega328p.yaml:28-39; crates/core/src/cpu/avr.rs:91-106), PORTB/C/D are `avr_gpio` and the ADC input side is `avr_adc` — so nothing beyond the rubric is declared and the lists below are empty."

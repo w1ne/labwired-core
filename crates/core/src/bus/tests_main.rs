@@ -2906,6 +2906,7 @@ external_devices:
     );
     assert_eq!(bus.motor_snapshots()[0].id, "wheel");
 
+    bus.write_u32(0x4800_0000, 0x55).unwrap(); // PA0..PA3 output mode
     bus.write_u32(0x4800_0014, 0b1011).unwrap(); // PWM, direction, enable
     bus.set_current_cycle(100);
     bus.tick_peripherals_with_costs();
@@ -2977,6 +2978,7 @@ motor_models:
     );
 
     // PWM + enable high, direction constant-true, brake constant-false → forward.
+    bus.write_u32(0x4800_0000, 0x41).unwrap(); // PA0/PA3 output mode
     bus.write_u32(0x4800_0014, 0b1001).unwrap(); // PA0 pwm, PA3 enable
     bus.set_current_cycle(100);
     bus.tick_peripherals_with_costs();
@@ -3031,6 +3033,7 @@ motor_models:
     )
     .unwrap();
     let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    bus.write_u32(0x4800_0000, 0x05).unwrap(); // PA0/PA1 output mode
     bus.write_u32(0x4800_0014, 0b0011).unwrap(); // PWM + direction, no enable bit
     bus.set_current_cycle(100);
     bus.tick_peripherals_with_costs();
@@ -3126,6 +3129,7 @@ motor_models:
     );
 
     let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    bus.write_u32(0x4800_0000, 0x55).unwrap(); // PA0..PA3 output mode
     bus.write_u32(0x4800_0014, 0b1011).unwrap(); // PWM, direction, enable
 
     let initial = bus.motor_snapshots();
@@ -3174,6 +3178,7 @@ motor_models:
     };
     config.simulation_clock_hz = 40_000_000;
     let mut slower_clock = SystemBus::from_config(&chip, &slower_clock_manifest).unwrap();
+    slower_clock.write_u32(0x4800_0000, 0x55).unwrap();
     slower_clock.write_u32(0x4800_0014, 0b1011).unwrap();
     slower_clock.set_current_cycle(100);
     slower_clock.tick_peripherals_with_costs();
@@ -3238,6 +3243,7 @@ motor_models:
         SystemBus::from_config(&chip, &manifest).unwrap()
     }
     fn configure_pwm(bus: &mut SystemBus) {
+        bus.write_u32(0x4800_0000, 1).unwrap(); // PA0 output, feedback pads input
         bus.write_u32(0x4800_0014, 1).unwrap(); // inverter enable
         bus.write_u32(0x4001_2c2c, 99).unwrap(); // ARR
         bus.write_u32(0x4001_2c38, 25).unwrap(); // CH2: complementary low
@@ -3904,6 +3910,7 @@ fn test_flash_boot_alias_read_and_write() {
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         rp2350_dcp: None,
+        rp2350_gpioc: false,
         ns_alias_offset: None,
         mem_aliases: Vec::new(),
         resident_tick_interval_override: None,
@@ -3911,6 +3918,7 @@ fn test_flash_boot_alias_read_and_write() {
         device_pin_pads: Vec::new(),
         observed: Vec::new(),
         motors: Vec::new(),
+        ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
         analog_muxes: Vec::new(),
@@ -4039,6 +4047,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         rp2350_dcp: None,
+        rp2350_gpioc: false,
         ns_alias_offset: None,
         mem_aliases: Vec::new(),
         resident_tick_interval_override: None,
@@ -4046,6 +4055,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         device_pin_pads: Vec::new(),
         observed: Vec::new(),
         motors: Vec::new(),
+        ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
         analog_muxes: Vec::new(),
@@ -4327,6 +4337,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         rp2350_dcp: None,
+        rp2350_gpioc: false,
         ns_alias_offset: None,
         mem_aliases: Vec::new(),
         resident_tick_interval_override: None,
@@ -4334,6 +4345,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         device_pin_pads: Vec::new(),
         observed: Vec::new(),
         motors: Vec::new(),
+        ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
         analog_muxes: Vec::new(),
@@ -4611,6 +4623,7 @@ fn test_peripheral_range_index_lookup() {
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         rp2350_dcp: None,
+        rp2350_gpioc: false,
         ns_alias_offset: None,
         mem_aliases: Vec::new(),
         resident_tick_interval_override: None,
@@ -4618,6 +4631,7 @@ fn test_peripheral_range_index_lookup() {
         device_pin_pads: Vec::new(),
         observed: Vec::new(),
         motors: Vec::new(),
+        ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
         analog_muxes: Vec::new(),
@@ -4751,6 +4765,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         rp2350_dcp: None,
+        rp2350_gpioc: false,
         ns_alias_offset: None,
         mem_aliases: Vec::new(),
         resident_tick_interval_override: None,
@@ -4758,6 +4773,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         device_pin_pads: Vec::new(),
         observed: Vec::new(),
         motors: Vec::new(),
+        ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
         analog_muxes: Vec::new(),

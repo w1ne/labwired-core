@@ -297,7 +297,15 @@ const MAX_MODEL_SITES: usize = 179;
 /// and both run only on the event-scheduler build (cycle/budget accounting is
 /// what the trace changes). `required-features` and the Cortex-M JIT
 /// differential lane keep it from reading green empty. Ends with the feature.
-const MAX_HARNESS_SITES: usize = 89;
+///
+/// 89 → 90: `tests/esp32_classic_irq_resettle.rs` is one gated file. It pins
+/// that a classic-ESP32 level-1 ISR reads its own scheduler-driven source
+/// (I2C0) in `RSR.INTERRUPT` after dispatch cleared the routed bit
+/// (labwired-core#1712). The source is scheduler-only, so without the feature
+/// there is no such source to lose. `required-features` and the
+/// `pr-scheduler-observable` lane keep it from reading green empty. Ends with
+/// the feature.
+const MAX_HARNESS_SITES: usize = 90;
 
 // ---------------------------------------------------------------------------
 // The counter. A pure function over source text, so its definition is testable

@@ -78,6 +78,12 @@ pub struct Rp2040I2c {
     lines: Option<std::sync::Arc<crate::peripherals::pad_lines::PadLines>>,
     /// Frames of the transfer in flight, narrated as one transaction at STOP.
     wire_frames: Vec<(u8, bool)>,
+    /// A transfer is open: a command has gone out since the last STOP/abort.
+    /// Tracked on its own, not from `wire_frames`, which only fills when a
+    /// lab routed the pads — with unrouted pads every command looked like a
+    /// transaction's first and re-STARTed the slave (an INA219 then returned
+    /// its first register byte for every byte of a multi-byte read).
+    in_transfer: bool,
     intr_mask: u32,
     raw_intr: Cell<u32>,
     tx_abrt_source: Cell<u32>,
@@ -461,6 +467,9 @@ impl Peripheral for Rp2040I2c {
                 if value & ENABLE_ENABLE != 0 {
                     // Enabled with empty FIFO → TX_EMPTY asserted.
                     self.set_raw(INTR_TX_EMPTY);
+                } else {
+                    // Disabling the block ends any open transfer.
+                    self.in_transfer = false;
                 }
             }
             IC_DATA_CMD if self.enable & ENABLE_ENABLE != 0 => {
@@ -504,9 +513,9 @@ impl Peripheral for Rp2040I2c {
                             .select_address(addr7);
                         // First command of a transaction → slave START so
                         // pointer-phase devices (INA219, etc.) reset.
-                        if self.wire_frames.len() <= 1 {
-                            // wire_frames already has the address frame.
+                        if !self.in_transfer {
                             self.attached_devices[idx].borrow_mut().start();
+                            self.in_transfer = true;
                         }
                         if value & DATA_CMD_READ != 0 {
                             let b = self.attached_devices[idx].borrow_mut().read();
@@ -531,6 +540,7 @@ impl Peripheral for Rp2040I2c {
                 if stop || self.raw_intr.get() & INTR_TX_ABRT != 0 {
                     // The transaction closed (STOP, or an abort's STOP): put
                     // its waveform on the pads.
+                    self.in_transfer = false;
                     self.wire_flush();
                 }
             }
@@ -685,6 +695,59 @@ mod tests {
         assert_ne!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_STOP_DET, 0);
         assert_ne!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_EMPTY, 0);
         assert!(i2c.tick().irq);
+    }
+
+    /// A two-byte read with no routed pads (no logic analyzer, `lines` None)
+    /// STARTs the slave once, so a pointer-phase sensor returns hi then lo.
+    /// The transfer state used to come from the waveform buffer, which stays
+    /// empty without pads: every byte re-STARTed the slave and an INA219 read
+    /// back 0x3939 for 0x399F (arduino-pico Wire on the Pico 2 twin).
+    #[test]
+    fn multi_byte_read_without_routed_pads_starts_the_slave_once() {
+        struct Reg {
+            idx: usize,
+            starts: std::sync::Arc<std::sync::atomic::AtomicU32>,
+        }
+        impl I2cDevice for Reg {
+            fn address(&self) -> u8 {
+                0x40
+            }
+            fn start(&mut self) {
+                self.idx = 0;
+                self.starts
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+            fn read(&mut self) -> u8 {
+                let b = [0x39, 0x9F][self.idx % 2];
+                self.idx += 1;
+                b
+            }
+            fn write(&mut self, _data: u8) {}
+        }
+        let starts = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let mut i2c = enabled_i2c();
+        assert!(i2c.lines.is_none(), "no pads routed in this test");
+        i2c.push_slave(Box::new(Reg {
+            idx: 0,
+            starts: starts.clone(),
+        }));
+        i2c.write_u32(IC_TAR, 0x40).unwrap();
+        i2c.write_u32(IC_DATA_CMD, DATA_CMD_READ).unwrap();
+        let hi = i2c.read_u32(IC_DATA_CMD).unwrap();
+        i2c.write_u32(IC_DATA_CMD, DATA_CMD_READ | DATA_CMD_STOP)
+            .unwrap();
+        let lo = i2c.read_u32(IC_DATA_CMD).unwrap();
+        assert_eq!((hi, lo), (0x39, 0x9F));
+        assert_eq!(
+            starts.load(std::sync::atomic::Ordering::Relaxed),
+            1,
+            "one START per transaction"
+        );
+        // After the STOP, the next transaction STARTs again.
+        i2c.write_u32(IC_DATA_CMD, DATA_CMD_READ | DATA_CMD_STOP)
+            .unwrap();
+        assert_eq!(i2c.read_u32(IC_DATA_CMD).unwrap(), 0x39);
+        assert_eq!(starts.load(std::sync::atomic::Ordering::Relaxed), 2);
     }
 
     /// Four sensors at ONE fixed address behind a TCA9548A, on the RP2040's
