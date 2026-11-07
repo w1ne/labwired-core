@@ -156,6 +156,14 @@ python3 validation/arduino-matrix/run_matrix.py --boards stm32f407,nrf52832
 
 46. **STM32WBA PWR SVMSR** — Arduino `HAL_PWREx_ControlVoltageScaling` polls `SVMSR`@0x3C `ACTVOSRDY`/`ACTVOS` after programming `VOSR`. Synthesize ACTVOS from VOSR.VOS and assert ACTVOSRDY with VOSRDY so clock config leaves the timeout spin.
 
+47. **RP2350 TIMER on the RP2040 map** — the RP2350 inserts LOCKED/SOURCE at 0x34/0x38, so INTR/INTE/INTF/INTS are at 0x3c..0x48. Read with the RP2040 map, pico-sdk's INTE write landed on read-only INTS and no alarm ever interrupted. arduino-pico's 1 ms `tud_task` (alarm → spare IRQ) never ran, and the first CDC write after boot was dropped even 50 ms in. `rp2040_timer` now takes `profile: rp2350`.
+
+48. **RP2350 GPIO coprocessor (p0)** — pico-sdk's RP2350 `gpio_set_dir`/`gpio_put` are `mcrr p0, ...`, so arduino-pico `pinMode` HardFaulted (UNDEFINSTR `0xec43 0x4044`). GPIOC now runs as SIO accesses (`coprocessors: [rp2350_gpioc]`), and the RP2350 SIO got its own GPIO map (`profile: rp2350`: OUT_SET 0x18, OE 0x30; it had the RP2040's 0x14/0x20).
+
+49. **DW I2C transfer state came from the waveform buffer** — `rp2040_i2c` STARTed the slave whenever `wire_frames` was short, but `wire_frames` only fills when a lab routed the pads. With unrouted pads (the RP2350 descriptor), every byte re-STARTed the INA219, so a 2-byte read returned 0x3939 for 0x399F. An explicit in-transfer flag now ends at STOP/abort/disable.
+
+50. **arduino-pico sketch quirks (silicon behaviour, not twin bugs)** — (a) `Serial` is USB CDC and drops writes until the host asserts DTR, so the sketches `while (!Serial)` on arduino-pico only. (b) `SPI.begin()` applies a 0 Hz default without `spi_init()`, so SSE stays 0 and a bare `SPI.transfer()` blocks in `spi_write_read_blocking`. L4 calls `beginTransaction` on arduino-pico. Both are guarded `ARDUINO_ARCH_RP2040 && !ARDUINO_ARCH_MBED`, so the Mbed rp2040 row is untouched.
+
 ## UNO R4 WiFi (Renesas RA4M1, `uno-r4-wifi`)
 
 Stock ArduinoCore-renesas 1.6.0 (`renesas-ra@1.9.0`). First run: L0 fell into
