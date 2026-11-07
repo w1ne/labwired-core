@@ -915,17 +915,19 @@ impl Avr {
     #[inline]
     fn is_pin_reg(&self, addr: u16) -> bool {
         match self.model {
+            // The megaAVR x8 family (48/88/168/328) shares one register
+            // summary: PINB/DDRB/PORTB..PIND/DDRD/PORTD at 0x23..0x2B.
             AvrModel::Atmega328p
             | AvrModel::Atmega328pb
             | AvrModel::Atmega168
+            | AvrModel::Atmega88
+            | AvrModel::Atmega48
             | AvrModel::Atmega32u4 => {
                 matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
             AvrModel::Atmega16 | AvrModel::Atmega128 | AvrModel::Atmega1284p => false,
             AvrModel::Atmega8
-            | AvrModel::Atmega48
-            | AvrModel::Atmega88
             | AvrModel::Atmega32
             | AvrModel::Atmega164
             | AvrModel::Atmega324
@@ -971,14 +973,14 @@ impl Avr {
             AvrModel::Atmega328p
             | AvrModel::Atmega328pb
             | AvrModel::Atmega168
+            | AvrModel::Atmega88
+            | AvrModel::Atmega48
             | AvrModel::Atmega32u4 => (AVR_PINB..=AVR_PIND + 2).contains(&addr),
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
             AvrModel::Atmega16 | AvrModel::Atmega128 | AvrModel::Atmega1284p => false,
             AvrModel::Atmega8
-            | AvrModel::Atmega48
-            | AvrModel::Atmega88
             | AvrModel::Atmega32
             | AvrModel::Atmega164
             | AvrModel::Atmega324
@@ -4280,6 +4282,24 @@ mod tests {
         let mut uno_bus = MockBus::new();
         uno.data_write(0x108, 0x03, &mut uno_bus).unwrap();
         assert_eq!(uno_bus.read_u8(AVR_IO_MIRROR_BASE + 0x108).unwrap(), 0);
+    }
+
+    /// ATmega48/88 share the x8-family port map with the 168/328P: DDRx and
+    /// PORTx reach the mirror window and PINx composes latch and input.
+    #[test]
+    fn megax8_small_parts_mirror_ports_like_the_328p() {
+        for model in [AvrModel::Atmega48, AvrModel::Atmega88] {
+            let mut bus = MockBus::new();
+            let mut cpu = Avr::new_model(model);
+            cpu.data_write(0x24, 0x20, &mut bus).unwrap(); // DDRB: PB5 out
+            cpu.data_write(0x25, 0x20, &mut bus).unwrap(); // PORTB: PB5 high
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x24).unwrap(), 0x20);
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x25).unwrap(), 0x20);
+            bus.write_u8(AVR_IO_MIRROR_BASE + u64::from(AVR_PIND), 0x04)
+                .unwrap();
+            assert_eq!(cpu.data_read(AVR_PINB, &bus).unwrap() & 0x20, 0x20);
+            assert_eq!(cpu.data_read(AVR_PIND, &bus).unwrap() & 0x04, 0x04);
+        }
     }
 
     #[test]

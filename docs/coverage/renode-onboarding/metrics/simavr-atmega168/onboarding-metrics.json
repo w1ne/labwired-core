@@ -15,24 +15,24 @@
   "script": "examples/renode-onboarding/simavr-atmega168-smoke.yaml",
   "system": "configs/systems/onboarding/simavr-atmega168.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T10:27:49Z",
-  "finished_at_utc": "2026-11-06T10:29:16Z",
-  "elapsed_seconds": 87,
-  "elapsed_ms": 86897,
+  "started_at_utc": "2026-11-07T10:33:23Z",
+  "finished_at_utc": "2026-11-07T10:37:00Z",
+  "elapsed_seconds": 217,
+  "elapsed_ms": 216946,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 86.585,
+    "build_cli": 125.352,
     "build_firmware": null,
-    "run_smoke": 0.303
+    "run_smoke": 91.585
   },
   "stages_ms": {
-    "build_cli": 86585,
+    "build_cli": 125352,
     "build_firmware": null,
-    "run_smoke": 303
+    "run_smoke": 91585
   },
-  "prebuilt_firmware": "tests/fixtures/avr/atmega168-cpu-smoke.elf"
+  "prebuilt_firmware": "tests/fixtures/avr/atmega168-io-smoke.elf"
 }
