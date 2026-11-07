@@ -97,6 +97,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: no SCI9 bring-up in this harness; bytes are proven by the ek-ra8m1 survival smoke
 * **ra4m1**
   * UART: Uno R4 Minima SCI2 uses generic type:uart (sci layout); no UART bring-up for this chip family in the edge gate yet
+  * SPI: RA RSPI (profile ra_rspi) hands each frame straight to the attached device and installs no PadLines cell, so no wire waveform is narrated; frames are proven by the UNO R4 WiFi Arduino matrix L4 cell
 * **rp2350**
   * I2C: rp2350 from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 from_config bus not yet edge-gated (no line cells)
