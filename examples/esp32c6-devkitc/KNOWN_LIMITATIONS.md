@@ -62,7 +62,10 @@ The full twelve-cell row, proven by `tests/fixtures/tier1/esp32c6.elf`:
   `boot::esp32c6_rom`.
 - **Radios**: Wi-Fi 6 (MAC/PHY), Bluetooth 5 LE, IEEE 802.15.4, and the
   coexistence block. No MAC, no PHY, no packet path.
-- **SYSTIMER, RMT, SPI0/SPI1, I2S, TWAI, PCNT, ETM, PARL_IO, TSENS,
+- **RMT** is behavioural only (the shared C3 model, `esp32c6_rmt`): `TX_START`
+  completes instantly and latches `CHn_TX_END`. No symbol timing, carrier,
+  loop mode, RX channels or pin waveform; RMTMEM is plain storage.
+- **SYSTIMER, SPI0/SPI1, I2S, TWAI, PCNT, ETM, PARL_IO, TSENS,
   AES/SHA/RSA/ECC/HMAC/DS, eFuse, PMU, LP_WDT, LP_I2C0, LP_UART0, trace** — not
   declared; accesses to these windows fault loudly rather than pretending to
   work. In particular the **LP_WDT** window (0x600B_1C00) is *not* the wdt

@@ -340,16 +340,12 @@ mod tests {
         for (i, byte) in e.iter_mut().enumerate() {
             *byte = bus.read_u8(0x4004_d0d0 + 52 + i as u64).expect("rom");
         }
-        // The ROM image is not committed: without LABWIRED_ESP32C6_ROM the
-        // region stays zero; with Espressif's esp32c6_rev0_rom image the tlsf
-        // table entry at +0x34 is the ROM function 0x400210b2.
+        // The flattened esp32c6_rev0_rom image is in-tree
+        // (crates/core/roms/esp32c6/) and resolves without
+        // LABWIRED_ESP32C6_ROM; its tlsf table entry at +0x34 is the ROM
+        // function 0x400210b2.
         let v = u32::from_le_bytes(e);
-        let expected = if std::env::var_os("LABWIRED_ESP32C6_ROM").is_some() {
-            0x4002_10b2
-        } else {
-            0
-        };
-        assert_eq!(v, expected, "tlsf table entry @ ROM+0x34");
+        assert_eq!(v, 0x4002_10b2, "tlsf table entry @ ROM+0x34");
     }
 
     #[test]

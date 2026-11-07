@@ -231,10 +231,17 @@ peripherals:
     type: "stub"
     base_address: 0x60003000
     size: "1KB"
+  # Behavioral RMT (the C3 model; identical register map). Instant TX_END on
+  # TX_START + TX_START count / LogicTap edges for matrix `led_watch: rmt:0`.
+  # 2KB covers RMTMEM @ 0x60006400: the 1KB stub faulted in rmt_encode_copy.
+  # Matrix source 49 = ETS_RMT_INTR_SOURCE (esp32c6 interrupts.h).
   - id: "rmt"
-    type: "stub"
+    type: "esp32c6_rmt"
+    irq: 49
     base_address: 0x60006000
-    size: "1KB"
+    size: "2KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/rmt.yaml"
   # Native esp_systimer (same IP as C3/S3; UNIT_OP bit29 = update-done). Stub
   # returned 0 forever → systimer_hal_get_counter_value spun at 0x40020876.
   # Matrix source 57 = ETS_SYSTIMER_TARGET0_INTR_SOURCE (esp32c6 interrupts.h).
