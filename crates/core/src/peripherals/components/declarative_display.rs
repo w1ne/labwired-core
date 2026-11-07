@@ -52,9 +52,9 @@ use std::collections::{BTreeMap, VecDeque};
 use anyhow::{bail, Context, Result};
 use labwired_config::{
     DeviceDescriptor, DisplayAction, DisplayAddressingMode, DisplayAxis, DisplayCommand,
-    DisplayCsSelect, DisplayCursorPart, DisplayDcSource, DisplayDcUnwired, DisplayMetaFlag,
-    DisplayMetaFormat, DisplayPageWrap, DisplayPixelFormat, DisplayPlaneOf, DisplayRamLayout,
-    DisplayRamStream, DisplaySpec, DisplayValue,
+    DisplayCsSelect, DisplayCursorPart, DisplayDcParams, DisplayDcSource, DisplayDcUnwired,
+    DisplayMetaFlag, DisplayMetaFormat, DisplayPageWrap, DisplayPixelFormat, DisplayPlaneOf,
+    DisplayRamLayout, DisplayRamStream, DisplaySpec, DisplayValue,
 };
 
 use super::declarative_display_gpio::{DisplayControlPin, DisplayGpioObserver, DisplaySpiHandle};
@@ -492,6 +492,13 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
             }
         }
         DisplayDcSource::ControlByte => {
+            if spec.dc.params == Some(DisplayDcParams::Data) {
+                bail!(
+                    "dc.params `data` puts command parameters on the data stream, and a \
+                     control-byte panel's data stream is frame memory: the first argument \
+                     would be a pixel"
+                );
+            }
             if spec.dc.command_value.is_none() {
                 bail!("dc.source control_byte needs a dc.command_value (the byte that opens the command stream)");
             }
@@ -542,9 +549,7 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
                      table declares a `ram_write` — one of the two is describing a different part"
                 );
             }
-            if spec.dc.source != DisplayDcSource::ControlByte
-                && spec.commands.iter().any(|c| c.args > 0)
-            {
+            if spec.dc.params_on_data_line() && spec.commands.iter().any(|c| c.args > 0) {
                 bail!(
                     "a D/C-pad panel whose data line is ALWAYS frame memory has nowhere to put a \
                      command's parameters: command 0x{:02X} declares {} of them",
@@ -1704,10 +1709,12 @@ impl GenericDisplay {
         }
     }
 
-    /// True when command PARAMETERS ride the data line — the 4-wire SPI panel,
-    /// whose D/C pad goes high for a command's arguments as much as for pixels.
+    /// True when command PARAMETERS ride the data line — the 4-wire SPI MIPI
+    /// panel, whose D/C pad goes high for a command's arguments as much as for
+    /// pixels. A D/C-pad panel that declares `dc.params: command` (the SSD1306
+    /// on SPI) counts them on the command level instead, as I²C does.
     fn args_on_data_stream(&self) -> bool {
-        self.spec.dc.source != DisplayDcSource::ControlByte
+        self.spec.dc.params_on_data_line()
     }
 
     fn ram_byte(&mut self, byte: u8) {
@@ -3378,6 +3385,7 @@ mod tests {
     const SHIPPED: &[&str] = &[
         "oled-ssd1306",
         "oled-ssd1306-128x32",
+        "oled-ssd1306-spi",
         "st7789-170x320",
         "oled-sh1107",
         "pcd8544",
@@ -3560,6 +3568,63 @@ mod tests {
             paint(&sabotaged),
             0x3F,
             "SET X read in the extended set decodes 0xBF as column 63"
+        );
+    }
+
+    /// The SSD1306 on 4-wire SPI frames its command ARGUMENTS with D/C# low
+    /// (`dc.params: command`), and ch32fun's ssd1306_spi.h raises CS# after
+    /// every byte. Both must hold for SET COLUMN / SET PAGE ADDRESS to land:
+    /// flipping either back to the MIPI rule (`params: data`, refused by the
+    /// validator on this always-stream panel) or dropping the pending opcode
+    /// on CS# (`closes_stream`) moves the first data byte off its target.
+    #[test]
+    fn ssd1306_spi_takes_arguments_on_the_command_level_across_cs_frames() {
+        let yaml = labwired_config::embedded_device_yaml("oled-ssd1306-spi").expect("embedded");
+        let closing = yaml.replace("cs_select: keeps_stream", "cs_select: closes_stream");
+        assert_ne!(closing, yaml, "the sabotage did not apply");
+
+        let paint = |desc: &str| -> Option<usize> {
+            let mut d = GenericDisplay::from_yaml(desc).expect("descriptor builds");
+            let byte = |d: &mut GenericDisplay, dc: bool, b: u8| {
+                SpiDevice::set_dc_level(d, dc);
+                SpiDevice::cs_select(d);
+                SpiDevice::transfer(d, b);
+                SpiDevice::cs_release(d);
+            };
+            for b in [0x20u8, 0x00, 0x21, 0x02, 0x05, 0x22, 0x01, 0x01] {
+                byte(&mut d, false, b);
+            }
+            byte(&mut d, true, 0xA5);
+            d.framebuffer().iter().position(|&b| b != 0)
+        };
+        assert_eq!(paint(&yaml), Some(128 + 2), "page 1, column 2");
+        assert_ne!(
+            paint(&closing),
+            Some(128 + 2),
+            "CS# dropped the window arguments"
+        );
+
+        let data_params = yaml.replace("params: command", "params: data");
+        assert_ne!(data_params, yaml, "the sabotage did not apply");
+        let err = GenericDisplay::from_yaml(&data_params).expect_err("params on the pixel stream");
+        assert!(
+            format!("{err:#}").contains("nowhere to put"),
+            "got: {err:#}"
+        );
+    }
+
+    /// A control-byte panel's data stream is frame memory, so it cannot take
+    /// command parameters there.
+    #[test]
+    fn control_byte_panel_refuses_params_on_the_data_stream() {
+        let broken = ssd1306_yaml_with((
+            "dc: { source: control_byte, command_value: 0x00 }",
+            "dc: { source: control_byte, command_value: 0x00, params: data }",
+        ));
+        let err = GenericDisplay::from_yaml(&broken).expect_err("params: data on I2C");
+        assert!(
+            format!("{err:#}").contains("would be a pixel"),
+            "got: {err:#}"
         );
     }
 

@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs fourteen of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs seventeen of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -164,6 +164,7 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `systick_irq` | debug-printf banner, `Milliseconds taken: 500` twice, DMDATA0 never timed out, PD0/PC0 edges | the 1 kHz SysTick ISR counts exactly 500 ms across two `Delay_Ms(250)` |
 | `adc_polled` | a potentiometer on PD4 (AIN7) is turned 50 % → 25 % → 100 %; the printed codes must be `511`, `511`, `255`, `255`, `1023` | `Count: 0 adc: 511` .. `Count: 4 adc: 1023`, one sample every 200 ms |
 | `i2c_oled` | a 128x32 SSD1306 at 0x3C on I2C1 (PC1/PC2); after the half-lit "buffer fill with binary" frame, mode 1 must leave exactly the two diagonals `(x, x/4)` and `(x, 31 - x/4)` lit: 256 of 4096 pixels, corners, centre crossing and two empty bands checked | 12/12; every packet completes with no `ssd1306_i2c_error` timeout |
+| `spi_oled` | a 0.96" 128x64 SSD1306 module strapped for 4-wire SPI on SPI1 (PC5 SCK, PC6 MOSI), CS# on PC3, D/C# on PC4, RES# on PC2 (driven, not modelled), wired as the example's README lists. The example fills the frame from its LFSR `rand()` and runs Conway's Life, one full refresh per generation. The smoke checks the console and three exact quadrant pixel counts of generation 21. [`check-spi-oled.py`](check-spi-oled.py) recomputes every frame from the example's source and matches each latched frame's SHA-256 ([`check-spi-oled.log`](evidence/ch32fun-spi-oled-smoke/check-spi-oled.log)) | 7/7; 23 frames in order, all exact: the blank init refresh, the random fill, then Life generations 1..21 about 48 ms apart. The stop lands four GDDRAM bytes into generation 22's refresh |
 | `tim2_pwm` | TIM2 PWM on CH1 (PD4), CH2 (PD3) and CH4 (PD7), with an LED on each; debug-printf banner and the TIM2 setup left behind (ATRLR, CEN/ARPE, CHCTLR1/2, CCER). [`check-tim2-pwm.py`](check-tim2-pwm.py) decodes the waveform of a `--watch-gpio` run, committed as [`pwm-capture.json.gz`](evidence/ch32fun-tim2-pwm-smoke/pwm-capture.json.gz) with its output in [`pwm-check.log`](evidence/ch32fun-tim2-pwm-smoke/pwm-check.log) | 11,546 whole 256-cycle periods (187.5 kHz); CH1 low for `count`/256 and CH2 low, CH4 high for `(count + 128) & 255`/256, through CH2's 255 → 0 wrap; `count` steps by 1 every 937.5 periods, i.e. `Delay_Ms(5)` |
 | `tim1_pwm` | TIM1, the advanced-control timer: PWM on the complementary output CH1N (PD0) and on CH4 (PC4), MOE set, an LED on each; debug-printf banner and the TIM1 setup left behind (ATRLR, CEN, CHCTLR1/2, CCER, BDTR.MOE). [`check-tim1-pwm.py`](check-tim1-pwm.py) decodes a `--watch-gpio` run, committed as [`pwm-capture.json.gz`](evidence/ch32fun-tim1-pwm-smoke/pwm-capture.json.gz) with its output in [`pwm-check.log`](evidence/ch32fun-tim1-pwm-smoke/pwm-check.log) | 16,851 whole 256-cycle periods (187.5 kHz); CH1N low for `count`/256 and CH4 low for `(count + 128) & 255`/256 through CH4's wrap; `count` steps by 1 every 937.5 periods, i.e. `Delay_Ms(5)` |
 | `tim1_pwm_complementary_outputs` | TIM1 remapped by `AFIO_PCFR1.TIM1_RM` = 01: the complementary pair CH1 (PC6) / CH1N (PC3), both active low, with an LED on each; the main loop steps `BDTR.DTG` every 20 ms. The smoke checks the remap, the pad modes and the TIM1 setup left behind (PSC, ATRLR, CH1CVR, CHCTLR1, CCER, CEN, MOE); the example prints nothing. [`check-tim1-complementary.py`](check-tim1-complementary.py) decodes a 265 M-cycle `--watch-gpio` run, committed as [`pwm-capture.json.gz`](evidence/ch32fun-tim1-complementary-smoke/pwm-capture.json.gz) with its output in [`pwm-check.log`](evidence/ch32fun-tim1-complementary-smoke/pwm-check.log) | 2,600 whole 100,010-cycle periods (479.95 Hz), OC1REF high 50,000 cycles; the two pads are never low together, and both dead-time gaps decode to `DTG` stepping +1 through all 256 values (DT 0..1008 cycles over all four encodings) and the 255 → 0 wrap, each held a mean 959,947 cycles (`Delay_Ms(20)`) |
@@ -209,6 +210,18 @@ This profile adds these to the PFIC profile:
   and the panel stayed blank. A 16-bit store to the data register now sends
   one byte. ch32fun declares `DATAR` as `uint16_t`, and the old byte-sliced
   store sent every byte twice, which drew the diagonals at half slope.
+- **SSD1306 on SPI1** (`spi_oled`): the SPI master is the one `spi_max7219`
+  already uses. The new part is the panel,
+  [`configs/devices/ssd1306_spi.yaml`](../../configs/devices/ssd1306_spi.yaml)
+  (`oled-ssd1306-spi`), the 7-pin SPI module. The engine's D/C-pin display
+  path assumed MIPI framing, where a command's arguments ride D/C high. The
+  SSD1306 sends them with D/C# low (datasheet section 8.1.3), so the
+  declarative display spec gained `dc.params: command`. Without it, the
+  driver's `21 00 7F` decodes as three opcodes and the window stays at
+  reset. ch32fun also raises CS# after every byte, so the panel declares
+  `cs_select: keeps_stream`. A unit test in `declarative_display.rs` breaks
+  each rule in turn. The smoke uses
+  [`ch32v003evt-ch32fun-spi-oled-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-spi-oled-smoke.yaml).
 - **TIM2** (`0x40000000`): the engine's STM32F1 general-purpose timer,
   whose CTLR1/CHCTLRx/CCER/PSC/ATRLR/CHxCVR layout and PWM modes the
   CH32V003 shares, counting at HCLK. Two changes made `tim2_pwm` drive its
@@ -577,11 +590,16 @@ cargo run -q -p labwired-cli -- test \
 # ch32fun ELFs are committed; this rebuilds them byte-identically.
 examples/ch32v003-evt/build-ch32fun-examples.sh
 for t in blink uartdemo systick-irq adc-polled i2c-oled tim2-pwm tim1-pwm tim1-complementary exti \
-    input-capture tim2-encoder tim2-pwm-remap; do
+    input-capture tim2-encoder tim2-pwm-remap spi-oled; do
   cargo run -q -p labwired-cli -- test \
     --script examples/ch32v003-evt/ch32fun-$t-smoke.yaml \
     --output-dir /tmp/ch32v003-ch32fun-$t
 done
+# spi_oled: every latched SSD1306 frame against the example's own Life.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003-evt/ch32fun-spi-oled-smoke.yaml \
+  --output-dir /tmp/spi-oled --inspect-bytes-max 4096
+python3 examples/ch32v003-evt/check-spi-oled.py /tmp/spi-oled/result.json --min-generations 21
 # tim2_pwm's waveform: capture the three pads, then decode them.
 cargo run -q -p labwired-cli -- test \
   --script examples/ch32v003-evt/ch32fun-tim2-pwm-smoke.yaml \

@@ -1262,6 +1262,21 @@
           "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered panel -- ABSENT MEANS POWERED, because the curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, darkens the panel: it then ignores the SPI bus entirely and reports `lit: false`, `display_on: false`, `awake: false`, `painted_bytes: 0`, which is what the part does on a bench."
         },
         {
+          "name": "power_pin",
+          "ty": "str",
+          "doc": "Optional GPIO label controlling the panel rail. When declared, the pin must be known high before the panel accepts SPI traffic."
+        },
+        {
+          "name": "reset_pin",
+          "ty": "str",
+          "doc": "Optional active-low hardware reset GPIO label."
+        },
+        {
+          "name": "backlight_pin",
+          "ty": "str",
+          "doc": "Optional active-high backlight GPIO label; it controls visibility, not frame memory."
+        },
+        {
           "name": "col_offset",
           "ty": "int",
           "doc": "First frame-memory column the glass shows. NOT a datasheet value -- the ST7789V document describes a 240-column frame memory and says nothing about which strip a given panel exposes. Leave unset to get the whole 240x320 frame memory, which is what the controller holds."
@@ -2521,6 +2536,40 @@
       ]
     },
     {
+      "device_type": "shtc3",
+      "label": "Sensirion SHTC3",
+      "summary": "Low-power temperature and humidity sensor over I2C.",
+      "detail": "Sensirion SHTC3 at fixed 7-bit address 0x70. Wake-up is 0x3517; low-power temperature-first measurement is 0x609C and returns after at most 0.8 ms; normal-mode temperature-first measurement is 0x7CA2 and returns after at most 12.1 ms. Each 16-bit big-endian measurement word is followed by CRC-8 (poly 0x31, init 0xFF). Sleep, software reset and ID-read commands are modeled. Internal power state, clock stretching and measurement noise are not modeled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "Fixed 7-bit I2C address; the SHTC3 uses 0x70."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0,
+          "default": 22.0
+        },
+        {
+          "key": "humidity",
+          "label": "Relative humidity",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 45.0
+        }
+      ]
+    },
+    {
       "device_type": "mcp9808",
       "label": "Microchip MCP9808",
       "summary": "±0.25 °C I²C temperature sensor with seeded noise + thermal lag.",
@@ -2805,7 +2854,7 @@
       "device_type": "tmp117",
       "label": "TMP117 Temperature",
       "summary": "TI TMP117 high-accuracy digital temperature sensor over I2C.",
-      "detail": "Pointer-addressed 16-bit registers; TEMP_RESULT at 7.8125 m°C/LSB. Stimulus channel `temperature` (°C) sets the conversion result. CONFIGURATION, both alert limits, TEMP_OFFSET and the EEPROM words are read/write storage; DATA_READY reads set because the part powers up in continuous-conversion mode. The alert comparator and the TEMP_OFFSET addition are not modelled.",
+      "detail": "Pointer-addressed 16-bit registers; TEMP_RESULT at 7.8125 m°C/LSB. Stimulus channel `temperature` (°C) sets the conversion result and defaults to 25 °C. CONFIGURATION, both alert limits, TEMP_OFFSET and the EEPROM words are read/write storage; DATA_READY reads set because the part powers up in continuous-conversion mode. The alert comparator and the TEMP_OFFSET addition are not modelled.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -2823,7 +2872,7 @@
           "unit": "°C",
           "min": -55.0,
           "max": 150.0,
-          "default": 0.0
+          "default": 25.0
         }
       ]
     },
@@ -3957,6 +4006,90 @@
       "inputs": []
     },
     {
+      "device_type": "lis2dux12",
+      "label": "LIS2DUX12 accelerometer",
+      "summary": "ST LIS2DUX12 3-axis accelerometer over I2C (SA0 low, address 0x18).",
+      "detail": "Models WHO_AM_I, the CTRL5 ODR/full-scale byte, fixed 800 Hz data-ready timing, and live signed XYZ samples. Full scale follows CTRL5.FS. Other embedded features, FIFO, interrupts, temperature, I3C and electrical behavior are not modeled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit address. Defaults to 0x18 with SA0 low; 0x19 with SA0 high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "x",
+          "label": "X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.061
+        },
+        {
+          "key": "y",
+          "label": "Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": -0.122
+        },
+        {
+          "key": "z",
+          "label": "Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.244
+        }
+      ]
+    },
+    {
+      "device_type": "lsm6dsox",
+      "label": "ST LSM6DSOX accelerometer slice",
+      "summary": "ST LSM6DSOX I2C identity and accelerometer XYZ path (partial model).",
+      "detail": "Models WHO_AM_I=0x6C, CTRL1_XL read/write, a fixed 416 Hz XLDA approximation when ODR is nonzero, and signed little-endian accelerometer XYZ scaled by CTRL1_XL full scale. I2C address defaults to 0x6A with SDO/SA0 low. Gyroscope, temperature, FIFO, interrupt and embedded functions, SPI/I3C, dynamic IF_INC, electrical behavior, and other ODR timings are not modeled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit address. Defaults to 0x6A with SDO/SA0 low; use 0x6B when high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "x",
+          "label": "X acceleration",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.061
+        },
+        {
+          "key": "y",
+          "label": "Y acceleration",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": -0.122
+        },
+        {
+          "key": "z",
+          "label": "Z acceleration",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.244
+        }
+      ]
+    },
+    {
       "device_type": "pybadge_buttons",
       "label": "PyBadge buttons",
       "summary": "Eight active-low buttons through the board's SN74HC165.",
@@ -4047,6 +4180,62 @@
           "default": 0.0
         }
       ]
+    },
+    {
+      "device_type": "max17048",
+      "label": "MAX17048 Fuel Gauge",
+      "summary": "Li-ion/Li-polymer cell voltage and state-of-charge registers over I2C.",
+      "detail": "Deterministic register snapshot at the MAX17048's 7-bit address 0x36. VCELL and SOC are stimulus-driven, big-endian register words and support the pointer-write / repeated-start / auto-increment read used by common drivers. This model does not implement ModelGauge's nonlinear estimation, reset and sleep state, alerts, timing, or voltage-history behavior. It is intended for firmware wiring and register-read tests, not battery-life prediction.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x36."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "battery_voltage",
+          "label": "Battery voltage",
+          "unit": "V",
+          "min": 2.5,
+          "max": 5.0,
+          "default": 3.85
+        },
+        {
+          "key": "state_of_charge",
+          "label": "State of charge",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 72.5
+        }
+      ]
+    },
+    {
+      "device_type": "oled-ssd1306-spi",
+      "label": "SSD1306 OLED (SPI)",
+      "summary": "128×64 monochrome OLED, the 7-pin 4-wire SPI module, with a paged framebuffer.",
+      "detail": "Solomon Systech SSD1306 strapped for 4-wire SPI (D0 SCLK, D1 SDIN, D/C#, CS#, RES#). Command vs data comes from a host GPIO D/C line that the bus resolves to a GPIO output register at attach time. RES# is not modelled.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select (CS#) GPIO pin label (e.g. \"PC3\")."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/command (D/C#) GPIO pin label (e.g. \"PC4\"). Required: low = command, high = GDDRAM data. It must resolve to a driveable GPIO output register, or every byte decodes as a command and the panel stays blank."
+        }
+      ],
+      "labs": [],
+      "inputs": []
     },
     {
       "device_type": "st7735",

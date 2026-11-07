@@ -1,0 +1,16 @@
+# WCH CH32V003 evaluation board running ch32fun's spi_oled, unmodified: a
+# 0.96" 128x64 SSD1306 OLED module strapped for 4-wire SPI on SPI1 (PC5
+# D0/SCK, PC6 D1/MOSI), CS# on PC3, D/C# on PC4, RES# on PC2, wired as the
+# example's README lists. The module is the test connection the example
+# drives, not a factory-installed part on the board. RES# is driven by the
+# firmware but not modelled (see configs/devices/ssd1306_spi.yaml).
+name: ch32v003evt-ch32fun-spi-oled-smoke
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+external_devices:
+  - id: oled
+    type: oled-ssd1306-spi
+    connection: spi1
+    config:
+      cs_pin: PC3
+      dc_pin: PC4
+board_io: []

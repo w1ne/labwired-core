@@ -1,0 +1,631 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 60000000,
+  "cycles": 162678862,
+  "instructions": 60000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 60000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 60000000
+    }
+  },
+  "limits": {
+    "max_steps": 200000000,
+    "max_cycles": 60000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "spi_oled example",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "initializing spi oled...done.",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "Looping...",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "oled",
+          "x": 64,
+          "y": 0,
+          "w": 64,
+          "h": 32,
+          "min_ink": 0.1220703125,
+          "max_ink": 0.1220703125
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "oled",
+          "x": 0,
+          "y": 32,
+          "w": 64,
+          "h": 32,
+          "min_ink": 0.19775390625,
+          "max_ink": 0.19775390625
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "oled",
+          "x": 64,
+          "y": 32,
+          "w": 64,
+          "h": 32,
+          "min_ink": 0.1318359375,
+          "max_ink": 0.1318359375
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "oled",
+          "x": 0,
+          "y": 0,
+          "min_ink": 0.1,
+          "max_ink": 0.2
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      2554,
+      536872876,
+      536871932,
+      0,
+      1,
+      7,
+      536872940,
+      536870924,
+      479,
+      66,
+      60,
+      61,
+      66,
+      32,
+      61,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 2392,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 2022,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 59999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "bb44750ac0a16f48ca66714d90db31d44445514ca8f82d74b35fe5202954fec0",
+  "config": {
+    "firmware": "examples/ch32v003-evt/ch32fun/spi_oled.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-ch32fun-spi-oled-smoke.yaml",
+    "script": "examples/ch32v003-evt/ch32fun-spi-oled-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "exti",
+        "kind": "native",
+        "base": 1073808384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "iwdg",
+        "kind": "native",
+        "base": 1073754112,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "debug_printf",
+        "kind": "native",
+        "base": 3758096628,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfic",
+        "kind": "native",
+        "base": 3758153728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dma1",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1073816576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "i2c",
+        "base": 1073763328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim1",
+        "kind": "native",
+        "base": 1073818624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim2",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 1073819648,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "oled",
+        "device_type": "oled-ssd1306-spi",
+        "declared": true,
+        "attachment": {
+          "transport": "spi",
+          "bus": "spi1",
+          "cs_pin": "PC3"
+        },
+        "artifacts": [
+          {
+            "kind": "framebuffer",
+            "id": "oled",
+            "meta": {
+              "device_id": "oled",
+              "format": "ssd1306_page",
+              "frames_seen": [
+                {
+                  "generation": 5897611217847481125,
+                  "ink_bytes": 0,
+                  "sha256": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+                  "t_us": 210709
+                },
+                {
+                  "generation": 15859263456414083093,
+                  "ink_bytes": 1021,
+                  "sha256": "46da6cadc2832a649ae7e24fb119b9a863d8fdf59b57f4c4c23d5fe8bb186e64",
+                  "t_us": 216655
+                },
+                {
+                  "generation": 1229461176902412797,
+                  "ink_bytes": 874,
+                  "sha256": "2b3112b0066329cd8da304443660bfa7bb595a97850bda7783f644964a490797",
+                  "t_us": 264851
+                },
+                {
+                  "generation": 1650244963045344640,
+                  "ink_bytes": 838,
+                  "sha256": "6d6934809fa77e21c24627b498ed1d514d222752beddf7e1edafd22f0739989b",
+                  "t_us": 312912
+                },
+                {
+                  "generation": 11462843476056763951,
+                  "ink_bytes": 808,
+                  "sha256": "f26ee506b0764b748ac988a1d0d2e00394f6c213d876c65f1ad8f9e881e010b7",
+                  "t_us": 360956
+                },
+                {
+                  "generation": 17987489257036874362,
+                  "ink_bytes": 771,
+                  "sha256": "fc300c5feeaaba0723fbeca184b30fca98efa759857441c3d3616809636689ca",
+                  "t_us": 408990
+                },
+                {
+                  "generation": 3740715115361171613,
+                  "ink_bytes": 760,
+                  "sha256": "0affe57fbb954e6cef779306e48e53fd9563585d4345017915b3ce89a821e9bd",
+                  "t_us": 457013
+                },
+                {
+                  "generation": 11716552542567355208,
+                  "ink_bytes": 734,
+                  "sha256": "662caec139215d4645764d8290cb147d94beca473302d6fb99a6301aea94bcb5",
+                  "t_us": 505031
+                },
+                {
+                  "generation": 291891716754237181,
+                  "ink_bytes": 720,
+                  "sha256": "8abda068e61dab10c7df8c8a990d09ad5caaae7d4eff41b12d2a4271a02fa367",
+                  "t_us": 553039
+                },
+                {
+                  "generation": 14308107922578379128,
+                  "ink_bytes": 709,
+                  "sha256": "3c8dfb9c493b81d391f663a7fabe9f1588a6b8be50e2ffe34f781e96b3497f8d",
+                  "t_us": 601041
+                },
+                {
+                  "generation": 8813967625693393520,
+                  "ink_bytes": 698,
+                  "sha256": "82d9afbb05ee42c1d45880b1bdf5af87200da06d1ec372022b202bf68ef9fada",
+                  "t_us": 649040
+                },
+                {
+                  "generation": 2105774033442960036,
+                  "ink_bytes": 660,
+                  "sha256": "2017c667ab75b662bee0891c8753e2aab93203df6c749b0f60aac26c7d89f641",
+                  "t_us": 697030
+                },
+                {
+                  "generation": 14033515910546104442,
+                  "ink_bytes": 666,
+                  "sha256": "4a03185b1f97ae5228c0b9801a6cba83c2a42e243a375bf0283fe0ecc60c9e67",
+                  "t_us": 745018
+                },
+                {
+                  "generation": 863573547525702730,
+                  "ink_bytes": 672,
+                  "sha256": "2f054b91db97f9c09d09a850b7623da311ee26348da401398fbdaf0c7bd9b21f",
+                  "t_us": 793006
+                },
+                {
+                  "generation": 2407932574265582529,
+                  "ink_bytes": 676,
+                  "sha256": "636ce6980649411fd6179bac738104151681aa1c4297121815951649e7b75316",
+                  "t_us": 840992
+                },
+                {
+                  "generation": 7321300458460351867,
+                  "ink_bytes": 663,
+                  "sha256": "fb38fb24b6001dffd8ee278a34ebc94031b297ade2e9245dee9f1fd5f052353f",
+                  "t_us": 888977
+                },
+                {
+                  "generation": 4398836593514766842,
+                  "ink_bytes": 628,
+                  "sha256": "12bf8368dd296d3e6742a4ce0cf5961a1ac3326e193441560a44ea39a02891b4",
+                  "t_us": 936958
+                },
+                {
+                  "generation": 10205632965541019089,
+                  "ink_bytes": 623,
+                  "sha256": "56d8eaaf018cf4546f1a9d569e53af459f9ca608ad1ba5cc0968185357bb76c5",
+                  "t_us": 984939
+                },
+                {
+                  "generation": 338103604058960630,
+                  "ink_bytes": 626,
+                  "sha256": "28c6f5b0b6210e92335d2a713e0c519417cdc7d40d9d3fd73a19a66485605265",
+                  "t_us": 1032918
+                },
+                {
+                  "generation": 17263723869559500440,
+                  "ink_bytes": 607,
+                  "sha256": "bd39e2d7f4a38faa03613e376bf8ccb4350256226af536b1fa2eade3802983b6",
+                  "t_us": 1080891
+                },
+                {
+                  "generation": 12984465970210141984,
+                  "ink_bytes": 597,
+                  "sha256": "e3b7383a4837e297c468b911008bbf890fdc02e3cf62ad02f09935ea6bea21bf",
+                  "t_us": 1128857
+                },
+                {
+                  "generation": 3519784185194002567,
+                  "ink_bytes": 591,
+                  "sha256": "f8c34c8e7b0ce87dce69cd7ac64c8ca0de01ffcb63ed61746b3b6ad881d3cd20",
+                  "t_us": 1176822
+                },
+                {
+                  "generation": 12958689624405319742,
+                  "ink_bytes": 605,
+                  "sha256": "84a75061d28101ee5026eda544901ac14f68aa624b175fc70b1c447b85f54b1e",
+                  "t_us": 1224786
+                }
+              ],
+              "generation": 12958689624405319742,
+              "generation_history": [
+                5897611217847481125,
+                15859263456414083093,
+                1229461176902412797,
+                1650244963045344640,
+                11462843476056763951,
+                17987489257036874362,
+                3740715115361171613,
+                11716552542567355208,
+                291891716754237181,
+                14308107922578379128,
+                8813967625693393520,
+                2105774033442960036,
+                14033515910546104442,
+                863573547525702730,
+                2407932574265582529,
+                7321300458460351867,
+                4398836593514766842,
+                10205632965541019089,
+                338103604058960630,
+                17263723869559500440,
+                12984465970210141984,
+                3519784185194002567,
+                12958689624405319742
+              ],
+              "h": 64,
+              "ink_bytes": 605,
+              "lit_pixels": 1270,
+              "w": 128
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (48000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2960,
+    "data_bytes": 8,
+    "bss_bytes": 1028,
+    "flash_used_bytes": 2968,
+    "ram_static_bytes": 1036,
+    "flash_total_bytes": 16384,
+    "ram_total_bytes": 2048,
+    "flash_used_pct": 18.12,
+    "ram_static_pct": 50.59,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 162678862,
+    "instructions": 60000000,
+    "steps_executed": 60000000,
+    "memory_reads": 67256616,
+    "memory_writes": 3255551,
+    "peripheral_accesses": 3553611,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 516,
+        "count": 13125
+      },
+      {
+        "pc": 518,
+        "count": 13125
+      },
+      {
+        "pc": 520,
+        "count": 13125
+      },
+      {
+        "pc": 910,
+        "count": 6914
+      },
+      {
+        "pc": 934,
+        "count": 6559
+      },
+      {
+        "pc": 894,
+        "count": 6558
+      },
+      {
+        "pc": 944,
+        "count": 6331
+      },
+      {
+        "pc": 904,
+        "count": 6216
+      },
+      {
+        "pc": 932,
+        "count": 6211
+      },
+      {
+        "pc": 906,
+        "count": 6210
+      },
+      {
+        "pc": 898,
+        "count": 6133
+      },
+      {
+        "pc": 916,
+        "count": 6130
+      },
+      {
+        "pc": 920,
+        "count": 6127
+      },
+      {
+        "pc": 938,
+        "count": 6091
+      },
+      {
+        "pc": 940,
+        "count": 5864
+      },
+      {
+        "pc": 952,
+        "count": 5863
+      }
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+# ch32fun examples/spi_oled, unmodified (build-ch32fun-examples.sh): a 128x64
+# SSD1306 strapped for 4-wire SPI on SPI1 (8-bit, 1-line TX, BR /2), with CS#
+# on PC3 and D/C# on PC4 as software GPIO. The driver raises CS# after every
+# byte and sends each command argument with D/C# low, which is what the
+# `oled-ssd1306-spi` descriptor's `params: command` and `cs_select:
+# keeps_stream` are for.
+#
+# After its 200 ms of start-up delays the example refreshes a blank frame,
+# fills the buffer from rand.h's LFSR, then runs Conway's Life with a full
+# refresh per generation, about 48 ms apart. The run stops at 60 M cycles
+# (1.25 s), four GDDRAM bytes into generation 22's refresh. Generation 21 is
+# then on the panel everywhere except bytes 0..3 (page 0, x = 0..3). The
+# three exact quadrant counts below come from that frame, so a model that
+# lost a command argument, mis-wrapped a page or dropped a byte can't hit
+# them. check-spi-oled.py recomputes every frame from the example's source
+# and checks all 23 latched frames by SHA-256:
+#
+#   labwired test --script examples/ch32v003-evt/ch32fun-spi-oled-smoke.yaml \
+#     --output-dir /tmp/spi-oled --inspect-bytes-max 4096
+#   examples/ch32v003-evt/check-spi-oled.py /tmp/spi-oled/result.json \
+#     --min-generations 21
+schema_version: "1.2"
+inputs:
+  firmware: "ch32fun/spi_oled.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-spi-oled-smoke.yaml"
+limits:
+  max_cycles: 60000000
+  max_steps: 200000000
+  wall_time_ms: 600000
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "spi_oled example" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "initializing spi oled...done." }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "Looping..." }
+  # Generation 21, top-right quadrant: 250 of 2048 pixels.
+  - display_region: { id: oled, x: 64, y: 0, w: 64, h: 32, min_ink: 0.1220703125, max_ink: 0.1220703125 }
+  # Bottom-left: 405 of 2048.
+  - display_region: { id: oled, x: 0, y: 32, w: 64, h: 32, min_ink: 0.19775390625, max_ink: 0.19775390625 }
+  # Bottom-right: 270 of 2048.
+  - display_region: { id: oled, x: 64, y: 32, w: 64, h: 32, min_ink: 0.1318359375, max_ink: 0.1318359375 }
+  # Whole panel: Life has thinned the ~50% random fill to about 15%.
+  - display_region: { id: oled, min_ink: 0.10, max_ink: 0.20 }
