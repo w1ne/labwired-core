@@ -273,12 +273,18 @@ impl GenericPeripheral {
     }
 
     /// Whether the output driver of `pin` is on: its `ENABLE` bit, or else
-    /// its `gpio_mode` field holding an `output` value. `None` when the
-    /// descriptor has neither (or the pin is out of range), i.e. the
-    /// direction is not derivable.
+    /// its `gpio_mode` field holding an `output` value. A port with an `IN`
+    /// register and neither `ENABLE`, `gpio_mode` nor an `OUT` latch is
+    /// input-only (LiteX `GPIOIn`): nothing can drive its pads, so every pin
+    /// in range is an input. `None` otherwise (or past the `IN` width), i.e.
+    /// the direction is not derivable.
     fn gpio_pad_driven(&self, pin: u8) -> Option<bool> {
         if self.gpio_reg("ENABLE").is_some() {
             return self.gpio_bit("ENABLE", pin);
+        }
+        if self.descriptor.gpio_mode.is_none() && self.gpio_reg("OUT").is_none() {
+            let (_, width) = self.gpio_reg("IN")?;
+            return (pin < width).then_some(false);
         }
         Some(self.gpio_mode_of(pin)? == crate::peripherals::gpio::GpioMode::Output)
     }
@@ -1317,6 +1323,42 @@ mod tests {
         assert_eq!(p.read_gpio_pad(3), None);
         assert_eq!(p.read_gpio_pad_drive(3), None);
         assert!(p.gpio_routing(3).is_none());
+    }
+
+    /// An `IN` register with no `OUT` latch, `ENABLE` or `gpio_mode` is an
+    /// input-only port (LiteX `GPIOIn`: one `in` CSR, pin k at bit k). Every
+    /// pin is an input that shows the outside level; adding an `OUT` latch
+    /// makes the direction underivable again.
+    #[test]
+    fn declarative_gpio_without_output_latch_is_input_only() {
+        use crate::peripherals::gpio::GpioMode;
+        let reg = |id: &str, off: u64| RegisterDescriptor {
+            id: id.to_string(),
+            address_offset: off,
+            size: 32,
+            access: Access::ReadOnly,
+            reset_value: 0,
+            fields: vec![],
+            side_effects: None,
+        };
+        let descriptor = |registers| PeripheralDescriptor {
+            peripheral: "GPIO".to_string(),
+            version: "1.0".to_string(),
+            registers,
+            interrupts: None,
+            timing: None,
+            gpio_mode: None,
+        };
+        let mut p = GenericPeripheral::new(descriptor(vec![reg("IN", 0), reg("IRQ_MODE", 4)]));
+        assert_eq!(p.gpio_routing(2).unwrap().mode, GpioMode::Input);
+        assert_eq!(p.read_gpio_pad(2), Some(false));
+        assert!(p.set_gpio_input(2, true));
+        assert_eq!(p.read_gpio_pad(2), Some(true), "input pad shows IN");
+        assert_eq!(p.read(0).unwrap(), 0x04, "pin 2 is IN bit 2");
+        assert!(p.gpio_routing(32).is_none(), "past the IN width");
+
+        let latched = GenericPeripheral::new(descriptor(vec![reg("IN", 0), reg("OUT", 4)]));
+        assert!(latched.gpio_routing(2).is_none());
     }
 
     /// A byte-wide port packed IN / OUT / DIR on consecutive bytes (MSP430

@@ -17,6 +17,23 @@ peripherals:
   type: litex_mmcm_csr32
   bus: sysbus
   base_address: 3758114816
+# LiteX GPIOOut/GPIOIn at the CSR bases the enjoydigital litex_vexriscv
+# Zephyr board declares (litex_vexriscv.dts gpio@e0005800 port-is-output,
+# gpio@e0006000), the SoC whose clock0 sits at 0xE000_4800 as below.
+- id: gpio_out
+  type: declarative
+  bus: sysbus
+  base_address: 3758118912
+  size: 4B
+  config:
+    path: ../../peripherals/litex/gpio_out.yaml
+- id: gpio_in
+  type: declarative
+  bus: sysbus
+  base_address: 3758120960
+  size: 4B
+  config:
+    path: ../../peripherals/litex/gpio_in.yaml
 - id: phy
   type: ethernetphysicallayer
   bus: eth

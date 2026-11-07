@@ -95,6 +95,12 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x10,
         "Linux pinctrl-sunxi.h DATA_REGS_OFFSET (Pn_DAT)",
     ),
+    // LiteX GPIOIn: the one `in` CSR at the core base.
+    (
+        "declarative/litex/gpio_in.yaml",
+        0x00,
+        "litex/soc/cores/gpio.py GPIOIn `in` (Zephyr gpio_litex.c)",
+    ),
     // Window based at the port's P_m byte, so PIN_m is +0x800.
     (
         "declarative/rzg2l/port.yaml",
@@ -162,7 +168,6 @@ const PLACEHOLDER_TYPES: &[&str] = &[
     "efmgpioport",
     "efr32_gpioport",
     "gaisler_gpio",
-    "litex_gpio",
     "max32650_gpio",
     "mpfs_gpio",
     "murax_gpio",
@@ -261,16 +266,28 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
         0x1103_0810,
         "r9a07g044.dtsi pinctrl@11030000 + pinctrl-rzg2l.c PIN(0x10)",
     ),
+    (
+        "litex_vexriscv",
+        "gpio_in",
+        0xE000_6000,
+        "Zephyr enjoydigital litex_vexriscv.dts gpio_in: gpio@e0006000",
+    ),
+    (
+        "litex_vexriscv_micropython",
+        "gpio_in",
+        0xE000_6000,
+        "Zephyr enjoydigital litex_vexriscv.dts gpio_in: gpio@e0006000",
+    ),
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 191;
+const COVERED: usize = 193;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 85;
+const SILICON_REGISTER: usize = 88;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 54;
+const NO_ANALOG_ENDPOINT: usize = 52;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
