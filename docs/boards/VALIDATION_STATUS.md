@@ -53,7 +53,7 @@ The models column is a content digest over everything that board's `models` list
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `c1ea4702ff93f24c` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `a7a4634a90595141` | no silicon capture |
 | `stm32l552` | 🟡 smoke-manual | — | `61eae4f468bee5f7` | no silicon capture |
-| `cc2538sf53` | 🟡 smoke-manual | — | `45c09c7a18d04595` | no silicon capture |
+| `cc2538sf53` | 🟡 smoke-manual | — | `3f8a758d1c25e7dd` | no silicon capture |
 | `amap42kp` | 🟡 smoke-manual | — | `0b0d98cc206d8a8a` | no silicon capture |
 | `r7fa6m5bh` | 🟡 smoke-manual | — | `10e07669eed7861e` | no silicon capture |
 | `r7fa8m1ah` | 🟡 smoke-manual | — | `0bd5f6dc053acc80` | no silicon capture |
@@ -464,7 +464,7 @@ The models column is a content digest over everything that board's `models` list
   - offline (CI): cc2538::gptimer (9 tests: periodic down timeout, split up one-shot/prescale/match, A/B IRQ routes; legacy + event-scheduler)
   - offline (CI): cc2538::i2cm (9 tests: reset, MFE gating, address/data NACK, held bus, repeated-start read, IRQ, reset release, byte lanes and snapshot)
   - offline (CI): cc2538dk io-smoke (GPTimer0 periodic timeout/hold and GPTimer1B split one-shot/prescale/match on IRQ 19/22)
-  - offline (CI): renode-onboarding cc2538 smoke (attached TMP102 fixture: register-pointer write, repeated-start 16-bit read, stop, IRQ 8 and RIS clear)
+  - offline (CI): renode-onboarding cc2538 smoke (attached TMP102 fixture: register-pointer write, repeated-start 16-bit read, stop, IRQ 8 and RIS clear; PKA SRAM: all 512 words written and read back)
 - Drift status: **no silicon capture**
 
 ## `amap42kp` — 🟡 smoke-manual

@@ -74,18 +74,22 @@ ELFs are not run. No wider Renode parity claim is made.
 | GPTimer RTC, capture/PWM edge handling, synchronization, ADC trigger, deferred reload, prescaler extension and CCP output | **not modelled** | `crates/core/src/peripherals/cc2538/gptimer.rs` |
 | I2CM: address and data NACK, held bus, register-pointer write, repeated-start read, STOP, completion RIS/ICR and IRQ 8 | unit-tested; smoke-exercised | `cc2538::i2cm` (9 tests); imported-system onboarding smoke reads the injected TMP102 fixture at `0x48`, checks `1900`, IRQ 8 and RIS clear |
 | I2CM transfer timing, TPR clock division, clock stretching, multi-master arbitration, loopback; I2CS slave mode | **not modelled** | `crates/core/src/peripherals/cc2538/i2cm.rs`; I2CS remains a separate stub |
-| PKA, USB, SoC ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
+| PKA SRAM (`0x4400_6000`, 2 KiB): all 512 words written and read back | smoke-exercised | `memory_regions` entry `pka_sram` in `configs/chips/cc2538sf53.yaml`; imported-system onboarding smoke line `pka_sram words=512 bad=0 last=751ef9b8` |
+| Negative control (PKA SRAM) | fail | `pka_sram` back to a `type: stub` peripheral → `pka_sram words=512 bad=512 last=00000000`, FAIL 2/3 |
+| PKA engine (modular arithmetic, ECC), USB, SoC ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
 
 On 2026-11-07, the imported-platform measurement
 `CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 /usr/bin/python3 scripts/run_renode_onboarding_inventory.py --only cc2538`
-passed after the I2CM change: 4,000,000 instructions, 3/3 smoke assertions,
-and UART `i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0`. The complete build,
-UART, JUnit, result and snapshot evidence is under
+passed after mapping the PKA SRAM range as ordinary RAM: 4,000,000
+instructions, 3/3 smoke assertions, and UART `pka_sram words=512 bad=0
+last=751ef9b8` alongside the I2CM checks. The complete build, UART, JUnit,
+result and snapshot evidence is under
 `docs/coverage/renode-onboarding/metrics/cc2538/`. Its system injects a virtual
 TMP102 as a test fixture; this does not claim that the CC2538DK includes that
 sensor. The shared scoreboard remains at 245 descriptors, 224 booted and
-smoke-passing, 21 not run, and 0 measured failures; this CC2538 profile still
-loads eight unrelated stub windows.
+smoke-passing, 21 not run, and 0 measured failures. The CC2538 profile retains
+seven zero-answering stub windows: IOC, analog registers, SoC ADC, I2CS, USB,
+the PKA compute engine and CCTEST.
 
 ## Commands and evidence (updated 2026-11-07)
 
@@ -96,7 +100,7 @@ CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 /usr/bin/python3 \
   scripts/run_renode_onboarding_inventory.py --only cc2538
 #   Finished `release` profile — no warnings
 #   245 descriptors; 224 booted; 224 booted and smoke-passing; 21 not run; 0 fail
-#   cc2538: 4,000,000 instructions; 3/3 assertions; I2CM TMP102 + IRQ 8
+#   cc2538: 4,000,000 instructions; 3/3 assertions; I2CM TMP102 + IRQ 8, PKA SRAM 512-word readback
 
 ./examples/cc2538dk/ci/test.sh
 #   PASS  3/3 checks · io-smoke · 4000000 steps

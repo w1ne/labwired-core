@@ -42,7 +42,7 @@
 | `brd4162a` | `pass` | `True` | `yes` | `yes` | `1028` | `1.028` | `True` | 0 | `n/a` | n/a | n/a |
 | `brd4186c` | `pass` | `True` | `yes` | `yes` | `1007` | `1.007` | `True` | 0 | `n/a` | n/a | n/a |
 | `brd4402a` | `pass` | `True` | `yes` | `yes` | `985` | `0.985` | `True` | 0 | `n/a` | n/a | n/a |
-| `cc2538` | `pass` | `True` | `yes` | `yes` | `125975` | `125.975` | `True` | 8: `ioc:stub`, `ana_regs:stub`, `soc_adc:stub`, `i2cs:stub`, `usb:stub`, `pka:stub`, `pka_sram:stub`, `cctest:stub` | `n/a` | n/a | n/a |
+| `cc2538` | `pass` | `True` | `yes` | `yes` | `113644` | `113.644` | `True` | 7: `ioc:stub`, `ana_regs:stub`, `soc_adc:stub`, `i2cs:stub`, `usb:stub`, `pka:stub`, `cctest:stub` | `n/a` | n/a | n/a |
 | `colibri-vf61` | `pass` | `True` | `yes` | `yes` | `7802` | `7.802` | `True` | 0 | `n/a` | n/a | n/a |
 | `core-v-mcu` | `pass` | `True` | `yes` | `yes` | `764` | `0.764` | `True` | 0 | `n/a` | n/a | n/a |
 | `cortex-a53-gicv2` | `pass` | `True` | `yes` | `yes` | `12566` | `12.566` | `True` | 0 | `n/a` | n/a | n/a |

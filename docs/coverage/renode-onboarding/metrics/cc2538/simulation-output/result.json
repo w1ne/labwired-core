@@ -50,6 +50,7 @@
           "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c",
           "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08",
           "i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0",
+          "pka_sram words=512 bad=0 last=751ef9b8",
           "gpt0 to=3 nvic19=1 held=1",
           "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok",
           "hb=0 yellow=1 green=0 orange=0",
@@ -68,7 +69,7 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      75963,
+      78564,
       24,
       32,
       101,
@@ -82,10 +83,10 @@
       61,
       1074638856,
       536903632,
-      2112669,
-      2114218
+      2114717,
+      2116270
     ],
-    "pc": 2114218,
+    "pc": 2116270,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -98,7 +99,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "fb39ce6e58e8b556b85ea06b633a18f54a5a62f276a026b6d3c4d914bdd07e30",
+  "firmware_hash": "2ffcb0b7a3e604830e72242ff865768e75c394e660c0ca5e73329a3a151725ef",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/cc2538.yaml",
@@ -289,13 +290,6 @@
         "artifacts": []
       },
       {
-        "name": "pka_sram",
-        "kind": "native",
-        "base": 1140875264,
-        "registers": [],
-        "artifacts": []
-      },
-      {
         "name": "cctest",
         "kind": "native",
         "base": 1140916224,
@@ -464,72 +458,78 @@
         "end_cycle": 10000
       },
       {
-        "text": "gpt0 to=3 nvic19=1 held=1",
-        "cycle_lo": 0,
-        "cycle": 10000,
+        "text": "pka_sram words=512 bad=0 last=751ef9b8",
+        "cycle_lo": 10000,
+        "cycle": 20000,
         "end_cycle": 20000
       },
       {
-        "text": "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16004",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "text": "gpt0 to=3 nvic19=1 held=1",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16006",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
       },
       {
         "text": "hb=0 yellow=1 green=0 orange=0",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
       },
       {
         "text": "hb=1 yellow=1 green=0 orange=0",
-        "cycle_lo": 620000,
-        "cycle": 630000,
-        "end_cycle": 630000
+        "cycle_lo": 630000,
+        "cycle": 640000,
+        "end_cycle": 640000
       },
       {
         "text": "hb=2 yellow=1 green=0 orange=0",
-        "cycle_lo": 1220000,
-        "cycle": 1230000,
-        "end_cycle": 1230000
+        "cycle_lo": 1230000,
+        "cycle": 1240000,
+        "end_cycle": 1240000
       },
       {
         "text": "hb=3 yellow=1 green=0 orange=0",
-        "cycle_lo": 1820000,
-        "cycle": 1830000,
-        "end_cycle": 1830000
+        "cycle_lo": 1830000,
+        "cycle": 1840000,
+        "end_cycle": 1840000
       },
       {
         "text": "hb=4 yellow=1 green=0 orange=0",
-        "cycle_lo": 2420000,
-        "cycle": 2430000,
-        "end_cycle": 2430000
+        "cycle_lo": 2430000,
+        "cycle": 2440000,
+        "end_cycle": 2440000
       },
       {
         "text": "hb=5 yellow=1 green=0 orange=0",
-        "cycle_lo": 3020000,
-        "cycle": 3030000,
-        "end_cycle": 3030000
+        "cycle_lo": 3030000,
+        "cycle": 3040000,
+        "end_cycle": 3040000
       },
       {
         "text": "hb=6 yellow=1 green=0 orange=0",
-        "cycle_lo": 3620000,
-        "cycle": 3630000,
-        "end_cycle": 3630000
+        "cycle_lo": 3630000,
+        "cycle": 3640000,
+        "end_cycle": 3640000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 18936,
+    "text_bytes": 21080,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 18936,
+    "flash_used_bytes": 21080,
     "ram_static_bytes": 0,
     "flash_total_bytes": 524288,
     "ram_total_bytes": 32768,
-    "flash_used_pct": 3.61,
+    "flash_used_pct": 4.02,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -555,35 +555,40 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 4061,
-    "memory_writes": 245,
-    "peripheral_accesses": 8244,
+    "memory_reads": 5183,
+    "memory_writes": 2298,
+    "peripheral_accesses": 8325,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 2114218,
+        "pc": 2116270,
         "count": 5196,
-        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 2114222,
-        "count": 5195,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 2114220,
+        "pc": 2116266,
+        "count": 5156,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 2116268,
         "count": 5156,
         "symbol": "firmware_cc2538dk_smoke::spin"
       },
       {
-        "pc": 2110772,
+        "pc": 2109984,
         "count": 39,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 2115498,
+        "pc": 2112784,
         "count": 39,
-        "symbol": "firmware_cc2538dk_smoke::put_dec32"
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 2112800,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
       }
     ]
   }

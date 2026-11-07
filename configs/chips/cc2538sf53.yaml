@@ -75,7 +75,8 @@
 # - flash controller: no CPU stall while executing from flash during an
 #   operation, no flash DMA trigger, no flash interrupt.
 # - GPTimer RTC, capture and PWM modes, the ADC trigger and timer sync.
-# - PKA, I2CS slave, USB, SoC ADC/analog: declared stubs. I2CM is a
+# - PKA engine, I2CS slave, USB, SoC ADC/analog: declared stubs (the PKA
+#   SRAM window is plain RAM). I2CM is a
 #   synchronous byte-command master; it has no clock stretching, bus timing,
 #   arbitration or loopback.
 #
@@ -127,6 +128,14 @@ memory_regions:
     size: "2KB"
     erased: true
     image_env: "LABWIRED_CC2538_INFO_PAGE"
+  # PKA engine RAM (Table 4-1: 0x4400_6000-0x4400_67FF, 2 KiB). Plain
+  # word-addressable SRAM from the CPU side: operands and results the PKA
+  # sequencer reads and writes. Mapped as RAM so stores read back; the PKA
+  # engine itself (0x4400_4000) is still a stub, so nothing here is ever
+  # computed. The RCGCSEC.PKA clock gate is not enforced (as for every gate).
+  - name: "pka_sram"
+    base: 0x44006000
+    size: "2KB"
 
 pins:
   # CC2538DK / SmartRF06 EB wiring (Contiki-NG `cc2538dk` dev/board.h, RIOT
@@ -332,10 +341,6 @@ peripherals:
     type: "stub"
     base_address: 0x44004000
     size: "4KB"
-  - id: "pka_sram"
-    type: "stub"
-    base_address: 0x44006000
-    size: "2KB"
   # CCTEST / OBSSEL (Table 4-1: 0x4401_0000-0x4401_0030).
   - id: "cctest"
     type: "stub"

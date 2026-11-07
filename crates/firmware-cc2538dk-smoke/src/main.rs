@@ -4,7 +4,7 @@
 //
 //! CC2538DK (CC2538SF53, Cortex-M3) L1 smoke: UART0 console, a walk over the
 //! SmartRF06 LEDs with GPIO_DATA readback, the keys' pad levels, an SSI0
-//! loopback self-test, an I2CM/TMP102 transfer, a GPTimer0/1 self-test and a heartbeat, in bare
+//! loopback self-test, an I2CM/TMP102 transfer, a PKA SRAM readback, a GPTimer0/1 self-test and a heartbeat, in bare
 //! registers.
 //!
 //! Board facts (Contiki-NG `cc2538dk` dev/board.h; RIOT `cc2538dk`):
@@ -359,6 +359,42 @@ fn i2cm_selftest() {
     }
 }
 
+// ── PKA SRAM (SWRU319C Table 4-1: 0x4400_6000-0x4400_67FF) ────────────────
+const PKA_SRAM: u32 = 0x4400_6000;
+const PKA_SRAM_WORDS: u32 = 2048 / 4;
+/// RCGCSEC (Contiki-NG arch/cpu/cc2538/dev/sys-ctrl.h, 0x400D_2048); bit 0
+/// clocks the PKA in active mode.
+const SYS_CTRL_RCGCSEC: u32 = SYS_CTRL + 0x48;
+const RCGCSEC_PKA: u32 = 0x1;
+
+/// Word pattern for PKA SRAM slot `i`: distinct per word and never zero, so a
+/// zero-answering window cannot pass.
+fn pka_pattern(i: u32) -> u32 {
+    (i.wrapping_mul(0x9E37_79B9)) ^ 0xA5A5_0000 ^ i
+}
+
+/// Clock the PKA, fill all 512 PKA SRAM words, then read every one back.
+fn pka_sram_selftest() {
+    wr(SYS_CTRL_RCGCSEC, rd(SYS_CTRL_RCGCSEC) | RCGCSEC_PKA);
+    for i in 0..PKA_SRAM_WORDS {
+        wr(PKA_SRAM + i * 4, pka_pattern(i));
+    }
+    let mut bad = 0;
+    for i in 0..PKA_SRAM_WORDS {
+        if rd(PKA_SRAM + i * 4) != pka_pattern(i) {
+            bad += 1;
+        }
+    }
+    puts(b"pka_sram words=");
+    put_dec32(PKA_SRAM_WORDS);
+    puts(b" bad=");
+    put_dec32(bad);
+    puts(b" last=");
+    put_hex16(rd(PKA_SRAM + (PKA_SRAM_WORDS - 1) * 4) >> 16);
+    put_hex16(rd(PKA_SRAM + (PKA_SRAM_WORDS - 1) * 4));
+    putc(b'\n');
+}
+
 fn put_hex16(value: u32) {
     put_hex8(value >> 8);
     put_hex8(value);
@@ -571,6 +607,7 @@ fn main() -> ! {
 
     ssi0_selftest();
     i2cm_selftest();
+    pka_sram_selftest();
     gpt_selftest();
 
     // Leave yellow lit; the heartbeat reports the three driven pad levels.
