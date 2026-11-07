@@ -148,6 +148,7 @@ pub fn process_peripheral(
             Some(interrupts)
         },
         timing: None,
+        gpio_mode: None,
     })
 }
 

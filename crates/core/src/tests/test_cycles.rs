@@ -231,6 +231,7 @@ fn machine_inspect_enumerates_and_filters() {
         }],
         interrupts: None,
         timing: None,
+        gpio_mode: None,
     };
 
     let cpu = MockCpu::default();

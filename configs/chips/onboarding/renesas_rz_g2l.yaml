@@ -12,7 +12,18 @@ flash:
 ram:
   base: 536870912
   size: 64KB
+# GPIO port P0 (off 0x10 from the controller at 0x1103_0000; r9a07g044.dtsi
+# pinctrl@11030000, Linux pinctrl-rzg2l.c), PIN_0 @0x1103_0810, on
+# configs/peripherals/rzg2l/port.yaml. The window spans the other ports'
+# bytes, so only P0 is declared.
 peripherals:
+- id: p0
+  type: declarative
+  bus: sysbus
+  base_address: 285409296
+  size: 2049B
+  config:
+    path: ../../peripherals/rzg2l/port.yaml
 - id: timer0
   type: arm_generictimer
   bus: cpu0

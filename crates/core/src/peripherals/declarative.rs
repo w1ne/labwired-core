@@ -272,11 +272,51 @@ impl GenericPeripheral {
         Some(value & (1u32 << pin) != 0)
     }
 
-    /// Whether the descriptor's `ENABLE` register has the output driver of
-    /// `pin` on. `None` when the descriptor has no `ENABLE` register (or the
-    /// pin is out of range), i.e. the direction is not derivable.
+    /// Whether the output driver of `pin` is on: its `ENABLE` bit, or else
+    /// its `gpio_mode` field holding an `output` value. `None` when the
+    /// descriptor has neither (or the pin is out of range), i.e. the
+    /// direction is not derivable.
     fn gpio_pad_driven(&self, pin: u8) -> Option<bool> {
-        self.gpio_bit("ENABLE", pin)
+        if self.gpio_reg("ENABLE").is_some() {
+            return self.gpio_bit("ENABLE", pin);
+        }
+        Some(self.gpio_mode_of(pin)? == crate::peripherals::gpio::GpioMode::Output)
+    }
+
+    /// Direction of `pin` from the descriptor's `gpio_mode` field: an
+    /// `output` value is Output, an `input` value Input, anything else a
+    /// function (Af). `None` without `gpio_mode`, past the `IN` register's
+    /// width, or when the field runs past the window.
+    fn gpio_mode_of(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioMode> {
+        use crate::peripherals::gpio::GpioMode;
+        let mode = self.descriptor.gpio_mode.as_ref()?;
+        let (_, in_width) = self.gpio_reg("IN")?;
+        if pin >= in_width || !(1..=8).contains(&mode.bits_per_pin) {
+            return None;
+        }
+        let start = self
+            .descriptor
+            .registers
+            .iter()
+            .find(|r| r.id == mode.register)?
+            .address_offset as usize;
+        let first_bit = usize::from(pin) * usize::from(mode.bits_per_pin);
+        let last_bit = first_bit + usize::from(mode.bits_per_pin) - 1;
+        // A field of at most 8 bits spans at most two bytes.
+        let data = self.data.borrow();
+        let bytes = data.get(start + first_bit / 8..=start + last_bit / 8)?;
+        let run = bytes
+            .iter()
+            .rev()
+            .fold(0u32, |word, &b| (word << 8) | u32::from(b));
+        let value = (run >> (first_bit % 8)) & ((1u32 << mode.bits_per_pin) - 1);
+        Some(if mode.output.contains(&value) {
+            GpioMode::Output
+        } else if mode.input.contains(&value) {
+            GpioMode::Input
+        } else {
+            GpioMode::Af
+        })
     }
 
     /// Little-endian `width`-bit register at `offset` in the backing store.
@@ -784,6 +824,11 @@ impl Peripheral for GenericPeripheral {
 
     fn gpio_routing(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {
         use crate::peripherals::gpio::{GpioMode, GpioRouting};
+        if self.gpio_reg("ENABLE").is_none() {
+            if let Some(mode) = self.gpio_mode_of(pin) {
+                return Some(GpioRouting { mode, func: None });
+            }
+        }
         let mode = if self.gpio_pad_driven(pin)? {
             GpioMode::Output
         } else {
@@ -865,6 +910,7 @@ mod tests {
             ],
             interrupts: None,
             timing: None,
+            gpio_mode: None,
         }
     }
 
@@ -1233,6 +1279,7 @@ mod tests {
             registers,
             interrupts: None,
             timing: None,
+            gpio_mode: None,
         }
     }
 
@@ -1292,6 +1339,7 @@ mod tests {
             registers: vec![reg("IN", 0), reg("OUT", 1), reg("ENABLE", 2)],
             interrupts: None,
             timing: None,
+            gpio_mode: None,
         });
         assert_eq!(p.pin_count(), 8);
         p.write(1, 0x81).unwrap(); // OUT
@@ -1304,5 +1352,94 @@ mod tests {
         assert_eq!(p.read_gpio_pad(0), Some(false), "released pad 0 shows IN");
         p.write(2, 0x01).unwrap(); // DIR: pin 0 driven
         assert_eq!(p.read_gpio_pad(0), Some(true), "driven pad shows OUT bit 0");
+    }
+
+    /// Direction from a 4-bit mode field per pin that runs on across
+    /// consecutive registers (Allwinner `Pn_CFG0` pins 0..7, `Pn_CFG1` pins
+    /// 8..15; 0 input, 1 output, 2..6 a function).
+    #[test]
+    fn declarative_gpio_mode_field_sets_direction_across_registers() {
+        use crate::peripherals::gpio::GpioMode;
+        let reg = |id: &str, off: u64| RegisterDescriptor {
+            id: id.to_string(),
+            address_offset: off,
+            size: 32,
+            access: Access::ReadWrite,
+            reset_value: 0,
+            fields: vec![],
+            side_effects: None,
+        };
+        let mut p = GenericPeripheral::new(PeripheralDescriptor {
+            peripheral: "GPIO".to_string(),
+            version: "1.0".to_string(),
+            registers: vec![reg("CFG0", 0), reg("CFG1", 4), reg("IN", 0x10)],
+            interrupts: None,
+            timing: None,
+            gpio_mode: Some(labwired_config::GpioModeDescriptor {
+                register: "CFG0".to_string(),
+                bits_per_pin: 4,
+                output: vec![1],
+                input: vec![0],
+            }),
+        });
+        let mode = |p: &GenericPeripheral, pin| p.gpio_routing(pin).map(|r| r.mode);
+        assert_eq!(mode(&p, 3), Some(GpioMode::Input), "reset nibble 0");
+        // Pin 3 is nibble 3 of CFG0; pin 9 is nibble 1 of CFG1.
+        p.write_u32(0, 0x1 << 12).unwrap();
+        p.write_u32(4, 0x2 << 4).unwrap();
+        assert_eq!(mode(&p, 3), Some(GpioMode::Output));
+        assert_eq!(p.read_gpio_is_output(3), Some(true));
+        assert_eq!(mode(&p, 2), Some(GpioMode::Input), "pin 2 untouched");
+        assert_eq!(mode(&p, 9), Some(GpioMode::Af), "function 2");
+        assert_eq!(p.read_gpio_is_output(9), Some(false));
+        assert_eq!(mode(&p, 8), Some(GpioMode::Input));
+        assert_eq!(mode(&p, 32), None, "IN is 32 bits wide");
+        assert_eq!(
+            p.read_gpio_pad_drive(9),
+            Some(crate::logic_capture::PadDrive::HighZ)
+        );
+        assert!(p.set_gpio_input(8, true));
+        assert_eq!(p.read_gpio_pad(8), Some(true), "input pad shows IN");
+    }
+
+    /// A 2-bit field per pin where two values drive (Renesas RZ `PM_m`:
+    /// 01 input, 10 output, 11 output with input, 00 Hi-Z).
+    #[test]
+    fn declarative_gpio_mode_field_takes_several_output_values() {
+        use crate::peripherals::gpio::GpioMode;
+        let reg = |id: &str, off: u64, size: u8| RegisterDescriptor {
+            id: id.to_string(),
+            address_offset: off,
+            size,
+            access: Access::ReadWrite,
+            reset_value: 0,
+            fields: vec![],
+            side_effects: None,
+        };
+        let mut p = GenericPeripheral::new(PeripheralDescriptor {
+            peripheral: "GPIO".to_string(),
+            version: "1.0".to_string(),
+            registers: vec![reg("OUT", 0, 8), reg("PM", 2, 16), reg("IN", 4, 8)],
+            interrupts: None,
+            timing: None,
+            gpio_mode: Some(labwired_config::GpioModeDescriptor {
+                register: "PM".to_string(),
+                bits_per_pin: 2,
+                output: vec![2, 3],
+                input: vec![1],
+            }),
+        });
+        let mode = |p: &GenericPeripheral, pin| p.gpio_routing(pin).map(|r| r.mode);
+        // Pin 0 input, 1 output, 2 output with input, 3 Hi-Z; pin 4 sits
+        // in PM's high byte.
+        p.write_u16(2, 0b10_00_11_10_01).unwrap();
+        assert_eq!(mode(&p, 0), Some(GpioMode::Input));
+        assert_eq!(mode(&p, 1), Some(GpioMode::Output));
+        assert_eq!(mode(&p, 2), Some(GpioMode::Output));
+        assert_eq!(mode(&p, 3), Some(GpioMode::Af), "Hi-Z is not GPIO");
+        assert_eq!(mode(&p, 4), Some(GpioMode::Output));
+        p.write(0, 0b10).unwrap(); // OUT: pin 1 high
+        assert_eq!(p.read_gpio_pad(1), Some(true), "driven pad shows OUT");
+        assert_eq!(p.read_gpio_pad(0), Some(false), "input pad shows IN");
     }
 }

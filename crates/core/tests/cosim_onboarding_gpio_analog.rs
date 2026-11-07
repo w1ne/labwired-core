@@ -89,6 +89,18 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x00,
         "SLAU208Q §12.4 PAIN",
     ),
+    // sunxi Pn_DAT serves both directions; it is the IN register here.
+    (
+        "declarative/sunxi/pio.yaml",
+        0x10,
+        "Linux pinctrl-sunxi.h DATA_REGS_OFFSET (Pn_DAT)",
+    ),
+    // Window based at the port's P_m byte, so PIN_m is +0x800.
+    (
+        "declarative/rzg2l/port.yaml",
+        0x800,
+        "Linux pinctrl-rzg2l.c PIN(off) = 0x0800 + off",
+    ),
     (
         "sam4s_pio",
         0x3C,
@@ -122,10 +134,13 @@ fn input_bit(kind: &str, pin: u8) -> u32 {
 /// Firmware load of the input register at the width its firmware uses. The
 /// MSP430 ports are byte (`mov.b &P1IN`) and halfword (`mov &PAIN`)
 /// registers, and the byte after P1IN is P1OUT, so a word load would read
-/// past the port. Every other map here is word-wide.
+/// past the port. RZ/G2L `PIN_m` is a byte (`readb` in pinctrl-rzg2l.c)
+/// and the next byte is the next port's. Every other map here is word-wide.
 fn load_input(bus: &SystemBus, kind: &str, register: u64) -> u32 {
     match kind {
-        "declarative/msp430/port8.yaml" => bus.read_u8(register).map(u32::from),
+        "declarative/msp430/port8.yaml" | "declarative/rzg2l/port.yaml" => {
+            bus.read_u8(register).map(u32::from)
+        }
         "declarative/msp430/port16.yaml" => bus.read_u16(register).map(u32::from),
         _ => bus.read_u32(register),
     }
@@ -234,16 +249,28 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
     ("mspsim-msp430f2617", "p1", 0x20, "SLAS541 P1IN"),
     ("msp430f2619", "p1", 0x20, "SLAS541 P1IN"),
     ("mspsim-msp430f5437", "pa", 0x200, "SLAS612 PAIN (P1IN)"),
+    (
+        "a20",
+        "pioA",
+        0x01C2_0810,
+        "sun7i-a20.dtsi pinctrl@1c20800 + pinctrl-sunxi.h PA_DAT",
+    ),
+    (
+        "renesas_rz_g2l",
+        "p0",
+        0x1103_0810,
+        "r9a07g044.dtsi pinctrl@11030000 + pinctrl-rzg2l.c PIN(0x10)",
+    ),
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 189;
+const COVERED: usize = 191;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 83;
+const SILICON_REGISTER: usize = 85;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 56;
+const NO_ANALOG_ENDPOINT: usize = 54;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -410,6 +437,12 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
                 .expect("SIUL2 MSCR.IBE");
         }
     }
+    if declarative_path_of(chip, port).is_some_and(|p| p.ends_with("rzg2l/port.yaml")) {
+        // Linux rzg2l_gpio_direction_input writes PM_INPUT (01) into the
+        // pin's two PM bits; the window's PM_m halfword is at +0x110.
+        let pm = (1 << (2 * NTC_PIN)) | (1 << (2 * DIODE_PIN));
+        bus.write_u16(base + 0x110, pm).expect("RZ/G2L PM_m input");
+    }
     if kind.as_deref() == Some("gpio") && profile_of(chip, port) == Some("sam_port") {
         // ASF/Arduino pinMode(INPUT) sets PINCFGn.INEN (bit 1); PINCFG is
         // one byte per pin from +0x40, so pins 0 and 1 share the first word.
@@ -417,6 +450,14 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
         bus.write_u32(base + 0x40, pincfg)
             .expect("SAM PORT PINCFG.INEN");
     }
+}
+
+fn declarative_path_of<'a>(chip: &'a ChipDescriptor, port: &str) -> Option<&'a str> {
+    chip.peripherals
+        .iter()
+        .find(|p| p.id == port && p.r#type.eq_ignore_ascii_case("declarative"))
+        .and_then(|p| p.config.get("path"))
+        .and_then(|v| v.as_str())
 }
 
 fn profile_of<'a>(chip: &'a ChipDescriptor, port: &str) -> Option<&'a str> {

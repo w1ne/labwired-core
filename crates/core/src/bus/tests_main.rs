@@ -404,6 +404,7 @@ fn declarative_descriptor(timing: Option<Vec<TimingDescriptor>>) -> PeripheralDe
         ],
         interrupts: None,
         timing,
+        gpio_mode: None,
     }
 }
 

@@ -766,6 +766,7 @@ impl Rig for Declarative {
                 ],
                 interrupts: None,
                 timing: None,
+                gpio_mode: None,
             },
         ))
     }

@@ -197,6 +197,7 @@ mod tests {
             }],
             interrupts: None,
             timing: None,
+            gpio_mode: None,
         };
         let mut bus = SystemBus::new();
         bus.add_peripheral(
@@ -251,6 +252,7 @@ mod tests {
             }],
             interrupts: None,
             timing: None,
+            gpio_mode: None,
         };
         let mut bus = SystemBus::new();
         bus.add_peripheral(
