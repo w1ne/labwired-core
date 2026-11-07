@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs nineteen of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs twenty of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -170,6 +170,7 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `tim1_pwm_complementary_outputs` | TIM1 remapped by `AFIO_PCFR1.TIM1_RM` = 01: the complementary pair CH1 (PC6) / CH1N (PC3), both active low, with an LED on each; the main loop steps `BDTR.DTG` every 20 ms. The smoke checks the remap, the pad modes and the TIM1 setup left behind (PSC, ATRLR, CH1CVR, CHCTLR1, CCER, CEN, MOE); the example prints nothing. [`check-tim1-complementary.py`](check-tim1-complementary.py) decodes a 265 M-cycle `--watch-gpio` run, committed as [`pwm-capture.json.gz`](evidence/ch32fun-tim1-complementary-smoke/pwm-capture.json.gz) with its output in [`pwm-check.log`](evidence/ch32fun-tim1-complementary-smoke/pwm-check.log) | 2,600 whole 100,010-cycle periods (479.95 Hz), OC1REF high 50,000 cycles; the two pads are never low together, and both dead-time gaps decode to `DTG` stepping +1 through all 256 values (DT 0..1008 cycles over all four encodings) and the 255 → 0 wrap, each held a mean 959,947 cycles (`Delay_Ms(20)`) |
 | `exti_pin_change_isr` | a button on PD3 is pressed, released and pressed again; the EXTI7_0 handler blips PC1. The smoke checks PC1 edges and the EXTI/AFIO/PFIC state left behind; the `--watch-gpio` run is committed as [`pc1-capture.json`](evidence/ch32fun-exti-smoke/pc1-capture.json) | PD3 rises at 200,001 and 600,001 and PC1 blips at 200,007-200,009 and 600,007-600,009: exactly 4 PC1 edges, none at the release (falling edge, FTENR clear) at 400,001 |
 | `spi_max7219` | 16-bit SPI1 frames (PC5 SCK, PC6 MOSI) to a MAX7219 with LOAD on PD0; the panel state the init writes leave ([`max7219-state.json`](evidence/ch32fun-spi-max7219-smoke/max7219-state.json)) | 10/10: intensity 15, scan limit 7, shutdown clear, 12 of 64 LEDs lit as Code-B 7..0 |
+| `adc_dma_opamp` | ADC1 scans AIN7 (PD4), AIN4 (PD3), AIN3 (PD2) and AIN2 (PC4) in continuous mode, and DMA1 channel 1 (circular, half-words) moves every conversion into the example's four-entry buffer, which `main()` prints every 200 ms. Pots on PD3/PD2/PC4 start at 100/50/0 % and move to 25/75/100 % at 30 M cycles. The smoke checks both printed rows twice each, the banner lines and `EXTEN_CTR.OPA_EN`. PD4 is the op-amp output; the OPA is not modelled and nothing is wired there, so that column is not checked. Uses [`ch32v003evt-ch32fun-adc-dma-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-adc-dma-smoke.yaml) | 8/8 over 55 M cycles: ` 1023  511    0`, then `  255  767 1023` after the move, each column on its own channel |
 | `uart_tx_dma` | `Hello World!\r\n` three times on USART1 (PD5), every byte moved by DMA1 channel 4; the transfer-complete handler (PFIC 25) toggles PD6 | 5/5: 42 bytes, PD6 4 edges, CNTR4 = 0, INTFR nibble 4 = 0x5 |
 | `usart_dma_rx_circular` | four command lines (`toggle`, `bogus`, `toggle`, `toggle`, 31 bytes) injected on USART1 RX (PD6); CTLR3.DMAR moves every byte through DMA1 channel 5 into the example's 16-byte circular buffer, so the last two lines wrap past its end. The smoke checks the replies on USART1 TX, three PC7 toggles, CNTR5, CFGR5 and the buffer image left behind | 7/7: `Horay!`, `Invalid cmd: bogus`, `Horay!`, `Horay!`; PC7 ends high, CNTR5 = 1 (one lap + 15 items), rx_buf = `oggle\r\ntoggle\r\nt` |
 | `ws2812bdemo` | a 191-LED WS2812B strip on PC6, fed by SPI1 at 3 MHz from DMA1 channel 3 in circular mode with HT/TC refills (PFIC 24). The strip decodes PC6's pulse widths; [`check-ws2812.py`](check-ws2812.py) recomputes every LED from the demo's own colour tables and replays the driver's buffer protocol ([`check-ws2812.log`](evidence/ch32fun-ws2812-smoke/colour-check/check-ws2812.log)) | 3/3 and all 190 LEDs the driver sends match frame 9. The driver clocks out 190 of `NR_LEDS` 191: the HT refill that writes LED 190 is the one that clears CIRC, so that half is never sent. [CH32V003F4P6 status and sourcing](evidence/ch32fun-ws2812-smoke/component-status.md) |
@@ -201,6 +202,14 @@ This profile adds these to the PFIC profile:
   ([`evidence/ch32fun-adc-polled-smoke/negative-control/`](evidence/ch32fun-adc-polled-smoke/negative-control/))
   puts the same image on the 12-bit STM32F1 ADC: it boots, calibrates and
   prints `2047`, `1023`, `4095`, so every code check fails.
+  With `CTLR1.SCAN` the regular group is SQ1..SQ(L) from RSQR3/RSQR2/RSQR1
+  (L = `RSQR1[23:20]` + 1), with EOC and EOCIE at the end of the group.
+  `CTLR2.DMA` requests DMA1 channel 1 after every conversion, and CONT
+  restarts the group without clearing EOC. `adc_dma_opamp` uses all three.
+- **EXTEN** (`0x40023800`): `EXTEN_CTR`/`EXTEN_KEYR` as plain storage, a
+  declarative block ([`exten.yaml`](../../configs/peripherals/ch32v003/exten.yaml)),
+  so `adc_dma_opamp`'s `OPA_EN` store lands and reads back. Nothing else
+  happens: the op-amp, the PLL delay, LOCKUP and the trims are not modelled.
 - **I2C1** (`0x40005400`, PC1 SDA, PC2 SCL): the engine's STM32F1-shaped
   I2C master, which the CH32V003 matches register for register. The
   `i2c_oled` smoke uses the system
@@ -405,10 +414,13 @@ Read these results correctly:
   `i2c_oled` run stops in mode 1, about 2.2 s in; modes 2 to 8 (lines,
   circles, image, text) take another 14 s of simulated time and are not
   checked.
-- On ADC1: sample time (`SAMPTR`) does not change the conversion time, and
-  the injected group, scan sequences (only RSQR3's first channel converts),
-  external triggers, the analog watchdog, DMA, the internal V_REFINT/V_CAL
-  channels and calibration offsets are not modeled. Codes are ideal (no
+- On ADC1: sample time (`SAMPTR`) does not change the conversion time
+  (every conversion takes 14 HCLK cycles, faster than silicon), and the
+  injected group, discontinuous mode, external triggers, the analog
+  watchdog, `CTLR2.ALIGN`, the internal V_REFINT/V_CAL channels and
+  calibration offsets are not modeled.
+- The OPA is not modeled: `EXTEN_CTR.OPA_EN` is stored, but no op-amp output
+  reaches PD4. Codes are ideal (no
   offset, gain or noise error) against a 3.3 V reference.
 - On TIM1: not modeled: the break input (BKIN) and
   `BDTR.AOE`/`LOCK`, center-aligned and down counting, the repetition

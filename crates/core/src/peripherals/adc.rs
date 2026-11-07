@@ -99,6 +99,12 @@ const F1_CR2_ADON: u32 = 1 << 0;
 const F1_CR2_CONT: u32 = 1 << 1;
 const F1_CR2_CAL: u32 = 1 << 2;
 const F1_CR2_RSTCAL: u32 = 1 << 3;
+/// ADC_CR2.DMA (bit 8): request a DMA transfer after each regular
+/// conversion (RM0008 §11.12.3; ch32fun ch32v003hw.h `ADC_DMA`).
+const F1_CR2_DMA: u32 = 1 << 8;
+/// ADC_CR1.SCAN (bit 8): convert the whole regular sequence, SQ1..SQ(L)
+/// (RM0008 §11.3.8; ch32fun ch32v003hw.h `ADC_SCAN`).
+const F1_CR1_SCAN: u32 = 1 << 8;
 /// Software trigger selected when EXTSEL[2:0] == 0b111 (bits 19:17).
 const F1_CR2_EXTSEL: u32 = 0b111 << 17;
 const F1_CR2_EXTTRIG: u32 = 1 << 20;
@@ -141,8 +147,12 @@ const F1_RSTCAL_CYCLES: u32 = 2;
 /// silicon-accurate duration.
 const F1_CAL_CYCLES: u32 = 14;
 
-/// Scheduler / walk event tokens for the F1 side-band (conversion uses 0).
-const F1_EVT_CONVERT: u32 = 0;
+/// Scheduler / walk event tokens for the F1 side-band. A conversion's token
+/// is `F1_EVT_CONVERT | (epoch & F1_EVT_EPOCH_MASK)`, so an event armed for
+/// a conversion that ADON-off or a fresh software start has since replaced
+/// is recognised as stale and ignored.
+const F1_EVT_CONVERT: u32 = 0x1_0000;
+const F1_EVT_EPOCH_MASK: u32 = 0xFFFF;
 const F1_EVT_RSTCAL: u32 = 1;
 const F1_EVT_CAL: u32 = 2;
 
@@ -224,9 +234,16 @@ impl FromStr for AdcRegisterLayout {
 pub struct F1AdcRegs {
     cr1: u32, // 0x04
     cr2: u32, // 0x08
-    /// ADC_SQR3 @ 0x34 (RM0008 §11.12.14). Only SQ1[4:0] — the first (and, on
-    /// this single-shot model, only) regular-sequence channel — is consumed,
-    /// by `advance_conversion`. Reset value 0 selects channel 0, which is what
+    /// ADC_SMPR1/SMPR2 @ 0x0C/0x10. Stored and read back; the sample time
+    /// does not change the modelled conversion time.
+    smpr1: u32,
+    smpr2: u32,
+    /// ADC_SQR1 @ 0x2C: SQ13..SQ16 and the sequence length L[23:20].
+    sqr1: u32,
+    /// ADC_SQR2 @ 0x30: SQ7..SQ12.
+    sqr2: u32,
+    /// ADC_SQR3 @ 0x34 (RM0008 §11.12.14): SQ1..SQ6. Without CR1.SCAN only
+    /// SQ1[4:0] is converted. Reset value 0 selects channel 0, which is what
     /// firmware that never programs the sequence converts on silicon.
     sqr3: u32,
 }
@@ -422,6 +439,14 @@ pub struct Adc {
     /// serialized.
     #[serde(skip)]
     ch32v003: bool,
+    /// Position in the regular sequence of the conversion in flight (0 =
+    /// SQ1). Only moves past 0 with CR1.SCAN set.
+    #[serde(skip)]
+    seq_index: usize,
+    /// Bumped whenever an in-flight conversion is abandoned (ADON cleared,
+    /// or a software start replacing it), so its scheduler event goes stale.
+    #[serde(skip)]
+    conv_epoch: u32,
 }
 
 impl Adc {
@@ -491,6 +516,8 @@ impl Adc {
             f1_cal_live: false,
             ambient_temp_c: DEFAULT_AMBIENT_TEMPERATURE_C,
             ch32v003: layout == AdcRegisterLayout::Ch32v003,
+            seq_index: 0,
+            conv_epoch: 0,
         }
     }
 
@@ -557,12 +584,20 @@ impl Adc {
         self.clock = None;
     }
 
-    /// One cycle of the F1 conversion countdown. Returns whether an EOC IRQ
-    /// should be raised this cycle. Shared verbatim by the legacy walk `tick()`
-    /// and the scheduler `on_event`, so the two routes are identical by
-    /// construction.
-    fn advance_conversion(&mut self) -> bool {
+    /// One cycle of the F1 conversion countdown. Returns `(irq, dma)`: whether
+    /// an EOC IRQ should be raised and whether a DMA request goes out this
+    /// cycle. Shared verbatim by the legacy walk `tick()` and the scheduler
+    /// `on_event`, so the two routes are identical by construction.
+    ///
+    /// Each conversion leaves its code in DR and, with CR2.DMA set, requests
+    /// a DMA transfer (RM0008 §11.12.3: "DMA requests are generated after
+    /// each regular conversion"). With CR1.SCAN set the conversions walk the
+    /// regular sequence SQ1..SQ(L) and EOC (with its EOCIE interrupt) is set
+    /// once the group is done; without SCAN the group is SQ1 alone. CONT
+    /// restarts the group from SQ1.
+    fn advance_conversion(&mut self) -> (bool, bool) {
         let mut irq = false;
+        let mut dma = false;
         if self.converting {
             if self.cycles_remaining > 0 {
                 self.cycles_remaining -= 1;
@@ -571,13 +606,14 @@ impl Adc {
                 let (cr1, cr2) = self.f1_ctrl();
 
                 // Injected channel value if available; else increment DR for
-                // visual feedback. The converted channel is SQR3 SQ1[4:0]
-                // (RM0008 §11.12.14) — NOT a CR2 bit field: the earlier CR2
-                // low-bits fallback always read ≥ 1 for any firmware that
-                // holds ADON set, so a seeded channel 0 was never returned.
-                // SQR3 resets to 0, so firmware that never programs the
-                // sequence converts channel 0, exactly like silicon.
-                let ch = self.f1_regular_channel();
+                // visual feedback. The converted channel comes from the
+                // regular sequence registers (RM0008 §11.12.12..14) — NOT a
+                // CR2 bit field: the earlier CR2 low-bits fallback always
+                // read >= 1 for any firmware that holds ADON set, so a seeded
+                // channel 0 was never returned. SQR3 resets to 0, so firmware
+                // that never programs the sequence converts channel 0,
+                // exactly like silicon.
+                let ch = self.f1_sequence_channel(self.seq_index);
                 if ch < self.channel_inputs.len() && self.channel_inputs[ch] != 0xFFFF {
                     self.dr = self.channel_inputs[ch] as u32;
                 } else if let Some(mv) = self.f1_internal_channel_mv(ch, cr2) {
@@ -585,19 +621,31 @@ impl Adc {
                 } else {
                     self.dr = (self.dr + 1) & self.full_scale();
                 }
+                dma = (cr2 & F1_CR2_DMA) != 0;
 
-                self.sr |= 1 << 1; // EOC
+                // The hardware starts the next conversion (the next scan slot,
+                // or SQ1 again under CONT) without touching EOC: only software
+                // clears it (RM0008 §11.12.1).
+                if self.seq_index + 1 < self.f1_sequence_len() {
+                    self.seq_index += 1;
+                    self.converting = true;
+                    self.cycles_remaining = self.conversion_time;
+                } else {
+                    self.seq_index = 0;
+                    self.sr |= 1 << 1; // EOC
 
-                if (cr1 & (1 << 5)) != 0 {
-                    irq = true; // EOCIE
-                }
-                // Continuous mode (CONT + ADON).
-                if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
-                    self.start_conversion();
+                    if (cr1 & (1 << 5)) != 0 {
+                        irq = true; // EOCIE
+                    }
+                    // Continuous mode (CONT + ADON).
+                    if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
+                        self.converting = true;
+                        self.cycles_remaining = self.conversion_time;
+                    }
                 }
             }
         }
-        irq
+        (irq, dma)
     }
 
     /// Inject a millivolt reading for a specific ADC channel. The next
@@ -668,13 +716,49 @@ impl Adc {
         }
     }
 
-    /// Regular channel being converted: SQR3 SQ1[4:0] on the F1 layout; 0 on
-    /// the other families (their engines select from their own SQR1/PCSEL).
-    fn f1_regular_channel(&self) -> usize {
+    /// Channel in regular-sequence slot `index` (0 = SQ1) on the F1 layout:
+    /// SQ1..SQ6 in SQR3, SQ7..SQ12 in SQR2, SQ13..SQ16 in SQR1, five bits
+    /// each. 0 on the other families (their engines select from their own
+    /// SQR1/PCSEL).
+    fn f1_sequence_channel(&self, index: usize) -> usize {
         match &self.regs {
-            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => (r.sqr3 & 0x1F) as usize,
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
+                let (reg, slot) = match index {
+                    0..=5 => (r.sqr3, index),
+                    6..=11 => (r.sqr2, index - 6),
+                    _ => (r.sqr1, index - 12),
+                };
+                ((reg >> (5 * slot)) & 0x1F) as usize
+            }
             AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => 0,
         }
+    }
+
+    /// Conversions in one regular group: SQR1.L + 1 with CR1.SCAN set, else
+    /// SQ1 alone.
+    fn f1_sequence_len(&self) -> usize {
+        match &self.regs {
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) if r.cr1 & F1_CR1_SCAN != 0 => {
+                ((r.sqr1 >> 20) & 0xF) as usize + 1
+            }
+            _ => 1,
+        }
+    }
+
+    /// Scheduler token of the conversion in flight.
+    fn convert_token(&self) -> u32 {
+        F1_EVT_CONVERT | (self.conv_epoch & F1_EVT_EPOCH_MASK)
+    }
+
+    /// A software start: the regular group begins again at SQ1, and any
+    /// conversion still in flight is abandoned with its scheduler event.
+    fn start_regular_group(&mut self) {
+        if self.converting {
+            self.conv_epoch = self.conv_epoch.wrapping_add(1);
+            self.chain_live = false;
+        }
+        self.seq_index = 0;
+        self.start_conversion();
     }
 
     fn read_reg_l4(r: &L4AdcRegs, dr: u32, reg: u64) -> u32 {
@@ -1096,6 +1180,10 @@ impl Adc {
     /// ADON falls or the block is reset — pending scheduler events become no-ops
     /// once the remaining counters are cleared.
     fn cancel_f1_pending(&mut self) {
+        if self.converting {
+            self.conv_epoch = self.conv_epoch.wrapping_add(1);
+        }
+        self.seq_index = 0;
         self.converting = false;
         self.cycles_remaining = 0;
         self.chain_live = false;
@@ -1260,6 +1348,10 @@ impl Peripheral for Adc {
                 0x00..=0x03 => self.sr,
                 0x04..=0x07 => r.cr1,
                 0x08..=0x0B => r.cr2,
+                0x0C..=0x0F => r.smpr1,
+                0x10..=0x13 => r.smpr2,
+                0x2C..=0x2F => r.sqr1,
+                0x30..=0x33 => r.sqr2,
                 0x34..=0x37 => r.sqr3,
                 0x4C..=0x4F => self.dr,
                 _ => {
@@ -1304,12 +1396,19 @@ impl Peripheral for Adc {
                         self.apply_f4_cr2(old_cr2, merged)
                     };
                     if trigger {
-                        self.start_conversion();
+                        self.start_regular_group();
                     }
                 }
-                0x34..=0x37 => match &mut self.regs {
+                0x0C..=0x13 | 0x2C..=0x37 => match &mut self.regs {
                     AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
-                        r.sqr3 = (r.sqr3 & !mask) | val_shifted;
+                        let reg = match offset & !3 {
+                            0x0C => &mut r.smpr1,
+                            0x10 => &mut r.smpr2,
+                            0x2C => &mut r.sqr1,
+                            0x30 => &mut r.sqr2,
+                            _ => &mut r.sqr3,
+                        };
+                        *reg = (*reg & !mask) | val_shifted;
                     }
                     _ => {}
                 },
@@ -1368,7 +1467,7 @@ impl Peripheral for Adc {
             return PeripheralTickResult::default();
         }
         self.advance_f1_calibration();
-        let irq = self.advance_conversion();
+        let (irq, dma) = self.advance_conversion();
         // Tick-cost normalization (mirrors SysTick B1): the legacy model charged
         // `cycles: 1` per converting tick into `total_cycles` — a sim artifact (a
         // real ADC conversion runs on the ADC clock and consumes zero *core*
@@ -1379,6 +1478,7 @@ impl Peripheral for Adc {
         PeripheralTickResult {
             irq,
             cycles: 0,
+            dma_signals: dma.then(|| vec![crate::DMA_SIGNAL_RX]),
             ..Default::default()
         }
     }
@@ -1409,9 +1509,11 @@ impl Peripheral for Adc {
             return Vec::new();
         }
         let mut out = Vec::new();
+        // One event per conversion, at the cycle the walk's countdown would
+        // finish it (`cycles_remaining` decrements, then the completing tick).
         if self.converting && !self.chain_live {
             self.chain_live = true;
-            out.push((0u64, F1_EVT_CONVERT));
+            out.push((self.cycles_remaining as u64, self.convert_token()));
         }
         if self.f1_rstcal_remaining.is_some() && !self.f1_rstcal_live {
             self.f1_rstcal_live = true;
@@ -1452,16 +1554,26 @@ impl Peripheral for Adc {
                     ..Default::default()
                 }
             }
-            _ => {
-                // Conversion countdown (token 0) — same engine as the walk.
-                let irq = self.advance_conversion();
+            token if token == self.convert_token() && self.converting => {
+                // The conversion is due: finish it with the walk's engine. A
+                // follow-on conversion (next scan slot, or CONT) re-arms the
+                // same token for its own completion cycle.
+                self.cycles_remaining = 0;
+                let (irq, dma) = self.advance_conversion();
                 self.chain_live = self.converting;
                 crate::sched::EventResult {
                     raise_own_irq: irq,
-                    reschedule_delay: self.converting.then_some(1),
+                    dma_signals: if dma {
+                        vec![crate::DMA_SIGNAL_RX]
+                    } else {
+                        Vec::new()
+                    },
+                    reschedule_delay: self.converting.then_some(self.cycles_remaining as u64 + 1),
                     ..Default::default()
                 }
             }
+            // A conversion that has since been abandoned.
+            _ => crate::sched::EventResult::default(),
         }
     }
 
@@ -1593,6 +1705,61 @@ mod tests {
         }
         assert_ne!(adc.read_u32(0x00).unwrap() & 2, 0, "EOC");
         assert_eq!(adc.read_u32(0x4C).unwrap(), 511);
+    }
+
+    /// CH32V003 ch32fun adc_dma_opamp: RSQR1.L = 3 and RSQR3 = 7, 4, 3, 2
+    /// with CTLR1.SCAN, CONT and DMA. Each conversion leaves its own channel
+    /// in RDATAR and requests DMA; STATR.EOC (and EOCIE) comes once the
+    /// fourth conversion ends; CONT starts the group again at AIN7.
+    #[test]
+    fn ch32v003_scan_walks_the_regular_sequence_and_requests_dma_per_conversion() {
+        let mut adc = Adc::new_with_layout("ch32v003".parse().unwrap());
+        for (ch, mv) in [(7u8, 3300u16), (4, 1650), (3, 825), (2, 0)] {
+            adc.set_channel_input(ch, mv);
+        }
+        adc.write_u32(0x2C, 3 << 20).unwrap();
+        adc.write_u32(0x34, 7 | (4 << 5) | (3 << 10) | (2 << 15))
+            .unwrap();
+        assert_eq!(adc.read_u32(0x2C).unwrap(), 3 << 20, "RSQR1 reads back");
+        adc.write_u32(0x10, 0o7777_7777).unwrap();
+        assert_eq!(
+            adc.read_u32(0x10).unwrap(),
+            0o7777_7777,
+            "SAMPTR2 reads back"
+        );
+        adc.write_u32(0x04, F1_CR1_SCAN | (1 << 5)).unwrap();
+        let cr2 = F1_CR2_ADON | F1_CR2_EXTSEL | F1_CR2_CONT | F1_CR2_DMA;
+        adc.write_u32(0x08, cr2).unwrap();
+        adc.write_u32(0x08, cr2 | F1_CR2_SWSTART).unwrap();
+
+        let mut seen = Vec::new();
+        let mut irqs = 0;
+        for _ in 0..(8 * 15) {
+            let r = adc.tick();
+            irqs += r.irq as u32;
+            if r.dma_signals == Some(vec![crate::DMA_SIGNAL_RX]) {
+                seen.push(adc.read_u32(0x4C).unwrap());
+                assert_eq!(
+                    adc.read_u32(0x00).unwrap() & 2 != 0,
+                    seen.len() % 4 == 0,
+                    "EOC only at the end of the group"
+                );
+                // Software clears EOC; the CONT restart does not.
+                adc.write_u32(0x00, 0).unwrap();
+            }
+        }
+        assert_eq!(seen, [1023, 511, 255, 0, 1023, 511, 255, 0]);
+        assert_eq!(irqs, 2, "EOCIE once per group");
+
+        // Without SCAN only RSQR3.SQ1 converts, even with L = 3.
+        adc.write_u32(0x04, 0).unwrap();
+        let mut codes = Vec::new();
+        for _ in 0..(3 * 15) {
+            if adc.tick().dma_signals.is_some() {
+                codes.push(adc.read_u32(0x4C).unwrap());
+            }
+        }
+        assert!(codes.iter().all(|&c| c == 1023), "{codes:?}");
     }
 
     /// `clear_channel_input` is the only road back to "no injection": the
@@ -2145,6 +2312,17 @@ mod scheduler_diff {
         adc
     }
 
+    /// The snapshot minus the conversion countdown. The walk decrements
+    /// `cycles_remaining` every cycle; the event path arms one event at the
+    /// completion cycle and never counts down. Firmware cannot read the
+    /// countdown, only its outcome (DR, EOC, the IRQ and DMA cycles).
+    fn observable(mut snap: serde_json::Value) -> serde_json::Value {
+        if let Some(obj) = snap.as_object_mut() {
+            obj.remove("cycles_remaining");
+        }
+        snap
+    }
+
     /// Drive the SAME op script against (a) the per-cycle walk and (b) the event
     /// path; assert the register snapshot AND the EOC-IRQ pend cycles are
     /// identical every cycle. The conversion countdown, DR latch, EOC flag and
@@ -2158,6 +2336,8 @@ mod scheduler_diff {
         let bus = &mut crate::bus::SystemBus::new();
         let mut walk_pends = Vec::new();
         let mut sched_pends = Vec::new();
+        let mut walk_dmas = Vec::new();
+        let mut sched_dmas = Vec::new();
 
         for c in 1..=cycles {
             for (sc, Op::Write(off, val)) in script.iter().copied() {
@@ -2170,8 +2350,12 @@ mod scheduler_diff {
                 }
             }
 
-            if walk.tick().irq {
+            let walk_res = walk.tick();
+            if walk_res.irq {
                 walk_pends.push(c);
+            }
+            if walk_res.dma_signals.is_some() {
+                walk_dmas.push(c);
             }
 
             clock.publish(c);
@@ -2184,15 +2368,22 @@ mod scheduler_diff {
                 if res.raise_own_irq {
                     sched_pends.push(c);
                 }
+                if !res.dma_signals.is_empty() {
+                    sched_dmas.push(c);
+                }
                 if let Some(delay) = res.reschedule_delay {
                     events.push((c + delay, token));
                 }
             }
 
             assert_eq!(
-                walk.snapshot(),
-                sched.snapshot(),
+                observable(walk.snapshot()),
+                observable(sched.snapshot()),
                 "register snapshot diverged at cycle {c}"
+            );
+            assert_eq!(
+                walk_dmas, sched_dmas,
+                "DMA request cycles diverged at cycle {c}"
             );
         }
         assert_eq!(walk_pends, sched_pends, "EOC-IRQ pend cycles diverged");
@@ -2228,6 +2419,24 @@ mod scheduler_diff {
         ];
         // 2 + 15 + 15 + 15 ≈ 47 cycles covers three back-to-back conversions.
         assert_walk_identical(&script, 50);
+    }
+
+    #[test]
+    fn f1_scan_dma_continuous_walk_identity() {
+        // ch32fun adc_dma_opamp's shape: SCAN over four channels, CONT, DMA.
+        // Every conversion requests DMA; EOC and its IRQ come once per group.
+        let script = [
+            (1u64, Op::Write(0x04, 1 << 5)),    // CR1.EOCIE
+            (1, Op::Write(0x05, 1)),            // CR1.SCAN (bit 8)
+            (1, Op::Write(0x2E, 3 << 4)),       // SQR1.L = 3 (four conversions)
+            (1, Op::Write(0x34, 3)),            // SQ1 = 3
+            (1, Op::Write(0x08, 1 | (1 << 1))), // CR2.ADON | CONT
+            (1, Op::Write(0x09, 1)),            // CR2.DMA (bit 8)
+            (1, Op::Write(0x0A, 0x0E)),         // EXTSEL = 111
+            (2, Op::Write(0x0A, 0x4E)),         // EXTSEL | SWSTART (bit 22)
+            (40, Op::Write(0x0A, 0x4E)),        // restart mid-group (stale event)
+        ];
+        assert_walk_identical(&script, 160);
     }
 
     // ── STM32H7 ADC (RM0468) ────────────────────────────────────────────────

@@ -1,0 +1,10 @@
+[2m2026-11-07T15:09:29.182704Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+[2m2026-11-07T15:09:29.244216Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+[2m2026-11-07T15:09:29.247957Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 100 applied
+[2m2026-11-07T15:09:29.247982Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 50 applied
+[2m2026-11-07T15:09:29.247987Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 0 applied
+[2m2026-11-07T15:09:47.616571Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 25 applied
+[2m2026-11-07T15:09:47.616627Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 75 applied
+[2m2026-11-07T15:09:47.616642Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 100 applied
+PASS  8/8 checks · ch32fun-adc-dma-opamp-smoke · 55000000 steps · 34.10s

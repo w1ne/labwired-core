@@ -1,0 +1,57 @@
+# CH32V003 EXTEND block at 0x40023800 (ch32fun ch32v003hw.h EXTEN_TypeDef;
+# field list from ch32-rs/ch32-data data/registers/extend_v0.yaml). Storage
+# only: EXTEN_CTR reads back what was written and changes nothing else. The
+# OPA it enables (OPA_EN bit 16, NSEL bit 17, PSEL bit 18) is not modelled,
+# so PD4 never carries an op-amp output, and PLL_CFG, LOCKUP_EN/RESET,
+# LDO_TRIM and FLASH_CLK_TRIM have no effect. The reset value is taken as 0;
+# neither source states it.
+peripheral: EXTEN
+version: 0.1.0
+registers:
+- id: EXTEN_CTR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PLL_CFG
+    bit_range: [3, 0]
+    description: PLL clock delay time
+  - name: LOCKUP_EN
+    bit_range: [6, 6]
+    description: LOCKUP enable
+  - name: LOCKUP_RESET
+    bit_range: [7, 7]
+    description: LOCKUP reset
+  - name: LDO_TRIM
+    bit_range: [10, 10]
+    description: LDO trim
+  - name: FLASH_CLK_TRIM
+    bit_range: [13, 11]
+    description: Flash clock trim
+  - name: WR_EN
+    bit_range: [14, 14]
+    description: Control register write enable
+  - name: WR_LOCK
+    bit_range: [15, 15]
+    description: Control register write lock
+  - name: OPA_EN
+    bit_range: [16, 16]
+    description: OPA enable (not modelled)
+  - name: OPA_NSEL
+    bit_range: [17, 17]
+    description: "OPA negative input: 0 = PA1, 1 = PD0"
+  - name: OPA_PSEL
+    bit_range: [18, 18]
+    description: "OPA positive input: 0 = PA2, 1 = PD7"
+  side_effects: null
+- id: EXTEN_KEYR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY
+    bit_range: [31, 0]
+    description: Write key value (stored, not checked)
+  side_effects: null

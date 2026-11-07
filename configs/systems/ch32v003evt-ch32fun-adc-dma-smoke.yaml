@@ -1,0 +1,34 @@
+# WCH CH32V003 evaluation board running ch32fun's adc_dma_opamp, unmodified,
+# with three potentiometer wipers between GND and the 3.3 V rail: on PD3
+# (AIN4), PD2 (AIN3) and PC4 (AIN2), and a WCH-LinkE on SWIO for the
+# debug-printf console. The pots are the test connections the example's
+# README describes ("Grounding any of those pins will force the result to 0
+# while tying the pin to VDD will force it to 1023"), not factory-installed
+# parts on the board.
+#
+# Nothing is wired to PD4 (AIN7). The example enables the op-amp, whose
+# output is PD4, but the engine does not model the OPA, so PD4's column
+# carries no claim and the smoke does not assert it.
+name: ch32v003evt-ch32fun-adc-dma-smoke
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+external_devices:
+  - id: pot_pd3
+    type: potentiometer
+    connection: adc1
+    config:
+      channel: 4
+  - id: pot_pd2
+    type: potentiometer
+    connection: adc1
+    config:
+      channel: 3
+  - id: pot_pc4
+    type: potentiometer
+    connection: adc1
+    config:
+      channel: 2
+board_io:
+  - { id: external_led_pc1, kind: led, peripheral: gpioc, pin: 1, signal: output, active_high: true }
+  - { id: pot_pd3, kind: adc_input, peripheral: adc1, pin: 4, signal: input, active_high: true, device_type: potentiometer }
+  - { id: pot_pd2, kind: adc_input, peripheral: adc1, pin: 3, signal: input, active_high: true, device_type: potentiometer }
+  - { id: pot_pc4, kind: adc_input, peripheral: adc1, pin: 2, signal: input, active_high: true, device_type: potentiometer }

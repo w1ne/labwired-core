@@ -20,11 +20,17 @@
 # - minichlink DefaultPollTerminal (the probe side of the debug printf)
 # - CH32V003 reference manual, RCC/GPIO/STK/PFIC/ADC chapters
 #
-# ADC1 models software-started single conversions of the regular channel in
-# RSQR3, the RSTCAL/CAL handshakes, EOC, and 10-bit codes against a 3.3 V
-# reference. Not modeled on it: sample time (SAMPTR), the injected group,
-# scan/discontinuous mode, external triggers, the analog watchdog, DMA, the
-# internal V_REFINT/V_CAL channels (IN8/IN9) and calibration offsets.
+# ADC1 models software-started conversions of the regular group, the
+# RSTCAL/CAL handshakes, EOC, and 10-bit codes against a 3.3 V reference.
+# Without CTLR1.SCAN the group is RSQR3.SQ1 alone; with SCAN it is SQ1..SQ(L)
+# from RSQR3/RSQR2/RSQR1 (L = RSQR1[23:20] + 1), EOC and its EOCIE interrupt
+# coming once the group ends. CONT restarts the group without clearing EOC.
+# With CTLR2.DMA each conversion requests DMA1 channel 1 (ch32fun's
+# adc_dma_opamp). SAMPTR1/SAMPTR2 are stored but do not set the conversion
+# time: every conversion takes 14 HCLK cycles, faster than silicon. Not
+# modeled on it: the injected group, discontinuous mode, external triggers,
+# the analog watchdog, data alignment (CTLR2.ALIGN), the internal V_REFINT/
+# V_CAL channels (IN8/IN9) and calibration offsets.
 #
 # I2C1 reuses the engine's STM32F1-shaped master event/register subset (same
 # CTLR1/CTLR2/OADDR1/DATAR/STAR1/STAR2/CKCFGR offsets and SB/ADDR/TXE/BTF/
@@ -101,14 +107,15 @@
 # it. CFGR/CNTR/PADDR/MADDR stay writable while EN=1 (the G0 lock does not
 # apply), and a CNTR store on an enabled channel re-arms it from PADDR/
 # MADDR with that count as the HT/TC/CIRC reference, as ch32fun's WS2812
-# driver relies on. Routed requests, from the fixed CH32V003 mapping: SPI1
-# TX on channel 3 and USART1 TX (CTLR3.DMAT) on channel 4. Not modeled on
-# DMA1: the other request lines (ADC1 ch1, SPI1 RX ch2, USART1 RX ch5,
-# I2C1, TIM1/TIM2), bus arbitration timing against the CPU (an item takes
+# driver relies on. Routed requests, from the fixed CH32V003 mapping: ADC1
+# (CTLR2.DMA) on channel 1, SPI1 TX on channel 3, USART1 TX (CTLR3.DMAT) on
+# channel 4 and USART1 RX (CTLR3.DMAR) on channel 5. Not modeled on DMA1:
+# the other request lines (SPI1 RX ch2, I2C1, TIM1/TIM2), bus arbitration timing against the CPU (an item takes
 # no CPU cycles), and RCC_AHBPCENR's SRAM/flash enables.
 #
 # Not modeled: debug-printf input from the host, a detached probe, the rest
-# of the RISC-V debug module, OPA, the
+# of the RISC-V debug module, the OPA (EXTEN_CTR.OPA_EN is stored by the
+# `exten` register block, but no op-amp output reaches PD4), the
 # window watchdog (WWDG), the RCC_RSTSCKR reset flags (a watchdog reset is
 # not recorded there), the IWDG hardware-watchdog option byte and its
 # PVU/RVU busy flags, sleep/standby, the HSE, the option bytes, and
@@ -241,6 +248,16 @@ peripherals:
         spi1_tx: 3
         usart1_tx: 4
         usart1_rx: 5
+        adc1_rx: 1
+
+  # EXTEND at 0x40023800 (AHB, no RCC gate): EXTEN_CTR/EXTEN_KEYR as plain
+  # storage. ch32fun's adc_dma_opamp sets EXTEN_CTR.OPA_EN here.
+  - id: exten
+    type: declarative
+    base_address: 0x40023800
+    size: 8B
+    config:
+      path: "../peripherals/ch32v003/exten.yaml"
 
   - id: usart1
     type: uart

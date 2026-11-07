@@ -1818,7 +1818,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 53c69b484ac87400ec86127de6b1f582057073bbdb51f05695ee35d77722396e
+    drift_ack_digest: a31a430bba1d3efd05d226557ec26f1657e9b260945a7392e9623e039da20d42
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2486,6 +2486,17 @@ boards:
     #   tests pass). rcc.rs adds TIM1EN to the WCH-only APB2PCENR mask;
     #   attach.rs adds TIM1 rows to the CH32V003-only pad table. The STM32
     #   F1 pad table is unchanged. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (CH32V003 ADC1 scan + DMA, ch32fun adc_dma_opamp): adc.rs,
+    #   shared F1/F4 register block. SMPR1/SMPR2/SQR1/SQR2 are now stored and
+    #   read back (were read-as-zero). With CR1.SCAN the regular group is
+    #   SQ1..SQ(L) and EOC/EOCIE come at the group end (was SQ1 only). CR2.DMA
+    #   raises an `<adc>_rx` request per conversion; only the CH32V003 yaml
+    #   routes it, so no STM32 DMA channel sees it. A CONT restart no longer
+    #   clears EOC (RM0008: software clears it). The L4/H7/U5 layouts are
+    #   untouched, and single-shot SWSTART timing is identical; the scheduler
+    #   path arms one event per conversion instead of one per cycle (walk diff
+    #   tests pin both). adc lib tests pass in both modes. ACK, NOT A SILICON
+    #   CAPTURE.
     drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -4108,7 +4119,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: b23bda62742fed59cf6674d6bfa5885c6ad72e372b8b796e13fdafd45c532d72
+    drift_ack_digest: 63364376766e2da472828144dca4cf80a534208fd5291940d17e04b67c54d4ca
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4764,6 +4775,17 @@ boards:
     #   tests pass). rcc.rs adds TIM1EN to the WCH-only APB2PCENR mask;
     #   attach.rs adds TIM1 rows to the CH32V003-only pad table. The STM32
     #   F1 pad table is unchanged. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (CH32V003 ADC1 scan + DMA, ch32fun adc_dma_opamp): adc.rs,
+    #   shared F1/F4 register block. SMPR1/SMPR2/SQR1/SQR2 are now stored and
+    #   read back (were read-as-zero). With CR1.SCAN the regular group is
+    #   SQ1..SQ(L) and EOC/EOCIE come at the group end (was SQ1 only). CR2.DMA
+    #   raises an `<adc>_rx` request per conversion; only the CH32V003 yaml
+    #   routes it, so no STM32 DMA channel sees it. A CONT restart no longer
+    #   clears EOC (RM0008: software clears it). The L4/H7/U5 layouts are
+    #   untouched, and single-shot SWSTART timing is identical; the scheduler
+    #   path arms one event per conversion instead of one per cycle (walk diff
+    #   tests pin both). adc lib tests pass in both modes. ACK, NOT A SILICON
+    #   CAPTURE.
     drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -5293,7 +5315,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 7f151add3c973d4be94bd620218a9f8c6a7227d864b2344a9dd4e80c50233213
+    drift_ack_digest: f63e4b301ff53ac2dd0d264474c7478af15efacb1cc0853971a53e2840de523f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5882,6 +5904,17 @@ boards:
     #   tests pass). rcc.rs adds TIM1EN to the WCH-only APB2PCENR mask;
     #   attach.rs adds TIM1 rows to the CH32V003-only pad table. The STM32
     #   F1 pad table is unchanged. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (CH32V003 ADC1 scan + DMA, ch32fun adc_dma_opamp): adc.rs,
+    #   shared F1/F4 register block. SMPR1/SMPR2/SQR1/SQR2 are now stored and
+    #   read back (were read-as-zero). With CR1.SCAN the regular group is
+    #   SQ1..SQ(L) and EOC/EOCIE come at the group end (was SQ1 only). CR2.DMA
+    #   raises an `<adc>_rx` request per conversion; only the CH32V003 yaml
+    #   routes it, so no STM32 DMA channel sees it. A CONT restart no longer
+    #   clears EOC (RM0008: software clears it). The L4/H7/U5 layouts are
+    #   untouched, and single-shot SWSTART timing is identical; the scheduler
+    #   path arms one event per conversion instead of one per cycle (walk diff
+    #   tests pin both). adc lib tests pass in both modes. ACK, NOT A SILICON
+    #   CAPTURE.
     drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -6476,7 +6509,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 66442a3d1326e164a5b768003db9456fffa68f54f2117813707849a13de0a4fb
+    drift_ack_digest: 69bef5a4713517389d8b8a97bc7bddb46d2eca5e31bf6808d4a612636b5a49ef
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7135,6 +7168,17 @@ boards:
     #   tests pass). rcc.rs adds TIM1EN to the WCH-only APB2PCENR mask;
     #   attach.rs adds TIM1 rows to the CH32V003-only pad table. The STM32
     #   F1 pad table is unchanged. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (CH32V003 ADC1 scan + DMA, ch32fun adc_dma_opamp): adc.rs,
+    #   shared F1/F4 register block. SMPR1/SMPR2/SQR1/SQR2 are now stored and
+    #   read back (were read-as-zero). With CR1.SCAN the regular group is
+    #   SQ1..SQ(L) and EOC/EOCIE come at the group end (was SQ1 only). CR2.DMA
+    #   raises an `<adc>_rx` request per conversion; only the CH32V003 yaml
+    #   routes it, so no STM32 DMA channel sees it. A CONT restart no longer
+    #   clears EOC (RM0008: software clears it). The L4/H7/U5 layouts are
+    #   untouched, and single-shot SWSTART timing is identical; the scheduler
+    #   path arms one event per conversion instead of one per cycle (walk diff
+    #   tests pin both). adc lib tests pass in both modes. ACK, NOT A SILICON
+    #   CAPTURE.
     drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -7685,7 +7729,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: c8560195033cf31403236532bb1b64aded4ca55e7342c1cc6061e23251be65f0
+    drift_ack_digest: 8fe2a3326194aef94a0ec5d4ba653fb71c7eea0819dc52a97b4c8d0f6808f39f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -8276,6 +8320,17 @@ boards:
     #   tests pass). rcc.rs adds TIM1EN to the WCH-only APB2PCENR mask;
     #   attach.rs adds TIM1 rows to the CH32V003-only pad table. The STM32
     #   F1 pad table is unchanged. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (CH32V003 ADC1 scan + DMA, ch32fun adc_dma_opamp): adc.rs,
+    #   shared F1/F4 register block. SMPR1/SMPR2/SQR1/SQR2 are now stored and
+    #   read back (were read-as-zero). With CR1.SCAN the regular group is
+    #   SQ1..SQ(L) and EOC/EOCIE come at the group end (was SQ1 only). CR2.DMA
+    #   raises an `<adc>_rx` request per conversion; only the CH32V003 yaml
+    #   routes it, so no STM32 DMA channel sees it. A CONT restart no longer
+    #   clears EOC (RM0008: software clears it). The L4/H7/U5 layouts are
+    #   untouched, and single-shot SWSTART timing is identical; the scheduler
+    #   path arms one event per conversion instead of one per cycle (walk diff
+    #   tests pin both). adc lib tests pass in both modes. ACK, NOT A SILICON
+    #   CAPTURE.
     drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
