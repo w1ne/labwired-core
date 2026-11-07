@@ -1,0 +1,17 @@
+# STM32F103R8 boots the NUCLEO-F103RB smoke image unchanged: the reset vector
+# runs, USART2 prints "OK", and PA5 toggles. The image is 1.5 KB of text and
+# its initial SP is 0x2000_5000 (top of 20 KB), which is this part's own SRAM
+# end, so it runs within R8's 64 KB / 20 KB geometry. This smoke is the
+# per-variant boot proof.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-nucleo-f103rb-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 4
+  - expected_stop_reason: max_steps

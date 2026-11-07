@@ -1,0 +1,24 @@
+# The SAMD21 SERCOM0/LED demo, relinked for the smallest SAM D21 parts.
+#
+# The program is firmware-samd21-demo's source, unchanged: it uses PA10/PA11
+# (SERCOM0 PAD[2]/PAD[3]) and PA17, which every E/G/J package bonds out.
+# Only the memory map differs. The G18A image puts the initial stack at
+# 0x2000_8000 (32 KB SRAM), which is past the end of a 4/8/16 KB x15/x16/x17
+# part, and it HardFaults on the first push.
+[package]
+name = "firmware-samd21-lowram-smoke"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-samd21-lowram-smoke"
+path = "../firmware-samd21-demo/src/main.rs"
+test = false
+bench = false

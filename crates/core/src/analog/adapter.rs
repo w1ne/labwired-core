@@ -18,7 +18,7 @@
 //!       substeps: 10
 //!       integration: be            # be | trap
 //!       probes:  { v_out: "v(out)" }
-//!       sources: { gpio: Vgpio }
+//!       sources: { gpio: Vgpio, temperature_c: Rntc }
 //!       trace:   ["v(in)", "i(Vgpio)"]
 //!       trace_samples: 20000
 //! ```
@@ -83,7 +83,7 @@ pub struct AnalogConfig {
     pub integration: Integration,
     /// LabWired output name → node voltage or supported element-current expression.
     pub probes: BTreeMap<String, String>,
-    /// LabWired input name → circuit element (`V`, `I`, `R` or `S`).
+    /// LabWired input name → `V`, `I`, or `S`; an `R` accepts ohms, or Celsius for an NTC.
     pub sources: BTreeMap<String, String>,
     /// Extra trace-only expressions, beyond the routed outputs.
     pub trace: Vec<String>,
@@ -199,6 +199,7 @@ enum InputTarget {
     VoltageSource(usize),
     CurrentSource(usize),
     Resistance(usize),
+    Thermistor(usize),
     /// Every switch sharing one control name.
     Switches(Vec<usize>),
 }
@@ -288,6 +289,8 @@ impl AnalogCosimAdapter {
                     )));
                 }
                 InputTarget::CurrentSource(index)
+            } else if let Some(index) = solver.thermistor_index(element) {
+                InputTarget::Thermistor(index)
             } else if let Some(index) = solver.resistor_index(element) {
                 let ohms = solver.circuit().resistors[index].ohms;
                 if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
@@ -299,7 +302,7 @@ impl AnalogCosimAdapter {
             } else {
                 return Err(AnalogError::Config(format!(
                     "config.sources.{input} names `{element}`, which the netlist does not declare \
-                     as a V, I, R or S element"
+                     as a V, I, S, or resistor element (an NTC resistor accepts temperature inputs)"
                 )));
             };
             inputs.insert(input.clone(), target);
@@ -453,6 +456,20 @@ impl AnalogCosimAdapter {
                     SimulationError::Other(format!("analog input `{name}`: {error}"))
                 })?;
             }
+            InputTarget::Thermistor(index) => {
+                if matches!(value, CosimSignalValue::Bool(_)) {
+                    return Err(SimulationError::Other(format!(
+                        "analog input `{name}` drives an NTC temperature; a boolean has no \
+                         temperature to map to — route a number in degrees Celsius"
+                    )));
+                }
+                let celsius = self.numeric(name, value, "degrees Celsius")?;
+                if !self.solver.set_thermistor_temperature(index, celsius) {
+                    return Err(SimulationError::Other(format!(
+                        "analog input `{name}` is not a finite NTC temperature above absolute zero"
+                    )));
+                }
+            }
             InputTarget::Switches(indices) => {
                 let closed = match value {
                     CosimSignalValue::Bool(state) => *state,
@@ -524,14 +541,15 @@ impl CosimAdapter for AnalogCosimAdapter {
         }
     }
 
-    /// A switch control is a logic level; a source or resistor takes
-    /// its number as given. An input the circuit does not use has no kind.
+    /// A switch is boolean; sources and resistors are numeric. NTC numbers are
+    /// degrees Celsius. An input the circuit does not use has no kind.
     fn input_kind(&self, name: &str) -> Option<CosimInputKind> {
         Some(match self.inputs.get(name)? {
             InputTarget::Switches(_) => CosimInputKind::Bool,
             InputTarget::VoltageSource(_)
             | InputTarget::CurrentSource(_)
-            | InputTarget::Resistance(_) => CosimInputKind::Number,
+            | InputTarget::Resistance(_)
+            | InputTarget::Thermistor(_) => CosimInputKind::Number,
         })
     }
 
