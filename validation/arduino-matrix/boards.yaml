@@ -81,8 +81,11 @@ boards:
     chip: rp2040
     system: systems/rp2040.yaml
     pio: { platform: raspberrypi, board: pico, framework: arduino }
-    max_steps: 8000000
-    budget_reason: "mbed RTX SysTick delay; L0~1.7M L2~0.8M with short delays (was 20M for delay(20))"
+    # TIMER runs at its real 1 MHz since #1454, so mbed's pre-main
+    # busy_wait_us(100_000) (double_tap_usb_boot) alone costs 12.5M cycles at
+    # 125 MHz; 40M = 320 ms (the CLI caps scripts at 50M steps).
+    max_steps: 40000000
+    budget_reason: "real-rate TIMER: 100 ms pre-main double-tap wait = 12.5M cycles; 320 ms window (was 8M, red since #1454)"
     # Pico LED = GPIO25 via SIO (not APB GPIO)
     led_watch: "sio:25"
     led_min_edges: 2
