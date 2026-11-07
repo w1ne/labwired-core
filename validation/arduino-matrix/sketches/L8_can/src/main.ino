@@ -91,6 +91,39 @@ static bool lw_can_probe() {
 }
 #define LW_HAS_CAN 1
 
+#elif defined(ARDUINO_NUCLEO_G474RE) || defined(STM32G474xx)
+// G4 FDCAN1 — same Bosch M_CAN enter_loopback sequence as the H5, but the
+// registers are at 0x40006400 and SRAMCAN is a separate block at 0x4000A400
+// (CMSIS FDCAN1_BASE / SRAMCAN_BASE), not FDCAN1 + 0x800. RCC APB1ENR1 @
+// 0x40021000 + 0x58, FDCANEN bit 25 (RCC_APB1ENR1_FDCANEN_Pos).
+static bool lw_can_probe() {
+  const uint32_t fd = 0x40006400u;
+  const uint32_t ram = 0x4000A400u;
+  const uint32_t rcc = 0x40021000u;
+  mmio_w(rcc + 0x58, mmio_r(rcc + 0x58) | (1u << 25));
+
+  mmio_w(fd + 0x18, 0x3u);   // CCCR INIT|CCE
+  mmio_w(fd + 0x18, 0xA3u);  // + TEST | MON
+  mmio_w(fd + 0x10, 1u << 4); // TEST.LBCK
+  // TX element 0 @ SRAMCAN+0x278: std ID 0x123, DLC 1
+  mmio_w(ram + 0x278, 0x123u << 18);
+  mmio_w(ram + 0x27C, 1u << 16);
+  mmio_w(ram + 0x280, 0xA5u);
+  mmio_w(fd + 0x18, 0xA2u); // leave INIT, keep TEST|MON (CCE clears)
+  mmio_w(fd + 0x0CC, 1u);   // TXBAR buffer 0
+
+  // TX completes on a later peripheral tick — spin.
+  for (int i = 0; i < 100000; i++) {
+    if ((mmio_r(fd + 0x90) & 0x7Fu) != 0) {
+      uint32_t w0 = mmio_r(ram + 0xB0);
+      uint32_t w2 = mmio_r(ram + 0xB0 + 8);
+      return ((w0 >> 18) & 0x7FFu) == 0x123u && (w2 & 0xFFu) == 0xA5u;
+    }
+  }
+  return false;
+}
+#define LW_HAS_CAN 1
+
 #elif defined(ARDUINO_NUCLEO_L476RG) || defined(STM32L476xx)
 static bool lw_can_probe() {
   const uint32_t can = 0x40006400u;
