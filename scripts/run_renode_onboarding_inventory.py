@@ -455,15 +455,15 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/simavr-attiny13-smoke.yaml",
     },
     "simavr-attiny2313": {
-        "prebuilt_firmware": "tests/fixtures/avr/attiny2313-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/attiny2313-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-attiny2313-smoke.yaml",
     },
     "simavr-attiny2313a": {
-        "prebuilt_firmware": "tests/fixtures/avr/attiny2313a-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/attiny2313a-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-attiny2313a-smoke.yaml",
     },
     "simavr-attiny4313": {
-        "prebuilt_firmware": "tests/fixtures/avr/attiny4313-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/attiny4313-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-attiny4313-smoke.yaml",
     },
     "simavr-attiny24": {

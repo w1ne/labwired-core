@@ -466,6 +466,12 @@ impl AvrModel {
         )
     }
 
+    /// Classic-I/O-file parts whose PINx is write-one-to-toggle (ATtiny2313
+    /// datasheet "Toggling the Pin"); the ATmega8/16/32/128 PINx is read-only.
+    pub const fn has_classic_pin_toggle(self) -> bool {
+        matches!(self, AvrModel::Attiny2313 | AvrModel::Attiny4313)
+    }
+
     /// The ATmega328PB has a second polling USART at data-space 0xC8..0xCE.
     /// Its USART interrupts are not yet modelled.
     pub const fn has_usart1(self) -> bool {
@@ -1002,6 +1008,8 @@ impl Avr {
             // ATmega128 ports A-D as on the 16/32, plus PINE/DDRE/PORTE at
             // 0x21..0x23. Ports F/G (DDRF/PORTF in extended I/O) are not mirrored.
             AvrModel::Atmega128 => matches!(addr, 0x0021 | 0x0030 | 0x0033 | 0x0036 | 0x0039),
+            // ATtiny2313/4313: PIND 0x30, PINB 0x36, PINA 0x39 (0x33..0x35 are GPIOR0..2).
+            AvrModel::Attiny2313 | AvrModel::Attiny4313 => matches!(addr, 0x0030 | 0x0036 | 0x0039),
             AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
@@ -1019,7 +1027,6 @@ impl Avr {
             | AvrModel::Attiny1606
             | AvrModel::Attiny1607 => false,
             AvrModel::Attiny13
-            | AvrModel::Attiny2313
             | AvrModel::Attiny25
             | AvrModel::Attiny45
             | AvrModel::Attiny85
@@ -1031,7 +1038,6 @@ impl Avr {
             | AvrModel::Attiny48
             | AvrModel::Attiny88
             | AvrModel::Attiny24
-            | AvrModel::Attiny4313
             | AvrModel::Attiny1634 => false,
         }
     }
@@ -1058,6 +1064,9 @@ impl Avr {
             AvrModel::Atmega128 => {
                 (0x0021..=0x0023).contains(&addr) || (0x0030..=0x003B).contains(&addr)
             }
+            AvrModel::Attiny2313 | AvrModel::Attiny4313 => {
+                (0x0030..=0x0032).contains(&addr) || (0x0036..=0x003B).contains(&addr)
+            }
             AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
@@ -1075,7 +1084,6 @@ impl Avr {
             | AvrModel::Attiny1606
             | AvrModel::Attiny1607 => false,
             AvrModel::Attiny13
-            | AvrModel::Attiny2313
             | AvrModel::Attiny25
             | AvrModel::Attiny45
             | AvrModel::Attiny85
@@ -1087,7 +1095,6 @@ impl Avr {
             | AvrModel::Attiny48
             | AvrModel::Attiny88
             | AvrModel::Attiny24
-            | AvrModel::Attiny4313
             | AvrModel::Attiny1634 => false,
         }
     }
@@ -1750,8 +1757,17 @@ impl Avr {
     fn classic_data_write(&mut self, addr: u16, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
         match addr {
             0x0000..=0x001F => self.r[addr as usize] = value,
-            // ATmega8/16/32/128 PINx are read-only: no write-one-to-toggle.
-            a if self.is_pin_reg(a) => {}
+            // ATtiny2313/4313 PINx are write-one-to-toggle (PORTx sits at
+            // PINx + 2); ATmega8/16/32/128 PINx are read-only.
+            a if self.is_pin_reg(a) => {
+                if self.model.has_classic_pin_toggle() {
+                    let port_addr = a + 2;
+                    let port_index = usize::from(port_addr - 0x20);
+                    self.io[port_index] ^= value;
+                    let latch = self.io[port_index];
+                    let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + u64::from(port_addr), latch);
+                }
+            }
             0x005D => self.sp = (self.sp & 0xFF00) | value as u16,
             0x005E => self.sp = (self.sp & 0x00FF) | ((value as u16) << 8),
             0x005F => self.sreg = value,
@@ -4603,6 +4619,43 @@ mod tests {
         cpu.data_write(0x3B, 0x5A, &mut bus).unwrap(); // GICR, not PORTA
         assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x3B).unwrap(), 0x00);
         assert_eq!(cpu.data_read(0x3B, &bus).unwrap(), 0x5A);
+    }
+
+    /// ATtiny2313/4313 ports A/B/D: PINB/DDRB/PORTB at 0x36..0x38, PIND at
+    /// 0x30, PINA at 0x39. PINx is write-one-to-toggle here, and SBI on PINB
+    /// toggles only the named bit. 0x33 is GPIOR0, not a port register.
+    #[test]
+    fn attiny2313_classic_ports_mirror_and_pin_toggle() {
+        for model in [AvrModel::Attiny2313, AvrModel::Attiny4313] {
+            let mut bus = MockBus::new();
+            let mut cpu = Avr::new_model(model);
+            cpu.data_write(0x37, 0x81, &mut bus).unwrap(); // DDRB
+            cpu.data_write(0x38, 0x81, &mut bus).unwrap(); // PORTB
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x38).unwrap(), 0x81);
+            assert_eq!(cpu.data_read(0x36, &bus).unwrap(), 0x81);
+            cpu.data_write(0x36, 0x01, &mut bus).unwrap(); // PINB toggles PB0
+            assert_eq!(
+                bus.read_u8(AVR_IO_MIRROR_BASE + 0x38).unwrap(),
+                0x80,
+                "{model:?}"
+            );
+            assert_eq!(cpu.data_read(0x36, &bus).unwrap(), 0x80);
+            // SBI PINB,0 (I/O 0x16): toggles PB0 back, PB7 untouched.
+            cpu.load_words(0x100, &[0x9AB0, 0xCFFF]);
+            cpu.set_pc(0x100);
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(
+                bus.read_u8(AVR_IO_MIRROR_BASE + 0x38).unwrap(),
+                0x81,
+                "{model:?}"
+            );
+            bus.write_u8(AVR_IO_MIRROR_BASE + 0x30, 0x04).unwrap(); // PD2 high
+            assert_eq!(cpu.data_read(0x30, &bus).unwrap() & 0x04, 0x04);
+            cpu.data_write(0x33, 0x5A, &mut bus).unwrap(); // GPIOR0
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x33).unwrap(), 0x00);
+            assert_eq!(cpu.data_read(0x33, &bus).unwrap(), 0x5A);
+        }
     }
 
     /// SBI/CBI on ATmega16 PORTA (I/O 0x1B) are read-modify-write: the 328P

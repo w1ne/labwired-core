@@ -205,9 +205,10 @@ on:
       - "scripts/build_atmega16_cpu_smoke.sh"
       - "tests/fixtures/avr/attiny-x5-cpu-smoke.c"
       - "tests/fixtures/avr/attiny13-cpu-smoke.elf"
-      - "tests/fixtures/avr/attiny2313-cpu-smoke.elf"
-      - "tests/fixtures/avr/attiny2313a-cpu-smoke.elf"
-      - "tests/fixtures/avr/attiny4313-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny2313-io-smoke.c"
+      - "tests/fixtures/avr/attiny2313-io-smoke.elf"
+      - "tests/fixtures/avr/attiny2313a-io-smoke.elf"
+      - "tests/fixtures/avr/attiny4313-io-smoke.elf"
       - "tests/fixtures/avr/attiny24-cpu-smoke.elf"
       - "tests/fixtures/avr/attiny44-cpu-smoke.elf"
       - "tests/fixtures/avr/attiny84-cpu-smoke.elf"
@@ -924,15 +925,15 @@ jobs:
             script: examples/renode-onboarding/simavr-attiny13-smoke.yaml
             system: configs/systems/onboarding/simavr-attiny13.yaml
           - id: simavr-attiny2313
-            prebuilt_firmware: tests/fixtures/avr/attiny2313-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/attiny2313-io-smoke.elf
             script: examples/renode-onboarding/simavr-attiny2313-smoke.yaml
             system: configs/systems/onboarding/simavr-attiny2313.yaml
           - id: simavr-attiny2313a
-            prebuilt_firmware: tests/fixtures/avr/attiny2313a-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/attiny2313a-io-smoke.elf
             script: examples/renode-onboarding/simavr-attiny2313a-smoke.yaml
             system: configs/systems/onboarding/simavr-attiny2313a.yaml
           - id: simavr-attiny4313
-            prebuilt_firmware: tests/fixtures/avr/attiny4313-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/attiny4313-io-smoke.elf
             script: examples/renode-onboarding/simavr-attiny4313-smoke.yaml
             system: configs/systems/onboarding/simavr-attiny4313.yaml
           - id: simavr-attiny24

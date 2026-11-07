@@ -8,8 +8,8 @@
     "pass": 224,
     "fail": 0,
     "pass_loading_zero_answering_windows": 4,
-    "pass_observable_assertions": 199,
-    "pass_stop_reason_only": 25,
+    "pass_observable_assertions": 202,
+    "pass_stop_reason_only": 22,
     "pass_depth_unknown": 0,
     "median_elapsed_ms": 1223,
     "median_elapsed_seconds": 1.223,
@@ -8202,32 +8202,35 @@
       "script": "examples/renode-onboarding/simavr-attiny2313-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-attiny2313.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T16:56:13Z",
-      "finished_at_utc": "2026-11-06T16:56:14Z",
+      "started_at_utc": "2026-11-07T17:13:30Z",
+      "finished_at_utc": "2026-11-07T17:13:31Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 634,
+      "elapsed_ms": 661,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.324,
+        "build_cli": 0.334,
         "build_firmware": null,
-        "run_smoke": 0.301
+        "run_smoke": 0.317
       },
       "stages_ms": {
-        "build_cli": 324,
+        "build_cli": 334,
         "build_firmware": null,
-        "run_smoke": 301
+        "run_smoke": 317
       },
-      "prebuilt_firmware": "tests/fixtures/avr/attiny2313-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/attiny2313-io-smoke.elf",
       "_artifact_path": "simavr-attiny2313",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "uart_contains",
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-attiny2313a",
@@ -8246,32 +8249,35 @@
       "script": "examples/renode-onboarding/simavr-attiny2313a-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-attiny2313a.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T16:56:14Z",
-      "finished_at_utc": "2026-11-06T16:56:14Z",
+      "started_at_utc": "2026-11-07T17:13:32Z",
+      "finished_at_utc": "2026-11-07T17:13:32Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 603,
+      "elapsed_ms": 673,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.292,
+        "build_cli": 0.296,
         "build_firmware": null,
-        "run_smoke": 0.302
+        "run_smoke": 0.367
       },
       "stages_ms": {
-        "build_cli": 292,
+        "build_cli": 296,
         "build_firmware": null,
-        "run_smoke": 302
+        "run_smoke": 367
       },
-      "prebuilt_firmware": "tests/fixtures/avr/attiny2313a-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/attiny2313a-io-smoke.elf",
       "_artifact_path": "simavr-attiny2313a",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "uart_contains",
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-attiny24",
@@ -8378,32 +8384,35 @@
       "script": "examples/renode-onboarding/simavr-attiny4313-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-attiny4313.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T16:56:17Z",
-      "finished_at_utc": "2026-11-06T16:56:18Z",
+      "started_at_utc": "2026-11-07T17:13:33Z",
+      "finished_at_utc": "2026-11-07T17:13:34Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 615,
+      "elapsed_ms": 701,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.297,
+        "build_cli": 0.348,
         "build_firmware": null,
-        "run_smoke": 0.309
+        "run_smoke": 0.34
       },
       "stages_ms": {
-        "build_cli": 297,
+        "build_cli": 348,
         "build_firmware": null,
-        "run_smoke": 309
+        "run_smoke": 340
       },
-      "prebuilt_firmware": "tests/fixtures/avr/attiny4313-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/attiny4313-io-smoke.elf",
       "_artifact_path": "simavr-attiny4313",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "uart_contains",
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-attiny44",

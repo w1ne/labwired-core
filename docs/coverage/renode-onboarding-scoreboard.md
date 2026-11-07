@@ -9,8 +9,8 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `4/224`
-- pass_observable_assertions: `199/224`
-- pass_stop_reason_only: `25/224`
+- pass_observable_assertions: `202/224`
+- pass_stop_reason_only: `22/224`
 - pass_depth_unknown: `0/224`
 - median_elapsed_ms: `1223`
 - median_elapsed_seconds: `1.223`
@@ -205,11 +205,11 @@
 | `simavr-atmega88` | `pass` | `True` | `yes` | `yes` | `1058` | `1.058` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny13` | `pass` | `True` | `yes` | `yes` | `86399` | `86.399` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny1634` | `pass` | `True` | `yes` | `yes` | `656` | `0.656` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `simavr-attiny2313` | `pass` | `True` | `yes` | `yes` | `634` | `0.634` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `simavr-attiny2313a` | `pass` | `True` | `yes` | `yes` | `603` | `0.603` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `simavr-attiny2313` | `pass` | `True` | `yes` | `yes` | `661` | `0.661` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `simavr-attiny2313a` | `pass` | `True` | `yes` | `yes` | `673` | `0.673` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny24` | `pass` | `True` | `yes` | `yes` | `618` | `0.618` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny25` | `pass` | `True` | `yes` | `yes` | `604` | `0.604` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `simavr-attiny4313` | `pass` | `True` | `yes` | `yes` | `615` | `0.615` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `simavr-attiny4313` | `pass` | `True` | `yes` | `yes` | `701` | `0.701` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny44` | `pass` | `True` | `yes` | `yes` | `633` | `0.633` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny45` | `pass` | `True` | `yes` | `yes` | `588` | `0.588` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny84` | `pass` | `True` | `yes` | `yes` | `660` | `0.66` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |

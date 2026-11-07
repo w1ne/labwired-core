@@ -17,6 +17,9 @@ use crate::{Bus, SimResult};
 fn write_one_register(data_addr: u16, model: AvrModel) -> bool {
     if model.uses_avrxt_data_map() {
         matches!(data_addr, 0x03 | 0x07)
+    } else if model.has_classic_pin_toggle() {
+        // ATtiny2313/4313: PIND/PINB/PINA toggle PORTx on a written 1.
+        matches!(data_addr, 0x30 | 0x36 | 0x39)
     } else if model.has_classic_io_file() || model == AvrModel::Atmega128 {
         // Classic layout: 0x35..0x3B are PORTC..PORTA/DDRx/PINx (read-only
         // PINx), so a single-bit write there would clobber the latch.

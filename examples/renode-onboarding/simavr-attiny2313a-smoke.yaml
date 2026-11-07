@@ -1,10 +1,14 @@
-# CPU and SRAM smoke for the imported ATtiny2313A profile.
-# No peripheral accesses or board I/O are asserted.
+# GPIOB + polled USART smoke against the imported ATtiny2313A profile.
 schema_version: "1.0"
 inputs:
-  firmware: "../../tests/fixtures/avr/attiny2313a-cpu-smoke.elf"
+  firmware: "../../tests/fixtures/avr/attiny2313a-io-smoke.elf"
   system: "../../configs/systems/onboarding/simavr-attiny2313a.yaml"
 limits:
   max_steps: 100000
 assertions:
+  - uart_contains: "T2313A IO bits=7F"
+  - memory_value: {address: 0x00B4, expected_value: 0x7F, size: 1}
+  - gpio_edges:
+      pin: "portb:0"
+      min_edges: 2
   - expected_stop_reason: max_steps
