@@ -1795,7 +1795,6 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 8493034a3cec84d57c0727e3df8a21eebb2ab30ca55b5e42c17fa1d39c2874f6
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2388,6 +2387,10 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-03 (ADC analog pin resolution): adc.rs now resolves routed channel voltage and
+    # VREF+ and holds them at acquisition. This intentionally adds MNA-driven ADC input
+    # behavior outside the existing register-oracle capture scope. Andrii accepted the
+    # renewal after the live `--ignored` diff on this date; this is not a replacement capture.
     # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
     # three files on this board's watch list. Each change is provably
     # behaviour-preserving for THIS part, so no re-capture is owed:
@@ -2430,7 +2433,6 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -2438,6 +2440,12 @@ boards:
     # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
     # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
     # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
+    # 2026-11-07 (batch/analog-spice, #1688): SPICE-detail analog models
+    # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
+    # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
+    drift_ack_digest: c4462a3cb4d3c971202e5428d16f8d9601e5f4d982ef14ca69a951f34e693619
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -3998,7 +4006,6 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 81ad1035baee1ce5c8256867de47f1ff4c98994ebee83edb0323851b789958f7
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4579,6 +4586,10 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-03 (ADC analog pin resolution): adc.rs now resolves routed channel voltage and
+    # VREF+ and holds them at acquisition. This intentionally adds MNA-driven ADC input
+    # behavior outside the existing register-oracle capture scope. Andrii accepted the
+    # renewal after the live `--ignored` diff on this date; this is not a replacement capture.
     # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
     # three files on this board's watch list. Each change is provably
     # behaviour-preserving for THIS part, so no re-capture is owed:
@@ -4621,7 +4632,6 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -4629,6 +4639,12 @@ boards:
     # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
     # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
     # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
+    # 2026-11-07 (batch/analog-spice, #1688): SPICE-detail analog models
+    # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
+    # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
+    drift_ack_digest: 4ab9a952cc9497d759175eb37b760190ee70b29fa808b7e33053933df430f76b
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6233,7 +6249,6 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: fabfd96c6de8e48ac201f8ab621c16fae75772b9d8adb9a000e29faf5585d785
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6817,6 +6832,10 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-03 (ADC analog pin resolution): adc.rs now resolves routed channel voltage and
+    # VREF+ and holds them at acquisition. This intentionally adds MNA-driven ADC input
+    # behavior outside the existing register-oracle capture scope. Andrii accepted the
+    # renewal after the live `--ignored` diff on this date; this is not a replacement capture.
     # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
     # three files on this board's watch list. Each change is provably
     # behaviour-preserving for THIS part, so no re-capture is owed:
@@ -6859,7 +6878,6 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -6867,6 +6885,12 @@ boards:
     # generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
     # / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
     # see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
+    # 2026-11-07 (batch/analog-spice, #1688): SPICE-detail analog models
+    # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
+    # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-07
+    drift_ack_digest: ecc2347ef7409270bd3574fc15b5e13d075a57d83fcdfda2f00fe87ad58ec288
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are

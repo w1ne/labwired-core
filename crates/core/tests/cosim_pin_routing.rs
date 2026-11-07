@@ -140,19 +140,54 @@ fn fresh_fixture_epoch_preserves_global_time_and_rebinds_actual_board_destinatio
     assert_eq!(session.cycles_until_boundary(7_800), 8_400);
 }
 
-/// The injected 12-bit count the next conversion on `channel` would return.
-/// `0xFFFF` means nothing has been injected.
-fn adc_channel_count(bus: &mut SystemBus, channel: u8) -> u16 {
+/// Read back the injected input count and active reference. `0xFFFF` means
+/// nothing has been injected on `channel`.
+fn adc_readback(bus: &mut SystemBus, channel: u8) -> (u16, f64) {
     let idx = bus
         .find_peripheral_index_by_name("adc1")
         .expect("F401 declares adc1");
-    bus.peripherals[idx]
+    let adc = bus.peripherals[idx]
         .dev
         .as_any_mut()
         .expect("adc1 downcasts")
         .downcast_mut::<labwired_core::peripherals::adc::Adc>()
-        .expect("adc1 is an Adc")
-        .channel_input_count(channel)
+        .expect("adc1 is an Adc");
+    (adc.channel_input_count(channel), adc.reference_voltage_v())
+}
+
+/// The injected 12-bit count the next conversion on `channel` would return.
+fn adc_channel_count(bus: &mut SystemBus, channel: u8) -> u16 {
+    adc_readback(bus, channel).0
+}
+
+/// Convert one routed input through the F401's firmware-visible ADC1 registers.
+/// This catches a route that reaches the injected-input slot but is not the
+/// channel selected by SQR3 or never reaches DR after software start.
+fn f401_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
+    const RCC_BASE: u64 = 0x4002_3800;
+    const ADC1_BASE: u64 = 0x4001_2000;
+    const ADC1EN: u32 = 1 << 8;
+    const ADON: u32 = 1;
+    const SWSTART: u32 = 1 << 30;
+    const EOC: u32 = 1 << 1;
+
+    // Firmware must enable the APB2 clock before ADC MMIO reaches the block.
+    let apb2enr = bus.read_u32(RCC_BASE + 0x44).expect("read APB2ENR");
+    bus.write_u32(RCC_BASE + 0x44, apb2enr | ADC1EN)
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC1_BASE + 0x34, u32::from(channel))
+        .expect("select SQR3 SQ1 channel");
+    bus.write_u32(ADC1_BASE + 0x08, ADON)
+        .expect("power up ADC1");
+    bus.write_u32(ADC1_BASE + 0x08, ADON | SWSTART)
+        .expect("software-start ADC1 conversion");
+    for _ in 0..15 {
+        bus.tick_peripherals_fully();
+    }
+    let status = bus.read_u32(ADC1_BASE).expect("read ADC1 SR");
+    assert_ne!(status & EOC, 0, "ADC1 conversion completes with EOC set");
+    bus.read_u32(ADC1_BASE + 0x4c)
+        .expect("read firmware-visible ADC1 DR")
 }
 
 /// Drive a GPIO output latch the way firmware does — an MMIO store to ODR.
@@ -708,24 +743,133 @@ fn a_model_voltage_lands_on_the_adc_channel_of_its_pad() {
     assert_eq!(adc_channel_count(&mut bus, 0), 2047);
 }
 
-/// The pad form resolves through the chip descriptor's `analog_pins:`, not a
-/// built-in table: on an F401 PC5 is ADC1_IN15, so a model voltage routed to
-/// `board.analog.pc5_volts` must land on channel 15 and leave channel 0 alone.
+/// Close the analog-to-ADC path with the real in-core netlist solver. A routed
+/// temperature changes the Beta NTC resistance, the divider moves PA0, the
+/// descriptor resolves PA0 to ADC1_IN0, and the ADC converts the routed level.
 #[test]
-fn the_pad_form_resolves_through_the_descriptor() {
+fn an_in_core_ntc_netlist_drives_the_resolved_adc_channel() {
+    let mut bus = f401_bus();
+    let mut session = build_session(
+        &bus,
+        &[analog_model(
+            100_000,
+            &[("temperature", "ui.ntc.temperature_c")],
+            &[("v_sense", "board.analog.pa0_volts")],
+            "Vcc vcc 0 dc 3.3\n\
+             Rntc vcc sense 10k beta=3950 tnom=25 temp=25\n\
+             Rpull sense 0 10k\n",
+            &[("v_sense", "v(sense)")],
+            &[("temperature", "Rntc")],
+            3.3,
+        )],
+    );
+
+    assert_eq!(adc_channel_count(&mut bus, 0), 0xFFFF);
+    let mut cycles = 0;
+    let mut samples = Vec::new();
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("the analog model reads the routed temperature");
+        cycles += 8_400; // One 100 us model boundary at the F401's 84 MHz.
+        let (_, errors) = session.advance_to(cycles, &mut bus).expect("step netlist");
+        assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
+
+        let volts = match session.signals().get("board.analog.pa0_volts") {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("netlist did not publish PA0 voltage: {other:?}"),
+        };
+        let (count, reference_v) = adc_readback(&mut bus, 0);
+        let ntc_ohms = 10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp();
+        let expected_volts = 3.3 * 10_000.0 / (ntc_ohms + 10_000.0);
+        let routed_mv = (expected_volts * 1000.0 + 0.5).floor();
+        let expected_count = (routed_mv * 4095.0 / (reference_v * 1000.0)).floor() as u16;
+
+        assert!(
+            (volts - expected_volts).abs() < 1e-9,
+            "at {temperature_c} °C the solved NTC divider should be {expected_volts} V, got {volts} V"
+        );
+        assert_eq!(
+            count, expected_count,
+            "the resolved ADC channel should convert the routed {volts} V at {temperature_c} °C"
+        );
+        assert_eq!(
+            f401_adc_convert(&mut bus, 0),
+            u32::from(expected_count),
+            "firmware reading ADC1_DR should see the routed PA0 sample at {temperature_c} °C"
+        );
+        samples.push((temperature_c, volts, count));
+    }
+
+    assert!(
+        samples[2].1 > samples[1].1 && samples[1].1 > samples[0].1,
+        "an NTC divider rises as it heats: {samples:?}"
+    );
+    assert!(
+        samples[2].2 > samples[1].2 && samples[1].2 > samples[0].2,
+        "the resolved ADC reading follows the physical voltage: {samples:?}"
+    );
+    assert_eq!(
+        samples[1].2, 2047,
+        "25 °C puts the matched divider at half scale"
+    );
+}
+
+/// VDDA is independent from the routed pad voltage. The ADC holds the pin in
+/// millivolts and converts it against the reference present at acquisition.
+#[test]
+fn a_model_vdda_reference_sets_adc_full_scale() {
     let mut bus = f401_bus();
     let mut session = build_session(
         &bus,
         &[mock_model(
             100_000,
             &[],
-            &[("v_out", "board.analog.pc5_volts")],
-            &[("v_out", serde_yaml::Value::from(1.65))],
+            &[
+                ("v_in", "board.analog.pa0_volts"),
+                ("vdda", "board.power.vdda_volts"),
+            ],
+            &[
+                ("v_in", serde_yaml::Value::from(1.65)),
+                ("vdda", serde_yaml::Value::from(1.65)),
+            ],
         )],
     );
-    session.advance_to(8_400, &mut bus).expect("step");
+    let (_, errors) = session.advance_to(8_400, &mut bus).expect("step");
+    assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
+
+    let (count, reference_v) = adc_readback(&mut bus, 0);
+    assert_eq!(reference_v, 1.65);
+    assert_eq!(count, 4095, "the routed 1.65 V is full scale");
+}
+
+/// The pad form resolves through the chip descriptor's `analog_pins:`, not a
+/// built-in table: on an F401 PC5 is ADC1_IN15. An in-core netlist's solved
+/// voltage must land on channel 15 and survive a firmware-visible conversion.
+#[test]
+fn an_in_core_netlist_on_pc5_reaches_adc1_channel_15() {
+    let mut bus = f401_bus();
+    let mut session = build_session(
+        &bus,
+        &[analog_model(
+            100_000,
+            &[],
+            &[("v_out", "board.analog.pc5_volts")],
+            "Vbias sense 0 dc 1.65\nRload sense 0 1k\n",
+            &[("v_out", "v(sense)")],
+            &[],
+            3.3,
+        )],
+    );
+    let (_, errors) = session.advance_to(8_400, &mut bus).expect("step");
+    assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
     assert_eq!(adc_channel_count(&mut bus, 15), 2047);
     assert_eq!(adc_channel_count(&mut bus, 0), 0xFFFF);
+    assert_eq!(
+        f401_adc_convert(&mut bus, 15),
+        2047,
+        "firmware converting ADC1_IN15 must see the netlist's 1.65 V"
+    );
 }
 
 /// On an L476 PA0 is ADC1_IN5, not IN0, and its descriptor records no

@@ -1,0 +1,4 @@
+# ATSAMD21E15A bare-chip smoke manifest. SERCOM0 PA10/PA11 banner, PA17 LED.
+name: "atsamd21e15a-smoke"
+chip: "../../configs/chips/atsamd21e15a.yaml"
+external_devices: []

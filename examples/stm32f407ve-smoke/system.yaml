@@ -1,0 +1,4 @@
+# STM32F407VE bare-chip smoke manifest. USART2 banner + PA5 heartbeat.
+name: "stm32f407ve-smoke"
+chip: "../../configs/chips/stm32f407ve.yaml"
+external_devices: []
