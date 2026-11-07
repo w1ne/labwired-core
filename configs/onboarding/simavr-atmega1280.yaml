@@ -6,8 +6,9 @@
 
 name: simavr-atmega1280
 description: >-
-  Imported ATmega1280 profile bounded to AVR8 instruction execution, 128 KiB
-  flash, and 8 KiB SRAM. No peripheral or board-I/O behavior is claimed.
+  Imported ATmega1280 profile measured for bounded AVR8 execution, GPIOA and
+  polled USART0 output. Other peripheral ranges are omitted from this profile.
+  Memory geometry: flash 128KB @ 0x0, ram 8KB @ 0x200.
 family: Atmel AVR
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
   \    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
@@ -15,15 +16,17 @@ verified: false
 system: systems/onboarding/simavr-atmega1280.yaml
 validation:
   method: renode-onboarding-exact-import-smoke
-  reason: bounded AVR8 CPU and SRAM execution only; ideal rail assumed; whole platform remains unverified
+  reason: bounded AVR8 execution, GPIOA (PA0) and polled USART0 TX only; ideal rail assumed; whole platform remains unverified
   checks:
     system_manifest: true
     chip_descriptor: true
     avr8_cpu_sram_smoke: true
+    gpio: true
+    uart0_polled_tx: true
     whole_platform: false
-    peripherals: false
-    board_io: false
-  timestamp_utc: '2026-11-06T09:33:54Z'
+    other_peripherals: false
+    board_io: true
+  timestamp_utc: '2026-11-07T11:50:00Z'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/simavr-atmega1280.validation.md
 provenance:

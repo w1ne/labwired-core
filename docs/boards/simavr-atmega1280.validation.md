@@ -1,19 +1,19 @@
 # Imported ATmega1280 onboarding smoke
 
-This profile measures AVR8 instruction execution and SRAM access against the
-imported 128 KiB flash / 8 KiB SRAM geometry. The fixture increments a volatile
-SRAM counter, and the smoke asserts the bounded `max_steps` stop after 100,000
-instructions. The run recorded 185,705 cycles, 28,570 memory writes, and zero
-peripheral accesses. It makes no peripheral or board-I/O claims.
+This profile measures AVR8 execution, GPIOA and polled USART0 against the
+imported 128 KiB flash / 8 KiB SRAM geometry. The chip maps only `porta`
+(PINA/DDRA/PORTA at 0x20..0x22) and `usart0` (0xC0..0xC6). The fixture
+[`tests/fixtures/avr/mega164-io-smoke.c`](../../tests/fixtures/avr/mega164-io-smoke.c),
+built with `-mmcu=atmega1280 -DPART_TAG='"1280"'`, runs seven checks: UBRR0L and
+UCSR0B readback, UDRE0 set, DDRA readback, PINA0 follows the latch, and PINA
+write-one-to-toggle low and high again. It stores the check bits at 0x0224,
+prints `M1280 IO bits=7F` on USART0, and toggles PA0 in a loop. The smoke
+asserts the UART text, the result byte 0x7F, at least two PA0 edges and the
+bounded `max_steps` stop after 100,000 instructions.
 
-For this bounded run, the imported target uses the existing ATmega1281 CPU
-geometry, which matches the imported ATmega1280 profile's 128 KiB flash and
-8 KiB SRAM ranges. This geometry alias does not validate ATmega1280 peripheral
-behavior. The run assumes an ideal power rail, so power-on and brown-out
-behavior are not measured.
-
-Build the fixture with `scripts/build_atmega1280_cpu_smoke.sh`. Result JSON,
-JUnit assertions, simulator logs, and the snapshot are under
+Not claimed: other ports, timers, ADC, SPI, TWI, USART1+, interrupts and
+EEPROM. The run assumes an ideal power rail. Result JSON, JUnit assertions,
+simulator logs, and the snapshot are under
 [`docs/coverage/renode-onboarding/metrics/simavr-atmega1280/`](../coverage/renode-onboarding/metrics/simavr-atmega1280/).
 This is local CLI smoke evidence against the imported manifest, not full
 ATmega1280 coverage or hardware confirmation.

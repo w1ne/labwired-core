@@ -8,11 +8,11 @@
     "pass": 224,
     "fail": 0,
     "pass_loading_zero_answering_windows": 4,
-    "pass_observable_assertions": 193,
-    "pass_stop_reason_only": 31,
+    "pass_observable_assertions": 195,
+    "pass_stop_reason_only": 29,
     "pass_depth_unknown": 0,
-    "median_elapsed_ms": 1223,
-    "median_elapsed_seconds": 1.223,
+    "median_elapsed_ms": 1195,
+    "median_elapsed_seconds": 1.195,
     "threshold_seconds": 3600,
     "threshold_met": 224,
     "descriptors_present": 245,
@@ -7144,32 +7144,35 @@
       "script": "examples/renode-onboarding/simavr-atmega1280-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-atmega1280.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T09:32:27Z",
-      "finished_at_utc": "2026-11-06T09:33:54Z",
-      "elapsed_seconds": 87,
-      "elapsed_ms": 86214,
+      "started_at_utc": "2026-11-07T11:38:49Z",
+      "finished_at_utc": "2026-11-07T11:38:57Z",
+      "elapsed_seconds": 8,
+      "elapsed_ms": 7863,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 85.902,
+        "build_cli": 7.538,
         "build_firmware": null,
-        "run_smoke": 0.301
+        "run_smoke": 0.315
       },
       "stages_ms": {
-        "build_cli": 85902,
+        "build_cli": 7538,
         "build_firmware": null,
-        "run_smoke": 301
+        "run_smoke": 315
       },
-      "prebuilt_firmware": "tests/fixtures/avr/atmega1280-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/atmega1280-io-smoke.elf",
       "_artifact_path": "simavr-atmega1280",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "uart_contains",
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega1281",
@@ -7188,32 +7191,35 @@
       "script": "examples/renode-onboarding/simavr-atmega1281-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-atmega1281.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T09:50:14Z",
-      "finished_at_utc": "2026-11-06T09:51:54Z",
-      "elapsed_seconds": 101,
-      "elapsed_ms": 100493,
+      "started_at_utc": "2026-11-07T11:38:58Z",
+      "finished_at_utc": "2026-11-07T11:38:58Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 645,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 100.183,
+        "build_cli": 0.288,
         "build_firmware": null,
-        "run_smoke": 0.3
+        "run_smoke": 0.348
       },
       "stages_ms": {
-        "build_cli": 100183,
+        "build_cli": 288,
         "build_firmware": null,
-        "run_smoke": 300
+        "run_smoke": 348
       },
-      "prebuilt_firmware": "tests/fixtures/avr/atmega1281-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/atmega1281-io-smoke.elf",
       "_artifact_path": "simavr-atmega1281",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "uart_contains",
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega1284p",

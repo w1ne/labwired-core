@@ -1,8 +1,11 @@
-// GPIOA + polled USART0 smoke for the imported ATmega164/324/644/1284P profiles.
+// GPIOA + polled USART0 smoke for the imported ATmega164/324/644/1284P and
+// ATmega1280/1281 profiles (port A at 0x20 and USART0 at 0xC0 on all of them).
 // Build: avr-gcc -mmcu=atmega164p -Os -o atmega164-io-smoke.elf mega164-io-smoke.c
 //        avr-gcc -mmcu=atmega324p -Os -DPART_TAG='"324"' -o atmega324-io-smoke.elf mega164-io-smoke.c
 //        avr-gcc -mmcu=atmega644 -Os -DPART_TAG='"644"' -o atmega644-io-smoke.elf mega164-io-smoke.c
 //        avr-gcc -mmcu=atmega1284p -Os -DPART_TAG='"1284P"' -o atmega1284p-io-smoke.elf mega164-io-smoke.c
+//        avr-gcc -mmcu=atmega1280 -Os -DPART_TAG='"1280"' -o atmega1280-io-smoke.elf mega164-io-smoke.c
+//        avr-gcc -mmcu=atmega1281 -Os -DPART_TAG='"1281"' -o atmega1281-io-smoke.elf mega164-io-smoke.c
 #include <avr/io.h>
 #include <stdint.h>
 

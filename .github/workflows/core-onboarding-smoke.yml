@@ -188,13 +188,13 @@ on:
       - "tests/fixtures/avr/mega164-io-smoke.c"
       - "scripts/build_atmega1284p_cpu_smoke.sh"
       - "tests/fixtures/avr/atmega1280-cpu-smoke.c"
-      - "tests/fixtures/avr/atmega1280-cpu-smoke.elf"
+      - "tests/fixtures/avr/atmega1280-io-smoke.elf"
       - "scripts/build_atmega1280_cpu_smoke.sh"
       - "tests/fixtures/avr/atmega128-cpu-smoke.c"
       - "tests/fixtures/avr/atmega128-cpu-smoke.elf"
       - "scripts/build_atmega128_cpu_smoke.sh"
       - "tests/fixtures/avr/atmega1281-cpu-smoke.c"
-      - "tests/fixtures/avr/atmega1281-cpu-smoke.elf"
+      - "tests/fixtures/avr/atmega1281-io-smoke.elf"
       - "scripts/build_atmega1281_cpu_smoke.sh"
       - "tests/fixtures/avr/atmega16-cpu-smoke.c"
       - "tests/fixtures/avr/atmega16-cpu-smoke.elf"
@@ -883,10 +883,10 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/atmega1284p-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega1284p-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega1284p.yaml
-          # The ATmega1280 smoke covers only its shared ATmega1281-class AVR8
-          # core geometry and SRAM execution; no peripherals are declared.
+          # ATmega1280 is measured for AVR8 execution, GPIOA and polled USART0
+          # only (shared mega164-io-smoke.c fixture).
           - id: simavr-atmega1280
-            prebuilt_firmware: tests/fixtures/avr/atmega1280-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/atmega1280-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega1280-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega1280.yaml
           # ATmega128 is measured only for its imported AVR8 CPU and SRAM;
@@ -895,10 +895,10 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/atmega128-cpu-smoke.elf
             script: examples/renode-onboarding/simavr-atmega128-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega128.yaml
-          # ATmega1281 is measured only for its imported AVR8 CPU and SRAM;
-          # the profile makes no peripheral or board-I/O claims.
+          # ATmega1281 is measured for AVR8 execution, GPIOA and polled USART0
+          # only (shared mega164-io-smoke.c fixture).
           - id: simavr-atmega1281
-            prebuilt_firmware: tests/fixtures/avr/atmega1281-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/atmega1281-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega1281-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega1281.yaml
           # ATmega168 maps PORTB/C/D and USART0 (328P register summary); the
