@@ -36,6 +36,7 @@ This is the product bar beyond unit tests and UART-only CI fixtures.
 | stm32f401 | ✅ L0–L4 | ✅ | ✅ both | |
 | stm32f407 | ✅ L0–L4 | ❌ | ✅ Arduino | Add Zephyr `nucleo_f407zg` if west board ok |
 | stm32g474re | ✅ L0–L4 | ✅ | ✅ Arduino | |
+| stm32g071rb | ✅ L0–L7 (L8 n/a, no CAN) | ❌ | ✅ Arduino (L3 exact tier) | NUCLEO-G071RB (`nucleo_g071rb`); L6 on PA0 TIM2_CH1 (PA5 is DAC1_OUT2), pad edges not routed |
 | stm32h563 | ✅ L0–L4 | ✅ | ✅ Arduino | |
 | stm32h735 | ❌ | ❌ | — | Chip model; framework path TBD |
 | stm32l073 | ✅ L0–L4 | ✅ | ✅ Arduino | |
