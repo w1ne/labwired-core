@@ -142,7 +142,7 @@ fn fresh_fixture_epoch_preserves_global_time_and_rebinds_actual_board_destinatio
 
 /// Read back the injected input count and active reference. `0xFFFF` means
 /// nothing has been injected on `channel`.
-fn adc_readback(bus: &mut SystemBus, channel: u8) -> (u16, f64) {
+fn adc_readback(bus: &mut SystemBus, channel: u8, force_legacy_walk: bool) -> (u16, f64) {
     let idx = bus
         .find_peripheral_index_by_name("adc1")
         .expect("F401 declares adc1");
@@ -152,12 +152,15 @@ fn adc_readback(bus: &mut SystemBus, channel: u8) -> (u16, f64) {
         .expect("adc1 downcasts")
         .downcast_mut::<labwired_core::peripherals::adc::Adc>()
         .expect("adc1 is an Adc");
+    if force_legacy_walk {
+        adc.force_legacy_walk();
+    }
     (adc.channel_input_count(channel), adc.reference_voltage_v())
 }
 
 /// The injected 12-bit count the next conversion on `channel` would return.
 fn adc_channel_count(bus: &mut SystemBus, channel: u8) -> u16 {
-    adc_readback(bus, channel).0
+    adc_readback(bus, channel, false).0
 }
 
 /// Convert one routed input through the F401's firmware-visible ADC1 registers.
@@ -171,19 +174,10 @@ fn f401_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
     const SWSTART: u32 = 1 << 30;
     const EOC: u32 = 1 << 1;
 
-    // This helper freezes the CPU and advances the peripheral directly. Pin
-    // the ADC to its legacy-walk reference; scheduler-enabled ADC conversions
-    // are drained by Machine, which this bare-bus harness deliberately omits.
-    let adc_idx = bus
-        .find_peripheral_index_by_name("adc1")
-        .expect("F401 declares adc1");
-    bus.peripherals[adc_idx]
-        .dev
-        .as_any_mut()
-        .expect("adc1 downcasts")
-        .downcast_mut::<labwired_core::peripherals::adc::Adc>()
-        .expect("adc1 is an Adc")
-        .force_legacy_walk();
+    // This helper freezes the CPU and advances the peripheral directly.
+    // Pin the ADC to its legacy-walk reference; scheduler-enabled ADC
+    // conversions are drained by Machine, which this bare-bus harness omits.
+    let _ = adc_readback(bus, channel, true);
 
     // Firmware must enable the APB2 clock before ADC MMIO reaches the block.
     let apb2enr = bus.read_u32(RCC_BASE + 0x44).expect("read APB2ENR");
@@ -793,7 +787,7 @@ fn an_in_core_ntc_netlist_drives_the_resolved_adc_channel() {
             Some(CosimSignalValue::F64(volts)) => *volts,
             other => panic!("netlist did not publish PA0 voltage: {other:?}"),
         };
-        let (count, reference_v) = adc_readback(&mut bus, 0);
+        let (count, reference_v) = adc_readback(&mut bus, 0, false);
         let ntc_ohms = 10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp();
         let expected_volts = 3.3 * 10_000.0 / (ntc_ohms + 10_000.0);
         let routed_mv = (expected_volts * 1000.0 + 0.5).floor();
@@ -852,7 +846,7 @@ fn a_model_vdda_reference_sets_adc_full_scale() {
     let (_, errors) = session.advance_to(8_400, &mut bus).expect("step");
     assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
 
-    let (count, reference_v) = adc_readback(&mut bus, 0);
+    let (count, reference_v) = adc_readback(&mut bus, 0, false);
     assert_eq!(reference_v, 1.65);
     assert_eq!(count, 4095, "the routed 1.65 V is full scale");
 }
