@@ -21,27 +21,27 @@
       0,
       0,
       0,
+      16,
       0,
+      165,
+      170,
+      170,
       0,
+      164,
+      1,
+      113,
       0,
+      154,
       0,
-      0,
-      0,
-      203,
-      55,
-      98,
-      0,
-      159,
-      0,
-      0,
+      111,
       0
     ],
-    "pc": 68,
-    "sp": 157,
-    "sreg": 0
+    "pc": 212,
+    "sp": 154,
+    "sreg": 21
   },
   "steps_executed": 100000,
-  "cycles": 185705,
+  "cycles": 156976,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -66,9 +66,9 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "c289098b8c86995fe2315afdfc8fb47bd5273f2a220899b13fdf2c35184b9ada",
+  "firmware_hash": "b4c624aeb481a42e8d04229733a5f0a14b0834b6570ba164425d5ca9bbaf4c0b",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/attiny13-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/attiny13-io-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-attiny13.yaml",
     "script": "examples/renode-onboarding/simavr-attiny13-smoke.yaml"
   }

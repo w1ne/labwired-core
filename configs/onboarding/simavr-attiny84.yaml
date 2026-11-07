@@ -6,8 +6,8 @@
 
 name: simavr-attiny84
 description: >-
-  ATtiny84 (Atmel AVR). Imported profile measured for bounded AVR8 CPU and SRAM
-  execution only; it declares no peripheral models and makes no board-I/O claim.
+  ATtiny84 (Atmel AVR). Imported profile measured for bounded AVR8 execution
+  and GPIOA and GPIOB only. Other peripheral ranges are omitted from this profile.
   Memory geometry: flash 8KB @ 0x0, ram 512B @ 0x60.
 family: Atmel AVR
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
@@ -15,6 +15,20 @@ code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // 
 pass_rate: 0
 verified: false
 system: systems/onboarding/simavr-attiny84.yaml
+validation:
+  method: renode-onboarding-exact-import-smoke
+  reason: bounded AVR8 execution and GPIOA and GPIOB (PB0 output) only; ideal rail assumed; whole platform remains unverified
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    avr8_cpu_sram_smoke: true
+    gpio: true
+    whole_platform: false
+    other_peripherals: false
+    board_io: true
+  timestamp_utc: '2026-11-07T17:58:08Z'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/simavr-attiny84.validation.md
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

@@ -1,4 +1,4 @@
-[2m2026-11-06T16:56:15.814467Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/simavr-attiny24.yaml
-[2m2026-11-06T16:56:15.815257Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x0
+[2m2026-11-07T17:58:05.611774Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/simavr-attiny24.yaml
+[2m2026-11-07T17:58:05.612525Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x0
 labwired-cli test: idle_ff=on (event_scheduler=on)
-PASS  1/1 checks · simavr-attiny24-smoke · 100000 steps · 0.02s
+PASS  3/3 checks · simavr-attiny24-smoke · 100000 steps · 0.02s

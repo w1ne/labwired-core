@@ -466,10 +466,22 @@ impl AvrModel {
         )
     }
 
-    /// Classic-I/O-file parts whose PINx is write-one-to-toggle (ATtiny2313
-    /// datasheet "Toggling the Pin"); the ATmega8/16/32/128 PINx is read-only.
+    /// Classic-I/O-file models whose PINx is implemented as write-one-to-toggle
+    /// (ATtiny2313/4313 and the measured ATtiny13/24/44/84/25/45/85 profiles);
+    /// ATmega8/16/32/128 PINx is modeled as read-only.
     pub const fn has_classic_pin_toggle(self) -> bool {
-        matches!(self, AvrModel::Attiny2313 | AvrModel::Attiny4313)
+        matches!(
+            self,
+            AvrModel::Attiny2313
+                | AvrModel::Attiny4313
+                | AvrModel::Attiny13
+                | AvrModel::Attiny24
+                | AvrModel::Attiny44
+                | AvrModel::Attiny84
+                | AvrModel::Attiny25
+                | AvrModel::Attiny45
+                | AvrModel::Attiny85
+        )
     }
 
     /// The ATmega328PB has a second polling USART at data-space 0xC8..0xCE.
@@ -1010,6 +1022,14 @@ impl Avr {
             AvrModel::Atmega128 => matches!(addr, 0x0021 | 0x0030 | 0x0033 | 0x0036 | 0x0039),
             // ATtiny2313/4313: PIND 0x30, PINB 0x36, PINA 0x39 (0x33..0x35 are GPIOR0..2).
             AvrModel::Attiny2313 | AvrModel::Attiny4313 => matches!(addr, 0x0030 | 0x0036 | 0x0039),
+            // ATtiny24/44/84: PINB 0x36, PINA 0x39.
+            AvrModel::Attiny24 | AvrModel::Attiny44 | AvrModel::Attiny84 => {
+                matches!(addr, 0x0036 | 0x0039)
+            }
+            // ATtiny13 and 25/45/85 have port B only: PINB 0x36.
+            AvrModel::Attiny13 | AvrModel::Attiny25 | AvrModel::Attiny45 | AvrModel::Attiny85 => {
+                addr == 0x0036
+            }
             AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
@@ -1026,18 +1046,11 @@ impl Avr {
             | AvrModel::Attiny1604
             | AvrModel::Attiny1606
             | AvrModel::Attiny1607 => false,
-            AvrModel::Attiny13
-            | AvrModel::Attiny25
-            | AvrModel::Attiny45
-            | AvrModel::Attiny85
-            | AvrModel::Attiny261
+            AvrModel::Attiny261
             | AvrModel::Attiny461
             | AvrModel::Attiny861
-            | AvrModel::Attiny44
-            | AvrModel::Attiny84
             | AvrModel::Attiny48
             | AvrModel::Attiny88
-            | AvrModel::Attiny24
             | AvrModel::Attiny1634 => false,
         }
     }
@@ -1067,6 +1080,12 @@ impl Avr {
             AvrModel::Attiny2313 | AvrModel::Attiny4313 => {
                 (0x0030..=0x0032).contains(&addr) || (0x0036..=0x003B).contains(&addr)
             }
+            AvrModel::Attiny24 | AvrModel::Attiny44 | AvrModel::Attiny84 => {
+                (0x0036..=0x003B).contains(&addr)
+            }
+            AvrModel::Attiny13 | AvrModel::Attiny25 | AvrModel::Attiny45 | AvrModel::Attiny85 => {
+                (0x0036..=0x0038).contains(&addr)
+            }
             AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
@@ -1083,18 +1102,11 @@ impl Avr {
             | AvrModel::Attiny1604
             | AvrModel::Attiny1606
             | AvrModel::Attiny1607 => false,
-            AvrModel::Attiny13
-            | AvrModel::Attiny25
-            | AvrModel::Attiny45
-            | AvrModel::Attiny85
-            | AvrModel::Attiny261
+            AvrModel::Attiny261
             | AvrModel::Attiny461
             | AvrModel::Attiny861
-            | AvrModel::Attiny44
-            | AvrModel::Attiny84
             | AvrModel::Attiny48
             | AvrModel::Attiny88
-            | AvrModel::Attiny24
             | AvrModel::Attiny1634 => false,
         }
     }
@@ -1757,7 +1769,7 @@ impl Avr {
     fn classic_data_write(&mut self, addr: u16, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
         match addr {
             0x0000..=0x001F => self.r[addr as usize] = value,
-            // ATtiny2313/4313 PINx are write-one-to-toggle (PORTx sits at
+            // Classic tinyAVR PINx are write-one-to-toggle (PORTx sits at
             // PINx + 2); ATmega8/16/32/128 PINx are read-only.
             a if self.is_pin_reg(a) => {
                 if self.model.has_classic_pin_toggle() {
@@ -4655,6 +4667,56 @@ mod tests {
             cpu.data_write(0x33, 0x5A, &mut bus).unwrap(); // GPIOR0
             assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x33).unwrap(), 0x00);
             assert_eq!(cpu.data_read(0x33, &bus).unwrap(), 0x5A);
+        }
+    }
+
+    /// Measured tinyAVR CPU models: PINB/DDRB/PORTB at 0x36..0x38 with
+    /// write-one-to-toggle PINB, SBI on PINB toggling only the named bit. The
+    /// x4 profiles add PINA/DDRA/PORTA at 0x39..0x3B; single-port profiles leave
+    /// 0x39..0x3B as plain stored bytes.
+    #[test]
+    fn classic_tiny_port_b_mirror_and_pin_toggle() {
+        for (model, has_port_a) in [
+            (AvrModel::Attiny13, false),
+            (AvrModel::Attiny25, false),
+            (AvrModel::Attiny45, false),
+            (AvrModel::Attiny85, false),
+            (AvrModel::Attiny24, true),
+            (AvrModel::Attiny44, true),
+            (AvrModel::Attiny84, true),
+        ] {
+            let mut bus = MockBus::new();
+            let mut cpu = Avr::new_model(model);
+            cpu.data_write(0x37, 0x09, &mut bus).unwrap(); // DDRB
+            cpu.data_write(0x38, 0x09, &mut bus).unwrap(); // PORTB
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x38).unwrap(), 0x09);
+            cpu.data_write(0x36, 0x01, &mut bus).unwrap(); // PINB toggles PB0
+            assert_eq!(
+                bus.read_u8(AVR_IO_MIRROR_BASE + 0x38).unwrap(),
+                0x08,
+                "{model:?}"
+            );
+            assert_eq!(cpu.data_read(0x36, &bus).unwrap() & 0x09, 0x08);
+            // SBI PINB,0 (I/O 0x16): toggles PB0 back, PB3 untouched.
+            cpu.load_words(0x40, &[0x9AB0, 0xCFFF]);
+            cpu.set_pc(0x40);
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(
+                bus.read_u8(AVR_IO_MIRROR_BASE + 0x38).unwrap(),
+                0x09,
+                "{model:?}"
+            );
+            bus.write_u8(AVR_IO_MIRROR_BASE + 0x36, 0x04).unwrap(); // PB2 high
+            assert_eq!(cpu.data_read(0x36, &bus).unwrap() & 0x04, 0x04);
+            cpu.data_write(0x3B, 0x5A, &mut bus).unwrap();
+            let mirrored = if has_port_a { 0x5A } else { 0x00 };
+            assert_eq!(
+                bus.read_u8(AVR_IO_MIRROR_BASE + 0x3B).unwrap(),
+                mirrored,
+                "{model:?}"
+            );
+            assert_eq!(cpu.data_read(0x3B, &bus).unwrap(), 0x5A);
         }
     }
 

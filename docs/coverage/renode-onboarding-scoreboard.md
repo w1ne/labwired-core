@@ -9,8 +9,8 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `4/224`
-- pass_observable_assertions: `210/224`
-- pass_stop_reason_only: `14/224`
+- pass_observable_assertions: `217/224`
+- pass_stop_reason_only: `7/224`
 - pass_depth_unknown: `0/224`
 - median_elapsed_ms: `1107`
 - median_elapsed_seconds: `1.107`
@@ -203,17 +203,17 @@
 | `simavr-atmega64m1` | `pass` | `True` | `yes` | `yes` | `628` | `0.628` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega8` | `pass` | `True` | `yes` | `yes` | `120400` | `120.4` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega88` | `pass` | `True` | `yes` | `yes` | `1058` | `1.058` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `simavr-attiny13` | `pass` | `True` | `yes` | `yes` | `86399` | `86.399` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `simavr-attiny13` | `pass` | `True` | `yes` | `yes` | `78119` | `78.119` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny1634` | `pass` | `True` | `yes` | `yes` | `656` | `0.656` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny2313` | `pass` | `True` | `yes` | `yes` | `661` | `0.661` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny2313a` | `pass` | `True` | `yes` | `yes` | `673` | `0.673` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `simavr-attiny24` | `pass` | `True` | `yes` | `yes` | `618` | `0.618` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `simavr-attiny25` | `pass` | `True` | `yes` | `yes` | `604` | `0.604` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `simavr-attiny24` | `pass` | `True` | `yes` | `yes` | `591` | `0.591` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `simavr-attiny25` | `pass` | `True` | `yes` | `yes` | `554` | `0.554` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny4313` | `pass` | `True` | `yes` | `yes` | `701` | `0.701` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `simavr-attiny44` | `pass` | `True` | `yes` | `yes` | `633` | `0.633` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `simavr-attiny45` | `pass` | `True` | `yes` | `yes` | `588` | `0.588` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `simavr-attiny84` | `pass` | `True` | `yes` | `yes` | `660` | `0.66` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `simavr-attiny85` | `pass` | `True` | `yes` | `yes` | `601` | `0.601` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `simavr-attiny44` | `pass` | `True` | `yes` | `yes` | `521` | `0.521` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `simavr-attiny45` | `pass` | `True` | `yes` | `yes` | `530` | `0.53` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `simavr-attiny84` | `pass` | `True` | `yes` | `yes` | `571` | `0.571` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `simavr-attiny85` | `pass` | `True` | `yes` | `yes` | `534` | `0.534` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `sltb001a` | `pass` | `True` | `yes` | `yes` | `1013` | `1.013` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `sltb004a` | `pass` | `True` | `yes` | `yes` | `809` | `0.809` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `slwstk6220a` | `pass` | `True` | `yes` | `yes` | `1383` | `1.383` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
