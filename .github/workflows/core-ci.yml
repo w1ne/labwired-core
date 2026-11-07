@@ -1456,6 +1456,7 @@ jobs:
           --test stm32l073_walk_differential
           --test stm32l476_walk_differential
           --test esp32_classic_ahb_fifo_wakes_uart
+          --test esp32_classic_irq_resettle
           --test xtensa_poll_loop_skip
           --test cc2538_rpl_udp
 

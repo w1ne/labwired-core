@@ -1,0 +1,23 @@
+# The NUCLEO-F103RB UART/LED smoke, relinked for STM32F103 low density.
+#
+# The program is the RB smoke's source, unchanged: it touches only RCC,
+# GPIOA (PA2/PA3/PA5) and USART2, all of which every low-density x4/x6
+# package bonds out (DS5792 Table 5). Only the memory map differs. The RB
+# image puts the initial stack at 0x2000_5000 (20 KB SRAM), which is past
+# the end of a 6 KB or 10 KB part, and it HardFaults on the first push.
+[package]
+name = "firmware-stm32f103-lowdensity-smoke"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+[dependencies]
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-stm32f103-lowdensity-smoke"
+path = "../firmware-nucleo-f103rb-smoke/src/main.rs"
+test = false
+bench = false

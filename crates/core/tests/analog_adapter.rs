@@ -147,6 +147,77 @@ mod analog {
     }
 
     #[test]
+    fn a_routed_temperature_updates_an_ntc_inside_the_analog_netlist() {
+        let netlist = "Vcc vcc 0 dc 3.3\nRntc vcc sense 10k beta=3950\nRpull sense 0 10k\n";
+        let cfg = AnalogConfig {
+            probes: BTreeMap::from([("v_sense".to_string(), "v(sense)".to_string())]),
+            sources: BTreeMap::from([("temperature_c".to_string(), "Rntc".to_string())]),
+            ..AnalogConfig::default()
+        };
+        let mut adapter = AnalogCosimAdapter::from_netlist(netlist, &cfg).expect("adapter builds");
+        assert_eq!(
+            adapter.input_kind("temperature_c"),
+            Some(labwired_core::cosim::CosimInputKind::Number)
+        );
+        let sample = |adapter: &mut AnalogCosimAdapter, time_ns, celsius| {
+            let result = adapter
+                .step(CosimStep {
+                    time_ns,
+                    dt_ns: 100_000,
+                    inputs: BTreeMap::from([(
+                        "temperature_c".to_string(),
+                        CosimSignalValue::F64(celsius),
+                    )]),
+                })
+                .expect("temperature step solves");
+            match result.outputs["v_sense"] {
+                CosimSignalValue::F64(volts) => volts,
+                ref other => panic!("probe should be a voltage, got {other:?}"),
+            }
+        };
+
+        let at_25_c = sample(&mut adapter, 100_000, 25.0);
+        let hot = sample(&mut adapter, 200_000, 80.0);
+        let cold = sample(&mut adapter, 300_000, -10.0);
+        assert!(
+            hot > at_25_c && at_25_c > cold,
+            "hot={hot}, 25 °C={at_25_c}, cold={cold}"
+        );
+
+        // Independently calculate the Beta resistance and divider voltage.
+        // The adapter must route each temperature into the MNA resistor stamp,
+        // not just move the output in the expected direction.
+        let expected_sense = |temperature_celsius: f64| {
+            let ntc_ohms =
+                10_000.0 * (3950.0 * (1.0 / (temperature_celsius + 273.15) - 1.0 / 298.15)).exp();
+            3.3 * 10_000.0 / (ntc_ohms + 10_000.0)
+        };
+        for (label, actual, temperature_celsius) in [
+            ("cold", cold, -10.0),
+            ("nominal", at_25_c, 25.0),
+            ("hot", hot, 80.0),
+        ] {
+            let expected = expected_sense(temperature_celsius);
+            assert!(
+                (actual - expected).abs() < 1e-9,
+                "{label} routed NTC voltage should be {expected} V at {temperature_celsius} °C, got {actual} V"
+            );
+        }
+
+        let error = adapter
+            .step(CosimStep {
+                time_ns: 400_000,
+                dt_ns: 100_000,
+                inputs: BTreeMap::from([(
+                    "temperature_c".to_string(),
+                    CosimSignalValue::Bool(true),
+                )]),
+            })
+            .expect_err("temperature input cannot be boolean");
+        assert!(error.to_string().contains("degrees Celsius"), "{error}");
+    }
+
+    #[test]
     fn an_input_that_is_not_a_circuit_source_is_ignored() {
         let mut adapter =
             AnalogCosimAdapter::from_netlist(RC, &rc_config()).expect("adapter builds");

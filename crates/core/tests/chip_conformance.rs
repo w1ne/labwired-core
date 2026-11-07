@@ -555,6 +555,15 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: None,
     },
     ChipConf {
+        // Medium-density x8 in LQFP64: same public engine as the C8 reference,
+        // different orderable geometry. No per-order-code silicon capture, so an
+        // honest L0 entry like the other exact F103 order codes.
+        name: "stm32f103r8",
+        yaml: "configs/chips/stm32f103r8.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32f103t4",
         yaml: "configs/chips/stm32f103t4.yaml",
         reset_oracle: None,
@@ -733,6 +742,16 @@ const CHIPS: &[ChipConf] = &[
         // Unmodified Zephyr hello_world for nucleo_g474re; asserts
         // "Hello World! nucleo_g474re" over UART (PR-run).
         behavior_gate: Some("firmware_survival::test_stm32g474_zephyr_survival"),
+    },
+    ChipConf {
+        // G431RB: same RM0440 G4 silicon family as g474re (same peripheral map,
+        // same `stm32g4` RCC profile), different memory/orderable. No silicon
+        // reset capture. Behavior gate = the TIER1 raw-register self-test
+        // firmware, which boots and reports PASS for every wired class.
+        name: "stm32g431rb",
+        yaml: "configs/chips/stm32g431rb.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
     },
     ChipConf {
         name: "stm32h563",
@@ -1054,6 +1073,22 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/pic24f16ka102.yaml",
         reset_oracle: None,
         behavior_gate: Some("pic24_ka_smoke::pic24f16ka102_uart_smoke"),
+    },
+    ChipConf {
+        // WCH CH32V003F4P6 (QingKe RV32EC). SIM-DERIVED: nothing here has been
+        // diffed against a real CH32V003 over SDI, so no reset_oracle. This
+        // slice models the RV32E register window, the WCH clock tree and
+        // GPIO A/C/D and polled USART1 TX (ch32v003_compiled_firmware.rs);
+        // I2C/SPI/ADC are not modelled yet (their bases are in the memory map
+        // but no peripheral descriptor consumes them). The
+        // gate is the compiled RV32E blink below, which boots a real ELF and
+        // asserts PC0 toggles — not a register-state assertion.
+        name: "ch32v003f4p6",
+        yaml: "configs/chips/ch32v003f4p6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
+        ),
     },
 ];
 

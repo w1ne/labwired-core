@@ -27,14 +27,11 @@ cosim_models:
 
 #[test]
 fn unsupported_vendor_parameters_are_reported_before_simulation() {
-    let found = issues("CJO=4p TT=3n", "");
+    let found = issues("CJO=4p TT=3n XTI=3", "");
     assert_eq!(found.len(), 1, "{found:?}");
     let message = &found[0];
     assert!(
-        message.contains("vendor")
-            && message.contains("CJO")
-            && message.contains("TT")
-            && message.contains("ngspice"),
+        message.contains("vendor") && message.contains("XTI") && message.contains("ngspice"),
         "{message}"
     );
 }
@@ -46,20 +43,23 @@ fn fully_supported_cards_do_not_need_a_waiver() {
 
 #[test]
 fn an_opt_in_does_not_hide_unmodeled_behavior() {
-    assert!(!issues("CJO=4p", "allow_ignored_model_parameters: true").is_empty());
+    assert!(!issues("XTI=3", "allow_ignored_model_parameters: true").is_empty());
 }
 
 #[test]
 fn a_string_cannot_silently_authorize_an_approximation() {
-    let found = issues("CJO=4p", "allow_ignored_model_parameters: 'true'");
+    let found = issues("XTI=3", "allow_ignored_model_parameters: 'true'");
     assert!(!found.is_empty(), "{found:?}");
 }
 
 #[test]
 fn low_level_parser_records_only_used_model_omissions() {
     let circuit = labwired_core::analog::parse_netlist(
-        "Q1 c b 0 qmod\nM1 d g 0 0 mmod\n.model qmod NPN(BF=100 VAF=10)\n\
-         .model mmod NMOS(LEVEL=1 KP=20u CGS=4p)\n.model unused D(CJO=9p)\n",
+        "Q1 c b 0 qmod\nM1 d g 0 0 mmod\nJ1 d g s jmod\n\
+         .model qmod NPN(BF=100 XTB=1.5)\n\
+         .model mmod NMOS(LEVEL=1 KP=20u TC1=0.01)\n\
+         .model jmod NJF(VTO=-1 BETA=2m IS=4p XTI=3)\n\
+         .model unused D(CJO=9p)\n",
     )
     .unwrap();
     let omitted: Vec<_> = circuit
@@ -67,7 +67,10 @@ fn low_level_parser_records_only_used_model_omissions() {
         .iter()
         .map(|p| (p.model.as_str(), p.parameter.as_str(), p.line))
         .collect();
-    assert_eq!(omitted, vec![("qmod", "VAF", 3), ("mmod", "CGS", 4)]);
+    assert_eq!(
+        omitted,
+        vec![("qmod", "XTB", 4), ("mmod", "TC1", 5), ("jmod", "XTI", 6)]
+    );
 }
 
 #[test]
@@ -82,12 +85,17 @@ fn approximation_flag_is_rejected_even_for_a_fully_supported_card() {
 #[test]
 fn direct_adapter_rejects_omitted_parameters() {
     use labwired_core::analog::{AnalogConfig, AnalogCosimAdapter};
-    let result = AnalogCosimAdapter::from_netlist(
-        "D1 a 0 vendor\n.model vendor D(CJO=4p)\n",
-        &AnalogConfig::default(),
-    );
-    let error = result.expect_err("direct adapter must not silently drop the model parameter");
-    assert!(error.to_string().contains("CJO"), "{error}");
+    for (deck, parameter) in [
+        ("D1 a 0 vendor\n.model vendor D(XTI=3)\n", "XTI"),
+        (
+            "J1 d g s vendor\n.model vendor NJF(VTO=-1 BETA=2m IS=4p XTI=3)\n",
+            "XTI",
+        ),
+    ] {
+        let result = AnalogCosimAdapter::from_netlist(deck, &AnalogConfig::default());
+        let error = result.expect_err("direct adapter must not silently drop the model parameter");
+        assert!(error.to_string().contains(parameter), "{error}");
+    }
 }
 
 #[test]
