@@ -29,6 +29,10 @@ pub struct Afio {
     pub mapr: u32,
     pub exticr: [u32; 4], // EXTICR1, EXTICR2, EXTICR3, EXTICR4
     pub mapr2: u32,
+    /// `MAPR` (`PCFR1` on the CH32V003) as last written, shared with the pad
+    /// routes whose mapping it selects ([`crate::Peripheral::remap_register`]).
+    #[serde(skip)]
+    remap: std::sync::Arc<std::sync::atomic::AtomicU32>,
 }
 
 impl Afio {
@@ -41,6 +45,12 @@ impl Afio {
             layout,
             ..Self::default()
         }
+    }
+
+    fn set_mapr(&mut self, value: u32) {
+        self.mapr = value;
+        self.remap
+            .store(value, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Returns the GPIO port index (0=A, 1=B, etc.) for a given EXTI line (0-15)
@@ -87,9 +97,10 @@ impl Afio {
     fn write_reg(&mut self, offset: u64, value: u32) {
         if self.layout == AfioLayout::Ch32v003 {
             match offset {
-                // PCFR1 keeps the F1 MAPR treatment (storage only, low 16
-                // bits): no remap moves a pad in this model.
-                0x04 => self.mapr = value & 0x0000_FFFF,
+                // PCFR1, low 16 bits. TIM1_RM [7:6] moves the TIM1 pads
+                // (`SystemBus::wire_stm32_timer_output_pads`); the other
+                // remap fields are stored only.
+                0x04 => self.set_mapr(value & 0x0000_FFFF),
                 // EXTICR: eight 2-bit fields in [15:0].
                 0x08 => self.exticr[0] = value & 0x0000_FFFF,
                 _ => {
@@ -107,7 +118,7 @@ impl Afio {
             // MAPR: the remap field readable on F103-medium is the low 16 bits;
             // the ADC-ETRG remap bits [20:16], the reserved [23:21]/[31:27], and
             // the write-only SWJ_CFG [26:24] all read back 0 here.
-            0x04 => self.mapr = value & 0x0000_FFFF,
+            0x04 => self.set_mapr(value & 0x0000_FFFF),
             // EXTICR: four 4-bit line-source fields; bit 15 (the 4th port-select
             // bit of the top field) and [31:16] read 0 → 0x7FFF.
             0x08 => self.exticr[0] = value & 0x7FFF,
@@ -152,6 +163,12 @@ impl Peripheral for Afio {
             AfioLayout::Ch32v003 => 8,
         };
         (line < lines).then(|| self.get_exti_mapping(line))
+    }
+
+    /// `MAPR` / CH32V003 `PCFR1`, for the
+    /// [`crate::peripherals::pad_routing::RemapGate`]s on the pads it moves.
+    fn remap_register(&self) -> Option<std::sync::Arc<std::sync::atomic::AtomicU32>> {
+        Some(self.remap.clone())
     }
 
     fn needs_legacy_walk(&self) -> bool {

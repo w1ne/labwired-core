@@ -793,6 +793,29 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// AFIO capability: the pin-remap register (`MAPR`, CH32V003 `PCFR1`) as
+    /// a shared cell the pad routes it moves read through a
+    /// [`crate::peripherals::pad_routing::RemapGate`]. Default: no remap
+    /// register.
+    fn remap_register(&self) -> Option<std::sync::Arc<std::sync::atomic::AtomicU32>> {
+        None
+    }
+
+    /// GPIO capability: [`Self::bind_timer_output_pad`] for a pad that
+    /// carries the line under ONE remap setting only — live while `gate`'s
+    /// field selects it as well (CH32V003 `AFIO_PCFR1.TIM1_RM`). Only an F1
+    /// port takes it; default `false`.
+    fn bind_remapped_timer_output_pad(
+        &mut self,
+        _cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        _pin: u8,
+        _line: usize,
+        _func: &'static str,
+        _gate: crate::peripherals::pad_routing::RemapGate,
+    ) -> bool {
+        false
+    }
+
     /// GPIO capability: bind pad `pin` to input `ti` of the timer at bus
     /// index `timer` — live while the pad selects `af` (an STM32 V2 AFR
     /// nibble), or while it is a digital input when `af` is `None` (STM32 F1

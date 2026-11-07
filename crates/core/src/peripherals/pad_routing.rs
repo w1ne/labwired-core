@@ -65,6 +65,35 @@ struct Route {
     /// while its line's output stage drives the pad, and then ahead of every
     /// ordinary route on the same pin.
     when_driving: bool,
+    /// A remap field the route also needs ([`RemapGate`]); `None` for a pad
+    /// whose mapping no register moves.
+    gate: Option<RemapGate>,
+}
+
+/// A remap-register field a route is live under: the route carries its
+/// signal only while `(register >> shift) & mask == value`.
+///
+/// This is the second selector input an F1-style pad needs. Its CRL/CRH say
+/// only "alternate-function output"; WHICH peripheral signal reaches it is
+/// set elsewhere, in `AFIO_PCFR1` on the CH32V003 (`TIM1_RM`, bits [7:6]).
+/// The AFIO block owns the register cell and stores every write into it
+/// ([`crate::Peripheral::remap_register`]); the pad reads it
+/// lock-free on each resolve.
+#[derive(Debug, Clone)]
+pub struct RemapGate {
+    pub register: Arc<std::sync::atomic::AtomicU32>,
+    pub shift: u32,
+    pub mask: u32,
+    pub value: u32,
+}
+
+impl RemapGate {
+    /// `true` while the register selects this route's mapping.
+    #[inline]
+    pub fn open(&self) -> bool {
+        (self.register.load(std::sync::atomic::Ordering::Relaxed) >> self.shift) & self.mask
+            == self.value
+    }
 }
 
 /// Every pad-to-peripheral-wire binding on one GPIO port.
@@ -148,6 +177,7 @@ impl PadRoutes {
             func,
             cell: cell_idx,
             when_driving: false,
+            gate: None,
         });
     }
 
@@ -172,6 +202,21 @@ impl PadRoutes {
         line: usize,
         func: &'static str,
     ) {
+        self.bind_when_driving_gated(cell, pin, selector, line, func, None);
+    }
+
+    /// [`Self::bind_when_driving`], live only while `gate` is open as well:
+    /// a pad that carries the signal under one remap setting only (CH32V003
+    /// PC3 is `TIM1_CH3` at `TIM1_RM = 00` and `TIM1_CH1N` at `01`).
+    pub fn bind_when_driving_gated(
+        &mut self,
+        cell: &Arc<PadLines>,
+        pin: u8,
+        selector: Option<u32>,
+        line: usize,
+        func: &'static str,
+        gate: Option<RemapGate>,
+    ) {
         let cell_idx = match self.cells.iter().position(|c| Arc::ptr_eq(c, cell)) {
             Some(i) => i,
             None => {
@@ -187,6 +232,7 @@ impl PadRoutes {
             func,
             cell: cell_idx,
             when_driving: true,
+            gate,
         });
     }
 
@@ -252,13 +298,17 @@ impl PadRoutes {
             r.pin == pin
                 && r.when_driving
                 && r.selector.is_none_or(|want| want == current)
+                && r.gate.as_ref().is_none_or(RemapGate::open)
                 && self.cells[r.cell].drives(r.line)
         });
         if conditional.is_some() {
             return conditional;
         }
         self.routes.iter().find(|r| {
-            r.pin == pin && !r.when_driving && r.selector.is_none_or(|want| want == current)
+            r.pin == pin
+                && !r.when_driving
+                && r.selector.is_none_or(|want| want == current)
+                && r.gate.as_ref().is_none_or(RemapGate::open)
         })
     }
 
@@ -327,13 +377,15 @@ impl PadRoutes {
             // this port (a timer enabling its channel output), and only a
             // port write re-syncs taps. So its line reports to the watch
             // channel whenever the pad is handed to a peripheral at all; it
-            // publishes nothing while it does not drive.
+            // publishes nothing while it does not drive. A gated route
+            // whose remap field selects another mapping does not report: the
+            // remap moved its signal to a different pad. (A remap written
+            // AFTER the pads were configured re-syncs on the next write to
+            // this port; ch32fun and the WCH SDK both remap first.)
             if selector_of(pin).is_some() {
-                for r in self
-                    .routes
-                    .iter()
-                    .filter(|r| r.when_driving && r.pin == pin)
-                {
+                for r in self.routes.iter().filter(|r| {
+                    r.when_driving && r.pin == pin && r.gate.as_ref().is_none_or(RemapGate::open)
+                }) {
                     if let Some(slot) = per_cell[r.cell].get_mut(r.line) {
                         if !slot.contains(&channel) {
                             slot.push(channel);

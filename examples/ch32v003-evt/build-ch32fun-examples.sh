@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build eleven unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build twelve unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -42,6 +42,13 @@
 #                    (PD0, CC1NE|CC1NP with CC1E clear) and on CH4 (PC4,
 #                    CC4E|CC4P); CH1's compare steps one count every
 #                    Delay_Ms(5), CH4's 128 counts ahead.
+#   tim1_pwm_complementary_outputs.elf
+#                    examples/tim1_pwm_complementary_outputs: TIM1 remapped
+#                    by AFIO_PCFR1.TIM1_RM = 01 (partial remap 1), CH1 on
+#                    PC6 and CH1N on PC3, PSC 9 / ATRLR 10000 (2.083 ms),
+#                    50% duty, both outputs active low (CC1P|CC1NP); the
+#                    main loop steps BDTR.DTG (dead time) 0..255 every
+#                    Delay_Ms(20).
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V003 (rv32ec/ilp32e, -Os -flto, generated_ch32v003.ld),
@@ -79,7 +86,7 @@ ld="${out_dir}/generated_ch32v003.ld"
   -DTARGET_MCU_MEMORY_SPLIT= "${src}/ch32fun/ch32fun.ld" > "${ld}"
 
 for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr \
-    spi_max7219 uart_tx_dma ws2812bdemo tim1_pwm; do
+    spi_max7219 uart_tx_dma ws2812bdemo tim1_pwm tim1_pwm_complementary_outputs; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

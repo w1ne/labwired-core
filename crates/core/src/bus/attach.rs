@@ -2883,33 +2883,103 @@ impl SystemBus {
             ("tim4", 'b', 8, 2, "TIM4_CH3"),
             ("tim4", 'b', 9, 3, "TIM4_CH4"),
         ];
-        // WCH CH32V003RM, TIM2 remap table, PCFR1.TIM2_RM = 00 (reset):
-        // T2CH1ETR PD4, T2CH2 PD3, T2CH3 PC0, T2CH4 PD7 (ch32fun's
-        // examples/tim2_pwm lists the same pads). The register block is the F1
-        // general-purpose timer; only the pads differ, so the table is picked
-        // from the chip's RCC profile like the CH32V003 I²C1 pads.
+        // WCH CH32V003: the register block is the F1 timer; only the pads
+        // differ, and AFIO_PCFR1 moves them, so every row names the remap
+        // field value it is live under: (timer, port, pin, channel, func,
+        // PCFR1 shift, value). The complementary outputs are wire lines 4..6
+        // (`complementary_line`).
         //
-        // TIM1 at PCFR1.TIM1_RM = 00 (reset), CH32V003 DS pin table and
-        // ch32fun's examples/tim1_pwm_complementary_outputs: T1CH1/CH1N
-        // PD2/PD0, T1CH2/CH2N PA1/PA2, T1CH3/CH3N PC3/PD1, T1CH4 PC4. The
-        // complementary outputs are wire lines 4..6 (`complementary_line`).
-        const CH32V003: &[(&str, char, u8, usize, &str)] = &[
-            ("tim1", 'd', 2, 0, "TIM1_CH1"),
-            ("tim1", 'a', 1, 1, "TIM1_CH2"),
-            ("tim1", 'c', 3, 2, "TIM1_CH3"),
-            ("tim1", 'c', 4, 3, "TIM1_CH4"),
-            ("tim1", 'd', 0, 4, "TIM1_CH1N"),
-            ("tim1", 'a', 2, 5, "TIM1_CH2N"),
-            ("tim1", 'd', 1, 6, "TIM1_CH3N"),
-            ("tim2", 'd', 4, 0, "TIM2_CH1"),
-            ("tim2", 'd', 3, 1, "TIM2_CH2"),
-            ("tim2", 'c', 0, 2, "TIM2_CH3"),
-            ("tim2", 'd', 7, 3, "TIM2_CH4"),
+        // TIM1_RM is PCFR1 [7:6]. Pads from ch32fun's ch32v003hw.h
+        // (AFIO_PCFR1_TIM1_REMAP_* comments) cross-checked against the
+        // remap table in examples/tim1_pwm_complementary_outputs; 00 and 10
+        // put the channels on the same pads (only ETR/BKIN differ):
+        //   00/10: CH1/CH1N PD2/PD0, CH2/CH2N PA1/PA2, CH3/CH3N PC3/PD1, CH4 PC4
+        //   01:    CH1/CH1N PC6/PC3, CH2/CH2N PC7/PC4, CH3/CH3N PC0/PD1, CH4 PD3
+        //   11:    CH1/CH1N PC4/PC3, CH2/CH2N PC7/PD2, CH3/CH3N PC5/PC6
+        // ⚠️ Full-remap CH4 is left out: the header puts it on PD4, the
+        // example's table on PD2 (already CH2N there). Two sources disagree,
+        // so that output stays dark rather than guessed.
+        //
+        // TIM2_RM is PCFR1 [9:8]; only its reset mapping 00 is bound, the
+        // pads ch32fun's examples/tim2_pwm drives: T2CH1ETR PD4, T2CH2 PD3,
+        // T2CH3 PC0, T2CH4 PD7. A remapped TIM2 is dark, not on the wrong pad.
+        type Ch32Row = (&'static str, char, u8, usize, &'static str, u32, u32);
+        const TIM1_RM: u32 = 6;
+        const TIM2_RM: u32 = 8;
+        const CH32V003: &[Ch32Row] = &[
+            ("tim1", 'd', 2, 0, "TIM1_CH1", TIM1_RM, 0b00),
+            ("tim1", 'a', 1, 1, "TIM1_CH2", TIM1_RM, 0b00),
+            ("tim1", 'c', 3, 2, "TIM1_CH3", TIM1_RM, 0b00),
+            ("tim1", 'c', 4, 3, "TIM1_CH4", TIM1_RM, 0b00),
+            ("tim1", 'd', 0, 4, "TIM1_CH1N", TIM1_RM, 0b00),
+            ("tim1", 'a', 2, 5, "TIM1_CH2N", TIM1_RM, 0b00),
+            ("tim1", 'd', 1, 6, "TIM1_CH3N", TIM1_RM, 0b00),
+            ("tim1", 'c', 6, 0, "TIM1_CH1", TIM1_RM, 0b01),
+            ("tim1", 'c', 7, 1, "TIM1_CH2", TIM1_RM, 0b01),
+            ("tim1", 'c', 0, 2, "TIM1_CH3", TIM1_RM, 0b01),
+            ("tim1", 'd', 3, 3, "TIM1_CH4", TIM1_RM, 0b01),
+            ("tim1", 'c', 3, 4, "TIM1_CH1N", TIM1_RM, 0b01),
+            ("tim1", 'c', 4, 5, "TIM1_CH2N", TIM1_RM, 0b01),
+            ("tim1", 'd', 1, 6, "TIM1_CH3N", TIM1_RM, 0b01),
+            ("tim1", 'd', 2, 0, "TIM1_CH1", TIM1_RM, 0b10),
+            ("tim1", 'a', 1, 1, "TIM1_CH2", TIM1_RM, 0b10),
+            ("tim1", 'c', 3, 2, "TIM1_CH3", TIM1_RM, 0b10),
+            ("tim1", 'c', 4, 3, "TIM1_CH4", TIM1_RM, 0b10),
+            ("tim1", 'd', 0, 4, "TIM1_CH1N", TIM1_RM, 0b10),
+            ("tim1", 'a', 2, 5, "TIM1_CH2N", TIM1_RM, 0b10),
+            ("tim1", 'd', 1, 6, "TIM1_CH3N", TIM1_RM, 0b10),
+            ("tim1", 'c', 4, 0, "TIM1_CH1", TIM1_RM, 0b11),
+            ("tim1", 'c', 7, 1, "TIM1_CH2", TIM1_RM, 0b11),
+            ("tim1", 'c', 5, 2, "TIM1_CH3", TIM1_RM, 0b11),
+            ("tim1", 'c', 3, 4, "TIM1_CH1N", TIM1_RM, 0b11),
+            ("tim1", 'd', 2, 5, "TIM1_CH2N", TIM1_RM, 0b11),
+            ("tim1", 'c', 6, 6, "TIM1_CH3N", TIM1_RM, 0b11),
+            ("tim2", 'd', 4, 0, "TIM2_CH1", TIM2_RM, 0b00),
+            ("tim2", 'd', 3, 1, "TIM2_CH2", TIM2_RM, 0b00),
+            ("tim2", 'c', 0, 2, "TIM2_CH3", TIM2_RM, 0b00),
+            ("tim2", 'd', 7, 3, "TIM2_CH4", TIM2_RM, 0b00),
         ];
-        let ch32v003 = self.rcc_is_ch32v003();
-        let table = if ch32v003 { CH32V003 } else { F1 };
+        use crate::peripherals::pad_routing::RemapGate;
+        let remap = if self.rcc_is_ch32v003() {
+            // No AFIO block on the bus: nothing can move a pad, so the reset
+            // rows stand alone.
+            Some(
+                self.find_peripheral_index_by_name("afio")
+                    .and_then(|i| self.peripherals[i].dev.remap_register()),
+            )
+        } else {
+            None
+        };
+        // (timer, port, pin, channel, func, remap gate)
+        type PadRow = (
+            &'static str,
+            char,
+            u8,
+            usize,
+            &'static str,
+            Option<RemapGate>,
+        );
+        let rows: Vec<PadRow> = match &remap {
+            None => F1
+                .iter()
+                .map(|&(t, port, pin, ch, func)| (t, port, pin, ch, func, None))
+                .collect(),
+            Some(cell) => CH32V003
+                .iter()
+                .filter(|row| cell.is_some() || row.6 == 0)
+                .map(|&(t, port, pin, ch, func, shift, value)| {
+                    let gate = cell.as_ref().map(|register| RemapGate {
+                        register: register.clone(),
+                        shift,
+                        mask: 0b11,
+                        value,
+                    });
+                    (t, port, pin, ch, func, gate)
+                })
+                .collect(),
+        };
         use crate::peripherals::timer::TimerInputStage;
-        for &(tim, port, pin, ch, func) in table {
+        for (tim, port, pin, ch, func, gate) in rows {
             let Some(t_idx) = self
                 .find_peripheral_index_by_name(tim)
                 .or_else(|| self.find_peripheral_index_by_name(&format!("{tim}_pwm")))
@@ -2927,10 +2997,12 @@ impl SystemBus {
             let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
                 continue;
             };
-            if self.peripherals[gpio_idx]
-                .dev
-                .bind_timer_output_pad(&lines, pin, ch, func)
-            {
+            let gpio = &mut self.peripherals[gpio_idx].dev;
+            let bound = match gate {
+                Some(gate) => gpio.bind_remapped_timer_output_pad(&lines, pin, ch, func, gate),
+                None => gpio.bind_timer_output_pad(&lines, pin, ch, func),
+            };
+            if bound {
                 // A pad can carry it: the timer starts generating its outputs.
                 self.peripherals[t_idx].dev.timer_output_lines(true);
             }

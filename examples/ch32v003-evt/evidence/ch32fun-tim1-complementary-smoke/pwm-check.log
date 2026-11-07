@@ -1,0 +1,13 @@
+$ target/debug/labwired test --script <ch32fun-tim1-complementary-smoke.yaml with max_cycles 265000000, max_steps 400000000> --output-dir /tmp/tim1comp-long --no-uart-stdout --watch-gpio gpioc:6 --watch-gpio gpioc:3
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  9/9 checks · .long-tim1-comp · 265000000 steps · 185.38s
+$ gzip -9 -n -c /tmp/tim1comp-long/result.json > pwm-capture.json.gz
+$ python3 -I examples/ch32v003-evt/check-tim1-complementary.py --full examples/ch32v003-evt/evidence/ch32fun-tim1-complementary-smoke/pwm-capture.json.gz
+window: cycles 4900138..264926138 (2600 whole periods of 100010 cycles, OC1REF high 50000)
+dead-time gaps: 5200 (two per period), 271 DTG values, mean hold 959947 cycles
+  DTG   0..127 0xx: DT = DTG            128/128 values  0..127, DT 0..127 cycles
+  DTG 128..191 10x: (64+DTG[5:0])x2      64/64 values  128..191, DT 128..254 cycles
+  DTG 192..223 110: (32+DTG[4:0])x8      32/32 values  192..223, DT 256..504 cycles
+  DTG 224..255 111: (32+DTG[4:0])x16     32/32 values  224..255, DT 512..1008 cycles
+  wrap 255 -> 0: yes
+PASS
