@@ -175,13 +175,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 175;
+const COVERED: usize = 179;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
 const SILICON_REGISTER: usize = 73;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 70;
+const NO_ANALOG_ENDPOINT: usize = 66;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
