@@ -28,7 +28,7 @@
 //! | 0x280 | `IPRR[8]` | write 1 to clear a latched pend (reads 0) |
 //! | 0x300 | `IACTR[8]` | read-only active status |
 //! | 0x400 | `IPRIOR[256]` | one byte per interrupt, bits [7:6] implemented |
-//! | 0xD10 | `SCTLR` | stored; SLEEPONEXIT/SEVONPEND/SYSRESET have no effect |
+//! | 0xD10 | `SCTLR` | stored; SETEVENT (bit 5) sets the event register, WFITOWFE (bit 3) makes `wfi` a WFE; SLEEPONEXIT/SEVONPEND/SYSRESET have no effect |
 //!
 //! The registers live in [`QingkePficState`], shared with the RISC-V core
 //! (installed by `configure_riscv`) the way the Cortex-M NVIC shares
@@ -42,13 +42,24 @@
 //! the interrupt stays requested exactly while the source asserts it and a
 //! handler that clears `STK_SR` drops it on the same store.
 //!
+//! Events (WFE). [`QingkePficState::event`] is the core's event register:
+//! an SCTLR store with SETEVENT set, or an EXTI line whose EVENR bit is set
+//! seeing its selected edge, raises it. With SCTLR.WFITOWFE set the core's
+//! `wfi` consumes a raised event and continues, or else stays parked on the
+//! `wfi` until an event arrives or an interrupt the PFIC would deliver is
+//! requested (ch32fun's `__WFE()` is SETEVENT, then two `wfi`: the first
+//! eats its own event, the second sleeps). EXTI lines that no GPIO pad
+//! drives (line 9, the PWR auto-wakeup) reach EXTI through
+//! [`QingkePficState::exti_line_pulse`], since EXTI has no tick of its own.
+//!
 //! Not modeled: interrupt nesting (`INTSYSCR.INESTEN`) — a higher preemption
 //! priority waits for the running handler's `mret`; the key-gated system
-//! reset in `CFGR`/`SCTLR`; sleep-on-exit and event semantics in `SCTLR`;
-//! the NMI.
+//! reset in `CFGR`/`SCTLR`; SLEEPONEXIT and SEVONPEND; the difference
+//! between sleep and deep sleep/standby (SLEEPDEEP, PWR_CTLR.PDDS): every
+//! clock keeps running while the core is parked; the NMI.
 
 use crate::{Peripheral, SimResult};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 const WORDS: usize = 8;
@@ -73,7 +84,24 @@ pub struct QingkePficState {
     pub vtf_id: AtomicU32,
     pub vtf_addr: [AtomicU32; VTF_CHANNELS],
     pub sctlr: AtomicU32,
+    /// The core's event register (see the module docs).
+    pub event: AtomicBool,
+    /// EXTI configuration published by the CH32V003 EXTI on every store:
+    /// RTENR | FTENR, EVENR and INTENR.
+    pub exti_edge: AtomicU32,
+    pub exti_evenr: AtomicU32,
+    pub exti_intenr: AtomicU32,
+    /// INTFR bits latched by [`Self::exti_line_pulse`]; EXTI reads them as
+    /// part of INTFR and its write-1-clear drops them.
+    pub exti_internal_flags: AtomicU32,
 }
+
+/// SCTLR bits (QingKe V2 manual, ch32fun `__WFE`).
+const SCTLR_WFITOWFE: u32 = 1 << 3;
+const SCTLR_SETEVENT: u32 = 1 << 5;
+/// EXTI line 9 is the PWR auto-wakeup; `AWU_IRQn` is 21 (ch32v003hw.h).
+const EXTI_AWU_LINE: u32 = 9;
+const AWU_IRQ: u32 = 21;
 
 impl Default for QingkePficState {
     fn default() -> Self {
@@ -87,6 +115,11 @@ impl Default for QingkePficState {
             vtf_id: AtomicU32::new(0),
             vtf_addr: Default::default(),
             sctlr: AtomicU32::new(0),
+            event: AtomicBool::new(false),
+            exti_edge: AtomicU32::new(0),
+            exti_evenr: AtomicU32::new(0),
+            exti_intenr: AtomicU32::new(0),
+            exti_internal_flags: AtomicU32::new(0),
         }
     }
 }
@@ -113,6 +146,45 @@ impl QingkePficState {
                 self.level[word].fetch_and(!bit, Ordering::SeqCst);
             }
         }
+    }
+
+    /// Raise the core's event register.
+    pub fn raise_event(&self) {
+        self.event.store(true, Ordering::SeqCst);
+    }
+
+    /// Consume the event register; true when it was raised.
+    pub fn take_event(&self) -> bool {
+        self.event.swap(false, Ordering::SeqCst)
+    }
+
+    /// SCTLR.WFITOWFE: the core's `wfi` waits for an event.
+    pub fn wfi_is_wfe(&self) -> bool {
+        self.sctlr.load(Ordering::Relaxed) & SCTLR_WFITOWFE != 0
+    }
+
+    /// An internal EXTI source (not a GPIO pad) pulsed `line`. As for a pad
+    /// edge, nothing happens unless RTENR or FTENR selects the line; then
+    /// INTFR latches it, EVENR raises the event register and INTENR the
+    /// line's interrupt. The pulse rises and falls, so either edge counts.
+    pub fn exti_line_pulse(&self, line: u32) {
+        let bit = 1u32 << line;
+        if self.exti_edge.load(Ordering::SeqCst) & bit == 0 {
+            return;
+        }
+        self.exti_internal_flags.fetch_or(bit, Ordering::SeqCst);
+        if self.exti_evenr.load(Ordering::SeqCst) & bit != 0 {
+            self.raise_event();
+        }
+        self.publish_exti_internal_levels(0);
+    }
+
+    /// Drive the interrupts of the non-GPIO EXTI lines from `INTFR & INTENR`,
+    /// with `gpio_flags` the EXTI's own INTFR bits.
+    pub fn publish_exti_internal_levels(&self, gpio_flags: u32) {
+        let flags = gpio_flags | self.exti_internal_flags.load(Ordering::SeqCst);
+        let active = flags & self.exti_intenr.load(Ordering::SeqCst);
+        self.set_level(AWU_IRQ, active & (1 << EXTI_AWU_LINE) != 0);
     }
 
     pub fn priority_of(&self, irq: u32) -> u8 {
@@ -232,9 +304,20 @@ impl QingkePficState {
                 self.priority[((offset - 0x400) / 4) as usize]
                     .store(value & mask, Ordering::Relaxed)
             }
-            0xD10 => self.sctlr.store(value, Ordering::Relaxed),
+            0xD10 => {
+                if value & SCTLR_SETEVENT != 0 {
+                    self.raise_event();
+                }
+                self.sctlr.store(value, Ordering::Relaxed)
+            }
             _ => crate::census_reg!("qingke_pfic:QingkePfic", offset, "write"),
         }
+    }
+
+    /// An MMIO store from a unit test that holds only the shared state.
+    #[cfg(test)]
+    pub fn write_reg_for_test(&self, offset: u64, value: u32) {
+        self.write_reg(offset, value);
     }
 
     fn is_write_one_bank(offset: u64) -> bool {
@@ -264,6 +347,8 @@ struct PficSnapshot {
     vtf_id: u32,
     vtf_addr: Vec<u32>,
     sctlr: u32,
+    event: bool,
+    exti_internal_flags: u32,
 }
 
 fn load_all(words: &[AtomicU32]) -> Vec<u32> {
@@ -288,6 +373,8 @@ impl QingkePfic {
             vtf_id: s.vtf_id.load(Ordering::Relaxed),
             vtf_addr: load_all(&s.vtf_addr),
             sctlr: s.sctlr.load(Ordering::Relaxed),
+            event: s.event.load(Ordering::Relaxed),
+            exti_internal_flags: s.exti_internal_flags.load(Ordering::Relaxed),
         }
     }
 
@@ -302,6 +389,9 @@ impl QingkePfic {
         s.vtf_id.store(snap.vtf_id, Ordering::Relaxed);
         store_all(&s.vtf_addr, &snap.vtf_addr);
         s.sctlr.store(snap.sctlr, Ordering::Relaxed);
+        s.event.store(snap.event, Ordering::Relaxed);
+        s.exti_internal_flags
+            .store(snap.exti_internal_flags, Ordering::Relaxed);
     }
 }
 

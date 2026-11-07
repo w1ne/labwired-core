@@ -1818,7 +1818,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: a31a430bba1d3efd05d226557ec26f1657e9b260945a7392e9623e039da20d42
+    drift_ack_digest: a7b27ccd04a47abf24236ad418bbd0c6d8079245ed9e594f955a6a2c2394ee19
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2497,6 +2497,12 @@ boards:
     #   path arms one event per conversion instead of one per cycle (walk diff
     #   tests pin both). adc lib tests pass in both modes. ACK, NOT A SILICON
     #   CAPTURE.
+    # 2026-11-07 (CH32V003 PWR auto-wakeup + WFE, ch32fun standby_autowake):
+    #   rcc.rs: WchRcc (CH32V003 only) gains RSTSCKR LSION/LSIRDY and PWREN
+    #   in its APB1 mask. No STM32 layout is touched.
+    #   pwr.rs: a new PwrCh32v003 struct (AWU), selected only by `pwr`
+    #   `profile: ch32v003`. The existing PWR structs are unchanged.
+    #   ACK, NOT A SILICON CAPTURE.
     drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -2728,7 +2734,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 7d78ff8d30410ebef384fafa44bedbe611f0e5e6df12a1f19f571c0e123ca6a4
+    drift_ack_digest: 8c86f02493a696a8992f2021570e38a4959ea94236e14bf8440afc103e856a55
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3607,6 +3613,11 @@ boards:
     #   duplicate CH32V003 table is dropped. The CH32V003 I2C pad arm now also
     #   matches the `Wch` GPIO layout. STM32 F1/V2 tables are unchanged. All
     #   19 CH32V003 smokes pass after the merge. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-07 (CH32V003 PWR auto-wakeup + WFE, ch32fun standby_autowake):
+    #   cpu/riscv.rs: `wfi` parks only when a QingKe PFIC is attached and its
+    #   SCTLR.WFITOWFE is set (CH32V003 WFE). The ESP32-C3 has no QingKe PFIC,
+    #   so its `wfi` is byte-for-byte the same no-op.
+    #   ACK, NOT A SILICON CAPTURE.
     drift_ack: 2026-11-07
 
   - id: nucleo-l476rg
@@ -4119,7 +4130,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 63364376766e2da472828144dca4cf80a534208fd5291940d17e04b67c54d4ca
+    drift_ack_digest: bf3a24fc8fa79d9316b4b0389979c7110f0139065f218fe6a85f545267ac91d9
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4786,6 +4797,14 @@ boards:
     #   path arms one event per conversion instead of one per cycle (walk diff
     #   tests pin both). adc lib tests pass in both modes. ACK, NOT A SILICON
     #   CAPTURE.
+    # 2026-11-07 (CH32V003 PWR auto-wakeup + WFE, ch32fun standby_autowake):
+    #   rcc.rs: WchRcc (CH32V003 only) gains RSTSCKR LSION/LSIRDY and PWREN
+    #   in its APB1 mask. No STM32 layout is touched.
+    #   exti.rs: only the Ch32v003 variant changes (EVENR events, AWU line 9
+    #   flags shared with the QingKe PFIC). F1/L4/G0/U5/L0 paths are untouched.
+    #   pwr.rs: a new PwrCh32v003 struct (AWU), selected only by `pwr`
+    #   `profile: ch32v003`. The existing PWR structs are unchanged.
+    #   ACK, NOT A SILICON CAPTURE.
     drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -5315,7 +5334,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: f63e4b301ff53ac2dd0d264474c7478af15efacb1cc0853971a53e2840de523f
+    drift_ack_digest: 2bad327c724c26289d7a784b883ccd89528c239936d33deaed77dcf5366aaf3b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5915,6 +5934,10 @@ boards:
     #   path arms one event per conversion instead of one per cycle (walk diff
     #   tests pin both). adc lib tests pass in both modes. ACK, NOT A SILICON
     #   CAPTURE.
+    # 2026-11-07 (CH32V003 PWR auto-wakeup + WFE, ch32fun standby_autowake):
+    #   rcc.rs: WchRcc (CH32V003 only) gains RSTSCKR LSION/LSIRDY and PWREN
+    #   in its APB1 mask. No STM32 layout is touched.
+    #   ACK, NOT A SILICON CAPTURE.
     drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -6509,7 +6532,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 69bef5a4713517389d8b8a97bc7bddb46d2eca5e31bf6808d4a612636b5a49ef
+    drift_ack_digest: 9a3b2187449d79fa90cff6880e18a6c3aa0be4762cd95728e2b60645bc5e618b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7179,6 +7202,12 @@ boards:
     #   path arms one event per conversion instead of one per cycle (walk diff
     #   tests pin both). adc lib tests pass in both modes. ACK, NOT A SILICON
     #   CAPTURE.
+    # 2026-11-07 (CH32V003 PWR auto-wakeup + WFE, ch32fun standby_autowake):
+    #   rcc.rs: WchRcc (CH32V003 only) gains RSTSCKR LSION/LSIRDY and PWREN
+    #   in its APB1 mask. No STM32 layout is touched.
+    #   exti.rs: only the Ch32v003 variant changes (EVENR events, AWU line 9
+    #   flags shared with the QingKe PFIC). F1/L4/G0/U5/L0 paths are untouched.
+    #   ACK, NOT A SILICON CAPTURE.
     drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -7729,7 +7758,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 8fe2a3326194aef94a0ec5d4ba653fb71c7eea0819dc52a97b4c8d0f6808f39f
+    drift_ack_digest: 170379d583bf3441439779ca0f6ae0bac7590048aac1b5ccbc100704539095f5
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -8331,6 +8360,10 @@ boards:
     #   path arms one event per conversion instead of one per cycle (walk diff
     #   tests pin both). adc lib tests pass in both modes. ACK, NOT A SILICON
     #   CAPTURE.
+    # 2026-11-07 (CH32V003 PWR auto-wakeup + WFE, ch32fun standby_autowake):
+    #   rcc.rs: WchRcc (CH32V003 only) gains RSTSCKR LSION/LSIRDY and PWREN
+    #   in its APB1 mask. No STM32 layout is touched.
+    #   ACK, NOT A SILICON CAPTURE.
     drift_ack: 2026-11-07
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`

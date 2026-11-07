@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs twenty of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs twenty-one of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -179,6 +179,7 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `tim2_pwm_remap` | TIM2 PWM (ATRLR 255, CH1/CH2 active low, CH2 = 255 - CH1) with LEDs on PD4, PD3, PC1 and PC7; after 255 duty steps `ToggleRemap()` sets `TIM2_RM` = 11 while TIM2 runs. The smoke checks the console (`Full Remapping!`), the remap and the TIM2 setup; [`check-tim2-pwm-remap.py`](check-tim2-pwm-remap.py) decodes a `--watch-gpio` run, committed as [`pwm-capture.json.gz`](evidence/ch32fun-tim2-pwm-remap-smoke/pwm-capture.json.gz) with its output in [`remap-check.log`](evidence/ch32fun-tim2-pwm-remap-smoke/remap-check.log) | 9/9; PD4/PD3 carry counts 253..254 and stop at cycle 66,011,469, PC1/PC7 start 255 cycles later at count 0 and carry 0..16; every whole period is 256 cycles with CH1 low + CH2 low = 255 |
 | `tim1_tim2_cascade` | timer master/slave: TIM1 counts milliseconds (PSC 47999, ATRLR 999) and sends TRGO on every update (`CTLR2.MMS` = 010); TIM2 counts that TRGO on ITR0 in external clock mode 1 (`SMCFGR` TS = 000, SMS = 111), so it counts seconds. `main()` prints `TIM2.TIM1 s` every 500 ms on the debug-printf channel. The smoke checks all eight lines, the TIM1/TIM2 setup and TIM2 `CNT` = 3 at the stop | 15/15 over 170 M cycles (3.54 s): `0.000 s`, `0.500 s` .. `3.500 s`. Before the TRGO/ITR link, SMS = 111 still counted CK_INT, so the seconds field was HCLK cycles mod 65536 |
 | `input_capture` | TIM1 input capture at 1 us per count: a pulse source on PD2 (T1CH1) gives a 1000 us and a 2500 us pulse; CH1 latches the rising edge, CH2 (TI1, `CC2P`) the falling edge, and the TIM1_CC handler (PFIC 37) queues each capture for `main()` to print. The smoke checks the four printed captures and the TIM1 setup left behind (PSC, CHCTLR1, CCER, DMAINTENR, CEN); the whole terminal is in [`terminal.log`](evidence/ch32fun-input-capture-smoke/terminal.log) | 11/11; fall minus rise is exactly 1000 (24993 → 25993) and 2500 (21957 → 24457) counts, one handler entry per capture, no `badtrigger` |
+| `standby_autowake` | standby with the auto-wakeup: a 5 s `Delay_Ms`, every GPIO to input pull-up, the LSI on (`RCC_RSTSCKR` LSION/LSIRDY), EXTI line 9 as a falling-edge event, the AWU at LSI/4096 with window 63 (2.016 s), PDDS + SLEEPDEEP, then `__WFE()` and `awake, N` in a loop. The smoke checks the banner, `entering sleep loop` and `awake, 2` within 576 M cycles (12 s). [`check-standby-autowake.py`](check-standby-autowake.py) reruns the image to either side of the third wake-up, logged in [`autowake-check.log`](evidence/ch32fun-standby-autowake-smoke/autowake-check.log). Uses [`ch32v003evt-ch32fun-standby-autowake-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-standby-autowake-smoke.yaml) | 3/3; exactly `awake, 0`..`awake, 2` in 12 s. At 530.2 M cycles `awake, 1` is printed and `awake, 2` is not; at 532.0 M `awake, 2` is printed. That rules out a core that falls through WFE, and it rules out a 64-count window |
 
 This profile adds these to the PFIC profile:
 
@@ -206,6 +207,22 @@ This profile adds these to the PFIC profile:
   (L = `RSQR1[23:20]` + 1), with EOC and EOCIE at the end of the group.
   `CTLR2.DMA` requests DMA1 channel 1 after every conversion, and CONT
   restarts the group without clearing EOC. `adc_dma_opamp` uses all three.
+- **PWR, the auto-wakeup and WFE** (`standby_autowake`). PWR
+  (`0x40007000`, `pwr` `profile: ch32v003`) stores CTLR and runs the AWU.
+  With AWUEN set, it counts the LSI divided by the AWUPSC prescaler (the codes
+  from WCH's `ch32v00x_pwr.c`). Every AWUWR counts it restarts and pulses
+  EXTI line 9. That gives a period of AWUWR × AWUPSC / f_LSI, the formula in
+  the example's header. Whether silicon counts AWUWR or AWUWR + 1 is not
+  verified. Line 9 latches INTFR when FTENR/RTENR selects it, and drives PFIC
+  interrupt 21 under INTENR. An EVENR line raises the core's event register.
+  QingKe `PFIC_SCTLR.WFITOWFE` makes `wfi` a WFE: a raised event is consumed
+  and the core goes on. Otherwise the core stays on the `wfi` until an event
+  arrives or an interrupt the PFIC would take is requested. ch32fun's
+  `__WFE()` sets SETEVENT and runs two `wfi`: the first consumes the event it
+  just set, and the second sleeps. A plain `wfi` (WFITOWFE clear) still does
+  not stall. Standby is that wait and nothing more: PDDS and SLEEPDEEP
+  change nothing, every clock keeps running, the core wakes onto the same
+  SYSCLK instead of the HSI, and the AWU does not check LSION.
 - **EXTEN** (`0x40023800`): `EXTEN_CTR`/`EXTEN_KEYR` as plain storage, a
   declarative block ([`exten.yaml`](../../configs/peripherals/ch32v003/exten.yaml)),
   so `adc_dma_opamp`'s `OPA_EN` store lands and reads back. Nothing else

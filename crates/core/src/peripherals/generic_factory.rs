@@ -1126,6 +1126,15 @@ pub fn try_build(
                 // F4 has only PWR_CR/PWR_CSR (RM0368 §5.4) — a distinct reset
                 // shape from the L4 CR1..CR4 / PUCRx set.
                 Some("stm32f4") | Some("f4") => Box::new(crate::peripherals::pwr::PwrF4::new()),
+                // CH32V003: CTLR/CSR plus the LSI-clocked auto-wakeup unit
+                // that pulses EXTI line 9 (`lsi_hz`, default 128 kHz).
+                Some("ch32v003") => Box::new(crate::peripherals::pwr::PwrCh32v003::new(
+                    p_cfg
+                        .config
+                        .get("lsi_hz")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(128_000),
+                )),
                 _ => Box::new(crate::peripherals::pwr::Pwr::new()),
             }
         }

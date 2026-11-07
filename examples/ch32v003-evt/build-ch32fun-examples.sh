@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build twenty unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build twenty-one unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -91,6 +91,12 @@
 #                    into a four-entry buffer; the op-amp enabled
 #                    (EXTEN_CTR.OPA_EN); the buffer printed every 200 ms on
 #                    the debug printf channel while PC1 blinks.
+#   standby_autowake.elf
+#                    examples/standby_autowake: after a 5 s Delay_Ms, all
+#                    GPIOs to input pull-up, LSI on, EXTI line 9 (AWU) as a
+#                    falling-edge event, AWU at LSI/4096 with window 63
+#                    (2.016 s), PDDS + SLEEPDEEP, then a loop of __WFE()
+#                    and "awake, N" on the debug printf channel.
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V003 (rv32ec/ilp32e, -Os -flto, generated_ch32v003.ld),
@@ -130,7 +136,7 @@ ld="${out_dir}/generated_ch32v003.ld"
 for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr \
     spi_max7219 uart_tx_dma ws2812bdemo tim1_pwm tim1_pwm_complementary_outputs iwdg \
     input_capture tim2_encoder tim2_pwm_remap spi_oled usart_dma_rx_circular tim1_tim2_cascade \
-    adc_dma_opamp; do
+    adc_dma_opamp standby_autowake; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

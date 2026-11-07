@@ -1,0 +1,5 @@
+530,200,000 cycles: 'awake, 1'   printed  ok
+530,200,000 cycles: 'awake, 2'   absent   ok
+532,000,000 cycles: 'awake, 2'   printed  ok
+532,000,000 cycles: 'awake, 3'   absent   ok
+PASS

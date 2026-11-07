@@ -763,3 +763,255 @@ mod h5_tests {
         assert_eq!(pwr.read_u32(0x24).unwrap(), 0x1, "DBPCR");
     }
 }
+
+/// WCH CH32V003 PWR at 0x4000_7000: CTLR, CSR and the auto-wakeup unit
+/// (AWU), offsets and fields from ch32fun's `ch32v003hw.h` `PWR_TypeDef` and
+/// ch32-rs/ch32-data `pwr_v00x.yaml`.
+///
+/// | Offset | Name | Model |
+/// | --- | --- | --- |
+/// | 0x00 | `CTLR` | PDDS, LDO_MODE, PVDE, PLS, FLASH_LP_REG, FLASH_LP stored |
+/// | 0x04 | `CSR` | PVDO reads 0 (no PVD model) |
+/// | 0x08 | `AWUCSR` | AWUEN (bit 1) starts the AWU counter |
+/// | 0x0C | `AWUWR` | 6-bit window value, reset 0x3F |
+/// | 0x10 | `AWUPSC` | 4-bit prescaler code |
+///
+/// With AWUEN set the AWU counts the LSI divided by the AWUPSC prescaler
+/// (WCH `ch32v00x_pwr.c` `PWR_AWU_SetPrescaler`: codes 0 and 1 are /1, 2..12
+/// are /2../2048, 13 is /4096, 14 is /10240, 15 is /61440). Each time it
+/// reaches AWUWR it restarts and pulses EXTI line 9, so the period is
+/// `AWUWR × AWUPSC / f_LSI`, the formula in ch32fun's standby_autowake
+/// (63 × 4096 / 128 kHz = 2.016 s). Whether silicon counts AWUWR or
+/// AWUWR + 1 prescaled ticks is not verified. The pulse reaches EXTI and the
+/// core through the QingKe PFIC state
+/// ([`QingkePficState::exti_line_pulse`](crate::peripherals::qingke_pfic::QingkePficState::exti_line_pulse)).
+///
+/// Not modeled: the AWU's dependence on RCC_RSTSCKR.LSION (it counts once
+/// AWUEN is set), the PVD, and the power modes themselves: PDDS is stored,
+/// but standby keeps every clock running and wakes onto the same SYSCLK
+/// rather than the HSI.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct PwrCh32v003 {
+    ctlr: u32,
+    awucsr: u32,
+    awuwr: u32,
+    awupsc: u32,
+    lsi_hz: u64,
+    #[serde(skip, default)]
+    cpu_hz: u64,
+    counter: u32,
+    phase: u64,
+    /// AWU pulses since reset (snapshot evidence).
+    wakeups: u64,
+    #[serde(skip)]
+    pfic: Option<Arc<crate::peripherals::qingke_pfic::QingkePficState>>,
+}
+
+impl PwrCh32v003 {
+    const AWUEN: u32 = 1 << 1;
+    /// PDDS, LDO_MODE[3:2], PVDE, PLS[6:5], FLASH_LP_REG (9), FLASH_LP[11:10].
+    const CTLR_WRITABLE: u32 = 0x0000_0E7E;
+    const AWU_LINE: u32 = 9;
+
+    pub fn new(lsi_hz: u64) -> Self {
+        Self {
+            ctlr: 0,
+            awucsr: 0,
+            awuwr: 0x3F,
+            awupsc: 0,
+            lsi_hz,
+            cpu_hz: 0,
+            counter: 0,
+            phase: 0,
+            wakeups: 0,
+            pfic: None,
+        }
+    }
+
+    /// AWU counter clock divider for an AWUPSC code.
+    pub fn prescaler(code: u32) -> u64 {
+        match code & 0xF {
+            0 | 1 => 1,
+            c @ 2..=13 => 1 << (c - 1),
+            14 => 10_240,
+            _ => 61_440,
+        }
+    }
+
+    pub fn wakeups(&self) -> u64 {
+        self.wakeups
+    }
+
+    fn running(&self) -> bool {
+        self.awucsr & Self::AWUEN != 0 && self.cpu_hz != 0 && self.lsi_hz != 0
+    }
+
+    fn advance(&mut self, cycles: u64) {
+        if !self.running() {
+            return;
+        }
+        let step = Self::prescaler(self.awupsc) * self.cpu_hz;
+        self.phase += cycles * self.lsi_hz;
+        let mut ticks = self.phase / step;
+        self.phase %= step;
+        let window = self.awuwr.max(1);
+        while ticks > 0 {
+            let to_match = u64::from(window.saturating_sub(self.counter).max(1));
+            if ticks < to_match {
+                self.counter += ticks as u32;
+                break;
+            }
+            ticks -= to_match;
+            self.counter = 0;
+            self.wakeups += 1;
+            if let Some(pfic) = &self.pfic {
+                pfic.exti_line_pulse(Self::AWU_LINE);
+            }
+        }
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.ctlr,
+            0x04 => 0,
+            0x08 => self.awucsr,
+            0x0C => self.awuwr,
+            0x10 => self.awupsc,
+            _ => {
+                crate::census_reg!("pwr:PwrCh32v003", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.ctlr = value & Self::CTLR_WRITABLE,
+            0x04 => {}
+            0x08 => {
+                let start = value & Self::AWUEN != 0 && self.awucsr & Self::AWUEN == 0;
+                self.awucsr = value & Self::AWUEN;
+                if start {
+                    self.counter = 0;
+                    self.phase = 0;
+                }
+            }
+            0x0C => self.awuwr = value & 0x3F,
+            0x10 => self.awupsc = value & 0xF,
+            _ => {
+                crate::census_reg!("pwr:PwrCh32v003", offset, "write");
+            }
+        }
+    }
+}
+
+impl crate::Peripheral for PwrCh32v003 {
+    fn legacy_tick_active(&self) -> bool {
+        self.running()
+    }
+
+    fn tick_elapsed(&mut self, cycles: u64) -> crate::PeripheralTickResult {
+        self.advance(cycles);
+        crate::PeripheralTickResult::default()
+    }
+
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        self.cpu_hz = hz;
+    }
+
+    fn attach_qingke_pfic(&mut self, pfic: Arc<crate::peripherals::qingke_pfic::QingkePficState>) {
+        self.pfic = Some(pfic);
+    }
+
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
+    }
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        let mut v = self.read_reg(reg);
+        let mask: u32 = 0xFF << (byte * 8);
+        v = (v & !mask) | ((value as u32) << (byte * 8));
+        self.write_reg(reg, v);
+        Ok(())
+    }
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write_reg(offset & !3, value);
+        Ok(())
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod ch32v003_tests {
+    use super::PwrCh32v003;
+    use crate::peripherals::qingke_pfic::QingkePficState;
+    use crate::Peripheral;
+    use std::sync::atomic::Ordering;
+    use std::sync::Arc;
+
+    fn awu() -> (PwrCh32v003, Arc<QingkePficState>) {
+        let mut p = PwrCh32v003::new(128_000);
+        p.attach_cpu_hz(48_000_000);
+        let pfic = Arc::new(QingkePficState::default());
+        p.attach_qingke_pfic(pfic.clone());
+        (p, pfic)
+    }
+
+    #[test]
+    fn prescaler_codes_follow_the_wch_driver() {
+        assert_eq!(PwrCh32v003::prescaler(0), 1);
+        assert_eq!(PwrCh32v003::prescaler(1), 1);
+        assert_eq!(PwrCh32v003::prescaler(2), 2);
+        assert_eq!(PwrCh32v003::prescaler(0xC), 2048);
+        assert_eq!(PwrCh32v003::prescaler(0xD), 4096);
+        assert_eq!(PwrCh32v003::prescaler(0xE), 10_240);
+        assert_eq!(PwrCh32v003::prescaler(0xF), 61_440);
+    }
+
+    #[test]
+    fn standby_autowake_period_is_awuwr_prescaled_lsi_ticks() {
+        let (mut p, pfic) = awu();
+        // ch32fun standby_autowake: EVENR|FTENR line 9, /4096, AWUWR 63.
+        pfic.exti_edge.store(1 << 9, Ordering::SeqCst);
+        pfic.exti_evenr.store(1 << 9, Ordering::SeqCst);
+        p.write_u32(0x10, 0xD).unwrap();
+        p.write_u32(0x0C, 63).unwrap();
+        p.write_u32(0x08, 1 << 1).unwrap();
+        // 2.016 s at 48 MHz = 96_768_000 cycles.
+        p.tick_elapsed(96_767_999);
+        assert_eq!(p.wakeups(), 0);
+        assert!(!pfic.take_event());
+        p.tick_elapsed(1);
+        assert_eq!(p.wakeups(), 1);
+        assert!(pfic.take_event());
+        assert_eq!(pfic.exti_internal_flags.load(Ordering::SeqCst), 1 << 9);
+        p.tick_elapsed(96_768_000 * 3);
+        assert_eq!(p.wakeups(), 4);
+    }
+
+    #[test]
+    fn no_edge_selected_means_no_event_and_no_flag() {
+        let (mut p, pfic) = awu();
+        pfic.exti_evenr.store(1 << 9, Ordering::SeqCst);
+        p.write_u32(0x10, 0x2).unwrap();
+        p.write_u32(0x0C, 1).unwrap();
+        p.write_u32(0x08, 1 << 1).unwrap();
+        p.tick_elapsed(48_000_000);
+        assert!(p.wakeups() > 0);
+        assert!(!pfic.take_event());
+        assert_eq!(pfic.exti_internal_flags.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn disabled_awu_does_not_count() {
+        let (mut p, _pfic) = awu();
+        p.tick_elapsed(u64::from(u32::MAX));
+        assert_eq!(p.wakeups(), 0);
+        assert_eq!(p.read_u32(0x0C).unwrap(), 0x3F, "AWUWR reset value");
+    }
+}

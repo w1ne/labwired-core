@@ -1615,6 +1615,15 @@ impl RiscV {
                 // loop already polls pending interrupts every instruction, so
                 // the idle task's WFI spin wakes as soon as a line asserts.
                 self.waiting_for_interrupt = true;
+                // QingKe SCTLR.WFITOWFE turns `wfi` into a WFE: consume a
+                // raised event and continue, or stay on this `wfi` until an
+                // event or a deliverable interrupt arrives. The interrupt is
+                // then taken after the `wfi`, so `mret` returns past it.
+                if let Some(pfic) = &self.qingke_pfic {
+                    if pfic.wfi_is_wfe() && !pfic.take_event() && pfic.next_interrupt().is_none() {
+                        next_pc = self.pc;
+                    }
+                }
             }
             Instruction::Ecall | Instruction::Ebreak => {
                 // Should trap. For now, we can just log or halt.

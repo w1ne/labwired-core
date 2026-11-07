@@ -82,10 +82,21 @@
 # over its ten lines. A rising or falling edge on a pad whose port
 # AFIO_EXTICR selects for lines 0..7 latches INTFR when RTENR/FTENR asks for
 # it, and INTFR & INTENR drives PFIC interrupt 20 (EXTI7_0) as a level until
-# the handler clears INTFR. Not modeled on EXTI: event mode (EVENR wakes
-# nothing, as sleep is not modeled), the PVD (line 8) and AWU (line 9)
-# sources and their interrupts 17/21, and the input filter/synchroniser
-# latency (the flag is set on the same cycle as the pad edge).
+# the handler clears INTFR. Line 9 is the PWR auto-wakeup (AWU): it
+# latches INTFR when RTENR/FTENR selects it and drives PFIC interrupt 21
+# under INTENR. A line whose EVENR bit is set raises the core's event
+# register on its edge, which wakes a WFE (ch32fun __WFE: PFIC SCTLR
+# WFITOWFE + SETEVENT, then two wfi). Not modeled on EXTI: the PVD (line 8)
+# and its interrupt 17, and the input filter/synchroniser latency (the flag
+# is set on the same cycle as the pad edge).
+#
+# PWR keeps CTLR (PDDS stored) and the auto-wakeup unit: with AWUEN set the
+# AWU counts LSI / AWUPSC and pulses EXTI line 9 every AWUWR counts (ch32fun
+# standby_autowake's formula; AWUWR vs AWUWR + 1 is not verified on
+# silicon). RCC_RSTSCKR keeps LSION, LSIRDY following at once. Standby is
+# modeled as a WFE wait: PDDS and SLEEPDEEP change nothing, every clock
+# keeps running while the core waits, and the core wakes onto the same
+# SYSCLK rather than the HSI.
 #
 # SPI1 reuses the engine's STM32F1 SPI (same CTLR1/CTLR2/STATR/DATAR/
 # CRCR/RCRCR/TCRCR offsets and CTLR1.DFF 8/16-bit frames as ch32fun's
@@ -118,7 +129,7 @@
 # `exten` register block, but no op-amp output reaches PD4), the
 # window watchdog (WWDG), the RCC_RSTSCKR reset flags (a watchdog reset is
 # not recorded there), the IWDG hardware-watchdog option byte and its
-# PVU/RVU busy flags, sleep/standby, the HSE, the option bytes, and
+# PVU/RVU busy flags, the standby clock shutdown, the HSE, the option bytes, and
 # everything listed
 # as not modeled in ch32v003f4p6-pfic-smoke.yaml.
 name: ch32v003f4p6-ch32fun-smoke
@@ -156,7 +167,7 @@ peripherals:
   - id: rcc
     type: rcc
     base_address: 0x40021000
-    size: 32B
+    size: 40B
     config:
       profile: ch32v003
 
@@ -176,6 +187,17 @@ peripherals:
     clock: { reg: apb2enr, bit: 0 }
     config:
       profile: ch32v003
+
+  # PWR at 0x40007000; RCC_APB1PCENR.PWREN is bit 28 (ch32v003hw.h). The
+  # AWU counts the 128 kHz LSI and pulses EXTI line 9.
+  - id: pwr
+    type: pwr
+    base_address: 0x40007000
+    size: 20B
+    clock: { reg: apb1pcenr, bit: 28 }
+    config:
+      profile: ch32v003
+      lsi_hz: 128000
 
   # EXTI has no RCC enable bit of its own on the CH32V003.
   - id: exti

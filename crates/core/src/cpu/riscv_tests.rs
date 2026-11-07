@@ -233,6 +233,54 @@ fn qingke_pfic_interrupt_vectors_through_address_table_with_hpe() {
     assert_eq!(pfic.next_interrupt(), None);
 }
 
+/// ch32fun `__WFE()`: SCTLR.WFITOWFE + SETEVENT, then two `wfi`. The first
+/// eats the self-set event, the second parks until an event (an EXTI EVENR
+/// line, here posted directly) or a deliverable interrupt.
+#[test]
+fn qingke_wfi_as_wfe_parks_until_an_event_or_interrupt() {
+    use std::sync::atomic::Ordering;
+    const WFI: u32 = 0x1050_0073;
+    let (mut machine, pfic) = qingke_machine_with_pfic();
+    for addr in [0x100u64, 0x104, 0x10C] {
+        machine.bus.flash.data[addr as usize..addr as usize + 4]
+            .copy_from_slice(&WFI.to_le_bytes());
+    }
+
+    // Plain WFI (WFITOWFE clear) does not stall.
+    pfic.sctlr.store(0, Ordering::SeqCst);
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.pc, 0x104);
+
+    // SCTLR |= WFITOWFE | SETEVENT, then SETEVENT restored to 0.
+    pfic.write_reg_for_test(0xD10, (1 << 3) | (1 << 5));
+    pfic.write_reg_for_test(0xD10, 1 << 3);
+    machine.step().unwrap();
+    assert_eq!(
+        machine.cpu.pc, 0x108,
+        "first wfi consumes the SETEVENT event"
+    );
+    machine.step().unwrap(); // the NOP at 0x108
+    for _ in 0..5 {
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.pc, 0x10C, "parked on the second wfi");
+    }
+    pfic.raise_event();
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.pc, 0x110, "an event wakes it");
+    assert!(!pfic.take_event(), "the wake consumed the event");
+
+    // Park again, then a deliverable interrupt wakes the core and is taken
+    // after the wfi, so mret returns past it.
+    machine.cpu.pc = 0x10C;
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.pc, 0x10C);
+    pfic.enabled[0].store(1 << 12, Ordering::SeqCst);
+    pfic.set_level(12, true);
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.pc, 0x200, "SysTick handler entered");
+    assert_eq!(machine.cpu.mepc, 0x110);
+}
+
 #[test]
 fn qingke_without_hwstken_leaves_registers_to_the_handler() {
     let (mut machine, pfic) = qingke_machine_with_pfic();

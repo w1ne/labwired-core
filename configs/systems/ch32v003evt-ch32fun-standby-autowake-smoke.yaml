@@ -1,0 +1,6 @@
+# WCH CH32V003 evaluation board running ch32fun's standby_autowake,
+# unmodified. Nothing is wired: the example sets every GPIO to input pull-up
+# and reports each wake-up on the WCH-LinkE debug printf channel.
+name: ch32v003evt-ch32fun-standby-autowake-smoke
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+external_devices: []

@@ -2771,9 +2771,10 @@ impl RccModel for U3Rcc {
 /// is not there. Add the bit when the block gets a model.
 const WCH_APB2PCENR_MODELED: u32 =
     (1 << 0) | (1 << 2) | (1 << 4) | (1 << 5) | (1 << 9) | (1 << 11) | (1 << 12) | (1 << 14);
-/// APB1PCENR gates of the modeled blocks: TIM2 bit 0, I2C1 bit 21
-/// (`RCC_APB1Periph_TIM2` 0x0000_0001, `RCC_APB1Periph_I2C1` 0x0020_0000).
-const WCH_APB1PCENR_MODELED: u32 = (1 << 0) | (1 << 21);
+/// APB1PCENR gates of the modeled blocks: TIM2 bit 0, I2C1 bit 21, PWR
+/// bit 28 (`RCC_APB1Periph_TIM2` 0x0000_0001, `RCC_APB1Periph_I2C1`
+/// 0x0020_0000, `RCC_APB1Periph_PWR` 0x1000_0000).
+const WCH_APB1PCENR_MODELED: u32 = (1 << 0) | (1 << 21) | (1 << 28);
 
 // ── WCH CH32V003 ────────────────────────────────────────────────────────────
 
@@ -2803,6 +2804,8 @@ const WCH_APB1PCENR_MODELED: u32 = (1 << 0) | (1 << 21);
 /// HSEON never yields HSERDY, so firmware that selects the HSE waits rather
 /// than running on a clock the board does not declare. The CFGR0 dividers
 /// other than HPRE, MCO and the clock security system are storage only.
+/// RSTSCKR (0x24) keeps LSION, and LSIRDY follows it at once; its reset
+/// flags and RMVF are not modeled and read 0.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct WchRcc {
     ctlr: u32,
@@ -2811,6 +2814,9 @@ pub struct WchRcc {
     ahbpcenr: u32,
     apb2pcenr: u32,
     apb1pcenr: u32,
+    /// RSTSCKR: LSION (bit 0) and its LSIRDY (bit 1). The reset flags are
+    /// not modeled.
+    rstsckr: u32,
     hse_present: bool,
     hse_hz: Option<u32>,
 }
@@ -2827,6 +2833,9 @@ impl WchRcc {
     const AHBPCENR: u64 = 0x14;
     const APB2PCENR: u64 = 0x18;
     const APB1PCENR: u64 = 0x1C;
+    const RSTSCKR: u64 = 0x24;
+    const LSION: u32 = 1 << 0;
+    const LSIRDY: u32 = 1 << 1;
     const HSION: u32 = 1 << 0;
     const HSIRDY: u32 = 1 << 1;
     const HSEON: u32 = 1 << 16;
@@ -2849,6 +2858,7 @@ impl WchRcc {
             ahbpcenr: 0,
             apb2pcenr: 0,
             apb1pcenr: 0,
+            rstsckr: 0,
             hse_present: false,
             hse_hz: None,
         };
@@ -2962,6 +2972,7 @@ impl WchRcc {
             Self::AHBPCENR => self.ahbpcenr,
             Self::APB2PCENR => self.apb2pcenr,
             Self::APB1PCENR => self.apb1pcenr,
+            Self::RSTSCKR => self.rstsckr,
             _ => 0,
         }
     }
@@ -2990,6 +3001,14 @@ impl RccModel for WchRcc {
             Self::AHBPCENR => self.ahbpcenr = value,
             Self::APB2PCENR => self.apb2pcenr = value & WCH_APB2PCENR_MODELED,
             Self::APB1PCENR => self.apb1pcenr = value & WCH_APB1PCENR_MODELED,
+            // The LSI is ready as soon as it is switched on.
+            Self::RSTSCKR => {
+                self.rstsckr = if value & Self::LSION != 0 {
+                    Self::LSION | Self::LSIRDY
+                } else {
+                    0
+                }
+            }
             _ => {
                 crate::census_reg!("rcc:WchRcc", offset, "write");
             }
@@ -4621,7 +4640,8 @@ mod tests {
 
     /// WCH's focused APB2PCENR/APB1PCENR gates include AFIO, GPIOA, GPIOC,
     /// GPIOD, ADC1, TIM1 (APB2 bit 11), SPI1 (APB2 bit 12), USART1, TIM2
-    /// (APB1 bit 0) and I2C1 (APB1 bit 21, not bit 1). The narrow
+    /// (APB1 bit 0), I2C1 (APB1 bit 21, not bit 1) and PWR (APB1 bit 28).
+    /// The narrow
     /// profile must not inherit unrelated STM32F1 gates.
     #[test]
     fn ch32v003_models_only_the_smoked_gpio_adc_tim_spi_usart_and_i2c_clock_gates() {
@@ -4649,7 +4669,22 @@ mod tests {
                 | (1 << 12)
                 | (1 << 14)
         );
-        assert_eq!(rcc.read_u32(0x1C).unwrap(), (1 << 0) | (1 << 21));
+        assert_eq!(
+            rcc.read_u32(0x1C).unwrap(),
+            (1 << 0) | (1 << 21) | (1 << 28)
+        );
+    }
+
+    /// ch32fun standby_autowake: `RCC->RSTSCKR |= RCC_LSION` then polls
+    /// LSIRDY.
+    #[test]
+    fn ch32v003_rstsckr_lsion_gives_lsirdy() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Wch);
+        assert_eq!(rcc.read_u32(0x24).unwrap(), 0);
+        rcc.write_u32(0x24, 1).unwrap();
+        assert_eq!(rcc.read_u32(0x24).unwrap(), 0b11);
+        rcc.write_u32(0x24, 0).unwrap();
+        assert_eq!(rcc.read_u32(0x24).unwrap(), 0);
     }
 
     /// WCH `SystemInit` + `SetSysClockTo_48MHZ_HSI` (openwch/ch32v003 EVT):

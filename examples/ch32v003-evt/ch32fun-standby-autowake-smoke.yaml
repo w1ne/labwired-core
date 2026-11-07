@@ -1,0 +1,12 @@
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/standby_autowake.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-standby-autowake-smoke.yaml"
+limits:
+  max_cycles: 576000000
+  max_steps: 600000000
+  wall_time_ms: 900000
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "low power example" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "entering sleep loop" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "awake, 2" }

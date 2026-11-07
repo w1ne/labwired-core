@@ -259,10 +259,14 @@ impl SplitPendingGpioExti {
 /// `AFIO_EXTICR`), 8 is PVD and 9 is AWU. With a QingKe PFIC attached,
 /// `INTFR & INTENR` over lines 0..7 drives PFIC interrupt 20 as a LEVEL, like
 /// the QingKe SysTick: requested from the edge until the handler's INTFR
-/// write-1-clear, so a handler that acknowledges runs once per edge. Lines 8
-/// and 9 latch and clear like the others but raise nothing (no PVD or AWU
-/// model drives them). Without a PFIC the flags are register state only.
-/// Event mode (EVENR) wakes nothing: sleep is not modeled.
+/// write-1-clear, so a handler that acknowledges runs once per edge. Line 9
+/// is the PWR auto-wakeup: the AWU posts its pulse to the PFIC state
+/// ([`QingkePficState::exti_line_pulse`](crate::peripherals::qingke_pfic::QingkePficState::exti_line_pulse)),
+/// INTFR reads those flags with its own, and INTFR & INTENR on line 9 drives
+/// PFIC interrupt 21 (AWU) as a level. Line 8 (PVD) has no source. A line
+/// whose EVENR bit is set raises the core's event register (WFE wake-up) on
+/// its selected edge, a pad edge or an SWIEVR store. Without a PFIC the
+/// flags are register state only.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct QingkeExti {
     bank1: ExtiBank,
@@ -279,8 +283,31 @@ impl QingkeExti {
 
     fn publish(&self) {
         if let Some(pfic) = &self.pfic {
+            use std::sync::atomic::Ordering;
             let active = self.bank1.pr & self.bank1.imr & Self::GPIO_LINES;
             pfic.set_level(Self::EXTI7_0_IRQ, active != 0);
+            pfic.exti_edge
+                .store(self.bank1.rtsr | self.bank1.ftsr, Ordering::SeqCst);
+            pfic.exti_evenr.store(self.bank1.emr, Ordering::SeqCst);
+            pfic.exti_intenr.store(self.bank1.imr, Ordering::SeqCst);
+            pfic.publish_exti_internal_levels(self.bank1.pr);
+        }
+    }
+
+    /// INTFR bits latched for internal sources (the AWU) on the PFIC state.
+    fn internal_flags(&self) -> u32 {
+        self.pfic.as_ref().map_or(0, |p| {
+            p.exti_internal_flags
+                .load(std::sync::atomic::Ordering::SeqCst)
+        })
+    }
+
+    /// An EVENR line saw its edge: raise the core's event register.
+    fn signal_events(&self, lines: u32) {
+        if lines & self.bank1.emr != 0 {
+            if let Some(pfic) = &self.pfic {
+                pfic.raise_event();
+            }
         }
     }
 }
@@ -417,6 +444,7 @@ impl Exti {
                     return false;
                 }
                 e.bank1.pr |= bit;
+                e.signal_events(bit);
                 e.publish();
                 return true;
             }
@@ -443,7 +471,8 @@ impl Exti {
                 }
             },
             Self::Ch32v003(e) => match offset {
-                0x00..=0x14 => e.bank1.read(offset),
+                0x14 => e.bank1.pr | e.internal_flags(),
+                0x00..=0x10 => e.bank1.read(offset),
                 _ => {
                     crate::census_reg!("exti:Exti", offset, "read");
                     0
@@ -479,7 +508,19 @@ impl Exti {
             },
             Self::Ch32v003(e) => {
                 if (0x00..=0x14).contains(&offset) {
+                    let before = e.bank1.pr;
                     e.bank1.write(offset, value, QingkeExti::LINES);
+                    if offset == 0x10 {
+                        e.signal_events(e.bank1.pr & !before);
+                    }
+                    if offset == 0x14 {
+                        if let Some(pfic) = &e.pfic {
+                            pfic.exti_internal_flags.fetch_and(
+                                !(value & QingkeExti::LINES),
+                                std::sync::atomic::Ordering::SeqCst,
+                            );
+                        }
+                    }
                     // SWIEVR / INTENR can raise the request, INTFR drops it.
                     e.publish();
                 } else {
@@ -837,6 +878,51 @@ impl Peripheral for Exti {
 mod tests {
     use super::{Exti, ExtiRegisterLayout};
     use crate::Peripheral;
+
+    /// The AWU pulse on line 9 (ch32fun standby_autowake): FTENR selects it,
+    /// EVENR raises the core event, INTENR drives AWU_IRQn 21 until the
+    /// INTFR write-1-clear.
+    #[test]
+    fn ch32v003_awu_line_9_latches_intfr_raises_event_and_irq_21() {
+        use crate::peripherals::qingke_pfic::QingkePficState;
+        use std::sync::Arc;
+        let pfic = Arc::new(QingkePficState::default());
+        let mut exti = Exti::new_with_layout(ExtiRegisterLayout::Ch32v003);
+        exti.attach_qingke_pfic(pfic.clone());
+        pfic.enabled[0].store(1 << 21, std::sync::atomic::Ordering::SeqCst);
+
+        pfic.exti_line_pulse(9);
+        assert_eq!(exti.read_u32(0x14).unwrap(), 0, "no edge selected yet");
+
+        exti.write_u32(0x04, 1 << 9).unwrap(); // EVENR
+        exti.write_u32(0x0C, 1 << 9).unwrap(); // FTENR
+        pfic.exti_line_pulse(9);
+        assert_eq!(exti.read_u32(0x14).unwrap(), 1 << 9);
+        assert!(pfic.take_event());
+        assert_eq!(pfic.next_interrupt(), None, "INTENR clear: no interrupt");
+
+        exti.write_u32(0x00, 1 << 9).unwrap(); // INTENR
+        assert_eq!(pfic.next_interrupt(), Some(21));
+        exti.write_u32(0x14, 1 << 9).unwrap();
+        assert_eq!(exti.read_u32(0x14).unwrap(), 0);
+        assert_eq!(pfic.next_interrupt(), None);
+    }
+
+    /// A GPIO edge on an EVENR line raises the core event too.
+    #[test]
+    fn ch32v003_gpio_event_line_raises_the_core_event() {
+        use crate::peripherals::qingke_pfic::QingkePficState;
+        use std::sync::Arc;
+        let pfic = Arc::new(QingkePficState::default());
+        let mut exti = Exti::new_with_layout(ExtiRegisterLayout::Ch32v003);
+        exti.attach_qingke_pfic(pfic.clone());
+        exti.write_u32(0x08, 1 << 3).unwrap(); // RTENR
+        assert!(exti.gpio_edge_with_source(3, 3, false, true, Some(3)));
+        assert!(!pfic.take_event(), "EVENR clear");
+        exti.write_u32(0x04, 1 << 3).unwrap();
+        assert!(exti.gpio_edge_with_source(3, 3, false, true, Some(3)));
+        assert!(pfic.take_event());
+    }
 
     fn poke(exti: &mut Exti, off: u64, val: u32) {
         for i in 0..4 {
