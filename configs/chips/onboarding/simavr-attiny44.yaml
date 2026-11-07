@@ -13,7 +13,43 @@ flash:
 ram:
   base: 96
   size: 256B
-peripherals: []
+# Register map checked against avr-libc 2.0.0 avr/iotn44.h (iotnx4.h layout):
+# the I/O-space map LabWired's ATtiny x4 core runs (AvrModel::Attiny44).
+# ADCSRB 0x23 (ADLAR is bit 4), ADCL/ADCH 0x24/0x25, ADCSRA 0x26, ADMUX 0x27
+# (MUX5:0); PINB/DDRB/PORTB 0x36..0x38 (PB0..PB3) and PINA/DDRA/PORTA
+# 0x39..0x3B. The CPU owns those registers; each port is mirrored at
+# 0x1_0000 + PINx and the ADC input side (millivolts per channel, two bytes
+# each) sits at 0x1_0060, past the I/O space. ADC0..7 are PA0..PA7
+# (ATtiny24A/44A/84A datasheet 8183F, Table 16-4).
+# VIL 0.3 VCC / VIH 0.6 VCC are the datasheet DC input limits for VCC 2.4..5.5 V
+# (Table 20-1).
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.6
+peripherals:
+  - id: "porta"
+    type: "avr_gpio"
+    base_address: 0x00010039
+    size: "3"
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010036
+    size: "3"
+  - id: "adc"
+    type: "avr_adc"
+    base_address: 0x00010060
+    size: "16"
+    config:
+      channels: 8
+analog_pins:
+  PA0: { peripheral: adc, channel: 0 }
+  PA1: { peripheral: adc, channel: 1 }
+  PA2: { peripheral: adc, channel: 2 }
+  PA3: { peripheral: adc, channel: 3 }
+  PA4: { peripheral: adc, channel: 4 }
+  PA5: { peripheral: adc, channel: 5 }
+  PA6: { peripheral: adc, channel: 6 }
+  PA7: { peripheral: adc, channel: 7 }
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

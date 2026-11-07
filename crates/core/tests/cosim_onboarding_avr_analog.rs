@@ -26,7 +26,11 @@
 //! sees them set once ADEN is. The ATtiny25/45/85 run on the I/O-space ATtiny
 //! x5 cores (ADC0..3 on PB5, PB2, PB4, PB3); there it checks REFS2 (ADMUX
 //! bit 4) selecting the internal 1.1 V and 2.56 V references and the MUX
-//! 0x0C bandgap. Every result is read back with LDS ADCL/ADCH.
+//! 0x0C bandgap. The ATtiny24/44/84 run on the I/O-space ATtiny x4 cores
+//! (ADC0..7 on PA0..PA7, MUX5:0 in ADMUX); there it checks REFS = 10 selecting
+//! the internal 1.1 V, the MUX 0x21 bandgap, MUX 0x20 AGND, and that firmware
+//! setting ADLAR in ADCSRB bit 4 (ADMUX bit 5 is MUX5 there) gets a
+//! left-adjusted result. Every result is read back with LDS ADCL/ADCH.
 //!
 //! For each covered part the generic Beta NTC divider and the unrelated
 //! Shockley diode route through the descriptor's `analog_pins`, to the lowest
@@ -68,8 +72,11 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-atmega644", AvrModel::Atmega644, "pa0", "pa7"),
     ("simavr-atmega8", AvrModel::Atmega8, "pc0", "pc5"),
     ("simavr-atmega88", AvrModel::Atmega328p, "pc0", "pc5"),
+    ("simavr-attiny24", AvrModel::Attiny24, "pa0", "pa7"),
     ("simavr-attiny25", AvrModel::Attiny25, "pb5", "pb3"),
+    ("simavr-attiny44", AvrModel::Attiny44, "pa0", "pa7"),
     ("simavr-attiny45", AvrModel::Attiny45, "pb5", "pb3"),
+    ("simavr-attiny84", AvrModel::Attiny84, "pa0", "pa7"),
     ("simavr-attiny85", AvrModel::Attiny85, "pb5", "pb3"),
 ];
 
@@ -96,10 +103,7 @@ const UNCOVERED: &[(&str, &str)] = &[
     ("simavr-attiny1634", "ADMUX at 0x24"),
     ("simavr-attiny2313", "no ADC"),
     ("simavr-attiny2313a", "no ADC"),
-    ("simavr-attiny24", "ADMUX at 0x27"),
     ("simavr-attiny4313", "no ADC"),
-    ("simavr-attiny44", "ADMUX at 0x27"),
-    ("simavr-attiny84", "ADMUX at 0x27"),
 ];
 
 const AVCC_MV: u32 = 5000;
@@ -116,10 +120,12 @@ fn avcc_mv(core: AvrModel) -> u32 {
 }
 
 /// ADCSRB/ADMUX/ADCSRA/ADCL data addresses on `core` (ADCH = ADCL + 1). The
-/// classic ATmega8/16/32 and the ATtiny25/45/85 keep the ADC in I/O space;
-/// MUX5 does not exist there (the tinies' ADCSRB holds only trigger bits).
+/// classic ATmega8/16/32 and the ATtinys keep the ADC in I/O space; ADCSRB
+/// is driven only on the ATtiny24/44/84, where it holds ADLAR.
 fn adc_registers(core: AvrModel) -> (Option<u16>, u16, u16, u16) {
-    if core.is_io_space() {
+    if core.is_tiny_x4() {
+        (Some(0x23), 0x27, 0x26, 0x24)
+    } else if core.is_io_space() {
         (None, 0x27, 0x26, 0x24)
     } else {
         (Some(0x7B), 0x7C, 0x7A, 0x78)
@@ -179,9 +185,45 @@ fn lds(rd: u16, addr: u16) -> [u16; 2] {
     [0x9000 | (rd << 4), addr]
 }
 
+/// ADMUX REFS bits selecting AVcc/VCC: REFS = 01 on the megas, 00 on the
+/// ATtinys (where 01 is the external AREF pin).
+fn vcc_refs(core: AvrModel) -> u8 {
+    if core.is_tiny_x4() || core.is_tiny_x5() {
+        0x00
+    } else {
+        0x40
+    }
+}
+
 /// One firmware conversion of ADC `channel` against AVcc.
 fn convert(chip: &ChipDescriptor, bus: &mut SystemBus, channel: u8) -> u16 {
-    convert_mux(chip, bus, 0x40, channel)
+    let refs = vcc_refs(AvrModel::from_chip_name(&chip.name));
+    convert_mux(chip, bus, refs, channel)
+}
+
+/// ATtiny24/44/84 firmware conversion with ADCSRB.ADLAR (bit 4) set:
+/// returns ADCH/ADCL as read back with LDS.
+fn convert_left_adjusted_tiny_x4(
+    chip: &ChipDescriptor,
+    bus: &mut SystemBus,
+    channel: u8,
+) -> (u8, u8) {
+    let mut cpu = Avr::for_chip_name(&chip.name);
+    let mut words = vec![ldi(16, 1 << 4)];
+    words.extend(sts(0x23, 16));
+    words.push(ldi(16, channel));
+    words.extend(sts(0x27, 16));
+    words.push(ldi(16, 0xC0));
+    words.extend(sts(0x26, 16));
+    words.extend(lds(24, 0x24));
+    words.extend(lds(25, 0x25));
+    cpu.load_words(0, &words);
+    let config = SimulationConfig::default();
+    for _ in 0..8 {
+        cpu.step(bus, &[], &config)
+            .expect("left-adjusted conversion");
+    }
+    (cpu.r[25], cpu.r[24])
 }
 
 /// One firmware conversion: ADCSRB.MUX5 for ADC8..15 (where ADCSRB exists),
@@ -428,6 +470,37 @@ fn assert_avr_converts_generic_analog(
             poll_adcsrb_status(chip, &mut bus),
             (0, 0xA0),
             "{board}: AVDDOK/REFOK read 0 before ADEN and 1 after"
+        );
+    }
+    if core.is_tiny_x4() {
+        // REFS = 10 is the internal 1.1 V. MUX5:0 is six bits: 0x21 is the
+        // 1.1 V bandgap, 0x20 AGND and 0x22 the unmodelled temperature
+        // sensor; 0x0C (the x5 bandgap), 0x1E (the megas') and 0x08
+        // (differential, not ADC8) have no input.
+        let mv = (expected_diode_v * 1000.0).round() as u32;
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x80, diode_channel),
+            (mv * 1024 / 1100).min(1023) as u16,
+            "{board}: the diode converts against the internal 1.1 V reference"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x00, 0x21),
+            (1100 * 1024 / AVCC_MV) as u16,
+            "{board}: MUX 0x21 converts the 1.1 V bandgap"
+        );
+        for code in [0x08, 0x0C, 0x1E, 0x20, 0x22] {
+            assert_eq!(
+                convert_mux(chip, &mut bus, 0x00, code),
+                0,
+                "{board}: MUX {code:#04x} is not a modelled input"
+            );
+        }
+        // ADLAR lives in ADCSRB bit 4: the diode code comes back left-adjusted.
+        let code = expected_code(core, expected_diode_v);
+        assert_eq!(
+            convert_left_adjusted_tiny_x4(chip, &mut bus, diode_channel),
+            ((code >> 2) as u8, ((code & 0x03) << 6) as u8),
+            "{board}: ADCSRB.ADLAR left-adjusts the diode result"
         );
     }
     if core.is_tiny_x5() {
