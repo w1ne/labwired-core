@@ -40,6 +40,12 @@ pub trait Bus {
     fn rp2350_dcp_mut(&mut self) -> Option<&mut crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp> {
         None
     }
+    /// Whether the core has the RP2350 GPIO coprocessor (`coprocessors:
+    /// [rp2350_gpioc]`). Asked only when a p0 coprocessor instruction
+    /// executes; `false` keeps it UNDEFINED.
+    fn rp2350_gpioc(&self) -> bool {
+        false
+    }
     /// ARM application-core interrupt levels, including deassertion.
     fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
         None

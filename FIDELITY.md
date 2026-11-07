@@ -262,7 +262,9 @@ RAM/flash regions correctly modeled as backing store. Real register models
 - **THUNK-LIB (real cheat — skips compiled firmware):**
   `esp_idf_heap_caps_init/malloc/calloc/free/realloc` (bump allocator that
   returns REAL DRAM — memory backing, not a behaviour fake),
-  `x_queue_create_mutex_static_echo` (idle-task static mutex),
+  `x_queue_create_mutex_static_echo` (idle-task static mutex; retired from the
+  Arduino-ESP32 profile and the wasm install, because it left IDF 5.x
+  `xSemaphoreCreateMutexWithCaps` queues uninitialised and the UART tx_mux deadlocked),
   `x_task_get_current_task_handle`, `getreent_dram_fake_ptr`,
   `esp_chip_info_stub`, `xthal_window_spill_thunk`.
   - **RETIRED in the canonical proof harness** (`tests/e2e_labwired_ereader.rs`):

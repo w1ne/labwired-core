@@ -15,6 +15,10 @@
   ],
   "firmware_release": "firmware-demos-v3",
   "chips": {
+    "ch32v003f4p6": {
+      "how": "needs-build",
+      "why": "Requires unreleased CH32V003/RV32E core support from PR #1698; the installed LabWired CLI v0.25.0 cannot run this branch-only model yet."
+    },
     "dspic33fj32mc204": {
       "how": "committed",
       "firmware": "examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf",
@@ -99,6 +103,10 @@
     "stm32f103rb": {
       "how": "needs-build",
       "why": "Exact STM32F103RBT6 descriptor added after the current released CLI. Its NUCLEO-F103RB firmware smoke is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
+    "stm32f103r8": {
+      "how": "needs-build",
+      "why": "Exact STM32F103R8T6 descriptor added after the current released CLI. Its boot proof (examples/stm32f103r8-smoke) is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
     },
     "stm32f103t4": {
       "how": "needs-build",
@@ -289,6 +297,10 @@
       "firmware": "tests/fixtures/tier1/stm32g474re.elf",
       "expect": "TIER1 clock PASS"
     },
+    "stm32g431rb": {
+      "how": "needs-build",
+      "why": "Exact STM32G431RBT6 descriptor added after the current released CLI. Its tier-1 fixture smoke (examples/stm32g431rb) is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
     "stm32l073": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/stm32l073.elf",
@@ -339,7 +351,11 @@
       "how": "example",
       "script": "examples/arduino-nano-blinky/io-smoke.yaml",
       "expect": null,
-      "note": "AVR runs through a system manifest, not `labwired run`. Blinky drives a pin and prints nothing, so the assertion is that it executes its whole step budget without faulting."
+      "note": "AVR runs through a system manifest, not `labwired run`. The script asserts the sketch's `nano-ok` banner on USART0 and that it then executes its whole step budget without faulting."
+    },
+    "atmega328pb": {
+      "how": "needs-build",
+      "why": "The ATmega328PB USART1 model is being added to core; the released clean-install CLI does not contain it yet. Promote to a runnable smoke after a release includes this model."
     },
     "atsamd21g18a": {
       "how": "committed",

@@ -1,0 +1,17 @@
+# STM32F401CE boots the F401 low-RAM smoke image on its own exact descriptor:
+# the reset vector runs, USART2 prints "OK", and PA5 toggles.
+# The image's SP (0x2001_0000) and 128 KB of flash sit inside this part's
+# 96 KB SRAM and its flash; every helper call pushes LR, so the stack is
+# exercised, not only the reset vector.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-f401-lowram-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 4
+  - expected_stop_reason: max_steps

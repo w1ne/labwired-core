@@ -62,6 +62,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f103r4h | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
 | stm32f103r6 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
 | stm32f103r6h | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
+| stm32f103r8 | open | L0 | 31 | 932.9 | 1.6 | ≥1× (CI) | — |
 | stm32f103t4 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
 | stm32f103t6 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
 | stm32f401 | open | L1 | 24 | 936.7 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32f401.md) |
@@ -87,8 +88,9 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f407vg | open | L0 | 34 | 935.8 | 1.6 | ≥1× (CI) | — |
 | stm32f407ze | open | L0 | 34 | 935.8 | 1.6 | ≥1× (CI) | — |
 | stm32f407zg | open | L0 | 34 | 935.8 | 1.6 | ≥1× (CI) | — |
-| stm32g0b1re | open | L0 | 10 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/stm32g0b1re.md) |
+| stm32g0b1re | open | L0 | 15 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/stm32g0b1re.md) |
 | stm32g474re | open | L1 | 22 | 936.3 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32g474re.md) |
+| stm32g431rb | open | L0 | 22 | 931.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32g431rb.md) |
 | stm32h563 | open | L1 | 37 | 986.5 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32h563.md) |
 | stm32u575 | open | L1 | 43 | 986.8 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32u575.md) |
 | stm32u545 | open | L1 | 39 | 986.8 | 1.8 | ≥1× (CI) | — |
@@ -101,6 +103,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | mkw41z4 | open | L1 | 20 | 906.2 | 1.5 | ≥1× (CI) | [doc](docs/boards/mkw41z4.md) |
 | efr32mg26 | open | L2 | 34 | 1513.7 | 2.2 | ≥1× (CI) | [doc](docs/boards/efr32mg26.md) |
 | atmega328p | open | L1 | 7 | 1044.8 | 7.6 | ≥1× (CI) | — |
+| atmega328pb | open | L1 | 8 | 1026.4 | 7.6 | ≥1× (CI) | — |
 | atmega2560 | open | L1 | 15 | — | — | ≥1× (CI) | — |
 | atmega2561 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega2561.md) |
 | atmega1281 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega1281.md) |
@@ -122,6 +125,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | pic24f08ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic24f16ka101 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic24f16ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| ch32v003f4p6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | k32w041z (closed) | closed | L2 | 9 | 987.8 | 1.6 | 6.50× | [doc](docs/boards/k32w041amdk6.md) |
 
 Open-model RTx is a CI receipt; the committed open perf rating is step/batch.
