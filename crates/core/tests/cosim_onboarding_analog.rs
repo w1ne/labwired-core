@@ -36,6 +36,9 @@ const CONVERTED: &[&str] = &[
     "nrf52840",
     "nucleo_f767zi",
     "nucleo_h753zi",
+    "stm32f042",
+    "stm32f072",
+    "stm32f072b_discovery",
     "stm32f401cdu6-blackpill",
     "stm32f777",
     "stm32h7",
@@ -43,23 +46,18 @@ const CONVERTED: &[&str] = &[
     "stm32h747-disco",
     "stm32h747",
     "stm32h753",
+    "stm32l071",
+    "stm32l072",
 ];
 
 /// Onboarding profiles that declare an ADC whose IP LabWired does not yet
-/// convert from a routed input. The F0/L0/WBA ADC selects channels through
-/// `CHSELR`, which no `adc` layout models, and the L4-map engine (L5) converts
-/// a fixed internal source rather than the routed channel. Listed so that
-/// closing either gap has to move the profile into [`CONVERTED`].
-const DECLARED_NOT_CONVERTIBLE: &[&str] = &[
-    "nucleo_wba52cg",
-    "ramn",
-    "stm32f042",
-    "stm32f072",
-    "stm32f072b_discovery",
-    "stm32l071",
-    "stm32l072",
-    "stm32wba52",
-];
+/// convert from a routed input. The WBA ADC4 is a CHSELR block, but its
+/// `CFGR1.RES` sits at bits 3:2, not the F0/L0's 4:3, and it needs
+/// `PWRR`/`ADVREGEN` (RM0493 §21), so it is not the `stm32f0`/`stm32l0`
+/// layout. The L4-map engine (L5) converts a fixed internal source rather
+/// than the routed channel. Listed so that closing either gap has to move the
+/// profile into [`CONVERTED`].
+const DECLARED_NOT_CONVERTIBLE: &[&str] = &["nucleo_wba52cg", "ramn", "stm32wba52"];
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -110,6 +108,9 @@ enum Family {
     Stm32F4,
     /// Shared `adc` model, H7 map (RM0433).
     Stm32H7,
+    /// Shared `adc` model, F0/L0 v2 map with the CHSELR bitmap (RM0091 §13,
+    /// RM0367 §14).
+    Stm32V2,
     /// i.MX RT 12-bit SAR ADC (IMXRT1060RM §66).
     Imxrt,
     /// nRF52840 SAADC with EasyDMA (nRF52840 PS §6.23).
@@ -139,6 +140,7 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             match p.config.get("profile").and_then(|v| v.as_str()) {
                 Some("stm32f4") => Family::Stm32F4,
                 Some("stm32h7") => Family::Stm32H7,
+                Some("stm32f0" | "stm32l0") => Family::Stm32V2,
                 other => {
                     return Err(format!(
                         "{}:{} ({kind}, profile {other:?})",
@@ -161,7 +163,7 @@ impl Converter {
         let mv = millivolts(volts);
         match self.family {
             // 12-bit, mV * 4095 / VREF (3.3 V) truncated.
-            Family::Stm32F4 | Family::Stm32H7 => (mv * 4095 / 3300).min(4095),
+            Family::Stm32F4 | Family::Stm32H7 | Family::Stm32V2 => (mv * 4095 / 3300).min(4095),
             // 12-bit, rounded to nearest.
             Family::Imxrt => (mv.min(3300) * 4095 + 1650) / 3300,
             // Gain 1/4 against VDD/4: full scale is VDD, 12-bit, 2^12 / VDD.
@@ -190,6 +192,36 @@ impl Converter {
                     .expect("select 12-bit H7 resolution");
                 bus.write_u32(self.base + 0x1C, (1 << NTC_CHANNEL) | (1 << DIODE_CHANNEL))
                     .expect("preselect routed channels");
+            }
+            Family::Stm32V2 => {
+                const ADEN: u32 = 1;
+                const ADCAL: u32 = 1 << 31;
+                const EOCAL: u32 = 1 << 11;
+                let cr = self.base + 0x08;
+                assert_eq!(
+                    bus.read_u32(cr).unwrap(),
+                    0,
+                    "{}: v2 CR resets to 0, no DEEPPWD",
+                    self.id
+                );
+                bus.write_u32(cr, ADCAL).expect("calibrate ADC");
+                assert_eq!(bus.read_u32(cr).unwrap() & ADCAL, 0, "ADCAL self-clears");
+                assert_ne!(
+                    bus.read_u32(self.base).unwrap() & EOCAL,
+                    0,
+                    "{}: calibration raises EOCAL",
+                    self.id
+                );
+                bus.write_u32(self.base, EOCAL).expect("clear EOCAL");
+                bus.write_u32(cr, ADEN).expect("enable ADC");
+                assert_ne!(
+                    bus.read_u32(self.base).unwrap() & 1,
+                    0,
+                    "{}: ADEN raises ADRDY",
+                    self.id
+                );
+                // CFGR1 RES[4:3] = 00 selects 12 bits, right-aligned.
+                bus.write_u32(self.base + 0x0C, 0).expect("select 12-bit");
             }
             Family::Imxrt => {
                 let cfg = bus.read_u32(self.base + 0x44).unwrap();
@@ -280,6 +312,21 @@ impl Converter {
                 bus.write_u32(self.base, EOC_EOS).expect("clear EOC/EOS");
                 code
             }
+            Family::Stm32V2 => {
+                const EOC_EOS: u32 = (1 << 2) | (1 << 3);
+                bus.write_u32(self.base + 0x28, 1 << channel)
+                    .expect("select CHSELR channel");
+                bus.write_u32(self.base, EOC_EOS).expect("clear EOC/EOS");
+                bus.write_u32(self.base + 0x08, 1 | (1 << 2))
+                    .expect("ADSTART");
+                assert_eq!(
+                    bus.read_u32(self.base).unwrap() & EOC_EOS,
+                    EOC_EOS,
+                    "{}: single-channel CHSELR conversion sets EOC and EOS",
+                    self.id
+                );
+                bus.read_u32(self.base + 0x40).expect("read DR")
+            }
             Family::Imxrt => {
                 bus.write_u32(self.base, u32::from(channel))
                     .expect("HC0 software trigger");
@@ -309,7 +356,10 @@ impl Converter {
     /// The shared STM32 model also exposes what it holds per channel, so an
     /// unrouted channel can be shown undriven rather than merely "some code".
     fn held_count(&self, bus: &mut SystemBus, channel: u8) -> Option<u16> {
-        if !matches!(self.family, Family::Stm32F4 | Family::Stm32H7) {
+        if !matches!(
+            self.family,
+            Family::Stm32F4 | Family::Stm32H7 | Family::Stm32V2
+        ) {
             return None;
         }
         let index = bus.find_peripheral_index_by_name(&self.id)?;
@@ -475,7 +525,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 24,
+        instances, 29,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
