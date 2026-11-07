@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs seventeen of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs eighteen of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -171,6 +171,7 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `exti_pin_change_isr` | a button on PD3 is pressed, released and pressed again; the EXTI7_0 handler blips PC1. The smoke checks PC1 edges and the EXTI/AFIO/PFIC state left behind; the `--watch-gpio` run is committed as [`pc1-capture.json`](evidence/ch32fun-exti-smoke/pc1-capture.json) | PD3 rises at 200,001 and 600,001 and PC1 blips at 200,007-200,009 and 600,007-600,009: exactly 4 PC1 edges, none at the release (falling edge, FTENR clear) at 400,001 |
 | `spi_max7219` | 16-bit SPI1 frames (PC5 SCK, PC6 MOSI) to a MAX7219 with LOAD on PD0; the panel state the init writes leave ([`max7219-state.json`](evidence/ch32fun-spi-max7219-smoke/max7219-state.json)) | 10/10: intensity 15, scan limit 7, shutdown clear, 12 of 64 LEDs lit as Code-B 7..0 |
 | `uart_tx_dma` | `Hello World!\r\n` three times on USART1 (PD5), every byte moved by DMA1 channel 4; the transfer-complete handler (PFIC 25) toggles PD6 | 5/5: 42 bytes, PD6 4 edges, CNTR4 = 0, INTFR nibble 4 = 0x5 |
+| `usart_dma_rx_circular` | four command lines (`toggle`, `bogus`, `toggle`, `toggle`, 31 bytes) injected on USART1 RX (PD6); CTLR3.DMAR moves every byte through DMA1 channel 5 into the example's 16-byte circular buffer, so the last two lines wrap past its end. The smoke checks the replies on USART1 TX, three PC7 toggles, CNTR5, CFGR5 and the buffer image left behind | 7/7: `Horay!`, `Invalid cmd: bogus`, `Horay!`, `Horay!`; PC7 ends high, CNTR5 = 1 (one lap + 15 items), rx_buf = `oggle\r\ntoggle\r\nt` |
 | `ws2812bdemo` | a 191-LED WS2812B strip on PC6, fed by SPI1 at 3 MHz from DMA1 channel 3 in circular mode with HT/TC refills (PFIC 24). The strip decodes PC6's pulse widths; [`check-ws2812.py`](check-ws2812.py) recomputes every LED from the demo's own colour tables and replays the driver's buffer protocol ([`check-ws2812.log`](evidence/ch32fun-ws2812-smoke/colour-check/check-ws2812.log)) | 3/3 and all 190 LEDs the driver sends match frame 9. The driver clocks out 190 of `NR_LEDS` 191: the HT refill that writes LED 190 is the one that clears CIRC, so that half is never sent. [CH32V003F4P6 status and sourcing](evidence/ch32fun-ws2812-smoke/component-status.md) |
 | `iwdg` | the independent watchdog: PD0/PD4/PC0 on 1.5 s, off 1 s, the IWDG started at /128 with RLDR 0xFFF, on 3 s, one feed, then 250 ms blinks with no further feed until the watchdog resets the chip. The smoke checks the edge counts and that PSCR is back at 0 after the reset (11.25 s, 540 M cycles). [`check-iwdg.py`](check-iwdg.py) decodes PD0 from a `--watch-gpio` run, committed as [`iwdg-capture.json.gz`](evidence/ch32fun-iwdg-smoke/iwdg-capture.json.gz) with its output in [`iwdg-check.log`](evidence/ch32fun-iwdg-smoke/iwdg-check.log) | feed at 5,500.003 ms, 17 blink edges at 250 ms, then the reset at feed + 4,095.002 ms (4095 counts of LSI/128 at 128 kHz) releases PD0, and the second boot's 1,500 ms on pulse starts 94 cycles later, as on power-up |
 | `tim2_encoder` | TIM2 in encoder mode 3 (`SMCFGR.SMS` = 011, both inputs, x4) on partial remap 1: a switch encoder's A on PC5 (T2CH1) and B on PC2 (T2CH2), both pulled up by the example and closing to GND. Three detents forward from cycle 6,000,000 and five back from 13,000,000; `main()` prints the position when `CNT` moved. The smoke checks both printed lines, the remap, SMS, CEN and `CTLR1.DIR`, and the final `CNT`; the whole terminal is in [`terminal.log`](evidence/ch32fun-tim2-encoder-smoke/terminal.log) | 7/7; `relative=12 absolute=36875 delta=12`, then `relative=-8 absolute=36855 delta=-20`, nothing else: `CNT` sits at 0x8FFF until the first edge |
@@ -590,7 +591,7 @@ cargo run -q -p labwired-cli -- test \
 # ch32fun ELFs are committed; this rebuilds them byte-identically.
 examples/ch32v003-evt/build-ch32fun-examples.sh
 for t in blink uartdemo systick-irq adc-polled i2c-oled tim2-pwm tim1-pwm tim1-complementary exti \
-    input-capture tim2-encoder tim2-pwm-remap spi-oled; do
+    input-capture tim2-encoder tim2-pwm-remap spi-oled usart-dma-rx; do
   cargo run -q -p labwired-cli -- test \
     --script examples/ch32v003-evt/ch32fun-$t-smoke.yaml \
     --output-dir /tmp/ch32v003-ch32fun-$t

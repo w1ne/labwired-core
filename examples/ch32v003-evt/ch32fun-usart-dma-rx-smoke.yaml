@@ -1,0 +1,48 @@
+# ch32fun examples/usart_dma_rx_circular, unmodified
+# (build-ch32fun-examples.sh). The CPU never reads USART1 DATAR: CTLR3.DMAR
+# asks DMA1 channel 5 (8-bit, MINC, peripheral to memory, circular, no
+# interrupts) for a transfer on every RXNE, and the channel drops each byte
+# received on PD6 into the 16-byte rx_buf. main derives the write head from
+# CNTR5, splits the stream on '\n' and answers "toggle\r\n" by toggling PC7
+# and printing "Horay!\r\n", anything else with "Invalid cmd: ...", on
+# USART1 TX (PD5, 115200, FUNCONF_USE_UARTPRINTF).
+#
+# Four lines, 31 bytes, are injected 2M cycles apart: toggle, bogus, toggle,
+# toggle. The third line starts at byte 15 and the fourth at 23, so both
+# wrap past the end of rx_buf and run the example's wrap-around copy; the
+# DMA reloads CNTR from 16 at each lap. PC7 toggles three times and ends
+# high. The run stops at max_cycles 12M (250 ms at 48 MHz).
+schema_version: "1.2"
+inputs:
+  firmware: "ch32fun/usart_dma_rx_circular.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 12000000
+  max_steps: 40000000
+  wall_time_ms: 600000
+uart_injections:
+  - uart: "usart1"
+    bytes: "toggle\r\n"
+    trigger: !after_cycles { cycles: 2000000 }
+  - uart: "usart1"
+    bytes: "bogus\r\n"
+    trigger: !after_cycles { cycles: 4000000 }
+  - uart: "usart1"
+    bytes: "toggle\r\n"
+    trigger: !after_cycles { cycles: 6000000 }
+  - uart: "usart1"
+    bytes: "toggle\r\n"
+    trigger: !after_cycles { cycles: 8000000 }
+assertions:
+  - uart_ordered: ["Horay!\r\n", "Invalid cmd: bogus\r\n", "Horay!\r\n", "Horay!\r\n"]
+  - gpio_edges: { pin: "gpioc:7", min_edges: 3 }
+  # Three toggles from reset-low: OUTDR bit 7 is 1.
+  - memory_value: { address: 0x4001100C, size: 32, mask: 0x80, expected_value: 0x80 }
+  # 31 bytes into a 16-deep circular channel: one lap and 15 items, CNTR5 = 1.
+  - memory_value: { address: 0x4002005C, size: 16, expected_value: 1 }
+  # Channel 5 still enabled, circular, MINC, peripheral-to-memory (CFGR5).
+  - memory_value: { address: 0x40020058, size: 32, mask: 0x7FFF, expected_value: 0x00A1 }
+  # rx_buf after the second lap is "oggle\r\ntoggle\r\nt": bytes 16..30
+  # overwrote [0..14], [15] is still byte 15, the 't' of the third line.
+  - memory_value: { address: 0x2000001C, size: 32, expected_value: 0x6C67676F }
+  - memory_value: { address: 0x20000028, size: 32, expected_value: 0x740A0D65 }

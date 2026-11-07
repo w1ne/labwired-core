@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build seventeen unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build eighteen unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -71,6 +71,13 @@
 #                    CS on PC3, D/C# on PC4, RES# on PC2, all software GPIO;
 #                    fills the frame from the example's LFSR rand() and runs
 #                    Conway's Life on it, a full refresh per generation.
+#   usart_dma_rx_circular.elf
+#                    examples/usart_dma_rx_circular: USART1 RX (PD6) moved
+#                    by DMA1 channel 5 (CTLR3.DMAR) into a 16-byte circular
+#                    buffer; main polls CNTR for the write head, splits on
+#                    '\n' (wrapping past the buffer end) and answers
+#                    "toggle\r\n" by toggling PC7 and printing "Horay!" on
+#                    USART1 TX (PD5), anything else with "Invalid cmd".
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V003 (rv32ec/ilp32e, -Os -flto, generated_ch32v003.ld),
@@ -109,7 +116,7 @@ ld="${out_dir}/generated_ch32v003.ld"
 
 for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr \
     spi_max7219 uart_tx_dma ws2812bdemo tim1_pwm tim1_pwm_complementary_outputs iwdg \
-    input_capture tim2_encoder tim2_pwm_remap spi_oled; do
+    input_capture tim2_encoder tim2_pwm_remap spi_oled usart_dma_rx_circular; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

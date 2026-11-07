@@ -1591,8 +1591,14 @@ impl Uart {
         let sci_b_rx_armed = self.sci_b_irq.is_some()
             && sci_b_irq::SciBIrq::rx_armed(self.sci_irq_ctrl())
             && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
+        // CR3.DMAR with a character waiting: the consumer is the DMA, not the
+        // NVIC, so this is work even on a USART with no IRQ line (ch32fun's
+        // usart_dma_rx_circular). Without it the RX request is never raised.
+        let dmar_rx_pending =
+            dmar_armed && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
         level_irq_observable
             || sci_b_rx_armed
+            || dmar_rx_pending
             || !self.attached_streams.is_empty()
             || self.dma_tx_pending
             || !self.wire_chars.is_empty()
@@ -3935,5 +3941,28 @@ mod wakeup_observability_tests {
             vec![(0, UART_WAKE_TOKEN)],
             "stream pacing must still arm on an IRQ-less bus"
         );
+    }
+
+    #[test]
+    fn irqless_uart_with_dmar_wakes_for_a_waiting_character() {
+        // ch32fun usart_dma_rx_circular: USART1 has no IRQ line, CR3.DMAR
+        // feeds a circular DMA channel. An injected byte must wake the UART
+        // so it raises the RX request; an empty receiver must not.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
+        uart.attach_irq_line(None);
+        uart.write(0x14, 1 << 6).unwrap(); // CR3.DMAR
+        assert!(
+            !uart.has_active_work(),
+            "DMAR with an empty receiver is not work on an IRQ-less bus"
+        );
+
+        uart.rx_buf.lock().unwrap().push_back(b't');
+        assert!(
+            uart.has_active_work(),
+            "DMAR with a waiting character is work: the DMA consumes it"
+        );
+        assert_eq!(uart.take_scheduled_events(), vec![(0, UART_WAKE_TOKEN)]);
+        let (_, dma_signals) = uart.advance_one_tick();
+        assert_eq!(dma_signals, vec![crate::DMA_SIGNAL_RX]);
     }
 }

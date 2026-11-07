@@ -9,7 +9,7 @@
 # tim2_pwm, and EXTI with its AFIO_EXTICR port select for ch32fun's
 # exti_pin_change_isr, and SPI1 (PC5 SCK, PC6 MOSI, PC7 MISO) for ch32fun's
 # spi_max7219, and DMA1 with USART1 TX on channel 4 for ch32fun's
-# uart_tx_dma and SPI1 TX on channel 3 for ch32fun's ws2812bdemo, and TIM1
+# uart_tx_dma (and USART1 RX on channel 5 for usart_dma_rx_circular) and SPI1 TX on channel 3 for ch32fun's ws2812bdemo, and TIM1
 # with its complementary outputs for ch32fun's tim1_pwm, and the IWDG
 # (counting from LSI, resetting the core on time-out) for ch32fun's iwdg.
 #
@@ -237,6 +237,7 @@ peripherals:
       requests:
         spi1_tx: 3
         usart1_tx: 4
+        usart1_rx: 5
 
   - id: usart1
     type: uart
