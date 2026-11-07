@@ -197,7 +197,8 @@ on:
       - "tests/fixtures/avr/atmega1281-io-smoke.elf"
       - "scripts/build_atmega1281_cpu_smoke.sh"
       - "tests/fixtures/avr/atmega16-cpu-smoke.c"
-      - "tests/fixtures/avr/atmega16-cpu-smoke.elf"
+      - "tests/fixtures/avr/atmega16-io-smoke.c"
+      - "tests/fixtures/avr/atmega16-io-smoke.elf"
       - "scripts/build_atmega16_cpu_smoke.sh"
       - "tests/fixtures/avr/attiny-x5-cpu-smoke.c"
       - "tests/fixtures/avr/attiny13-cpu-smoke.elf"
@@ -907,10 +908,10 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/atmega168-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega168-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega168.yaml
-          # ATmega16 is measured only for its bounded AVR8 CPU and SRAM path;
-          # the imported profile declares no peripherals.
+          # ATmega16 is measured for AVR8 execution, GPIOA and polled USART TX
+          # only (classic I/O-file layout).
           - id: simavr-atmega16
-            prebuilt_firmware: tests/fixtures/avr/atmega16-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/atmega16-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega16-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega16.yaml
           # Classic tinyAVR parts are measured only for their bounded AVR8 CPU

@@ -580,10 +580,11 @@ mod tests {
         cpu.load_words(0x100, &[0x9A1D, 0xCFFF]);
         cpu.set_pc(0x100);
         run(&mut cpu, &mut bus, 1);
+        // The CPU owns the latch: PB5 toggles low, PB0 stays high.
         assert_eq!(
-            bus.mem[&(AVR_IO_MIRROR_BASE + u64::from(PB))],
-            1 << 5,
-            "the PINB write carries bit 5 only"
+            bus.mem[&(AVR_IO_MIRROR_BASE + u64::from(PB + 2))],
+            0x01,
+            "the PINB write toggles bit 5 only"
         );
     }
 

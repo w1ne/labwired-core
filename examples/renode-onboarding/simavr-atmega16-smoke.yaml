@@ -1,10 +1,14 @@
-# CPU and SRAM smoke for the imported ATmega16 profile.
-# No peripheral accesses or board I/O are asserted.
+# GPIOA + polled USART smoke against the imported ATmega16 profile.
 schema_version: "1.0"
 inputs:
-  firmware: "../../tests/fixtures/avr/atmega16-cpu-smoke.elf"
+  firmware: "../../tests/fixtures/avr/atmega16-io-smoke.elf"
   system: "../../configs/systems/onboarding/simavr-atmega16.yaml"
 limits:
   max_steps: 100000
 assertions:
+  - uart_contains: "M16 IO bits=7F"
+  - memory_value: {address: 0x0122, expected_value: 0x7F, size: 1}
+  - gpio_edges:
+      pin: "porta:0"
+      min_edges: 2
   - expected_stop_reason: max_steps

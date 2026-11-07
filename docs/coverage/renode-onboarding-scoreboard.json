@@ -8,8 +8,8 @@
     "pass": 224,
     "fail": 0,
     "pass_loading_zero_answering_windows": 4,
-    "pass_observable_assertions": 195,
-    "pass_stop_reason_only": 29,
+    "pass_observable_assertions": 196,
+    "pass_stop_reason_only": 28,
     "pass_depth_unknown": 0,
     "median_elapsed_ms": 1195,
     "median_elapsed_seconds": 1.195,
@@ -7373,32 +7373,35 @@
       "script": "examples/renode-onboarding/simavr-atmega16-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-atmega16.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T10:44:38Z",
-      "finished_at_utc": "2026-11-06T10:46:06Z",
-      "elapsed_seconds": 88,
-      "elapsed_ms": 87856,
+      "started_at_utc": "2026-11-07T12:03:57Z",
+      "finished_at_utc": "2026-11-07T12:06:29Z",
+      "elapsed_seconds": 152,
+      "elapsed_ms": 151490,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 87.534,
+        "build_cli": 151.021,
         "build_firmware": null,
-        "run_smoke": 0.314
+        "run_smoke": 0.46
       },
       "stages_ms": {
-        "build_cli": 87534,
+        "build_cli": 151021,
         "build_firmware": null,
-        "run_smoke": 314
+        "run_smoke": 460
       },
-      "prebuilt_firmware": "tests/fixtures/avr/atmega16-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/atmega16-io-smoke.elf",
       "_artifact_path": "simavr-atmega16",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "uart_contains",
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega164",

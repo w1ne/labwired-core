@@ -443,6 +443,29 @@ impl AvrModel {
         self == AvrModel::Atmega2560
     }
 
+    /// Classic parts with only the 64-byte I/O file (0x20..0x5F). Their SRAM
+    /// starts at 0x0060, so 0x60..0xFF is memory, not the 328P extended I/O
+    /// file: a variable at 0xC6 must not be sent out as a UDR0 byte.
+    pub fn has_classic_io_file(self) -> bool {
+        self.sram_start() == 0x0060
+    }
+
+    /// Parts whose (first) USART sits in the classic I/O-file layout: UBRRL
+    /// 0x29, UCSRB 0x2A, UCSRA 0x2B, UDR 0x2C (ATmega8/16/32 USART, ATmega128
+    /// USART0, ATtiny2313/4313 USART). UBRRH/UCSRC live elsewhere on each and
+    /// are kept as plain registers.
+    pub const fn has_classic_usart(self) -> bool {
+        matches!(
+            self,
+            AvrModel::Atmega8
+                | AvrModel::Atmega16
+                | AvrModel::Atmega32
+                | AvrModel::Atmega128
+                | AvrModel::Attiny2313
+                | AvrModel::Attiny4313
+        )
+    }
+
     /// The ATmega328PB has a second polling USART at data-space 0xC8..0xCE.
     /// Its USART interrupts are not yet modelled.
     pub const fn has_usart1(self) -> bool {
@@ -913,6 +936,39 @@ impl Avr {
         }
     }
 
+    /// The 328P-layout USART0 register a classic-layout USART register
+    /// stands for, so both layouts share one USART implementation and the
+    /// same bus-side host window.
+    #[inline]
+    fn classic_usart_alias(&self, addr: u16) -> Option<u16> {
+        if !self.model.has_classic_usart() {
+            return None;
+        }
+        match addr {
+            0x0029 => Some(0x00C4), // UBRRL -> UBRR0L
+            0x002A => Some(0x00C1), // UCSRB -> UCSR0B
+            0x002B => Some(0x00C0), // UCSRA -> UCSR0A
+            0x002C => Some(0x00C6), // UDR -> UDR0
+            _ => None,
+        }
+    }
+
+    /// Where a classic-layout access goes before the 328P decode sees it:
+    /// `Ok(addr)` to run the 328P decode on (a USART alias), `Err(())` when the
+    /// classic decode owns the address.
+    #[inline]
+    fn classic_route(&self, addr: u16) -> Result<u16, ()> {
+        if let Some(canon) = self.classic_usart_alias(addr) {
+            return Ok(canon);
+        }
+        if self.model.has_classic_io_file()
+            || (self.model.has_classic_usart() && (0x00C0..=0x00C6).contains(&addr))
+        {
+            return Err(());
+        }
+        Ok(addr)
+    }
+
     /// `PINx` of a port this model has.
     #[inline]
     fn is_pin_reg(&self, addr: u16) -> bool {
@@ -934,7 +990,9 @@ impl Avr {
             | AvrModel::Atmega1284p => {
                 matches!(addr, AVR_PINA | AVR_PINB | AVR_PINC | AVR_PIND)
             }
-            AvrModel::Atmega16 | AvrModel::Atmega128 => false,
+            // Classic layout: PINx/DDRx/PORTx descend from PORTA at 0x3B.
+            AvrModel::Atmega16 => matches!(addr, 0x0030 | 0x0033 | 0x0036 | 0x0039),
+            AvrModel::Atmega128 => false,
             AvrModel::Atmega8
             | AvrModel::Atmega32
             | AvrModel::Atmega169
@@ -988,7 +1046,8 @@ impl Avr {
             | AvrModel::Atmega324
             | AvrModel::Atmega644
             | AvrModel::Atmega1284p => (AVR_PINA..=AVR_PIND + 2).contains(&addr),
-            AvrModel::Atmega16 | AvrModel::Atmega128 => false,
+            AvrModel::Atmega16 => (0x0030..=0x003B).contains(&addr),
+            AvrModel::Atmega128 => false,
             AvrModel::Atmega8
             | AvrModel::Atmega32
             | AvrModel::Atmega169
@@ -1115,6 +1174,10 @@ impl Avr {
         if self.is_avrxt() {
             return self.avrxt_data_read(addr, bus);
         }
+        let addr = match self.classic_route(addr) {
+            Ok(a) => a,
+            Err(()) => return self.classic_data_read(addr, bus),
+        };
         match addr {
             0x0000..=0x001F => Ok(self.r[addr as usize]),
             // PINB/PINC/PIND — the registers on this part whose value the
@@ -1255,6 +1318,10 @@ impl Avr {
         if self.is_avrxt() {
             return self.avrxt_data_write(addr, value, bus);
         }
+        let addr = match self.classic_route(addr) {
+            Ok(a) => a,
+            Err(()) => return self.classic_data_write(addr, value, bus),
+        };
         match addr {
             0x0000..=0x001F => {
                 self.r[addr as usize] = value;
@@ -1382,7 +1449,11 @@ impl Avr {
             0x00C6 => {
                 self.serial_tx.push(value);
                 self.ucsr0a |= UCSRA_UDRE | UCSRA_TXC;
-                bus.write_u8(addr as u64, value)?;
+                // On a classic-layout part data-space 0xC6 is SRAM (or
+                // reserved), not this register: keep the byte off the bus RAM.
+                if !self.model.has_classic_usart() {
+                    bus.write_u8(addr as u64, value)?;
+                }
                 // Hand the byte to the bus-side USART, which hosts the peers
                 // (an RS-485 transceiver and its slaves). No window, no peers.
                 Self::usart_mirror_write(bus, 0xC6, value)?;
@@ -1639,6 +1710,60 @@ impl Avr {
             }
             _ => Err(SimulationError::MemoryViolation(u64::from(addr))),
         }
+    }
+
+    /// Classic 64-byte I/O-file decode (SRAM at 0x0060). Only the core
+    /// registers, mapped ports and the aliased USART have behaviour; every
+    /// other I/O register is a stored byte, and 0x60.. is SRAM. The 328P
+    /// timer/ADC/TWI/ext-int addresses are not these parts' registers.
+    fn classic_data_read(&self, addr: u16, bus: &dyn Bus) -> SimResult<u8> {
+        match addr {
+            0x0000..=0x001F => Ok(self.r[addr as usize]),
+            a if self.is_pin_reg(a) => {
+                let ddr = self.io[(addr + 1 - 0x20) as usize];
+                let port = self.io[(addr + 2 - 0x20) as usize];
+                let external = bus.read_u8(AVR_IO_MIRROR_BASE + u64::from(addr))?;
+                Ok((port & ddr) | (external & !ddr))
+            }
+            0x005D => Ok((self.sp & 0xFF) as u8),
+            0x005E => Ok((self.sp >> 8) as u8),
+            0x005F => Ok(self.sreg),
+            0x0020..=0x005F => Ok(self.io[(addr - 0x20) as usize]),
+            a if self.model.has_classic_io_file()
+                && (self.sram_start..=self.ramend).contains(&a) =>
+            {
+                Ok(self.sram[(a - self.sram_start) as usize])
+            }
+            0x0060..=0x00FF => Ok(self.io[(addr - 0x20) as usize]),
+            _ => Err(SimulationError::MemoryViolation(addr as u64)),
+        }
+    }
+
+    fn classic_data_write(&mut self, addr: u16, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
+        match addr {
+            0x0000..=0x001F => self.r[addr as usize] = value,
+            // ATmega8/16/32 PINx are read-only: no write-one-to-toggle.
+            a if self.is_pin_reg(a) => {}
+            0x005D => self.sp = (self.sp & 0xFF00) | value as u16,
+            0x005E => self.sp = (self.sp & 0x00FF) | ((value as u16) << 8),
+            0x005F => self.sreg = value,
+            0x0020..=0x005F => {
+                self.io[(addr - 0x20) as usize] = value;
+                if self.is_port_reg(addr) {
+                    let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + u64::from(addr), value);
+                }
+            }
+            a if self.model.has_classic_io_file()
+                && (self.sram_start..=self.ramend).contains(&a) =>
+            {
+                self.sram[(a - self.sram_start) as usize] = value;
+                bus.write_u8(u64::from(a), value)?;
+            }
+            // ATmega128 reserved extended I/O where the 328P has USART0.
+            0x0060..=0x00FF => self.io[(addr - 0x20) as usize] = value,
+            _ => return Err(SimulationError::MemoryViolation(addr as u64)),
+        }
+        Ok(())
     }
 
     /// AVRxt data-space write. I/O writes are retained locally and mirrored to
@@ -4324,6 +4449,126 @@ mod tests {
     /// ATmega164/324/644/1284P expose ports A-D at the low megaAVR IO map.
     /// Check that GPIOA reaches the bus mirror and PINx reads combine the
     /// output latch with the outside input level for every supported model.
+    /// On the 64-byte-I/O-file parts 0x60..0xFF is SRAM. Before the classic
+    /// decode it hit the 328P extended I/O arms: a variable at 0xC6 was sent
+    /// as a UART byte, one at 0xC0 read back with UDRE set.
+    #[test]
+    fn classic_io_file_parts_keep_0x60_to_0xff_as_sram() {
+        let models = [
+            AvrModel::Atmega8,
+            AvrModel::Atmega16,
+            AvrModel::Atmega32,
+            AvrModel::Attiny13,
+            AvrModel::Attiny2313,
+            AvrModel::Attiny25,
+            AvrModel::Attiny45,
+            AvrModel::Attiny85,
+            AvrModel::Attiny24,
+            AvrModel::Attiny44,
+            AvrModel::Attiny84,
+            AvrModel::Attiny261,
+            AvrModel::Attiny461,
+            AvrModel::Attiny861,
+            AvrModel::Attiny4313,
+        ];
+        for model in models {
+            assert!(model.has_classic_io_file(), "{model:?}");
+            let mut bus = MockBus::new();
+            let mut cpu = Avr::new_model(model);
+            for a in 0x60u16..=0x9F {
+                cpu.data_write(a, (a as u8) ^ 0xA5, &mut bus).unwrap();
+            }
+            for a in 0x60u16..=0x9F {
+                assert_eq!(
+                    cpu.data_read(a, &bus).unwrap(),
+                    (a as u8) ^ 0xA5,
+                    "{model:?} {a:#x}"
+                );
+            }
+            if cpu.ramend >= 0xFF {
+                for a in 0xA0u16..=0xFF {
+                    cpu.data_write(a, a as u8, &mut bus).unwrap();
+                    assert_eq!(cpu.data_read(a, &bus).unwrap(), a as u8, "{model:?} {a:#x}");
+                }
+            }
+            assert!(
+                cpu.serial_tx.is_empty(),
+                "{model:?} sent SRAM writes as UART"
+            );
+        }
+    }
+
+    /// The classic-layout USART (UBRRL 0x29, UCSRB 0x2A, UCSRA 0x2B, UDR 0x2C)
+    /// transmits, reports UDRE and keeps its control registers.
+    #[test]
+    fn classic_usart_layout_transmits_from_udr_0x2c() {
+        for model in [
+            AvrModel::Atmega8,
+            AvrModel::Atmega16,
+            AvrModel::Atmega32,
+            AvrModel::Atmega128,
+            AvrModel::Attiny2313,
+            AvrModel::Attiny4313,
+        ] {
+            let mut bus = MockBus::new();
+            let mut cpu = Avr::new_model(model);
+            cpu.data_write(0x29, 51, &mut bus).unwrap();
+            cpu.data_write(0x2A, 0x18, &mut bus).unwrap();
+            assert_eq!(cpu.data_read(0x29, &bus).unwrap(), 51, "{model:?}");
+            assert_eq!(cpu.data_read(0x2A, &bus).unwrap(), 0x18, "{model:?}");
+            assert_ne!(
+                cpu.data_read(0x2B, &bus).unwrap() & UCSRA_UDRE,
+                0,
+                "{model:?}"
+            );
+            cpu.data_write(0x2C, b'K', &mut bus).unwrap();
+            assert_eq!(cpu.serial_tx, b"K", "{model:?}");
+        }
+        // ATmega128: 0xC0..0xC6 is reserved extended I/O, not a second USART.
+        let mut bus = MockBus::new();
+        let mut cpu = Avr::new_model(AvrModel::Atmega128);
+        cpu.data_write(0xC6, b'X', &mut bus).unwrap();
+        assert!(cpu.serial_tx.is_empty());
+    }
+
+    /// ATmega16 ports descend from PORTA 0x3B: PINx/DDRx/PORTx at 0x39/0x3A/
+    /// 0x3B .. 0x30/0x31/0x32. PORTC (0x35) is a latch, not the 328P TIFR0.
+    #[test]
+    fn atmega16_classic_ports_mirror_and_read_only_pin() {
+        let mut bus = MockBus::new();
+        let mut cpu = Avr::new_model(AvrModel::Atmega16);
+        cpu.data_write(0x3A, 0x01, &mut bus).unwrap(); // DDRA
+        cpu.data_write(0x3B, 0x01, &mut bus).unwrap(); // PORTA
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x3B).unwrap(), 0x01);
+        assert_eq!(cpu.data_read(0x39, &bus).unwrap() & 1, 1);
+        cpu.data_write(0x39, 0x01, &mut bus).unwrap(); // PINA is read-only
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x3B).unwrap(), 0x01);
+        cpu.data_write(0x3B, 0x00, &mut bus).unwrap();
+        assert_eq!(cpu.data_read(0x39, &bus).unwrap() & 1, 0);
+        cpu.data_write(0x35, 0x5A, &mut bus).unwrap(); // PORTC
+        assert_eq!(cpu.data_read(0x35, &bus).unwrap(), 0x5A);
+        bus.write_u8(AVR_IO_MIRROR_BASE + 0x30, 0x04).unwrap(); // PD2 high
+        assert_eq!(cpu.data_read(0x30, &bus).unwrap() & 0x04, 0x04);
+    }
+
+    /// SBI/CBI on ATmega16 PORTA (I/O 0x1B) are read-modify-write: the 328P
+    /// write-one set (where 0x3B is PCIFR) must not apply.
+    #[test]
+    fn atmega16_sbi_cbi_on_porta_keep_other_bits() {
+        let mut bus = MockBus::new();
+        let mut cpu = Avr::new_model(AvrModel::Atmega16);
+        cpu.data_write(0x3B, 0x80, &mut bus).unwrap();
+        // SBI PORTA,0 ; CBI PORTA,7 ; RJMP .
+        cpu.load_words(0x100, &[0x9AD8, 0x98DF, 0xCFFF]);
+        cpu.set_pc(0x100);
+        cpu.step(&mut bus, &[], &SimulationConfig::default())
+            .unwrap();
+        assert_eq!(cpu.data_read(0x3B, &bus).unwrap(), 0x81);
+        cpu.step(&mut bus, &[], &SimulationConfig::default())
+            .unwrap();
+        assert_eq!(cpu.data_read(0x3B, &bus).unwrap(), 0x01);
+    }
+
     #[test]
     fn mega164_family_mirrors_port_a_and_pin_toggle() {
         for model in [

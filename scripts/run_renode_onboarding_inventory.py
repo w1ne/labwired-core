@@ -547,7 +547,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/simavr-at90usb162-smoke.yaml",
     },
     "simavr-atmega16": {
-        "prebuilt_firmware": "tests/fixtures/avr/atmega16-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/atmega16-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega16-smoke.yaml",
     },
     "efm32g210": {
