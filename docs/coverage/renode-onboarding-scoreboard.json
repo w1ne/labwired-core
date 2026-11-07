@@ -1097,32 +1097,30 @@
       "script": "examples/renode-onboarding/cc2538-smoke.yaml",
       "system": "configs/systems/onboarding/cc2538.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-07T21:09:09Z",
-      "finished_at_utc": "2026-11-07T21:17:08Z",
-      "elapsed_seconds": 480,
-      "elapsed_ms": 479341,
+      "started_at_utc": "2026-11-07T22:02:02Z",
+      "finished_at_utc": "2026-11-07T22:05:51Z",
+      "elapsed_seconds": 230,
+      "elapsed_ms": 229258,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 477.02,
-        "build_firmware": 0.306,
-        "run_smoke": 1.99
+        "build_cli": 226.375,
+        "build_firmware": 1.113,
+        "run_smoke": 1.753
       },
       "stages_ms": {
-        "build_cli": 477020,
-        "build_firmware": 306,
-        "run_smoke": 1990
+        "build_cli": 226375,
+        "build_firmware": 1113,
+        "run_smoke": 1753
       },
       "_artifact_path": "cc2538",
       "zero_answering_windows": [
-        "ana_regs:stub",
         "i2cs:stub",
         "usb:stub",
-        "pka:stub",
-        "cctest:stub"
+        "pka:stub"
       ],
       "smoke_assertion_kinds": [
         "uart_contains",

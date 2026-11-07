@@ -431,6 +431,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "cc2538_i2cm",
     "cc2538_ioc",
     "cc2538_soc_adc",
+    "cc2538_cctest",
+    "cc2538_ana_regs",
     // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
     // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
@@ -1929,6 +1931,9 @@ pub fn try_build(
         // SOC_ADC: ADC single/sequence conversions, the RNG LFSR / CRC16 and
         // the analog comparator. Conversions complete inside the write.
         "cc2538_soc_adc" => Box::new(crate::peripherals::cc2538::soc_adc::Cc2538SocAdc::new()),
+        // CCTEST (CC_TESTCTRL) and ANA_REGS: register storage only.
+        "cc2538_cctest" => Box::new(crate::peripherals::cc2538::cctest::Cc2538CcTest::new()),
+        "cc2538_ana_regs" => Box::new(crate::peripherals::cc2538::ana_regs::Cc2538AnaRegs::new()),
         // GPTIMER0-3: timer A pends the entry's `irq:`, timer B `irq_b`.
         "cc2538_gptimer" => Box::new(crate::peripherals::cc2538::gptimer::Cc2538GpTimer::new(
             p_cfg

@@ -79,7 +79,9 @@
 # - SOC_ADC: conversion timing, STSEL 01/10 sequence starts, the IOC check
 #   that skips inactive sequence channels, ADC DMA triggers, a varying
 #   temperature, the CSP-clocked RNG and the comparator's PA5 edge/IRQ.
-# - PKA engine, I2CS slave, USB, ANA_REGS: declared stubs (the PKA
+# - CCTEST and ANA_REGS: register storage only; no pad, observation-output,
+#   temperature-gate, USB PHY or bias effect.
+# - PKA engine, I2CS slave, USB: declared stubs (the PKA
 #   SRAM window is plain RAM). I2CM is a
 #   synchronous byte-command master; it has no clock stretching, bus timing,
 #   arbitration or loopback.
@@ -244,8 +246,11 @@ peripherals:
     irq: 145
     config:
       clock_hz: 16000000
+  # ANA_REGS (§23.16.5, Table 23-12): IVCTRL storage at its 0x13 reset
+  # (crates/core/src/peripherals/cc2538/ana_regs.rs). The bias fields have no
+  # effect on the RF core or DAC models.
   - id: "ana_regs"
-    type: "stub"
+    type: "cc2538_ana_regs"
     base_address: 0x400D6000
     size: "4KB"
   # SOC_ADC (§15-17): ADC single (ADCCON3) and ST-started sequence
@@ -353,8 +358,13 @@ peripherals:
     type: "stub"
     base_address: 0x44004000
     size: "4KB"
-  # CCTEST / OBSSEL (Table 4-1: 0x4401_0000-0x4401_0030).
+  # CCTEST / CC_TESTCTRL (§23.16.4, Table 23-11): IO, OBSSEL0-7, TR0 and
+  # USBCTRL storage (crates/core/src/peripherals/cc2538/cctest.rs). Table 4-1
+  # gives 0x4401_0000-0x4401_0030, but Table 23-11 places TR0 at 0x34 and
+  # USBCTRL at 0x50, so the window covers both. Not modelled: pad strength,
+  # RF observation output on PC0-7, the ADCTM temperature-sensor gate and the
+  # USB PHY stand-by override.
   - id: "cctest"
-    type: "stub"
+    type: "cc2538_cctest"
     base_address: 0x44010000
-    size: "64B"
+    size: "256B"

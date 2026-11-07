@@ -285,6 +285,46 @@ fn ioc_selftest() {
     putc(b'\n');
 }
 
+// ── CCTEST (Table 23-11, base 0x4401_0000) / ANA_REGS (Table 23-12) ───────
+const CCTEST: u32 = 0x4401_0000;
+const CCTEST_IO: u32 = CCTEST;
+const CCTEST_OBSSEL3: u32 = CCTEST + 0x20;
+const CCTEST_TR0: u32 = CCTEST + 0x34;
+const CCTEST_USBCTRL: u32 = CCTEST + 0x50;
+const ANA_REGS_IVCTRL: u32 = 0x400D_6004;
+
+/// CCTEST and ANA_REGS register read-back: reset values, then all-ones
+/// writes that keep only each register's field bits (IO.SC, OBSSEL EN|SEL,
+/// TR0[2:0], USBCTRL.USB_STB, IVCTRL[5:0]), restored afterwards.
+fn cctest_ana_selftest() {
+    let regs = [
+        CCTEST_IO,
+        CCTEST_OBSSEL3,
+        CCTEST_TR0,
+        CCTEST_USBCTRL,
+        ANA_REGS_IVCTRL,
+    ];
+    let names: [&[u8]; 5] = [b"io=", b" obssel3=", b" tr0=", b" usbctrl=", b" ivctrl="];
+    let mut reset = [0u32; 5];
+    let mut ones = [0u32; 5];
+    for (i, &reg) in regs.iter().enumerate() {
+        reset[i] = rd(reg);
+        wr(reg, 0xFFFF_FFFF);
+        ones[i] = rd(reg);
+        wr(reg, reset[i]);
+    }
+    puts(b"cctest ");
+    for i in 0..5 {
+        puts(names[i]);
+        put_hex8(reset[i]);
+        putc(b'/');
+        put_hex8(ones[i]);
+    }
+    puts(b" restored=");
+    put_hex8(rd(ANA_REGS_IVCTRL));
+    putc(b'\n');
+}
+
 fn ssi_drain() {
     while rd(SSI_SR) & SSI_SR_RNE != 0 {
         rd(SSI_DR);
@@ -731,6 +771,7 @@ fn main() -> ! {
     putc(b'\n');
 
     ioc_selftest();
+    cctest_ana_selftest();
     soc_adc_selftest();
     ssi0_selftest();
     i2cm_selftest();
