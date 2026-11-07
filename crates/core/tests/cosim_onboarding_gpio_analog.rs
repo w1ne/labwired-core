@@ -43,6 +43,14 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
     ("gpio/kinetis", 0x10, "S32K1xx RM rev 14 §12.3 GPIOx_PDIR"),
     ("gpio/sam_port", 0x20, "SAM D5x/E5x DS60001507 §32.7 IN"),
     ("imxrt_gpio", 0x08, "IMXRT1060RM §12.5 GPIO_PSR"),
+    (
+        "lpc_gpio",
+        0x2100,
+        "MIMXRT595S_cm33.h GPIO_Type PIN[0] (UM11147)",
+    ),
+    // A word load at PGPDI1 (0x1740) carries PGPDI0 in its upper halfword;
+    // see [`input_bit`].
+    ("s32k3_siul2", 0x1740, "S32K388_SIUL2.h PGPDI1/PGPDI0"),
     ("nrf52840_gpio", 0x510, "nRF52840 PS §6.9.2 IN"),
     ("sam4s_pio", 0x3C, "SAM4S DS §31.7 PIO_PDSR"),
     ("miv_coregpio", 0x90, "CoreGPIO handbook InputRegister"),
@@ -58,6 +66,17 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         "PINx (DS8271 §14.4, DS2549 §13.4), via the CPU IO mirror",
     ),
 ];
+
+/// Bit of the input-register word that carries `pin`. Every map here puts
+/// pin k at bit k, except SIUL2: `PGPDI0` is the halfword at 0x1742 and holds
+/// pin k at bit `15 - k` (Zephyr `gpio_nxp_siul2.c` reverses it with
+/// `__RBIT`), so in the word at 0x1740 pin k is bit `31 - k`.
+fn input_bit(kind: &str, pin: u8) -> u32 {
+    match kind {
+        "s32k3_siul2" => 1 << (31 - u32::from(pin)),
+        _ => 1 << pin,
+    }
+}
 
 /// Placeholder IDR offset: GPIO types LabWired does not model yet run on the
 /// STM32F1 map, so the level is firmware-visible here and nowhere else.
@@ -101,13 +120,13 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 165;
+const COVERED: usize = 168;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 63;
+const SILICON_REGISTER: usize = 66;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 80;
+const NO_ANALOG_ENDPOINT: usize = 77;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -182,8 +201,9 @@ fn first_input_port(bus: &SystemBus) -> Option<usize> {
     })
 }
 
-/// Absolute address of the port's input register, from its declared type.
-fn input_register(chip: &ChipDescriptor, port: &str, base: u64) -> (u64, bool) {
+/// Absolute address of the port's input register, from its declared type,
+/// whether it is the silicon register, and the type key for [`input_bit`].
+fn input_register(chip: &ChipDescriptor, port: &str, base: u64) -> (u64, bool, String) {
     let cfg = chip
         .peripherals
         .iter()
@@ -201,14 +221,14 @@ fn input_register(chip: &ChipDescriptor, port: &str, base: u64) -> (u64, bool) {
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
     if let Some((_, offset, _)) = SILICON_INPUT_REGISTER.iter().find(|(t, ..)| *t == kind) {
-        return (base - window + offset, true);
+        return (base - window + offset, true, kind);
     }
     assert!(
         PLACEHOLDER_TYPES.contains(&kind.as_str()),
         "{}: GPIO type {kind} is unclassified; add it to SILICON_INPUT_REGISTER or PLACEHOLDER_TYPES",
         chip.name
     );
-    (base + PLACEHOLDER_INPUT_OFFSET, false)
+    (base + PLACEHOLDER_INPUT_OFFSET, false, kind)
 }
 
 /// Cortex-M3/M4 peripheral bit-band alias window (ARMv7-M ARM §B3.1).
@@ -259,6 +279,14 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
         bus.write_u32(base + 0x04, model)
             .expect("Series-2 GPIO_P_MODEL INPUT");
     }
+    if kind.as_deref() == Some("s32k3_siul2") {
+        // RTD Siul2_Port_Init writes MSCR[n] with SSS = 0 (GPIO) and IBE
+        // (bit 19); GPDI/PGPDI read 0 for a pad whose input buffer is off.
+        for pin in [NTC_PIN, DIODE_PIN] {
+            bus.write_u32(base + 0x240 + 4 * u64::from(pin), 1 << 19)
+                .expect("SIUL2 MSCR.IBE");
+        }
+    }
     if kind.as_deref() == Some("gpio") && profile_of(chip, port) == Some("sam_port") {
         // ASF/Arduino pinMode(INPUT) sets PINCFGn.INEN (bit 1); PINCFG is
         // one byte per pin from +0x40, so pins 0 and 1 share the first word.
@@ -303,7 +331,8 @@ fn assert_port_routes_generic_analog(
         "{tag}: both netlists bind to pins {NTC_PIN}/{DIODE_PIN}"
     );
 
-    let (register, silicon_register) = input_register(chip, &port, base);
+    let (register, silicon_register, kind) = input_register(chip, &port, base);
+    let (ntc_bit, diode_bit) = (input_bit(&kind, NTC_PIN), input_bit(&kind, DIODE_PIN));
     let unreached = INPUT_REGISTER_UNREACHED.iter().any(|(b, _)| *b == board);
     let io_v = chip.io_voltage_v.expect("io voltage set before the bus");
     let expected_diode_v = diode_load_line_voltage();
@@ -360,8 +389,7 @@ fn assert_port_routes_generic_analog(
         let word = bus
             .read_u32(register)
             .expect("load the port input register");
-        register_tracked &=
-            (word & (1 << NTC_PIN) != 0) == expected_ntc_level && word & (1 << DIODE_PIN) == 0;
+        register_tracked &= (word & ntc_bit != 0) == expected_ntc_level && word & diode_bit == 0;
     }
     if unreached {
         assert!(

@@ -765,12 +765,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          onboarding/nxp-s32k388evb.",
     ),
     (
-        "s32k3xx_systemintegrationunitlite2",
-        "NXP S32K3xx SIUL2. Renode-imported onboarding descriptor; no model in this engine, \
-         so the window answers reads with zeros. Used by: onboarding/nxp-s32k388, \
-         onboarding/nxp-s32k388evb.",
-    ),
-    (
         "s32kxx_modeentrymodule",
         "NXP S32K mode entry module. Renode-imported onboarding descriptor; no model in this \
          engine, so the window answers reads with zeros. Used by: onboarding/nxp-s32k388, \

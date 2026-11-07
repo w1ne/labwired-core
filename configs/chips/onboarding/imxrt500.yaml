@@ -5,15 +5,27 @@
 # See the LICENSE file in the project root for full license information.
 
 # SUPERSEDED: staged onboarding descriptor (a generic UART fixture on a
-# Renode-derived map with the flash window at 0x03000000 (the boot ROM) and no
-# RT500 peripherals). The promoted i.MX RT595S part is
-# configs/chips/mimxrt595s.yaml (board: configs/systems/mimxrt595-evk.yaml).
+# Renode-derived map with the flash window at 0x03000000 (the boot ROM) and,
+# apart from the GPIO below, no RT500 peripherals). The promoted i.MX RT595S
+# part is configs/chips/mimxrt595s.yaml (board: configs/systems/mimxrt595-evk.yaml).
 name: imxrt500
 arch: arm
+# i.MX RT500 is a Cortex-M33 (no bit-band), as configs/chips/mimxrt595s.yaml.
+core: cortex-m33
 flash:
   base: 50331648
   size: 131072B
 ram:
   base: 536870912
   size: 5242880B
-peripherals: []
+# High-speed GPIO, ports 0-6, on the `lpc_gpio` model the promoted part runs:
+# B[port][pin] @0x0000, DIR @0x2000, PIN @0x2100 + 4 * port, SET/CLR/NOT
+# (MIMXRT595S_cm33.h GPIO_Type; UM11147 ch. GPIO). Renode's imxrt500 map
+# declares no GPIO. IOPCTL pad config (IBENA, pulls) and the CLKCTL1 HSGPIO
+# clock gate are not declared, so PIN reads the pad regardless.
+peripherals:
+- id: gpio
+  type: lpc_gpio
+  bus: sysbus
+  base_address: 0x40100000
+  size: 16KB

@@ -5,11 +5,13 @@
 # See the LICENSE file in the project root for full license information.
 
 # SUPERSEDED: staged onboarding descriptor (a generic UART fixture on the
-# Renode-derived map with 256 KiB of RAM and no S32K3 SIUL2 model). The
+# Renode-derived map with 256 KiB of RAM). The
 # promoted S32K388 part is configs/chips/s32k388.yaml (board:
 # configs/systems/s32k388-evb.yaml).
 name: nxp-s32k388evb
 arch: arm
+# S32K388 DS: Cortex-M7 (no bit-band), as configs/chips/s32k388.yaml.
+core: cortex-m7
 flash:
   base: 4194304
   size: 8388608B
@@ -57,10 +59,17 @@ peripherals:
   type: s32k3xx_miscellaneoussystemcontrolmodule
   bus: sysbus
   base_address: 1076232192
+# SIUL2 runs on the `s32k3_siul2` model the promoted configs/chips/s32k388.yaml
+# uses: MSCR[n] @0x240 + 4n (IBE bit 19), GPDI bytes @0x1500, PGPDI halfwords
+# @0x1740 (S32K388_SIUL2.h, RTD BaseNXP). Renode's type had no LabWired model.
+# MC_ME/MC_CGM are not modelled here, so GPDI reads the pad whatever the
+# SIUL2 clock; IMCR input muxing and the pad filters are stored only.
 - id: siul2
-  type: s32k3xx_systemintegrationunitlite2
+  type: s32k3_siul2
+  renode_type: s32k3xx_systemintegrationunitlite2
   bus: sysbus
   base_address: 1076428800
+  size: 16KB
 - id: mc_me
   type: s32kxx_modeentrymodule
   bus: sysbus
