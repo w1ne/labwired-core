@@ -1,0 +1,20 @@
+# Fixed 64 MHz operating-point profile. Firmware must actually configure PLL64
+# and validate_timed_uart_clock must pass before measuring latency.
+# g0_customer_timing attaches the timed virtual master; this manifest alone
+# does not create a bit-timed master, inject a physical wake pulse or boot ELF.
+name: iolink-g0b1re-tiol112-64mhz
+chip: ../../configs/chips/stm32g0b1re.yaml
+cpu_hz: 64000000
+external_devices:
+  - id: phy
+    type: tiol112
+    connection: usart1
+    config:
+      en: PA8
+      wake: PB0
+      nfault: PB1
+      driver_delay_ns: 1200
+      receiver_delay_ns: 300
+      enable_delay_ns: 4000 # Typical scenario, not a maximum guarantee.
+      disable_delay_ns: 4000 # Typical scenario, not a maximum guarantee.
+board_io: []

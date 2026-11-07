@@ -47,9 +47,11 @@ jobs:
           - nrf52832
           - nrf52840
           - rp2040
+          - rp2350
           - stm32f103
           - stm32f401
           - stm32f407
+          - stm32f411ceu6
           - stm32g474re
           - stm32h563
           - stm32l073
@@ -119,6 +121,10 @@ jobs:
             stm32*)      platform=ststm32@19.7.1 ;;
             nrf*)        platform=nordicnrf52 ;;
             rp2040)      platform=raspberrypi ;;
+            # Pico 2 / arduino-pico: Max Gerhardt's platform, pinned (the
+            # registry `raspberrypi` has no RP2350 boards). Same string as
+            # boards.yaml, so the installed package is the one PIO resolves.
+            rp2350)      platform=https://github.com/maxgerhardt/platform-raspberrypi.git#5d4561a05e3b212660ac6fdd3fbfb328d1988aa1 ;;
             esp32*)      platform=espressif32@7.0.1 ;;
             atmega328p)  platform=atmelavr@5.3.0 ;;
             *)

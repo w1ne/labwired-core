@@ -374,6 +374,13 @@
     "behavior": false,
     "excluded": 0,
     "level": 0,
+    "name": "stm32f103r8",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
     "name": "stm32f103t4",
     "reg_match": 0
   },
@@ -560,6 +567,13 @@
     "reg_match": 0
   },
   {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32g431rb",
+    "reg_match": 0
+  },
+  {
     "behavior": true,
     "excluded": 0,
     "level": 1,
@@ -641,6 +655,13 @@
     "excluded": 0,
     "level": 1,
     "name": "atmega328p",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "atmega328pb",
     "reg_match": 0
   },
   {
@@ -788,6 +809,13 @@
     "excluded": 0,
     "level": 1,
     "name": "pic24f16ka102",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v003f4p6",
     "reg_match": 0
   }
 ]

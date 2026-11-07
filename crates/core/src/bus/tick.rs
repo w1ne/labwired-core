@@ -430,13 +430,21 @@ impl SystemBus {
             return;
         };
         match outcome {
-            Ok(None) => return,
-            Ok(Some(value)) => p.dev.dma_load_data(req, value),
+            Ok(None) => {
+                if !p.dev.dma_transfer_complete(req) {
+                    return;
+                }
+            }
+            Ok(Some(value)) => {
+                p.dev.dma_load_data(req, value);
+                p.dev.dma_transfer_complete(req);
+            }
             Err(e) => {
                 tracing::trace!("DMA request {req:?} failed: {e:?}");
                 p.dev.dma_transfer_error(req);
             }
         }
+        self.mark_multi_irq_levels(issuer);
         self.collect_scheduled_events(issuer);
     }
 

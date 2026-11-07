@@ -81,8 +81,11 @@ boards:
     chip: rp2040
     system: systems/rp2040.yaml
     pio: { platform: raspberrypi, board: pico, framework: arduino }
-    max_steps: 8000000
-    budget_reason: "mbed RTX SysTick delay; L0~1.7M L2~0.8M with short delays (was 20M for delay(20))"
+    # TIMER runs at its real 1 MHz since #1454, so mbed's pre-main
+    # busy_wait_us(100_000) (double_tap_usb_boot) alone costs 12.5M cycles at
+    # 125 MHz; 40M = 320 ms (the CLI caps scripts at 50M steps).
+    max_steps: 40000000
+    budget_reason: "real-rate TIMER: 100 ms pre-main double-tap wait = 12.5M cycles; 320 ms window (was 8M, red since #1454)"
     # Pico LED = GPIO25 via SIO (not APB GPIO)
     led_watch: "sio:25"
     led_min_edges: 2
@@ -91,6 +94,28 @@ boards:
     sketches_skip: [L8_can]
     sketches_skip_reason:
       L8_can: "No on-chip CAN model"
+
+  - id: rp2350
+    chip: rp2350
+    system: systems/rp2350.yaml
+    # Raspberry Pi Pico 2 on Earle Philhower's arduino-pico core. The registry
+    # `raspberrypi` platform has no RP2350 boards (and its `pico` board is the
+    # Mbed core the rp2040 row uses), so this pins Max Gerhardt's platform,
+    # the one arduino-pico documents for PlatformIO, at a fixed commit.
+    pio: { platform: "https://github.com/maxgerhardt/platform-raspberrypi.git#5d4561a05e3b212660ac6fdd3fbfb328d1988aa1", board: rpipico2, framework: arduino }
+    # Serial is native USB CDC: the sketches wait for the simulated host's
+    # DTR (`while (!Serial)`), so every cell pays USB enumeration first.
+    max_steps: 3000000
+    budget_reason: "USB CDC enumeration + DTR before the first print: L0/L5 ~0.73M steps; ~4x headroom"
+    # Pico 2 LED = GP25 via SIO (pinMode/digitalWrite go through the GPIO
+    # coprocessor, p0).
+    led_watch: "sio:25"
+    led_min_edges: 2
+    family: rp2040
+    notes: "arduino-pico core; Serial = USB CDC; L6 analogWrite = PWM slice 4B on GP25"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "RP2350 has no CAN controller"
 
   - id: stm32f103
     chip: stm32f103
@@ -114,6 +139,23 @@ boards:
     sketches_skip: [L8_can]
     sketches_skip_reason:
       L8_can: "No bxCAN/FDCAN in chip yaml"
+
+  - id: stm32f411ceu6
+    chip: stm32f411ceu6
+    system: systems/stm32f411ceu6.yaml
+    pio: { platform: ststm32, board: blackpill_f411ce, framework: arduino }
+    max_steps: 4000000
+    budget_reason: "Black Pill 100 MHz: L0~0.10M L2~0.29M L4~0.20M; L6 30x delay(1) ~2.98M"
+    led_watch: "gpioc:13"
+    led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0 (PC13 has no timer channel, so analogWrite
+    # would fall back to digitalWrite). TIM2 reaches PWM1/CC1E with PA0 on
+    # AF1, but no pwm_watch: there is no STM32 TIM OC->pad routing on main
+    # yet (PROBLEMS.md "L6 PWM edges"), so PA0 shows one edge, not a wave.
+    family: stm32
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "STM32F411 has no CAN peripheral"
 
   - id: stm32f407
     chip: stm32f407

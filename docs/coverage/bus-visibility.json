@@ -29,6 +29,10 @@
   },
   {
     "buses": [],
+    "name": "atmega328pb"
+  },
+  {
+    "buses": [],
     "name": "atsamd21"
   },
   {
@@ -90,6 +94,10 @@
   {
     "buses": [],
     "name": "cc2538sf53"
+  },
+  {
+    "buses": [],
+    "name": "ch32v003f4p6"
   },
   {
     "buses": [],
@@ -354,6 +362,14 @@
       "SPI",
       "UART"
     ],
+    "name": "stm32f103r8"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
     "name": "stm32f103rb"
   },
   {
@@ -583,6 +599,14 @@
       "UART"
     ],
     "name": "stm32g0b1re"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32g431rb"
   },
   {
     "buses": [

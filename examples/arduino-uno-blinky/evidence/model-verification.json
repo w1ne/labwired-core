@@ -1,0 +1,33 @@
+{
+  "tool": "labwired_verify",
+  "target": "arduino-uno",
+  "diagram": {
+    "board": "arduino-uno",
+    "parts": [{"id": "mcu", "type": "arduino-uno"}],
+    "wires": []
+  },
+  "language": "arduino",
+  "entry_path": "src/main.ino",
+  "firmware_source": "examples/arduino-uno-blinky/src/main.cpp",
+  "max_steps": 2000000,
+  "oracle": {
+    "serial": [{"contains": "."}],
+    "gpio": [{"pin": "D13", "state": "toggled"}]
+  },
+  "status": "model_verified",
+  "run_status": "pass",
+  "stop_reason": "max_steps",
+  "verification": "serial contains \".\"; D13 toggled (gpio_pins pad). Model-verified deterministically.",
+  "oracle_results": [
+    {"kind": "serial", "passed": true, "detail": "serial contains \".\""},
+    {"kind": "gpio", "passed": true, "detail": "D13 toggled (gpio_pins pad)"}
+  ],
+  "serial": "uno-ok\r\n................................................................................",
+  "gaps": [
+    {
+      "code": "approximation",
+      "scope": "model",
+      "detail": "No power net drives the MCU; VDD is assumed to be an ideal 5 V rail, so power-on and brown-out reset are not simulated."
+    }
+  ]
+}
