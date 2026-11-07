@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs seven of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs ten of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -166,6 +166,9 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `i2c_oled` | a 128x32 SSD1306 at 0x3C on I2C1 (PC1/PC2); after the half-lit "buffer fill with binary" frame, mode 1 must leave exactly the two diagonals `(x, x/4)` and `(x, 31 - x/4)` lit: 256 of 4096 pixels, corners, centre crossing and two empty bands checked | 12/12; every packet completes with no `ssd1306_i2c_error` timeout |
 | `tim2_pwm` | TIM2 PWM on CH1 (PD4), CH2 (PD3) and CH4 (PD7), with an LED on each; debug-printf banner and the TIM2 setup left behind (ATRLR, CEN/ARPE, CHCTLR1/2, CCER). [`check-tim2-pwm.py`](check-tim2-pwm.py) decodes the waveform of a `--watch-gpio` run, committed as [`pwm-capture.json.gz`](evidence/ch32fun-tim2-pwm-smoke/pwm-capture.json.gz) with its output in [`pwm-check.log`](evidence/ch32fun-tim2-pwm-smoke/pwm-check.log) | 11,546 whole 256-cycle periods (187.5 kHz); CH1 low for `count`/256 and CH2 low, CH4 high for `(count + 128) & 255`/256, through CH2's 255 → 0 wrap; `count` steps by 1 every 937.5 periods, i.e. `Delay_Ms(5)` |
 | `exti_pin_change_isr` | a button on PD3 is pressed, released and pressed again; the EXTI7_0 handler blips PC1. The smoke checks PC1 edges and the EXTI/AFIO/PFIC state left behind; the `--watch-gpio` run is committed as [`pc1-capture.json`](evidence/ch32fun-exti-smoke/pc1-capture.json) | PD3 rises at 200,001 and 600,001 and PC1 blips at 200,007-200,009 and 600,007-600,009: exactly 4 PC1 edges, none at the release (falling edge, FTENR clear) at 400,001 |
+| `spi_max7219` | 16-bit SPI1 frames (PC5 SCK, PC6 MOSI) to a MAX7219 with LOAD on PD0; the panel state the init writes leave ([`max7219-state.json`](evidence/ch32fun-spi-max7219-smoke/max7219-state.json)) | 10/10: intensity 15, scan limit 7, shutdown clear, 12 of 64 LEDs lit as Code-B 7..0 |
+| `uart_tx_dma` | `Hello World!\r\n` three times on USART1 (PD5), every byte moved by DMA1 channel 4; the transfer-complete handler (PFIC 25) toggles PD6 | 5/5: 42 bytes, PD6 4 edges, CNTR4 = 0, INTFR nibble 4 = 0x5 |
+| `ws2812bdemo` | a 191-LED WS2812B strip on PC6, fed by SPI1 at 3 MHz from DMA1 channel 3 in circular mode with HT/TC refills (PFIC 24). The strip decodes PC6's pulse widths; [`check-ws2812.py`](check-ws2812.py) recomputes every LED from the demo's own colour tables and replays the driver's buffer protocol ([`check-ws2812.log`](evidence/ch32fun-ws2812-smoke/colour-check/check-ws2812.log)) | 3/3 and all 190 LEDs the driver sends match frame 9. The driver clocks out 190 of `NR_LEDS` 191: the HT refill that writes LED 190 is the one that clears CIRC, so that half is never sent. [CH32V003F4P6 status and sourcing](evidence/ch32fun-ws2812-smoke/component-status.md) |
 
 This profile adds these to the PFIC profile:
 
@@ -254,8 +257,17 @@ Read these results correctly:
   cycles on silicon. Line contents and order are exact; their timing is not.
 - Not modeled: input from the host over the debug channel (ch32fun's
   `handle_debug_input`), a detached probe as a configuration, and every
-  peripheral the other ch32fun examples need (TIM1, SPI, DMA, OPA,
-  watchdogs, standby).
+  peripheral the other ch32fun examples need (TIM1, OPA, watchdogs,
+  standby; SPI1 slave mode and its interrupt; DMA requests other than
+  SPI1 TX and USART1 TX).
+- On WS2812: the strip latches a frame when the next frame's first rising
+  edge proves the 40 us reset gap, because it sees only edges. A real LED
+  latches on the gap itself, so between frames the model shows the previous
+  frame. The pulse widths come from the SPI bit engine's cycle stamps; DMA
+  items cost no CPU cycles, so ISR refill latency is not stressed the way it
+  is on silicon. Negative controls in
+  [`evidence/ch32fun-ws2812-smoke/negative-control/`](evidence/ch32fun-ws2812-smoke/negative-control/):
+  no SPI pad map gives 0 LEDs; no CNTR re-arm gives 6 LEDs and CIRC stuck.
 - On EXTI: the 6-cycle gap from the PD3 edge to the PC1 store is the
   model's interrupt entry plus two instructions, not a measured QingKe V2
   latency, and the input filter/synchroniser delay is not modeled (the flag

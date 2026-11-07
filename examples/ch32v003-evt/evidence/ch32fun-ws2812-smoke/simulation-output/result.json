@@ -1,0 +1,390 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 6200000,
+  "cycles": 16568820,
+  "instructions": 6200000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 6200000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 6200000
+    }
+  },
+  "limits": {
+    "max_steps": 12400000,
+    "max_cycles": 6200000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073872948,
+          "expected_value": 0,
+          "mask": null,
+          "size": 16
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073872944,
+          "expected_value": 1,
+          "mask": 33,
+          "size": 32
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073819652,
+          "expected_value": 2,
+          "mask": 2,
+          "size": 16
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1688,
+      536872940,
+      536871932,
+      0,
+      1,
+      536870956,
+      0,
+      0,
+      0,
+      0,
+      3758157824,
+      795547,
+      1976,
+      1073812480,
+      774945,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1478,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 1476,
+    "mcause": 2147483672,
+    "mtval": 0,
+    "mtime": 6199519,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "d4569fb92fa7db08d67760546516dda4e46848a6911b3e67554564c9ecfdb5a8",
+  "config": {
+    "firmware": "examples/ch32v003-evt/ch32fun/ws2812bdemo.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-ch32fun-ws2812.yaml",
+    "script": "examples/ch32v003-evt/ch32fun-ws2812-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "exti",
+        "kind": "native",
+        "base": 1073808384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "debug_printf",
+        "kind": "native",
+        "base": 3758096628,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfic",
+        "kind": "native",
+        "base": 3758153728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dma1",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1073816576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "i2c",
+        "base": 1073763328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim2",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 1073819648,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "strip",
+        "device_type": "neopixel",
+        "declared": true,
+        "attachment": {
+          "transport": "gpio",
+          "bus": "gpio"
+        },
+        "artifacts": [
+          {
+            "kind": "framebuffer",
+            "id": "strip",
+            "meta": {
+              "data_pin": 6,
+              "format": "ws2812_grb",
+              "generation": 11691855844676457202,
+              "h": 1,
+              "lit_pixels": 190,
+              "pixels_decoded": 190,
+              "w": 191
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2548,
+    "data_bytes": 0,
+    "bss_bytes": 496,
+    "flash_used_bytes": 2548,
+    "ram_static_bytes": 496,
+    "flash_total_bytes": 16384,
+    "ram_total_bytes": 2048,
+    "flash_used_pct": 15.55,
+    "ram_static_pct": 24.22,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 16568820,
+    "instructions": 6200000,
+    "steps_executed": 6200000,
+    "memory_reads": 6259917,
+    "memory_writes": 35426,
+    "peripheral_accesses": 2005456,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1476,
+        "count": 7853
+      },
+      {
+        "pc": 1480,
+        "count": 7735
+      },
+      {
+        "pc": 1478,
+        "count": 7733
+      },
+      {
+        "pc": 558,
+        "count": 39
+      },
+      {
+        "pc": 562,
+        "count": 39
+      },
+      {
+        "pc": 756,
+        "count": 39
+      },
+      {
+        "pc": 830,
+        "count": 39
+      },
+      {
+        "pc": 836,
+        "count": 39
+      },
+      {
+        "pc": 844,
+        "count": 39
+      },
+      {
+        "pc": 854,
+        "count": 39
+      },
+      {
+        "pc": 864,
+        "count": 39
+      },
+      {
+        "pc": 896,
+        "count": 39
+      },
+      {
+        "pc": 902,
+        "count": 39
+      },
+      {
+        "pc": 914,
+        "count": 39
+      },
+      {
+        "pc": 928,
+        "count": 39
+      },
+      {
+        "pc": 938,
+        "count": 39
+      }
+    ]
+  }
+}

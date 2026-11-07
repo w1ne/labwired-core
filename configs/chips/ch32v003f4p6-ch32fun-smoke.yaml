@@ -9,7 +9,7 @@
 # tim2_pwm, and EXTI with its AFIO_EXTICR port select for ch32fun's
 # exti_pin_change_isr, and SPI1 (PC5 SCK, PC6 MOSI, PC7 MISO) for ch32fun's
 # spi_max7219, and DMA1 with USART1 TX on channel 4 for ch32fun's
-# uart_tx_dma.
+# uart_tx_dma and SPI1 TX on channel 3 for ch32fun's ws2812bdemo.
 #
 # Sources:
 # - ch32fun ch32v003hw.h (register map, DMDATA0/DMDATA1/sentinel at
@@ -53,10 +53,13 @@
 # SPI1 reuses the engine's STM32F1 SPI (same CTLR1/CTLR2/STATR/DATAR/
 # CRCR/RCRCR/TCRCR offsets and CTLR1.DFF 8/16-bit frames as ch32fun's
 # ch32v003hw.h), master mode with a software chip select on a GPIO. A
-# 16-bit frame goes out MSB first. Not modeled on SPI1: the SCK/MOSI pad
-# waveforms (the device sees whole frames, not edges; no pad_map), the
-# baud-rate prescaler as bus timing, HSCR, the AFIO PCFR1 SPI1 remap,
-# hardware NSS, slave mode, CRC, the SPI1 interrupt and DMA.
+# 16-bit frame goes out MSB first, clocked at the CTLR1.BR prescaler. With
+# `pad_map: ch32v003` SCK and MOSI are driven on PC5/PC6 while CFGLR selects
+# the alternate function, each edge at its bit-engine cycle (the WS2812
+# strip in ch32fun's ws2812bdemo decodes PC6). CTLR2.TXDMAEN/RXDMAEN raise
+# DMA1 requests as levels. Not modeled on SPI1: HSCR, the AFIO PCFR1 SPI1
+# remap, MISO/NSS pads, hardware NSS, slave mode, CRC and the SPI1
+# interrupt.
 #
 # DMA1 is the STM32F1 seven-channel block at the same INTFR/INTFCR/CFGRx/
 # CNTRx/PADDRx/MADDRx offsets as ch32fun's ch32v003hw.h, on the `ch32v003`
@@ -65,11 +68,13 @@
 # TC/HT/TE & TCIE/HTIE/TEIE is a level on PFIC interrupt 21 + N
 # (DMA1_Channel1_IRQn = 22 .. DMA1_Channel7_IRQn = 28) until INTFCR clears
 # it. CFGR/CNTR/PADDR/MADDR stay writable while EN=1 (the G0 lock does not
-# apply). The only routed request is USART1 TX (CTLR3.DMAT) on channel 4,
-# the fixed CH32V003 mapping. Not modeled on DMA1: the other request lines
-# (ADC1 ch1, SPI1 RX/TX ch2/ch3, USART1 RX ch5, I2C1, TIM1/TIM2), bus
-# arbitration timing against the CPU (an item takes no CPU cycles), and
-# RCC_AHBPCENR's SRAM/flash enables.
+# apply), and a CNTR store on an enabled channel re-arms it from PADDR/
+# MADDR with that count as the HT/TC/CIRC reference, as ch32fun's WS2812
+# driver relies on. Routed requests, from the fixed CH32V003 mapping: SPI1
+# TX on channel 3 and USART1 TX (CTLR3.DMAT) on channel 4. Not modeled on
+# DMA1: the other request lines (ADC1 ch1, SPI1 RX ch2, USART1 RX ch5,
+# I2C1, TIM1/TIM2), bus arbitration timing against the CPU (an item takes
+# no CPU cycles), and RCC_AHBPCENR's SRAM/flash enables.
 #
 # Not modeled: debug-printf input from the host, a detached probe, the rest
 # of the RISC-V debug module, TIM1, OPA, the
@@ -186,6 +191,7 @@ peripherals:
       profile: ch32v003
       # Fixed request mapping, CH32V003 RM DMA1 request table.
       requests:
+        spi1_tx: 3
         usart1_tx: 4
 
   - id: usart1
@@ -225,3 +231,6 @@ peripherals:
     base_address: 0x40013000
     size: 1KB
     clock: { reg: apb2enr, bit: 12 }
+    config:
+      # PC5 SCK / PC6 MOSI, AFIO_PCFR1.SPI1_RM = 0 (see SpiPadMap::Ch32v003).
+      pad_map: ch32v003

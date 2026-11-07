@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build nine unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build ten unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -31,6 +31,12 @@
 #                    (PD5, 115200) moved by DMA1 channel 4 (CTLR3.DMAT)
 #                    once per second; the channel's transfer-complete
 #                    interrupt (PFIC 25) toggles PD6.
+#   ws2812bdemo.elf  examples/ws2812bdemo: 191 WS2812/SK6805 LEDs (GRB) on
+#                    PC6, driven by ch32fun's ws2812b_dma_spi_led_driver.h:
+#                    16-bit SPI1 frames at 3 MHz (one LED bit = four SPI
+#                    bits, 1000 or 1110) moved by DMA1 channel 3 in circular
+#                    mode, its half/complete interrupts (PFIC 24) refilling
+#                    a 48-halfword buffer from WS2812BLEDCallback().
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V003 (rv32ec/ilp32e, -Os -flto, generated_ch32v003.ld),
@@ -68,7 +74,7 @@ ld="${out_dir}/generated_ch32v003.ld"
   -DTARGET_MCU_MEMORY_SPLIT= "${src}/ch32fun/ch32fun.ld" > "${ld}"
 
 for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr \
-    spi_max7219 uart_tx_dma; do
+    spi_max7219 uart_tx_dma ws2812bdemo; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

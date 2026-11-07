@@ -1957,6 +1957,13 @@ impl SystemBus {
             ("spi2", 'b', 13, Sck, "SPI2_SCK"),
             ("spi2", 'b', 15, Mosi, "SPI2_MOSI"),
         ];
+        // WCH CH32V003 (F1-style ports; `pad_map: ch32v003`): SPI1 default
+        // mapping, SCK/MOSI only, for the same reason as F1. See
+        // `SpiPadMap::Ch32v003`.
+        const CH32V003: &[(&str, char, u8, SpiSignal, &str)] = &[
+            ("spi1", 'c', 5, Sck, "SPI1_SCK"),
+            ("spi1", 'c', 6, Mosi, "SPI1_MOSI"),
+        ];
 
         // ── H5/H7 "SPI v3" parts ────────────────────────────────────────────
         //
@@ -2177,8 +2184,15 @@ impl SystemBus {
                             }
                         }
                     }
-                    GpioRegisterLayout::Stm32F1 => {
-                        for &(spi, p, pin, sig, func) in F1 {
+                    layout @ (GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch) => {
+                        // A WCH port with no declared map routes nothing: the
+                        // F1 rows are an STM32 pinout.
+                        let table = match (layout, pad_map) {
+                            (_, SpiPadMap::Ch32v003) => CH32V003,
+                            (GpioRegisterLayout::Stm32F1, _) => F1,
+                            _ => &[],
+                        };
+                        for &(spi, p, pin, sig, func) in table {
                             if spi == spi_name && p == port {
                                 gpio.add_pad_route(
                                     lines.pad_lines(),

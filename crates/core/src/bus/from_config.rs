@@ -1708,6 +1708,23 @@ impl SystemBus {
         false
     }
 
+    /// Install a GPIO edge observer on ONE STM32-style port (`gpioc`), for
+    /// a part wired to a port pad (`PC6`). The port reports the pads a
+    /// peripheral drives through its pad routes (an SPI MOSI), each edge at
+    /// the cycle the peripheral's wire stamps; see
+    /// [`crate::peripherals::gpio::GpioPort::add_observer`]. Returns whether
+    /// a port of that name took it.
+    pub fn install_port_gpio_observer(
+        bus: &mut SystemBus,
+        port: &str,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    ) -> bool {
+        let Some(idx) = bus.find_peripheral_index_by_name(port) else {
+            return false;
+        };
+        bus.peripherals[idx].dev.observe_port_pads(observer)
+    }
+
     #[allow(dead_code)] // residual GPIO helpers kept for CAN/tester arms that may re-use them
     fn gpio_from_config(
         ext: &labwired_config::ExternalDevice,

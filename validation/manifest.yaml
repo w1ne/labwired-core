@@ -1298,6 +1298,20 @@ boards:
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: stm32h563
+    # 2026-11-07 (WS2812): CH32V003 SPI1 MOSI pads + DMA1 channel 3 change
+    # the shared spi.rs/dma.rs/gpio.rs/pad_lines.rs/pad_routing.rs/attach.rs
+    # digests. STM32-visible effects: (1) the classic/FIFO SPI answers
+    # `dma_request_level` (TX = TXDMAEN & SPE & TXE, RX = RXDMAEN & RXNE),
+    # so a DMA channel enabled while that request already stands is served
+    # at once; only chips whose DMA `requests:` table names the SPI reach
+    # it. (2) In the event-scheduler build the first wire edge of a frame
+    # started by a DATAR store carries the store's cycle instead of the
+    # logic tap's provisional clock. (3) GPIO ports can carry edge
+    # observers on pad-routed lines; nothing registers one on these boards.
+    # The F1 SPI pad table, the DMA register file, CNDTR semantics (the
+    # CNTR re-arm is `profile: ch32v003` only) and every IRQ path are
+    # unchanged. This is a reviewed model-drift acknowledgment, NOT a new
+    # silicon capture; no capture or ack date moves.
     # 2026-11-07: CH32V003 DMA1 changes the shared dma.rs/uart.rs/
     # peripheral.rs/bus digests (and exti.rs/inspect.rs: a test-only match
     # arm and rustfmt). New `profile: ch32v003` DMA (G0 commit-after-copy
@@ -1804,7 +1818,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: ad10255893b0e297199c942dd28a3ba1a1a93a6925123f735ab801cb60018140
+    drift_ack_digest: d2aaeea30a79395daecc3cdf03fa19df344f7797ca5d2c6200b50a496f91401a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3554,6 +3568,20 @@ boards:
     drift_ack: 2026-11-07
 
   - id: nucleo-l476rg
+    # 2026-11-07 (WS2812): CH32V003 SPI1 MOSI pads + DMA1 channel 3 change
+    # the shared spi.rs/dma.rs/gpio.rs/pad_lines.rs/pad_routing.rs/attach.rs
+    # digests. STM32-visible effects: (1) the classic/FIFO SPI answers
+    # `dma_request_level` (TX = TXDMAEN & SPE & TXE, RX = RXDMAEN & RXNE),
+    # so a DMA channel enabled while that request already stands is served
+    # at once; only chips whose DMA `requests:` table names the SPI reach
+    # it. (2) In the event-scheduler build the first wire edge of a frame
+    # started by a DATAR store carries the store's cycle instead of the
+    # logic tap's provisional clock. (3) GPIO ports can carry edge
+    # observers on pad-routed lines; nothing registers one on these boards.
+    # The F1 SPI pad table, the DMA register file, CNDTR semantics (the
+    # CNTR re-arm is `profile: ch32v003` only) and every IRQ path are
+    # unchanged. This is a reviewed model-drift acknowledgment, NOT a new
+    # silicon capture; no capture or ack date moves.
     # 2026-11-07: CH32V003 DMA1 changes the shared dma.rs/uart.rs/
     # peripheral.rs/bus digests (and exti.rs/inspect.rs: a test-only match
     # arm and rustfmt). New `profile: ch32v003` DMA (G0 commit-after-copy
@@ -4049,7 +4077,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 8acf05dccf69fe4e26761ca6f0f40378ab4420e20475ba650d4b104efb60fd27
+    drift_ack_digest: 2bf95aeeb0263b6ed813f75e4965d7f65d230f621177da08efafb0745d1ba05e
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4748,6 +4776,20 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: nucleo-l073rz
+    # 2026-11-07 (WS2812): CH32V003 SPI1 MOSI pads + DMA1 channel 3 change
+    # the shared spi.rs/dma.rs/gpio.rs/pad_lines.rs/pad_routing.rs/attach.rs
+    # digests. STM32-visible effects: (1) the classic/FIFO SPI answers
+    # `dma_request_level` (TX = TXDMAEN & SPE & TXE, RX = RXDMAEN & RXNE),
+    # so a DMA channel enabled while that request already stands is served
+    # at once; only chips whose DMA `requests:` table names the SPI reach
+    # it. (2) In the event-scheduler build the first wire edge of a frame
+    # started by a DATAR store carries the store's cycle instead of the
+    # logic tap's provisional clock. (3) GPIO ports can carry edge
+    # observers on pad-routed lines; nothing registers one on these boards.
+    # The F1 SPI pad table, the DMA register file, CNDTR semantics (the
+    # CNTR re-arm is `profile: ch32v003` only) and every IRQ path are
+    # unchanged. This is a reviewed model-drift acknowledgment, NOT a new
+    # silicon capture; no capture or ack date moves.
     # 2026-11-07: CH32V003 DMA1 changes the shared dma.rs/uart.rs/
     # peripheral.rs/bus digests (and exti.rs/inspect.rs: a test-only match
     # arm and rustfmt). New `profile: ch32v003` DMA (G0 commit-after-copy
@@ -5195,7 +5237,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 315b9f3f930b726661d92022cc1bf53124453e76fd964903106aebe2b110079c
+    drift_ack_digest: 925cc2da629c62ce67ce21504956db8ad18a0b90c7b3c696bab09046e1548487
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5831,6 +5873,20 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f103
+    # 2026-11-07 (WS2812): CH32V003 SPI1 MOSI pads + DMA1 channel 3 change
+    # the shared spi.rs/dma.rs/gpio.rs/pad_lines.rs/pad_routing.rs/attach.rs
+    # digests. STM32-visible effects: (1) the classic/FIFO SPI answers
+    # `dma_request_level` (TX = TXDMAEN & SPE & TXE, RX = RXDMAEN & RXNE),
+    # so a DMA channel enabled while that request already stands is served
+    # at once; only chips whose DMA `requests:` table names the SPI reach
+    # it. (2) In the event-scheduler build the first wire edge of a frame
+    # started by a DATAR store carries the store's cycle instead of the
+    # logic tap's provisional clock. (3) GPIO ports can carry edge
+    # observers on pad-routed lines; nothing registers one on these boards.
+    # The F1 SPI pad table, the DMA register file, CNDTR semantics (the
+    # CNTR re-arm is `profile: ch32v003` only) and every IRQ path are
+    # unchanged. This is a reviewed model-drift acknowledgment, NOT a new
+    # silicon capture; no capture or ack date moves.
     # 2026-11-07: CH32V003 DMA1 changes the shared dma.rs/uart.rs/
     # peripheral.rs/bus digests (and exti.rs/inspect.rs: a test-only match
     # arm and rustfmt). New `profile: ch32v003` DMA (G0 commit-after-copy
@@ -6339,7 +6395,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: c728221fc9aeaa0b7dae2f427babfd06e644df54192b34c7b64a50276cd8cfb2
+    drift_ack_digest: 55f0fce0d37677590442b555204e64a87f63418411bbfd02f9047915a7845f0f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7045,6 +7101,20 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f407
+    # 2026-11-07 (WS2812): CH32V003 SPI1 MOSI pads + DMA1 channel 3 change
+    # the shared spi.rs/dma.rs/gpio.rs/pad_lines.rs/pad_routing.rs/attach.rs
+    # digests. STM32-visible effects: (1) the classic/FIFO SPI answers
+    # `dma_request_level` (TX = TXDMAEN & SPE & TXE, RX = RXDMAEN & RXNE),
+    # so a DMA channel enabled while that request already stands is served
+    # at once; only chips whose DMA `requests:` table names the SPI reach
+    # it. (2) In the event-scheduler build the first wire edge of a frame
+    # started by a DATAR store carries the store's cycle instead of the
+    # logic tap's provisional clock. (3) GPIO ports can carry edge
+    # observers on pad-routed lines; nothing registers one on these boards.
+    # The F1 SPI pad table, the DMA register file, CNDTR semantics (the
+    # CNTR re-arm is `profile: ch32v003` only) and every IRQ path are
+    # unchanged. This is a reviewed model-drift acknowledgment, NOT a new
+    # silicon capture; no capture or ack date moves.
     # 2026-11-07: CH32V003 DMA1 changes the shared dma.rs/uart.rs/
     # peripheral.rs/bus digests (and exti.rs/inspect.rs: a test-only match
     # arm and rustfmt). New `profile: ch32v003` DMA (G0 commit-after-copy
@@ -7509,7 +7579,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 314a0f6f685387bbe05bd3ad8b9544e07c668d89dff1037bdc04b11b7b52fe49
+    drift_ack_digest: 2f06f97498aff96d6794b04829119ba9cac429309ab44f3a306dea277e583fbc
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the

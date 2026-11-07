@@ -489,6 +489,33 @@ impl Dma1 {
                         0x04 | 0x08 | 0x0c
                             if self.locks_config_while_enabled
                                 && self.channels[chan_idx].ccr & 1 != 0 => {}
+                        0x04 if self.profile == DmaProfile::Ch32v003
+                            && self.channels[chan_idx].ccr & 1 != 0 =>
+                        {
+                            // CH32V003: a CNTR store on an enabled channel
+                            // re-arms it from the programmed addresses, as
+                            // EN 0->1 does. ch32fun's WS2812 driver depends
+                            // on it: it enables channel 3 once with CNTR = 0
+                            // and starts every frame by storing CNTR (and
+                            // MADDR) with EN left set, after the previous
+                            // frame ran out at the end of the buffer.
+                            let chan = &mut self.channels[chan_idx];
+                            chan.cndtr = value & 0xFFFF;
+                            chan.cndtr_initial = chan.cndtr;
+                            chan.cpar_ptr = chan.cpar;
+                            chan.cmar_ptr = chan.cmar;
+                            chan.requests = 0;
+                            if chan.ccr & (1 << 14) != 0 {
+                                chan.active = chan.cndtr > 0;
+                            } else {
+                                chan.active = false;
+                                if chan.cndtr > 0 {
+                                    // A standing peripheral request is
+                                    // served now (bus request-level poll).
+                                    self.newly_enabled |= 1 << chan_idx;
+                                }
+                            }
+                        }
                         0x04 => self.channels[chan_idx].cndtr = value & 0xFFFF,
                         0x08 => self.channels[chan_idx].cpar = value,
                         0x0C => self.channels[chan_idx].cmar = value,

@@ -1,0 +1,18 @@
+# WCH CH32V003 evaluation board running ch32fun's ws2812bdemo unmodified:
+# a 191-LED WS2812B/SK6805 strip on PC6, the SPI1 MOSI pad. The firmware
+# never touches PC6 as a GPIO: SPI1 shifts the NRZ stream out at 3 MHz (one
+# LED bit = four SPI bits) and DMA1 channel 3 feeds SPI1 DATAR. The strip
+# decodes the pad's real edges, timed by the SPI bit engine, so a decoded
+# colour is the one the waveform on PC6 carries.
+name: ch32v003evt-ch32fun-ws2812
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+cpu_hz: 48000000
+external_devices:
+  - id: strip
+    type: neopixel
+    connection: gpio
+    config:
+      data_pin: "PC6"
+      num_pixels: 191
+board_io:
+  - { id: external_led_pd0, kind: led, peripheral: gpiod, pin: 0, signal: output, active_high: true }

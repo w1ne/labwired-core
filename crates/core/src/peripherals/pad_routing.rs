@@ -79,7 +79,16 @@ pub struct PadRoutes {
     /// Per cell, per line: the watch channels last registered with that wire.
     /// Cached so an unrelated register write costs no mutex traffic.
     registered: Vec<Vec<Vec<u32>>>,
+    /// Per cell: the `(line, pad)` pairs GPIO observers were last registered
+    /// on ([`Self::sync_observers`]), cached for the same reason.
+    observed: Vec<Vec<(usize, u8)>>,
+    /// This table's owner token on the cells' observer lists; 0 until the
+    /// first observer sync.
+    owner: u64,
 }
+
+/// Source of [`PadRoutes::owner`] tokens.
+static NEXT_OBSERVER_OWNER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 impl PadRoutes {
     pub fn new() -> Self {
@@ -179,6 +188,50 @@ impl PadRoutes {
             cell: cell_idx,
             when_driving: true,
         });
+    }
+
+    /// Register `observers` with the wire each routed pad selects now, so a
+    /// peripheral-driven pad reports its edges to them (at the cycles the
+    /// wire stamps). A pad taken back for plain GPIO stops reporting. Call
+    /// after any register write, like [`Self::sync_taps`]; only wires whose
+    /// pad set changed are touched.
+    pub fn sync_observers<F>(
+        &mut self,
+        observers: &[Arc<dyn crate::peripherals::device::GpioObserver>],
+        selector_of: F,
+    ) where
+        F: Fn(u8) -> Option<u32>,
+    {
+        if self.routes.is_empty() || (observers.is_empty() && self.owner == 0) {
+            return;
+        }
+        if self.owner == 0 {
+            self.owner = NEXT_OBSERVER_OWNER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.observed.resize(self.cells.len(), Vec::new());
+        let mut per_cell: Vec<Vec<(usize, u8)>> = vec![Vec::new(); self.cells.len()];
+        if !observers.is_empty() {
+            let mut pins: Vec<u8> = self.routes.iter().map(|r| r.pin).collect();
+            pins.sort_unstable();
+            pins.dedup();
+            for pin in pins {
+                if let Some(route) = self.active(pin, &selector_of) {
+                    per_cell[route.cell].push((route.line, pin));
+                }
+            }
+        }
+        for (idx, pairs) in per_cell.into_iter().enumerate() {
+            if self.observed[idx] != pairs {
+                let add = pairs
+                    .iter()
+                    .flat_map(|&(line, pin)| {
+                        observers.iter().map(move |o| (line, pin, Arc::clone(o)))
+                    })
+                    .collect();
+                self.cells[idx].set_observers(self.owner, add);
+                self.observed[idx] = pairs;
+            }
+        }
     }
 
     /// The route currently driving `pin`, if any.

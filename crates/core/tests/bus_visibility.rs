@@ -94,6 +94,66 @@ const PAYLOAD: [u8; 3] = [0x53, 0x1C, 0xE1];
 /// drive to decodable edges, with the reason. Adding a silent `continue` instead
 /// of a row here is the same failure as the binding-only gate this replaced.
 const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
+    // WCH CH32V003 (ch32fun smoke profile): F1-shaped GPIO and the STM32F1
+    // SPI/I2C/USART register files, but WCH's RCC (APB2PCENR/APB1PCENR at
+    // their own offsets and gate masks) and pinout (USART1_TX PD5, I2C1
+    // PC1/PC2, SPI1 PC5/PC6). The F1 drive here enables STM32F103 clocks and
+    // watches PA9/PB6/PA5, so it cannot bring these up. Each bus is proven
+    // on its pads by an unmodified ch32fun example instead
+    // (examples/ch32v003-evt).
+    (
+        "ch32v003f4p6-ch32fun-smoke",
+        BusKind::I2c,
+        "no WCH RCC/pinout bring-up in this harness; I2C1 is proven by \
+         ch32fun-i2c-oled-smoke",
+    ),
+    (
+        "ch32v003f4p6-ch32fun-smoke",
+        BusKind::Spi,
+        "no WCH RCC/pinout bring-up in this harness; SPI1 MOSI on PC6 is \
+         proven edge-for-edge by ch32fun-ws2812-smoke",
+    ),
+    (
+        "ch32v003f4p6-ch32fun-smoke",
+        BusKind::Uart,
+        "no WCH RCC/pinout bring-up in this harness; USART1 bytes are proven \
+         by ch32fun-uartdemo-smoke",
+    ),
+    (
+        "ch32v003f4p6-pfic-smoke",
+        BusKind::Uart,
+        "no WCH RCC/pinout bring-up in this harness; USART1 bytes on this \
+         profile are proven by usart-smoke and pfic-smoke",
+    ),
+    (
+        "ch32v003f4p6-usart-smoke",
+        BusKind::Uart,
+        "no WCH RCC/pinout bring-up in this harness; USART1 bytes are proven by usart-smoke",
+    ),
+    (
+        "ch32v003f4p6-systick-smoke",
+        BusKind::Uart,
+        "no WCH RCC/pinout bring-up in this harness; bytes on this profile are proven by systick-smoke",
+    ),
+    (
+        "ch32v003f4p6-sht31-smoke",
+        BusKind::Uart,
+        "no WCH RCC/pinout bring-up in this harness; USART1 bytes are proven by i2c-smoke",
+    ),
+    (
+        "ch32v003f4p6-sht31-smoke",
+        BusKind::I2c,
+        "no WCH RCC/pinout bring-up in this harness; SHT31 reads are proven by i2c-smoke",
+    ),
+    // WCH CH32V203 (WeAct BluePill-Plus-CH32 smoke profile): the harness
+    // picks UART bring-up by chip family and has no WCH family. USART1 TX on
+    // PA9 is proven by an AF-configured firmware instead.
+    (
+        "ch32v203c8t6-smoke",
+        BusKind::Uart,
+        "no WCH family bring-up in this harness; USART1 bytes on PA9 are \
+         proven by weact-bluepill-plus-ch32v203-smoke",
+    ),
     // nRF51822: the bring-up drives the nRF52 EasyDMA personalities (UARTE
     // ENABLE=8, TWIM), which the nRF51 does not have; its UART0 is the legacy
     // UART (ENABLE=4, TXD + EVENTS_TXDRDY) and its TWI is the legacy TWI. No

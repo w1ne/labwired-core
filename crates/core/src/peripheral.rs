@@ -1238,6 +1238,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn dma_request_level(&self, _line: u32) -> bool {
         false
     }
+    /// GPIO port capability: attach an edge observer to this port's pads,
+    /// returning whether the port took it. The STM32-style port reports the
+    /// pads a peripheral drives through a pad route, at the cycles the
+    /// peripheral's wire stamps (an SPI MOSI feeding a WS2812 strip).
+    /// Default: not a port that reports pad edges.
+    fn observe_port_pads(
+        &mut self,
+        _observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    ) -> bool {
+        false
+    }
     /// Flash-controller capability: `true` for the peripheral that decides what
     /// a CPU store into the flash region does (NXP JN51xx / K32W flash
     /// controllers latch addresses and program pages through stores to the

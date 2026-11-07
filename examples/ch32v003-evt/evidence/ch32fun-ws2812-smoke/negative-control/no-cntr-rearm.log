@@ -1,0 +1,7 @@
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-07T03:34:03.306526Z ERROR labwired_cli::execute: Memory assertion failed at 0x40020030 (size 32): expected 0x1, got 0x35b7 (mask 0x21)
+2026-11-07T03:34:03.306543Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073872944, expected_value: 1, mask: Some(33), size: Some(32), node: None } }) (captured len=0)
+FAIL  2/3 checks · ch32fun-ws2812-smoke · 6200000 steps · 3.74s
+$ check-ws2812.py (no CNTR re-arm)
+strip meta: {"data_pin": 6, "format": "ws2812_grb", "generation": 16986637073020227924, "h": 1, "lit_pixels": 6, "pixels_decoded": 6, "w": 191}
+FAIL: 6 LEDs decoded, the driver sends 190
