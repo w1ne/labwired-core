@@ -1,0 +1,25 @@
+# STM32F401 variant smoke, linked to the family's smallest geometry.
+#
+# firmware-f401-demo (the NUCLEO-F401RE banner) hard-codes its initial SP at
+# 0x2001_8000 (96 KB SRAM). That is past the end of SRAM on the 64 KB parts
+# (F401xB/xC: CB, CC, RB, RC, VB, VC; DS9716 Table 2). The demo still passes
+# there only because it never touches the stack. This image does: the
+# cortex-m-rt reset handler initialises .data/.bss, and every helper call
+# pushes LR. Linking to 128 KB flash / 64 KB SRAM lets one image boot on all
+# twelve F401 variants.
+[package]
+name = "firmware-f401-lowram-smoke"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+[dependencies]
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-f401-lowram-smoke"
+path = "src/main.rs"
+test = false
+bench = false

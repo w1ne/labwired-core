@@ -32,6 +32,8 @@ mod poll_loop;
 
 #[path = "cortex_m/rp2350_dcp.rs"]
 pub mod rp2350_dcp;
+#[path = "cortex_m/rp2350_gpioc.rs"]
+pub mod rp2350_gpioc;
 
 /// How an executed arm advances PC relative to the decoded default. Returned
 /// by every `exec_*` method instead of mutating a `&mut` out-parameter: the

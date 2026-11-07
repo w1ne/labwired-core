@@ -474,6 +474,9 @@ pub struct SystemBus {
     /// path; the core reaches it through `Bus::rp2350_dcp_mut` only from the
     /// cold coprocessor-instruction path.
     pub rp2350_dcp: Option<Box<crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp>>,
+    /// The chip lists `coprocessors: [rp2350_gpioc]`: p0 instructions run as
+    /// SIO GPIO accesses (see `cpu::cortex_m::rp2350_gpioc`).
+    pub rp2350_gpioc: bool,
     /// Which family's atomic register aliases this chip implements (see
     /// `ChipDescriptor::atomic_register_aliases`). When enabled, word accesses
     /// in the peripheral window whose address has bits [13:12] set decode as a
