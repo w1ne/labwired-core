@@ -9,8 +9,8 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `5/224`
-- median_elapsed_ms: `1195`
-- median_elapsed_seconds: `1.195`
+- median_elapsed_ms: `1223`
+- median_elapsed_seconds: `1.223`
 - threshold_seconds: `3600`
 - threshold_met: `224/224`
 
@@ -32,7 +32,7 @@
 | `at91rm9200` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | 4: `uart0:atmel91debugunit`, `ckgrPllar:pythonperipheral`, `ckgrPllbr:pythonperipheral`, `pmcMkcr:pythonperipheral` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | arm920t has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
 | `atsamd21j17d-aft` | `pass` | `True` | `yes` | `yes` | `1530` | `1.53` | `True` | 0 | `n/a` | n/a | n/a |
 | `atsamd51g19a` | `pass` | `True` | `yes` | `yes` | `1028` | `1.028` | `True` | 0 | `n/a` | n/a | n/a |
-| `beaglev-fire` | `pass` | `True` | `yes` | `yes` | `570` | `0.57` | `True` | 3: `i2c0:stub`, `i2c1:stub`, `spi1:stub` | `n/a` | n/a | n/a |
+| `beaglev-fire` | `pass` | `True` | `yes` | `yes` | `603` | `0.603` | `True` | 1: `spi1:stub` | `n/a` | n/a | n/a |
 | `beaglev_starlight` | `pass` | `True` | `yes` | `yes` | `7993` | `7.993` | `True` | 0 | `n/a` | n/a | n/a |
 | `brd4116a` | `pass` | `True` | `yes` | `yes` | `1101` | `1.101` | `True` | 0 | `n/a` | n/a | n/a |
 | `brd4117a` | `pass` | `True` | `yes` | `yes` | `752` | `0.752` | `True` | 0 | `n/a` | n/a | n/a |
@@ -126,7 +126,7 @@
 | `miv-board-additional-uarts` | `pass` | `True` | `yes` | `yes` | `1018` | `1.018` | `True` | 0 | `n/a` | n/a | n/a |
 | `miv_rv32` | `pass` | `True` | `yes` | `yes` | `758` | `0.758` | `True` | 0 | `n/a` | n/a | n/a |
 | `mpc5567` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | 3: `fec:fastethernetcontroller`, `emios:emios`, `fmpllSynsr:pythonperipheral` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no PowerPC e200z6 CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
-| `mpfs-icicle-kit` | `pass` | `True` | `yes` | `yes` | `712` | `0.712` | `True` | 3: `i2c0:stub`, `i2c1:stub`, `spi1:stub` | `n/a` | n/a | n/a |
+| `mpfs-icicle-kit` | `pass` | `True` | `yes` | `yes` | `112219` | `112.219` | `True` | 1: `spi1:stub` | `n/a` | n/a | n/a |
 | `msp430f2619` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | 4: `boot:arraymemory`, `ram_extended:arraymemory`, `code:arraymemory`, `info_mem:arraymemory` | `not_configured` | Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub. | MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage. |
 | `mspsim-msp430f149` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | 0 | `not_configured` | Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub. | MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage. |
 | `mspsim-msp430f1611` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | 0 | `not_configured` | Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub. | MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage. |
@@ -149,7 +149,7 @@
 | `opentitan-earlgrey` | `pass` | `True` | `yes` | `yes` | `841` | `0.841` | `True` | 0 | `n/a` | n/a | n/a |
 | `opentitan-earlgrey-cw310` | `pass` | `True` | `yes` | `yes` | `1349` | `1.349` | `True` | 0 | `n/a` | n/a | n/a |
 | `picosoc` | `pass` | `True` | `yes` | `yes` | `1288` | `1.288` | `True` | 0 | `n/a` | n/a | n/a |
-| `polarfire-soc` | `pass` | `True` | `yes` | `yes` | `581` | `0.581` | `True` | 3: `i2c0:stub`, `i2c1:stub`, `spi1:stub` | `n/a` | n/a | n/a |
+| `polarfire-soc` | `pass` | `True` | `yes` | `yes` | `673` | `0.673` | `True` | 1: `spi1:stub` | `n/a` | n/a | n/a |
 | `quark-c1000` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | 4: `spi0:stub`, `spi1:stub`, `pwm:stub`, `scss:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no IA-32 (Intel Quark) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `quark_c1000-cc2520` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | 8: `led:led`, `button:button`, `radio:cc2520`, `lm74:ti_lm74`, `spi0:stub`, `spi1:stub`, `pwm:stub`, `scss:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no IA-32 (Intel Quark) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `ramn` | `pass` | `True` | `yes` | `yes` | `1208` | `1.208` | `True` | 0 | `n/a` | n/a | n/a |

@@ -401,6 +401,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "miv_coretimer",
     // PolarFire SoC MSS GPIO (CoreGPIO semantics, MSS register map).
     "mpfs_gpio",
+    // PolarFire SoC MSS I2C0/1 (CoreI2C-family master).
+    "mpfs_i2c",
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
@@ -1794,6 +1796,9 @@ pub fn try_build(
             }
             Box::new(crate::peripherals::miv::MivCoreGpio::mpfs(ports as u32))
         }
+        // PolarFire SoC MSS I2C0/1: master mode; devices attach through
+        // `external_devices:`.
+        "mpfs_i2c" => Box::new(crate::peripherals::mpfs_i2c::MpfsI2c::new()),
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
         "cortex_m7_cache" => {

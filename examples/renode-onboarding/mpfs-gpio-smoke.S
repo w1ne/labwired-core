@@ -27,12 +27,41 @@
  *
  * Without a PLIC (or with the old zero-answering window) the trap never
  * comes and the line reads "plic ... id=00000000 ...".
+ *
+ * Last, MSS I2C0 (mss_i2c_regs.h; CoreI2C status codes) addresses 0x50,
+ * which nothing on the imported board answers, with SI polled:
+ *
+ *   STATUS at reset                     -> 0xF8 (idle)
+ *   CTRL = ENS1|STA                     -> SI, STATUS 0x08 (START sent),
+ *                                          PLIC source 58 pending
+ *   DATA = 0x50<<1 (SLA+W), clear SI    -> SI, STATUS 0x20 (address NACK)
+ *   CTRL = ENS1|STO                     -> STATUS 0xF8, CTRL 0x40 (STO and
+ *                                          SI clear)
+ *
+ * The zero-answering window this replaced reads STATUS 0x00, which on this
+ * controller is the bus-error code, and never sets SI.
+ *
+ * Build (GNU binutils, riscv64-unknown-elf):
+ *   as -march=rv64imac_zicsr -mabi=lp64 -o mpfs-gpio-smoke.o \
+ *       examples/renode-onboarding/mpfs-gpio-smoke.S
+ *   ld -N --no-warn-rwx-segments -Ttext=0x80000000 \
+ *       -o tests/fixtures/mpfs-gpio-smoke.elf mpfs-gpio-smoke.o
  */
 .equ GPIO0, 0x20120000
 .equ GPIO1, 0x20121000
 .equ GPIO2, 0x20122000
 .equ UART1, 0x20100000
 .equ PLIC, 0x0C000000
+.equ I2C0, 0x2010A000
+
+.equ I2C_CTRL, 0x00
+.equ I2C_STATUS, 0x04
+.equ I2C_DATA, 0x08
+.equ I2C_SI, 1 << 3
+.equ I2C_STO, 1 << 4
+.equ I2C_STA, 1 << 5
+.equ I2C_ENS1, 1 << 6
+.equ PLIC_PRIO58, 4 * 58
 
 .equ PLIC_PRIO51, 4 * 51
 .equ PLIC_PENDING1, 0x1004
@@ -164,9 +193,73 @@ _start:
     jal ra, puthex
     la a0, newline
     jal ra, puts
+
+    /* --- MSS I2C0: START, SLA+W to an absent 0x50, STOP --- */
+    li s9, PLIC
+    li t0, 1
+    sw t0, PLIC_PRIO58(s9)
+    li s11, I2C0
+    lbu s3, I2C_STATUS(s11)
+    li t0, I2C_ENS1 | I2C_STA
+    sb t0, I2C_CTRL(s11)
+    jal ra, i2c_wait_si
+    lbu s4, I2C_STATUS(s11)
+    li t5, PLIC + PLIC_PAGE1
+    lw s5, PLIC_PENDING1 - PLIC_PAGE1(t5)
+    srli s5, s5, 58 - 32
+    andi s5, s5, 1
+    li t0, 0x50 << 1
+    sb t0, I2C_DATA(s11)
+    li t0, I2C_ENS1     /* clears STA and SI: send the address */
+    sb t0, I2C_CTRL(s11)
+    jal ra, i2c_wait_si
+    lbu s7, I2C_STATUS(s11)
+    li t0, I2C_ENS1 | I2C_STO
+    sb t0, I2C_CTRL(s11)
+    lbu s8, I2C_STATUS(s11)
+    lbu s10, I2C_CTRL(s11)
+
+    la a0, label_i2c
+    jal ra, puts
+    mv a0, s3
+    jal ra, puthex
+    la a0, label_start
+    jal ra, puts
+    mv a0, s4
+    jal ra, puthex
+    la a0, label_irq
+    jal ra, puts
+    mv a0, s5
+    jal ra, puthex
+    la a0, label_sla
+    jal ra, puts
+    mv a0, s7
+    jal ra, puthex
+    la a0, label_stop
+    jal ra, puts
+    mv a0, s8
+    jal ra, puthex
+    la a0, label_ctrl
+    jal ra, puts
+    mv a0, s10
+    jal ra, puthex
+    la a0, newline
+    jal ra, puts
 1:
     wfi
     j 1b
+
+/* i2c_wait_si: poll I2C0 CTRL.SI (s11) for at most 1000 reads. Clobbers t0-t1. */
+i2c_wait_si:
+    li t1, 1000
+8:
+    lbu t0, I2C_CTRL(s11)
+    andi t0, t0, I2C_SI
+    bnez t0, 9f
+    addi t1, t1, -1
+    bnez t1, 8b
+9:
+    ret
 
 /* Machine trap handler: claim, clear the GPIO latch, complete. */
 .balign 4
@@ -228,3 +321,9 @@ label_claim0: .asciz " claim0="
 label_id:     .asciz " id="
 label_mcause: .asciz " mcause="
 label_pend:   .asciz " pending="
+label_i2c:    .asciz "i2c0 reset="
+label_start:  .asciz " start="
+label_irq:    .asciz " irq58="
+label_sla:    .asciz " sla_w="
+label_stop:   .asciz " stop="
+label_ctrl:   .asciz " ctrl="

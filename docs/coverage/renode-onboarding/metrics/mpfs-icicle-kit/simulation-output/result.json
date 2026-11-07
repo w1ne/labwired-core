@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 100000,
-  "cycles": 107898,
+  "cycles": 106687,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -103,6 +103,23 @@
     },
     {
       "assertion": {
+        "uart_contains": "i2c0 reset=000000f8 start=00000008 irq58=00000001 sla_w=00000020 stop=000000f8 ctrl=00000040"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 537960452,
+          "expected_value": 248,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -112,16 +129,16 @@
     "type": "risc_v64",
     "x": [
       0,
-      2147484046,
+      2147484258,
       2155872256,
       0,
       0,
-      18446744073709551615,
+      80,
       0,
       32,
       538058752,
       538050560,
-      2147484212,
+      2147484448,
       18446744073709551612,
       10,
       0,
@@ -130,30 +147,30 @@
       0,
       0,
       538054656,
-      7,
-      0,
-      0,
+      248,
+      8,
+      1,
       537919488,
-      51,
-      9223372036854775819,
+      32,
+      248,
       201326592,
-      203427840,
-      0,
-      2147484046,
+      64,
+      537960448,
+      2147484258,
       1,
       201330688,
       0
     ],
-    "pc": 2147484050,
+    "pc": 2147484262,
     "mstatus": 6272,
     "mie": 2048,
-    "mtvec": 2147484052,
+    "mtvec": 2147484288,
     "mscratch": 0,
-    "mepc": 2147483902,
+    "mepc": 2147483904,
     "mcause": 9223372036854775819,
     "mtval": 0,
-    "mcycle": 107898,
-    "minstret": 2102,
+    "mcycle": 106687,
+    "minstret": 3313,
     "pmpcfg": [
       0,
       0,
@@ -194,9 +211,9 @@
       "base": 33554432,
       "msip": false,
       "mtimecmp": 18446744073709551615,
-      "mtime": 179,
+      "mtime": 177,
       "divider": 600,
-      "residue": 498
+      "residue": 487
     },
     "plic": {
       "base": 201326592,
@@ -262,7 +279,7 @@
         0,
         0,
         0,
-        0,
+        1,
         0,
         0,
         0,
@@ -394,7 +411,7 @@
       ],
       "pending": [
         0,
-        0,
+        67108864,
         0,
         0,
         0,
@@ -496,7 +513,7 @@
     },
     "reservation": null
   },
-  "firmware_hash": "7b7e146f38bfc9f7e9cd807b7d13860189a31689e3ec73e296997ad4346ea254",
+  "firmware_hash": "d11fe415f6e8d1812f70d09030df213b4a34771c7293075d8556bcf83b0f99b3",
   "config": {
     "firmware": "examples/renode-onboarding/../../tests/fixtures/mpfs-gpio-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/mpfs-icicle-kit.yaml",
@@ -565,6 +582,13 @@
   },
   "fidelity": [
     {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (600000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
       "kind": "unpowered_rail_assumed",
       "address": "0x0",
       "first_pc": "0x0",
@@ -591,20 +615,26 @@
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
+      },
+      {
+        "text": "i2c0 reset=000000f8 start=00000008 irq58=00000001 sla_w=00000020 stop=000000f8 ctrl=00000040",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 609,
+    "text_bytes": 895,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 609,
+    "flash_used_bytes": 895,
     "ram_static_bytes": 0,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 8388608,
-    "flash_used_pct": 0.46,
+    "flash_used_pct": 0.68,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -617,17 +647,17 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 107898,
+    "cycles": 106687,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 3715,
+    "memory_reads": 5855,
     "memory_writes": 0,
-    "peripheral_accesses": 351,
+    "peripheral_accesses": 550,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 2147484050,
-        "count": 8
+        "pc": 2147484262,
+        "count": 12
       }
     ]
   }

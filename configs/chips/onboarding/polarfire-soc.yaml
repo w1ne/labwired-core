@@ -4,8 +4,9 @@
 # mostly zero-answering MSS windows. This profile follows the sourced MPFS MSS
 # map and claims only one RV64IMAC U54, the memory windows used by the firmware,
 # the model-backed MMUART0/1, the model-backed MSS GPIO_0..2 banks, the
-# in-core CLINT and PLIC, and explicit startup stubs reached by Zephyr. Those
-# stubs do not model I2C or SPI behavior. The E51, other U54
+# in-core CLINT and PLIC, master-mode MSS I2C0/1 (PLIC 58/61; `mpfs_i2c`, no
+# slave mode), and an explicit SPI1 startup stub reached by Zephyr. That stub
+# does not model SPI behavior. The E51, other U54
 # harts, F/D extensions, supervisor mode, DMA, storage, and remaining MSS
 # peripherals are outside this profile.
 # Sources: configs/chips/mpfs095t.yaml; Microchip PolarFire SoC MSS TRM;
@@ -67,13 +68,15 @@ peripherals:
     config:
       ports: 32
   - id: "i2c0"
-    type: "stub"
+    type: "mpfs_i2c"
     base_address: 0x2010A000
     size: "4KB"
+    irq: 58
   - id: "i2c1"
-    type: "stub"
+    type: "mpfs_i2c"
     base_address: 0x2010B000
     size: "4KB"
+    irq: 61
   - id: "spi1"
     type: "stub"
     base_address: 0x20109000

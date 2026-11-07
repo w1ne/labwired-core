@@ -3,9 +3,10 @@
 # The MPFS MSS map follows configs/chips/mpfs095t.yaml, which is sourced from
 # Microchip's PolarFire SoC MSS manual and Zephyr's mpfs_icicle U54 devicetree.
 # This imported profile retains only the RV64IMAC M-mode core, memory windows,
-# its in-core CLINT and PLIC, model-backed MMUART0/1 and MSS GPIO_0..2, and
-# zero-answering I2C/SPI stubs reached by Zephyr startup. These stubs do not
-# model those peripherals.
+# its in-core CLINT and PLIC, model-backed MMUART0/1 and MSS GPIO_0..2,
+# master-mode MSS I2C0/1 (PLIC 58/61; `mpfs_i2c`, no slave mode), and a
+# zero-answering SPI1 stub reached by Zephyr startup. The stub does not model
+# that peripheral.
 # The E51 and other U54 harts, DMA, storage, and other MSS peripherals are
 # outside this profile.
 name: "mpfs-icicle-kit"
@@ -49,13 +50,15 @@ peripherals:
     config:
       ports: 32
   - id: "i2c0"
-    type: "stub"
+    type: "mpfs_i2c"
     base_address: 0x2010A000
     size: "4KB"
+    irq: 58
   - id: "i2c1"
-    type: "stub"
+    type: "mpfs_i2c"
     base_address: 0x2010B000
     size: "4KB"
+    irq: 61
   - id: "spi1"
     type: "stub"
     base_address: 0x20109000
