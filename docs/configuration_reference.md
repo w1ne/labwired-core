@@ -437,8 +437,11 @@ canonical `type:`; the table below is rendered from that file by
 | `ina260` | I²C | TI INA260 current / voltage / power monitor with an integrated 2 mΩ shunt over I²C (36 V, 15 A) |
 | `ina3221` | I²C | TI INA3221 three-channel shunt and bus voltage monitor over I²C (26 V) |
 | `lcd1602` | I²C | 16×2 HD44780 character LCD behind a PCF8574 I2C backpack |
+| `lis2dux12` | I²C | ST LIS2DUX12 3-axis accelerometer over I2C (SA0 low, address 0x18) |
+| `lsm6dsox` | I²C | ST LSM6DSOX I2C identity and accelerometer XYZ path (partial model) |
 | `lsm303agr_accel` | I²C | ST LSM303AGR accelerometer half over I2C (address 0x19) |
 | `lsm303agr_mag` | I²C | ST LSM303AGR magnetometer half over I2C (address 0x1E) |
+| `max17048` | I²C | Li-ion/Li-polymer cell voltage and state-of-charge registers over I2C |
 | `max30102` | I²C | Maxim MAX30102 pulse-oximetry / heart-rate front-end over I2C |
 | `mcp9808` | I²C | ±0.25 °C I²C temperature sensor with seeded noise + thermal lag |
 | `mcp23017` | I²C | Microchip MCP23017 16-bit I²C GPIO expander (IODIR / GPIO / OLAT register map) |
@@ -464,6 +467,7 @@ canonical `type:`; the table below is rendered from that file by
 | `sht30` | I²C | Sensirion SHT30 I²C temperature and humidity sensor |
 | `sht31` | I²C | Temperature + humidity sensor over I²C (Sensirion CRC-8) |
 | `sht40` | I²C | Sensirion SHT40 I²C temperature and humidity sensor (single-byte commands, CRC-8) |
+| `shtc3` | I²C | Low-power temperature and humidity sensor over I2C |
 | `sps30` | I²C | Laser particulate-matter sensor (PM1/2.5/4/10) over I2C |
 | `tmp102` | I²C | 12-bit I²C temperature sensor (self-drifting demo) |
 | `tmp117` | I²C | TI TMP117 high-accuracy digital temperature sensor over I2C |
@@ -490,6 +494,7 @@ canonical `type:`; the table below is rendered from that file by
 | `mcp3008` | SPI | 8-channel 10-bit SPI ADC (single-ended / differential, Figure 6-1 framing) |
 | `microsd` | SPI | SPI SD card command shell (init + single-block read zeros) |
 | `nrf24l01` | SPI | 2.4 GHz SPI transceiver register shell (no air link) |
+| `oled-ssd1306-spi` | SPI | 128×64 monochrome OLED, the 7-pin 4-wire SPI module, with a paged framebuffer |
 | `pcd8544` | SPI | Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI |
 | `rc522` | SPI | MFRC522 SPI RFID reader with ISO/IEC 14443-A cascade-level-1 air interface |
 | `rfm95` | SPI | HopeRF RFM95W (Semtech SX1276) SPI LoRa register shell (no RF) |
