@@ -249,6 +249,42 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[];
 /// entries pin it. Each board listed must be covered.
 const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
     (
+        "cortex-a53-gicv2",
+        "gpio",
+        0x0903_03FC,
+        "QEMU hw/arm/virt.c VIRT_GPIO + PL061 GPIODATA all-bits mask",
+    ),
+    (
+        "cortex-a53-gicv3",
+        "gpio",
+        0x0903_03FC,
+        "QEMU hw/arm/virt.c VIRT_GPIO + PL061 GPIODATA all-bits mask",
+    ),
+    (
+        "cortex-a53-gicv3_smp",
+        "gpio",
+        0x0903_03FC,
+        "QEMU hw/arm/virt.c VIRT_GPIO + PL061 GPIODATA all-bits mask",
+    ),
+    (
+        "cortex-a78",
+        "gpio",
+        0x0903_03FC,
+        "QEMU hw/arm/virt.c VIRT_GPIO + PL061 GPIODATA all-bits mask",
+    ),
+    (
+        "cortex_a53_console",
+        "gpio",
+        0x0903_03FC,
+        "QEMU hw/arm/virt.c VIRT_GPIO + PL061 GPIODATA all-bits mask",
+    ),
+    (
+        "cortex_a53_virtio",
+        "gpio",
+        0x0903_03FC,
+        "QEMU hw/arm/virt.c VIRT_GPIO + PL061 GPIODATA all-bits mask",
+    ),
+    (
         "fsl_lx2160ardb",
         "gpio1",
         0x0230_0008,
@@ -415,13 +451,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 207;
+const COVERED: usize = 213;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 102;
+const SILICON_REGISTER: usize = 108;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 38;
+const NO_ANALOG_ENDPOINT: usize = 32;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
