@@ -150,9 +150,9 @@ peripherals:
       # G4 AF pinout (SPI1 AF5, NSS on PA4/PA15), not the L4 one.
       pad_map: "stm32g4"
     clock: { reg: "apb2enr", bit: 12 }
-  # ADC1 (AHB2). RCC_AHB2ENR.ADC12EN (bit 13). Model has no conversion engine
-  # (L4 layout) — the genuinely-modelled DEEPPWD→ADVREGEN→ADEN→ADRDY power-up
-  # path is exercised.
+  # ADC1 (AHB2). RCC_AHB2ENR.ADC12EN (bit 13). The L4 register map with the
+  # G4's wide JSQR packing (JSQ1 at bit 9, stm32g474.svd): DEEPPWD→ADVREGEN→
+  # ADEN→ADRDY power-up, the regular sequence and the injected group.
   - id: "adc1"
     type: "adc"
     base_address: 0x50000000
@@ -160,7 +160,7 @@ peripherals:
     irq: 18
     config:
       debug_schema: "../peripherals/stm32g474re/adc1.yaml"
-      profile: "stm32l4"
+      profile: "stm32g4"
     clock: { reg: "ahb2enr", bit: 13 }
   # DMA1 (AHB1, 7-channel + DMAMUX). RM0440 puts DMA1EN on AHB1ENR (bit 0). The
   # stm32g4 RCC model stores AHB1ENR@0x48 but no `clock:` gate is declared for
@@ -217,3 +217,24 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32g474re/dbgmcu.yaml"
       idcode: 0x00000469
+
+# External ADC1 pad routes from ST open pin data
+# mcu/STM32G474R(B-C-E)Tx.xml (commit 7d1f1514ed5583ec5007ad91236b4e1d377295b1),
+# every ADC1_INx signal bonded out on the LQFP64. Lets
+# `board.analog.<pad>_volts` reach ADC1 through the same pad-to-channel
+# contract as the other chip descriptors.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 1 }
+  PA1: { peripheral: "adc1", channel: 2 }
+  PA2: { peripheral: "adc1", channel: 3 }
+  PA3: { peripheral: "adc1", channel: 4 }
+  PB14: { peripheral: "adc1", channel: 5 }
+  PC0: { peripheral: "adc1", channel: 6 }
+  PC1: { peripheral: "adc1", channel: 7 }
+  PC2: { peripheral: "adc1", channel: 8 }
+  PC3: { peripheral: "adc1", channel: 9 }
+  PF0: { peripheral: "adc1", channel: 10 }
+  PB12: { peripheral: "adc1", channel: 11 }
+  PB1: { peripheral: "adc1", channel: 12 }
+  PB11: { peripheral: "adc1", channel: 14 }
+  PB0: { peripheral: "adc1", channel: 15 }

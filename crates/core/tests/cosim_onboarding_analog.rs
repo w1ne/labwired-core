@@ -458,6 +458,29 @@ impl Converter {
                     "{}: each ADSTART converts the next DISCNUM + 1 channels",
                     self.id
                 );
+                // Injected group: one JADSTART converts the routed sensors
+                // into JDR1..JDRn in JSQ order, leaving DR alone.
+                let dr = bus.read_u32(self.base + 0x40).expect("DR");
+                for (ranks, expected) in [
+                    (vec![DIODE_CHANNEL], vec![diode]),
+                    (
+                        vec![NTC_CHANNEL, DIODE_CHANNEL, IDLE_CHANNEL, NTC_CHANNEL],
+                        vec![ntc, diode, idle, ntc],
+                    ),
+                ] {
+                    assert_eq!(
+                        self.injected_sqr(bus, &ranks),
+                        expected,
+                        "{}: one JADSTART converts injected ranks {ranks:?}",
+                        self.id
+                    );
+                }
+                assert_eq!(
+                    bus.read_u32(self.base + 0x40).unwrap(),
+                    dr,
+                    "{}: the injected group leaves DR alone",
+                    self.id
+                );
                 single
             }
             _ => [
@@ -671,6 +694,48 @@ impl Converter {
         }
         (0..n)
             .map(|k| bus.read_u32(self.base + 0x3c + 4 * k as u64).expect("JDRx"))
+            .collect()
+    }
+
+    /// L4/L5/H7 injected group over `channels` (`JSQ1` first), started by
+    /// `CR.JADSTART` (bit 3) with a software trigger. The L4 map (L4, L5)
+    /// packs `JSQR` with `JSQ1` at bit 8 (`stm32l476.svd`); the H7 with
+    /// `JSQ1` at bit 9 (`stm32h735.svd`). Expects `JEOC`|`JEOS` and
+    /// `JADSTART` cleared, and returns `JDR1..JDRn`.
+    fn injected_sqr(&self, bus: &mut SystemBus, channels: &[u8]) -> Vec<u32> {
+        const JEOC_JEOS: u32 = (1 << 5) | (1 << 6);
+        const JADSTART: u32 = 1 << 3;
+        let jsq1 = if matches!(self.family, Family::Stm32H7) {
+            9
+        } else {
+            8
+        };
+        let n = channels.len();
+        let jsqr = channels
+            .iter()
+            .enumerate()
+            .fold((n as u32) - 1, |w, (k, &ch)| {
+                w | (u32::from(ch) << (jsq1 + 6 * k))
+            });
+        bus.write_u32(self.base + 0x4C, jsqr).expect("JSQR");
+        bus.write_u32(self.base, JEOC_JEOS)
+            .expect("clear JEOC/JEOS");
+        bus.write_u32(self.base + 0x08, (1 << 28) | 1 | JADSTART)
+            .expect("JADSTART");
+        assert_eq!(
+            bus.read_u32(self.base).unwrap() & JEOC_JEOS,
+            JEOC_JEOS,
+            "{}: the injected group sets JEOC and JEOS",
+            self.id
+        );
+        assert_eq!(
+            bus.read_u32(self.base + 0x08).unwrap() & JADSTART,
+            0,
+            "{}: JADSTART self-clears",
+            self.id
+        );
+        (0..n)
+            .map(|k| bus.read_u32(self.base + 0x80 + 4 * k as u64).expect("JDRx"))
             .collect()
     }
 

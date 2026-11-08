@@ -253,6 +253,10 @@ pub enum AdcRegisterLayout {
     ///   0x20/0x24/0x2C, `PWRR` @ 0x44, `AWD2CR`/`AWD3CR` @ 0xA0/0xA4 and
     ///   `CALFACT` @ 0xC4 (the F0/L0's is at 0xB4).
     Stm32Adc4,
+    /// STM32G4 (RM0440). The L4 map, but its `JSQR` uses the wide packing
+    /// (`JSQ1` at bit 9, as on the H5/H7/U5) that `stm32g474.svd` gives, so
+    /// the injected group reads different channels than on an L4.
+    Stm32G4,
 }
 
 impl FromStr for AdcRegisterLayout {
@@ -273,6 +277,7 @@ impl FromStr for AdcRegisterLayout {
             "stm32l4" | "l4" | "stm32f7" | "f7" | "stm32g0" | "g0" => Ok(Self::Stm32L4),
             "stm32h7" | "h7" => Ok(Self::Stm32H7),
             "stm32h5" | "h5" => Ok(Self::Stm32H5),
+            "stm32g4" | "g4" => Ok(Self::Stm32G4),
             "stm32u5" | "u5" => Ok(Self::Stm32U5),
             // `stm32g0` stays on the L4 map above: NUCLEO-G071RB's silicon
             // capture was taken against it, and moving it is a capture, not
@@ -280,7 +285,7 @@ impl FromStr for AdcRegisterLayout {
             "stm32f0" | "f0" | "stm32l0" | "l0" => Ok(Self::Stm32V2),
             "stm32wba" | "wba" | "stm32_adc4" | "adc4" => Ok(Self::Stm32Adc4),
             _ => Err(format!(
-                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32h5, stm32h7, stm32u5, stm32f0, stm32l0, stm32wba",
+                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32g4, stm32h5, stm32h7, stm32u5, stm32f0, stm32l0, stm32wba",
                 value
             )),
         }
@@ -365,18 +370,28 @@ impl F1AdcRegs {
 /// STM32L4 ADC register file (data `dr` is shared on `Adc`).
 #[derive(Debug, Default, serde::Serialize)]
 pub struct L4AdcRegs {
-    isr: u32,        // 0x00
-    ier: u32,        // 0x04
-    cr: u32,         // 0x08
-    cfgr: u32,       // 0x0C
-    cfgr2: u32,      // 0x10
-    smpr1: u32,      // 0x14
-    smpr2: u32,      // 0x18
-    sqr1: u32,       // 0x30
-    sqr2: u32,       // 0x34
-    sqr3: u32,       // 0x38
-    sqr4: u32,       // 0x3C
+    isr: u32,   // 0x00
+    ier: u32,   // 0x04
+    cr: u32,    // 0x08
+    cfgr: u32,  // 0x0C
+    cfgr2: u32, // 0x10
+    smpr1: u32, // 0x14
+    smpr2: u32, // 0x18
+    sqr1: u32,  // 0x30
+    sqr2: u32,  // 0x34
+    sqr3: u32,  // 0x38
+    sqr4: u32,  // 0x3C
+    /// ADC_JSQR @ 0x4C and ADC_JDR1..4 @ 0x80..0x8C, the injected group.
+    /// Left out of snapshots while zero, so captured shapes are unchanged.
+    #[serde(skip_serializing_if = "is_zero")]
+    jsqr: u32,
+    #[serde(skip_serializing_if = "all_zero")]
+    jdr: [u32; 4],
     common_ccr: u32, // 0x308
+    /// `JSQR` uses the wide (G4/H5) packing rather than the L4/WB one; see
+    /// [`sqr_injected_sequence`]. A property of the part, not a register.
+    #[serde(skip)]
+    wide_jsqr: bool,
 }
 
 /// STM32H7 ADC control registers (RM0468 §26.4; offsets and reset values taken
@@ -642,6 +657,31 @@ fn sqr_regular_sequence(sqr: [u32; 4]) -> Vec<usize> {
         .collect()
 }
 
+/// Which `ADC_JSQR` packing a map uses. Both put `JL[1:0]` at bit 0 and
+/// space `JSQ1..JSQ4` six bits apart; they differ in the width of
+/// `JEXTSEL`, which shifts everything above it by one bit:
+///
+/// * narrow (L4 `stm32l476.svd`, WB `stm32wb55.svd`): `JEXTSEL[5:2]`,
+///   `JEXTEN[7:6]`, `JSQ1` at bit 8.
+/// * wide (G4 `stm32g474.svd`, H5 `stm32h563.svd`, H7 `stm32h735.svd`, U5
+///   `stm32u575.svd`): `JEXTSEL[6:2]`, `JEXTEN[8:7]`, `JSQ1` at bit 9.
+///
+/// Returns the injected group in conversion order (`JSQ1` first; unlike
+/// the F1, `JDRy` holds `JSQy`'s result), or `None` while `JEXTEN` selects
+/// a hardware trigger, which this model does not generate.
+fn sqr_injected_sequence(jsqr: u32, wide: bool) -> Option<Vec<usize>> {
+    let (jexten_shift, jsq1_shift) = if wide { (7, 9) } else { (6, 8) };
+    if (jsqr >> jexten_shift) & 0x3 != 0 {
+        return None;
+    }
+    let len = (jsqr & 0x3) as usize + 1;
+    Some(
+        (0..len)
+            .map(|k| ((jsqr >> (jsq1_shift + 6 * k)) & 0x1F) as usize)
+            .collect(),
+    )
+}
+
 /// `ISR` / `CR` / `CFGR` bits the L4, H7 and U5 maps share with the V2.
 const SQR_ISR_EOC: u32 = 1 << 2;
 const SQR_ISR_EOS: u32 = 1 << 3;
@@ -654,6 +694,14 @@ const SQR_CFGR_CONT: u32 = 1 << 13;
 /// (RM0351), the H7 (RM0433) and the U5 ADC1 `CFGR1` (RM0456).
 const SQR_CFGR_DISCEN: u32 = 1 << 16;
 const SQR_CFGR_DISCNUM_SHIFT: u32 = 17;
+/// Injected group bits of the L4, G4, H5, H7 and U5 maps (one placement on
+/// all five SVDs): `ISR.JEOC` (bit 5) after each injected conversion,
+/// `ISR.JEOS` (bit 6) after the last; `CR.JADSTART` (bit 3) starts the
+/// group and `CR.JADSTP` (bit 5) stops it.
+const SQR_ISR_JEOC: u32 = 1 << 5;
+const SQR_ISR_JEOS: u32 = 1 << 6;
+const SQR_CR_JADSTART: u32 = 1 << 3;
+const SQR_CR_JADSTP: u32 = 1 << 5;
 
 /// `ADC_ISR` / `ADC_CR` / `ADC_CFGR1` bits of the v2 ADC (RM0367 §14.12).
 const V2_ISR_ADRDY: u32 = 1 << 0;
@@ -794,13 +842,14 @@ impl Adc {
         let regs = match layout {
             AdcRegisterLayout::Stm32F1 => AdcRegs::Stm32F1(F1AdcRegs::default()),
             AdcRegisterLayout::Stm32F4 => AdcRegs::Stm32F4(F1AdcRegs::default()),
-            AdcRegisterLayout::Stm32L4 | AdcRegisterLayout::Stm32H5 => {
-                AdcRegs::Stm32L4(L4AdcRegs {
-                    cr: 0x2000_0000,
-                    cfgr: 0x8000_0000,
-                    ..Default::default()
-                })
-            }
+            AdcRegisterLayout::Stm32L4
+            | AdcRegisterLayout::Stm32H5
+            | AdcRegisterLayout::Stm32G4 => AdcRegs::Stm32L4(L4AdcRegs {
+                cr: 0x2000_0000,
+                cfgr: 0x8000_0000,
+                wide_jsqr: layout != AdcRegisterLayout::Stm32L4,
+                ..Default::default()
+            }),
             // Same DEEPPWD/JQDIS story as the L4, plus the three analog-watchdog
             // high thresholds, which reset to the 26-bit all-ones 0x03FF_FFFF
             // rather than 0.
@@ -1237,6 +1286,8 @@ impl Adc {
             0x38 => r.sqr3,
             0x3C => r.sqr4,
             0x40 => dr,
+            0x4C => r.jsqr,
+            0x80..=0x8C if reg % 4 == 0 => r.jdr[((reg - 0x80) / 4) as usize],
             0x308 => r.common_ccr,
             _ => {
                 crate::census_reg!("adc:Adc", reg, "read");
@@ -1364,6 +1415,57 @@ impl Adc {
             }
         }
         true
+    }
+
+    /// `(ISR, CR, JSQR, wide packing, JDR1..4)` of an L4/G4/H5, H7 or U5 block.
+    fn sqr_injected_regs(&mut self) -> Option<(&mut u32, &mut u32, u32, bool, &mut [u32; 4])> {
+        match &mut self.regs {
+            AdcRegs::Stm32L4(r) => Some((&mut r.isr, &mut r.cr, r.jsqr, r.wide_jsqr, &mut r.jdr)),
+            AdcRegs::Stm32H7(r) => Some((&mut r.isr, &mut r.cr, r.jsqr, true, &mut r.jdr)),
+            AdcRegs::Stm32U5(r) => Some((&mut r.isr, &mut r.cr, r.jsqr, true, &mut r.jdr)),
+            _ => None,
+        }
+    }
+
+    /// L4/G4/H5/H7/U5 injected group (RM0351 §18.4.21, RM0440 §21.4.21,
+    /// RM0481, RM0433 §25.4.21, RM0456 §33.4.21). `JADSTART` with `ADEN`
+    /// and `ADRDY` and a software trigger (`JSQR.JEXTEN` = 0) converts
+    /// `JSQ1..JSQ(JL+1)` into `JDR1..JDR(JL+1)` at `CFGR.RES`, through the
+    /// same per-channel path as the regular sequence (routed level against
+    /// the reference, else the layout's internal source). `JEOC` and `JEOS`
+    /// rise and `JADSTART` self-clears. Immediate, like the regular engine.
+    /// `JADSTP` cancels a pending start.
+    ///
+    /// Not modelled, stated: hardware injected triggers (`JADSTART` stays
+    /// set, waiting, which is what silicon shows until the trigger fires),
+    /// `JAUTO`, `JDISCEN`, the `JSQR` context queue beyond its current
+    /// entry, `OFRy` offsets, and `JEOCIE`/`JEOSIE` interrupts (the regular
+    /// path on these maps raises none either). `DR` and the regular
+    /// sequence are untouched.
+    fn maybe_start_sqr_injected(&mut self) {
+        let Some((isr, cr, jsqr, wide, _)) = self.sqr_injected_regs() else {
+            return;
+        };
+        if *cr & SQR_CR_JADSTP != 0 {
+            *cr &= !(SQR_CR_JADSTP | SQR_CR_JADSTART);
+            return;
+        }
+        // ADEN, ADRDY, JADSTART.
+        if *cr & 0x1 == 0 || *isr & 0x1 == 0 || *cr & SQR_CR_JADSTART == 0 {
+            return;
+        }
+        let Some(channels) = sqr_injected_sequence(jsqr, wide) else {
+            return;
+        };
+        let codes: Vec<u32> = channels
+            .iter()
+            .map(|&ch| self.sqr_dr_for_channel(ch))
+            .collect();
+        if let Some((isr, cr, _, _, jdr)) = self.sqr_injected_regs() {
+            jdr[..codes.len()].copy_from_slice(&codes);
+            *isr |= SQR_ISR_JEOC | SQR_ISR_JEOS;
+            *cr &= !SQR_CR_JADSTART;
+        }
     }
 
     /// L4 conversion engine. ADSTART (CR bit 2) with ADEN (bit 0) and a
@@ -1520,6 +1622,7 @@ impl Adc {
         if reg == 0x08 {
             self.h7_apply_cr(value);
             self.maybe_start_h7_conversion();
+            self.maybe_start_sqr_injected();
             return;
         }
         if let AdcRegs::Stm32H7(r) = &mut self.regs {
@@ -1654,6 +1757,7 @@ impl Adc {
         if reg == 0x08 {
             self.u5_apply_cr(value);
             self.maybe_start_u5_conversion();
+            self.maybe_start_sqr_injected();
             return;
         }
         if let AdcRegs::Stm32U5(r) = &mut self.regs {
@@ -2033,6 +2137,8 @@ impl Adc {
             0x38 => r.sqr3 = value,
             0x3C => r.sqr4 = value,
             0x40 => {} // DR read-only
+            0x4C => r.jsqr = value,
+            0x80..=0x8C if reg % 4 == 0 => {} // JDRn read-only
             0x308 => r.common_ccr = value,
             _ => {
                 crate::census_reg!("adc:Adc", reg, "write");
@@ -2333,6 +2439,7 @@ impl Peripheral for Adc {
                 // A write touching CR may have set ADSTART — try to convert.
                 if reg == 0x08 {
                     self.maybe_start_l4_conversion(full);
+                    self.maybe_start_sqr_injected();
                 }
             }
             AdcRegs::Stm32H7(_) => {
@@ -3761,6 +3868,115 @@ mod tests {
             assert_eq!(adc.read_u32(0x40).unwrap(), c7, "{layout:?} SQ1 again");
             assert_eq!(adc.read_u32(0x40).unwrap(), c6, "{layout:?} SQ2 again");
         }
+    }
+
+    #[test]
+    fn sqr_injected_sequence_follows_each_svd_packing() {
+        // JL = 2, JSQ1 = 10, JSQ2 = 5, JSQ3 = 17 in each packing.
+        let narrow = 2 | 10 << 8 | 5 << 14 | 17 << 20;
+        let wide = 2 | 10 << 9 | 5 << 15 | 17 << 21;
+        assert_eq!(sqr_injected_sequence(narrow, false), Some(vec![10, 5, 17]));
+        assert_eq!(sqr_injected_sequence(wide, true), Some(vec![10, 5, 17]));
+        // Read with the other packing, the same word names other channels.
+        assert_eq!(sqr_injected_sequence(narrow, true), Some(vec![5, 2, 8]));
+        // ... and an odd narrow JSQ1 sets bit 8, the wide JEXTEN[1].
+        assert_eq!(sqr_injected_sequence(9 << 8, true), None);
+        // JL counts from zero; JEXTEN != 0 waits for a hardware trigger.
+        assert_eq!(sqr_injected_sequence(9 << 8, false), Some(vec![9]));
+        assert_eq!(sqr_injected_sequence(9 << 8 | 1 << 6, false), None);
+        assert_eq!(sqr_injected_sequence(9 << 9 | 1 << 7, true), None);
+        // The narrow JEXTEN sits on the wide packing's JEXTSEL[4] / JEXTEN[0].
+        assert_eq!(sqr_injected_sequence(1 << 6, true), Some(vec![0]));
+    }
+
+    #[test]
+    fn sqr_layouts_jadstart_converts_jsq1_to_jsqn_into_jdr1_to_jdrn() {
+        const JEOC: u32 = 1 << 5;
+        const JEOS: u32 = 1 << 6;
+        const JADSTART: u32 = 1 << 3;
+        const JADSTP: u32 = 1 << 5;
+        let cr = (1 << 28) | 1;
+        for (layout, wide) in [
+            (AdcRegisterLayout::Stm32L4, false),
+            (AdcRegisterLayout::Stm32G4, true),
+            (AdcRegisterLayout::Stm32H5, true),
+            (AdcRegisterLayout::Stm32H7, true),
+            (AdcRegisterLayout::Stm32U5, true),
+        ] {
+            let (mut adc, c5, c6, c7) = sqr_block(layout);
+            let dr = adc.read_u32(0x40).unwrap();
+            let isr = adc.read_u32(0x00).unwrap();
+            adc.write_u32(0x00, isr).unwrap();
+            let jsqr = |jl: u32, jsq: &[u32]| {
+                let first = if wide { 9 } else { 8 };
+                jsq.iter()
+                    .enumerate()
+                    .fold(jl, |acc, (k, &ch)| acc | ch << (first + 6 * k as u32))
+            };
+            // JL = 3: IN6, IN7 (undriven), IN5, IN6.
+            adc.write_u32(0x4C, jsqr(3, &[6, 7, 5, 6])).unwrap();
+            assert_eq!(adc.read_u32(0x00).unwrap() & (JEOC | JEOS), 0);
+            adc.write_u32(0x08, cr | JADSTART).unwrap();
+            let got: Vec<u32> = (0..4)
+                .map(|k| adc.read_u32(0x80 + 4 * k).unwrap())
+                .collect();
+            assert_eq!(got, vec![c6, c7, c5, c6], "{layout:?} JDRy = JSQy");
+            assert_eq!(
+                adc.read_u32(0x00).unwrap() & (JEOC | JEOS | 0xC),
+                JEOC | JEOS,
+                "{layout:?} JEOC|JEOS only: no regular EOC/EOS"
+            );
+            assert_eq!(adc.read_u32(0x08).unwrap() & JADSTART, 0, "{layout:?}");
+            assert_eq!(adc.read_u32(0x40).unwrap(), dr, "{layout:?} DR untouched");
+            // JDRn are read-only.
+            adc.write_u32(0x80, 0x123).unwrap();
+            assert_eq!(adc.read_u32(0x80).unwrap(), c6, "{layout:?} JDR1 ro");
+
+            // A routed level that moved converts at its new value on the
+            // next JADSTART; JL = 0 rewrites only JDR1.
+            adc.set_channel_input(5, 3000);
+            adc.write_u32(0x00, JEOC | JEOS).unwrap();
+            adc.write_u32(0x4C, jsqr(0, &[5])).unwrap();
+            adc.write_u32(0x08, cr | JADSTART).unwrap();
+            let moved = adc.read_u32(0x80).unwrap();
+            assert!(moved > c5, "{layout:?} 3.0 V over 1.65 V");
+            assert_eq!(adc.read_u32(0x84).unwrap(), c7, "{layout:?} JDR2 kept");
+
+            // A hardware trigger (JEXTEN = rising) leaves JADSTART waiting;
+            // JADSTP cancels it.
+            adc.write_u32(0x00, JEOC | JEOS).unwrap();
+            let jexten = if wide { 1 << 7 } else { 1 << 6 };
+            adc.write_u32(0x4C, jsqr(0, &[6]) | jexten).unwrap();
+            adc.write_u32(0x08, cr | JADSTART).unwrap();
+            assert_ne!(adc.read_u32(0x08).unwrap() & JADSTART, 0, "{layout:?}");
+            assert_eq!(adc.read_u32(0x00).unwrap() & JEOC, 0, "{layout:?}");
+            assert_eq!(adc.read_u32(0x80).unwrap(), moved, "{layout:?}");
+            adc.write_u32(0x08, cr | JADSTART | JADSTP).unwrap();
+            assert_eq!(
+                adc.read_u32(0x08).unwrap() & (JADSTART | JADSTP),
+                0,
+                "{layout:?} JADSTP"
+            );
+        }
+        // Without ADRDY nothing converts.
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.set_channel_input(5, 1650);
+        adc.write_u32(0x4C, 5 << 8).unwrap();
+        adc.write_u32(0x08, JADSTART).unwrap();
+        assert_eq!(adc.read_u32(0x00).unwrap() & JEOC, 0);
+        assert_eq!(adc.read_u32(0x80).unwrap(), 0);
+    }
+
+    #[test]
+    fn g4_layout_is_selected_by_name() {
+        assert_eq!(
+            "stm32g4".parse::<AdcRegisterLayout>(),
+            Ok(AdcRegisterLayout::Stm32G4)
+        );
+        assert_eq!(
+            "G4".parse::<AdcRegisterLayout>(),
+            Ok(AdcRegisterLayout::Stm32G4)
+        );
     }
 
     #[test]
