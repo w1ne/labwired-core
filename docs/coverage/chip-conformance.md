@@ -9,7 +9,7 @@ This page covers the public models. For every chip we model — public and priva
 | Chip | Level | Estate | Peripherals | Reg match (verifiable) | Excluded | Behavior gate |
 |------|-------|--------|-------------|------------------------|----------|---------------|
 | esp32c3 | **L2** | ✓ | 40 | 380/402 (94%) | 190 | firmware_survival::test_esp32c3_demo_survival |
-| esp32c6 | **L1** | ✓ | 68 | — | — | firmware_survival::test_esp32c6_demo_survival |
+| esp32c6 | **L1** | ✓ | 69 | — | — | firmware_survival::test_esp32c6_demo_survival |
 | litex-vexriscv | **L1** | ✓ | 5 | — | — | firmware_survival::test_litex_vexriscv_smoke_survival |
 | arty-litex-vexriscv | **L1** | ✓ | 6 | — | — | firmware_survival::test_arty_litex_smoke_survival |
 | vegaboard-ri5cy | **L1** | ✓ | 9 | — | — | firmware_survival::test_vegaboard_ri5cy_smoke_survival |

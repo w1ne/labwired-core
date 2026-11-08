@@ -85,7 +85,7 @@ The GPIO matrix reuses the engine's C3-sized register block (pins 0–25), so
 | RV32IMAC HP core | ✅ / ⚠️ | Interpreter executes the smoke; the A-extension decodes but is not exercised by the `imc` fixture |
 | Memory map (flash window, 512 KB HP SRAM, 320 KB ROM region, 16 KB LP SRAM) | ✅ | Bases match the C6 memory map and `soc.h` |
 | Mask ROM | ⚠️ | Optional image via `LABWIRED_ESP32C6_ROM`; not the reset path of this ELF |
-| Reset / clocks | ✅ / ⚠️ | PCR is a native register file (full SVD map) and the `clock:` gate controller: `CLK_EN` is **enforced** by the shared bus gate for UART0/UART1/TIMG0/TIMG1/GDMA/I²C0/SPI2/LEDC/SARADC. `RST_EN` is recorded, not enforced; no clock tree (dividers are storage) |
+| Reset / clocks | ✅ / ⚠️ | PCR is a native register file (full SVD map) and the `clock:` gate controller: `CLK_EN` is **enforced** by the shared bus gate for UART0/UART1/TIMG0/TIMG1/GDMA/I²C0/SPI2/LEDC (SARADC: `REG_CLK_EN`, bit 2). `RST_EN` is recorded, not enforced; no clock tree (dividers are storage) |
 | LP core (RV32IMC) | ❌ | Not modelled |
 
 ### Console, GPIO, IO_MUX
@@ -98,7 +98,7 @@ The GPIO matrix reuses the engine's C3-sized register block (pins 0–25), so
 | USB Serial/JTAG | ⚠️ | `UsbSerialJtag` @ `0x6000_F000` (irq 48); system `debug_uart` still `uart0` |
 | I²C0 | ✅ / ⚠️ | Behavioral command-list engine shared with the C3 (`esp32c3_i2c`), C6 base `0x6000_4000` + source 50 (I2C_EXT0). The C6-only differences (SDA/SCL filter tail) are unmodelled; the C3 matrix-signal pad wiring is applied by the shared wiring pass even though C6 signal ids differ |
 | GP-SPI2 | ✅ / ⚠️ | Behavioral GP-SPI transaction engine shared with the C3 (`esp32c3_spi`), C6 base `0x6008_1000` + source 72. No external-device/CS-gating or DMA-coupled path |
-| APB_SARADC | ✅ / ⚠️ | Behavioral one-shot engine shared with the C3 (`esp32c3_apb_saradc`), C6 base `0x6000_E000` + source 60. Register reset seeds are the C3 silicon capture; no DMA mode, thresholds or TSENS |
+| APB_SARADC | ✅ / ⚠️ | Behavioral one-shot engine shared with the C3 (`esp32c3_apb_saradc`), C6 base `0x6000_E000` + source 60. Gated on `PCR.SARADC_CONF.SARADC_REG_CLK_EN` (bit 2, the APB register clock `adc_ll_enable_bus_clock` sets), not `SARADC_CLK_EN` (bit 0, the digital-controller clock IDF startup clears). `PWDET_CONF` (`0x600A_0810`) is a write-ignored stub, so the SAR power mode is not modelled. Arduino `analogRead(A0)` = 256 and `analogRead(A1)` = 529 (the fixed per-channel source). Register reset seeds are the C3 silicon capture; no DMA mode, thresholds or TSENS |
 | LEDC | ✅ / ⚠️ | The C3 timer/counter/wrap engine on the C6 field geometry (`esp32c6_ledc`), base `0x6000_7000` + source 45. Channel outputs reach the pad through matrix signals 0..5, clocked from `PCR.LEDC_SCLK_CONF`: Arduino `analogWrite(2, 128)` is 1 kHz / 50 % on GPIO2. The C6-only gamma/event/compare/capture tail is not modelled |
 | TIMG0/TIMG1 | ✅ / ⚠️ | Shared `esp32_timg` GP timer plus the real C3/C6 **MWDT** path (`esp32c6_mwdt`): WDTWPROTECT write lock, `WDTCONFIG0..5` round-trip, walk-driven **four-stage chain** (`0→1→2→3→0`, WDTCONFIG2..5 stage holds, STG0..3 interrupt-action encodings), WDTFEED reload to stage 0, `INT_RAW_TIMERS.WDT_INT_RAW` latch + W1C. The CPU/system reset actions are **not** performed (advanced through, never triggered) |
 | LP_TIMER (RTC) | ✅ / ⚠️ | C6-only `esp32c6_lp_rtc`: free-running 48-bit counter + `UPDATE` snapshot into `MAIN_BUF0`/`MAIN_BUF1`. No RTC-slow rate, alarms/overflow IRQs, or sleep retention |

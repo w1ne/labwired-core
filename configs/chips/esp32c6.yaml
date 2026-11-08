@@ -191,12 +191,17 @@ peripherals:
   # SAR1DATA_STATUS@0x2C, INT_RAW@0x44, INT_CLR@0x4C). C6 delta: source = 60.
   # The model's register reset SEEDS are the C3 silicon capture — the C6 reset
   # values may differ (documented gap; firmware writes the registers it uses).
+  # Gate = PCR.SARADC_CONF.SARADC_REG_CLK_EN (bit 2), the APB register clock
+  # that adc_ll_enable_bus_clock() sets. Bit 0 (SARADC_CLK_EN) is the digital
+  # controller function clock: IDF startup clears it and oneshot never sets it
+  # (measured SARADC_CONF = 0x4 at analogRead), so gating on it drops the
+  # ONETIME_START write and read_cal_channel spins forever.
   - id: "apb_saradc"
     type: "esp32c3_apb_saradc"
     irq: 60 # ETS_APB_SARADC_INTR_SOURCE (esp32c6.svd APB_SARADC)
     base_address: 0x6000E000
     size: "4KB"
-    clock: { controller: "pcr", reg: "SARADC_CONF", bit: 0 }
+    clock: { controller: "pcr", reg: "SARADC_CONF", bit: 2 }
     config:
       debug_schema: "../peripherals/esp32c6/apb_saradc.yaml"
   # LEDC — the C3 live-timer LED PWM engine on the C6 field geometry
@@ -346,6 +351,14 @@ peripherals:
   - id: "lp_apm0"
     type: "stub"
     base_address: 0x60099800
+    size: "1KB"
+  - id: "pwdet"
+    # PWDET_CONF_REG (0x600A0810, reg_base.h), the RF front-end word that
+    # sar_ctrl_ll_set_power_mode_from_pwdet() read-modify-writes before every
+    # oneshot analogRead. Write-ignored zero stub: the SAR power mode is not
+    # modelled, the conversion engine is apb_saradc.
+    type: "stub"
+    base_address: 0x600a0800
     size: "1KB"
   - id: "ieee802154"
     type: "stub"

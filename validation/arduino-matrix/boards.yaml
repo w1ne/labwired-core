@@ -80,10 +80,11 @@ boards:
     pwm_watch: "gpio:2"
     pwm_min_edges: 20
     family: esp32
-    notes: "Arduino-ESP32-C6 (IDF 5.5) on the in-tree C6 mask ROM; L3 INA219 on variant SDA/SCL 23/22; L4 SPI MISO from the MAX31855 kit; L6 LEDC on GPIO2"
-    sketches_skip: [L5_adc, L8_can]
+    # L5: A0 = GPIO0 = ADC1_CH0 -> 256 (0x100), the APB_SARADC fixed channel
+    # source; an A1 build reads 529 (0x211), so the code tracks the channel.
+    notes: "Arduino-ESP32-C6 (IDF 5.5) on the in-tree C6 mask ROM; L3 INA219 on variant SDA/SCL 23/22; L4 SPI MISO from the MAX31855 kit; L5 oneshot APB_SARADC (REG_CLK_EN gate, PWDET stub); L6 LEDC on GPIO2"
+    sketches_skip: [L8_can]
     sketches_skip_reason:
-      L5_adc: "analogRead powers the SAR through PMU/SAR-ctrl registers the C6 does not model (faults in sar_ctrl_ll_set_power_mode_from_pwdet)"
       L8_can: "No C6 TWAI model"
 
   - id: nrf52832
