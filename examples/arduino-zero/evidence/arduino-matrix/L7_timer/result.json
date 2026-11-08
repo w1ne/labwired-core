@@ -1,0 +1,7692 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 265760,
+  "cycles": 265760,
+  "instructions": 265760,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 3000000,
+    "max_cycles": null,
+    "max_uart_bytes": 65536,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 1000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "LW_L7_OK"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      10,
+      536871084,
+      21490,
+      0,
+      536872340,
+      21736,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536872296,
+      536903656,
+      10987,
+      10988
+    ],
+    "pc": 10988,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 8192,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "firmware_hash": "052d88c231ad050009174353dbcf85e379f82ef8c53c29965c3d75a4d441b337",
+  "config": {
+    "firmware": "/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/arduino-zero/L7_timer/firmware.elf",
+    "system": "/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/systems/arduino-zero.yaml",
+    "script": "/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/arduino-zero/L7_timer/test.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "pm",
+        "kind": "declarative",
+        "base": 1073742848,
+        "registers": [
+          {
+            "name": "CTRL",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SLEEP",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IDLE",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CPUSEL",
+            "offset": 8,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CPUDIV",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "APBASEL",
+            "offset": 9,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "APBADIV",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "APBBSEL",
+            "offset": 10,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "APBBDIV",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "APBCSEL",
+            "offset": 11,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "APBCDIV",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "AHBMASK",
+            "offset": 20,
+            "size": 32,
+            "value": 127,
+            "fields": [
+              {
+                "name": "HPB0_",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "HPB1_",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "HPB2_",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "DSU_",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "NVMCTRL_",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "DMAC_",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 1
+              },
+              {
+                "name": "USB_",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "APBAMASK",
+            "offset": 24,
+            "size": 32,
+            "value": 127,
+            "fields": [
+              {
+                "name": "PAC0_",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "PM_",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "SYSCTRL_",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "GCLK_",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "WDT_",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "RTC_",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 1
+              },
+              {
+                "name": "EIC_",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "APBBMASK",
+            "offset": 28,
+            "size": 32,
+            "value": 127,
+            "fields": [
+              {
+                "name": "PAC1_",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "DSU_",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "NVMCTRL_",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "PORT_",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "DMAC_",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "USB_",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 1
+              },
+              {
+                "name": "HMATRIX_",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "APBCMASK",
+            "offset": 32,
+            "size": 32,
+            "value": 344060,
+            "fields": [
+              {
+                "name": "PAC2_",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EVSYS_",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "SERCOM0_",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "SERCOM1_",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "SERCOM2_",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "SERCOM3_",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 1
+              },
+              {
+                "name": "SERCOM4_",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "SERCOM5_",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "TCC0_",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "TCC1_",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "TCC2_",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 1
+              },
+              {
+                "name": "TC3_",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 1
+              },
+              {
+                "name": "TC4_",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 1
+              },
+              {
+                "name": "TC5_",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 1
+              },
+              {
+                "name": "ADC_",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 1
+              },
+              {
+                "name": "AC_",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "DAC_",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 1
+              },
+              {
+                "name": "PTC_",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "I2S_",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENCLR",
+            "offset": 52,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CKRDY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENSET",
+            "offset": 53,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CKRDY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTFLAG",
+            "offset": 54,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CKRDY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "RCAUSE",
+            "offset": 56,
+            "size": 8,
+            "value": 1,
+            "fields": [
+              {
+                "name": "POR",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "BOD12",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "BOD33",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "EXT",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "WDT",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYST",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "sysctrl",
+        "kind": "declarative",
+        "base": 1073743872,
+        "registers": [
+          {
+            "name": "INTENCLR",
+            "offset": 0,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "XOSCRDY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "XOSC32KRDY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "OSC32KRDY",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "OSC8MRDY",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLRDY",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLOOB",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLLCKF",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLLCKC",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLRCS",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "BOD33RDY",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "BOD33DET",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "B33SRDY",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "DPLLLCKR",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "DPLLLCKF",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "DPLLLTO",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENSET",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "XOSCRDY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "XOSC32KRDY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "OSC32KRDY",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "OSC8MRDY",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLRDY",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLOOB",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLLCKF",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLLCKC",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLRCS",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "BOD33RDY",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "BOD33DET",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "B33SRDY",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "DPLLLCKR",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "DPLLLCKF",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "DPLLLTO",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTFLAG",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "XOSCRDY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "XOSC32KRDY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "OSC32KRDY",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "OSC8MRDY",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLRDY",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLOOB",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLLCKF",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLLCKC",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLRCS",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "BOD33RDY",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "BOD33DET",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "B33SRDY",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "DPLLLCKR",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "DPLLLCKF",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "DPLLLTO",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PCLKSR",
+            "offset": 12,
+            "size": 32,
+            "value": 101087,
+            "fields": [
+              {
+                "name": "XOSCRDY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "XOSC32KRDY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "OSC32KRDY",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "OSC8MRDY",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "DFLLRDY",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "DFLLOOB",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "DFLLLCKF",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "DFLLLCKC",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "DFLLRCS",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "BOD33RDY",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "BOD33DET",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "B33SRDY",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 1
+              },
+              {
+                "name": "DPLLLCKR",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 1
+              },
+              {
+                "name": "DPLLLCKF",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 1
+              },
+              {
+                "name": "DPLLLTO",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "XOSC",
+            "offset": 16,
+            "size": 16,
+            "value": 128,
+            "fields": [
+              {
+                "name": "ENABLE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "XTALEN",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "ONDEMAND",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "GAIN",
+                "bits": [
+                  10,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "AMPGC",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "STARTUP",
+                "bits": [
+                  15,
+                  12
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "XOSC32K",
+            "offset": 20,
+            "size": 16,
+            "value": 1550,
+            "fields": [
+              {
+                "name": "ENABLE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "XTALEN",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "EN32K",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "EN1K",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "AAMPEN",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "ONDEMAND",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "STARTUP",
+                "bits": [
+                  10,
+                  8
+                ],
+                "value": 6
+              },
+              {
+                "name": "WRTLOCK",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OSC32K",
+            "offset": 24,
+            "size": 32,
+            "value": 4128896,
+            "fields": [
+              {
+                "name": "ENABLE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "EN32K",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "EN1K",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "ONDEMAND",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "STARTUP",
+                "bits": [
+                  10,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "WRTLOCK",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "CALIB",
+                "bits": [
+                  22,
+                  16
+                ],
+                "value": 63
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OSCULP32K",
+            "offset": 28,
+            "size": 8,
+            "value": 31,
+            "fields": [
+              {
+                "name": "CALIB",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 31
+              },
+              {
+                "name": "WRTLOCK",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OSC8M",
+            "offset": 32,
+            "size": 32,
+            "value": 2265382914,
+            "fields": [
+              {
+                "name": "ENABLE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "ONDEMAND",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "PRESC",
+                "bits": [
+                  9,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CALIB",
+                "bits": [
+                  27,
+                  16
+                ],
+                "value": 1799
+              },
+              {
+                "name": "FRANGE",
+                "bits": [
+                  31,
+                  30
+                ],
+                "value": 2
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DFLLCTRL",
+            "offset": 36,
+            "size": 16,
+            "value": 2566,
+            "fields": [
+              {
+                "name": "ENABLE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "MODE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "STABLE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "LLAW",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "USBCRM",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "ONDEMAND",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "CCDIS",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "QLDIS",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "BPLCKC",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAITLOCK",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DFLLVAL",
+            "offset": 40,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "FINE",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "COARSE",
+                "bits": [
+                  15,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "DIFF",
+                "bits": [
+                  31,
+                  16
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DFLLMUL",
+            "offset": 44,
+            "size": 32,
+            "value": 2113865145,
+            "fields": [
+              {
+                "name": "MUL",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 1465
+              },
+              {
+                "name": "FSTEP",
+                "bits": [
+                  25,
+                  16
+                ],
+                "value": 511
+              },
+              {
+                "name": "CSTEP",
+                "bits": [
+                  31,
+                  26
+                ],
+                "value": 31
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DFLLSYNC",
+            "offset": 48,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "READREQ",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "BOD33",
+            "offset": 52,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ENABLE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "HYST",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ACTION",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "MODE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CEN",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "PSEL",
+                "bits": [
+                  15,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "LEVEL",
+                "bits": [
+                  21,
+                  16
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "VREG",
+            "offset": 60,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "FORCELDO",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "VREF",
+            "offset": 64,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TSEN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "BGOUTEN",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "CALIB",
+                "bits": [
+                  26,
+                  16
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DPLLCTRLA",
+            "offset": 68,
+            "size": 8,
+            "value": 128,
+            "fields": [
+              {
+                "name": "ENABLE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "ONDEMAND",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DPLLRATIO",
+            "offset": 72,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LDR",
+                "bits": [
+                  11,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "LDRFRAC",
+                "bits": [
+                  19,
+                  16
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DPLLCTRLB",
+            "offset": 76,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "FILTER",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "LPEN",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUF",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "REFCLK",
+                "bits": [
+                  5,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "LTIME",
+                "bits": [
+                  10,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBYPASS",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "DIV",
+                "bits": [
+                  26,
+                  16
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DPLLSTATUS",
+            "offset": 80,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LOCK",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "CLKRDY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "ENABLE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "DIV",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gclk",
+        "kind": "declarative",
+        "base": 1073744896,
+        "registers": [
+          {
+            "name": "CTRL",
+            "offset": 0,
+            "size": 8,
+            "value": 1,
+            "fields": [
+              {
+                "name": "SWRST",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNCBUSY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "CLKCTRL",
+            "offset": 2,
+            "size": 16,
+            "value": 16409,
+            "fields": [
+              {
+                "name": "ID",
+                "bits": [
+                  5,
+                  0
+                ],
+                "value": 25
+              },
+              {
+                "name": "GEN",
+                "bits": [
+                  11,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CLKEN",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 1
+              },
+              {
+                "name": "WRTLOCK",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GENCTRL",
+            "offset": 4,
+            "size": 32,
+            "value": 67075,
+            "fields": [
+              {
+                "name": "ID",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 3
+              },
+              {
+                "name": "SRC",
+                "bits": [
+                  12,
+                  8
+                ],
+                "value": 6
+              },
+              {
+                "name": "GENEN",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 1
+              },
+              {
+                "name": "IDC",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "OOV",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "OE",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "DIVSEL",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GENDIV",
+            "offset": 8,
+            "size": 32,
+            "value": 3,
+            "fields": [
+              {
+                "name": "ID",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 3
+              },
+              {
+                "name": "DIV",
+                "bits": [
+                  23,
+                  8
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "wdt",
+        "kind": "declarative",
+        "base": 1073745920,
+        "registers": [
+          {
+            "name": "CTRL",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ENABLE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "WEN",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ALWAYSON",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CONFIG",
+            "offset": 1,
+            "size": 8,
+            "value": 187,
+            "fields": [
+              {
+                "name": "PER",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 11
+              },
+              {
+                "name": "WINDOW",
+                "bits": [
+                  7,
+                  4
+                ],
+                "value": 11
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EWCTRL",
+            "offset": 2,
+            "size": 8,
+            "value": 11,
+            "fields": [
+              {
+                "name": "EWOFFSET",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 11
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENCLR",
+            "offset": 4,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EW",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENSET",
+            "offset": 5,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EW",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTFLAG",
+            "offset": 6,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EW",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 7,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNCBUSY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "CLEAR",
+            "offset": 8,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CLEAR",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "nvmctrl",
+        "kind": "declarative",
+        "base": 1090535424,
+        "registers": [
+          {
+            "name": "CTRLA",
+            "offset": 0,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CMD",
+                "bits": [
+                  6,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMDEX",
+                "bits": [
+                  15,
+                  8
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTRLB",
+            "offset": 4,
+            "size": 32,
+            "value": 130,
+            "fields": [
+              {
+                "name": "RWS",
+                "bits": [
+                  4,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "MANW",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "SLEEPPRM",
+                "bits": [
+                  9,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "READMODE",
+                "bits": [
+                  17,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "CACHEDIS",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PARAM",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "NVMP",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PSZ",
+                "bits": [
+                  18,
+                  16
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENCLR",
+            "offset": 12,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "READY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ERROR",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENSET",
+            "offset": 16,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "READY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ERROR",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTFLAG",
+            "offset": 20,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "READY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ERROR",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 24,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PRM",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "LOAD",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "PROGE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "LOCKE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NVME",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "SB",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ADDR",
+            "offset": 28,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ADDR",
+                "bits": [
+                  21,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "LOCK",
+            "offset": 32,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LOCK",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpio_a",
+        "kind": "native",
+        "base": 1090536448,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio_b",
+        "kind": "native",
+        "base": 1090536576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sercom0",
+        "kind": "native",
+        "base": 1107298304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sercom1",
+        "kind": "native",
+        "base": 1107299328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sercom2",
+        "kind": "native",
+        "base": 1107300352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sercom3",
+        "kind": "native",
+        "base": 1107301376,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sercom4",
+        "kind": "native",
+        "base": 1107302400,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sercom5",
+        "kind": "native",
+        "base": 1107303424,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dac",
+        "kind": "declarative",
+        "base": 1107314688,
+        "registers": [
+          {
+            "name": "CTRLA",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SWRST",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ENABLE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTRLB",
+            "offset": 1,
+            "size": 8,
+            "value": 65,
+            "fields": [
+              {
+                "name": "EOEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "IOEN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "LEFTADJ",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "VPD",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "BDWP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "REFSEL",
+                "bits": [
+                  7,
+                  6
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EVCTRL",
+            "offset": 2,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STARTEI",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EMPTYEO",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENCLR",
+            "offset": 4,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "UNDERRUN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EMPTY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNCRDY",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENSET",
+            "offset": 5,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "UNDERRUN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EMPTY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNCRDY",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTFLAG",
+            "offset": 6,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "UNDERRUN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EMPTY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNCRDY",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 7,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNCBUSY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "DATA",
+            "offset": 8,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DATA",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DATABUF",
+            "offset": 12,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DATABUF",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "usb",
+        "kind": "declarative",
+        "base": 1090539520,
+        "registers": [
+          {
+            "name": "CTRLA",
+            "offset": 0,
+            "size": 8,
+            "value": 7,
+            "fields": [
+              {
+                "name": "SWRST",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "ENABLE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "MODE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SYNCBUSY",
+            "offset": 2,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SWRST",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ENABLE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "QOSCTRL",
+            "offset": 3,
+            "size": 8,
+            "value": 10,
+            "fields": [
+              {
+                "name": "CQOS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 2
+              },
+              {
+                "name": "DQOS",
+                "bits": [
+                  3,
+                  2
+                ],
+                "value": 2
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTRLB",
+            "offset": 8,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DETACH",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "UPRSM",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "SPDCONF",
+                "bits": [
+                  3,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "NREPLY",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "TSTJ",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TSTK",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TSTPCKT",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "OPMODE2",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "GNAK",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "LPMHDSK",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DADD",
+            "offset": 10,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DADD",
+                "bits": [
+                  6,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDEN",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 12,
+            "size": 8,
+            "value": 64,
+            "fields": [
+              {
+                "name": "SPEED",
+                "bits": [
+                  3,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "LINESTATE",
+                "bits": [
+                  7,
+                  6
+                ],
+                "value": 1
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "FSMSTATUS",
+            "offset": 13,
+            "size": 8,
+            "value": 1,
+            "fields": [
+              {
+                "name": "FSMSTATE",
+                "bits": [
+                  6,
+                  0
+                ],
+                "value": 1
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "FNUM",
+            "offset": 16,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "MFNUM",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "FNUM",
+                "bits": [
+                  13,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "FNCERR",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "INTENCLR",
+            "offset": 20,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SUSPEND",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSOF",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "SOF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "EORST",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "EORSM",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "UPRSM",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "RAMACER",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "LPMNYET",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "LPMSUSP",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENSET",
+            "offset": 24,
+            "size": 16,
+            "value": 12,
+            "fields": [
+              {
+                "name": "SUSPEND",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSOF",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "SOF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "EORST",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "WAKEUP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "EORSM",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "UPRSM",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "RAMACER",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "LPMNYET",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "LPMSUSP",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTFLAG",
+            "offset": 28,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SUSPEND",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSOF",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "SOF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "EORST",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "EORSM",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "UPRSM",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "RAMACER",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "LPMNYET",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "LPMSUSP",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTSMRY",
+            "offset": 32,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EPINT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPINT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPINT2",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPINT3",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPINT4",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPINT5",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPINT6",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPINT7",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "DESCADD",
+            "offset": 36,
+            "size": 32,
+            "value": 536873552,
+            "fields": [
+              {
+                "name": "DESCADD",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 536873552
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PADCAL",
+            "offset": 40,
+            "size": 16,
+            "value": 12637,
+            "fields": [
+              {
+                "name": "TRANSP",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 29
+              },
+              {
+                "name": "TRANSN",
+                "bits": [
+                  10,
+                  6
+                ],
+                "value": 5
+              },
+              {
+                "name": "TRIM",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 3
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPCFG0",
+            "offset": 256,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EPTYPE0",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPTYPE1",
+                "bits": [
+                  6,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "NYETDIS",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPSTATUSCLR0",
+            "offset": 260,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUSSET0",
+            "offset": 261,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUS0",
+            "offset": 262,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "EPINTFLAG0",
+            "offset": 263,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENCLR0",
+            "offset": 264,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENSET0",
+            "offset": 265,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPCFG1",
+            "offset": 288,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EPTYPE0",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPTYPE1",
+                "bits": [
+                  6,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "NYETDIS",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPSTATUSCLR1",
+            "offset": 292,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUSSET1",
+            "offset": 293,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUS1",
+            "offset": 294,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "EPINTFLAG1",
+            "offset": 295,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENCLR1",
+            "offset": 296,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENSET1",
+            "offset": 297,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPCFG2",
+            "offset": 320,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EPTYPE0",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPTYPE1",
+                "bits": [
+                  6,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "NYETDIS",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPSTATUSCLR2",
+            "offset": 324,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUSSET2",
+            "offset": 325,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUS2",
+            "offset": 326,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "EPINTFLAG2",
+            "offset": 327,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENCLR2",
+            "offset": 328,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENSET2",
+            "offset": 329,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPCFG3",
+            "offset": 352,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EPTYPE0",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPTYPE1",
+                "bits": [
+                  6,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "NYETDIS",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPSTATUSCLR3",
+            "offset": 356,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUSSET3",
+            "offset": 357,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUS3",
+            "offset": 358,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "EPINTFLAG3",
+            "offset": 359,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENCLR3",
+            "offset": 360,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENSET3",
+            "offset": 361,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPCFG4",
+            "offset": 384,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EPTYPE0",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPTYPE1",
+                "bits": [
+                  6,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "NYETDIS",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPSTATUSCLR4",
+            "offset": 388,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUSSET4",
+            "offset": 389,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUS4",
+            "offset": 390,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "EPINTFLAG4",
+            "offset": 391,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENCLR4",
+            "offset": 392,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENSET4",
+            "offset": 393,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPCFG5",
+            "offset": 416,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EPTYPE0",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPTYPE1",
+                "bits": [
+                  6,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "NYETDIS",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPSTATUSCLR5",
+            "offset": 420,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUSSET5",
+            "offset": 421,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUS5",
+            "offset": 422,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "EPINTFLAG5",
+            "offset": 423,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENCLR5",
+            "offset": 424,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENSET5",
+            "offset": 425,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPCFG6",
+            "offset": 448,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EPTYPE0",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPTYPE1",
+                "bits": [
+                  6,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "NYETDIS",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPSTATUSCLR6",
+            "offset": 452,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUSSET6",
+            "offset": 453,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUS6",
+            "offset": 454,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "EPINTFLAG6",
+            "offset": 455,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENCLR6",
+            "offset": 456,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENSET6",
+            "offset": 457,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPCFG7",
+            "offset": 480,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EPTYPE0",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPTYPE1",
+                "bits": [
+                  6,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "NYETDIS",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPSTATUSCLR7",
+            "offset": 484,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUSSET7",
+            "offset": 485,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "EPSTATUS7",
+            "offset": 486,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DTGLOUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTGLIN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "CURBK",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ0",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALLRQ1",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK0RDY",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BK1RDY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "EPINTFLAG7",
+            "offset": 487,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENCLR7",
+            "offset": 488,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EPINTENSET7",
+            "offset": 489,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TRCPT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRCPT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL0",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRFAIL1",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXSTP",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL0",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "STALL1",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "declarative",
+        "base": 1107312640,
+        "registers": [
+          {
+            "name": "CTRLA",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SWRST",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ENABLE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "REFCTRL",
+            "offset": 1,
+            "size": 8,
+            "value": 2,
+            "fields": [
+              {
+                "name": "REFSEL",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 2
+              },
+              {
+                "name": "REFCOMP",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "AVGCTRL",
+            "offset": 2,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SAMPLENUM",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADJRES",
+                "bits": [
+                  6,
+                  4
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SAMPCTRL",
+            "offset": 3,
+            "size": 8,
+            "value": 63,
+            "fields": [
+              {
+                "name": "SAMPLEN",
+                "bits": [
+                  5,
+                  0
+                ],
+                "value": 63
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTRLB",
+            "offset": 4,
+            "size": 16,
+            "value": 1824,
+            "fields": [
+              {
+                "name": "DIFFMODE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "LEFTADJ",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "FREERUN",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "CORREN",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RESSEL",
+                "bits": [
+                  5,
+                  4
+                ],
+                "value": 2
+              },
+              {
+                "name": "PRESCALER",
+                "bits": [
+                  10,
+                  8
+                ],
+                "value": 7
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "WINCTRL",
+            "offset": 8,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "WINMODE",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SWTRIG",
+            "offset": 12,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "FLUSH",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "START",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INPUTCTRL",
+            "offset": 16,
+            "size": 32,
+            "value": 251664384,
+            "fields": [
+              {
+                "name": "MUXPOS",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "MUXNEG",
+                "bits": [
+                  12,
+                  8
+                ],
+                "value": 24
+              },
+              {
+                "name": "INPUTSCAN",
+                "bits": [
+                  19,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "INPUTOFFSET",
+                "bits": [
+                  23,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "GAIN",
+                "bits": [
+                  27,
+                  24
+                ],
+                "value": 15
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EVCTRL",
+            "offset": 20,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STARTEI",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNCEI",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RESRDYEO",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "WINMONEO",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENCLR",
+            "offset": 22,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RESRDY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVERRUN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "WINMON",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNCRDY",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENSET",
+            "offset": 23,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RESRDY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVERRUN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "WINMON",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNCRDY",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTFLAG",
+            "offset": 24,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RESRDY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVERRUN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "WINMON",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNCRDY",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 25,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNCBUSY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "RESULT",
+            "offset": 26,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RESULT",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "WINLT",
+            "offset": 28,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "WINLT",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "WINUT",
+            "offset": 32,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "WINUT",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GAINCORR",
+            "offset": 36,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "GAINCORR",
+                "bits": [
+                  11,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OFFSETCORR",
+            "offset": 38,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OFFSETCORR",
+                "bits": [
+                  11,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CALIB",
+            "offset": 40,
+            "size": 16,
+            "value": 2047,
+            "fields": [
+              {
+                "name": "LINEARITY_CAL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 255
+              },
+              {
+                "name": "BIAS_CAL",
+                "bits": [
+                  10,
+                  8
+                ],
+                "value": 7
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DBGCTRL",
+            "offset": 42,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DBGRUN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157296,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "LW_L7_BOOT",
+        "cycle_lo": 107511,
+        "cycle": 107512,
+        "end_cycle": 108066
+      },
+      {
+        "text": "LW_L7_OK",
+        "cycle_lo": 264437,
+        "cycle": 264438,
+        "end_cycle": 264900
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 13544,
+    "data_bytes": 144,
+    "bss_bytes": 2844,
+    "flash_used_bytes": 13688,
+    "ram_static_bytes": 2988,
+    "flash_total_bytes": 262144,
+    "ram_total_bytes": 32768,
+    "flash_used_pct": 5.22,
+    "ram_static_pct": 9.12,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 29780,
+    "main_stack_high_water_bytes": 128,
+    "main_stack_free_min_bytes": 29548,
+    "main_stack_base": 536873900,
+    "main_stack_top": 536903680,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 29780,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 29548,
+    "heap_base": 536873900,
+    "heap_top": 536903680
+  },
+  "metrics": {
+    "cycles": 265760,
+    "instructions": 265760,
+    "steps_executed": 265760,
+    "memory_reads": 94270,
+    "memory_writes": 54917,
+    "peripheral_accesses": 28201,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 10778,
+        "count": 24
+      },
+      {
+        "pc": 10782,
+        "count": 24
+      },
+      {
+        "pc": 10786,
+        "count": 24
+      },
+      {
+        "pc": 10790,
+        "count": 24
+      },
+      {
+        "pc": 10794,
+        "count": 24
+      },
+      {
+        "pc": 10798,
+        "count": 24
+      },
+      {
+        "pc": 10802,
+        "count": 24
+      },
+      {
+        "pc": 10806,
+        "count": 24
+      },
+      {
+        "pc": 10810,
+        "count": 24
+      },
+      {
+        "pc": 10814,
+        "count": 24
+      },
+      {
+        "pc": 10770,
+        "count": 23
+      },
+      {
+        "pc": 10774,
+        "count": 23
+      },
+      {
+        "pc": 10818,
+        "count": 23
+      },
+      {
+        "pc": 10822,
+        "count": 23
+      },
+      {
+        "pc": 10826,
+        "count": 23
+      },
+      {
+        "pc": 10880,
+        "count": 23
+      }
+    ]
+  }
+}

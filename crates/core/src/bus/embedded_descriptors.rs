@@ -36,6 +36,8 @@ macro_rules! packed {
 
 /// Every embedded descriptor, sorted by key so `lookup` can binary-search it.
 static DESCRIPTORS: &[(&str, &[u8])] = &[
+    ("atsamd21g18a/adc.yaml", packed!("atsamd21g18a/adc.yaml")),
+    ("atsamd21g18a/dac.yaml", packed!("atsamd21g18a/dac.yaml")),
     ("atsamd21g18a/gclk.yaml", packed!("atsamd21g18a/gclk.yaml")),
     (
         "atsamd21g18a/nvmctrl.yaml",
@@ -46,6 +48,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
         "atsamd21g18a/sysctrl.yaml",
         packed!("atsamd21g18a/sysctrl.yaml"),
     ),
+    ("atsamd21g18a/usb.yaml", packed!("atsamd21g18a/usb.yaml")),
     ("atsamd21g18a/wdt.yaml", packed!("atsamd21g18a/wdt.yaml")),
     ("esp32/apb_ctrl.yaml", packed!("esp32/apb_ctrl.yaml")),
     ("esp32/dport.yaml", packed!("esp32/dport.yaml")),
