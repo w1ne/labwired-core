@@ -440,6 +440,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "max32650_adc",
     // Renesas DA1459x GPADC (Renode RenesasDA14_GPADC.cs, SDK10 adc_sample).
     "renesasda14_gpadc",
+    // CAES UT32M0R500 delta-sigma ADC (Renode CAES_ADC.cs, CAES app notes).
+    "caes_adc",
     // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
     // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
@@ -1915,6 +1917,7 @@ pub fn try_build(
                 .and_then(|v| v.as_u64())
                 .map_or(1220, |v| v as u32),
         )),
+        "caes_adc" => Box::new(crate::peripherals::caes_adc::CaesAdc::new()),
         "renesasda14_gpadc" => {
             Box::new(crate::peripherals::renesas_da14_gpadc::RenesasDa14Gpadc::new())
         }

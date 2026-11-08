@@ -63,6 +63,7 @@ const CONVERTED: &[&str] = &[
     "stm32l071",
     "stm32l072",
     "stm32wba52",
+    "ut32m0r500",
     "zolertia-firefly",
 ];
 
@@ -159,6 +160,10 @@ enum Family {
     /// 16-bit `RESULT` against 0.9 V x (`GP_ADC_ATTN` + 1) (Renode
     /// RenesasDA14_GPADC.cs, SDK10 hw_gpadc_adc_measure/get_value).
     Da14Gpadc,
+    /// CAES UT32M0R500 delta-sigma ADC: one `ADC_TRIGGER` sweeps every
+    /// enabled `SECHAN_CFG`, 12 bits against 1.5 V / PGA gain, bit 11
+    /// flipped in `DATA_OUT` (Renode CAES_ADC.cs, CAES ADC app notes).
+    Caes,
 }
 
 struct Converter {
@@ -192,6 +197,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Max32650
         } else if kind == "renesasda14_gpadc" {
             Family::Da14Gpadc
+        } else if kind == "caes_adc" {
+            Family::Caes
         } else {
             match p.config.get("profile").and_then(|v| v.as_str()) {
                 Some("stm32f4") => Family::Stm32F4,
@@ -242,6 +249,8 @@ impl Converter {
             Family::Max32650 => mv.min(1220) * 1023 / 1220,
             // 10-bit with the attenuator at 3.6 V full scale, truncated.
             Family::Da14Gpadc => mv.min(3600) * 1023 / 3600,
+            // 12-bit against 1.5 V at PGA 1 V/V, truncated, clamped.
+            Family::Caes => mv.min(1500) * 4095 / 1500,
         }
     }
 
@@ -250,6 +259,8 @@ impl Converter {
     fn expected_ntc_code(&self, volts: f64) -> u32 {
         match self.family {
             Family::Max32650 => millivolts(volts).min(6100) * 1023 / 6100,
+            // PGA 0.5 V/V doubles the 1.5 V range to 3 V.
+            Family::Caes => millivolts(volts).min(3000) * 4095 / 3000,
             _ => self.expected_code(volts),
         }
     }
@@ -270,6 +281,23 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Caes => {
+                // Users Guide Example 1: ADC_REGDEF, then single sweep with
+                // ADC_EN, plus EN_PGA for the per-channel gains.
+                const REGDEF: u32 = 1 << 31;
+                const ADC_EN: u32 = 1;
+                const EN_PGA: u32 = 1 << 1;
+                const SINGLESWEEP: u32 = 1 << 13;
+                bus.write_u32(self.base + 0x04, REGDEF).expect("ADC_REGDEF");
+                assert_eq!(
+                    bus.read_u32(self.base + 0x10).unwrap(),
+                    0x10,
+                    "{}: SECHAN_CFG resets to GAIN 1 V/V, disabled",
+                    self.id
+                );
+                bus.write_u32(self.base, SINGLESWEEP | EN_PGA | ADC_EN)
+                    .expect("SPB_CFG_0");
+            }
             Family::Da14Gpadc => {
                 // hw_gpadc_configure: single-ended, GP_ADC_ATTN = 3 (up to
                 // 3.6 V), CONV_NRS = 4 (16 samples, the SDK minimum for
@@ -533,6 +561,50 @@ impl Converter {
                     self.id
                 );
                 [self.convert(bus, AIN0_DIV5), self.convert(bus, 1)]
+            }
+            Family::Caes => {
+                // One sweep of three SECHAN_CFG channels: the NTC through
+                // PGA 0.5 V/V (GAIN 000), the diode and the unrouted AIN7 at
+                // 1 V/V (GAIN 001). Poll CONV_COMPL_COMB plus the highest
+                // enabled channel's pending bit (errata 8.2), then read
+                // DATA_OUT and flip bit 11 back to offset binary (Code 4).
+                const EN: u32 = 1;
+                let chan_cfg = |channel: u8| self.base + 0x10 + 4 * u64::from(channel);
+                let data = |channel: u8| self.base + 0x90 + 4 * u64::from(channel);
+                bus.write_u32(chan_cfg(NTC_CHANNEL), EN)
+                    .expect("NTC SECHAN_CFG");
+                bus.write_u32(chan_cfg(DIODE_CHANNEL), (1 << 4) | EN)
+                    .expect("diode SECHAN_CFG");
+                bus.write_u32(chan_cfg(IDLE_CHANNEL), (1 << 4) | EN)
+                    .expect("idle SECHAN_CFG");
+                bus.write_u32(self.base + 0x04, 1).expect("ADC_TRIGGER");
+                let done = (1 << 31) | (1 << IDLE_CHANNEL);
+                assert_eq!(
+                    bus.read_u32(self.base + 0x8C).unwrap() & done,
+                    done,
+                    "{}: the sweep sets CONV_COMPL_COMB and the last channel's pending bit",
+                    self.id
+                );
+                assert_eq!(
+                    bus.read_u32(self.base + 0x8C).unwrap(),
+                    0,
+                    "{}: INT_STATUS clears on read",
+                    self.id
+                );
+                let code = |bus: &mut SystemBus, channel: u8| {
+                    (bus.read_u32(data(channel)).expect("DATA") & 0xFFF) ^ 0x800
+                };
+                assert_eq!(
+                    code(bus, IDLE_CHANNEL),
+                    0,
+                    "{}: unrouted AIN7 converts to zero",
+                    self.id
+                );
+                let codes = [code(bus, NTC_CHANNEL), code(bus, DIODE_CHANNEL)];
+                for channel in [NTC_CHANNEL, DIODE_CHANNEL, IDLE_CHANNEL] {
+                    bus.write_u32(chan_cfg(channel), 0x10).expect("disable");
+                }
+                codes
             }
             Family::Da14Gpadc => {
                 // SEL_P 2 is pad P1_2, unrouted, so it converts to 0.
@@ -1302,6 +1374,23 @@ impl Converter {
                 assert_eq!(value & 0xF, 0, "{}: noiseless oversampling", self.id);
                 value >> conv_nrs
             }
+            Family::Caes => {
+                // Single channel at 1 V/V, one sweep, DATA_OUT bit 11 flipped.
+                let chan_cfg = self.base + 0x10 + 4 * u64::from(channel);
+                bus.write_u32(chan_cfg, (1 << 4) | 1).expect("SECHAN_CFG");
+                bus.write_u32(self.base + 0x04, 1).expect("ADC_TRIGGER");
+                assert_ne!(
+                    bus.read_u32(self.base + 0x8C).unwrap() & (1 << channel),
+                    0,
+                    "{}: channel {channel} pends",
+                    self.id
+                );
+                let raw = bus
+                    .read_u32(self.base + 0x90 + 4 * u64::from(channel))
+                    .expect("DATA");
+                bus.write_u32(chan_cfg, 0x10).expect("disable");
+                (raw & 0xFFF) ^ 0x800
+            }
             Family::Saadc { .. } => unreachable!("SAADC converts as a scan"),
         }
     }
@@ -1426,7 +1515,7 @@ fn assert_converter_routes_generic_analog(
         }
         if matches!(
             converter.family,
-            Family::Imxrt | Family::Sam4s | Family::Apollo4 | Family::Cc2538
+            Family::Imxrt | Family::Sam4s | Family::Apollo4 | Family::Cc2538 | Family::Caes
         ) {
             assert_eq!(
                 converter.convert(&mut bus, IDLE_CHANNEL),
@@ -1507,7 +1596,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 45,
+        instances, 46,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -1515,7 +1604,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 178,
+        without_adc, 177,
         "onboarding profiles that declare no modelled ADC"
     );
 }
