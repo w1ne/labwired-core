@@ -1,8 +1,9 @@
 # Arduino matrix system — Arduino Nano Every (ATmega4809 @ 16 MHz).
 # Serial = USART3 (the SAMD11 USB bridge on PB4/PB5); LED_BUILTIN = D13 = PE2.
 # L3: INA219 at 0x40 on Wire = TWI0 (SDA PA2 / SCL PA3, Nano Every A4/A5).
-# SPI0 is not modelled on this part yet, so L4 is skipped in boards.yaml
-# rather than attached to a stand-in.
+# L4: MAX31855 on SPI = SPI0 (PORTMUX ALT2: MOSI PE0 / MISO PE1 / SCK PE2,
+# Nano Every D11/D12/D13); CS = SS = D8 = PE3. SPI0 does not observe CS, so
+# the kit frames on its soft-CS path.
 # L5: A0 (PD3 = AIN3) held at 2500 mV, half the board's 5 V VDD — a divider
 # on the pin. init() selects analogReference(VDD), so stock analogRead() must
 # return exactly 512 (10-bit).
@@ -14,6 +15,11 @@ external_devices:
     connection: "twi0"
     config:
       i2c_address: 0x40
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi0"
+    config:
+      cs_pin: "PE3"
 peripherals:
   - id: "adc0"
     type: "megaavr_adc"

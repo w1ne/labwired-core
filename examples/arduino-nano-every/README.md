@@ -31,11 +31,11 @@ The chip descriptor (`configs/chips/atmega4809.yaml`) now models more than
 this example uses. Stock ArduinoCore-megaavr sketches run on it in the Arduino
 matrix (`validation/arduino-matrix`, row `arduino-nano-every`): L0/L1 serial
 through USART3, L2 blink and L7 `millis()`/`micros()` through TCB3 pass. L3
-`Wire` reads an INA219's registers over TWI0 (host mode), and L5
-`analogRead(A0)` converts on ADC0; their evidence and negative controls are
-under `evidence/arduino-matrix/`. SPI0 and the timer pad outputs are not
-modelled yet, so L4 and L6 are skipped with that reason (L8: the part has no
-CAN). An I/O access to anything the descriptor does not declare faults
+`Wire` reads an INA219's registers over TWI0 (host mode), L4 `SPI` reads a
+MAX31855 frame over SPI0 (host mode), and L5 `analogRead(A0)` converts on
+ADC0; their evidence and negative controls are under
+`evidence/arduino-matrix/`. The timer pad outputs are not modelled yet, so L6
+is skipped with that reason (L8: the part has no CAN). An I/O access to anything the descriptor does not declare faults
 instead of reading zero.
 
 ## Lifecycle and hardware sources

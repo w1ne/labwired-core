@@ -130,12 +130,12 @@
       },
       "spi": {
         "state": "none",
-        "gap": "SPI0 is not modelled on the ATmega4809.",
+        "gap": "SPI0 is a megaavr_spi model (host mode) and the Arduino matrix row arduino-nano-every reads a MAX31855 frame through stock ArduinoCore-megaavr SPI (L4), but that row needs PlatformIO and runs nightly; no PR-gated firmware lane yet.",
         "lane": "none"
       },
       "i2c": {
         "state": "none",
-        "gap": "TWI0 is not modelled on the ATmega4809.",
+        "gap": "TWI0 is a megaavr_twi model (host mode) and the Arduino matrix row arduino-nano-every reads an INA219 through stock ArduinoCore-megaavr Wire (L3), but that row needs PlatformIO and runs nightly; no PR-gated firmware lane yet.",
         "lane": "none"
       }
     },

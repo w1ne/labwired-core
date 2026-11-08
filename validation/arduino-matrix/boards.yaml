@@ -383,9 +383,8 @@ boards:
     led_min_edges: 2
     family: avr
     notes: "Arduino Nano Every (ATmega4809, megaAVR 0-series)"
-    sketches_skip: [L4_spi_sensor, L6_pwm, L8_can]
+    sketches_skip: [L6_pwm, L8_can]
     sketches_skip_reason:
-      L4_spi_sensor: "SPI0 is not modelled on the ATmega4809 yet"
       L6_pwm: "TCA0/TCB waveform outputs are not modelled on the ATmega4809 yet"
       L8_can: "ATmega4809 has no CAN controller"
 

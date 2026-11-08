@@ -118,6 +118,17 @@ peripherals:
     base_address: 0x000108A0
     size: "15"
     irq: 15
+  # SPI0 host mode (`megaavr_spi`), normal (unbuffered) mode: a DATA write
+  # clocks one byte both ways at once and sets IF, cleared by reading
+  # INTFLAGS then DATA; DORD bit order applies. PRESC / CLK2X / MODE are
+  # stored, not timed. SS is not observed: every attached device sees every
+  # byte (soft CS). Buffer mode, the client side and interrupts are refused.
+  # The pads are not routed: PORTMUX.TWISPIROUTEA is stored, devices attach
+  # to SPI0 by name.
+  - id: "spi0"
+    type: "megaavr_spi"
+    base_address: 0x000108C0
+    size: "5"
   # Register banks generated from the ATDF by scripts/atdf_to_declarative.py.
   # They store what firmware writes and nothing more: no clock switching or
   # prescaling, no sleep, no brown-out and no reset cause beyond the reset

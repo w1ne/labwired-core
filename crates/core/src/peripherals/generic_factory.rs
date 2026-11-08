@@ -405,6 +405,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "megaavr_tc",
     "megaavr_adc",
     "megaavr_twi",
+    "megaavr_spi",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -1706,6 +1707,19 @@ pub fn try_build(
                 anyhow::bail!("megaavr_twi '{}' admits no config key '{k}'", p_cfg.id);
             }
             Box::new(crate::peripherals::megaavr::twi::MegaAvrTwi::new(irq))
+        }
+        // Host mode only; interrupts are refused, so there is no `irq`.
+        "megaavr_spi" => {
+            if p_cfg.irq.is_some() {
+                anyhow::bail!(
+                    "megaavr_spi '{}' models no interrupt (drop `irq`)",
+                    p_cfg.id
+                );
+            }
+            if let Some(k) = p_cfg.config.keys().next() {
+                anyhow::bail!("megaavr_spi '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            Box::new(crate::peripherals::megaavr::spi::MegaAvrSpi::new())
         }
         // `vdd_mv`: the board's VDD (the VDDREF reference, default 5000);
         // `input_mv: { <ain>: <mV> }`: static levels on AIN0..AIN15.

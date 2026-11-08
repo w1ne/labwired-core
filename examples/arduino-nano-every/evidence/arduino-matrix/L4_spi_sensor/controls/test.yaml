@@ -1,0 +1,9 @@
+schema_version: '1.0'
+inputs:
+  firmware: validation/arduino-matrix/out/arduino-nano-every/L4_spi_sensor/firmware.elf
+  system: examples/arduino-nano-every/evidence/arduino-matrix/L4_spi_sensor/controls/arduino-nano-every-max31855-100c.yaml
+limits:
+  max_steps: 500000
+  max_uart_bytes: 65536
+assertions:
+- uart_contains: LW_L4_OK
