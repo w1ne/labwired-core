@@ -404,6 +404,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "megaavr_usart",
     "megaavr_tc",
     "megaavr_adc",
+    "megaavr_twi",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -1695,6 +1696,16 @@ pub fn try_build(
             Box::new(crate::peripherals::megaavr::tc::MegaAvrTimers::new([
                 irqs[0], irqs[1], irqs[2], irqs[3],
             ]))
+        }
+        // `irq`: the TWIM (host) vector number.
+        "megaavr_twi" => {
+            let irq = p_cfg.irq.ok_or_else(|| {
+                anyhow::anyhow!("megaavr_twi '{}' needs `irq` (the TWIM vector)", p_cfg.id)
+            })?;
+            if let Some(k) = p_cfg.config.keys().next() {
+                anyhow::bail!("megaavr_twi '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            Box::new(crate::peripherals::megaavr::twi::MegaAvrTwi::new(irq))
         }
         // `vdd_mv`: the board's VDD (the VDDREF reference, default 5000);
         // `input_mv: { <ain>: <mV> }`: static levels on AIN0..AIN15.

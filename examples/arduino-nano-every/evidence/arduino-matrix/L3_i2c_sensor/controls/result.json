@@ -1,0 +1,1244 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 500000,
+  "cycles": 675762,
+  "instructions": 499958,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 500000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 500000
+    }
+  },
+  "limits": {
+    "max_steps": 500000,
+    "max_cycles": null,
+    "max_uart_bytes": 65536,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "LW_L3_OK"
+      },
+      "passed": false
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      29,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3,
+      0,
+      2,
+      0,
+      10,
+      85,
+      17,
+      0,
+      100,
+      8,
+      247,
+      63,
+      96,
+      8
+    ],
+    "pc": 4890,
+    "sp": 16375,
+    "sreg": 130
+  },
+  "firmware_hash": "f657d36407b355b126e96b3a5dca11b0e693ad128b2e533dd4db75de3a711837",
+  "config": {
+    "firmware": "/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/arduino-nano-every/L3_i2c_sensor/firmware.elf",
+    "system": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/arduino-nano-every/evidence/arduino-matrix/L3_i2c_sensor/controls/arduino-nano-every-ina219-0x41.yaml",
+    "script": "/dev/shm/hwob-l3/test.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "porta",
+        "kind": "native",
+        "base": 66560,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 66592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 66624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 66656,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porte",
+        "kind": "native",
+        "base": 66688,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portf",
+        "kind": "native",
+        "base": 66720,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "uart",
+        "base": 67584,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "uart",
+        "base": 67616,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "uart",
+        "base": 67648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart3",
+        "kind": "uart",
+        "base": 67680,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timers",
+        "kind": "native",
+        "base": 68096,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "twi0",
+        "kind": "native",
+        "base": 67744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rstctrl",
+        "kind": "declarative",
+        "base": 65600,
+        "registers": [
+          {
+            "name": "RSTFR",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "BORF",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "EXTRF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "PORF",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SWRF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "UPDIRF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "WDRF",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SWRR",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SWRE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "slpctrl",
+        "kind": "declarative",
+        "base": 65616,
+        "registers": [
+          {
+            "name": "CTRLA",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SMODE",
+                "bits": [
+                  2,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "clkctrl",
+        "kind": "declarative",
+        "base": 65632,
+        "registers": [
+          {
+            "name": "MCLKCTRLA",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CLKOUT",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "CLKSEL",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MCLKCTRLB",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PDIV",
+                "bits": [
+                  4,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "PEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MCLKLOCK",
+            "offset": 2,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LOCKEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MCLKSTATUS",
+            "offset": 3,
+            "size": 8,
+            "value": 16,
+            "fields": [
+              {
+                "name": "EXTS",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "OSC20MS",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "OSC32KS",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SOSC",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "XOSC32KS",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "OSC20MCTRLA",
+            "offset": 16,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OSC20MCALIBA",
+            "offset": 17,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CAL20M",
+                "bits": [
+                  6,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OSC20MCALIBB",
+            "offset": 18,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LOCK",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "TEMPCAL20M",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OSC32KCTRLA",
+            "offset": 24,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "XOSC32KCTRLA",
+            "offset": 28,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CSUT",
+                "bits": [
+                  5,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "ENABLE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "bod",
+        "kind": "declarative",
+        "base": 65664,
+        "registers": [
+          {
+            "name": "CTRLA",
+            "offset": 0,
+            "size": 8,
+            "value": 5,
+            "fields": [
+              {
+                "name": "ACTIVE",
+                "bits": [
+                  3,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "SAMPFREQ",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLEEP",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTRLB",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LVL",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "VLMCTRLA",
+            "offset": 8,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "VLMLVL",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTCTRL",
+            "offset": 9,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "VLMCFG",
+                "bits": [
+                  2,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "VLMIE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTFLAGS",
+            "offset": 10,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "VLMIF",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 11,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "VLMS",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "vref",
+        "kind": "declarative",
+        "base": 65696,
+        "registers": [
+          {
+            "name": "CTRLA",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "AC0REFSEL",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADC0REFSEL",
+                "bits": [
+                  6,
+                  4
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTRLB",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "AC0REFEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADC0REFEN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "portmux",
+        "kind": "declarative",
+        "base": 67040,
+        "registers": [
+          {
+            "name": "EVSYSROUTEA",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EVOUT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EVOUT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "EVOUT2",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "EVOUT3",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "EVOUT4",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "EVOUT5",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CCLROUTEA",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LUT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "LUT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "LUT2",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "LUT3",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USARTROUTEA",
+            "offset": 2,
+            "size": 8,
+            "value": 64,
+            "fields": [
+              {
+                "name": "USART0",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "USART1",
+                "bits": [
+                  3,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "USART2",
+                "bits": [
+                  5,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "USART3",
+                "bits": [
+                  7,
+                  6
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "TWISPIROUTEA",
+            "offset": 3,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SPI0",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TWI0",
+                "bits": [
+                  5,
+                  4
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "TCAROUTEA",
+            "offset": 4,
+            "size": 8,
+            "value": 1,
+            "fields": [
+              {
+                "name": "TCA0",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "TCBROUTEA",
+            "offset": 5,
+            "size": 8,
+            "value": 3,
+            "fields": [
+              {
+                "name": "TCB0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "TCB1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "TCB2",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCB3",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "adc0",
+        "kind": "native",
+        "base": 67072,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sigrow",
+        "kind": "declarative",
+        "base": 69888,
+        "registers": [
+          {
+            "name": "DEVICEID0",
+            "offset": 0,
+            "size": 8,
+            "value": 30,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "DEVICEID1",
+            "offset": 1,
+            "size": 8,
+            "value": 150,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "DEVICEID2",
+            "offset": 2,
+            "size": 8,
+            "value": 81,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM0",
+            "offset": 3,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM1",
+            "offset": 4,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM2",
+            "offset": 5,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM3",
+            "offset": 6,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM4",
+            "offset": 7,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM5",
+            "offset": 8,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM6",
+            "offset": 9,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM7",
+            "offset": 10,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM8",
+            "offset": 11,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM9",
+            "offset": 12,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSCCAL32K",
+            "offset": 20,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSCCAL16M0",
+            "offset": 24,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSCCAL16M1",
+            "offset": 25,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSCCAL20M0",
+            "offset": 26,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSCCAL20M1",
+            "offset": 27,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "TEMPSENSE0",
+            "offset": 32,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "TEMPSENSE1",
+            "offset": 33,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSC16ERR3V",
+            "offset": 34,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSC16ERR5V",
+            "offset": 35,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSC20ERR3V",
+            "offset": 36,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSC20ERR5V",
+            "offset": 37,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "CHECKSUM1",
+            "offset": 47,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          }
+        ],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 5 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "LW_L3_BOOT",
+        "cycle_lo": 15763,
+        "cycle": 31933,
+        "end_cycle": 31933
+      },
+      {
+        "text": "LW_L3_FAIL nack",
+        "cycle_lo": 31933,
+        "cycle": 47807,
+        "end_cycle": 47807
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 5527,
+    "data_bytes": 4,
+    "bss_bytes": 480,
+    "flash_used_bytes": 5531,
+    "ram_static_bytes": 484,
+    "flash_total_bytes": 49152,
+    "ram_total_bytes": 6144,
+    "flash_used_pct": 11.25,
+    "ram_static_pct": 7.88,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 675762,
+    "instructions": 499958,
+    "steps_executed": 500000,
+    "memory_reads": 0,
+    "memory_writes": 4479,
+    "peripheral_accesses": 888,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 4892,
+        "count": 664
+      },
+      {
+        "pc": 4894,
+        "count": 625
+      },
+      {
+        "pc": 4890,
+        "count": 586
+      },
+      {
+        "pc": 1360,
+        "count": 39
+      },
+      {
+        "pc": 5202,
+        "count": 39
+      }
+    ]
+  }
+}

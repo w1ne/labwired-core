@@ -8,4 +8,5 @@
 
 pub mod adc;
 pub mod tc;
+pub mod twi;
 pub mod usart;
