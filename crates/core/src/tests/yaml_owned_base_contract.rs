@@ -394,13 +394,12 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
         "rp2350.yaml",
         "clk_rst",
         "io_bank0",
-        "Same shape as rp2040.yaml above. `clk_rst` is one 320 KB catch-all \
-         (0x4001_0000..0x4006_0000) for CLOCKS/RESETS/PSM/XOSC/PLL_SYS/PLL_USB, \
-         and the RP2350 IO_BANK0 sits inside it at 0x4002_8000. XOSC and both \
-         PLLs live above io_bank0 in that span, so narrowing clk_rst would cut \
-         off registers pico-sdk's pll_init polls. Greatest-start-wins routing \
-         gives io_bank0 its 4 KB regardless of registration order, which is what \
-         lets the Pico 2 GP25 FUNCSEL write reach the selector model.",
+        "Same shape as rp2040.yaml: `clk_rst` is a 320 KB catch-all for \
+         CLOCKS/RESETS/IO_QSPI/PADS/XOSC/PLL_SYS/PLL_USB, and IO_BANK0 sits \
+         inside it at 0x4002_8000. XOSC and both PLLs sit above io_bank0, so \
+         narrowing clk_rst would cut off clock bring-up. Greatest-start-wins \
+         routing gives io_bank0 its 4 KB deterministically, which lets Pico 2 \
+         GPIOn_CTRL.FUNCSEL reach the pad mux model.",
     ),
     (
         "esp32.yaml",

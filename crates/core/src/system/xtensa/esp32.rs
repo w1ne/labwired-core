@@ -429,7 +429,11 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
                                                                  // GPIO ROM helpers — Arduino-ESP32 uses these to set up VSPI pins.
                                                                  // No-op in sim (our Esp32Gpio/Esp32Spi peripherals accept signals
                                                                  // directly without IO_MUX-state enforcement).
-    rom_bank.register(0x4000_9edc, rom_thunks::nop_return_zero); // esp_rom_gpio_connect_in_signal
+                                                                 // GPIO input matrix — `gpio_matrix_in(gpio, signal, inv)`
+                                                                 // (`esp_rom_gpio_connect_in_signal`), what the PCNT driver's
+                                                                 // `pcnt_set_pin` and Arduino's `pinMatrixInAttach` call. It was a nop, so
+                                                                 // no input signal was ever routed: a pulse counter saw no pad at all.
+    rom_bank.register(0x4000_9edc, gpio_matrix_in); // esp_rom_gpio_connect_in_signal
     rom_bank.register(0x4000_9fdc, rom_thunks::nop_return_zero); // esp_rom_gpio_pad_select_gpio
                                                                  // MMU / cache setup helpers — discovered iteratively while booting
                                                                  // the the reference firmware Arduino-ESP32 binary in sim. All no-ops because the
@@ -658,6 +662,9 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // …and the LEDC channel outputs (matrix signals 71..86), so a servo or LED
     // pad attached with `ledcAttachPin` shows its PWM edges.
     bus.wire_esp32_ledc_pads();
+    // …and the other direction: the 32 PCNT input signals, so a pad routed
+    // to a pulse counter with `gpio_matrix_in` counts its edges.
+    bus.wire_esp32_pcnt_inputs();
     // AHB TX FIFO alias registered after wifi_mac_phy (see below).
 
     // SYSCON (TRM §13.2) — system controller. Owns SYSCLK_CONF, TICK_CONF,
@@ -743,7 +750,8 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         ("i2s1", 0x3FF6_D000),
         // pwm0 (0x3FF5_E000) is now the real MCPWM0 model registered above.
         ("ledc2", 0x3FF6_8000),
-        ("pcnt", 0x3FF5_7000),
+        // rmt (0x3FF5_6000) and pcnt (0x3FF5_7000) are real models registered
+        // above; a SystemStub at either base would shadow the real peripheral.
     ] {
         bus.add_peripheral(
             name,
@@ -990,6 +998,10 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     ("ledc",     "esp32_ledc",     0x3FF5_9000, 0x1000, None),
     ("twai",     "esp32_twai",     0x3FF6_B000, 0x1000, None),
     ("mcpwm0",   "esp32_mcpwm",    0x3FF5_E000, 0x1000, None),
+    // PCNT (TRM §17, `DR_REG_PCNT_BASE`): 8 pulse-counter units, inputs from
+    // the GPIO input matrix (signals 39..58, 71..82) through
+    // `wire_esp32_pcnt_inputs`; `ETS_PCNT_INTR_SOURCE` = 48.
+    ("pcnt",     "esp32_pcnt",     0x3FF5_7000, 0x1000, Some(48)),
     ("host_slc", "esp32_sdio",     0x3FF5_8000, 0x1000, None),
     // RTC IO MUX + RTC GPIO (TRM §6.11-6.13, `DR_REG_RTCIO_BASE`). The block
     // is 0xCC bytes; the window stays the 4 KiB the catch-all stub it
@@ -1002,6 +1014,29 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
 
 /// `GPIO_FUNC0_OUT_SEL_CFG_REG` (`DR_REG_GPIO_BASE` 0x3FF4_4000 + 0x530), stride 4.
 const GPIO_FUNC0_OUT_SEL_CFG: u64 = 0x3FF4_4530;
+
+/// `GPIO_FUNC0_IN_SEL_CFG_REG` (`DR_REG_GPIO_BASE` 0x3FF4_4000 + 0x130),
+/// one word per input signal 0..255.
+const GPIO_FUNC0_IN_SEL_CFG: u64 = 0x3FF4_4130;
+
+/// BROM `gpio_matrix_in(gpio, signal_idx, inv)`: write input signal
+/// `signal_idx`'s `FUNCn_IN_SEL_CFG` = `gpio` (bits 5:0: a pad, or
+/// `GPIO_MATRIX_CONST_ZERO_INPUT` 0x30 / `_ONE_INPUT` 0x38) | `inv` << 6
+/// (`IN_INV_SEL`) | `SIG_IN_SEL` (bit 7, take the matrix rather than the
+/// signal's IO_MUX pad). esp-idf `rom/gpio.h`, TRM §4.10. A signal past the
+/// 256 is ignored.
+fn gpio_matrix_in(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> crate::SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let gpio = cpu.regs.read_logical(n + 2) & 0x3F;
+    let signal = cpu.regs.read_logical(n + 3);
+    let inv = cpu.regs.read_logical(n + 4) & 1;
+    if signal < 256 {
+        let value = gpio | (inv << 6) | (1 << 7);
+        bus.write_u32(GPIO_FUNC0_IN_SEL_CFG + u64::from(signal) * 4, value)?;
+    }
+    rom_thunks::RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
 
 /// BROM `gpio_matrix_out(gpio, signal_idx, out_inv, oen_inv)`: write the
 /// pad's `FUNCn_OUT_SEL_CFG` = `signal_idx` (bits 8:0) | `out_inv` << 9

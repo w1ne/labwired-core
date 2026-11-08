@@ -228,6 +228,37 @@ static bool lw_can_probe() {
 }
 #define LW_HAS_CAN 1
 
+#elif defined(ARDUINO_ESP32C3_DEV) || defined(CONFIG_IDF_TARGET_ESP32C3)
+// ESP32-C3 TWAI @ 0x6002B000 — the S3 register map (twai_struct.h identical).
+// Ungate the APB clock and release reset first, as on silicon
+// (SYSTEM_PERIP_CLK_EN0 @0x600C0010 / PERIP_RST_EN0 @0x600C0018, TWAI bit 19),
+// then self-RX + decode std ID 0x123 / data 0xA5.
+static bool lw_can_probe() {
+  const uint32_t sys = 0x600C0000u;
+  mmio_w(sys + 0x10, mmio_r(sys + 0x10) | (1u << 19));
+  mmio_w(sys + 0x18, mmio_r(sys + 0x18) & ~(1u << 19));
+  const uint32_t twai = 0x6002B000u;
+  mmio_w(twai + 0x00, 0x0); // leave reset mode
+  mmio_w(twai + 0x40, 0x01u); // DLC=1
+  mmio_w(twai + 0x44, 0x24u); // ID[10:3] of 0x123
+  mmio_w(twai + 0x48, 0x60u); // ID[2:0]<<5
+  mmio_w(twai + 0x4C, 0xA5u);
+  mmio_w(twai + 0x04, 1u << 4); // CMD.self_rx_req
+  if ((mmio_r(twai + 0x08) & 1u) == 0) {
+    return false;
+  }
+  if ((mmio_r(twai + 0x74) & 0x7Fu) != 1u) {
+    return false;
+  }
+  uint8_t fi = (uint8_t)(mmio_r(twai + 0x40) & 0xFFu);
+  uint8_t id_hi = (uint8_t)(mmio_r(twai + 0x44) & 0xFFu);
+  uint8_t id_lo = (uint8_t)(mmio_r(twai + 0x48) & 0xFFu);
+  uint8_t data0 = (uint8_t)(mmio_r(twai + 0x4C) & 0xFFu);
+  uint16_t sid = ((uint16_t)id_hi << 3) | ((uint16_t)id_lo >> 5);
+  return fi == 0x01u && sid == 0x123u && data0 == 0xA5u;
+}
+#define LW_HAS_CAN 1
+
 #elif defined(ARDUINO_ESP32S3_DEV) || defined(CONFIG_IDF_TARGET_ESP32S3)
 // ESP32-S3 TWAI @ 0x6002B000 — self-RX + decode std ID 0x123 / data 0xA5.
 // Model stores one payload byte per 32-bit word slot (0x40,0x44,0x48,0x4C…).

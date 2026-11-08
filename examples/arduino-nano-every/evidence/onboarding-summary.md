@@ -1,8 +1,8 @@
 # Onboarding Smoke: arduino-nano-every-atmega4809
 
 - status: `pass`
-- elapsed_seconds: `11`
-- elapsed_ms: `10020`
+- elapsed_seconds: `317`
+- elapsed_ms: `316646`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

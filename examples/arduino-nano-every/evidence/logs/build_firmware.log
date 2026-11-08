@@ -14,11 +14,8 @@ Found 4 compatible libraries
 Scanning dependencies...
 No dependencies
 Building in release mode
-Compiling .pio/build/nano_every/src/main.cpp.o
-Linking .pio/build/nano_every/firmware.elf
 Checking size .pio/build/nano_every/firmware.elf
 Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
 RAM:   [          ]   2.9% (used 177 bytes from 6144 bytes)
 Flash: [=         ]   6.0% (used 2919 bytes from 48640 bytes)
-Building .pio/build/nano_every/firmware.hex
-========================= [SUCCESS] Took 0.86 seconds =========================
+========================= [SUCCESS] Took 0.50 seconds =========================
