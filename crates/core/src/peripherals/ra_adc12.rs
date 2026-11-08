@@ -23,7 +23,9 @@
 //!   manual's state count), then every selected channel's `ADDRn` is
 //!   loaded, `ADST` clears (single scan) and the scan-end event fires;
 //! - the conversion code is `input_mv * (2^bits - 1) / vref_mv`, clamped,
-//!   with `bits` from `ADCER.ADPRC` (12/10/8) and left-justified when
+//!   with `bits` from `ADCER.ADPRC` (12/10/8, and 14 for `ADPRC` = 3 on a
+//!   14-bit ADC14 unit such as the RA4M1's, `adc14: true` in the config;
+//!   `ADPRC` = 3 is reserved on ADC12 and converts 12-bit) and left-justified when
 //!   `ADCER.ADRFMT` = 1 (the value shifted to bit 15);
 //! - A/D-converted value addition / averaging (`ADADS0/1` channel bits,
 //!   `ADADC.ADC` count 1/2/3/4/16, `ADADC.AVEE`): addition sums the
@@ -97,6 +99,10 @@ pub const DEFAULT_VREF_MV: u16 = 3300;
 pub struct RaAdc12 {
     elc_event: u32,
     vref_mv: u16,
+    /// ADC14 unit: `ADCER.ADPRC` = 3 selects 14-bit (RA4M1 R01UH0887
+    /// §28.2.12, FSP `ADC_RESOLUTION_14_BIT`).
+    #[serde(default)]
+    adc14: bool,
     conversion_cycles: u64,
     /// Plain register storage for the whole window; `ADDRn` lives in `data`.
     regs: Vec<u8>,
@@ -136,6 +142,7 @@ impl RaAdc12 {
         Self {
             elc_event,
             vref_mv: vref_mv.max(1),
+            adc14: false,
             conversion_cycles,
             regs: vec![0; WINDOW],
             data: [0; CHANNELS],
@@ -147,6 +154,12 @@ impl RaAdc12 {
             links: Vec::new(),
             probes: Probes::default(),
         }
+    }
+
+    /// Make this an ADC14 unit, where `ADCER.ADPRC` = 3 is 14-bit.
+    pub fn with_adc14(mut self, adc14: bool) -> Self {
+        self.adc14 = adc14;
+        self
     }
 
     /// Ask the bus to wire `channel` to output `output` of `source`.
@@ -203,6 +216,7 @@ impl RaAdc12 {
         match (self.reg16(ADCER) >> ADPRC_SHIFT) & ADPRC_MASK {
             1 => 10,
             2 => 8,
+            3 if self.adc14 => 14,
             _ => 12,
         }
     }
@@ -544,6 +558,36 @@ mod tests {
         w16(&mut a, ADCSR, ADST);
         finish(&mut a, &clock);
         assert_eq!(r16(&a, addr(0)), 4095);
+    }
+
+    #[test]
+    fn adprc_3_is_14_bit_only_on_an_adc14_unit() {
+        // ArduinoCore-renesas sets ADPRC = 3 and shifts the code down to
+        // analogReadResolution (10 by default): 2.5 V of 5 V must convert
+        // 8191, so that 8191 >> 4 = 511.
+        let (a, clock) = adc_at(0);
+        let mut a = a.with_adc14(true);
+        a.vref_mv = 5000;
+        a.set_channel_input(9, 2500);
+        w16(&mut a, ADANSA0, 1 << 9);
+        w16(&mut a, ADCER, 3 << ADPRC_SHIFT);
+        w16(&mut a, ADCSR, ADST);
+        finish(&mut a, &clock);
+        assert_eq!(r16(&a, addr(9)), 8191);
+        // Left-justified 14-bit: MSB at bit 15.
+        w16(&mut a, ADCER, ADRFMT | (3 << ADPRC_SHIFT));
+        w16(&mut a, ADCSR, ADST);
+        finish(&mut a, &clock);
+        assert_eq!(r16(&a, addr(9)), 8191 << 2);
+        // On an ADC12 unit the reserved setting stays 12-bit.
+        let (mut b, clock) = adc_at(0);
+        b.vref_mv = 5000;
+        b.set_channel_input(9, 2500);
+        w16(&mut b, ADANSA0, 1 << 9);
+        w16(&mut b, ADCER, 3 << ADPRC_SHIFT);
+        w16(&mut b, ADCSR, ADST);
+        finish(&mut b, &clock);
+        assert_eq!(r16(&b, addr(9)), 2047);
     }
 
     #[test]

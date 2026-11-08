@@ -38,6 +38,7 @@ This is the product bar beyond unit tests and UART-only CI fixtures.
 | stm32f411ceu6 | ✅ L0–L7 (L8 n/a, no CAN) | ❌ | ✅ Arduino (L3 ACK-only, F4 sketch ifdef) | WeAct Black Pill (`blackpill_f411ce`); L6 on PA0 TIM2_CH1, pad edges not routed |
 | stm32g474re | ✅ L0–L4 | ✅ | ✅ Arduino | |
 | stm32g071rb | ✅ L0–L7 (L8 n/a, no CAN) | ❌ | ✅ Arduino (L3 exact tier) | NUCLEO-G071RB (`nucleo_g071rb`); L6 on PA0 TIM2_CH1 (PA5 is DAC1_OUT2), pad edges not routed |
+| ra4m1 (UNO R4 WiFi) | ✅ L0–L8 (L8 = CAN0 internal loopback) | ❌ | ✅ Arduino (exact) | Stock ArduinoCore-renesas (`uno_r4_wifi`); Serial = SCI9; L6 P102 pad edges 490 Hz / 128/255 |
 | stm32h563 | ✅ L0–L4 | ✅ | ✅ Arduino | |
 | stm32h735 | ❌ | ❌ | — | Chip model; framework path TBD |
 | stm32l073 | ✅ L0–L4 | ✅ | ✅ Arduino | |

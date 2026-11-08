@@ -339,10 +339,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_mclk",
     // Renesas RA SYSTEM (HOCO / OSCSF).
     "ra_sysc",
-    // Renesas RA8 / RA6 SYSTEM, full R_SYSTEM register file (adds the
+    // Renesas RA8 / RA6 / RA4 SYSTEM, full R_SYSTEM register file (adds the
     // xxxCKCR handshake).
     "ra8_sysc",
     "ra6_sysc",
+    "ra4_sysc",
     // Renesas RX SYSTEM (oscillator stable flags, clock-switch handshakes).
     "rx_sysc",
     // Renesas RX FLASH control registers (0xAA-keyed word writes).
@@ -361,12 +362,14 @@ pub const MODEL_TYPES: &[&str] = &[
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
     "ra8_pfs",
     // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT, the
-    // 12-bit ADC and DAC, the IIC (RIIC) master and the GPT (saw-wave PWM).
+    // 12-bit ADC and DAC, the IIC (RIIC) master, the CAN module (normal
+    // mailbox mode) and the GPT (saw-wave PWM).
     "ra_icu",
     "ra_agt",
     "ra_adc12",
     "ra_dac12",
     "ra_iic",
+    "ra_can",
     "ra_gpt",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
@@ -1501,6 +1504,7 @@ pub fn try_build(
         "ra_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new()),
         "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra8()),
         "ra6_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra6()),
+        "ra4_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra4()),
         "rx_sysc" => Box::new(crate::peripherals::rx_sysc::RxSysc::new()),
         // `irq`: the EVIC vector; `timer_type`: "a" (Timer1) or "b";
         // `clock_hz`: SYSCLK; `pbclk_hz`: the timer's PBCLK3; `sosc_hz`.
@@ -1620,7 +1624,8 @@ pub fn try_build(
             ))
         }
         // `clock_hz`: the rate the bus cycles run at; `elc_event`: the unit's
-        // scan-end event; `vref_mv`: the reference; `input_mv: { <ch>: <mV> }`:
+        // scan-end event; `vref_mv`: the reference; `adc14`: a 14-bit ADC14
+        // unit (ADPRC = 3 is 14-bit); `input_mv: { <ch>: <mV> }`:
         // board-level static channel levels.
         // `clock_hz`: the rate the bus cycles run at; `pclkb_hz`: PCLKB, the
         // RIIC's clock; `elc_event`: the channel's RXI event (TXI/TEI/ERI
@@ -1634,9 +1639,20 @@ pub fn try_build(
                 get("elc_event").map_or(iic::DEFAULT_ELC_EVENT, |v| v as u32),
             ))
         }
+        // Normal mailbox mode; interrupts are refused, so there is no `irq`.
+        "ra_can" => {
+            if p_cfg.irq.is_some() {
+                anyhow::bail!("ra_can '{}' models no interrupt (drop `irq`)", p_cfg.id);
+            }
+            if let Some(k) = p_cfg.config.keys().next() {
+                anyhow::bail!("ra_can '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            Box::new(crate::peripherals::ra_can::RaCan::new())
+        }
         // `channels`: GPT channel count; `clock_hz`: the rate the bus cycles
         // run at; `pclkd_hz`: PCLKD, the count clock before GTCR.TPCS;
-        // `elc_event`: GPT0's capture/compare A event (nine per channel);
+        // `elc_event`: GPT0's capture/compare A event; `events_per_channel`:
+        // the ELC event stride (default nine; eight on the RA4M1);
         // `wide_channels`: mask of the 32-bit channels; `gtioc_pads`:
         // `{ GTIOCnA: Pmnn, ... }`, the pads that carry each GTIOC line.
         "ra_gpt" => {
@@ -1665,6 +1681,9 @@ pub fn try_build(
                     get("elc_event").map_or(gpt::DEFAULT_ELC_EVENT, |v| v as u32),
                     get("wide_channels").map_or(0xFF, |v| v as u32),
                 )
+                .with_events_per_channel(
+                    get("events_per_channel").map_or(gpt::DEFAULT_EVENTS_PER_CHANNEL, |v| v as u32),
+                )
                 .with_output_pads(pads),
             )
         }
@@ -1675,6 +1694,13 @@ pub fn try_build(
                 get("clock_hz").unwrap_or(adc::DEFAULT_CLOCK_HZ),
                 get("elc_event").map_or(adc::DEFAULT_ELC_EVENT, |v| v as u32),
                 get("vref_mv").map_or(adc::DEFAULT_VREF_MV, |v| v as u16),
+            )
+            .with_adc14(
+                p_cfg
+                    .config
+                    .get("adc14")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
             );
             if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
                 for (k, v) in map {

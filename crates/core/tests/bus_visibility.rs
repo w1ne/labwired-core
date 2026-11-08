@@ -519,6 +519,13 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
          bring-up for this chip family in the edge gate yet",
     ),
     (
+        "ra4m1",
+        BusKind::Spi,
+        "RA RSPI (profile ra_rspi) hands each frame straight to the attached \
+         device and installs no PadLines cell, so no wire waveform is narrated; \
+         frames are proven by the UNO R4 WiFi Arduino matrix L4 cell",
+    ),
+    (
         "imxrt1064",
         BusKind::Uart,
         "no edge bring-up path for i.MX LPUART in this gate yet",
