@@ -266,7 +266,16 @@ impl Samd21Adc {
             return Self::refuse("load from a reserved offset");
         };
         if offset - base + size > width {
-            return Self::refuse("load spanning two registers");
+            // A wide load over several narrow registers reads each byte from
+            // its own register (reserved bytes read 0), as the APB bridge does:
+            // a 32-bit read at 0x00 returns CTRLA..SAMPCTRL.
+            let mut v = 0u32;
+            for i in 0..size {
+                if let Some((b, _)) = Self::layout(offset + i) {
+                    v |= ((self.read_reg(b) >> (8 * (offset + i - b))) & 0xff) << (8 * i);
+                }
+            }
+            return Ok(v);
         }
         let v = self.read_reg(base) >> (8 * (offset - base));
         Ok(if size >= 4 {
@@ -369,6 +378,17 @@ mod tests {
         // 1650 mV * 1/2 * 1024 / 1650 mV = 512.
         let (gn, gd) = a.gain().unwrap();
         assert_eq!(1650 * gn * 1024 / (gd * 1650), 512);
+    }
+
+    #[test]
+    fn a_word_load_over_byte_registers_reads_each_byte() {
+        let mut a = Samd21Adc::new();
+        a.write(0x01, 0x02).unwrap(); // REFCTRL INTVCC0
+        a.write(0x03, 0x05).unwrap(); // SAMPCTRL
+        assert_eq!(a.read_u32(0x00).unwrap(), 0x0500_0200);
+        // CTRLB (16-bit) then two reserved bytes.
+        a.write_u16(0x04, 0x0020).unwrap(); // RESSEL 8-bit
+        assert_eq!(a.read_u32(0x04).unwrap(), 0x0020);
     }
 
     #[test]

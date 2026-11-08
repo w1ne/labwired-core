@@ -64,9 +64,9 @@
   },
   "firmware_hash": "a50a59b4335a7f9e11d679e4f57b691fd6afd47a3dde9eb7aecf375c2f2965ca",
   "config": {
-    "firmware": "/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/arduino-zero/L4_spi_sensor/firmware.elf",
-    "system": "/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/systems/arduino-zero.yaml",
-    "script": "/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/arduino-zero/L4_spi_sensor/test.yaml"
+    "firmware": "/dev/shm/zero-row-out/arduino-zero/L4_spi_sensor/firmware.elf",
+    "system": "/dev/shm/lw-zero-pr/validation/arduino-matrix/systems/arduino-zero.yaml",
+    "script": "/dev/shm/zero-row-out/arduino-zero/L4_spi_sensor/test.yaml"
   },
   "inspect": {
     "peripherals": [
@@ -6956,6 +6956,27 @@
         "artifacts": []
       },
       {
+        "name": "tcc0",
+        "kind": "native",
+        "base": 1107304448,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tcc1",
+        "kind": "native",
+        "base": 1107305472,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tcc2",
+        "kind": "native",
+        "base": 1107306496,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
@@ -6987,13 +7008,6 @@
         "name": "itm",
         "kind": "native",
         "base": 3758096384,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "scs_debug",
-        "kind": "native",
-        "base": 3758157296,
         "registers": [],
         "artifacts": []
       }

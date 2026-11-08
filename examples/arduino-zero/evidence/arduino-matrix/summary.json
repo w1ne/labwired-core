@@ -1,6 +1,6 @@
 {
   "board": "arduino-zero",
-  "generated_at": "2026-11-08T13:45:06+0000",
+  "generated_at": "2026-11-08T14:11:53+0000",
   "platform": "atmelsam@9.0.0 (ArduinoCore-samd)",
   "rows": [
     {
@@ -38,6 +38,12 @@
       "status": "pass",
       "logic_edge_count": null,
       "steps": 109980
+    },
+    {
+      "sketch": "L6_pwm",
+      "status": "pass",
+      "logic_edge_count": 45,
+      "steps": 1551471
     },
     {
       "sketch": "L7_timer",
