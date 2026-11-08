@@ -10370,6 +10370,7 @@ boards:
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/system/builder/arm.rs
+      - crates/core/src/peripherals/sam4s_adc.rs
       - crates/firmware-sam4s-xplained-smoke
       - configs/chips/sam4s16c.yaml
       - configs/systems/sam4s-xplained.yaml

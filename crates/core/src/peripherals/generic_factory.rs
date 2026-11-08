@@ -415,6 +415,7 @@ pub const MODEL_TYPES: &[&str] = &[
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
+    "sam4s_adc",
     // Cortex-M7 L1 cache maintenance window + the SCB cache-ID geometry.
     "cortex_m7_cache",
     // Cortex-M FP extension: FPCCR/FPCAR/FPDSCR/MVFR + FP context stacking.
@@ -1780,6 +1781,14 @@ pub fn try_build(
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
+        // `vref_mv`: the ADVREF level the board ties the reference pin to.
+        "sam4s_adc" => Box::new(crate::peripherals::sam4s_adc::Sam4sAdc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(3300, |v| v as u32),
+        )),
         "cortex_m7_cache" => {
             let kb = |key: &str| -> anyhow::Result<u32> {
                 p_cfg

@@ -123,6 +123,7 @@ pub mod s32k3_siul2;
 pub mod sai;
 pub mod sam;
 pub mod sam4s;
+pub mod sam4s_adc;
 pub mod sam_clock;
 pub mod scb;
 pub mod scs_debug;

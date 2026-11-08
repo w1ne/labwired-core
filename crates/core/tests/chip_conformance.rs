@@ -285,8 +285,9 @@ const CHIPS: &[ChipConf] = &[
     ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench
         // part. Modelled: PMC (sam4s_pmc), the older PIO block (sam4s_pio),
-        // UART0/1 and USART0/1 (sam layout); TC/SPI/TWI/EEFC and the system
-        // controller are declared stubs — see examples/sam4s-xplained/VALIDATION.md.
+        // UART0/1 and USART0/1 (sam layout), the 12-bit ADC (sam4s_adc);
+        // TC/SPI/TWI/EEFC and the system controller are declared stubs —
+        // see examples/sam4s-xplained/VALIDATION.md.
         name: "sam4s16c",
         yaml: "configs/chips/sam4s16c.yaml",
         reset_oracle: None,
