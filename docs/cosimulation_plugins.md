@@ -420,12 +420,15 @@ parameters have no temperature dependence. Signal- or load-dependent supply
 current is not modeled. The hand-calculated macro tests are in
 `crates/core/tests/analog_macros.rs`.
 
-`.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`, `.probe`, `.width`,
-`.temp`, `.nodeset`, `.title` and a whole `.control` … `.endc` block are
-accepted and ignored, so one deck can be handed to this engine and to ngspice
-unchanged. This engine takes its run length, step and outputs from the
-manifest. Any other directive is still a hard error naming the ngspice adapter,
-so a typo cannot quietly drop an element line.
+`.tran`, `.op`, `.print`, `.plot`, `.save`, `.probe`, `.width`, `.nodeset`,
+`.title`, and non-temperature `.options` settings are accepted and ignored by
+the in-core adapter; run length, step and outputs come from the manifest.
+`.temp`, `.options temp=...` / `tnom=...`, and `.control` … `.endc` are rejected:
+the adapter runs at a fixed temperature and cannot execute ngspice scripts. For
+a deck shared with ngspice, keep those directives in the ngspice copy and remove
+them from the `adapter: analog` copy. Other unsupported directives are hard
+errors that point to the ngspice adapter, so a typo cannot quietly drop an
+element line.
 
 ### Independent sources
 
@@ -459,9 +462,8 @@ input at a different element.
 ```
 
 The parentheses are optional, parameters may be separated by spaces or commas,
-and a card may be written after the elements that use it. A parameter omitted
-from a card takes **ngspice's** default, so a deck written out in full means the
-same thing to both engines.
+and a card may be written after the elements that use it. For model behavior
+supported by both engines, an omitted parameter takes **ngspice's** default.
 
 This engine models diode recombination current from `ISR`/`NR` when `ISR` is
 supplied, diode depletion capacitance from `CJO`/`VJ`/`M`/`FC`,
@@ -479,11 +481,15 @@ Ward–Dutton drain/source partitioning and a charge-conserving terminal Jacobia
 It requires `TOX`. Without `TOX`, only explicit overlap and bulk-junction
 capacitances are present. `CHARGEMOD=WARD_DUTTON` is an in-core extension and
 is not a portable ngspice model-card parameter.
-Other device capacitances, temperature coefficients and terminal resistances
-outside the supported parameters below are accepted and ignored. BJT `RB`/`RC`/`RE`
-are modeled as series resistors, while `RBM`/`IRB` make `RB` fall with base
-current; JFET terminal resistances `RD`/`RS` and MOSFET terminal resistances `RD`/`RS` or
-`RSH` times the per-instance `NRD`/`NRS` are modeled as series resistors. An
+For a model used by a device, any model parameter not modeled here is recorded
+by the netlist parser and causes `adapter: analog` to refuse the run with the
+model, parameter and source line. This prevents the adapter from silently
+running an incomplete vendor card; use the ngspice adapter for such models. The
+lower-level `parse_netlist` plus `Solver` API does not apply the adapter guard,
+so callers using it directly should inspect `Circuit::ignored_model_parameters`.
+BJT `RB`/`RC`/`RE` are modeled as series resistors; `RBM`/`IRB` make `RB` fall
+with base current. JFET `RD`/`RS` and MOSFET `RD`/`RS` or `RSH` times the
+per-instance `NRD`/`NRS` are modeled as series resistors. An
 explicitly supplied direct MOSFET `RD` or `RS` takes precedence for that
 terminal, including an explicit zero that disables its sheet-resistance path.
 `NRD` and `NRS` default to one square and may be set to zero to disable the
