@@ -223,18 +223,28 @@ peripherals:
       num_pins: 32
 
   # ── SERCOM 0..5 ────────────────────────────────────────────────────────────
-  # Six identical SERCOM instances on APB-C at a 0x400 stride, each modelled in
-  # USART mode. A SERCOM whose firmware puts it into SPI or I²C mode
-  # (CTRLA.MODE) goes inert rather than answering out of the wrong register
-  # map — those modes are not implemented yet.
+  # Six identical SERCOM instances on APB-C at a 0x400 stride. On silicon each
+  # one becomes a USART, an SPI or an I²C controller by CTRLA.MODE; here each
+  # window is ONE of those models, because a LabWired peripheral has a single
+  # register map. The roles are the Arduino Zero's (ArduinoCore-samd
+  # variants/arduino_zero/variant.h, shared by arduino_mzero and Adafruit's
+  # Feather M0 / Metro M0):
+  #
+  #   SERCOM0 USART  Serial1 (D0/D1 = PA11/PA10)
+  #   SERCOM1 USART  unused by the Zero variant
+  #   SERCOM2 USART  unused by the Zero variant
+  #   SERCOM3 I²C    Wire    (SDA PA22 / SCL PA23, PMUX C)
+  #   SERCOM4 SPI    SPI     (MISO PA12 PAD0, MOSI PB10 PAD2, SCK PB11 PAD3, PMUX D)
+  #   SERCOM5 USART  Serial  (EDBG virtual COM port, PB22/PB23)
+  #
+  # ⚠️ So a sketch that runs SERCOM3 or SERCOM4 as a UART, or SPI/I²C on one of
+  # the USART instances (the MKR variants put Wire on SERCOM2 and SPI on
+  # SERCOM1), does not get it here. A USART instance put into SPI or I²C mode
+  # goes inert rather than answering out of the wrong register map.
   #
   # `size` is the SVD addressBlock (0x40), not the 0x400 APB slot: the gap
   # between instances stays UNMAPPED on purpose, so a driver reaching past the
   # register block is reported instead of being quietly absorbed.
-  #
-  # Which SERCOM is the console is a BOARD fact, not a chip fact — the Arduino
-  # Zero's `Serial1` is SERCOM0 while its EDBG virtual COM port is SERCOM5.
-  # The system manifest picks; this file only declares the silicon.
   - id: "sercom0"
     type: "sam_sercom_usart"
     base_address: 0x42000800
@@ -250,16 +260,32 @@ peripherals:
     base_address: 0x42001000
     size: "64B"
     irq: 11
+  # SERCOM3 as the I²C master slice (crates/core/src/peripherals/sam/
+  # sercom_i2cm.rs, SAMD21 instance table): 7-bit addressing, writes, reads,
+  # repeated start, STOP and the MB/SB/RXNACK handshake, gated by
+  # PM.APBCMASK.SERCOM3 and by PAD0/PAD1 being muxed to the SERCOM. The model
+  # reports its own line (IRQ 12). Operations complete on the next bus tick:
+  # the SAMD21 core clock (GCLK.CLKCTRL is indirect) is not resolved, so no SCL
+  # timing and no BAUD pacing.
   - id: "sercom3"
-    type: "sam_sercom_usart"
+    type: "samd21_sercom_i2cm"
     base_address: 0x42001400
     size: "64B"
-    irq: 12
+  # SERCOM4 as the SPI master (sercom_spi.rs): 8-bit, MODE=3, transfers only
+  # while DOPO = 1 and SCK (PB11) / MOSI (PB10) are muxed to function D. No IRQ
+  # is declared: that model reports DRE/TXC/RXC/ERROR on four consecutive
+  # lines, which is the SAMD51 layout; a SAMD21 SERCOM has one (IRQ 13), so
+  # interrupt-driven SPI is not claimed. The Arduino SPI library polls.
   - id: "sercom4"
-    type: "sam_sercom_usart"
+    type: "sam_sercom_spi"
     base_address: 0x42001800
     size: "64B"
-    irq: 13
+    config:
+      port_base: 0x41004480
+      sck_bit: 11
+      mosi_bit: 10
+      pad_mux: 3
+      dopo: 1
   - id: "sercom5"
     type: "sam_sercom_usart"
     base_address: 0x42001C00
