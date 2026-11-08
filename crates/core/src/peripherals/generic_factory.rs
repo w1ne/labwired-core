@@ -438,6 +438,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "eoss3_adc",
     // MAX32650/MAX32652 10-bit ADC (msdk adc_regs.h, Renode MAX32650_ADC.cs).
     "max32650_adc",
+    // Renesas DA1459x GPADC (Renode RenesasDA14_GPADC.cs, SDK10 adc_sample).
+    "renesasda14_gpadc",
     // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
     // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
@@ -1913,6 +1915,9 @@ pub fn try_build(
                 .and_then(|v| v.as_u64())
                 .map_or(1220, |v| v as u32),
         )),
+        "renesasda14_gpadc" => {
+            Box::new(crate::peripherals::renesas_da14_gpadc::RenesasDa14Gpadc::new())
+        }
         "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
         "apollo4_adc" => Box::new(crate::peripherals::apollo4_adc::Apollo4Adc::new()),
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),

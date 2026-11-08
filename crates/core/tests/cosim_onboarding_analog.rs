@@ -45,6 +45,7 @@ const CONVERTED: &[&str] = &[
     "nucleo_h753zi",
     "nucleo_wba52cg",
     "ramn",
+    "renesas-da14592",
     "sam4s",
     "sam4s16c",
     "sam4s8b",
@@ -153,6 +154,11 @@ enum Family {
     /// 1.22 V bandgap, `INTR.DONE_IF` is write 1 to clear (msdk adc_reva.c,
     /// Renode MAX32650_ADC.cs).
     Max32650,
+    /// Renesas DA1459x GPADC: `GP_ADC_SEL.SEL_P` picks the mux input,
+    /// `GP_ADC_START` converts and self-clears, 10 bits MSB-aligned in the
+    /// 16-bit `RESULT` against 0.9 V x (`GP_ADC_ATTN` + 1) (Renode
+    /// RenesasDA14_GPADC.cs, SDK10 hw_gpadc_adc_measure/get_value).
+    Da14Gpadc,
 }
 
 struct Converter {
@@ -184,6 +190,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Eoss3
         } else if kind == "max32650_adc" {
             Family::Max32650
+        } else if kind == "renesasda14_gpadc" {
+            Family::Da14Gpadc
         } else {
             match p.config.get("profile").and_then(|v| v.as_str()) {
                 Some("stm32f4") => Family::Stm32F4,
@@ -232,6 +240,8 @@ impl Converter {
             Family::Eoss3 => mv.min(1400) * 4095 / 1400,
             // 10-bit against 1.22 V, truncated, clamped (Renode ToADCRawValue).
             Family::Max32650 => mv.min(1220) * 1023 / 1220,
+            // 10-bit with the attenuator at 3.6 V full scale, truncated.
+            Family::Da14Gpadc => mv.min(3600) * 1023 / 3600,
         }
     }
 
@@ -250,7 +260,8 @@ impl Converter {
     fn routed_channels(&self) -> [u8; 2] {
         match self.family {
             // AIN0 and AIN1: the two pads with a divide-by-5 channel.
-            Family::Eoss3 | Family::Max32650 => [0, 1],
+            // DA1459x: SEL_P 0/1 are pads P1_0/P1_1.
+            Family::Eoss3 | Family::Max32650 | Family::Da14Gpadc => [0, 1],
             _ => [NTC_CHANNEL, DIODE_CHANNEL],
         }
     }
@@ -259,6 +270,19 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Da14Gpadc => {
+                // hw_gpadc_configure: single-ended, GP_ADC_ATTN = 3 (up to
+                // 3.6 V), CONV_NRS = 4 (16 samples, the SDK minimum for
+                // the die sensor), then GP_ADC_EN.
+                const SE: u32 = 1 << 6;
+                let ctrl = self.base;
+                let ctrl2 = self.base + 0x04;
+                bus.write_u32(ctrl, SE).expect("GP_ADC_SE");
+                let value = bus.read_u32(ctrl2).unwrap() & !(3 | (7 << 6));
+                bus.write_u32(ctrl2, value | 3 | (4 << 6))
+                    .expect("GP_ADC_ATTN/CONV_NRS");
+                bus.write_u32(ctrl, SE | 1).expect("GP_ADC_EN");
+            }
             Family::Max32650 => {
                 // msdk MXC_ADC_RevA_Init: clear REF_READY_IF, CTRL.PWR, then
                 // CTRL.REFBUF_PWR, spin on REF_READY_IF, clear it.
@@ -509,6 +533,17 @@ impl Converter {
                     self.id
                 );
                 [self.convert(bus, AIN0_DIV5), self.convert(bus, 1)]
+            }
+            Family::Da14Gpadc => {
+                // SEL_P 2 is pad P1_2, unrouted, so it converts to 0.
+                assert_eq!(
+                    self.convert(bus, 2),
+                    0,
+                    "{}: unrouted P1_2 converts to zero",
+                    self.id
+                );
+                self.routed_channels()
+                    .map(|channel| self.convert(bus, channel))
             }
             Family::Cc2538 => {
                 // One extra conversion per channel; EOC rises at the ADCCON3
@@ -1238,6 +1273,35 @@ impl Converter {
                 // CTRL.DATA_ALIGN = 0: LSB justified.
                 bus.read_u32(self.base + 0x08).expect("DATA") & 0xFFFF
             }
+            Family::Da14Gpadc => {
+                // SDK hw_gpadc_set_positive, hw_gpadc_clear_interrupt,
+                // hw_gpadc_adc_measure (START, spin until it reads 0),
+                // hw_gpadc_get_value (RESULT >> (6 - CONV_NRS)).
+                const START: u32 = 1 << 1;
+                const INT: u32 = 1 << 4;
+                let ctrl = self.base;
+                bus.write_u32(self.base + 0x0C, u32::from(channel) << 4)
+                    .expect("GP_ADC_SEL_P");
+                bus.write_u32(self.base + 0x1C, 1).expect("GP_ADC_CLR_INT");
+                assert_eq!(
+                    bus.read_u32(ctrl).unwrap() & INT,
+                    0,
+                    "{}: CLEAR_INT clears GP_ADC_INT",
+                    self.id
+                );
+                let value = bus.read_u32(ctrl).unwrap();
+                bus.write_u32(ctrl, value | START).expect("GP_ADC_START");
+                let value = bus.read_u32(ctrl).unwrap();
+                assert_eq!(value & START, 0, "{}: GP_ADC_START clears", self.id);
+                assert_ne!(value & INT, 0, "{}: the conversion sets INT", self.id);
+                let raw = bus.read_u32(self.base + 0x20).expect("RESULT") & 0xFFFF;
+                let conv_nrs = (bus.read_u32(self.base + 0x04).unwrap() >> 6) & 7;
+                assert_eq!(conv_nrs, 4, "{}: 16 samples", self.id);
+                // 10 + 4 bits; the noiseless samples carry no extra bits.
+                let value = raw >> (6 - conv_nrs);
+                assert_eq!(value & 0xF, 0, "{}: noiseless oversampling", self.id);
+                value >> conv_nrs
+            }
             Family::Saadc { .. } => unreachable!("SAADC converts as a scan"),
         }
     }
@@ -1443,7 +1507,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 44,
+        instances, 45,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -1451,7 +1515,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 179,
+        without_adc, 178,
         "onboarding profiles that declare no modelled ADC"
     );
 }
