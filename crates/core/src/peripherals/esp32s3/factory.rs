@@ -100,6 +100,9 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
             ledc::ESP32S2_LEDC_INTR_SOURCE_ID,
         ))),
         "esp32s3_sens" => Box::new(sens::Esp32s3Sens::new()),
+        // Same SAR oneshot fields at 0x00..0x58; the S2's own tail to 0x148.
+        "esp32s2_sens" => Box::new(sens::Esp32s3Sens::new_esp32s2()),
+        "esp32s2_apb_saradc" => Box::new(apb_saradc_s2::Esp32s2ApbSarAdc::new()),
         "esp32s3_extmem" => Box::new(extmem::Esp32s3Extmem::new()),
         "esp32s3_system" => Box::new(system::Esp32s3System::new()),
         "esp32s3_system_stub" => {
@@ -191,6 +194,8 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32s3_rng",
     "esp32s3_ledc",
     "esp32s3_sens",
+    "esp32s2_sens",
+    "esp32s2_apb_saradc",
     "esp32s3_extmem",
     "esp32s3_system",
     "esp32s3_system_stub",

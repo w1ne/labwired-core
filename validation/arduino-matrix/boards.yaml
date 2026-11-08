@@ -71,11 +71,7 @@ boards:
     pwm_watch: "gpio:2"
     pwm_min_edges: 4
     family: esp32
-    notes: "Arduino-ESP32-S2 on the genuine S2 mask ROM; L0/L1/L7 (UART0, FreeRTOS tick, 80 MHz SYSTIMER), L2 (RMT WS2812 waveform on GPIO18), L3 (I2C0 Wire reads INA219 CONFIG/BUS), L4 (FSPI/SPI2 reads the MAX31855 frame), L6 (LEDC PWM on GPIO2), L8 (TWAI self-RX at 0x3F42B000)"
-    sketches_skip: [L5_adc]
-    sketches_skip_reason:
-      # Each measured 2026-11-08 on this profile.
-      L5_adc: "no S2 SAR ADC model: analogRead never completes"
+    notes: "Arduino-ESP32-S2 on the genuine S2 mask ROM; L0/L1/L7 (UART0, FreeRTOS tick, 80 MHz SYSTIMER), L2 (RMT WS2812 waveform on GPIO18), L3 (I2C0 Wire reads INA219 CONFIG/BUS), L4 (FSPI/SPI2 reads the MAX31855 frame), L5 (SENS oneshot: analogRead(A0) = 2048), L6 (LEDC PWM on GPIO2), L8 (TWAI self-RX at 0x3F42B000)"
 
   - id: nrf52832
     chip: nrf52832

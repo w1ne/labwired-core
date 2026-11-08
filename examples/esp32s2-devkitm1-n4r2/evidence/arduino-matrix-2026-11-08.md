@@ -16,7 +16,7 @@ that run predates the narrowed descriptor, re-measured cell by cell after it):
 | L2 blink | **pass** | WS2812 waveform on the GPIO18 pad via RMT ch0 (see below) |
 | L3 I2C INA219 | **pass** | Wire reads INA219 CONFIG 0x399F and BUS 0x19CA via I2C0 (see below) |
 | L4 SPI MAX31855 | **pass** | `SPI.transfer` reads the MAX31855 frame 0x01901600 via GP-SPI2 (see below) |
-| L5 ADC | skip | no S2 SAR ADC model |
+| L5 ADC | **pass** | `analogRead(A0)` converts on SENS: exact 2048 at 12 bits (see below) |
 | L6 PWM | **pass** | 1 kHz, 50 % PWM on the GPIO2 pad via LEDC LS ch6 (see below) |
 | L7 micros | **pass** | 80 MHz SYSTIMER (`SYSTIMER_LL_TICKS_PER_US` = 80) |
 | L8 CAN | **pass** | TWAI self-reception returns ID 0x123 / 0xA5 (register-level, no bus; see below) |
@@ -174,6 +174,61 @@ Not modelled: a CAN bus. There are no peers, no arbitration, no ACK, and no
 bit timing. `tx_req` completes at once, and only self-reception produces an
 RX frame. The sketch is register-level, not the ESP-IDF `twai` driver: the
 driver's alert/ISR path through source 47 is not exercised.
+
+## L5 — SENS oneshot ADC (added later the same day)
+
+Before this change, linking `analogRead()` stopped the S2 before `setup()`.
+IDF's boot-time `adc_hw_calibration` constructor busy-polls
+`SENS_SAR_MEAS1_CTRL2.MEAS1_DONE_SAR` (`read_cal_channel`, pc 0x40097287),
+and SENS was part of a zero-answering stub page. On the S2 the oneshot driver
+converts on this RTC-domain controller, not on APB_SARADC.
+
+- **SENS (`esp32s2_sens`, 0x3F40_8800).** The S2 block shares 0x000..0x058
+  with the S3 field for field: START bit 17, DONE bit 16, DATA [15:0],
+  `SAR1_EN_PAD` [30:19], and `SLAVE_ADDR1.MEAS_STATUS` [29:22]. So it is the
+  existing `Esp32s3Sens` with the S2's own register map. Reset values and
+  write masks come from the ESP32-S2 SVD shipped with arduino-esp32. The
+  touch/DAC/COCPU tail differs, and `SARDATE` (0x01906140) is at 0x148. The
+  S2's RTC SAR is 13-bit (`SOC_ADC_RTC_MAX_BITWIDTH`), so its codes are too:
+  mid-scale 0x1000 with nothing injected, and `mV * 8191 / 3300` on an
+  injected channel. The generic `SystemBus::set_input` analog path reaches
+  it unchanged.
+- **APB_SARADC (`esp32s2_apb_saradc`, 0x3F44_0000).** Once SENS answered,
+  the next fault was `adc_hal_arbiter_config` writing `ARB_CTRL` (0x38). The
+  S2 map diverges from the S3's after 0x3C, so this is a register file of
+  its own, seeded from the SVD. The oneshot path only configures it.
+- The RTC page is now split: RTC_CNTL+RTCIO stub (2 KiB), SENS (1 KiB),
+  RTC_I2C stub (1 KiB).
+
+**The sketch was reading the wrong pin.** arduino-esp32's `A0` is a
+`static const uint8_t`, not a macro, so the sketch's `#if defined(A0)` was
+false and it read GPIO0. GPIO0 is not an ADC pin on the S2:
+`adc_oneshot_io_to_channel` fails and `analogRead` returns 0 without
+converting (traced). `0 == 0` satisfied the old "two equal samples" check.
+So with only the model change, the cell "passed" with `LW_L5_VAL 0 0`. The
+first gate test caught this. The sketch's `ARDUINO_ESP32S2_DEV` branch now
+reads `A0` (GPIO1 = ADC1_CH0) and calls `analogReadResolution(12)` (the
+core's `mapResolution` shifts 13 → 12). It accepts only the exact twin code
+2048. The other ESP32 rows probably have the same `defined(A0)` miss. GPIO0
+is ADC1_CH0 on the C3, but not on the S3. Not checked or changed here.
+
+Re-run of the row
+([`arduino-matrix-esp32s2-l5-adc-2026-11-08.log`](arduino-matrix-esp32s2-l5-adc-2026-11-08.log)):
+all nine cells pass (9 pass / 0 skip / 0 fail). UART0 prints `LW_L5_BOOT`,
+then `LW_L5_OK`. The matrix run stops at the marker, so the
+`LW_L5_VAL 2048 2048` line that follows is checked by the gate test below.
+
+Gate test: `cargo test -p labwired-core --test esp32s2_arduino_adc`. With
+nothing injected it expects `LW_L5_OK` and `LW_L5_VAL 2048 2048`. With 1000 mV
+injected on ADC1_CH0 it expects `LW_L5_VAL 1241 1241` (2482 at 13 bits, then
+shifted). That is not the 1240 a 12-bit model would give, and the exact-2048
+oracle then fails, as it should.
+
+Not modelled: the analog cells (attenuation, the calibration ground short
+via regi2c, noise), ADC2 injection (fixed mid-scale), digital-controller
+conversions and DMA (continuous mode), touch, the temperature sensor, the
+ULP, and the APB_ADC interrupt. eFuse holds no ADC calibration, so
+`analogReadMilliVolts` uses IDF's no-eFuse fallback and was not checked.
 
 ## Vendor status (live, 2026-11-08)
 

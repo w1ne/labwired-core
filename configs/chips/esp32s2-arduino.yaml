@@ -182,11 +182,30 @@ peripherals:
     type: "esp32s3_system_stub"
     base_address: 0x3F406000
     size: "4KB"
-  # RTC_CNTL, RTCIO, SENS and RTC_I2C share this 4 KiB page.
+  # RTC_CNTL (+0x000) and RTCIO (+0x400) share the first half of this page;
+  # SENS (+0x800) and RTC_I2C (+0xC00) are their own windows below.
   - id: "rtc_cntl"
     type: "esp32s3_system_stub"
     base_address: 0x3F408000
-    size: "4KB"
+    size: "2KB"
+  # SENS: the RTC-domain SAR controller IDF's oneshot ADC driver uses on the
+  # S2. Boot's adc_hw_calibration constructor polls MEAS1_DONE_SAR here, and
+  # analogRead() reads MEAS1_DATA_SAR. Oneshot completes at once with a fixed
+  # 0x800 (or the injected channel input). No analog cells, touch, or ULP.
+  - id: "sens"
+    type: "esp32s2_sens"
+    base_address: 0x3F408800
+    size: "1KB"
+  - id: "rtc_i2c"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F408C00
+    size: "1KB"
+  # APB_SARADC (digital controller): register file only. The S2 oneshot
+  # path converts in SENS and just configures CTRL/ARB_CTRL here.
+  - id: "apb_saradc"
+    type: "esp32s2_apb_saradc"
+    base_address: 0x3F440000
+    size: "1KB"
   - id: "io_mux"
     type: "esp32s3_system_stub"
     base_address: 0x3F409000

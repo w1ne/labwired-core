@@ -15,7 +15,13 @@
 #include <Arduino.h>
 
 #ifndef LW_ADC_PIN
-#  if defined(A0)
+#  if defined(ARDUINO_ESP32S2_DEV)
+// arduino-esp32's A0 is a `static const uint8_t`, not a macro, so the
+// `defined(A0)` test below misses it and would read GPIO0 (not an ADC pin on
+// the S2: analogRead returns 0 without converting). A0 = GPIO1 = ADC1_CH0.
+#    define LW_ADC_PIN A0
+#    define LW_ADC_RES_BITS 12
+#  elif defined(A0)
 #    define LW_ADC_PIN A0
 #  else
 #    define LW_ADC_PIN 0
@@ -49,6 +55,11 @@ static bool samples_ok(int v0, int v1) {
   // avr.rs ADC mid-scale 512 (10-bit). Exact.
   return v0 == 512 && v1 == 512;
 
+#elif defined(ARDUINO_ESP32S2_DEV)
+  // esp32s2_sens mid-scale 0x1000 (13-bit) -> 2048 at 12 bits. Exact; a 0
+  // here means analogRead never converted.
+  return v0 == 2048 && v1 == 2048;
+
 #elif defined(ARDUINO_ARCH_RP2040)
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).
   return v0 == 0 && v1 == 0;
@@ -66,6 +77,11 @@ static bool samples_ok(int v0, int v1) {
 void setup() {
   logBegin();
   logLine("LW_L5_BOOT");
+#ifdef LW_ADC_RES_BITS
+  // The S2's RTC SAR returns 13-bit codes; ask the core for 12 like portable
+  // sketches do (mapResolution shifts 13 -> 12).
+  analogReadResolution(LW_ADC_RES_BITS);
+#endif
 
   (void)analogRead(LW_ADC_PIN);
   int v0 = analogRead(LW_ADC_PIN);
