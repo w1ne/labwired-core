@@ -229,6 +229,26 @@
         "gap": "no I2C window is declared on configs/chips/esp32c6.yaml; the I2C0 window is deliberately unmapped at L1. The C3's I2C-matrix signal indices do not transfer (I2CEXT0_SCL is 45 on the C6 vs 53 on the C3)."
       }
     },
+    "esp32s2-arduino": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/esp32s2_arduino_boot.rs",
+        "test": "stock_arduino_l0_prints_over_uart0",
+        "signal": "stock Arduino-ESP32 L0 (tests/fixtures/esp32s2-arduino-l0.elf) runs the genuine S2 mask ROM, ESP-IDF startup and FreeRTOS, and Serial.println writes 'LW_L0_OK' through UART_FIFO_AHB_REG (0x6000_0000, the PeriBus2 view of UART0 at 0x3F40_0000); the test asserts the console sink receives it, and a negative control with an erased partition table asserts it never does",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test esp32s2_arduino_boot"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "GP-SPI2/3 (0x3F42_4000/0x3F42_5000) are not modelled; the matrix L4 cell faults at 0x3F42_4030.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "I2C0/1 (0x3F41_3000/0x3F42_7000) are not modelled; the matrix L3 cell prints LW_L3_FAIL nack.",
+        "lane": "none"
+      }
+    },
     "esp32s3": {
       "in_boards": true,
       "uart": {

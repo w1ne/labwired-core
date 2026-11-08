@@ -1662,24 +1662,65 @@ pub(crate) fn run_test(
                     );
                     return ExitCode::from(EXIT_CONFIG_ERROR);
                 }
-                let mut machine = labwired_core::Machine::new(cpu, bus);
-                if let Err(e) = machine.load_firmware(&program) {
-                    return handle_load_error(
-                        &args,
-                        &metrics,
-                        &resolved_limits,
+                // An ESP-IDF / Arduino app ships its partition table beside
+                // the ELF; a freestanding smoke ELF does not. The app needs
+                // the S2 external flash (MMU-translated cache windows + SPI1)
+                // and a bootloader-equivalent layout; the smoke keeps the
+                // descriptor's identity flash window.
+                let partitions = resolve_esp_partitions_bin(std::path::Path::new(&firmware_path))
+                    .and_then(|p| std::fs::read(p).ok());
+                let mut machine = if let Some(table) = partitions {
+                    let flash_size = resolved_system
+                        .as_ref()
+                        .and_then(|s| s.chip().ok())
+                        .map(|c| c.flash.size as usize)
+                        .unwrap_or(4 * 1024 * 1024);
+                    let flash =
+                        labwired_core::system::xtensa::attach_esp32s2_flash(&mut bus, flash_size);
+                    if let Err(e) = labwired_core::boot::esp32s2::fast_boot(
                         &firmware_bytes,
-                        &uart_tx,
-                        &rtt_tx,
-                        &itm_tx,
-                        &machine.cpu,
-                        &firmware_path,
-                        system_path.as_ref(),
-                        e,
+                        &mut bus,
+                        &mut cpu,
+                        &flash,
+                        Some(&table),
+                    ) {
+                        let msg = format!("ESP32-S2 fast_boot: {e:#}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                    eprintln!(
+                        "labwired-cli test: ESP32-S2 app fast-boot (partition table + MMU-mapped app @ flash 0x10000)"
                     );
-                }
-                machine.cpu.set_pc(program.entry_point as u32);
-                machine.cpu.set_sp(0x3FFF_FFF0);
+                    labwired_core::Machine::new(cpu, bus)
+                } else {
+                    let mut machine = labwired_core::Machine::new(cpu, bus);
+                    if let Err(e) = machine.load_firmware(&program) {
+                        return handle_load_error(
+                            &args,
+                            &metrics,
+                            &resolved_limits,
+                            &firmware_bytes,
+                            &uart_tx,
+                            &rtt_tx,
+                            &itm_tx,
+                            &machine.cpu,
+                            &firmware_path,
+                            system_path.as_ref(),
+                            e,
+                        );
+                    }
+                    machine.cpu.set_pc(program.entry_point as u32);
+                    machine.cpu.set_sp(0x3FFF_FFF0);
+                    machine
+                };
                 crate::log_ts::set_hz(machine.bus.cpu_hz);
                 apply_run_speed_opts(&mut machine);
                 machine.add_observer(metrics.clone());

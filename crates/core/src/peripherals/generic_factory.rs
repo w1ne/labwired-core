@@ -287,7 +287,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32s3_usb_serial_jtag",
     "esp32s3_wifi_mac",
     // ESP32-S2's narrow GPIO/UART smoke models share the corresponding S3 heads.
+    "esp32s2_crosscore_ipi",
     "esp32s2_gpio",
+    "esp32s2_intmatrix",
+    "esp32s2_rng",
+    "esp32s2_systimer",
     "esp32s2_uart",
     // nRF52 behavioral models the factory builds but this table never named.
     // Alias spellings are deliberately NOT here -- `canonical_peripheral_type`

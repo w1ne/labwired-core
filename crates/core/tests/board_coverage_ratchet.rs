@@ -709,6 +709,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // debugprintfdemo and dual_usart with remap-gated USART pads; no
         // Playground catalog board or physical-silicon differential.
         "ch32v006f8u7-ch32fun-smoke",
+        // ESP32-S2 (Xtensa LX7) on its genuine mask ROM: stock Arduino-ESP32
+        // L0/L1/L7 pass in the Arduino matrix (`esp32s2` row) and
+        // tests/esp32s2_arduino_boot.rs; no Playground catalog board or
+        // physical-silicon differential.
+        "esp32s2-arduino",
         // CH32V307VCT6 on the WCH CH32V307V-EVT: the QingKe V4F core (RV32F
         // checked against a host FPU oracle) runs ch32fun's V30x blink and
         // debugprintfdemo plus an FPU self-test; no Playground catalog board

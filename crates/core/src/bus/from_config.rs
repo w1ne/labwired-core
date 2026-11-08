@@ -63,6 +63,9 @@ fn default_region_image_path(env: &str) -> Option<PathBuf> {
     let rel = match env {
         "LABWIRED_ESP32C3_ROM" => "roms/esp32c3/esp32c3_rom.bin",
         "LABWIRED_ESP32C3_ROM_DATA" => "roms/esp32c3/esp32c3_drom.bin",
+        "LABWIRED_ESP32S2_ROM" => "roms/esp32s2/esp32s2_rom.bin",
+        "LABWIRED_ESP32S2_DROM" => "roms/esp32s2/esp32s2_drom.bin",
+        "LABWIRED_ESP32S2_ROM_DATA" => "roms/esp32s2/esp32s2_rom_data.bin",
         // Same image as `embedded_region_image`; kept so an operator can
         // still point the env var at a replacement file. Bare-metal ELFs
         // that need the Cortex-M flash boot alias at 0 (PIO onboarding) set

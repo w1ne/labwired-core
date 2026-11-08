@@ -43,6 +43,7 @@ jobs:
         board:
           - esp32
           - esp32c3
+          - esp32s2
           - esp32s3
           - nrf52832
           - nrf52840
@@ -122,6 +123,8 @@ jobs:
             stm32*)      platform=ststm32@19.7.1 ;;
             nrf*)        platform=nordicnrf52 ;;
             rp2040)      platform=raspberrypi ;;
+            # The S2 row was measured on espressif32 8.0.0 (arduino-esp32 3.3).
+            esp32s2)     platform=espressif32@8.0.0 ;;
             esp32*)      platform=espressif32@7.0.1 ;;
             atmega328p)  platform=atmelavr@5.3.0 ;;
             # Not in the registry; same pin as boards.yaml.

@@ -93,6 +93,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32s3_ds" => Box::new(ds::Esp32s3Ds::new(src(0))),
         "esp32s3_sha" => Box::new(sha::Esp32s3Sha::new()),
         "esp32s3_rng" => Box::new(rng::Esp32s3Rng::new()),
+        "esp32s2_rng" => Box::new(rng::Esp32s3Rng::new_esp32s2()),
         "esp32s3_ledc" => Box::new(ledc::Esp32s3Ledc::new()),
         "esp32s3_sens" => Box::new(sens::Esp32s3Sens::new()),
         "esp32s3_extmem" => Box::new(extmem::Esp32s3Extmem::new()),
@@ -102,6 +103,10 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         }
         "esp32s3_core1_control" => Box::new(core1_control::Esp32s3Core1Control::new()),
         "esp32s3_crosscore_ipi" => Box::new(crosscore_ipi::Esp32s3CrossCoreIpi::new()),
+        "esp32s2_crosscore_ipi" => Box::new(crosscore_ipi::Esp32s3CrossCoreIpi::new_esp32s2()),
+        // The S3 interrupt-matrix model with the S2 map/status layout; the bus
+        // routes through any instance of it (`irq_fabric.esp32s3`).
+        "esp32s2_intmatrix" => Box::new(intmatrix::Esp32s3IntMatrix::new_esp32s2()),
         // ESP32-S2 and S3 share the GPIO matrix register head exercised by
         // the S2 DevKitM smoke (OUT/ENABLE/W1TS/W1TC and FUNCn_OUT_SEL_CFG).
         // The S2 board profile limits its claim to those GPIO output paths;
@@ -132,6 +137,16 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
                 57, // ETS_SYSTIMER_TARGET0_INTR_SOURCE
             ))
         }
+        // ESP32-S2 SYSTIMER: its own register map over the shared engine
+        // (`Systimer::new_esp32s2`), 80 MHz counter, sources 71/72/73.
+        "esp32s2_systimer" => {
+            let cpu_clock_hz = p_cfg
+                .config
+                .get("cpu_clock_hz")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(240_000_000) as u32;
+            Box::new(systimer::Systimer::new_esp32s2(cpu_clock_hz))
+        }
         // I2C0 default source 42, I2C1 = 43 (ETS_I2C_EXT{0,1}_INTR_SOURCE). The
         // built controller has no I²C slaves attached; board-specific slaves
         // (e.g. TMP102) are attached by the caller after construction.
@@ -146,6 +161,10 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
 pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32s2_uart",
     "esp32s2_gpio",
+    "esp32s2_systimer",
+    "esp32s2_rng",
+    "esp32s2_crosscore_ipi",
+    "esp32s2_intmatrix",
     "esp32s3_uart",
     "esp32s3_timer_group",
     "esp32s3_gdma",
