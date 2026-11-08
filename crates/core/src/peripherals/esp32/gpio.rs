@@ -1605,6 +1605,14 @@ impl Peripheral for Esp32Gpio {
         Some(self)
     }
 
+    fn pads_for_output_signal(&self, signal: u32) -> Vec<u8> {
+        Esp32Gpio::pads_for_output_signal(self, signal)
+    }
+
+    fn drive_matrix_pad(&mut self, pin: u8, level: bool, cycle: u64) -> bool {
+        self.drive_pad_output_at(pin, level, cycle)
+    }
+
     fn gpio_routing(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {
         use crate::peripherals::gpio::{GpioMode, GpioRouting};
         if pin >= PAD_COUNT {

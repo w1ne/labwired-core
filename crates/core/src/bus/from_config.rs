@@ -1469,6 +1469,8 @@ impl SystemBus {
         bus.wire_esp32_uart_pads();
         // …and its LEDC outputs (signals 71..86).
         bus.wire_esp32_ledc_pads();
+        // Matrix output wires published through capabilities (S2 RMT).
+        bus.wire_matrix_output_lines();
         // RP2040: bind I²C wires to the pads IO_BANK0's FUNCSEL can route them to.
         bus.wire_rp2040_i2c_pads();
         // Same for the RP2040 UARTs' TX/RX, so serial output is a waveform on

@@ -13,7 +13,7 @@ that run predates the narrowed descriptor, re-measured cell by cell after it):
 |---|---|---|
 | L0 serial boot | **pass** | `LW_L0_OK` at 606k steps |
 | L1 serial loop | **pass** | |
-| L2 blink | skip | LED_BUILTIN = RGB pixel on GPIO18 via RMT; no S2 RMT model (fault @ 0x3F416080) |
+| L2 blink | **pass** | WS2812 waveform on the GPIO18 pad via RMT ch0 (see below) |
 | L3 I2C INA219 | skip | no S2 I2C model: `LW_L3_FAIL nack` |
 | L4 SPI MAX31855 | skip | no S2 GP-SPI model (fault @ 0x3F424030) |
 | L5 ADC | skip | no S2 SAR ADC model |
@@ -23,6 +23,33 @@ that run predates the narrowed descriptor, re-measured cell by cell after it):
 
 Gate test: `cargo test -p labwired-core --test esp32s2_arduino_boot`, with
 a negative control (erased partition table → no marker).
+
+## L2 — RMT (added later the same day)
+
+`LED_BUILTIN` on this board is the WS2812 on GPIO18, so `digitalWrite`
+becomes `rgbLedWrite`: ESP-IDF's RMT TX driver writes 24 symbols into
+RMTMEM, starts channel 0 and waits for the TX_END interrupt. The S2 RMT is
+the classic ESP32 design with 4 channels and moved offsets
+(`RmtLayout::ESP32S2`, type `esp32s2_rmt`); its channel outputs are a wire
+the GPIO matrix carries to whichever pad `FUNCn_OUT_SEL` selects (signal 87).
+
+Re-run of the row with `--watch-gpio gpio:18`
+([`arduino-matrix-esp32s2-l2-rmt-2026-11-08.log`](arduino-matrix-esp32s2-l2-rmt-2026-11-08.log)):
+L0, L1, L2, L7 pass. The L2 oracle needs `LW_L2_OK`, ≥ 48 pad edges on
+GPIO18 and ≥ 1 RMT TX_START. The run had 96 edges and 2 TX_STARTs
+([`result.json`](arduino-matrix-esp32s2-l2-result-2026-11-08.json.gz), gzip).
+Decoded ([`…-ws2812-decode-2026-11-08.txt`](arduino-matrix-esp32s2-l2-ws2812-decode-2026-11-08.txt)):
+
+| frame | GRB | meaning | T0H / T1H / bit period |
+|---|---|---|---|
+| 0 | `0x404040` | `digitalWrite(HIGH)` = `rgbLedWrite(64, 64, 64)` (`RGB_BRIGHTNESS`) | 400 / 800 / 1200 ns |
+| 1 | `0x000000` | `digitalWrite(LOW)` = off | 400 / — / 1200 ns |
+
+Gate test: `cargo test -p labwired-core --test esp32s2_arduino_rmt` decodes
+the same two frames from the logic analyzer on the pad. Without the bus pass
+that binds the RMT wire to the GPIO matrix, it sees 0 edges and fails
+(mutation-checked). Before this change the cell faulted at `0x3F416080`
+(RMT_APB_CONF). RMT RX, carrier, continuous and loop modes are not modelled.
 
 ## Vendor status (live, 2026-11-08)
 

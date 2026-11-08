@@ -5,12 +5,13 @@
 # genuine ESP32-S2 mask ROM (crates/core/roms/esp32s2). Modelled: the S2
 # memory map, external flash behind the MMU-translated cache windows and SPI1
 # (crates/core/src/system/xtensa/esp32s2.rs), UART0, SYSTIMER, TIMG0/1, the
-# interrupt matrix + FROM_CPU doorbells, the WDEV RNG and the EXTMEM cache
-# controller. Blocks marked "register file" below store what is written and
-# read it back; they carry no behaviour, and nothing that depends on them
-# (clock tree, RF, eFuse values, IO_MUX pad function) is claimed.
+# interrupt matrix + FROM_CPU doorbells, the WDEV RNG, the EXTMEM cache
+# controller and RMT transmit (symbols played out through the GPIO matrix).
+# Blocks marked "register file" below store what is written and read it
+# back; they carry no behaviour, and nothing that depends on them (clock tree,
+# RF, eFuse values, IO_MUX pad function) is claimed.
 #
-# Not modelled: Wi-Fi, USB OTG, PSRAM, I2C, GP-SPI, RMT, LEDC, ADC, TWAI, touch.
+# Not modelled: Wi-Fi, USB OTG, PSRAM, I2C, GP-SPI, RMT RX, LEDC, ADC, TWAI, touch.
 # The narrow freestanding DevKitM-1 smoke profile is configs/chips/esp32s2.yaml.
 #
 # Addresses: ESP-IDF components/soc/esp32s2/include/soc/reg_base.h and
@@ -67,6 +68,11 @@ memory_regions:
     size: "768KB"
     alias_of: 0x3F400000
 
+# Only the pad this profile's tests exercise: the WS2812 data line of the
+# Saola-1 / DevKitM-1 RGB pixel (RMT ch0 through the GPIO matrix).
+pins:
+  GPIO18: { gpio: "gpio", bit: 18 }
+
 peripherals:
   - id: "uart0"
     type: "esp32s2_uart"
@@ -92,6 +98,13 @@ peripherals:
     base_address: 0x3F423000
     size: "4KB"
     irq: 71 # ETS_SYSTIMER_TARGET0_INTR_SOURCE
+  # Classic-ESP32 RMT design with 4 channels; RMTMEM at +0x400 is inside
+  # this window. TX plays out through the GPIO matrix (signals 87..90).
+  - id: "rmt"
+    type: "esp32s2_rmt"
+    base_address: 0x3F416000
+    size: "4KB"
+    irq: 50 # ETS_RMT_INTR_SOURCE
   - id: "rng"
     type: "esp32s2_rng"
     base_address: 0x3F435000

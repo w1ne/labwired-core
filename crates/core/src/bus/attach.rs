@@ -365,6 +365,27 @@ impl SystemBus {
         }
     }
 
+    /// Bind every peripheral's GPIO-matrix output wire
+    /// ([`crate::Peripheral::matrix_output_lines`], the ESP32-S2 RMT) to the
+    /// `gpio` port, through capabilities rather than concrete types. A port
+    /// that does not route peripheral wires declines, and the peripheral
+    /// keeps whatever fallback it has.
+    pub(crate) fn wire_matrix_output_lines(&mut self) {
+        let Some(gpio_idx) = self.find_peripheral_index_by_name("gpio") else {
+            return;
+        };
+        for idx in 0..self.peripherals.len() {
+            if idx == gpio_idx {
+                continue;
+            }
+            if let Some((first, lines)) = self.peripherals[idx].dev.matrix_output_lines() {
+                self.peripherals[gpio_idx]
+                    .dev
+                    .bind_matrix_output_lines(first, &lines);
+            }
+        }
+    }
+
     /// Bind the classic-ESP32 LEDC controller's 16 channel outputs to the pads
     /// the GPIO output matrix can route them to (signals 71..86,
     /// `LEDC_HS_SIG_OUT0_IDX`..`LEDC_LS_SIG_OUT7_IDX`), so a pad attached with

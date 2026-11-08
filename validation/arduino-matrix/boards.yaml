@@ -59,12 +59,17 @@ boards:
     pio: { platform: espressif32, board: esp32-s2-saola-1, framework: arduino }
     max_steps: 50000000
     budget_reason: "single-core S2 FreeRTOS boot ~0.6M; same cap as the other ESP32 rows"
+    # LED_BUILTIN is the WS2812 on GPIO18: digitalWrite -> rgbLedWrite -> RMT
+    # ch0, routed by the GPIO matrix (signal 87). The probe is the pad: two
+    # 24-bit frames before LW_L2_OK are 96 edges, so 48 is one whole frame.
+    led_watch: "gpio:18"
+    led_min_edges: 48
+    min_rmt_tx: 1
     family: esp32
-    notes: "Arduino-ESP32-S2 on the genuine S2 mask ROM; L0/L1/L7 (UART0, FreeRTOS tick, 80 MHz SYSTIMER)"
-    sketches_skip: [L2_blink_serial, L3_i2c_sensor, L4_spi_sensor, L5_adc, L6_pwm, L8_can]
+    notes: "Arduino-ESP32-S2 on the genuine S2 mask ROM; L0/L1/L7 (UART0, FreeRTOS tick, 80 MHz SYSTIMER), L2 (RMT WS2812 waveform on GPIO18)"
+    sketches_skip: [L3_i2c_sensor, L4_spi_sensor, L5_adc, L6_pwm, L8_can]
     sketches_skip_reason:
       # Each measured 2026-11-08 on this profile.
-      L2_blink_serial: "LED_BUILTIN is the RGB pixel on GPIO18 (rgbLedWrite -> RMT); no S2 RMT model, access at 0x3F416080 faults"
       L3_i2c_sensor: "no S2 I2C model: Wire prints LW_L3_FAIL nack"
       L4_spi_sensor: "no S2 GP-SPI model: SPI2 access at 0x3F424030 faults"
       L5_adc: "no S2 SAR ADC model: analogRead never completes"

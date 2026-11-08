@@ -12,8 +12,9 @@ constexpr uintptr_t kGpioEnableW1ts = 0x3FF44024;
 constexpr uintptr_t kGpioFunc0OutSel = 0x3FF44530;
 constexpr uint32_t kRmtOut0Signal = 87;
 constexpr uint32_t kRmtOut1Signal = 88;
+// RMT_CHn_TX_END_INT_RAW is bit 3n (rmt_reg.h); bits 3n+1/3n+2 are RX_END/ERR.
 constexpr uint32_t kRmtTxEndCh0 = 1u << 0;
-constexpr uint32_t kRmtTxEndCh1 = 1u << 1;
+constexpr uint32_t kRmtTxEndCh1 = 1u << 3;
 
 struct Pulse {
   uint16_t duration;
@@ -58,7 +59,7 @@ void transmitPixel(uint8_t channel, uint8_t pin, uint32_t signal,
     rmt_mem[i / 2] = pack(pulses[i], pulses[i + 1]);
   }
 
-  *rmt_int_clear = 1u << channel;
+  *rmt_int_clear = 1u << (channel * 3);
   // Channel 0 uses APB (80 MHz), divided by four to a 20 MHz RMT tick.
   *rmt_conf0 = (1u << 31) | (1u << 24) | 4u;
   // REF_ALWAYS_ON selects APB; MEM_RD_RST resets the channel's read pointer.
