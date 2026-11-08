@@ -61,11 +61,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          onboarding/msp430f2619 (+8 more).",
     ),
     (
-        "atmel91debugunit",
-        "Atmel AT91 debug unit (DBGU). Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: onboarding/at91rm9200.",
-    ),
-    (
         "bitbanding",
         "Cortex-M bit-band alias region. Bit-banding is modelled by the bus itself \
          (SystemBus::bit_band_enabled), so the imported peripheral entry is inert. \
@@ -278,8 +273,8 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          Python snippet the .repl carried. There is nothing to port — the imported descriptor \
          has no register semantics at all. Renode-imported onboarding descriptor; no model in \
          this engine, so the window answers reads with zeros. Used by: \
-         onboarding/arduino_uno_r4_minima, onboarding/arvsom, onboarding/at91rm9200, \
-         onboarding/atsamd51g19a, onboarding/beaglev_starlight and other imported descriptors.",
+         onboarding/arduino_uno_r4_minima, onboarding/arvsom, onboarding/atsamd51g19a, \
+         onboarding/beaglev_starlight and other imported descriptors.",
     ),
     (
         "ram",

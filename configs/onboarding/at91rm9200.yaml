@@ -1,6 +1,5 @@
 name: at91rm9200
-description: 'Microchip (Atmel) AT91RM9200 ARM920T based microprocessor. Architecture:
-  ARM9 (ARMv4T). Vintage industrial processor.'
+description: 'Imported Microchip (Atmel) AT91RM9200 (ARM920T, ARMv4T). The measured subset runs on the ARM926EJ-S CPU model Renode uses for this part, from the 0x30000-byte internal memory at 0x00000000, and exercises polled TX on the Debug Unit (DBGU). The ARM920T itself, AIC, system timer, PMC, PIO, SDRAM and other peripherals are not modeled.'
 url: https://www.microchip.com/en-us/product/AT91RM9200
 family: Microchip AT91
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\

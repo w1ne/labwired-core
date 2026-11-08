@@ -369,7 +369,6 @@ fn imported_non_cortex_m_platforms_never_route_to_cortex_m() {
         "litex_microwatt",
         "xtensa-sample-controller",
         "litex_common",
-        "at91rm9200",
     ] {
         assert!(
             machine_family(&load(name)).is_err(),
@@ -380,12 +379,21 @@ fn imported_non_cortex_m_platforms_never_route_to_cortex_m() {
         machine_family(&load("a20")).unwrap(),
         MachineFamily::CortexA
     );
-    let versatile = load("versatile");
-    assert_eq!(machine_family(&versatile).unwrap(), MachineFamily::CortexA);
-    assert_eq!(
-        crate::system::arch_policy::cortex_a_core(&versatile).unwrap(),
-        crate::system::arch_policy::CortexACore::Arm926
-    );
+    // AT91RM9200 declares the ARM926EJ-S model Renode runs it on; its
+    // ARM920T name stays refused above.
+    for name in ["versatile", "at91rm9200"] {
+        let chip = load(name);
+        assert_eq!(
+            machine_family(&chip).unwrap(),
+            MachineFamily::CortexA,
+            "{name}"
+        );
+        assert_eq!(
+            crate::system::arch_policy::cortex_a_core(&chip).unwrap(),
+            crate::system::arch_policy::CortexACore::Arm926,
+            "{name}"
+        );
+    }
     for name in [
         "vexpress",
         "tegra2",

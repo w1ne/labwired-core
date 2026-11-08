@@ -63,6 +63,12 @@ SMOKE_MAPPINGS = {
         "cli_features": "qemu-arm",
         "cli_profile": "native-system",
     },
+    "at91rm9200": {
+        "prebuilt_firmware": "tests/fixtures/at91rm9200-dbgu-smoke.elf",
+        "script": "examples/renode-onboarding/at91rm9200-dbgu-smoke.yaml",
+        "cli_features": "qemu-arm",
+        "cli_profile": "native-system",
+    },
     "lpc2294": {
         "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-uart-smoke.elf",
         "script": "examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml",
@@ -1155,9 +1161,8 @@ NOT_RUN_REASONS["litex_common"] = (
 NOT_RUN_HINTS["litex_common"] = "Measure the concrete LiteX platforms that include it instead."
 
 # ARM application/classic cores with no native adapter: machine_family refuses them.
-NO_ADAPTER_CORE_TARGETS = {
-    "at91rm9200": "arm920t",
-}
+# at91rm9200 left this set when its profile adopted Renode's ARM926EJ-S CPU model.
+NO_ADAPTER_CORE_TARGETS: dict[str, str] = {}
 NOT_RUN_REASONS.update(
     {
         target: f"{core} has no native adapter; the chip is refused rather than run as a Cortex-M. "

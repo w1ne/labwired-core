@@ -2,20 +2,20 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `224`
-- booted: `224/245`
-- boot_and_smoke_passed: `224/245`
-- not_run: `21`
-- pass: `224`
+- run_attempted: `225`
+- booted: `225/245`
+- boot_and_smoke_passed: `225/245`
+- not_run: `20`
+- pass: `225`
 - fail: `0`
-- pass_loading_zero_answering_windows: `0/224`
-- pass_observable_assertions: `224/224`
-- pass_stop_reason_only: `0/224`
-- pass_depth_unknown: `0/224`
-- median_elapsed_ms: `1151`
-- median_elapsed_seconds: `1.151`
+- pass_loading_zero_answering_windows: `0/225`
+- pass_observable_assertions: `225/225`
+- pass_stop_reason_only: `0/225`
+- pass_depth_unknown: `0/225`
+- median_elapsed_ms: `1154`
+- median_elapsed_seconds: `1.154`
 - threshold_seconds: `3600`
-- threshold_met: `224/224`
+- threshold_met: `225/225`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor. `Zero Windows` lists the peripherals in the chip the target's system actually loads that are allowlisted stubs (`crates/core/src/bus/known_stubs.rs`) and answer reads with zeros; a pass with zero windows did not exercise those blocks. `Smoke Depth` is `stop_reason_only` when the script asserts nothing but `expected_stop_reason` (the CPU stepped to its budget without faulting; no UART, memory or GPIO result is checked) and `observable` when it also checks a UART, memory, GPIO or fidelity result.
 
@@ -32,7 +32,7 @@
 | `arduino_uno_r4_minima` | `pass` | `True` | `yes` | `yes` | `119052` | `119.052` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `arty_litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `3557` | `3.557` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `arvsom` | `pass` | `True` | `yes` | `yes` | `897` | `0.897` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `at91rm9200` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 4: `uart0:atmel91debugunit`, `ckgrPllar:pythonperipheral`, `ckgrPllbr:pythonperipheral`, `pmcMkcr:pythonperipheral` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | arm920t has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
+| `at91rm9200` | `pass` | `True` | `yes` | `yes` | `368699` | `368.699` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `atsamd21j17d-aft` | `pass` | `True` | `yes` | `yes` | `1530` | `1.53` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `atsamd51g19a` | `pass` | `True` | `yes` | `yes` | `1028` | `1.028` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `beaglev-fire` | `pass` | `True` | `yes` | `yes` | `657` | `0.657` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
