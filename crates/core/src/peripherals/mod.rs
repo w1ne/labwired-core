@@ -84,6 +84,7 @@ pub mod litex_timer;
 pub mod lpc;
 pub mod lptim;
 pub mod mcg;
+pub mod megaavr;
 pub mod miv;
 pub mod noise;
 pub mod nrf52;

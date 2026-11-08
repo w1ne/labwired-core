@@ -1,0 +1,8 @@
+# Arduino matrix system — Arduino Nano Every (ATmega4809 @ 16 MHz).
+# Serial = USART3 (the SAMD11 USB bridge on PB4/PB5); LED_BUILTIN = D13 = PE2.
+# No sensors are wired: TWI0 and SPI0 are not modelled on this part yet, so
+# L3/L4 are skipped in boards.yaml rather than attached to stand-ins.
+name: "arduino-matrix-arduino-nano-every"
+chip: "../../../configs/chips/atmega4809.yaml"
+external_devices: []
+board_io: []

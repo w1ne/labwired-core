@@ -66,6 +66,7 @@ jobs:
           - atmega328p
           - atmega2560
           - arduino-zero
+          - arduino-nano-every
           - ch32v203
           - ch32v307
           - ch32x035
@@ -139,6 +140,9 @@ jobs:
             atmega328p|atmega2560) platform=atmelavr@5.3.0 ;;
             # The Zero row was measured on atmelsam 9.0.0 (ArduinoCore-samd).
             arduino-zero) platform=atmelsam@9.0.0 ;;
+            # The Nano Every row was measured on atmelmegaavr 1.10.0
+            # (ArduinoCore-megaavr 1.8.8).
+            arduino-nano-every) platform=atmelmegaavr@1.10.0 ;;
             # Not in the registry; same pin as boards.yaml.
             ch32v203|ch32v307|ch32x035) platform=https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7 ;;
             *)

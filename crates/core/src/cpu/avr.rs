@@ -478,6 +478,8 @@ pub struct Avr {
     /// Ports sampled at every boundary (bit 0 = B, 1 = C, 2 = D); zero while
     /// no INT/PCINT is configured, which keeps the step cost unchanged.
     ext_watch: u8,
+    /// AVRxt CCP window and CPUINT (`avr/avrxt.rs`).
+    xt: avrxt::XtState,
 }
 
 impl std::fmt::Debug for Avr {
@@ -764,6 +766,7 @@ impl Avr {
             sleeping: false,
             ext_last: [0; 3],
             ext_watch: 0,
+            xt: avrxt::XtState::default(),
             irq_shadow: false,
         }
     }
@@ -1452,70 +1455,6 @@ impl Avr {
         }
     }
 
-    /// AVRxt data-space read. The CPU register file is separate from data
-    /// memory; low addresses are I/O, SRAM starts at the selected device's
-    /// geometry, and flash is visible to LD/ST at 0x8000.
-    fn avrxt_data_read(&self, addr: u16, bus: &dyn Bus) -> SimResult<u8> {
-        match addr {
-            0x0000..=0x0FFF => match addr {
-                // CPU peripheral block starts at 0x30; SP is at 0x3D/0x3E
-                // and SREG at 0x3F (datasheet §8.6).
-                0x003D => Ok(self.sp as u8),
-                0x003E => Ok((self.sp >> 8) as u8),
-                0x003F => Ok(self.sreg),
-                _ => {
-                    let mirror = AVR_IO_MIRROR_BASE + u64::from(addr);
-                    if bus.has_mmio_window(mirror) {
-                        bus.read_u8(mirror)
-                    } else {
-                        Ok(self.tiny_io[addr as usize])
-                    }
-                }
-            },
-            a if (self.sram_start..=self.ramend).contains(&a) => {
-                Ok(self.sram[(a - self.sram_start) as usize])
-            }
-            a if a >= 0x8000 && usize::from(a - 0x8000) < self.flash.len() => {
-                Ok(self.flash[usize::from(a - 0x8000)])
-            }
-            _ => Err(SimulationError::MemoryViolation(u64::from(addr))),
-        }
-    }
-
-    /// AVRxt data-space write. I/O writes are retained locally and mirrored to
-    /// an explicitly mapped peripheral window; SRAM writes update both the
-    /// CPU's backing store and the system bus.
-    fn avrxt_data_write(&mut self, addr: u16, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
-        match addr {
-            0x003D => {
-                self.sp = (self.sp & 0xFF00) | u16::from(value);
-                Ok(())
-            }
-            0x003E => {
-                self.sp = (self.sp & 0x00FF) | (u16::from(value & 0x3F) << 8);
-                Ok(())
-            }
-            0x003F => {
-                self.sreg = value;
-                Ok(())
-            }
-            0x0000..=0x0FFF => {
-                self.tiny_io[addr as usize] = value;
-                let mirror = AVR_IO_MIRROR_BASE + u64::from(addr);
-                if bus.has_mmio_window(mirror) {
-                    bus.write_u8(mirror, value)?;
-                }
-                Ok(())
-            }
-            a if (self.sram_start..=self.ramend).contains(&a) => {
-                self.sram[(a - self.sram_start) as usize] = value;
-                bus.write_u8(u64::from(a), value)?;
-                Ok(())
-            }
-            _ => Err(SimulationError::MemoryViolation(u64::from(addr))),
-        }
-    }
-
     /// One 10-bit conversion of the channel ADMUX selects.
     ///
     /// MUX 0..7 are the input pins, whose millivolts come from the bus-side
@@ -2046,6 +1985,9 @@ impl Avr {
     }
 
     fn try_take_irq(&mut self, bus: &mut dyn Bus) -> SimResult<bool> {
+        if self.is_avrxt() {
+            return self.try_take_irq_avrxt(bus);
+        }
         if !self.flag_i() || self.pending_irq == 0 {
             return Ok(false);
         }
@@ -2354,6 +2296,7 @@ impl Cpu for Avr {
             self.cycles = 0;
             self.sleeping = false;
             self.irq_shadow = false;
+            self.reset_avrxt();
             let _ = bus;
             return Ok(());
         }
@@ -2462,7 +2405,8 @@ impl Cpu for Avr {
         // The flag was true when it was latched; an ISR that ran in between may
         // have read the byte. Vectoring then would hand the firmware a phantom
         // 0x00 from an empty UDR0, so check again at the moment of entry.
-        if self.pending_irq & (1u64 << VEC_USART_RX) != 0
+        if !self.is_avrxt()
+            && self.pending_irq & (1u64 << VEC_USART_RX) != 0
             && self.flag_i()
             && bus.read_u8(AVR_IO_MIRROR_BASE + 0xC0)? & UCSRA_RXC == 0
         {
@@ -2516,6 +2460,7 @@ impl Cpu for Avr {
         }
 
         self.step_inner(bus, observers, config)?;
+        self.xt.retire();
 
         let delta = self.cycles.saturating_sub(before) as u32;
 
@@ -2663,6 +2608,8 @@ impl Cpu for Avr {
     }
 }
 
+#[path = "avr/avrxt.rs"]
+mod avrxt;
 #[path = "avr/exec/mod.rs"]
 mod exec;
 #[path = "avr/ext_int.rs"]
