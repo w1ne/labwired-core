@@ -1,0 +1,19 @@
+# Arduino matrix system — Arduino Nano Every (ATmega4809 @ 16 MHz).
+# Serial = USART3 (the SAMD11 USB bridge on PB4/PB5); LED_BUILTIN = D13 = PE2.
+# No sensors are wired: TWI0 and SPI0 are not modelled on this part yet, so
+# L3/L4 are skipped in boards.yaml rather than attached to stand-ins.
+# L5: A0 (PD3 = AIN3) held at 2500 mV, half the board's 5 V VDD — a divider
+# on the pin. init() selects analogReference(VDD), so stock analogRead() must
+# return exactly 512 (10-bit).
+name: "arduino-matrix-arduino-nano-every"
+chip: "../../../configs/chips/atmega4809.yaml"
+external_devices: []
+peripherals:
+  - id: "adc0"
+    type: "megaavr_adc"
+    base_address: 0x00010600
+    size: "24"
+    config:
+      vdd_mv: 5000
+      input_mv: { 3: 2500 }
+board_io: []

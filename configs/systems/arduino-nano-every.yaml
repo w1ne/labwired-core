@@ -1,0 +1,11 @@
+name: arduino-nano-every
+chip: ../chips/atmega4809.yaml
+# 16 MHz, as selected by Arduino's official megaAVR board package.
+cpu_hz: 16000000
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "porte"
+    pin: 2          # PE2 / Arduino D13 / LED_BUILTIN
+    signal: "output"
+    active_high: true

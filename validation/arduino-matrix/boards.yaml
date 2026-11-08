@@ -329,6 +329,25 @@ boards:
     sketches_skip_reason:
       L8_can: "ATmega328P has no CAN controller"
 
+  - id: arduino-nano-every
+    chip: atmega4809
+    system: systems/arduino-nano-every.yaml
+    # ArduinoCore-megaavr `nona4809`: Serial is USART3 behind the SAMD11 USB
+    # bridge (PB4/PB5), millis() runs on TCB3 clocked from TCA0 (CLK_PER/64).
+    pio: { platform: atmelmegaavr@1.10.0, board: nano_every, framework: arduino }
+    max_steps: 500000
+    budget_reason: "AVR 16 MHz, same budget as the Nano and Mega rows"
+    led_watch: "porte:2"
+    led_min_edges: 2
+    family: avr
+    notes: "Arduino Nano Every (ATmega4809, megaAVR 0-series)"
+    sketches_skip: [L3_i2c_sensor, L4_spi_sensor, L6_pwm, L8_can]
+    sketches_skip_reason:
+      L3_i2c_sensor: "TWI0 is not modelled on the ATmega4809 yet"
+      L4_spi_sensor: "SPI0 is not modelled on the ATmega4809 yet"
+      L6_pwm: "TCA0/TCB waveform outputs are not modelled on the ATmega4809 yet"
+      L8_can: "ATmega4809 has no CAN controller"
+
   # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────
   #
   # ⚠️ The ONLY board here that does not compile through PlatformIO. Silicon
