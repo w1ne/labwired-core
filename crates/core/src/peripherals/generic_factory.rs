@@ -217,6 +217,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32_i2c",
     "esp32_ledc",
     "esp32_mcpwm",
+    "esp32_pcnt",
     "esp32_rtc_cntl",
     "esp32_rtc_io",
     "esp32_sar_adc",

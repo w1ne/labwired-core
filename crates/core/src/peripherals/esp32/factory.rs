@@ -54,6 +54,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32_ledc" => Box::new(ledc::Ledc::new(base)),
         "esp32_twai" => Box::new(twai::Esp32Twai::new()),
         "esp32_mcpwm" => Box::new(mcpwm::Mcpwm::new(base)),
+        "esp32_pcnt" => Box::new(pcnt::Esp32Pcnt::new()),
         "esp32_sdio" => Box::new(sdio_stub::HostSlc::new()),
         // RTC IO MUX + RTC GPIO (`DR_REG_RTCIO_BASE` 0x3FF4_8400), shared with
         // the GPIO model through the bus (`rebuild_rtc_io_link`).
@@ -79,6 +80,7 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32_ledc",
     "esp32_twai",
     "esp32_mcpwm",
+    "esp32_pcnt",
     "esp32_sdio",
     "esp32_rtc_io",
 ];
