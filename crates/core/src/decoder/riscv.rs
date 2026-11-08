@@ -7,96 +7,467 @@
 /// RISC-V RV32I Base Integer Instruction Set
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Instruction {
-    Lui { rd: u8, imm: u32 },             // LUI rd, imm
-    Auipc { rd: u8, imm: u32 },           // AUIPC rd, imm
-    Jal { rd: u8, imm: i32 },             // JAL rd, offset
-    Jalr { rd: u8, rs1: u8, imm: i32 },   // JALR rd, rs1, offset
-    Beq { rs1: u8, rs2: u8, imm: i32 },   // BEQ rs1, rs2, offset
-    Bne { rs1: u8, rs2: u8, imm: i32 },   // BNE rs1, rs2, offset
-    Blt { rs1: u8, rs2: u8, imm: i32 },   // BLT rs1, rs2, offset
-    Bge { rs1: u8, rs2: u8, imm: i32 },   // BGE rs1, rs2, offset
-    Bltu { rs1: u8, rs2: u8, imm: i32 },  // BLTU rs1, rs2, offset
-    Bgeu { rs1: u8, rs2: u8, imm: i32 },  // BGEU rs1, rs2, offset
-    Lb { rd: u8, rs1: u8, imm: i32 },     // LB rd, offset(rs1)
-    Lh { rd: u8, rs1: u8, imm: i32 },     // LH rd, offset(rs1)
-    Lw { rd: u8, rs1: u8, imm: i32 },     // LW rd, offset(rs1)
-    Lbu { rd: u8, rs1: u8, imm: i32 },    // LBU rd, offset(rs1)
-    Lhu { rd: u8, rs1: u8, imm: i32 },    // LHU rd, offset(rs1)
-    Sb { rs1: u8, rs2: u8, imm: i32 },    // SB rs2, offset(rs1)
-    Sh { rs1: u8, rs2: u8, imm: i32 },    // SH rs2, offset(rs1)
-    Sw { rs1: u8, rs2: u8, imm: i32 },    // SW rs2, offset(rs1)
-    Addi { rd: u8, rs1: u8, imm: i32 },   // ADDI rd, rs1, imm
-    Slti { rd: u8, rs1: u8, imm: i32 },   // SLTI rd, rs1, imm
-    Sltiu { rd: u8, rs1: u8, imm: i32 },  // SLTIU rd, rs1, imm
-    Xori { rd: u8, rs1: u8, imm: i32 },   // XORI rd, rs1, imm
-    Ori { rd: u8, rs1: u8, imm: i32 },    // ORI rd, rs1, imm
-    Andi { rd: u8, rs1: u8, imm: i32 },   // ANDI rd, rs1, imm
-    Slli { rd: u8, rs1: u8, shamt: u8 },  // SLLI rd, rs1, shamt
-    Srli { rd: u8, rs1: u8, shamt: u8 },  // SRLI rd, rs1, shamt
-    Srai { rd: u8, rs1: u8, shamt: u8 },  // SRAI rd, rs1, shamt
-    Add { rd: u8, rs1: u8, rs2: u8 },     // ADD rd, rs1, rs2
-    Sub { rd: u8, rs1: u8, rs2: u8 },     // SUB rd, rs1, rs2
-    Sll { rd: u8, rs1: u8, rs2: u8 },     // SLL rd, rs1, rs2
-    Slt { rd: u8, rs1: u8, rs2: u8 },     // SLT rd, rs1, rs2
-    Sltu { rd: u8, rs1: u8, rs2: u8 },    // SLTU rd, rs1, rs2
-    Xor { rd: u8, rs1: u8, rs2: u8 },     // XOR rd, rs1, rs2
-    Srl { rd: u8, rs1: u8, rs2: u8 },     // SRL rd, rs1, rs2
-    Sra { rd: u8, rs1: u8, rs2: u8 },     // SRA rd, rs1, rs2
-    Or { rd: u8, rs1: u8, rs2: u8 },      // OR rd, rs1, rs2
-    And { rd: u8, rs1: u8, rs2: u8 },     // AND rd, rs1, rs2
-    Fence,                                // FENCE
-    Ecall,                                // ECALL
-    Ebreak,                               // EBREAK
-    Mret,                                 // MRET
-    Wfi,                                  // WFI (wait for interrupt)
-    Csrrw { rd: u8, rs1: u8, csr: u16 },  // CSRRW
-    Csrrs { rd: u8, rs1: u8, csr: u16 },  // CSRRS
-    Csrrc { rd: u8, rs1: u8, csr: u16 },  // CSRRC
-    Csrrwi { rd: u8, imm: u8, csr: u16 }, // CSRRWI
-    Csrrsi { rd: u8, imm: u8, csr: u16 }, // CSRRSI
-    Csrrci { rd: u8, imm: u8, csr: u16 }, // CSRRCI
+    Lui {
+        rd: u8,
+        imm: u32,
+    }, // LUI rd, imm
+    Auipc {
+        rd: u8,
+        imm: u32,
+    }, // AUIPC rd, imm
+    Jal {
+        rd: u8,
+        imm: i32,
+    }, // JAL rd, offset
+    Jalr {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // JALR rd, rs1, offset
+    Beq {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // BEQ rs1, rs2, offset
+    Bne {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // BNE rs1, rs2, offset
+    Blt {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // BLT rs1, rs2, offset
+    Bge {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // BGE rs1, rs2, offset
+    Bltu {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // BLTU rs1, rs2, offset
+    Bgeu {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // BGEU rs1, rs2, offset
+    Lb {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // LB rd, offset(rs1)
+    Lh {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // LH rd, offset(rs1)
+    Lw {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // LW rd, offset(rs1)
+    Lbu {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // LBU rd, offset(rs1)
+    Lhu {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // LHU rd, offset(rs1)
+    Sb {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // SB rs2, offset(rs1)
+    Sh {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // SH rs2, offset(rs1)
+    Sw {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // SW rs2, offset(rs1)
+    Addi {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // ADDI rd, rs1, imm
+    Slti {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // SLTI rd, rs1, imm
+    Sltiu {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // SLTIU rd, rs1, imm
+    Xori {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // XORI rd, rs1, imm
+    Ori {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // ORI rd, rs1, imm
+    Andi {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // ANDI rd, rs1, imm
+    Slli {
+        rd: u8,
+        rs1: u8,
+        shamt: u8,
+    }, // SLLI rd, rs1, shamt
+    Srli {
+        rd: u8,
+        rs1: u8,
+        shamt: u8,
+    }, // SRLI rd, rs1, shamt
+    Srai {
+        rd: u8,
+        rs1: u8,
+        shamt: u8,
+    }, // SRAI rd, rs1, shamt
+    Add {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // ADD rd, rs1, rs2
+    Sub {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // SUB rd, rs1, rs2
+    Sll {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // SLL rd, rs1, rs2
+    Slt {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // SLT rd, rs1, rs2
+    Sltu {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // SLTU rd, rs1, rs2
+    Xor {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // XOR rd, rs1, rs2
+    Srl {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // SRL rd, rs1, rs2
+    Sra {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // SRA rd, rs1, rs2
+    Or {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // OR rd, rs1, rs2
+    And {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // AND rd, rs1, rs2
+    Fence,  // FENCE
+    Ecall,  // ECALL
+    Ebreak, // EBREAK
+    Mret,   // MRET
+    Wfi,    // WFI (wait for interrupt)
+    Csrrw {
+        rd: u8,
+        rs1: u8,
+        csr: u16,
+    }, // CSRRW
+    Csrrs {
+        rd: u8,
+        rs1: u8,
+        csr: u16,
+    }, // CSRRS
+    Csrrc {
+        rd: u8,
+        rs1: u8,
+        csr: u16,
+    }, // CSRRC
+    Csrrwi {
+        rd: u8,
+        imm: u8,
+        csr: u16,
+    }, // CSRRWI
+    Csrrsi {
+        rd: u8,
+        imm: u8,
+        csr: u16,
+    }, // CSRRSI
+    Csrrci {
+        rd: u8,
+        imm: u8,
+        csr: u16,
+    }, // CSRRCI
     // RV32M Extension
-    Mul { rd: u8, rs1: u8, rs2: u8 },
-    Mulh { rd: u8, rs1: u8, rs2: u8 },
-    Mulhsu { rd: u8, rs1: u8, rs2: u8 },
-    Mulhu { rd: u8, rs1: u8, rs2: u8 },
-    Div { rd: u8, rs1: u8, rs2: u8 },
-    Divu { rd: u8, rs1: u8, rs2: u8 },
-    Rem { rd: u8, rs1: u8, rs2: u8 },
-    Remu { rd: u8, rs1: u8, rs2: u8 },
+    Mul {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Mulh {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Mulhsu {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Mulhu {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Div {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Divu {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Rem {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Remu {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
 
     // RV32C Extension (Selection of common ones)
-    CAddi { rd: u8, imm: i32 },
-    CLw { rd: u8, rs1: u8, imm: u32 },
-    CSw { rs2: u8, rs1: u8, imm: u32 },
-    CJr { rs1: u8 },
-    CJalr { rs1: u8 },
-    CLi { rd: u8, imm: i32 },
-    CMv { rd: u8, rs2: u8 },
-    CAddi16sp { imm: i32 },
-    CAddi4spn { rd: u8, imm: u32 },
-    CSli { rd: u8, shamt: u8 },
-    CLwsp { rd: u8, imm: u32 },
-    CSwsp { rs2: u8, imm: u32 },
-    CJ { imm: i32 },
-    CBeqz { rs1: u8, imm: i32 },
-    CBnez { rs1: u8, imm: i32 },
+    CAddi {
+        rd: u8,
+        imm: i32,
+    },
+    CLw {
+        rd: u8,
+        rs1: u8,
+        imm: u32,
+    },
+    CSw {
+        rs2: u8,
+        rs1: u8,
+        imm: u32,
+    },
+    CJr {
+        rs1: u8,
+    },
+    CJalr {
+        rs1: u8,
+    },
+    CLi {
+        rd: u8,
+        imm: i32,
+    },
+    CMv {
+        rd: u8,
+        rs2: u8,
+    },
+    CAddi16sp {
+        imm: i32,
+    },
+    CAddi4spn {
+        rd: u8,
+        imm: u32,
+    },
+    CSli {
+        rd: u8,
+        shamt: u8,
+    },
+    CLwsp {
+        rd: u8,
+        imm: u32,
+    },
+    CSwsp {
+        rs2: u8,
+        imm: u32,
+    },
+    CJ {
+        imm: i32,
+    },
+    CBeqz {
+        rs1: u8,
+        imm: i32,
+    },
+    CBnez {
+        rs1: u8,
+        imm: i32,
+    },
 
     // RV32A Atomics (word). aq/rl ignored on a single-hart simulator;
     // any store invalidates any outstanding LR reservation per ISA §8.2.
-    LrW { rd: u8, rs1: u8 },
-    ScW { rd: u8, rs1: u8, rs2: u8 },
-    AmoSwapW { rd: u8, rs1: u8, rs2: u8 },
-    AmoAddW { rd: u8, rs1: u8, rs2: u8 },
-    AmoXorW { rd: u8, rs1: u8, rs2: u8 },
-    AmoOrW { rd: u8, rs1: u8, rs2: u8 },
-    AmoAndW { rd: u8, rs1: u8, rs2: u8 },
-    AmoMinW { rd: u8, rs1: u8, rs2: u8 },
-    AmoMaxW { rd: u8, rs1: u8, rs2: u8 },
-    AmoMinuW { rd: u8, rs1: u8, rs2: u8 },
-    AmoMaxuW { rd: u8, rs1: u8, rs2: u8 },
+    LrW {
+        rd: u8,
+        rs1: u8,
+    },
+    ScW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoSwapW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoAddW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoXorW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoOrW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoAndW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoMinW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoMaxW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoMinuW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoMaxuW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+
+    /// RV32F: FLW/FSW, the fused multiply-adds and OP-FP, carried as the
+    /// 32-bit encoding (a C.FLW/C.FSW/C.FLWSP/C.FSWSP is expanded to its
+    /// FLW/FSW). Only the major opcode is decoded; the core's FP unit checks
+    /// the remaining fields, and a core without F treats it as `Unknown`.
+    Fp(u32),
 
     Unknown(u32),
+}
+
+/// WCH QingKe "XW" compressed byte/halfword loads and stores (CH32V003,
+/// `-march=rv32ecxw`). They sit in RVC slots that RV32EC leaves free (the
+/// C.FLD/C.FSD/C.FLDSP/C.FSDSP slots and quadrant 0 funct3 = 100), and each
+/// one is a 2-byte encoding of a base load or store, so it decodes to that
+/// base instruction. `None` for any other halfword.
+///
+/// The bit layout is read off WCH's own assembler (`riscv-wch-elf-as`
+/// 12.2.0, `-march=rv32ecxw`), by assembling each mnemonic across its whole
+/// offset range and every operand register. The unit tests below pin those
+/// assembler outputs.
+///
+/// | insn                     | op | f3  | offset bits                                   |
+/// |--------------------------|----|-----|-----------------------------------------------|
+/// | c.lbu rd', o(rs1')       | 00 | 001 | o[0]=12 o[4:3]=11:10 o[2]=6 o[1]=5            |
+/// | c.sb  rs2', o(rs1')      | 00 | 101 | as c.lbu                                      |
+/// | c.lhu rd', o(rs1')       | 10 | 001 | o[5]=12 o[4:3]=11:10 o[2]=6 o[1]=5            |
+/// | c.sh  rs2', o(rs1')      | 10 | 101 | as c.lhu                                      |
+/// | c.{lbu,lhu,sb,sh}sp r', o(sp) | 00 | 100 | bits 6:5 = 00/01/10/11; bits 12:11 = 0; byte o[3:0]=10:7; half o[3:1]=10:8 o[4]=7 |
+pub fn decode_wch_xw(inst: u16) -> Option<Instruction> {
+    let inst = inst as u32;
+    let op = inst & 0x3;
+    let f3 = (inst >> 13) & 0x7;
+    let r_lo = (((inst >> 2) & 0x7) + 8) as u8; // rd' / rs2'
+    let r_hi = (((inst >> 7) & 0x7) + 8) as u8; // rs1'
+    let mid = ((inst >> 5) & 0x1) << 1 | ((inst >> 6) & 0x1) << 2 | ((inst >> 10) & 0x3) << 3;
+    let byte_imm = (mid | (inst >> 12) & 0x1) as i32;
+    let half_imm = (mid | ((inst >> 12) & 0x1) << 5) as i32;
+    Some(match (op, f3) {
+        (0b00, 0b001) => Instruction::Lbu {
+            rd: r_lo,
+            rs1: r_hi,
+            imm: byte_imm,
+        },
+        (0b00, 0b101) => Instruction::Sb {
+            rs1: r_hi,
+            rs2: r_lo,
+            imm: byte_imm,
+        },
+        (0b10, 0b001) => Instruction::Lhu {
+            rd: r_lo,
+            rs1: r_hi,
+            imm: half_imm,
+        },
+        (0b10, 0b101) => Instruction::Sh {
+            rs1: r_hi,
+            rs2: r_lo,
+            imm: half_imm,
+        },
+        (0b00, 0b100) if (inst >> 11) & 0x3 == 0 => {
+            let byte_sp = ((inst >> 7) & 0xF) as i32;
+            let half_sp = (((inst >> 8) & 0x7) << 1 | ((inst >> 7) & 0x1) << 4) as i32;
+            match (inst >> 5) & 0x3 {
+                0b00 => Instruction::Lbu {
+                    rd: r_lo,
+                    rs1: 2,
+                    imm: byte_sp,
+                },
+                0b01 => Instruction::Lhu {
+                    rd: r_lo,
+                    rs1: 2,
+                    imm: half_sp,
+                },
+                0b10 => Instruction::Sb {
+                    rs1: 2,
+                    rs2: r_lo,
+                    imm: byte_sp,
+                },
+                _ => Instruction::Sh {
+                    rs1: 2,
+                    rs2: r_lo,
+                    imm: half_sp,
+                },
+            }
+        }
+        _ => return None,
+    })
 }
 
 pub fn decode_rv32(inst: u32) -> Instruction {
@@ -341,7 +712,34 @@ pub fn decode_rv32(inst: u32) -> Instruction {
                 _ => Instruction::Unknown(inst),
             }
         }
+        0x07 | 0x27 | 0x43 | 0x47 | 0x4B | 0x4F | 0x53 => Instruction::Fp(inst),
         _ => Instruction::Unknown(inst),
+    }
+}
+
+/// C.FLW / C.FSW (quadrant 0) and C.FLWSP / C.FSWSP (quadrant 2) use the
+/// operand layout of C.LW / C.SW / C.LWSP / C.SWSP one funct3 code higher;
+/// decode the integer twin and re-encode it as the 32-bit FLW / FSW.
+fn decode_rv32fc(inst: u16) -> Instruction {
+    let flw = |rd: u8, rs1: u8, imm: u32| {
+        Instruction::Fp((imm << 20) | ((rs1 as u32) << 15) | (2 << 12) | ((rd as u32) << 7) | 0x07)
+    };
+    let fsw = |rs1: u8, rs2: u8, imm: u32| {
+        Instruction::Fp(
+            ((imm >> 5) << 25)
+                | ((rs2 as u32) << 20)
+                | ((rs1 as u32) << 15)
+                | (2 << 12)
+                | ((imm & 0x1F) << 7)
+                | 0x27,
+        )
+    };
+    match decode_rv32c(inst & !(1 << 13)) {
+        Instruction::CLw { rd, rs1, imm } => flw(rd, rs1, imm),
+        Instruction::CSw { rs2, rs1, imm } => fsw(rs1, rs2, imm),
+        Instruction::CLwsp { rd, imm } => flw(rd, 2, imm),
+        Instruction::CSwsp { rs2, imm } => fsw(2, rs2, imm),
+        _ => Instruction::Unknown(inst as u32),
     }
 }
 
@@ -407,6 +805,7 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                         imm: imm as u32,
                     }
                 }
+                3 | 7 => decode_rv32fc(inst),
                 _ => Instruction::Unknown(inst as u32),
             }
         }
@@ -680,6 +1079,7 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                         imm: imm as u32,
                     }
                 }
+                3 | 7 => decode_rv32fc(inst),
                 _ => Instruction::Unknown(inst as u32),
             }
         }
@@ -741,5 +1141,291 @@ mod compressed_jump_tests {
             Instruction::CJ { imm } => assert_eq!(imm, 0, "c.j 0 (to self)"),
             other => panic!("expected CJ, got {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod wch_xw_tests {
+    use super::{decode_rv32, decode_wch_xw, Instruction::*};
+
+    /// Encodings produced by `riscv-wch-elf-as -march=rv32ecxw` (WCH GCC
+    /// 12.2.0 toolchain shipped with PlatformIO `ch32v`). a0 = x10, a1 = x11.
+    #[test]
+    fn matches_the_wch_assembler() {
+        let cases = [
+            (
+                0x2188,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 0,
+                },
+            ),
+            (
+                0x3188,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 1,
+                },
+            ),
+            (
+                0x21a8,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 2,
+                },
+            ),
+            (
+                0x21c8,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 4,
+                },
+            ),
+            (
+                0x2588,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 8,
+                },
+            ),
+            (
+                0x2988,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 16,
+                },
+            ),
+            (
+                0x3de8,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 31,
+                },
+            ),
+            (
+                0x218a,
+                Lhu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 0,
+                },
+            ),
+            (
+                0x21aa,
+                Lhu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 2,
+                },
+            ),
+            (
+                0x2dea,
+                Lhu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 30,
+                },
+            ),
+            (
+                0x3dea,
+                Lhu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 62,
+                },
+            ),
+            (
+                0xa188,
+                Sb {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 0,
+                },
+            ),
+            (
+                0xb188,
+                Sb {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 1,
+                },
+            ),
+            (
+                0xbde8,
+                Sb {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 31,
+                },
+            ),
+            (
+                0xa18a,
+                Sh {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 0,
+                },
+            ),
+            (
+                0xb18a,
+                Sh {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 32,
+                },
+            ),
+            (
+                0xbdea,
+                Sh {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 62,
+                },
+            ),
+            (
+                0x8008,
+                Lbu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 0,
+                },
+            ),
+            (
+                0x8088,
+                Lbu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 1,
+                },
+            ),
+            (
+                0x8788,
+                Lbu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 15,
+                },
+            ),
+            (
+                0x801c,
+                Lbu {
+                    rd: 15,
+                    rs1: 2,
+                    imm: 0,
+                },
+            ),
+            (
+                0x8000,
+                Lbu {
+                    rd: 8,
+                    rs1: 2,
+                    imm: 0,
+                },
+            ),
+            (
+                0x80c8,
+                Sb {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 1,
+                },
+            ),
+            (
+                0x87c8,
+                Sb {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 15,
+                },
+            ),
+            (
+                0x8128,
+                Lhu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 2,
+                },
+            ),
+            (
+                0x80a8,
+                Lhu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 16,
+                },
+            ),
+            (
+                0x87a8,
+                Lhu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 30,
+                },
+            ),
+            (
+                0x8168,
+                Sh {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 2,
+                },
+            ),
+            (
+                0x80e8,
+                Sh {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 16,
+                },
+            ),
+            (
+                0x87e8,
+                Sh {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 30,
+                },
+            ),
+            // The first XW instruction the WCH Arduino L0 image executes:
+            // `c.lhusp a1, 24(sp)` at 0x736.
+            (
+                0x84ac,
+                Lhu {
+                    rd: 11,
+                    rs1: 2,
+                    imm: 24,
+                },
+            ),
+        ];
+        for (raw, want) in cases {
+            assert_eq!(decode_wch_xw(raw), Some(want), "{raw:#06x}");
+        }
+    }
+
+    /// The XW slots are not base RV32C on their own: the generic decoder
+    /// leaves them undecoded, so only a QingKe core (which asks for XW
+    /// explicitly) runs them.
+    #[test]
+    fn base_decoder_leaves_the_xw_slots_alone() {
+        for raw in [0x2188u32, 0x218a, 0xa188, 0xa18a, 0x84ac] {
+            assert!(matches!(decode_rv32(raw), Unknown(_)), "{raw:#06x}");
+        }
+    }
+
+    #[test]
+    fn rvc_words_outside_the_xw_slots_are_not_xw() {
+        // c.lw a0, 0(a1); c.addi4spn s0, sp, 4; c.sw a0, 0(a1); c.mv a0, a1.
+        for raw in [0x4188u16, 0x0040, 0xc188, 0x852e] {
+            assert_eq!(decode_wch_xw(raw), None, "{raw:#06x}");
+        }
+        // Quadrant 0 funct3 = 100 with bits 12:11 set is still reserved.
+        assert_eq!(decode_wch_xw(0x8808), None);
     }
 }

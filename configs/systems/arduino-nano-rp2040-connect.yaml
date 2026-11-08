@@ -1,0 +1,16 @@
+# Arduino Nano RP2040 Connect (ABX00052): header TX / GP0 plus its onboard
+# LSM6DSOX accelerometer over I2C0 on GP12/GP13. The radio, microphone, crypto
+# device and RGB LED are outside this profile.
+name: "arduino-nano-rp2040-connect"
+chip: "../chips/rp2040-nano-rp2040-connect-smoke.yaml"
+debug_uart: "uart0"
+external_devices:
+  - id: "imu"
+    type: "lsm6dsox"
+    connection: "i2c0"
+    route:
+      sda: "GP12"
+      scl: "GP13"
+    config:
+      i2c_address: 0x6A
+board_io: []

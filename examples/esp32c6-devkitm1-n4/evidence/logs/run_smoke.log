@@ -1,0 +1,5 @@
+2026-11-06T11:14:08.347359Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32c6-devkitm1-n4-smoke.yaml
+2026-11-06T11:14:08.438513Z  INFO labwired_loader: ELF Entry Point: 0x42000000
+labwired-cli test: C6 MMU factory@0x10000 mapped 1 virt page(s) [0] → phys+1; VALID=0x200; free entries for PT mmap
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  4/4 checks · onboarding-smoke · 500000 steps · 0.16s

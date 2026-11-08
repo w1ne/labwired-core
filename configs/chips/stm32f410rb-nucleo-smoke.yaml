@@ -1,0 +1,65 @@
+# Focused STM32F410RBT6 profile for the NUCLEO-F410RB board smoke.
+#
+# Only the board-connected paths used by this smoke are declared: RCC, GPIOA,
+# SysTick, and USART2. All other peripheral windows are omitted, not replaced
+# with zero-answering stubs.
+#
+# Sources:
+# - ST DS11144, STM32F410x8/xB: 128 KiB flash, 32 KiB SRAM, Cortex-M4.
+#   https://www.st.com/resource/en/datasheet/stm32f410rb.pdf
+# - ST RM0401, STM32F410 reference manual: RCC, GPIO, and USART register maps.
+#   https://www.st.com/resource/en/reference_manual/dm00180366-stm32f410-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
+# - ST UM1724, NUCLEO-64 MB1136: D13 is PA5; USART2 is PA2/PA3.
+#   https://www.st.com/resource/en/user_manual/dm00105823.pdf
+
+name: "stm32f410rb-nucleo-smoke"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 150
+# Smoke firmware remains on the reset 16 MHz HSI clock.
+cpu_hz: 16_000_000
+
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "32KB"
+
+pins:
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA3: { gpio: "gpioa", bit: 3 }
+  PA5: { gpio: "gpioa", bit: 5 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x64000000
+    clock: { reg: "ahb1enr", bit: 0 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      # STM32F410 USART2 uses the classic SR/DR register layout.
+      cr3_mask: 0xFFF
+    clock: { reg: "apb1enr", bit: 17 }

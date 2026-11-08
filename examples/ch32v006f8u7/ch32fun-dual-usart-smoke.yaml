@@ -1,0 +1,25 @@
+# ch32fun examples_x00x/dual_usart, unmodified. USART1 (PCFR1.USART1_RM = 0,
+# TX on PD5) and USART2 (USART2_RM = 3, TX on PD2) each print a banner, then
+# one "tick N via USARTn" line per Delay_Ms(1000), 115200 8N1 at 48 MHz.
+# The UART text below is the merged console of both ports; the pad edges
+# show each TX line leaving on its remapped pin.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/dual_usart.elf"
+  system: "../../configs/systems/ch32v006f8u7-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 110000000
+  max_steps: 120000000
+  wall_time_ms: 600000
+assertions:
+  - uart_contains: "USART1 ready\r\n"
+  - uart_contains: "USART2 ready\r\n"
+  - uart_ordered:
+      - "tick 0 via USART1\r\n"
+      - "tick 0 via USART2\r\n"
+      - "tick 1 via USART1\r\n"
+      - "tick 1 via USART2\r\n"
+      - "tick 2 via USART1\r\n"
+      - "tick 2 via USART2\r\n"
+  - gpio_edges: { pin: "gpiod:5", min_edges: 100 }
+  - gpio_edges: { pin: "gpiod:2", min_edges: 100 }

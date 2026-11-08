@@ -1,0 +1,43 @@
+# Focused ATSAMD21G18A profile for the Arduino MKR WiFi 1010's D6 LED smoke.
+# Only the SAMD21 main core, PM APBBMASK, and PORT group A are exposed. The
+# NINA-W102, ATECC508, PMIC, USB and all other SAMD21 peripherals are outside
+# this profile.
+#
+# Sources:
+# - Arduino MKR WiFi 1010 official pinout and SAMD core variant: D6 / LED_BUILTIN
+#   is PA20.
+# - Arduino MKR WiFi 1010 schematic: PA20 controls the gate of Q1 (2N7002), a
+#   low-side switch for the onboard yellow LED; PA20 high lights the LED.
+# - Microchip DS40001882: ATSAMD21G18A memory and SAMD21 PORT / PM register map.
+
+name: "atsamd21g18a-mkr-wifi-1010-smoke"
+arch: "arm"
+core: "cortex-m0+"
+# On reset, OSC8M is divided by 8 before it drives GCLK_MAIN: 1 MHz.
+cpu_hz: 1_000_000
+
+flash:
+  base: 0x00000000
+  size: "256KB"
+ram:
+  base: 0x20000000
+  size: "32KB"
+
+pins:
+  PA20: { gpio: "gpio_a", bit: 20 }
+
+peripherals:
+  - id: "pm"
+    type: "sam_pm"
+    base_address: 0x40000400
+    size: "128B"
+
+  - id: "gpio_a"
+    type: "gpio"
+    base_address: 0x41004400
+    size: "128B"
+    config:
+      profile: "sam"
+      num_pins: 32
+    # PM.APBBMASK.PORT_ (DS40001882 §16.8.4, bit 3).
+    clock: { controller: "pm", reg: "APBBMASK", bit: 3 }

@@ -1,0 +1,53 @@
+{
+  "manifest_schema_version": "1.0",
+  "engine_version": "0.25.0",
+  "seed": 0,
+  "nondeterminism": "none",
+  "firmware": {
+    "path": "debugprintfdemo.elf",
+    "sha256": "ea365dd6017de454da34357011b63eac1b42352c708f7fbb73c02272571a6512"
+  },
+  "configs": [
+    {
+      "path": "ch32fun-debugprintf-smoke.yaml",
+      "sha256": "316ca7f3bf48a6ae833f20fe9ef2f1504e03cf7a6e1c1a1b2ebd4d68d8c1e86b"
+    },
+    {
+      "path": "ch32v307v-evt-ch32fun-smoke.yaml",
+      "sha256": "d93b41964c40efc03ca30f06361bb974a41a1a7f2683c624ea7c46f01634f402"
+    }
+  ],
+  "results": {
+    "status": "pass",
+    "stop_reason": "MaxSteps",
+    "steps_executed": 100000000,
+    "cycles": 371132798,
+    "instructions": 100000000,
+    "assertions": [
+      {
+        "assertion": "PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: \"debug_printf\", log: \"terminal\", contains: \"+0\", min_count: 1, node: None } })",
+        "passed": true
+      },
+      {
+        "assertion": "PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: \"debug_printf\", log: \"terminal\", contains: \"-1[\", min_count: 1, node: None } })",
+        "passed": true
+      },
+      {
+        "assertion": "PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: \"debug_printf\", log: \"terminal\", contains: \"+4\", min_count: 1, node: None } })",
+        "passed": true
+      },
+      {
+        "assertion": "PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: \"debug_printf\", log: \"terminal\", contains: \"-5[\", min_count: 1, node: None } })",
+        "passed": true
+      },
+      {
+        "assertion": "MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 3758097280, expected_value: 0, mask: Some(192), size: None, node: None } })",
+        "passed": true
+      }
+    ],
+    "cpu_state_digest": "0edc78182e659a1a2c51755594c4d91da244a162591c9e8257a7fe301a8fb172"
+  },
+  "coverage": null,
+  "fault_injections": [],
+  "digest": "c272bc34d1a5c1529ee9bd29ccb68b06f58c6b48b97c1c177b135b3dc7e1bcb3"
+}

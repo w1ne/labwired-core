@@ -1,0 +1,28 @@
+{
+  "target_id": "esp8684-devkitm-1-h4x",
+  "status": "pass",
+  "crate": "firmware-esp8684-devkitm1-h4x-smoke",
+  "target_triple": "riscv32imc-unknown-none-elf",
+  "script": "examples/esp8684-devkitm-1-h4x/onboarding-smoke.yaml",
+  "system": "configs/systems/esp8684-devkitm-1-h4x.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T09:32:40Z",
+  "finished_at_utc": "2026-11-05T09:33:17Z",
+  "elapsed_seconds": 38,
+  "elapsed_ms": 37716,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 36.819,
+    "build_firmware": 0.536,
+    "run_smoke": 0.35
+  },
+  "stages_ms": {
+    "build_cli": 36819,
+    "build_firmware": 536,
+    "run_smoke": 350
+  }
+}

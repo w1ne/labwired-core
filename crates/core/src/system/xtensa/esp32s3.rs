@@ -740,6 +740,14 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
                     serde_yaml::Value::Number((opts.cpu_clock_hz as u64).into()),
                 );
             }
+            // RMT waveform edges are emitted in CPU simulation cycles. Its
+            // default 80 MHz source clock must be scaled against this clock.
+            "rmt_s3" => {
+                config.insert(
+                    "cpu_clock_hz".to_string(),
+                    serde_yaml::Value::Number((opts.cpu_clock_hz as u64).into()),
+                );
+            }
             // uart0 echoes TX to the host console; uart1/2 are capture-only.
             "uart1_s3" | "uart2_s3" => {
                 config.insert("echo_stdout".to_string(), serde_yaml::Value::Bool(false));

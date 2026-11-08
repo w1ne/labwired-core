@@ -1,0 +1,12 @@
+# Adafruit ItsyBitsy RP2040 (product 4888), limited to the onboard red D13 LED.
+# The manufacturer pinout maps D13 to GP11; the smoke exercises IO_BANK0 and SIO.
+name: "adafruit-itsybitsy-rp2040"
+chip: "../chips/rp2040-itsybitsy-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_d13"
+    kind: "led"
+    peripheral: "sio"
+    pin: 11
+    signal: "output"
+    active_high: true

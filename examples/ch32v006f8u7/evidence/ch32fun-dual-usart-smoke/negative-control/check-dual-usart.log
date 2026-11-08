@@ -1,0 +1,9 @@
+--- gpiod:5 (USART1_TX) ---
+
+CH32V00x dual_usart example
+USART1 ready
+tick 0 via USART1
+tick 1 via USART1
+tick 2 via USART1
+--- gpiod:2 (USART2_TX) ---
+gpiod:2: missing '\r\nCH32V00x dual_usart example\r\n' after offset 0

@@ -1,0 +1,451 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 3000000,
+  "cycles": 6223744,
+  "instructions": 3000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 3000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 3000000
+    }
+  },
+  "limits": {
+    "max_steps": 3000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "SystemClk:24000000"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "CH32V003_SYSTICK_IRQ_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "CH32V003_IRQ_MASK_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "CH32V003_SW_IPSR_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "CH32V003_SW_SWIE_OK hits=2"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiod:0",
+          "min_edges": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1088,
+      536872932,
+      536872984,
+      0,
+      1,
+      0,
+      0,
+      536870912,
+      536870912,
+      28,
+      4882,
+      1,
+      25,
+      536872916,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1088,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 1088,
+    "mcause": 2147483660,
+    "mtval": 0,
+    "mtime": 2999880,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "088c09a72b21dddb7a443a37c0dca0090a78842d04dff5eb3c0ccec7c89c3b22",
+  "config": {
+    "firmware": "examples/ch32v003-evt/../../target/wch-sdk/ch32v003f4p6-pfic-smoke.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-pfic-smoke.yaml",
+    "script": "examples/ch32v003-evt/pfic-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfic",
+        "kind": "native",
+        "base": 3758153728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 3000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpiod",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 422843,
+            "value": 1
+          },
+          {
+            "cycle": 662851,
+            "value": 0
+          },
+          {
+            "cycle": 902861,
+            "value": 1
+          },
+          {
+            "cycle": 1142859,
+            "value": 0
+          },
+          {
+            "cycle": 1382869,
+            "value": 1
+          },
+          {
+            "cycle": 1622869,
+            "value": 0
+          },
+          {
+            "cycle": 1862871,
+            "value": 1
+          },
+          {
+            "cycle": 2102867,
+            "value": 0
+          },
+          {
+            "cycle": 2342877,
+            "value": 1
+          },
+          {
+            "cycle": 2582877,
+            "value": 0
+          },
+          {
+            "cycle": 2822879,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 86638,
+            "state": "0"
+          },
+          {
+            "cycle": 422843,
+            "state": "1"
+          },
+          {
+            "cycle": 662851,
+            "state": "0"
+          },
+          {
+            "cycle": 902861,
+            "state": "1"
+          },
+          {
+            "cycle": 1142859,
+            "state": "0"
+          },
+          {
+            "cycle": 1382869,
+            "state": "1"
+          },
+          {
+            "cycle": 1622869,
+            "state": "0"
+          },
+          {
+            "cycle": 1862871,
+            "state": "1"
+          },
+          {
+            "cycle": 2102867,
+            "state": "0"
+          },
+          {
+            "cycle": 2342877,
+            "state": "1"
+          },
+          {
+            "cycle": 2582877,
+            "state": "0"
+          },
+          {
+            "cycle": 2822879,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 11
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpiod",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "SystemClk:24000000",
+        "cycle_lo": 80000,
+        "cycle": 90000,
+        "end_cycle": 90000
+      },
+      {
+        "text": "CH32V003_SYSTICK_IRQ_OK ticks=5",
+        "cycle_lo": 200000,
+        "cycle": 210000,
+        "end_cycle": 210000
+      },
+      {
+        "text": "CH32V003_IRQ_MASK_OK",
+        "cycle_lo": 350000,
+        "cycle": 360000,
+        "end_cycle": 360000
+      },
+      {
+        "text": "CH32V003_SW_IPSR_OK",
+        "cycle_lo": 350000,
+        "cycle": 360000,
+        "end_cycle": 360000
+      },
+      {
+        "text": "CH32V003_SW_SWIE_OK hits=2",
+        "cycle_lo": 350000,
+        "cycle": 360000,
+        "end_cycle": 360000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 4956,
+    "data_bytes": 24,
+    "bss_bytes": 264,
+    "flash_used_bytes": 4980,
+    "ram_static_bytes": 288,
+    "flash_total_bytes": 16384,
+    "ram_total_bytes": 2048,
+    "flash_used_pct": 30.4,
+    "ram_static_pct": 14.06,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 6223744,
+    "instructions": 3000000,
+    "steps_executed": 3000000,
+    "memory_reads": 3103116,
+    "memory_writes": 38797,
+    "peripheral_accesses": 8647,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1088,
+        "count": 10351
+      },
+      {
+        "pc": 1276,
+        "count": 312
+      },
+      {
+        "pc": 826,
+        "count": 195
+      },
+      {
+        "pc": 886,
+        "count": 157
+      },
+      {
+        "pc": 960,
+        "count": 156
+      },
+      {
+        "pc": 964,
+        "count": 156
+      },
+      {
+        "pc": 830,
+        "count": 118
+      },
+      {
+        "pc": 934,
+        "count": 117
+      },
+      {
+        "pc": 834,
+        "count": 78
+      },
+      {
+        "pc": 836,
+        "count": 78
+      }
+    ]
+  }
+}

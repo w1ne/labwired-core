@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      872,
+      536891344,
+      536871932,
+      0,
+      0,
+      0,
+      0,
+      1073809408,
+      1048576,
+      24999996,
+      0,
+      0,
+      4292967272,
+      4294967295,
+      27000020,
+      3758157824,
+      0,
+      262144,
+      65536,
+      128,
+      16,
+      4,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 376,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 716,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 199999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 200000000,
+  "cycles": 742857008,
+  "instructions": 200000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000000
+    }
+  },
+  "limits": {
+    "max_steps": 200000000,
+    "max_cycles": 200000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "6a555a67cb9649376e257019bbd8ab3556dd0f1fb6831f4392c5d1c356f6dfdb",
+  "config": {
+    "firmware": "ch32fun/blink.elf",
+    "system": "../../configs/systems/weact-bluepill-plus-ch32v203-ch32fun-smoke.yaml",
+    "script": "ch32fun-blink-smoke.yaml"
+  }
+}

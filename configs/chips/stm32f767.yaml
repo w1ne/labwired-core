@@ -29,6 +29,16 @@ flash:
 ram:
   base: 0x20000000
   size: "512KB"
+
+# Pads used by the NUCLEO-F767ZI + LSM6DSOX smoke. Nucleo-144 routes PB8/PB9
+# to Arduino D15/D14 as I2C1 SCL/SDA; PD8/PD9 connect USART3 to the ST-LINK VCP.
+pins:
+  PB0: { gpio: gpiob, bit: 0 }
+  PB8: { gpio: gpiob, bit: 8, functions: [{ type: i2c, peripheral: i2c1, role: scl }] }
+  PB9: { gpio: gpiob, bit: 9, functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
+  PD8: { gpio: gpiod, bit: 8, functions: [{ type: uart, peripheral: usart3, role: tx }] }
+  PD9: { gpio: gpiod, bit: 9, functions: [{ type: uart, peripheral: usart3, role: rx }] }
+
 peripherals:
   - id: "rcc"
     type: "rcc"
@@ -133,6 +143,7 @@ peripherals:
     base_address: 0x40004800
     size: "1KB"
     irq: 39
+    clock: { reg: "apb1enr", bit: 18 }
   - id: "uart1"
     type: "uart"
     base_address: 0x40011000

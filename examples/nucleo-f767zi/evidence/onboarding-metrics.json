@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-f767zi",
+  "status": "pass",
+  "crate": "tier1-fixture-stm32f767",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/nucleo-f767zi/onboarding-smoke.yaml",
+  "system": "configs/systems/nucleo-f767zi.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T12:43:58Z",
+  "finished_at_utc": "2026-11-03T12:44:00Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2028,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.301,
+    "build_firmware": 0.041,
+    "run_smoke": 1.67
+  },
+  "stages_ms": {
+    "build_cli": 301,
+    "build_firmware": 41,
+    "run_smoke": 1670
+  }
+}

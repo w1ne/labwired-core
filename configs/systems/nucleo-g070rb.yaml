@@ -1,0 +1,23 @@
+# LabWired - NUCLEO-G070RB system manifest
+#
+# Board wiring per ST UM2324 / MB1360:
+#   - LD4 user LED on PA5, active high.
+#   - B1 user button on PC13, active low.
+#   - USART2 PA2 (TX) / PA3 (RX) connects to the on-board ST-LINK/V2-1 VCP.
+# Only the GPIOA/C and USART2 paths are exposed by the chip's smoke profile.
+name: nucleo-g070rb
+chip: ../chips/stm32g070rb-smoke.yaml
+external_devices: []
+board_io:
+  - id: led_ld4
+    kind: led
+    peripheral: gpioa
+    pin: 5
+    signal: output
+    active_high: true
+  - id: button_b1
+    kind: button
+    peripheral: gpioc
+    pin: 13
+    signal: input
+    active_high: false

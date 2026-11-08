@@ -1,0 +1,15 @@
+# NUCLEO-G0B1RE smoke: USART2 through the ST-LINK VCP and LD4 on PA5.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32g0-demo"
+  system: "../../configs/systems/nucleo-g0b1re.yaml"
+limits:
+  # The shared firmware includes four visible LED cycles with a deterministic
+  # delay loop. Allow the simulation to reach all eight PA5 transitions.
+  max_steps: 1000000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

@@ -1,0 +1,61 @@
+# Arduino UNO R4 WiFi (ABX00087), focused RA4M1 board profile.
+#
+# The chip is the Renesas R7FA4M1AB3CFM#AA0 (64-pin RA4M1). This profile
+# reuses the existing RA4M1 register models but exposes only the board pins
+# and blocks exercised by this smoke: SCI2 on D0/D1, D13 on P102, reset-clock
+# readiness, PORT1/PFS. The USBFS, ESP32-S3 radio coprocessor,
+# LED matrix, Qwiic connector, and all other RA4M1 peripherals are outside
+# this system profile; they are not replaced with zero-answering stubs.
+#
+# Board pin mapping: Arduino UNO R4 WiFi full pinout (ABX00087), D0/RX=P301,
+# D1/TX=P302, D13/LED_BUILTIN=P102. RA4M1 memory and register bases follow
+# R01UH0887 / the shared R7FA4M1AB descriptor.
+
+name: "r7fa4m1ab-uno-r4-wifi-smoke"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 48_000_000
+flash:
+  base: 0x00000000
+  size: "256KB"
+ram:
+  base: 0x20000000
+  size: "32KB"
+pins:
+  P102: { gpio: port1, bit: 2, functions: [{ type: gpio, peripheral: port1 }] }
+  P301: { gpio: port3, bit: 1, functions: [{ type: uart, peripheral: sci2, role: rx }] }
+  P302: { gpio: port3, bit: 2, functions: [{ type: uart, peripheral: sci2, role: tx }] }
+peripherals:
+  - id: "ra_sysc"
+    type: "ra_sysc"
+    base_address: 0x4001E000
+    size: "256B"
+  - id: "port1"
+    type: "gpio"
+    base_address: 0x40040020
+    size: "32B"
+    config:
+      profile: "ra_port"
+      pad_control: "pfs"
+      pad_control_port: 1
+      swapped_half_aliases: true
+  - id: "port3"
+    type: "gpio"
+    base_address: 0x40040060
+    size: "32B"
+    config:
+      profile: "ra_port"
+      pad_control: "pfs"
+      pad_control_port: 3
+      swapped_half_aliases: true
+  - id: "pfs"
+    type: "ra_pfs"
+    base_address: 0x40040800
+    size: "1536B"
+  - id: "sci2"
+    type: "uart"
+    base_address: 0x40070040
+    size: "32B"
+    irq: 4
+    config:
+      profile: "sci"

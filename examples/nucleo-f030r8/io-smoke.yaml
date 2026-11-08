@@ -1,0 +1,13 @@
+# NUCLEO-F030R8: USART2 output and repeated LD2 GPIOA5 transitions.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nucleo-f030r8-smoke"
+  system: "../../configs/systems/nucleo-f030r8.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "NUCLEO_F030R8_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

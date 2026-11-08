@@ -18,6 +18,8 @@ mod esp32;
 pub use esp32::*;
 mod esp32_rom_console;
 pub use esp32_rom_console::*;
+mod esp32s2;
+pub use esp32s2::*;
 mod esp32s3;
 pub use esp32s3::*;
 

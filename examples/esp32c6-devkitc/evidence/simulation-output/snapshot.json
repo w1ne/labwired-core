@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1107297068,
+      1082654688,
+      1082132480,
+      0,
+      0,
+      1082654720,
+      0,
+      1082654720,
+      0,
+      1107297135,
+      1610612736,
+      1107297135,
+      10,
+      1610637312,
+      2560,
+      5275648,
+      71,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1107297096,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 0,
+    "mtvec": 1107296568,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 200000,
+    "mtimecmp": 18446744073709551615,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 200000,
+  "cycles": 400268,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "07bc73b7237b29ac2b5d41d335abc42fcc2973b96848cb84eca2183cbef13bf5",
+  "config": {
+    "firmware": "examples/esp32c6-devkitc/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c6-demo",
+    "system": "examples/esp32c6-devkitc/../../configs/systems/esp32c6-devkitc.yaml",
+    "script": "examples/esp32c6-devkitc/io-smoke.yaml"
+  }
+}

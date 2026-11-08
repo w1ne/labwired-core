@@ -79,6 +79,14 @@ def write_pio_project(work: Path, board: dict, sketch_src: Path) -> Path:
             -DCORE_DEBUG_LEVEL=0
         """
     )
+    # Per-board extras, e.g. a board LED pin for a variant whose LED_BUILTIN
+    # is undefined. Indented so PlatformIO reads them as build_flags lines.
+    for flag in pio.get("build_flags") or []:
+        ini += f"    {flag}\n"
+    # Pins a framework whose platform tracks a moving git branch.
+    if pio.get("platform_packages"):
+        ini += "platform_packages =\n"
+        ini += "".join(f"    {pkg}\n" for pkg in pio["platform_packages"])
     (work / "platformio.ini").write_text(ini, encoding="utf-8")
     src_dir = work / "src"
     if src_dir.exists():
@@ -307,7 +315,12 @@ def main() -> int:
                 pio_platform=pio.get("platform") or "external",
                 pio_board=pio.get("board") or (ext or {}).get("target", "external"),
                 pio_framework=pio.get("framework") or "arduino",
-                extra={"max_steps": board.get("max_steps"), "led_watch": board.get("led_watch")},
+                extra={
+                    "max_steps": board.get("max_steps"),
+                    "led_watch": board.get("led_watch"),
+                    # Only when set, so boards without extras keep their digest.
+                    **{k: pio[k] for k in ("build_flags", "platform_packages") if pio.get(k)},
+                },
             )
 
             # ⚠️ AN EXTERNAL-COMPILE CELL IS NOT CACHEABLE.

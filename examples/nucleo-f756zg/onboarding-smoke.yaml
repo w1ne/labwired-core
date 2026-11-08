@@ -1,0 +1,13 @@
+# NUCLEO-F756ZG: ST-LINK USART3 VCP and LD2 blue LED on PB7.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-f756zg-smoke"
+  system: "../../configs/systems/nucleo-f756zg.yaml"
+limits:
+  max_steps: 16000
+assertions:
+  - uart_contains: "NUCLEO_F756ZG_OK"
+  - gpio_edges:
+      pin: "gpiob:7"
+      min_edges: 16
+  - expected_stop_reason: max_steps

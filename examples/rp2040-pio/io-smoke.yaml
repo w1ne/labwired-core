@@ -7,4 +7,7 @@ limits:
   max_steps: 10000
 assertions:
   - uart_contains: "PIO_OK"
+  - gpio_edges:
+      pin: "sio:25"
+      min_edges: 8
   - expected_stop_reason: max_steps

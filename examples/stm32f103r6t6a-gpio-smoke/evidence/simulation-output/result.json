@@ -1,0 +1,535 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioc:13",
+          "min_edges": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073811472,
+      8192,
+      536870912,
+      7700,
+      0,
+      0,
+      0,
+      536881136,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536881136,
+      134219107,
+      134218996
+    ],
+    "pc": 134218996,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "b9a8a8b1009a4fcfeb5ad06439f4b57ab29a377ec765cc463e6313eb9e13f586",
+  "config": {
+    "firmware": "examples/stm32f103r6t6a-gpio-smoke/../../target/thumbv7m-none-eabi/release/firmware-stm32f103r6-gpio-smoke",
+    "system": "examples/stm32f103r6t6a-gpio-smoke/../../configs/systems/stm32f103r6t6a-gpio-smoke.yaml",
+    "script": "examples/stm32f103r6t6a-gpio-smoke/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [
+          {
+            "name": "CR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CFGR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CIR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB2RSTR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1RSTR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHBENR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB2ENR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1ENR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BDCR",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CSR",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [
+          {
+            "name": "CRL",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CRH",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "ODR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BSRR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "BRR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "LCKR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157296,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 200000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioc",
+        "pin": 13,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 34,
+            "value": 1
+          },
+          {
+            "cycle": 36,
+            "value": 0
+          },
+          {
+            "cycle": 20838,
+            "value": 1
+          },
+          {
+            "cycle": 41641,
+            "value": 0
+          },
+          {
+            "cycle": 62443,
+            "value": 1
+          },
+          {
+            "cycle": 83246,
+            "value": 0
+          },
+          {
+            "cycle": 104048,
+            "value": 1
+          },
+          {
+            "cycle": 124851,
+            "value": 0
+          },
+          {
+            "cycle": 145653,
+            "value": 1
+          },
+          {
+            "cycle": 166456,
+            "value": 0
+          },
+          {
+            "cycle": 187258,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 31,
+            "state": "0"
+          },
+          {
+            "cycle": 34,
+            "state": "1"
+          },
+          {
+            "cycle": 36,
+            "state": "0"
+          },
+          {
+            "cycle": 20838,
+            "state": "1"
+          },
+          {
+            "cycle": 41641,
+            "state": "0"
+          },
+          {
+            "cycle": 62443,
+            "state": "1"
+          },
+          {
+            "cycle": 83246,
+            "state": "0"
+          },
+          {
+            "cycle": 104048,
+            "state": "1"
+          },
+          {
+            "cycle": 124851,
+            "state": "0"
+          },
+          {
+            "cycle": 145653,
+            "state": "1"
+          },
+          {
+            "cycle": 166456,
+            "state": "0"
+          },
+          {
+            "cycle": 187258,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 11
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioc",
+      "number": 13,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1384,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1384,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 32768,
+    "ram_total_bytes": 10240,
+    "flash_used_pct": 4.22,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 10240,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 10224,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536881152,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 10240,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 10224,
+    "heap_base": 536870912,
+    "heap_top": 536881152
+  },
+  "metrics": {
+    "cycles": 200000,
+    "instructions": 200000,
+    "steps_executed": 200000,
+    "memory_reads": 165,
+    "memory_writes": 6,
+    "peripheral_accesses": 15,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134219086,
+        "count": 40,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134218884,
+        "count": 39,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134218888,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134218898,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134218902,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134218916,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134218930,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134218946,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134218960,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134218974,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134218978,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134218996,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219012,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219026,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219040,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219044,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      }
+    ]
+  }
+}

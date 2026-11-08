@@ -1,0 +1,17 @@
+# Run the WCH SDK's 48 MHz HSI-PLL SystemInit sequence, then time the WCH SDK
+# Delay_Us and ch32v003fun DelaySysTick idioms against the QingKe SysTick.
+# Each OK marker prints only when its delay waited a bounded, non-zero time.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/ch32v003f4p6-systick-smoke.elf"
+  system: "../../configs/systems/ch32v003evt-systick-smoke.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "CH32V003_PLL48_OK"
+  - uart_contains: "CH32V003_SDK_DELAY_OK"
+  - uart_contains: "CH32V003_CH32FUN_DELAY_OK"
+  - gpio_edges:
+      pin: "gpiod:0"
+      min_edges: 8
+  - expected_stop_reason: max_steps

@@ -1,0 +1,13 @@
+# Onboarding Smoke Scoreboard
+
+- targets_total: `1`
+- pass: `1`
+- fail: `0`
+- median_elapsed_ms: `17351`
+- median_elapsed_seconds: `17.351`
+- threshold_seconds: `3600`
+- threshold_met: `1/1`
+
+| Target | Status | Elapsed (ms) | Elapsed (s) | Threshold Met | Failure Stage | Hint | Signature |
+|---|---|---:|---:|---|---|---|---|
+| `stm32g071b-disco` | `pass` | `17351` | `17.351` | `True` | `n/a` | `n/a` | `n/a` |

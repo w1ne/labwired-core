@@ -1,0 +1,28 @@
+{
+  "target_id": "adafruit-feather-rp2350",
+  "status": "pass",
+  "crate": "firmware-adafruit-feather-rp2350-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/adafruit-feather-rp2350/io-smoke.yaml",
+  "system": "configs/systems/adafruit-feather-rp2350.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T01:21:09Z",
+  "finished_at_utc": "2026-11-04T01:21:25Z",
+  "elapsed_seconds": 16,
+  "elapsed_ms": 15328,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 14.771,
+    "build_firmware": 0.221,
+    "run_smoke": 0.326
+  },
+  "stages_ms": {
+    "build_cli": 14771,
+    "build_firmware": 221,
+    "run_smoke": 326
+  }
+}

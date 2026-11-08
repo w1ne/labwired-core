@@ -1,0 +1,63 @@
+# Narrow STM32F030R8T6 model for NUCLEO-F030R8 onboarding.
+#
+# Only reset/clock setup, GPIOA/C, SysTick, and USART2 used by this smoke are
+# declared. Other F030 blocks are omitted, so accesses remain unsupported.
+# Sources: ST DS9773 (STM32F030x4/x6/x8/xC), RM0360, and MB1136/UM1724.
+name: stm32f030r8-nucleo-smoke
+arch: arm
+core: cortex-m0
+cpu_hz: 8000000
+
+flash:
+  base: 0x08000000
+  size: 64KB
+ram:
+  base: 0x20000000
+  size: 8KB
+
+# Only pads connected to the board's VCP, LD2 and user button are included.
+pins:
+  PA2: { gpio: gpioa, bit: 2 }
+  PA3: { gpio: gpioa, bit: 3 }
+  PA5: { gpio: gpioa, bit: 5 }
+  PC13: { gpio: gpioc, bit: 13 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 1KB
+    config:
+      profile: stm32f0
+
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x48000000
+    size: 1KB
+    clock: { reg: ahbenr, bit: 17 }
+    config:
+      profile: stm32v2
+      # Preserve the reset AF mode and pull-ups on SWD PA13/PA14.
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x24000000
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x48000800
+    size: 1KB
+    clock: { reg: ahbenr, bit: 19 }
+    config:
+      profile: stm32v2
+
+  - id: usart2
+    type: uart
+    base_address: 0x40004400
+    size: 1KB
+    irq: 28
+    clock: { reg: apb1enr, bit: 17 }
+    config:
+      profile: stm32v2

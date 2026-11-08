@@ -1,0 +1,19 @@
+# ch32fun examples_v30x/debugprintfdemo, unmodified, built for the
+# CH32V307VCT6 (rv32imafc/ilp32f). "+N" then "-N[c]" through the WCH-Link
+# debug printf channel (DMDATA0/1 at 0xE0000380), 100 ms apart plus 10,000
+# poll_input() calls; c is the last host byte, NUL here (no host input is
+# modelled). DMDATA0 bits 7:6 read 0 at the end: the probe took every request.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/debugprintfdemo.elf"
+  system: "../../configs/systems/ch32v307v-evt-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 100000000
+  max_steps: 100000000
+  wall_time_ms: 600000
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "+0" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "-1[" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "+4" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "-5[" }
+  - memory_value: { address: 0xE0000380, mask: 0xC0, expected_value: 0 }

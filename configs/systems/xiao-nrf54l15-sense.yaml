@@ -1,0 +1,12 @@
+# GPIO-only system profile for Seeed Studio XIAO nRF54L15 Sense (SKU 101991422).
+# The IMU and microphone are physically present but intentionally unmodeled.
+name: "xiao-nrf54l15-sense"
+chip: "../chips/nrf54l15-xiao-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "gpio2"
+    pin: 0
+    signal: "output"
+    active_high: false

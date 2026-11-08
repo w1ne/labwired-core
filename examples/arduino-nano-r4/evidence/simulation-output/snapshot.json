@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      0,
+      536870912,
+      1176,
+      0,
+      1074004032,
+      0,
+      1048576,
+      536903664,
+      16,
+      0,
+      0,
+      0,
+      0,
+      536903664,
+      1139,
+      1142
+    ],
+    "pc": 1142,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 16000,
+  "cycles": 16000,
+  "instructions": 16000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 16000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 16000
+    }
+  },
+  "limits": {
+    "max_steps": 16000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "b3f789dd51b675e965b96edb15c770e0ac8f675f7edc5786bd9c369440d28859",
+  "config": {
+    "firmware": "examples/arduino-nano-r4/../../target/thumbv7em-none-eabi/release/firmware-arduino-nano-r4-smoke",
+    "system": "examples/arduino-nano-r4/../../configs/systems/arduino-nano-r4.yaml",
+    "script": "examples/arduino-nano-r4/onboarding-smoke.yaml"
+  }
+}

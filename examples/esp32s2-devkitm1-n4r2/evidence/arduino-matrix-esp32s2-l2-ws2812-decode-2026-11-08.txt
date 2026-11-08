@@ -1,0 +1,3 @@
+pin 18: 96 edges (mode af)
+frame 0: 24 bits GRB=0x404040 -> R=64 G=64 B=64; T0H ns [400] T1H ns [800] low ns [400, 800]
+frame 1: 24 bits GRB=0x000000 -> R=0 G=0 B=0; T0H ns [400] T1H ns [] low ns [800]

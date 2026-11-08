@@ -240,8 +240,32 @@ fn ram_geometry_is_valid(chip: &ChipDescriptor) -> bool {
 
 /// Zero is an honest absence of internal flash only for this declared SoC.
 /// The base must also be zero: the placeholder must not imply a storage map.
+/// Parts whose erase sector is smaller than 4 KiB, with the flash size the
+/// datasheet gives. The CH32V006 has 62 KB of code flash erased in 1 KiB
+/// sectors (CH32V006DS0: "Built-in 62K-byte program flash memory area",
+/// `terase_sec` "Sector (1K bytes) erase time"). The CH32X035 (all three
+/// packages, one die) has 62 KB erased in 1 KiB pages (WCH SPL
+/// ch32x035_flash.c `FLASH_ErasePage`: "Erases a specified FLASH page(1KB)";
+/// PlatformIO ch32v genericCH32X035* `maximum_size` 63488). The CH32L103
+/// has 62 KB erased in 1 KiB pages (WCH product page "20KB SRAM, 62KB
+/// Flash"; SPL ch32l103_flash.c `FLASH_ErasePage`: "Erases a specified FLASH
+/// page(1KB)").
+const SMALL_SECTOR_FLASH_PARTS: &[(&str, u64, u64)] = &[
+    ("ch32v006f8u7-ch32fun-smoke", 62 * 1024, 1024),
+    ("ch32x035c8t6-ch32fun-smoke", 62 * 1024, 1024),
+    ("ch32x035f8u6-ch32fun-smoke", 62 * 1024, 1024),
+    ("ch32x035g8u6", 62 * 1024, 1024),
+    ("ch32l103c8t6", 62 * 1024, 1024),
+];
+
 fn flash_geometry_is_valid(chip: &ChipDescriptor) -> bool {
     const SECTOR: u64 = 4096;
+    if let Some((_, size, sector)) = SMALL_SECTOR_FLASH_PARTS
+        .iter()
+        .find(|(name, _, _)| chip.name == *name)
+    {
+        return chip.flash.size == *size && chip.flash.size % sector == 0;
+    }
     if chip.flash.size != 0 {
         return chip.flash.size % SECTOR == 0;
     }

@@ -2,8 +2,23 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! 8-bit AVR GPIO port: classic ATmega PINx / DDRx / PORTx or AVRxt VPORT
-//! DIR / OUT / IN register ordering.
+//! 8-bit AVR GPIO port: classic ATmega PINx / DDRx / PORTx, AVRxt VPORT
+//! DIR / OUT / IN register ordering, or the full megaAVR 0-series PORT block.
+//!
+//! The megaAVR PORT layout (ATmega4808/4809 data sheet DS40002173 §16.5,
+//! offsets from the Microchip ATDF): DIR 0x00, DIRSET/CLR/TGL 0x01..0x03,
+//! OUT 0x04, OUTSET/CLR/TGL 0x05..0x07, IN 0x08 (writing 1 toggles OUT),
+//! INTFLAGS 0x09, PORTCTRL 0x0A and PINnCTRL 0x10..0x17. PINnCTRL.PULLUPEN
+//! is the pull-up; ISC = INPUT_DISABLE turns the digital input buffer off, so
+//! IN reads 0 there. Pin-change / edge interrupts (ISC 1..3, 5) and INVEN are
+//! not modelled: a PINnCTRL write that asks for them is refused. The CPU
+//! aliases VPORTn onto DIR / OUT / IN / INTFLAGS of this block.
+//!
+//! A megaAVR pad can also carry a timer waveform output: with the pad an
+//! output (DIR set) and the timer driving its line (TCA0 CTRLB.CMPnEN), the
+//! waveform overrides OUT (DS40002173 §20.3.3.4), and IN, the logic analyzer
+//! and push capture read the waveform. The bus binds the routes
+//! (`SystemBus::wire_megaavr_tca_output_pads`), gated on PORTMUX.TCAROUTEA.
 //!
 //! Parking model so `--watch-gpio portb:5` can observe Arduino Nano
 //! `LED_BUILTIN` (PB5). The AVR interpreter owns the same registers in its
@@ -24,7 +39,21 @@ pub enum AvrGpioRegisterLayout {
     #[default]
     Atmega,
     AvrxtVport,
+    MegaAvrPort,
 }
+
+/// megaAVR PORT register offsets.
+const MP_DIR: u64 = 0x00;
+const MP_OUT: u64 = 0x04;
+const MP_IN: u64 = 0x08;
+const MP_INTFLAGS: u64 = 0x09;
+const MP_PORTCTRL: u64 = 0x0A;
+const MP_PINCTRL: u64 = 0x10;
+const PINCTRL_PULLUPEN: u8 = 1 << 3;
+const PINCTRL_INVEN: u8 = 1 << 7;
+const PINCTRL_ISC_MASK: u8 = 0x07;
+const PINCTRL_ISC_INTDISABLE: u8 = 0;
+const PINCTRL_ISC_INPUT_DISABLE: u8 = 4;
 
 #[derive(Debug)]
 pub struct AvrGpioPort {
@@ -45,6 +74,11 @@ pub struct AvrGpioPort {
     watch: Option<crate::pins::PadWatch>,
     /// Level cells kept equal to a pad (see `Peripheral::watch_pad_level`).
     cells: Vec<(u8, std::sync::Arc<std::sync::atomic::AtomicBool>)>,
+    /// megaAVR `PINnCTRL` and `PORTCTRL` (unused by the other layouts).
+    pinctrl: [u8; 8],
+    portctrl: u8,
+    /// Timer waveform outputs bound to these pads (megaAVR layout only).
+    pad_routes: crate::peripherals::pad_routing::PadRoutes,
 }
 
 impl Default for AvrGpioPort {
@@ -64,6 +98,11 @@ impl AvrGpioPort {
         Self::with_layout(AvrGpioRegisterLayout::AvrxtVport, pin_count)
     }
 
+    /// Create a megaAVR 0-series PORT block (`PORTx`, 0x20 bytes).
+    pub fn new_megaavr_port(pin_count: u8) -> Self {
+        Self::with_layout(AvrGpioRegisterLayout::MegaAvrPort, pin_count)
+    }
+
     /// Create a classic AVR GPIO block with fewer than eight bonded pins.
     pub fn new_with_pin_count(pin_count: u8) -> Self {
         Self::with_layout(AvrGpioRegisterLayout::Atmega, pin_count)
@@ -81,6 +120,118 @@ impl AvrGpioPort {
             pud: false,
             watch: None,
             cells: Vec::new(),
+            pinctrl: [0; 8],
+            portctrl: 0,
+            pad_routes: crate::peripherals::pad_routing::PadRoutes::new(),
+        }
+    }
+
+    /// The route selector of every pad: a pad can carry a peripheral line
+    /// only while it is an output.
+    #[inline]
+    fn route_selector(ddr: u8) -> impl Fn(u8) -> Option<u32> {
+        move |pin| (pin < 8 && ddr & (1u8 << pin) != 0).then_some(0)
+    }
+
+    /// The output pads a timer line drives now, and the levels it puts there.
+    #[inline]
+    fn routed(&self) -> (u8, u8) {
+        if self.pad_routes.is_empty() {
+            return (0, 0);
+        }
+        let (mut mask, mut level) = (0u8, 0u8);
+        let select = Self::route_selector(self.ddr);
+        for pin in 0..self.pin_count {
+            if let Some(l) = self.pad_routes.level(pin, &select) {
+                mask |= 1 << pin;
+                if l {
+                    level |= 1 << pin;
+                }
+            }
+        }
+        (mask, level)
+    }
+
+    /// Re-register watched pads with the lines that drive them now.
+    fn sync_pad_line_taps(&mut self) {
+        if self.pad_routes.is_empty() {
+            return;
+        }
+        let Some(watch) = self.watch.take() else {
+            return;
+        };
+        self.pad_routes
+            .sync_taps(watch.tap(), watch.pairs(), Self::route_selector(self.ddr));
+        self.watch = Some(watch);
+    }
+
+    /// Bits of the bonded pads.
+    #[inline]
+    fn bonded(&self) -> u8 {
+        if self.pin_count >= 8 {
+            0xFF
+        } else {
+            (1u8 << self.pin_count) - 1
+        }
+    }
+
+    /// megaAVR pads whose digital input buffer is off (ISC = INPUT_DISABLE).
+    fn input_disabled(&self) -> u8 {
+        if self.layout != AvrGpioRegisterLayout::MegaAvrPort {
+            return 0;
+        }
+        (0..8).fold(0u8, |acc, i| {
+            if self.pinctrl[i] & PINCTRL_ISC_MASK == PINCTRL_ISC_INPUT_DISABLE {
+                acc | (1 << i)
+            } else {
+                acc
+            }
+        })
+    }
+
+    fn megaavr_write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let v = value & self.bonded();
+        match offset {
+            MP_DIR => self.mutate_pads(|s| s.ddr = v),
+            0x01 => self.mutate_pads(|s| s.ddr |= v),
+            0x02 => self.mutate_pads(|s| s.ddr &= !v),
+            0x03 => self.mutate_pads(|s| s.ddr ^= v),
+            MP_OUT => self.mutate_pads(|s| s.port = v),
+            0x05 => self.mutate_pads(|s| s.port |= v),
+            0x06 => self.mutate_pads(|s| s.port &= !v),
+            0x07 | MP_IN => self.mutate_pads(|s| s.port ^= v),
+            // No pin interrupt is ever raised, so there is no flag to clear.
+            MP_INTFLAGS => {}
+            MP_PORTCTRL => self.portctrl = value & 0x01,
+            o if (MP_PINCTRL..MP_PINCTRL + 8).contains(&o) => {
+                let isc = value & PINCTRL_ISC_MASK;
+                if value & PINCTRL_INVEN != 0
+                    || !matches!(isc, PINCTRL_ISC_INTDISABLE | PINCTRL_ISC_INPUT_DISABLE)
+                {
+                    return Err(crate::SimulationError::NotImplemented(format!(
+                        "megaAVR PIN{}CTRL {value:#04x}: pin interrupts and INVEN are \
+                         not modelled",
+                        o - MP_PINCTRL
+                    )));
+                }
+                let i = (o - MP_PINCTRL) as usize;
+                self.mutate_pads(|s| s.pinctrl[i] = value & (PINCTRL_PULLUPEN | PINCTRL_ISC_MASK));
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn megaavr_read(&self, offset: u64) -> u8 {
+        match offset {
+            MP_DIR..=0x03 => self.ddr,
+            MP_OUT..=0x07 => self.port,
+            MP_IN => self.pad_bits() & !self.input_disabled(),
+            MP_PORTCTRL => self.portctrl,
+            o if (MP_PINCTRL..MP_PINCTRL + 8).contains(&o) => {
+                self.pinctrl[(o - MP_PINCTRL) as usize]
+            }
+            _ => 0,
         }
     }
 
@@ -89,6 +240,7 @@ impl AvrGpioPort {
         match self.layout {
             AvrGpioRegisterLayout::Atmega => OFF_PIN,
             AvrGpioRegisterLayout::AvrxtVport => OFF_PORT,
+            AvrGpioRegisterLayout::MegaAvrPort => MP_IN,
         }
     }
 
@@ -97,6 +249,7 @@ impl AvrGpioPort {
         match self.layout {
             AvrGpioRegisterLayout::Atmega => OFF_PORT,
             AvrGpioRegisterLayout::AvrxtVport => OFF_DDR,
+            AvrGpioRegisterLayout::MegaAvrPort => MP_OUT,
         }
     }
 
@@ -107,6 +260,15 @@ impl AvrGpioPort {
     fn pull_ups(&self) -> u8 {
         if self.pud {
             0
+        } else if self.layout == AvrGpioRegisterLayout::MegaAvrPort {
+            let pullen = (0..8).fold(0u8, |acc, i| {
+                if self.pinctrl[i] & PINCTRL_PULLUPEN != 0 {
+                    acc | (1 << i)
+                } else {
+                    acc
+                }
+            });
+            pullen & !self.ddr
         } else {
             self.port & !self.ddr
         }
@@ -118,7 +280,9 @@ impl AvrGpioPort {
     #[inline]
     fn pad_bits(&self) -> u8 {
         let from_pull = self.pull_ups() & !self.ext_mask;
-        (self.port & self.ddr) | (self.pin & !self.ddr & !from_pull) | from_pull
+        let bits = (self.port & self.ddr) | (self.pin & !self.ddr & !from_pull) | from_pull;
+        let (mask, level) = self.routed();
+        (bits & !mask) | (level & mask)
     }
 
     /// Publish the pad level into every watching cell.
@@ -160,7 +324,10 @@ impl PinPort for AvrGpioPort {
             return None;
         }
         let bit = 1u8 << pin;
-        Some(if self.ddr & bit != 0 {
+        let (mask, level) = self.routed();
+        Some(if mask & bit != 0 {
+            PadDriver::drive(level & bit != 0)
+        } else if self.ddr & bit != 0 {
             PadDriver::drive(self.port & bit != 0)
         } else if self.pull_ups() & bit != 0 {
             PadDriver::released(Pull::Up)
@@ -226,8 +393,23 @@ impl PinPort for AvrGpioPort {
     }
 
     fn install_watch(&mut self, watch: Option<crate::pins::PadWatch>) -> bool {
-        self.watch = watch;
+        match watch {
+            None => {
+                self.watch = None;
+                self.pad_routes.clear_taps();
+            }
+            Some(watch) => {
+                self.watch = Some(watch);
+                // Seeded stale so the sync installs the current routing.
+                self.pad_routes.invalidate_registrations();
+                self.sync_pad_line_taps();
+            }
+        }
         true
+    }
+
+    fn routes_changed(&mut self) {
+        self.sync_pad_line_taps();
     }
 
     fn take_watch(&mut self) -> Option<crate::pins::PadWatch> {
@@ -259,6 +441,7 @@ impl Peripheral for AvrGpioPort {
         let (direction, output, input) = match self.layout {
             AvrGpioRegisterLayout::Atmega => (OFF_DDR, OFF_PORT, OFF_PIN),
             AvrGpioRegisterLayout::AvrxtVport => (OFF_PIN, OFF_DDR, OFF_PORT),
+            AvrGpioRegisterLayout::MegaAvrPort => return Ok(self.megaavr_read(offset)),
         };
         Ok(match offset {
             // Outputs read back their latch; inputs read the outside/pull-up
@@ -286,6 +469,7 @@ impl Peripheral for AvrGpioPort {
                 // semantics.
                 _ => {}
             },
+            AvrGpioRegisterLayout::MegaAvrPort => return self.megaavr_write(offset, value),
         }
         Ok(())
     }
@@ -325,8 +509,30 @@ impl Peripheral for AvrGpioPort {
             } else {
                 GpioMode::Input
             },
-            func: None,
+            func: self
+                .pad_routes
+                .func(pin, Self::route_selector(self.ddr))
+                .map(String::from),
         })
+    }
+
+    /// Bind pad `pin` to TCA0 waveform output `line`: live while the pad is
+    /// an output, the timer drives the line, and `gate` (PORTMUX.TCAROUTEA)
+    /// routes TCA0 to this port. megaAVR PORT layout only.
+    fn bind_remapped_timer_output_pad(
+        &mut self,
+        cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        pin: u8,
+        line: usize,
+        func: &'static str,
+        gate: crate::peripherals::pad_routing::RemapGate,
+    ) -> bool {
+        if self.layout != AvrGpioRegisterLayout::MegaAvrPort || pin >= self.pin_count {
+            return false;
+        }
+        self.pad_routes
+            .bind_when_driving_gated(cell, pin, None, line, func, Some(gate));
+        true
     }
 
     fn pins(&self) -> Option<&dyn PinPort> {
@@ -556,5 +762,47 @@ mod tests {
         assert!(!p.set_gpio_input(4, true));
         assert_eq!(p.read_gpio_input(4), None);
         assert_eq!(p.read_gpio_is_output(4), None);
+    }
+
+    /// megaAVR PORT: SET/CLR/TGL strobes, IN-write toggle, PINnCTRL pull-up.
+    #[test]
+    fn megaavr_port_strobes_and_pullups() {
+        let mut p = AvrGpioPort::new_megaavr_port(8);
+        p.write(0x01, 1 << 2).unwrap(); // DIRSET PE2
+        assert_eq!(p.read(0x00).unwrap(), 1 << 2);
+        p.write(0x05, 1 << 2).unwrap(); // OUTSET
+        assert_eq!(p.read_gpio_output(2), Some(true));
+        p.write(0x07, 1 << 2).unwrap(); // OUTTGL
+        assert_eq!(p.read_gpio_output(2), Some(false));
+        p.write(0x08, 1 << 2).unwrap(); // writing 1 to IN toggles OUT
+        assert_eq!(p.read(0x04).unwrap(), 1 << 2);
+        p.write(0x06, 1 << 2).unwrap(); // OUTCLR
+        assert_eq!(p.read(0x08).unwrap() & (1 << 2), 0);
+        // PIN3CTRL.PULLUPEN: an input with nothing attached reads high.
+        assert_eq!(p.read(0x08).unwrap() & (1 << 3), 0);
+        p.write(0x13, PINCTRL_PULLUPEN).unwrap();
+        assert_eq!(p.read(0x08).unwrap() & (1 << 3), 1 << 3);
+        // INPUT_DISABLE turns the input buffer off.
+        p.write(0x13, PINCTRL_PULLUPEN | PINCTRL_ISC_INPUT_DISABLE)
+            .unwrap();
+        assert_eq!(p.read(0x08).unwrap() & (1 << 3), 0);
+    }
+
+    #[test]
+    fn megaavr_port_refuses_pin_interrupts() {
+        let mut p = AvrGpioPort::new_megaavr_port(8);
+        assert!(
+            p.write(0x10, 0x03).is_err(),
+            "ISC = FALLING is not modelled"
+        );
+        assert!(p.write(0x10, 0x80).is_err(), "INVEN is not modelled");
+        assert_eq!(p.read(0x10).unwrap(), 0);
+    }
+
+    #[test]
+    fn megaavr_port_masks_unbonded_pads() {
+        let mut p = AvrGpioPort::new_megaavr_port(4);
+        p.write(0x00, 0xFF).unwrap();
+        assert_eq!(p.read(0x00).unwrap(), 0x0F);
     }
 }

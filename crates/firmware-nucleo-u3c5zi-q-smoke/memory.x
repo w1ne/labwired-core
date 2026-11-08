@@ -1,0 +1,6 @@
+/* STM32U3C5ZIT6Q has 2 MiB flash and 640 KiB contiguous SRAM (ST CMSIS). */
+MEMORY
+{
+  FLASH : ORIGIN = 0x08000000, LENGTH = 2M
+  RAM   : ORIGIN = 0x20000000, LENGTH = 640K
+}

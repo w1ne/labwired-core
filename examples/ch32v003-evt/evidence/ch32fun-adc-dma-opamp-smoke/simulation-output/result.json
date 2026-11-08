@@ -1,0 +1,736 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 55000000,
+  "cycles": 146666786,
+  "instructions": 55000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 55000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 55000000
+    }
+  },
+  "limits": {
+    "max_steps": 100000000,
+    "max_cycles": 55000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 900000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "adc_dma_opamp example",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "initializing adc...done.",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "initializing op-amp...",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "looping...",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": " 1023  511    0",
+          "min_count": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "  255  767 1023",
+          "min_count": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073887232,
+          "expected_value": 65536,
+          "mask": 65536,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioc:1",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      2146,
+      536872948,
+      536871932,
+      0,
+      536872793,
+      3,
+      13,
+      536870912,
+      4096,
+      11,
+      536872792,
+      536872851,
+      3758157824,
+      7202654,
+      4294639638,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 716,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 1770,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 54999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "fb2c3325d25ba5d2e22bf4ada34004b099132cab3efef466476f4ea3531281f2",
+  "config": {
+    "firmware": "examples/ch32v003-evt/ch32fun/adc_dma_opamp.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-ch32fun-adc-dma-smoke.yaml",
+    "script": "examples/ch32v003-evt/ch32fun-adc-dma-opamp-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "exti",
+        "kind": "native",
+        "base": 1073808384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "iwdg",
+        "kind": "native",
+        "base": 1073754112,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "debug_printf",
+        "kind": "native",
+        "base": 3758096628,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfic",
+        "kind": "native",
+        "base": 3758153728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dma1",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "exten",
+        "kind": "declarative",
+        "base": 1073887232,
+        "registers": [
+          {
+            "name": "EXTEN_CTR",
+            "offset": 0,
+            "size": 32,
+            "value": 65536,
+            "fields": [
+              {
+                "name": "PLL_CFG",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "LOCKUP_EN",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "LOCKUP_RESET",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "LDO_TRIM",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "FLASH_CLK_TRIM",
+                "bits": [
+                  13,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "WR_EN",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "WR_LOCK",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "OPA_EN",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 1
+              },
+              {
+                "name": "OPA_NSEL",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "OPA_PSEL",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EXTEN_KEYR",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "KEY",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1073816576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "i2c",
+        "base": 1073763328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim1",
+        "kind": "native",
+        "base": 1073818624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim2",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 1073819648,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "pot_pd3",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc1",
+          "channel": 4
+        },
+        "artifacts": []
+      },
+      {
+        "id": "pot_pd2",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc1",
+          "channel": 3
+        },
+        "artifacts": []
+      },
+      {
+        "id": "pot_pc4",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc1",
+          "channel": 2
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 55000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioc",
+        "pin": 1,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 4808591,
+            "value": 1
+          },
+          {
+            "cycle": 9608596,
+            "value": 0
+          },
+          {
+            "cycle": 14410960,
+            "value": 1
+          },
+          {
+            "cycle": 19210965,
+            "value": 0
+          },
+          {
+            "cycle": 24013329,
+            "value": 1
+          },
+          {
+            "cycle": 28813331,
+            "value": 0
+          },
+          {
+            "cycle": 33615968,
+            "value": 1
+          },
+          {
+            "cycle": 38415973,
+            "value": 0
+          },
+          {
+            "cycle": 43218610,
+            "value": 1
+          },
+          {
+            "cycle": 48018621,
+            "value": 0
+          },
+          {
+            "cycle": 52821258,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 4807532,
+            "state": "0"
+          },
+          {
+            "cycle": 4808591,
+            "state": "1"
+          },
+          {
+            "cycle": 9608596,
+            "state": "0"
+          },
+          {
+            "cycle": 14410960,
+            "state": "1"
+          },
+          {
+            "cycle": 19210965,
+            "state": "0"
+          },
+          {
+            "cycle": 24013329,
+            "state": "1"
+          },
+          {
+            "cycle": 28813331,
+            "state": "0"
+          },
+          {
+            "cycle": 33615968,
+            "state": "1"
+          },
+          {
+            "cycle": 38415973,
+            "state": "0"
+          },
+          {
+            "cycle": 43218610,
+            "state": "1"
+          },
+          {
+            "cycle": 48018621,
+            "state": "0"
+          },
+          {
+            "cycle": 52821258,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 11
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioc",
+      "number": 1,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "stimuli": [
+    {
+      "channel": "position",
+      "component": "pot_pd3",
+      "value": 100.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1
+    },
+    {
+      "channel": "position",
+      "component": "pot_pd2",
+      "value": 50.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1
+    },
+    {
+      "channel": "position",
+      "component": "pot_pc4",
+      "value": 0.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1
+    },
+    {
+      "channel": "position",
+      "component": "pot_pd3",
+      "value": 25.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 30000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 30000000
+    },
+    {
+      "channel": "position",
+      "component": "pot_pd2",
+      "value": 75.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 30000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 30000000
+    },
+    {
+      "channel": "position",
+      "component": "pot_pc4",
+      "value": 100.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 30000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 30000000
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2316,
+    "data_bytes": 0,
+    "bss_bytes": 8,
+    "flash_used_bytes": 2316,
+    "ram_static_bytes": 8,
+    "flash_total_bytes": 16384,
+    "ram_total_bytes": 2048,
+    "flash_used_pct": 14.14,
+    "ram_static_pct": 0.39,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 146666786,
+    "instructions": 55000000,
+    "steps_executed": 55000000,
+    "memory_reads": 55002774,
+    "memory_writes": 3349093,
+    "peripheral_accesses": 21673271,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 716,
+        "count": 71641
+      },
+      {
+        "pc": 720,
+        "count": 71563
+      },
+      {
+        "pc": 718,
+        "count": 71561
+      },
+      {
+        "pc": 182,
+        "count": 39
+      },
+      {
+        "pc": 560,
+        "count": 39
+      }
+    ]
+  }
+}

@@ -1,0 +1,54 @@
+# Narrow smoke profile for Espressif's ESP32-C3-LCDkit.
+# It exposes only the on-board LCD's GPIO/SPI path and UART0 TX. Audio,
+# encoder, IR, RGB LED, USB, Wi-Fi, BLE and other board functions are omitted.
+name: "esp32c3-lcdkit-smoke"
+arch: "riscv"
+core: "rv32imc"
+registers_count: 31
+cpu_hz: 160_000_000
+
+flash:
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  base: 0x3FC80000
+  size: "400KB"
+
+pins:
+  GPIO0: { gpio: "gpio", bit: 0 }  # LCD_SDA / MOSI
+  GPIO1: { gpio: "gpio", bit: 1 }  # LCD_SCL / SCK
+  GPIO2: { gpio: "gpio", bit: 2 }  # LCD_D/C
+  GPIO5: { gpio: "gpio", bit: 5 }  # LCD_BL_CTRL
+  GPIO7: { gpio: "gpio", bit: 7 }  # LCD_CS
+  GPIO21: { gpio: "gpio", bit: 21 } # UART0 TX pad
+
+peripherals:
+  - id: "uart0"
+    type: "esp32c3_uart"
+    irq: 21
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32c3/uart0.yaml"
+
+  - id: "gpio"
+    type: "esp32c3_gpio"
+    base_address: 0x60004000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/gpio.yaml"
+
+  - id: "io_mux"
+    type: "esp32c3_io_mux"
+    base_address: 0x60009000
+    size: "256"
+    config:
+      debug_schema: "../peripherals/esp32c3/io_mux.yaml"
+      path: "../peripherals/esp32c3/io_mux.yaml"
+
+  - id: "spi2"
+    type: "esp32c3_spi"
+    base_address: 0x60024000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/spi2.yaml"

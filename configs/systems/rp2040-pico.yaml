@@ -6,6 +6,7 @@
 name: "rp2040-pico"
 chip: "../chips/rp2040.yaml"
 external_devices: []
+# This board smoke claims the UART0 TX pad GP0 and the onboard LED on GP25.
 board_io:
   - id: "led_gp25"
     kind: "led"

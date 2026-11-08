@@ -271,6 +271,16 @@ pub struct RiscVRuntimeSnapshotV2 {
     pub triggers: crate::cpu::riscv::trigger::TriggerSnapshot,
 }
 
+/// [`RiscVRuntimeSnapshotV2`] plus the F extension's `f0..f31` and `fcsr`.
+/// Written only by a core with F, so every other core's blob is unchanged;
+/// the reader tries it before V2 (a V2 blob is too short to decode as it).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiscVRuntimeSnapshotV3 {
+    pub v2: RiscVRuntimeSnapshotV2,
+    pub f: [u32; 32],
+    pub fcsr: u32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

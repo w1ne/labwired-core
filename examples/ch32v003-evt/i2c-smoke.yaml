@@ -1,0 +1,11 @@
+# Read the SHT31 status word over the CH32V003's I2C1 master and report it on
+# USART1. The device model returns the datasheet power-on value 0x8010.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/ch32v003f4p6-sht31-smoke.elf"
+  system: "../../configs/systems/ch32v003evt-sht31-smoke.yaml"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "CH32V003_SHT31_STATUS_OK"
+  - expected_stop_reason: max_steps

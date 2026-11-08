@@ -39,18 +39,41 @@ pub const SIZE: u64 = 0x10;
 /// `FROM_CPU_INTR0` interrupt source ID; `FROM_CPU_INTR{n}` = `BASE + n`.
 const FROM_CPU_SOURCE_BASE: u32 = 79;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Esp32s3CrossCoreIpi {
     /// Latched value of FROM_CPU_0..3. Non-zero = the source is asserting.
     from_cpu: [u32; 4],
+
+    /// `FROM_CPU_INTR0` source ID (S3: 79; S2: 28, `ETS_FROM_CPU_INTR0_SOURCE`).
+    source_base: u32,
 
     /// Bus-published cycle clock (walk-free level export).
     clock: Option<CycleClock>,
 }
 
+impl Default for Esp32s3CrossCoreIpi {
+    fn default() -> Self {
+        Self {
+            from_cpu: [0; 4],
+            source_base: FROM_CPU_SOURCE_BASE,
+            clock: None,
+        }
+    }
+}
+
 impl Esp32s3CrossCoreIpi {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// ESP32-S2: the same four `CPU_INTR_FROM_CPU_n` latches, at SYSTEM +
+    /// 0x58 (`DPORT_CPU_INTR_FROM_CPU_0_REG`), raising sources 28..31. The
+    /// single-core S2's FreeRTOS port yields through FROM_CPU_0.
+    pub fn new_esp32s2() -> Self {
+        Self {
+            source_base: 28,
+            ..Self::default()
+        }
     }
 
     fn word(&self, offset: u64) -> u32 {
@@ -87,7 +110,7 @@ impl Peripheral for Esp32s3CrossCoreIpi {
             if std::env::var("LABWIRED_IPI_DEBUG").is_ok() && was == 0 && value != 0 {
                 eprintln!(
                     "[ipi] FROM_CPU_{idx} doorbell rung (→ assert source {})",
-                    FROM_CPU_SOURCE_BASE + idx as u32
+                    self.source_base + idx as u32
                 );
             }
         }
@@ -101,7 +124,7 @@ impl Peripheral for Esp32s3CrossCoreIpi {
         let mut irqs = Vec::new();
         for (n, &v) in self.from_cpu.iter().enumerate() {
             if v != 0 {
-                irqs.push(FROM_CPU_SOURCE_BASE + n as u32);
+                irqs.push(self.source_base + n as u32);
             }
         }
         PeripheralTickResult {
@@ -128,7 +151,7 @@ impl Peripheral for Esp32s3CrossCoreIpi {
     fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
         for (n, &v) in self.from_cpu.iter().enumerate() {
             if v != 0 {
-                out.push(FROM_CPU_SOURCE_BASE + n as u32);
+                out.push(self.source_base + n as u32);
             }
         }
     }

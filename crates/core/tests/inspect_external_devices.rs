@@ -175,24 +175,15 @@ fn external_devices_do_not_appear_as_peripherals() {
     );
 }
 
-/// A live device with no manifest declaration is reported as itself, not handed
-/// someone else's name.
-///
-/// Classic ESP32 hardwires a BMP280 at 0x76 onto i2c0 in
-/// `configure_xtensa_esp32` — real, on the bus, and declared by nobody. It must
-/// show up (it answers on a bus the firmware can address) and it must NOT be
-/// labelled `mux` merely for being the first thing the walk found.
+/// A bare classic ESP32 does not invent a physical sensor on its I2C bus.
 #[test]
-fn undeclared_device_is_reported_without_a_fabricated_identity() {
+fn undeclared_classic_esp32_sensor_is_not_fabricated() {
     let machine = bay_occupancy_machine();
     let inspect = machine.inspect(None, &InspectOpts::default());
-    let board = device(&inspect.devices, "i2c0@0x76");
-    assert!(!board.declared, "no manifest entry claims this device");
-    assert_eq!(
-        board.device_type, None,
-        "type is never guessed from the Rust model"
+    assert!(
+        !inspect.devices.iter().any(|d| d.id == "i2c0@0x76"),
+        "an ESP32 system with no BMP280 declaration must not attach one"
     );
-    assert_eq!(board.attachment.address, Some(0x76));
 }
 
 /// Painted-panel evidence comes out of `inspect` as structured data.

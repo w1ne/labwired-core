@@ -1,0 +1,13 @@
+# Focused nRF54L10 emulation profile on the nRF54L15-DK (PCA10156).
+# Nordic documents this DK target as nrf54l15dk/nrf54l10/cpuapp. The smoke
+# exposes the modeled UARTE20 VCOM and active-high LED0 on GPIO P2.09 only.
+name: "nrf54l10-on-nrf54l15-dk"
+chip: "../chips/nrf54l10.yaml"
+external_devices: []
+board_io:
+  - id: "led0"
+    kind: "led"
+    peripheral: "gpio2"
+    pin: 9
+    signal: "output"
+    active_high: true

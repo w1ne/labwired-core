@@ -1,0 +1,13 @@
+# NUCLEO-G031K8 smoke: USART2 VCP marker and LD3 on PC6.
+schema_version: "1.0"
+inputs:
+  firmware: ../../target/thumbv6m-none-eabi/release/firmware-nucleo-g031k8-smoke
+  system: ../../configs/systems/nucleo-g031k8.yaml
+limits:
+  max_steps: 30000
+assertions:
+  - uart_contains: "NUCLEO_G031K8_OK"
+  - gpio_edges:
+      pin: "gpioc:6"
+      min_edges: 16
+  - expected_stop_reason: max_steps

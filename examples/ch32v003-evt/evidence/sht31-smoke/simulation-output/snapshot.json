@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      0,
+      536872960,
+      0,
+      0,
+      1073821696,
+      128,
+      0,
+      0,
+      0,
+      134218107,
+      16,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 134218080,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 0,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 500000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 500000,
+  "cycles": 1009082,
+  "instructions": 500000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 500000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 500000
+    }
+  },
+  "limits": {
+    "max_steps": 500000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "76a8ce9c041f1883fc7a7ef083d5aac22950b21b3967145044ec32b1da385547",
+  "config": {
+    "firmware": "examples/ch32v003-evt/../../tests/fixtures/ch32v003f4p6-sht31-smoke.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-sht31-smoke.yaml",
+    "script": "examples/ch32v003-evt/i2c-smoke.yaml"
+  }
+}

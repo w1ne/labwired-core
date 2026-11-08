@@ -1,0 +1,34 @@
+{
+  "ok": true,
+  "status": "model_verified",
+  "proven": true,
+  "run_status": "pass",
+  "stop_reason": "assertions_passed",
+  "verification": "serial contains BME280_ID=0x60 and BME280_TEMP_RAW=0x082DC0",
+  "oracle_results": [
+    {
+      "kind": "serial",
+      "passed": true,
+      "detail": "serial contains BME280_ID=0x60"
+    },
+    {
+      "kind": "serial",
+      "passed": true,
+      "detail": "serial contains BME280_TEMP_RAW=0x082DC0"
+    }
+  ],
+  "serial": "BME280_ID=0x60\r\nBME280_TEMP_RAW=0x082DC0\r\n",
+  "gaps": [
+    {
+      "code": "approximation",
+      "scope": "model",
+      "detail": "no power net drives the MCU; VDD is assumed to be an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "unmodeled_faults": [
+    {
+      "access": "unpowered_rail_assumed",
+      "count": 1
+    }
+  ]
+}

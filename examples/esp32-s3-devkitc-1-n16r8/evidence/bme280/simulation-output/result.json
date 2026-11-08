@@ -1,0 +1,823 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 1500000,
+  "cycles": 1500000,
+  "instructions": 1500000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1500000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1500000
+    }
+  },
+  "limits": {
+    "max_steps": 1500000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "BME280_ID=0x60"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_TEMP_RAW=0x082DC0"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "xtensa_lx7",
+    "registers": [
+      0,
+      1070464960,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1070464960,
+      2151121986,
+      1070464912,
+      1077380204,
+      1070464967,
+      0,
+      0,
+      0,
+      1070464912
+    ],
+    "pc": 1077380162,
+    "ps": 262144,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "firmware_hash": "e8b3aed27c7db24df0c042430fe12fdcce05b238b1e2bccd51eb17befdc24bc7",
+  "config": {
+    "firmware": "examples/esp32-s3-devkitc-1-n16r8/../../target/xtensa-esp32s3-none-elf/release/firmware-esp32s3-devkitc-n16r8-bme280-smoke",
+    "system": "examples/esp32-s3-devkitc-1-n16r8/../../configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml",
+    "script": "examples/esp32-s3-devkitc-1-n16r8/bme280-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "iram",
+        "kind": "native",
+        "base": 1077346304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dram",
+        "kind": "native",
+        "base": 1070104576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc_slow",
+        "kind": "native",
+        "base": 1342177280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc_fast",
+        "kind": "native",
+        "base": 1611653120,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_icache",
+        "kind": "native",
+        "base": 1107296256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_dcache",
+        "kind": "native",
+        "base": 1006632960,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "drom",
+        "kind": "native",
+        "base": 1072693248,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rom_thunks",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "intmatrix",
+        "kind": "native",
+        "base": 1611407360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "crosscore_ipi",
+        "kind": "native",
+        "base": 1611399216,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "extmem",
+        "kind": "native",
+        "base": 1611415552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spimem1",
+        "kind": "native",
+        "base": 1610620928,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "system",
+        "kind": "native",
+        "base": 1611399168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "system_regs",
+        "kind": "native",
+        "base": 1611399168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "system_regs_hi",
+        "kind": "native",
+        "base": 1611399232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc_cntl",
+        "kind": "native",
+        "base": 1610645504,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "efuse",
+        "kind": "native",
+        "base": 1610641408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "low_mmio",
+        "kind": "native",
+        "base": 1610612736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mmio_rest",
+        "kind": "native",
+        "base": 1610678272,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usb_serial_jtag",
+        "kind": "native",
+        "base": 1610842112,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "wifi_mac",
+        "kind": "native",
+        "base": 1610821632,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "systimer",
+        "kind": "native",
+        "base": 1610756096,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 1610629120,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "io_mux",
+        "kind": "native",
+        "base": 1610649600,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sens_s3",
+        "kind": "native",
+        "base": 1610647552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc_io",
+        "kind": "native",
+        "base": 1610646528,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rng",
+        "kind": "native",
+        "base": 1610829824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sha",
+        "kind": "native",
+        "base": 1610854400,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pcnt",
+        "kind": "native",
+        "base": 1610706944,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ledc",
+        "kind": "native",
+        "base": 1610715136,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timg0_s3",
+        "kind": "native",
+        "base": 1610739712,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timg1_s3",
+        "kind": "native",
+        "base": 1610743808,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rmt_s3",
+        "kind": "rmt",
+        "base": 1610702848,
+        "registers": [],
+        "artifacts": [
+          {
+            "kind": "rmt_tx",
+            "id": "tx_start",
+            "meta": {
+              "count": 0
+            }
+          }
+        ]
+      },
+      {
+        "name": "spi2_s3",
+        "kind": "native",
+        "base": 1610760192,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi3_s3",
+        "kind": "native",
+        "base": 1610764288,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sar_adc_s3",
+        "kind": "native",
+        "base": 1610874880,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gdma",
+        "kind": "native",
+        "base": 1610870784,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2s0_s3",
+        "kind": "native",
+        "base": 1610674176,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2s1_s3",
+        "kind": "native",
+        "base": 1610797056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "twai",
+        "kind": "native",
+        "base": 1610788864,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "aes",
+        "kind": "native",
+        "base": 1610850304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rsa",
+        "kind": "native",
+        "base": 1610858496,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "hmac",
+        "kind": "native",
+        "base": 1610866688,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ds",
+        "kind": "native",
+        "base": 1610862592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mcpwm0",
+        "kind": "native",
+        "base": 1610735616,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mcpwm1",
+        "kind": "native",
+        "base": 1610792960,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sdmmc",
+        "kind": "native",
+        "base": 1610776576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "lcd_cam",
+        "kind": "native",
+        "base": 1610878976,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usb_otg",
+        "kind": "native",
+        "base": 1611137024,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "native",
+        "base": 1610772480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart0_s3",
+        "kind": "native",
+        "base": 1610612736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1_s3",
+        "kind": "native",
+        "base": 1610678272,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart2_s3",
+        "kind": "native",
+        "base": 1610801152,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c0",
+        "kind": "native",
+        "base": 1610690560,
+        "registers": [
+          {
+            "name": "SCL_LOW_PERIOD",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CTR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TO",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SLAVE_ADDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FIFO_ST",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FIFO_CONF",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATA",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ENA",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_STATUS",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SDA_HOLD",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SDA_SAMPLE",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_HIGH_PERIOD",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_START_HOLD",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_RSTART_SETUP",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STOP_HOLD",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STOP_SETUP",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FILTER_CFG",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLK_CONF",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD0-7",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_ST_TIME_OUT",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_MAIN_ST_TIME_OUT",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_SP_CONF",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STRETCH_CONF",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 248,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TXFIFO_START_ADDR",
+            "offset": 256,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RXFIFO_START_ADDR",
+            "offset": 384,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "bme280",
+        "device_type": "bme280",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c0",
+          "address": 119
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "bme280",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "BME280_ID=0x60",
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 320000
+      },
+      {
+        "text": "BME280_TEMP_RAW=0x082DC0",
+        "cycle_lo": 330000,
+        "cycle": 340000,
+        "end_cycle": 840000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1193,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1193,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 16777216,
+    "ram_total_bytes": 524288,
+    "flash_used_pct": 0.01,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 1500000,
+    "instructions": 1500000,
+    "steps_executed": 1500000,
+    "memory_reads": 0,
+    "memory_writes": 0,
+    "peripheral_accesses": 795,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1077380162,
+        "count": 5859
+      }
+    ]
+  }
+}

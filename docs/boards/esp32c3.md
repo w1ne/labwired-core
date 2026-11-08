@@ -21,7 +21,7 @@ This page is the **board-page template** for public docs: status → artifact �
 | Example system | [`configs/systems/esp32c3-devkit.yaml`](../../configs/systems/esp32c3-devkit.yaml) |
 | Playground board id | `esp32-c3-supermini` (labs such as `esp32c3-oled-lab`) |
 | Reference firmware | [`crates/firmware-esp32c3-demo/`](../../crates/firmware-esp32c3-demo/) |
-| Examples | `examples/esp32c3-blinky`, `esp32c3-oled-demo`, weather / thermal workshops under `examples/` |
+| Examples | `examples/esp32c3-blinky`, `esp32c3-oled-demo`, weather / thermal workshops, and the Seeed XIAO ESP32-C3 BME280 smoke under `examples/` |
 | Wi-Fi path | Register-level MAC + bridge — [ESP32-C3 Wi-Fi MAC bridge](../esp32c3_wifi_mac_bridge.md) |
 | Tier (snapshot) | Full documented SVD estate wired; behavioral depth varies by block (matrix below) |
 
@@ -163,6 +163,9 @@ Details: [First agent run](../agent/first-run.md) · [Tools](../agent/tools.md).
 | Path | What |
 |------|------|
 | `configs/systems/esp32c3-devkit.yaml` | Baseline system |
+| [ESP32-C3-DevKitM-1-N4X smoke](esp32c3-devkitm1-n4x.md) | Exact active board SKU; onboard RGB LED on GPIO8 and BME280 I2C sensor example |
+| [Seeed XIAO ESP32-C3 GPIO example](../../examples/seeed-xiao-esp32c3/README.md) | D10 / GPIO10 external LED path |
+| [Seeed XIAO ESP32-C3 + BME280](../../examples/seeed-xiao-esp32c3-bme280/README.md) | D4/D5 I2C0 route, BME280 ID and raw temperature smoke |
 | `configs/systems/esp32c3-oled-demo.yaml` | Display lab |
 | `examples/esp32c3-blinky` | Minimal bring-up |
 | `docs/esp32c3_wifi_mac_bridge.md` | Wi-Fi fidelity |

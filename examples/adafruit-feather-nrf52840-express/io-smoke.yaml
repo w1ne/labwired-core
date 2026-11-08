@@ -1,0 +1,10 @@
+# Boot the Feather nRF52840 Express profile and emit a UART marker on D0/TX.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-feather-nrf52840-express-smoke"
+  system: "../../configs/systems/adafruit-feather-nrf52840-express.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "FEATHER_NRF52840_UART_OK"
+  - expected_stop_reason: max_steps

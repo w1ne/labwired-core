@@ -1,0 +1,37 @@
+# Narrow P4X Function EV profile: one HP RISC-V core and GPIO8 only.
+# ESP-IDF's ESP32-P4 memory map reserves the low 256 KiB of HP RAM for ROM use.
+name: "esp32p4"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 400_000_000
+
+flash:
+  # P4 unified flash mapped into the IROM/DROM window; this board has 16 MB.
+  base: 0x40000000
+  size: "16384KB"
+ram:
+  # 768 KiB HP IRAM/DRAM less the 256 KiB ROM-reserved area.
+  base: 0x4FF40000
+  size: "512KB"
+memory_regions:
+  - name: "rom"
+    base: 0x4FC00000
+    size: "128KB"
+
+pins:
+  GPIO8: { gpio: "gpio", bit: 8 }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32p4_gpio"
+    base_address: 0x500E0000
+    size: "2KB"
+    config:
+      debug_schema: "../peripherals/esp32p4/gpio.yaml"
+  - id: "io_mux"
+    type: "esp32p4_io_mux"
+    base_address: 0x500E1000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32p4/io_mux.yaml"

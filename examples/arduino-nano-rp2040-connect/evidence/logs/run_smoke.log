@@ -1,0 +1,6 @@
+2026-11-06T07:57:24.276024Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/rp2040-nano-rp2040-connect-smoke.yaml
+2026-11-06T07:57:24.373507Z  INFO labwired_loader: ELF Entry Point: 0x100001c1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 818116 of 2000000 device cycles (1181884 interpreted)
+PASS  3/3 checks · io-smoke · 2000000 steps · 0.29s

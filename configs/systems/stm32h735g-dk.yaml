@@ -1,0 +1,19 @@
+# STM32H735G-DK / MB1520 board paths used by the smoke.
+# Only the active-low user LEDs and USART3 ST-LINK VCP are declared here.
+name: "stm32h735g-dk"
+chip: "../chips/stm32h735igk6-dk-smoke.yaml"
+debug_uart: "usart3"
+external_devices: []
+board_io:
+  - id: "led_ld1_green"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 3
+    signal: "output"
+    active_high: false
+  - id: "led_ld2_red"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 2
+    signal: "output"
+    active_high: false

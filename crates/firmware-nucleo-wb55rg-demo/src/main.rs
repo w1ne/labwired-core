@@ -1,10 +1,14 @@
 #![no_std]
 #![no_main]
 
-//! NUCLEO-WB55RG (MB1355C) demo firmware: a running light over the board's user LED(s) plus a
-//! heartbeat line on the console USART, in bare registers (no HAL).
+//! NUCLEO-WB55RG (MB1355C) smoke firmware: a running light over the board's
+//! user LEDs plus a heartbeat on the default ST-LINK VCP USART1, in bare
+//! registers (no HAL).
 //!
-//! LD1 blue PB5, LD2 green PB0, LD3 red PB1, all active high. The console is LPUART1 on PA2 (AF8, ST-LINK VCP), 115200 8N1 from the 4 MHz MSI the part resets to.
+//! LD1 blue PB5, LD2 green PB0, LD3 red PB1, all active high. The default
+//! VCP1 path is USART1 TX/RX on PB6/PB7 (AF7), 115200 8N1 from the 4 MHz MSI
+//! clock at reset. LPUART1 on PA2/PA3 is an Arduino-header UART, not the
+//! default ST-LINK VCP.
 //!
 //! Each beat lights ONE LED, prints `hb=<n> <led>=on`, then switches it off and
 //! prints `... =off`. The state in the printed line is READ BACK from the GPIO
@@ -15,19 +19,18 @@ use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-// RCC (STM32WB, RM0434): AHB2ENR gates the GPIO ports, APB1ENR2 gates LPUART1.
+// RCC (STM32WB, RM0434): AHB2ENR gates GPIO ports; APB2ENR gates USART1.
 const RCC: u32 = 0x5800_0000;
 const RCC_AHB2ENR: u32 = RCC + 0x4C;
-const RCC_APB1ENR2: u32 = RCC + 0x5C;
+const RCC_APB2ENR: u32 = RCC + 0x60;
 
-// LPUART1 (same ISR/TDR register layout as a USART; BRR = 256 * fck / baud).
-const USART: u32 = 0x4000_8000;
+// USART1: ISR/TDR register layout; BRR = fck / baud at oversampling by 16.
+const USART: u32 = 0x4001_3800;
 const USART_ISR: *const u32 = (USART + 0x1C) as *const u32;
 const USART_TDR: *mut u32 = (USART + 0x28) as *mut u32;
 const USART_BRR: *mut u32 = (USART + 0x0C) as *mut u32;
 const USART_CR1: *mut u32 = USART as *mut u32;
 const TXE: u32 = 1 << 7;
-const GPIOA: u32 = 0x4800_0000;
 const GPIOB: u32 = 0x4800_0400;
 
 /// GPIO register offsets (STM32 GPIO v2 block: MODER/ODR/BSRR).
@@ -112,12 +115,13 @@ fn delay() {
 
 #[entry]
 fn main() -> ! {
-    // GPIO clocks and the console USART clock, then the TX pin and the USART.
-    reg_rmw(RCC_AHB2ENR, 0, (1 << 0) | (1 << 1)); // GPIOA | GPIOB
-    reg_rmw(RCC_APB1ENR2, 0, 1 << 0); // LPUART1
-    pin_af(GPIOA, 2, 8);
+    // GPIOB and USART1 clocks; default VCP1 is USART1 on PB6/PB7, AF7.
+    reg_rmw(RCC_AHB2ENR, 0, 1 << 1); // GPIOB
+    reg_rmw(RCC_APB2ENR, 0, 1 << 14); // USART1
+    pin_af(GPIOB, 6, 7); // USART1_TX -> ST-LINK VCP_RX
+    pin_af(GPIOB, 7, 7); // USART1_RX <- ST-LINK VCP_TX
     unsafe {
-        write_volatile(USART_BRR, 8888 /* 256 * 4 MHz / 115200 */);
+        write_volatile(USART_BRR, 35 /* 4 MHz / 115200, rounded */);
         write_volatile(USART_CR1, (1 << 0) | (1 << 3)); // UE | TE
     }
     for (_, base, pin) in LEDS {

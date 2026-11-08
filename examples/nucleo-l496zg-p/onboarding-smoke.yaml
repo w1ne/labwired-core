@@ -1,0 +1,12 @@
+# NUCLEO-L496ZG-P: toggle the red user LED LD3 through GPIOB pin 14.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-l496zg-p-smoke"
+  system: "../../configs/systems/nucleo-l496zg-p.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - gpio_edges:
+      pin: "gpiob:14"
+      min_edges: 16
+  - expected_stop_reason: max_steps

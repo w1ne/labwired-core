@@ -105,6 +105,12 @@ pub struct Rp2040Sio {
     /// Pads bound to peripheral wires, resolved against IO_BANK0's live
     /// FUNCSEL. Empty until `SystemBus::wire_rp2040_pads` binds them.
     pad_routes: crate::peripherals::pad_routing::PadRoutes,
+    /// Components such as a NeoPixel can observe GPIO pads driven by SIO.
+    gpio_observers: Vec<std::sync::Arc<dyn crate::peripherals::device::GpioObserver>>,
+    /// Shared CPU clock for edge timestamps used by GPIO-observed devices.
+    cycle_clock: Option<crate::CycleClock>,
+    /// Legacy-cycle fallback for hand-built buses without a shared clock.
+    cycle: u64,
     /// Live pad-function state shared from IO_BANK0, so a pad re-assigned at
     /// runtime changes hands immediately.
     pad_functions: Option<std::sync::Arc<super::io_bank0::PadFunctions>>,
@@ -138,6 +144,22 @@ pub struct Rp2040Sio {
 impl Rp2040Sio {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Add an observer for transitions on pads selected to SIO (or not yet
+    /// assigned to an alternate function).
+    pub fn add_gpio_observer(
+        &mut self,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    ) {
+        self.gpio_observers.push(observer);
+    }
+
+    fn stamp_cycle(&self) -> u64 {
+        self.cycle_clock
+            .as_ref()
+            .map(|clock| clock.now())
+            .unwrap_or(self.cycle)
     }
 
     pub fn with_layout(mut self, layout: SioLayout) -> Self {
@@ -290,7 +312,27 @@ impl Rp2040Sio {
     #[inline]
     fn mutate_pads<R>(&mut self, mutate: impl FnOnce(&mut Self) -> R) -> R {
         crate::pins::watch_begin(self);
+        let before = self.gpio_in();
         let r = mutate(self);
+        let after = self.gpio_in();
+        let mut changed = (before ^ after) & GPIO_MASK;
+        let cycle = self.stamp_cycle();
+        while changed != 0 {
+            let pin = changed.trailing_zeros() as u8;
+            changed &= changed - 1;
+            if !matches!(
+                self.pad_function(pin),
+                None | Some(super::io_bank0::GPIO_FUNC_SIO)
+            ) {
+                continue;
+            }
+            let bit = 1u32 << pin;
+            let from = before & bit != 0;
+            let to = after & bit != 0;
+            for observer in &self.gpio_observers {
+                observer.on_pin_change(pin, from, to, cycle);
+            }
+        }
         self.report_levels();
         crate::pins::watch_end(self);
         r
@@ -442,6 +484,10 @@ impl Peripheral for Rp2040Sio {
     /// Dropping SIO from the walk is byte-identical (logic taps fire on write).
     fn needs_legacy_walk(&self) -> bool {
         false
+    }
+
+    fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
+        self.cycle_clock = Some(clock);
     }
 
     fn take_wire_input_edges(&mut self) -> Vec<crate::peripherals::pad_lines::WireInputEdge> {

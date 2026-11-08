@@ -1,0 +1,419 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 3000000,
+  "cycles": 4648910,
+  "instructions": 2999717,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 3000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 3000000
+    }
+  },
+  "limits": {
+    "max_steps": 3000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "MEGA READY"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "k=1 a8=512 a9=512 a0=512 ms=200 f=6"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "portb:7",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      2,
+      0,
+      2,
+      0,
+      2,
+      0,
+      0,
+      89,
+      0,
+      0,
+      0,
+      200,
+      0,
+      0,
+      0,
+      12,
+      0,
+      192,
+      0
+    ],
+    "pc": 1664,
+    "sp": 8697,
+    "sreg": 149
+  },
+  "firmware_hash": "f354c61c155742944df0c9df0e548dbe0ae8c3058a0efb03c1df7192f7eeef5a",
+  "config": {
+    "firmware": "examples/arduino-mega-2560-io/../../tests/fixtures/avr/arduino-mega-2560-io.elf",
+    "system": "examples/arduino-mega-2560-io/./system.yaml",
+    "script": "examples/arduino-mega-2560-io/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "spi",
+        "kind": "native",
+        "base": 65536,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c",
+        "kind": "i2c",
+        "base": 65552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porta",
+        "kind": "native",
+        "base": 65568,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 65571,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 65574,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 65577,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porte",
+        "kind": "native",
+        "base": 65580,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portf",
+        "kind": "native",
+        "base": 65583,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portg",
+        "kind": "native",
+        "base": 65586,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 65728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porth",
+        "kind": "native",
+        "base": 65792,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portj",
+        "kind": "native",
+        "base": 65795,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portk",
+        "kind": "native",
+        "base": 65798,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portl",
+        "kind": "native",
+        "base": 65801,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "native",
+        "base": 66048,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "pot_a8",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 8
+        },
+        "artifacts": []
+      },
+      {
+        "id": "pot_a9",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 9
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 5 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 4650325,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "portb",
+        "pin": 7,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 2375,
+            "value": 1
+          },
+          {
+            "cycle": 1607916,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 2029,
+            "state": "0"
+          },
+          {
+            "cycle": 2375,
+            "state": "1"
+          },
+          {
+            "cycle": 1607916,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 2
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "portb",
+      "number": 7,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "MEGA READY",
+        "cycle_lo": 0,
+        "cycle": 15596,
+        "end_cycle": 15596
+      },
+      {
+        "text": "k=0 a8=512 a9=512 a0=512 ms=100 f=2",
+        "cycle_lo": 1598477,
+        "cycle": 1613123,
+        "end_cycle": 1626884
+      },
+      {
+        "text": "k=1 a8=512 a9=512 a0=512 ms=200 f=6",
+        "cycle_lo": 3209746,
+        "cycle": 3223387,
+        "end_cycle": 3238152
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 3386,
+    "data_bytes": 36,
+    "bss_bytes": 171,
+    "flash_used_bytes": 3422,
+    "ram_static_bytes": 207,
+    "flash_total_bytes": 262144,
+    "ram_total_bytes": 8192,
+    "flash_used_pct": 1.31,
+    "ram_static_pct": 2.53,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 4648910,
+    "instructions": 2999717,
+    "steps_executed": 3000000,
+    "memory_reads": 0,
+    "memory_writes": 229909,
+    "peripheral_accesses": 94203,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1668,
+        "count": 353
+      },
+      {
+        "pc": 1666,
+        "count": 351
+      },
+      {
+        "pc": 2788,
+        "count": 351
+      },
+      {
+        "pc": 2808,
+        "count": 351
+      },
+      {
+        "pc": 2840,
+        "count": 351
+      },
+      {
+        "pc": 1688,
+        "count": 313
+      },
+      {
+        "pc": 1708,
+        "count": 313
+      },
+      {
+        "pc": 1734,
+        "count": 313
+      },
+      {
+        "pc": 2790,
+        "count": 313
+      },
+      {
+        "pc": 2822,
+        "count": 313
+      },
+      {
+        "pc": 2842,
+        "count": 313
+      },
+      {
+        "pc": 1664,
+        "count": 312
+      },
+      {
+        "pc": 1670,
+        "count": 312
+      },
+      {
+        "pc": 1714,
+        "count": 312
+      },
+      {
+        "pc": 1736,
+        "count": 312
+      },
+      {
+        "pc": 1738,
+        "count": 312
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "usart0",
+      "offset": 0,
+      "accesses": 28661
+    }
+  }
+}

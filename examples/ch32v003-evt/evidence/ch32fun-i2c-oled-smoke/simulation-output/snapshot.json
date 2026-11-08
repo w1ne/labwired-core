@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      3274,
+      536872916,
+      536871932,
+      0,
+      130,
+      4294967295,
+      13,
+      128,
+      31,
+      25207118,
+      4294967295,
+      458884,
+      100000,
+      3758157824,
+      4286010126,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 516,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 3008,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 129999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 130000000,
+  "cycles": 346693646,
+  "instructions": 130000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 130000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 130000000
+    }
+  },
+  "limits": {
+    "max_steps": 200000000,
+    "max_cycles": 130000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "b2e05c6cb1e955df36a630eb956ec00acfc2fa2fc4e4eef95836bc294f7d34d4",
+  "config": {
+    "firmware": "examples/ch32v003-evt/ch32fun/i2c_oled.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-ch32fun-i2c-oled-smoke.yaml",
+    "script": "examples/ch32v003-evt/ch32fun-i2c-oled-smoke.yaml"
+  }
+}

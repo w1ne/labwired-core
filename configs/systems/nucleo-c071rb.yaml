@@ -1,0 +1,15 @@
+# LabWired - NUCLEO-C071RB system manifest
+# Board wiring per ST UM3353 Rev 2: LD1 is on PA5 with SB1 in its default ON
+# position. Only this tested board path is declared; the button and VCP are
+# outside the smoke profile.
+
+name: nucleo-c071rb
+chip: ../chips/stm32c071rb-nucleo-smoke.yaml
+external_devices: []
+board_io:
+  - id: led_ld1
+    kind: led
+    peripheral: gpioa
+    pin: 5
+    signal: output
+    active_high: true

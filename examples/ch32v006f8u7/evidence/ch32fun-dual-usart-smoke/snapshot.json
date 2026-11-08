@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1908,
+      536879008,
+      536871932,
+      0,
+      536879012,
+      536878895,
+      536878920,
+      3,
+      0,
+      1073759232,
+      536879031,
+      536878956,
+      3758157824,
+      18001027,
+      4290716265,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1930,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 1618,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 109999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 110000000,
+  "cycles": 293333250,
+  "instructions": 110000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 110000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 110000000
+    }
+  },
+  "limits": {
+    "max_steps": 120000000,
+    "max_cycles": 110000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "e26df0e0d07db84b22336e83d3c5f38099f05a56d104af7031069b1fc64b20f3",
+  "config": {
+    "firmware": "examples/ch32v006f8u7/ch32fun/dual_usart.elf",
+    "system": "examples/ch32v006f8u7/../../configs/systems/ch32v006f8u7-ch32fun-smoke.yaml",
+    "script": "examples/ch32v006f8u7/ch32fun-dual-usart-smoke.yaml"
+  }
+}

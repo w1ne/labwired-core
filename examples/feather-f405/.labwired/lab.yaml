@@ -1,10 +1,10 @@
-# LabWired - Feather-STM32F405 IO/UART smoke test (lab entry)
+# LabWired - Adafruit Feather STM32F405 Express board smoke (lab entry)
 schema_version: "1.0"
 inputs:
-  firmware: "../../../target/thumbv7em-none-eabi/release/firmware-f401-demo"
+  firmware: "../../../target/thumbv7em-none-eabi/release/firmware-feather-f405-demo"
   system: "../system.yaml"
 limits:
-  max_steps: 64
+  max_steps: 100000
 assertions:
-  - uart_contains: "OK"
+  - uart_contains: "Feather F405 ready"
   - expected_stop_reason: max_steps

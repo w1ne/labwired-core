@@ -211,6 +211,21 @@ const HARDCODED_BASE_ALLOWLIST: &[(&str, &str, &str)] = &[
          UART0_BASE above.",
     ),
     (
+        "peripherals/esp32c5/uart.rs",
+        "UART0_BASE",
+        "OWN BASE (esp32c5.yaml: uart0). Same role as the esp32c3 UART0_BASE \
+         entry: `default_source_id` uses it only as the lookup key for the \
+         default interrupt-matrix source when the descriptor names no `irq:`; \
+         it is never used as an address.",
+    ),
+    (
+        "peripherals/esp32c5/uart.rs",
+        "UART1_BASE",
+        "OWN BASE (UART1 at 0x6000_1000 in the ESP32-C5 TRM; esp32c5.yaml \
+         declares only uart0 today). Same interrupt-source lookup key as \
+         UART0_BASE above.",
+    ),
+    (
         "peripherals/esp32/dport.rs",
         "BASE",
         "OWN BASE (esp32.yaml: dport). Classic-ESP32 registration constant. \
@@ -379,11 +394,12 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
         "rp2350.yaml",
         "clk_rst",
         "io_bank0",
-        "Same shape as rp2040.yaml: `clk_rst` covers CLOCKS/RESETS/IO_QSPI/\
-         PADS/XOSC/PLL_SYS/PLL_USB as one 320 KB block (0x4001_0000..\
-         0x4006_0000) and IO_BANK0 sits inside it at 0x4002_8000, below XOSC \
-         and both PLLs. Greatest-start-wins routing gives io_bank0 its 4 KB \
-         deterministically, so GPIOn_CTRL.FUNCSEL reaches the pad mux model.",
+        "Same shape as rp2040.yaml: `clk_rst` is a 320 KB catch-all for \
+         CLOCKS/RESETS/IO_QSPI/PADS/XOSC/PLL_SYS/PLL_USB, and IO_BANK0 sits \
+         inside it at 0x4002_8000. XOSC and both PLLs sit above io_bank0, so \
+         narrowing clk_rst would cut off clock bring-up. Greatest-start-wins \
+         routing gives io_bank0 its 4 KB deterministically, which lets Pico 2 \
+         GPIOn_CTRL.FUNCSEL reach the pad mux model.",
     ),
     (
         "esp32.yaml",

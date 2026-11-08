@@ -49,16 +49,30 @@
       "expect": "OK",
       "note": "ESP32-C6-DevKitC-1 L1 smoke. Bare-metal RV32IMAC HP-core image ungates UART0 through the C6's own PCR clock/reset block, routes GPIO16/U0TXD via IO_MUX, and prints OK. The LP core, ROM bootloader/flash-image path, interrupt delivery, radios and every non-UART peripheral window are out of scope at L1."
     },
+    "esp32c5": {
+      "how": "needs-build",
+      "why": "ESP32-C5-DevKitC-1 v1.2 UART0 smoke is validated from this Core source tree; its bare-metal firmware and C5 UART model are not yet included in a released CLI. The profile exposes the HP RISC-V core, memory windows, UART0, and the two PCR registers needed for UART0 clock setup."
+    },
     "nrf52840": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/nrf52840.elf",
       "expect": "TIER1 gpio PASS"
+    },
+    "nrf52840-dk-led-smoke": {
+      "how": "needs-build",
+      "why": "Focused nRF52840-DK GPIO0/physical LED1 (Zephyr led0) board profile and firmware smoke are built from this Core source tree; the smoke ELF is not a released CLI fixture yet."
     },
     "nrf54l15": {
       "how": "example",
       "script": "examples/nrf54l15-dk/io-smoke.yaml",
       "expect": "nRF54L15 boot OK",
       "note": "The README quickstart. Firmware is committed, so a clone is enough."
+    },
+    "nrf54l10": {
+      "how": "example",
+      "script": "examples/nrf54l10/io-smoke.yaml",
+      "expect": "nRF54L10 boot OK",
+      "note": "Focused L10 memory profile on Nordic's documented nRF54L15-DK emulation target; UART and DK LED0 are tested."
     },
     "nrf54lm20a": {
       "how": "example",
@@ -306,6 +320,10 @@
       "firmware": "tests/fixtures/tier1/stm32l073.elf",
       "expect": "TIER1 clock PASS"
     },
+    "stm32l031k6-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "Exact STM32L031K6 NUCLEO-L031K6 profile and GPIO smoke are validated from this Core source tree; no released CLI firmware fixture is pinned yet."
+    },
     "stm32wb55": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/stm32wb55.elf",
@@ -431,9 +449,9 @@
     },
     "imxrt1064": {
       "how": "committed",
-      "firmware": "tests/fixtures/imxrt1064-teensy41-smoke.elf",
+      "firmware": "tests/fixtures/imxrt1064-lpuart-regression.elf",
       "expect": "OK",
-      "note": "Teensy 4.1 UART/LED smoke. Serial1 is LPUART6. Image is DTCM-linked."
+      "note": "Internal i.MX RT1064-class peripheral regression image linked in DTCM. Direct LPUART6 capture is not Teensy 4.1 pin-routing evidence."
     },
     "stm32f746": {
       "how": "committed",
@@ -575,6 +593,538 @@
     "xck26-rpu": {
       "how": "needs-build",
       "why": "The Cortex-R5F core runs only in a source build with --features qemu-arm-system, which the released CLI this gate installs does not carry. The committed tests/fixtures/kv260-r5-zephyr-hello.elf prints 'Hello World! kv260_r5' on such a build (examples/kv260-r5/ci/test.sh); switch to `committed` once a release ships the model"
+    },
+    "atsamd21g18a-feather-m0-express-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "atsamd21g18a-mkr-wifi-1010-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "atsamd51-metro-m4-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "atsamd51j19a-feather-m4-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "ch32v003f4p6-gpio-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "ch32v003f4p6-usart-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "esp32-devkitc-32e-gpio-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "esp32-feather-v2-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "esp32c3-devkitm1-n4x-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "esp32c3-devkitm1-n4x-bme280-smoke": {
+      "how": "needs-build",
+      "why": "The focused BME280 profile and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "esp32c3-xiao-gpio-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "esp32c6-xiao-gpio-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "esp32s2": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "esp32s3-arduino-nano-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "esp32s3-devkitc-1-n16r8-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "esp32s3-xiao-gpio-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "mimxrt1062-teensy4-gpio-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "nrf52833-microbit-v2-uart-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "nrf52840-feather-uart-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "nrf5340-dk-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "nrf54l15-xiao-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "nrf54lm20a-dk-led-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "r7fa4m1ab-uno-r4-wifi-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "ra4m1-nano-r4-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "rp2040-feather-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "rp2040-itsybitsy-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "rp2040-nano-rp2040-connect-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "rp2040-pico-w-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "rp2040-xiao-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "rp2350-feather-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "rp2350-pico2-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "rp2350-pico2-w-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "rp2350-xiao-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32c031c6-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32c051c8-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32c071rb-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32c092rc-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32c542rc-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32c5a3zg-nucleo-gpio-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f030r8-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f051r8-discovery-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f070rb-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f072-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f091rc-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f103c6t6a-gpio-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f103r8t6-gpio-smoke": {
+      "how": "needs-build",
+      "why": "The focused R8T6 GPIO profile and firmware smoke are built from this source tree; they have not been verified with a published CLI release."
+    },
+    "stm32f103c8-bluepill-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f103rb-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f207zg-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f302r8-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f303k8-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f303re-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f303vc-f3discovery-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f334c8-f3348-disco-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f334r8-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f410rb-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f411ceu6-blackpill-led-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f411re-nucleo-bme280-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f411re-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f412zg-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f413zh-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f429zi-f429i-disc1-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f439zi-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f446re-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f446ze-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f722ze-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f756zg-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32g031k8-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32g070rb-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32g071rb-disco-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32g071rb-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32g0b1re-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32g431kb-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32g431rb-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32g491re-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32h503rb-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32h533re-nucleo-gpio-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32h573ii-dk-gpio-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32h723zg-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32h735igk6-dk-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32h753zi-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32h755zi-nucleo-m7-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32h7a3zit6q-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32l010rb-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32l011k4-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32l432kc-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32l452re-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32l496zg-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32l4a6zg-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32u031r8-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32u083rc-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32u385rg-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32u3c5zi-q-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32u545re-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32wba25ceu7-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32wba55cg-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "atmega4809": {
+      "how": "needs-build",
+      "why": "ATmega4809 and the Nano Every GPIO/UART smoke are validated from this Core source tree; installed LabWired CLI v0.25.0 does not include this model, so clean-install runnable coverage waits for a matching release."
+    },
+    "ch32l103c8t6": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v003f4p6-ch32fun-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v003f4p6-pfic-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v003f4p6-sht31-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v003f4p6-systick-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v006f8u7-ch32fun-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v203c8t6-ch32fun-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v203c8t6-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v307vct6-ch32fun-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32x035c8t6-ch32fun-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32x035f8u6-ch32fun-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32x035g8u6": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32-feather-v2-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c3-devkit-rust-2-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c3-lcdkit-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c3-waveshare-c3-zero-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c3-xiao-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c6-devkitm1-n4-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c6-xiao-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c61": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32h2-devkitm-1-n4s-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32p4": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s2-arduino": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s3-arduino-nano-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s3-atoms3-lite-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s3-cardputer-adv-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s3-devkitc-1-n16r8-v10-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s3-feather-8mb": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s3-heltec-wifi-lora-32-v4-s3r2-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp8684-devkitm-1-h4x-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "rp2040-pico-w-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "rp2350-pico2-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "rp2350-pico2-w-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "rp2350-zero-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "stm32f103r6t6a-gpio-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "stm32f103r8-gpio-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
     }
   }
 }

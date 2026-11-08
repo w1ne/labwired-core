@@ -1,0 +1,4 @@
+   text	   data	    bss	    dec	    hex	filename
+   4380	     24	    260	   4664	   1238	/home/andrii/worktrees/labwired-core/hw-onboarding/target/wch-sdk/ch32v003f4p6-wch-sdk-systick-interrupt.elf
+   text	   data	    bss	    dec	    hex	filename
+   4956	     24	    264	   5244	   147c	/home/andrii/worktrees/labwired-core/hw-onboarding/target/wch-sdk/ch32v003f4p6-pfic-smoke.elf

@@ -1,0 +1,61 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      0,
+      1073741776,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1074267470,
+      1610612736,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1074266223,
+    "ps": 31,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "steps_executed": 1000000,
+  "cycles": 1000000,
+  "instructions": 1000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1000000
+    }
+  },
+  "limits": {
+    "max_steps": 1000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "420f66948fc1852c437584ae85365690e73f325b8f0c45d8b7a718956138bbc4",
+  "config": {
+    "firmware": "examples/esp32s2-devkitm1-n4r2/../../target/esp32s2-devkitm1-n4r2/firmware.elf",
+    "system": "examples/esp32s2-devkitm1-n4r2/../../configs/systems/esp32s2-devkitm1-n4r2.yaml",
+    "script": "examples/esp32s2-devkitm1-n4r2/onboarding-smoke.yaml"
+  }
+}

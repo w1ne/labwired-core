@@ -1,0 +1,21 @@
+# ESP32-C3-LCDkit: boot firmware, initialize its GC9A01 over SPI2, paint an
+# 8x8 red patch, and report on UART0.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c3-lcdkit-smoke"
+  system: "../../configs/systems/esp32c3-lcdkit.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "ESP32_C3_LCDKIT_GC9A01_OK"
+  - display_region:
+      id: "lcd"
+      x: 0
+      y: 0
+      w: 8
+      h: 8
+      min_ink: 1.0
+      lit: true
+      colour: "0xF800"
+      min_colour_pixels: 64
+  - expected_stop_reason: max_steps

@@ -1,0 +1,14 @@
+# WCH CH32V003 evaluation board running ch32fun's tim1_pwm, unmodified, with
+# an LED on each TIM1 output the example enables (PD0 = T1CH1N, PC4 = T1CH4)
+# and a WCH-LinkE on SWIO for the debug-printf console. The example sets
+# CC1NE|CC1NP with CC1E clear, so PD0 carries OC1REF inverted (RM Table
+# "complementary output control": CCxNE alone gives OCxN = OCxREF, CCxNP
+# inverts), and CC4E|CC4P, so PC4 carries OC4REF inverted too. Both LEDs are
+# therefore wired active low (LED to 3.3 V). They are test connections, not
+# factory-installed parts.
+name: ch32v003evt-ch32fun-tim1-pwm-smoke
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+external_devices: []
+board_io:
+  - { id: external_led_pd0, kind: led, peripheral: gpiod, pin: 0, signal: output, active_high: false }
+  - { id: external_led_pc4, kind: led, peripheral: gpioc, pin: 4, signal: output, active_high: false }

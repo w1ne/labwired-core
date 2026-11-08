@@ -56,6 +56,8 @@ fn ensure_fixture_built(root: &Path) -> PathBuf {
 struct Run {
     exit_code: Option<i32>,
     stderr: String,
+    /// `peripheral-logs/<file>` contents the run wrote, by file name.
+    logs: std::collections::BTreeMap<String, String>,
 }
 
 /// Run `labwired test` with `extra` (stimuli / injections / assertions)
@@ -109,10 +111,22 @@ limits:
         ])
         .output()
         .expect("execute labwired");
+    let logs = std::fs::read_dir(dir.join("peripheral-logs"))
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|e| {
+                    let text = std::fs::read_to_string(e.path()).unwrap_or_default();
+                    (e.file_name().to_string_lossy().into_owned(), text)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     let _ = std::fs::remove_dir_all(&dir);
     Run {
         exit_code: output.status.code(),
         stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        logs,
     }
 }
 
@@ -151,6 +165,18 @@ fn phone_data_goes_through_the_firmware_and_back() {
 "#
     ));
     assert_eq!(r.exit_code, Some(0), "stderr: {}", r.stderr);
+    // --output-dir carries each asserted log whole, one file per log.
+    let names: Vec<&str> = r.logs.keys().map(String::as_str).collect();
+    assert_eq!(names, ["uart1.air.log", "uart1.at.log", "uart1.link.log"]);
+    let air = &r.logs["uart1.air.log"];
+    assert!(
+        air.lines().any(|l| l.contains("phone->mcu 68 65 6c 6c 6f")),
+        "{air}"
+    );
+    assert!(
+        air.lines().any(|l| l.contains("mcu->phone 4f 4b 0d 0a")),
+        "{air}"
+    );
 }
 
 #[test]

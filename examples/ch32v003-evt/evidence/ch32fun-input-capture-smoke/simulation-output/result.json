@@ -1,0 +1,487 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 14000000,
+  "cycles": 37333842,
+  "instructions": 14000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 14000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 14000000
+    }
+  },
+  "limits": {
+    "max_steps": 30000000,
+    "max_cycles": 14000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "UP",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "capture 1 24993",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "capture 0 25993",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "capture 1 21957",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "capture 0 24457",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "capture",
+          "min_count": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073818664,
+          "expected_value": 47,
+          "mask": null,
+          "size": 16
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073818648,
+          "expected_value": 513,
+          "mask": null,
+          "size": 16
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073818656,
+          "expected_value": 49,
+          "mask": null,
+          "size": 16
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073818636,
+          "expected_value": 6,
+          "mask": null,
+          "size": 16
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073818624,
+          "expected_value": 1,
+          "mask": 1,
+          "size": 16
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      2034,
+      536872948,
+      536871932,
+      0,
+      536872793,
+      3,
+      10,
+      0,
+      1073812480,
+      1753407,
+      536872792,
+      536872851,
+      2293,
+      3758157824,
+      4294963879,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 516,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 516,
+    "mcause": 2147483685,
+    "mtval": 0,
+    "mtime": 13999995,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "030f2bb950a327c9d17b582eeaa42722a5cad9e975f76c5c0f721d6d93f76a9a",
+  "config": {
+    "firmware": "examples/ch32v003-evt/ch32fun/input_capture.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-ch32fun-input-capture-smoke.yaml",
+    "script": "examples/ch32v003-evt/ch32fun-input-capture-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "exti",
+        "kind": "native",
+        "base": 1073808384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "iwdg",
+        "kind": "native",
+        "base": 1073754112,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "debug_printf",
+        "kind": "native",
+        "base": 3758096628,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfic",
+        "kind": "native",
+        "base": 3758153728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dma1",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1073816576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "i2c",
+        "base": 1073763328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim1",
+        "kind": "native",
+        "base": 1073818624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim2",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 1073819648,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "pulse_pd2",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "stimuli": [
+    {
+      "channel": "pressed",
+      "component": "pulse_pd2",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 6000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 6000000
+    },
+    {
+      "channel": "pressed",
+      "component": "pulse_pd2",
+      "value": 0.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 6048000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 6048000
+    },
+    {
+      "channel": "pressed",
+      "component": "pulse_pd2",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 9000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 9000000
+    },
+    {
+      "channel": "pressed",
+      "component": "pulse_pd2",
+      "value": 0.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 9120000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 9120000
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2316,
+    "data_bytes": 0,
+    "bss_bytes": 72,
+    "flash_used_bytes": 2316,
+    "ram_static_bytes": 72,
+    "flash_total_bytes": 16384,
+    "ram_total_bytes": 2048,
+    "flash_used_pct": 14.14,
+    "ram_static_pct": 3.52,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 37333842,
+    "instructions": 14000000,
+    "steps_executed": 14000000,
+    "memory_reads": 14001267,
+    "memory_writes": 1049,
+    "peripheral_accesses": 4663315,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 516,
+        "count": 18391
+      },
+      {
+        "pc": 518,
+        "count": 18132
+      },
+      {
+        "pc": 520,
+        "count": 18047
+      },
+      {
+        "pc": 206,
+        "count": 39
+      },
+      {
+        "pc": 904,
+        "count": 39
+      },
+      {
+        "pc": 906,
+        "count": 39
+      }
+    ]
+  }
+}

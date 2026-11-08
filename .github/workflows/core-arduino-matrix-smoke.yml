@@ -43,6 +43,7 @@ jobs:
         board:
           - esp32
           - esp32c3
+          - esp32s2
           - esp32s3
           - nrf52832
           - nrf52840
@@ -63,6 +64,12 @@ jobs:
           - stm32wb55
           - stm32wba52
           - atmega328p
+          - atmega2560
+          - arduino-zero
+          - arduino-nano-every
+          - ch32v203
+          - ch32v307
+          - ch32x035
 
     steps:
       - uses: actions/checkout@v4
@@ -123,12 +130,21 @@ jobs:
             stm32*)      platform=ststm32@19.7.1 ;;
             nrf*)        platform=nordicnrf52 ;;
             rp2040)      platform=raspberrypi ;;
+            # The S2 row was measured on espressif32 8.0.0 (arduino-esp32 3.3).
+            esp32s2)     platform=espressif32@8.0.0 ;;
             # Pico 2 / arduino-pico: Max Gerhardt's platform, pinned (the
             # registry `raspberrypi` has no RP2350 boards). Same string as
             # boards.yaml, so the installed package is the one PIO resolves.
             rp2350)      platform=https://github.com/maxgerhardt/platform-raspberrypi.git#5d4561a05e3b212660ac6fdd3fbfb328d1988aa1 ;;
             esp32*)      platform=espressif32@7.0.1 ;;
-            atmega328p)  platform=atmelavr@5.3.0 ;;
+            atmega328p|atmega2560) platform=atmelavr@5.3.0 ;;
+            # The Zero row was measured on atmelsam 9.0.0 (ArduinoCore-samd).
+            arduino-zero) platform=atmelsam@9.0.0 ;;
+            # The Nano Every row was measured on atmelmegaavr 1.10.0
+            # (ArduinoCore-megaavr 1.8.8).
+            arduino-nano-every) platform=atmelmegaavr@1.10.0 ;;
+            # Not in the registry; same pin as boards.yaml.
+            ch32v203|ch32v307|ch32x035) platform=https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7 ;;
             *)
               echo "::error::no PlatformIO platform mapped for board '${{ matrix.board }}'"
               exit 1

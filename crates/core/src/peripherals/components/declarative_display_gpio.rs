@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-//! Port-aware GPIO controls for an opted-in declarative serial display.
+//! Port-aware GPIO controls for an opted-in declarative display.
 //! No controller downcast, peripheral clock dependency or per-cycle polling.
 use std::sync::{Arc, Mutex};
 
@@ -27,6 +27,7 @@ pub struct DisplaySpiHandle {
 #[derive(Debug)]
 pub struct DisplayGpioObserver {
     display: Arc<Mutex<GenericDisplay>>,
+    power: Option<DisplayControlPin>,
     reset: Option<DisplayControlPin>,
     backlight: Option<DisplayControlPin>,
     addrs: Vec<u64>,
@@ -36,6 +37,7 @@ pub struct DisplayGpioObserver {
 impl DisplaySpiHandle {
     pub(super) fn bind(
         mut display: GenericDisplay,
+        power: Option<DisplayControlPin>,
         reset: Option<DisplayControlPin>,
         backlight: Option<DisplayControlPin>,
     ) -> (Self, DisplayGpioObserver) {
@@ -43,9 +45,9 @@ impl DisplaySpiHandle {
         let dc_pin = SpiDevice::dc_pin(&display).map(str::to_owned);
         let dc_source = SpiDevice::dc_source(&display);
         let component_id = SpiDevice::component_id(&display).map(str::to_owned);
-        display.configure_gpio_controls(reset.is_some(), backlight.is_some());
+        display.configure_gpio_controls(power.is_some(), reset.is_some(), backlight.is_some());
         let display = Arc::new(Mutex::new(display));
-        let mut addrs: Vec<u64> = [reset, backlight]
+        let mut addrs: Vec<u64> = [power, reset, backlight]
             .into_iter()
             .flatten()
             .map(|pin| pin.addr)
@@ -54,6 +56,7 @@ impl DisplaySpiHandle {
         addrs.dedup();
         let observer = DisplayGpioObserver {
             display: display.clone(),
+            power,
             reset,
             backlight,
             addrs,
@@ -134,11 +137,15 @@ impl BusResidentDevice for DisplayGpioObserver {
         };
         // Sample both wires before changing display state: one port store can
         // change reset and light together, and neither may see a stale peer.
-        let (reset, backlight) = (sample(self.reset), sample(self.backlight));
+        let (power, reset, backlight) = (
+            sample(self.power),
+            sample(self.reset),
+            sample(self.backlight),
+        );
         self.display
             .lock()
             .unwrap()
-            .update_gpio_controls(reset, backlight);
+            .update_gpio_controls(power, reset, backlight);
     }
     fn needs_per_cycle_service(&self) -> bool {
         false
@@ -196,6 +203,7 @@ mod tests {
     }
     const RESET: u64 = 0x41008010;
     const LIGHT: u64 = 0x41008090; // same bit, different port: no PA0/PB0 alias
+    const POWER: u64 = 0x41008110;
     fn panel() -> (DisplaySpiHandle, DisplayGpioObserver) {
         let mut panel =
             GenericDisplay::from_yaml(include_str!("../../../tests/fixtures/st7735r-memory.yaml"))
@@ -208,6 +216,7 @@ mod tests {
         });
         panel
             .bind_gpio_controls(
+                None,
                 Some(DisplayControlPin {
                     addr: RESET,
                     bit: 0,
@@ -282,6 +291,50 @@ mod tests {
         observer.service_edge(&mut pins, 2);
         assert!(frame(&panel).meta["backlight_on"].is_null());
         assert_eq!(frame(&panel).meta["lit"], false);
+    }
+
+    #[test]
+    fn display_gpio_power_gates_spi_until_enabled_and_when_disabled() {
+        let mut panel =
+            GenericDisplay::from_yaml(include_str!("../../../tests/fixtures/st7735r-memory.yaml"))
+                .unwrap();
+        panel.set_glass_window(super::super::declarative_display::GlassWindow {
+            col_offset: 0,
+            row_offset: 0,
+            cols: 1,
+            rows: 1,
+        });
+        let (mut panel, mut observer) = panel
+            .bind_gpio_controls(
+                Some(DisplayControlPin {
+                    addr: POWER,
+                    bit: 3,
+                    active_level: true,
+                }),
+                None,
+                None,
+            )
+            .unwrap();
+        let mut pins = Pins::default();
+
+        assert!(!panel.display.lock().unwrap().powered());
+        command(&mut panel, 0x29, &[]);
+        assert_eq!(frame(&panel).meta["display_on"], false);
+
+        pins.levels.insert((POWER, 3), true);
+        observer.service_edge(&mut pins, 1);
+        assert!(panel.display.lock().unwrap().powered());
+        command(&mut panel, 0x29, &[]);
+        command(&mut panel, 0x11, &[]);
+        command(&mut panel, 0x2c, &[0xfc, 0, 0]);
+        assert_eq!(frame(&panel).meta["display_on"], true);
+        assert_eq!(frame(&panel).bytes, Some(vec![255, 0, 0]));
+
+        pins.levels.insert((POWER, 3), false);
+        observer.service_edge(&mut pins, 2);
+        assert!(!panel.display.lock().unwrap().powered());
+        command(&mut panel, 0x29, &[]);
+        assert_eq!(frame(&panel).meta["display_on"], false);
     }
 
     #[test]

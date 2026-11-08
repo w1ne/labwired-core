@@ -9,15 +9,21 @@ destinations.
 first UARTE byte, the more precisely a failure localises to the simulator rather
 than to a vendor HAL.
 
-## Build
+## Build and run
 
 ```sh
-make            # build build/nrf54l15-smoke.elf
-make publish    # build and copy to ../../tests/fixtures/ (the committed fixture)
-make clean
+scripts/onboarding_smoke.sh \
+  --target-id nrf54l15-dk \
+  --firmware-build-script examples/nrf54l15-dk/ci/build-firmware.sh \
+  --script examples/nrf54l15-dk/io-smoke.yaml \
+  --system configs/systems/nrf54l15dk.yaml \
+  --out-dir examples/nrf54l15-dk/evidence
 ```
 
-Toolchain on macOS: `brew install arm-none-eabi-gcc`.
+The build script compiles this source and refreshes the committed ELF fixture.
+It keeps intermediate object files in the temporary directory. Install
+`arm-none-eabi-gcc` first (for example, `brew install arm-none-eabi-gcc` on
+macOS).
 
 ## Run
 
@@ -50,6 +56,11 @@ here rather than as mysterious stack corruption later.
 | `.data` copy / `.bss` zero | RRAM→RAM reads and RAM writes |
 | GPIO P2 DIRSET/OUTSET (LED0 = P2.09) | GPIO model, per-port widths, base-address convention |
 | UARTE20 EasyDMA TX ×3 | PSEL/BAUDRATE/ENABLE, TXD.PTR/MAXCNT, TASKS_STARTTX → EVENTS_ENDTX |
+
+The profile claims the nRF54L15 application SoC, the four DK LEDs and buttons,
+and the UARTE20 virtual console. It does not emulate the DK's radio, J-Link
+interface MCU, or 8 MB external flash. The smoke asserts both the console text
+and an observed GPIO2:9 edge for LED0.
 
 ## Two details that are easy to get wrong
 

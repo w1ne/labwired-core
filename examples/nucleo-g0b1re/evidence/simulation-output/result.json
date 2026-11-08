@@ -1,0 +1,399 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 1000000,
+  "cycles": 1000000,
+  "instructions": 1000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1000000
+    }
+  },
+  "limits": {
+    "max_steps": 1000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioa:5",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1342177304,
+      32,
+      3221225472,
+      3959419663,
+      0,
+      2097152,
+      0,
+      536907760,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536907752,
+      134218413,
+      134218408
+    ],
+    "pc": 134218408,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "206e9fcec237cd7dd6da3bc0be421388e83c802801d41a881f0c34d4713825a3",
+  "config": {
+    "firmware": "examples/nucleo-g0b1re/../../target/thumbv6m-none-eabi/release/firmware-stm32g0-demo",
+    "system": "examples/nucleo-g0b1re/../../configs/systems/nucleo-g0b1re.yaml",
+    "script": "examples/nucleo-g0b1re/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1342177280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1342178304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1342179328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim2",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "exti",
+        "kind": "native",
+        "base": 1073879040,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "syscfg",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "button_b1",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 1000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioa",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 102,
+            "value": 1
+          },
+          {
+            "cycle": 100107,
+            "value": 0
+          },
+          {
+            "cycle": 200111,
+            "value": 1
+          },
+          {
+            "cycle": 300114,
+            "value": 0
+          },
+          {
+            "cycle": 400118,
+            "value": 1
+          },
+          {
+            "cycle": 500121,
+            "value": 0
+          },
+          {
+            "cycle": 600125,
+            "value": 1
+          },
+          {
+            "cycle": 700128,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 63,
+            "state": "0"
+          },
+          {
+            "cycle": 102,
+            "state": "1"
+          },
+          {
+            "cycle": 100107,
+            "state": "0"
+          },
+          {
+            "cycle": 200111,
+            "state": "1"
+          },
+          {
+            "cycle": 300114,
+            "state": "0"
+          },
+          {
+            "cycle": 400118,
+            "state": "1"
+          },
+          {
+            "cycle": 500121,
+            "state": "0"
+          },
+          {
+            "cycle": 600125,
+            "state": "1"
+          },
+          {
+            "cycle": 700128,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 8
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioa",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 724,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 724,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 0.14,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 36864,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 36840,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536907776,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 36864,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 36840,
+    "heap_base": 536870912,
+    "heap_top": 536907776
+  },
+  "metrics": {
+    "cycles": 1000000,
+    "instructions": 1000000,
+    "steps_executed": 1000000,
+    "memory_reads": 179,
+    "memory_writes": 9,
+    "peripheral_accesses": 27,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134218442,
+        "count": 1172,
+        "symbol": "__nop"
+      },
+      {
+        "pc": 134218342,
+        "count": 391,
+        "symbol": "cortex_m::asm::nop"
+      },
+      {
+        "pc": 134218394,
+        "count": 391,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134218440,
+        "count": 391,
+        "symbol": "lib::inline::__nop"
+      },
+      {
+        "pc": 134218332,
+        "count": 390,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134218376,
+        "count": 390,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      }
+    ]
+  }
+}

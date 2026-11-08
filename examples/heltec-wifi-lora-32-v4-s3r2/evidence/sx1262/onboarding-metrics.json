@@ -1,0 +1,29 @@
+{
+  "target_id": "heltec-wifi-lora-32-v4-s3r2-sx1262",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/heltec-wifi-lora-32-v4-s3r2/radio-onboarding-smoke.yaml",
+  "system": "configs/systems/heltec-wifi-lora-32-v4-s3r2.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T09:17:58Z",
+  "finished_at_utc": "2026-11-06T09:18:25Z",
+  "elapsed_seconds": 27,
+  "elapsed_ms": 26928,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 25.265,
+    "build_firmware": 0.49,
+    "run_smoke": 1.132
+  },
+  "stages_ms": {
+    "build_cli": 25265,
+    "build_firmware": 490,
+    "run_smoke": 1132
+  },
+  "firmware_build_script": "examples/heltec-wifi-lora-32-v4-s3r2/ci/build-radio-firmware.sh"
+}

@@ -1,0 +1,35 @@
+labwired: target/debug/labwired
+boards:   ch32l103
+sketches: L0_serial_boot, L1_serial_loop, L2_blink_serial, L3_i2c_sensor, L4_spi_sensor, L5_adc, L6_pwm, L7_timer, L8_can
+out:      validation/arduino-matrix/out
+
+==> ch32l103 × L0_serial_boot
+    compile: ok (firmware.elf)
+    run: boot_fail
+==> ch32l103 × L1_serial_loop
+    compile: ok (firmware.elf)
+    run: boot_fail
+==> ch32l103 × L2_blink_serial
+    compile: ok (firmware.elf)
+    run: boot_fail
+==> ch32l103 × L3_i2c_sensor
+    compile: compile_fail
+==> ch32l103 × L4_spi_sensor
+    compile: ok (firmware.elf)
+    run: boot_fail
+==> ch32l103 × L5_adc
+    compile: ok (firmware.elf)
+    run: boot_fail
+==> ch32l103 × L6_pwm
+    compile: ok (firmware.elf)
+    run: boot_fail
+==> ch32l103 × L7_timer
+    compile: ok (firmware.elf)
+    run: boot_fail
+==> ch32l103 × L8_can
+    compile: ok (firmware.elf)
+    run: boot_fail
+
+Done in 132s — 0 pass / 0 skip / 9 fail (cells 9; gate treats skip as non-fail)
+Scoreboard: validation/arduino-matrix/out/scoreboard.md
+Docs scoreboard unchanged (partial run; not full 23×9)

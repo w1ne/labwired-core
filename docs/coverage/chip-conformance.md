@@ -29,7 +29,7 @@ This page covers the public models. For every chip we model — public and priva
 | sam4s16c | **L1** | ✓ | 20 | — | — | firmware_survival::test_sam4s_xplained_smoke_survival |
 | stm32f072 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32f072b_disco_smoke_survival |
 | nrf54l15 | **L1** | ✓ | 29 | — | — | firmware_survival::test_nrf54l15_zephyr_survival |
-| atsamd21g18a | **L1** | ✓ | 15 | — | — | atsamd21_peripheral_estate::the_estate_answers_at_its_own_addresses |
+| atsamd21g18a | **L1** | ✓ | 21 | — | — | atsamd21_peripheral_estate::the_estate_answers_at_its_own_addresses |
 | atsamd21e15a | **L0** | ✓ | 13 | — | — | — |
 | atsamd21e16a | **L0** | ✓ | 13 | — | — | — |
 | atsamd21e17a | **L0** | ✓ | 13 | — | — | — |
@@ -110,7 +110,7 @@ This page covers the public models. For every chip we model — public and priva
 | atsamd51 | **L1** | ✓ | 27 | — | — | firmware_survival::test_atsamd51_metro_m4_smoke_survival |
 | atsamd51-pybadge | **L0** | ✓ | 28 | — | — | — |
 | ra4m1 | **L1** | ✓ | 7 | — | — | firmware_survival::test_ra4m1_uno_r4_smoke_survival |
-| imxrt1064 | **L1** | ✓ | 6 | — | — | firmware_survival::test_imxrt1064_teensy41_smoke_survival |
+| imxrt1064 | **L1** | ✓ | 6 | — | — | firmware_survival::test_imxrt1064_lpuart_regression_fixture_survival |
 | stm32f746 | **L1** | ✓ | 17 | — | — | firmware_survival::test_stm32f746_discovery_smoke_survival |
 | stm32g071 | **L1** | ✓ | 41 | — | — | firmware_survival::test_nucleo_g071rb_smoke_survival |
 | dspic33fj32mc204 | **L1** | ✓ | 3 | — | — | pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart |

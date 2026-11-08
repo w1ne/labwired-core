@@ -1,0 +1,11 @@
+# WeAct BluePill-Plus-CH32 (CH32V203C8T6) running ch32fun's exti_blink,
+# unmodified: a push button from PA1 to 3.3 V (the example leaves PA1 a
+# floating input, so the button stands for a contact with an external
+# pull-down) and an LED on PA10, the pad the EXTI handler toggles. Both are
+# test connections, as in the example's own comment.
+name: weact-bluepill-plus-ch32v203-ch32fun-exti-smoke
+chip: chip.yaml
+external_devices: []
+board_io:
+  - { id: button_pa1, kind: button, peripheral: gpioa, pin: 1, signal: input, active_high: true }
+  - { id: external_led_pa10, kind: led, peripheral: gpioa, pin: 10, signal: output, active_high: true }

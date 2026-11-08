@@ -4,12 +4,12 @@ Run all commands from `core/`.
 
 ## Purpose
 
-This example provides deterministic bring-up for STM32F7 Discovery (STM32F746NG) using the minimal supported subset:
+This example provides deterministic bring-up for the currently orderable STM32F746G-DISCO (STM32F746NG) using the minimal supported subset:
 1. `rcc` (`stm32f4` profile @ `0x40023800`)
 2. `gpioa`–`gpioi` (`stm32v2`)
 3. `usart1` (`stm32v2` — ST-LINK VCP)
 4. `systick`
-5. stubs: LTDC, ETH, DMA2D, USB, QUADSPI
+5. Explicit zero-answering windows: LTDC, ETH, DMA2D, USB, QUADSPI. They are outside this smoke's claim; display, Ethernet, DMA2D, USB and external-flash behavior are not modeled.
 
 **SIM-DERIVED.** Not silicon-verified. No new GPIO/UART/RCC family models — F4-class reuse + Cortex-M7 DTCM map.
 
@@ -17,12 +17,16 @@ This example provides deterministic bring-up for STM32F7 Discovery (STM32F746NG)
 
 ```bash
 cargo build -p firmware-stm32f746-demo --release --target thumbv7em-none-eabi
-cargo run -q -p labwired-cli -- test --script examples/stm32f7-discovery/uart-smoke.yaml --output-dir out/stm32f7-discovery/uart-smoke --no-uart-stdout
+cargo run -q -p labwired-cli -- test --script examples/stm32f7-discovery/io-smoke.yaml --output-dir out/stm32f7-discovery/io-smoke --no-uart-stdout
 ```
 
 Expected result:
 1. smoke test passes
 2. UART contains `OK`
+3. PI1 (LD1) makes the asserted GPIO transition
+
+The reproducible onboarding run, committed logs, and live ST purchase check
+are recorded in [`ONBOARDING.md`](ONBOARDING.md) and [`evidence/`](evidence/).
 
 ## Files
 

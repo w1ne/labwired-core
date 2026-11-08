@@ -1,0 +1,353 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 40000000,
+  "cycles": 106746868,
+  "instructions": 40000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 40000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 40000000
+    }
+  },
+  "limits": {
+    "max_steps": 40000000,
+    "max_cycles": 40000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "+0",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "-1[",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "+4",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "-5[",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 3758096628,
+          "expected_value": 0,
+          "mask": 192,
+          "size": null
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1886,
+      536879088,
+      536871932,
+      0,
+      536878933,
+      3,
+      10,
+      1073812480,
+      0,
+      3,
+      536878932,
+      3758157824,
+      5490684,
+      4999996,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1908,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 1786,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 39999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "6b624dd269d46f5470f1a1de19365d703ca731d72c45db648711d45211d4409d",
+  "config": {
+    "firmware": "examples/ch32v006f8u7/ch32fun/debugprintfdemo.elf",
+    "system": "examples/ch32v006f8u7/../../configs/systems/ch32v006f8u7-ch32fun-smoke.yaml",
+    "script": "examples/ch32v006f8u7/ch32fun-debugprintf-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "debug_printf",
+        "kind": "native",
+        "base": 3758096628,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfic",
+        "kind": "native",
+        "base": 3758153728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2036,
+    "data_bytes": 0,
+    "bss_bytes": 8,
+    "flash_used_bytes": 2036,
+    "ram_static_bytes": 8,
+    "flash_total_bytes": 63488,
+    "ram_total_bytes": 8192,
+    "flash_used_pct": 3.21,
+    "ram_static_pct": 0.1,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 106746868,
+    "instructions": 40000000,
+    "steps_executed": 40000000,
+    "memory_reads": 40040786,
+    "memory_writes": 40803,
+    "peripheral_accesses": 13211678,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1908,
+        "count": 26172
+      },
+      {
+        "pc": 1906,
+        "count": 26133
+      },
+      {
+        "pc": 1910,
+        "count": 26133
+      },
+      {
+        "pc": 2006,
+        "count": 25000
+      },
+      {
+        "pc": 2008,
+        "count": 25000
+      },
+      {
+        "pc": 2010,
+        "count": 25000
+      },
+      {
+        "pc": 712,
+        "count": 316
+      },
+      {
+        "pc": 704,
+        "count": 312
+      },
+      {
+        "pc": 716,
+        "count": 312
+      },
+      {
+        "pc": 724,
+        "count": 312
+      },
+      {
+        "pc": 1930,
+        "count": 312
+      },
+      {
+        "pc": 1936,
+        "count": 312
+      },
+      {
+        "pc": 1940,
+        "count": 312
+      },
+      {
+        "pc": 1946,
+        "count": 312
+      },
+      {
+        "pc": 1950,
+        "count": 312
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "stk",
+      "offset": 8,
+      "accesses": 291498
+    }
+  }
+}

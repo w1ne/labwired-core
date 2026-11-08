@@ -1,0 +1,29 @@
+{
+  "target_id": "ch32v003f4p6-ch32fun-iwdg",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/ch32v003-evt/ch32fun-iwdg-smoke.yaml",
+  "system": "configs/systems/ch32v003evt-ch32fun-iwdg-smoke.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-07T07:54:57Z",
+  "finished_at_utc": "2026-11-07T08:01:50Z",
+  "elapsed_seconds": 413,
+  "elapsed_ms": 412371,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 15.445,
+    "build_firmware": 5.137,
+    "run_smoke": 391.744
+  },
+  "stages_ms": {
+    "build_cli": 15445,
+    "build_firmware": 5137,
+    "run_smoke": 391744
+  },
+  "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh"
+}

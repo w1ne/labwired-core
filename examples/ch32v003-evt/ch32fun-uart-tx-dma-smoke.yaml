@@ -1,0 +1,29 @@
+# ch32fun examples/uart_tx_dma, unmodified (build-ch32fun-examples.sh). The
+# CPU never writes USART1 DATAR: CTLR3.DMAT asks DMA1 channel 4 for a byte
+# whenever the transmitter is empty, and the channel (8-bit, MINC, memory to
+# peripheral, normal mode, TCIE) copies "Hello World!\r\n" from flash into
+# DATAR. On the fourteenth item TCIF4 rises, PFIC interrupt 25
+# (DMA1_Channel4_IRQn) is taken, and the handler clears it through INTFCR
+# and toggles PD6, which led_setup() left high. main re-arms the channel
+# once per Delay_Ms(1000).
+#
+# The run stops at max_cycles 110M (2.29 s at 48 MHz): three transfers, at
+# about 0 s, 1 s and 2 s, so PD6 goes high once and toggles three times.
+schema_version: "1.2"
+inputs:
+  firmware: "ch32fun/uart_tx_dma.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 110000000
+  max_steps: 200000000
+  wall_time_ms: 600000
+assertions:
+  - uart_ordered: ["Hello World!\r\n", "Hello World!\r\n", "Hello World!\r\n"]
+  - gpio_edges: { pin: "gpiod:6", min_edges: 4 }
+  # High from led_setup(), toggled by three handler runs: OUTDR bit 6 is 0.
+  - memory_value: { address: 0x4001140C, size: 32, mask: 0x40, expected_value: 0 }
+  # The last transfer ran out: CNTR4 = 0, the channel still enabled.
+  - memory_value: { address: 0x40020048, size: 16, expected_value: 0 }
+  # INTFR channel 4 nibble: the handler wrote CTCIF4 only, so TCIF4 is
+  # clear while HTIF4 (set at item 7, HTIE off) and GIF4 stay set: 0b0101.
+  - memory_value: { address: 0x40020000, size: 32, mask: 0x0000F000, expected_value: 0x00005000 }

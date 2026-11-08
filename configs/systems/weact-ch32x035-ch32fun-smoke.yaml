@@ -1,0 +1,13 @@
+# WeAct Studio CH32X035 core board (CH32X035F8U6, QFN20) running unmodified
+# ch32fun CH32X035 examples, with a WCH-LinkE on SWDIO for the debug-printf
+# console.
+# PB12 is the board's own LED (ch32fun blink: "WeAct ch32x035 board uses this
+# pin for LED"); PA2/PA4/PA7 are the test connections the example drives.
+name: weact-ch32x035-ch32fun-smoke
+chip: ../chips/ch32x035f8u6-ch32fun-smoke.yaml
+external_devices: []
+board_io:
+  - { id: board_led_pb12, kind: led, peripheral: gpiob, pin: 12, signal: output, active_high: true }
+  - { id: external_led_pa2, kind: led, peripheral: gpioa, pin: 2, signal: output, active_high: true }
+  - { id: external_led_pa4, kind: led, peripheral: gpioa, pin: 4, signal: output, active_high: true }
+  - { id: external_led_pa7, kind: led, peripheral: gpioa, pin: 7, signal: output, active_high: true }

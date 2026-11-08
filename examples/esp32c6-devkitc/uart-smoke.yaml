@@ -4,7 +4,7 @@ inputs:
   # Built by: cargo build -p firmware-esp32c6-demo --release --target riscv32imc-unknown-none-elf
   # Survival fixture (same bytes): tests/fixtures/esp32c6-demo.elf
   firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c6-demo"
-  system: "./system.yaml"
+  system: "../../configs/systems/esp32c6-devkitc.yaml"
 limits:
   max_steps: 200000
 assertions:

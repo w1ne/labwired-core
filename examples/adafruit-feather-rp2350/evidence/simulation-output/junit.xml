@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.005515">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="6540f4a18d1c37f4b873f3624c52ada1d9e01de9063ff4cbe25eb74442a0d008"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.005515">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: gpio_edges: sio:7 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

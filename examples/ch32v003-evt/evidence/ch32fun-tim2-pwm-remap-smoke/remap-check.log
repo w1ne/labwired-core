@@ -1,0 +1,10 @@
+TIM2_RM = 00, PD4 (CH1) / PD3 (CH2): cycles 65686715..66011468, counts 253..254 (1268 periods)
+  last PD4/PD3 edge 66011469; PC1/PC7 flat over 65686715..66011724
+TIM2_RM = 11, PC1 (CH1) / PC7 (CH2): cycles 66011980..69999779, counts 0..16 (15552 periods)
+  first PC1/PC7 edge 66011724, 255 cycles after the last PD edge
+  PD4/PD3: CH1 low 253/256  CH2 low   2/256  for 331 periods
+  PD4/PD3: CH1 low 254/256  CH2 low   1/256  for 937 periods
+  PC1/PC7: CH1 low   0/256  CH2 low 255/256  for 937 periods
+  PC1/PC7: CH1 low   1/256  CH2 low 254/256  for 936 periods
+  PC1/PC7: CH1 low   2/256  CH2 low 253/256  for 936 periods
+PASS: the pair moves PD4/PD3 -> PC1/PC7 at the remap, every whole period 256 cycles with CH1 low + CH2 low = 255, count +1 every ~937.5 periods; 20 period(s) cut short by a UG restart, all at a count step; 0 step(s) where CH2 took the new count one period late

@@ -1,0 +1,345 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 40000000,
+  "cycles": 148175574,
+  "instructions": 40000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 40000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 40000000
+    }
+  },
+  "limits": {
+    "max_steps": 40000000,
+    "max_cycles": 40000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "+0",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "-1[",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "+4",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "-5[",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 3758097280,
+          "expected_value": 0,
+          "mask": 192,
+          "size": null
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1816,
+      536891344,
+      536871932,
+      0,
+      0,
+      536891192,
+      0,
+      1073809408,
+      8192,
+      4999996,
+      0,
+      0,
+      4294491393,
+      4294967295,
+      5475899,
+      3758157824,
+      0,
+      0,
+      3758097280,
+      0,
+      0,
+      0,
+      132,
+      1,
+      0,
+      0,
+      0,
+      9,
+      0,
+      0,
+      0
+    ],
+    "pc": 628,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 1718,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 39999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "6163c5e885bcdb0d955637fb5af3aa4abea574b7ea3c8a4beb9bb3894d6d6566",
+  "config": {
+    "firmware": "examples/weact-ch32x035/ch32fun/debugprintfdemo.elf",
+    "system": "examples/weact-ch32x035/../../configs/systems/weact-ch32x035-ch32fun-smoke.yaml",
+    "script": "examples/weact-ch32x035/ch32fun-debugprintf-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "exti",
+        "kind": "native",
+        "base": 1073808384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "debug_printf",
+        "kind": "native",
+        "base": 3758097280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfic",
+        "kind": "native",
+        "base": 3758153728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1073810432,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1896,
+    "data_bytes": 0,
+    "bss_bytes": 8,
+    "flash_used_bytes": 1896,
+    "ram_static_bytes": 8,
+    "flash_total_bytes": 63488,
+    "ram_total_bytes": 20480,
+    "flash_used_pct": 2.99,
+    "ram_static_pct": 0.04,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 148175574,
+    "instructions": 40000000,
+    "steps_executed": 40000000,
+    "memory_reads": 40001044,
+    "memory_writes": 1110,
+    "peripheral_accesses": 11375330,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 638,
+        "count": 22032
+      },
+      {
+        "pc": 628,
+        "count": 22031
+      },
+      {
+        "pc": 616,
+        "count": 21994
+      },
+      {
+        "pc": 624,
+        "count": 21992
+      },
+      {
+        "pc": 620,
+        "count": 21953
+      },
+      {
+        "pc": 632,
+        "count": 21953
+      },
+      {
+        "pc": 636,
+        "count": 21952
+      },
+      {
+        "pc": 1828,
+        "count": 391
+      },
+      {
+        "pc": 1832,
+        "count": 391
+      },
+      {
+        "pc": 654,
+        "count": 390
+      },
+      {
+        "pc": 1838,
+        "count": 196
+      },
+      {
+        "pc": 644,
+        "count": 195
+      },
+      {
+        "pc": 648,
+        "count": 195
+      },
+      {
+        "pc": 660,
+        "count": 195
+      },
+      {
+        "pc": 664,
+        "count": 195
+      },
+      {
+        "pc": 1820,
+        "count": 195
+      }
+    ]
+  }
+}

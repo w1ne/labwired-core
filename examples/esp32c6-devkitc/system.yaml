@@ -5,27 +5,11 @@
 # See the LICENSE file in the project root for full license information.
 #
 # ESP32-C6-DevKitC-1 (ESP32-C6-WROOM-1, 8 MB flash). SIM-DERIVED — not
-# silicon-verified. Board wiring per the DevKitC-1 v1.2 user guide:
-#   - UART console on the USB-to-UART bridge (U0TXD GPIO16 / U0RXD GPIO17)
-#   - Addressable RGB LED on GPIO8 (WS2812 — needs RMT to light; pin stub only)
-#   - BOOT button on GPIO9 (active low, strapping pin)
+# silicon-verified. This smoke profile exposes only UART0 to the host console.
 
 name: "esp32c6-devkitc-example"
 chip: "../../configs/chips/esp32c6.yaml"
 external_devices: []
-board_io:
-  - id: "rgb_led"
-    kind: "led"
-    peripheral: "gpio"
-    pin: 8
-    signal: "output"
-    active_high: true
-  - id: "button_boot"
-    kind: "button"
-    peripheral: "gpio"
-    pin: 9
-    signal: "input"
-    active_high: false
 connectors:
   - type: "uart"
     peripheral: "uart0"

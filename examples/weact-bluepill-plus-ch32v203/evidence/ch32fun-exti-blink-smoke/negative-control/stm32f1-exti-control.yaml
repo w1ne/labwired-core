@@ -1,0 +1,39 @@
+# NEGATIVE CONTROL for ch32fun-exti-blink-smoke (see chip.yaml): expected FAIL.
+# ch32fun examples_v20x/exti_blink, unmodified. EXTI line 1 takes PA1
+# (AFIO_EXTICR1 = PA), rising edge only; the EXTI1 handler (PFIC 23) toggles
+# PA10 and clears INTFR. main() spins, so every PA10 edge after the initial
+# set-high comes from the handler.
+#
+# Press, release, press: two rising edges, two toggles (high -> low -> high),
+# and the release makes none. 3 edges is exact here: the set-high at boot and
+# one per press (committed run: cycles 92, 2,000,030 and 6,000,030).
+schema_version: "1.2"
+inputs:
+  firmware: "../../../ch32fun/exti_blink.elf"
+  system: "system.yaml"
+limits:
+  max_cycles: 8000000
+  max_steps: 8000000
+  wall_time_ms: 120000
+stimuli:
+  - target: { component: button_pa1, channel: pressed }
+    trigger: !after_cycles { cycles: 2000000 }
+    value: 1.0
+  - target: { component: button_pa1, channel: pressed }
+    trigger: !after_cycles { cycles: 4000000 }
+    value: 0.0
+  - target: { component: button_pa1, channel: pressed }
+    trigger: !after_cycles { cycles: 6000000 }
+    value: 1.0
+assertions:
+  - gpio_edges: { pin: "gpioa:10", min_edges: 3 }
+  # EXTICR1 line 1 -> PA (0), INTENR/RTENR line 1, FTENR clear, INTFR acked.
+  - memory_value: { address: 0x40010008, size: 32, expected_value: 0x0 }
+  - memory_value: { address: 0x40010400, size: 32, expected_value: 0x2 }
+  - memory_value: { address: 0x40010408, size: 32, expected_value: 0x2 }
+  - memory_value: { address: 0x4001040C, size: 32, expected_value: 0x0 }
+  - memory_value: { address: 0x40010414, size: 32, expected_value: 0x0 }
+  # PFIC: EXTI1 (interrupt 23) enabled, not pending, not active.
+  - memory_value: { address: 0xE000E000, size: 32, mask: 0x00800000, expected_value: 0x00800000 }
+  - memory_value: { address: 0xE000E020, size: 32, mask: 0x00800000, expected_value: 0 }
+  - memory_value: { address: 0xE000E300, size: 32, mask: 0x00800000, expected_value: 0 }

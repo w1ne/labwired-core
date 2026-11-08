@@ -1,0 +1,5 @@
+2026-11-04T20:14:24.292349Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/nrf54lm20a-dk-led-smoke.yaml
+2026-11-04T20:14:24.294382Z  INFO labwired_loader: ELF Entry Point: 0x801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: idle_ff skipped 196684 of 200000 device cycles (3316 interpreted)
+PASS  3/3 checks · onboarding-smoke · 200000 steps · 0.00s

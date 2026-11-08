@@ -1,0 +1,13 @@
+# NUCLEO-C051C8 (MB1717) smoke profile.
+# Only the active-high user LED LD4 on PA5 is attached. Buttons, VCP, and
+# expansion connectors are outside this descriptor.
+name: nucleo-c051c8
+chip: ../chips/stm32c051c8-nucleo-smoke.yaml
+external_devices: []
+board_io:
+  - id: led_ld4
+    kind: led
+    peripheral: gpioa
+    pin: 5
+    signal: output
+    active_high: true

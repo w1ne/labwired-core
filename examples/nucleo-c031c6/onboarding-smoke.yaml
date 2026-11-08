@@ -1,0 +1,12 @@
+# NUCLEO-C031C6: boot Cortex-M0+ firmware and toggle the on-board LD4 on PA5.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nucleo-c031c6-smoke"
+  system: "../../configs/systems/nucleo-c031c6.yaml"
+limits:
+  max_steps: 5000
+assertions:
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 16
+  - expected_stop_reason: max_steps

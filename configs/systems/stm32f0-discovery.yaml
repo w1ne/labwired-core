@@ -1,0 +1,13 @@
+# STM32F0DISCOVERY (STM32F051R8T6). Narrow board profile for the LD3 smoke.
+# ST UM1525 maps the green user LED LD3 to PC9. No other board peripheral is
+# claimed here.
+name: stm32f0-discovery
+chip: "../chips/stm32f051r8-discovery-smoke.yaml"
+external_devices: []
+board_io:
+  - id: led_ld3
+    kind: led
+    peripheral: gpioc
+    pin: 9
+    signal: output
+    active_high: true

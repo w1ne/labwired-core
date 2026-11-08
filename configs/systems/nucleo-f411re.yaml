@@ -1,0 +1,13 @@
+# NUCLEO-F411RE board mapping per ST UM1724 / MB1136.
+# LD2 is PA5. The on-board ST-LINK VCP connects to USART2 on PA2/PA3.
+# Only these paths are exposed by stm32f411re-nucleo-smoke.
+name: "nucleo-f411re"
+chip: "../chips/stm32f411re-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

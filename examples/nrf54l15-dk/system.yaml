@@ -5,6 +5,8 @@
 # with the nrf54l15 chip via its `system.yaml`, exactly like every other
 # onboarded board. Pin assignments come from the Zephyr board devicetree
 # `boards/nordic/nrf54l15dk/nrf54l15dk_common.dtsi`. UARTE20 is the DK console.
+# Scope is the SoC, LEDs/buttons, and UARTE20; radio, J-Link interface MCU,
+# and the on-board 8 MB flash are not modeled here.
 name: "nrf54l15dk-example"
 chip: "../../configs/chips/nrf54l15.yaml"
 external_devices: []

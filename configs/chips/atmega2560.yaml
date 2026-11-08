@@ -7,7 +7,9 @@ registers_count: 32
 # RAMPZ/ELPM), 8 KB SRAM at 0x0200, ports A..L, a 16-channel ADC (ADCSRB.MUX5
 # selects ADC8..15 = A8..A15) and the 2560 vector table. Timer0 (millis/delay),
 # Timer1/Timer2 and USART0 (Serial) are the 328P models at the same addresses.
-# Not modelled here: INTn/PCINT, PWM pads (analogWrite), Timer3/4/5, USART1..3.
+# analogWrite reaches the Timer0/1/2 pads (OC0A PB7, OC0B PG5, OC1A/B PB5/PB6,
+# OC2A PB4, OC2B PH6; cpu/avr/oc_pins.rs).
+# Not modelled here: INTn/PCINT, OC1C, Timer3/4/5 (and their PWM pads), USART1..3.
 # Microchip DS2549 (ATmega640/1280/1281/2560/2561), 16 MHz on the Arduino Mega.
 cpu_hz: 16_000_000
 io_voltage_v: 5.0

@@ -1,0 +1,24 @@
+# ESP32-WROOM-32 development setup for the Tier-1 peripheral fixture.
+# The fixture exercises the classic ESP32 I2C command engine against an
+# explicitly attached BMP280; the bare board descriptor remains sensor-free.
+name: "esp32-wroom-32-tier1"
+chip: "../chips/esp32.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "bmp280"
+    type: "bmp280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO21"
+      scl: "GPIO22"
+    config:
+      i2c_address: 0x76
+      powered: true
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 2
+    signal: "output"
+    active_high: true

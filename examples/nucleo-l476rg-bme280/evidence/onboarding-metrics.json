@@ -1,0 +1,29 @@
+{
+  "target_id": "nucleo-l476rg-bme280",
+  "status": "pass",
+  "crate": "examples/nucleo-l476rg-bme280",
+  "target_triple": "nucleo_l476rg",
+  "script": "examples/nucleo-l476rg-bme280/onboarding-smoke.yaml",
+  "system": "configs/systems/nucleo-l476rg-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T10:45:21Z",
+  "finished_at_utc": "2026-11-04T10:45:38Z",
+  "elapsed_seconds": 18,
+  "elapsed_ms": 17132,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.322,
+    "build_firmware": 2.328,
+    "run_smoke": 14.471
+  },
+  "stages_ms": {
+    "build_cli": 322,
+    "build_firmware": 2328,
+    "run_smoke": 14471
+  },
+  "firmware_build_script": "scripts/build_nucleo_l476rg_bme280_smoke.sh"
+}

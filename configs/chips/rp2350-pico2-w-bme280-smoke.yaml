@@ -1,0 +1,45 @@
+# Narrow RP2350 profile for Raspberry Pi Pico 2 W + an external BME280.
+# The CYW43439 wireless module and its connected onboard LED are omitted.
+name: "rp2350-pico2-w-bme280-smoke"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 150_000_000
+reset_vector_offset: 0x0
+
+flash:
+  base: 0x10000000
+  size: "4096KB"
+ram:
+  base: 0x20000000
+  size: "520KB"
+
+pins:
+  # External sensor route: GP4 = I2C0 SDA, GP5 = I2C0 SCL.
+  GP4: { gpio: "sio", bit: 4 }
+  GP5: { gpio: "sio", bit: 5 }
+
+peripherals:
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x40070000
+    size: "1KB"
+    config:
+      profile: "pl011"
+
+  - id: "i2c0"
+    type: "rp2040_i2c"
+    base_address: 0x40090000
+    size: "4KB"
+    irq: 36
+
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40028000
+    size: "4KB"
+
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/sio.yaml"

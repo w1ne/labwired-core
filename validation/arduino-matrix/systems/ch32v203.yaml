@@ -1,0 +1,18 @@
+# Arduino matrix system — WeAct Studio BluePill-Plus-CH32 (CH32V203C8T6).
+# INA219 on Wire (I2C1, PB6/PB7) for L3, MAX31855 on SPI (SPI1, PA5/6/7,
+# CS PA4) for L4; L0–L2 ignore both. Pins are WCH's CH32V203C8 variant
+# defaults (variant_CH32V203C8.h PIN_WIRE_*, PIN_SPI_*).
+name: "arduino-matrix-ch32v203"
+chip: "../../../configs/chips/ch32v203c8t6-ch32fun-smoke.yaml"
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+board_io: []

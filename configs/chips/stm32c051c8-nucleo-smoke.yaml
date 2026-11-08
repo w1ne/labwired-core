@@ -1,0 +1,40 @@
+# Narrow STM32C051C8 profile for the NUCLEO-C051C8 onboard LED smoke.
+# It exposes reset-clock boot, RCC IOPENR GPIOA clock enable, and GPIOA only.
+# Other MCU peripherals, board buttons, and VCP wiring remain unsupported.
+#
+# Sources: ST STM32C051x6/x8 datasheet (64 KiB flash, 12 KiB SRAM), RM0490
+# (STM32C0 RCC IOPENR at 0x34 and GPIOAEN bit 0), and UM2953 Rev 2 / MB1717
+# schematic (NUCLEO-C051C8 LD4 on PA5, default SB26 closed).
+
+name: stm32c051c8-nucleo-smoke
+arch: arm
+core: cortex-m0+
+cpu_hz: 12000000
+
+flash:
+  base: 0x08000000
+  size: 64KB
+ram:
+  base: 0x20000000
+  size: 12KB
+
+pins:
+  PA5: { gpio: gpioa, bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  # Only RCC_IOPENR@0x34 is in the smoke path; bound the rest of the block so
+  # unmodelled C051 RCC offsets fault rather than reading as zeros.
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 56B
+    config:
+      profile: stm32c0
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x50000000
+    size: 1KB
+    config:
+      profile: stm32v2
+    clock: { reg: iopenr, bit: 0 }

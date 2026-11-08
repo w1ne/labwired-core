@@ -1,0 +1,12 @@
+# Feather M4 Express: repeated GPIO transitions on the on-board D13 LED.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-feather-m4-express-smoke"
+  system: "../../configs/systems/feather-m4-express.yaml"
+limits:
+  max_steps: 1000
+assertions:
+  - gpio_edges:
+      pin: "porta:23"
+      min_edges: 8
+  - expected_stop_reason: max_steps

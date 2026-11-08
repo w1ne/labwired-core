@@ -1,0 +1,21 @@
+# M5Stack Cardputer-Adv (K132-ADV): boot S3 firmware, initialize its ST7789V2
+# over GP-SPI3, draw an 8x8 red patch, and report on UART0.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-m5stack-cardputer-adv-smoke"
+  system: "../../configs/systems/m5stack-cardputer-adv.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "M5STACK_CARDPUTER_ADV_ST7789_OK"
+  - display_region:
+      id: "display"
+      x: 0
+      y: 232
+      w: 8
+      h: 8
+      min_ink: 1.0
+      lit: true
+      colour: "0xF800"
+      min_colour_pixels: 64
+  - expected_stop_reason: max_steps

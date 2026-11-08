@@ -34,13 +34,36 @@ pub enum RiscVCoreProfile {
     StandardRv32,
     /// RV32E profile: the integer register file contains x0..x15 only.
     Rv32e,
+    /// WCH QingKe V2 (CH32V00x): the RV32EC profile plus the vendor
+    /// interrupt-system CSR INTSYSCR (0x804) that WCH's startup code and
+    /// `ch32v003fun` write before `main`, and the QingKe trap entry: with a
+    /// `qingke_pfic` on the bus the core takes PFIC interrupts through the
+    /// vector table (see [`RiscV::attach_qingke_pfic`]). INTSYSCR keeps
+    /// HWSTKEN (bit 0) and INESTEN (bit 1); HWSTKEN turns on the hardware
+    /// prologue/epilogue (HPE) that saves the caller-saved registers on trap
+    /// entry and restores them on `mret`, which WCH's
+    /// `"WCH-Interrupt-fast"` handlers rely on. INESTEN is stored, but
+    /// nesting is not modeled: a pending interrupt waits for `mret`.
+    QingkeV2,
+    /// WCH QingKe V4 (CH32V20x/V30x, RV32IMAC): the full register file, the
+    /// same INTSYSCR and PFIC trap entry as V2, and the vendor core
+    /// configuration CSR CORECFGR (0xBC0) that WCH's startup and ch32fun
+    /// write before `main` (stored; it tunes the pipeline and has no
+    /// architectural effect here).
+    QingkeV4,
+    /// WCH QingKe V4F (CH32V303/V305/V307, RV32IMAFC): QingKe V4 plus the
+    /// single-precision F extension — 32 `f` registers, `fcsr`, and
+    /// `mstatus.FS`. HPE saves only the integer registers here; an
+    /// interrupt handler that uses the FPU must save the `f` registers
+    /// itself.
+    QingkeV4F,
 }
 
 impl RiscVCoreProfile {
     /// Select the profile a chip descriptor runs.
     ///
-    /// The engine models two profiles: the standard RV32 machine and the
-    /// ESP32-C3's vendor CSR set. An `esp32*` chip keeps the vendor profile —
+    /// The engine models the standard RV32 machine, the RV32E register limit,
+    /// and the ESP32-C3's vendor CSR set. An `esp32*` chip keeps the vendor profile —
     /// the C3 is the part whose ROM and performance-counter block the engine
     /// models, and the C6 shares that register surface today. Any other chip
     /// that declares a generic non-E `rv32*` core (e.g. `core: "rv32im"` on a
@@ -60,11 +83,40 @@ impl RiscVCoreProfile {
         if chip.name.to_ascii_lowercase().contains("esp32") {
             return Self::Esp32C3;
         }
-        if core.starts_with("rv32") {
-            Self::StandardRv32
-        } else {
-            Self::Esp32C3
+        match core.as_str() {
+            c if c.starts_with("qingke-v2") => Self::QingkeV2,
+            c if c.starts_with("qingke-v4f") => Self::QingkeV4F,
+            c if c.starts_with("qingke-v4") => Self::QingkeV4,
+            c if c.starts_with("rv32") => Self::StandardRv32,
+            _ => Self::Esp32C3,
         }
+    }
+
+    fn has_standard_rv32_counters(self) -> bool {
+        matches!(
+            self,
+            Self::StandardRv32 | Self::Rv32e | Self::QingkeV2 | Self::QingkeV4 | Self::QingkeV4F
+        )
+    }
+
+    /// A WCH QingKe core: INTSYSCR and the PFIC trap entry.
+    fn is_qingke(self) -> bool {
+        matches!(self, Self::QingkeV2 | Self::QingkeV4 | Self::QingkeV4F)
+    }
+
+    /// A QingKe V4 core (with or without the FPU): CORECFGR exists.
+    fn is_qingke_v4(self) -> bool {
+        matches!(self, Self::QingkeV4 | Self::QingkeV4F)
+    }
+
+    /// The F extension: `f0..f31`, `fcsr` and `mstatus.FS`.
+    pub fn has_f(self) -> bool {
+        matches!(self, Self::QingkeV4F)
+    }
+
+    /// RV32E register file: only x0..x15 exist.
+    fn is_rv32e(self) -> bool {
+        matches!(self, Self::Rv32e | Self::QingkeV2)
     }
 }
 
@@ -143,9 +195,14 @@ fn rv32e_reg_operands(instruction: &Instruction) -> [Option<u8>; 3] {
         CAddi16sp { .. } => [Some(2), None, None],
         CAddi4spn { rd, .. } | CLwsp { rd, .. } => [Some(rd), Some(2), None],
         CSwsp { rs2, .. } => [Some(2), Some(rs2), None],
-        Fence | Ecall | Ebreak | Mret | Wfi | CJ { .. } | Unknown(_) => [None, None, None],
+        // No RV32E profile has the F extension, so an FP encoding traps as
+        // illegal before its integer operand matters.
+        Fence | Ecall | Ebreak | Mret | Wfi | CJ { .. } | Fp(_) | Unknown(_) => [None, None, None],
     }
 }
+
+/// `mstatus.FS` (bits 14:13): Off / Initial / Clean / Dirty.
+const MSTATUS_FS: u32 = 0b11 << 13;
 
 fn rv32e_uses_high_register(instruction: &Instruction) -> bool {
     rv32e_reg_operands(instruction)
@@ -174,6 +231,11 @@ pub struct RiscV {
     pub mtime: u64,
     pub mtimecmp: u64,
 
+    /// F extension state (profiles where [`RiscVCoreProfile::has_f`]):
+    /// `f0..f31` as raw binary32 bits, and `fcsr` = `frm[7:5] | fflags[4:0]`.
+    pub f: [u32; 32],
+    pub fcsr: u32,
+
     /// Active LR/SC reservation address. `None` means no outstanding
     /// reservation; the next SC.W to any address will fail. On a single
     /// hart any intervening store (including any AMO*) invalidates the
@@ -185,6 +247,21 @@ pub struct RiscV {
     pub triggers: trigger::TriggerModule,
 
     waiting_for_interrupt: bool,
+
+    /// QingKe V2 interrupt controller shared with the `qingke_pfic`
+    /// peripheral; `None` on every other core and on a QingKe chip
+    /// descriptor without a PFIC (no interrupt is then delivered).
+    qingke_pfic: Option<Arc<crate::peripherals::qingke_pfic::QingkePficState>>,
+    /// INTSYSCR (CSR 0x804) HWSTKEN and INESTEN bits.
+    qingke_intsyscr: u32,
+    /// QingKe V4 CORECFGR (CSR 0xBC0), stored only.
+    qingke_corecfgr: u32,
+    /// One frame per QingKe trap not yet returned from, innermost last.
+    qingke_frames: Vec<QingkeTrapFrame>,
+    /// Vector-table slot whose stored handler address becomes the PC once
+    /// the trapping instruction's step returns (mtvec MODE = 3 holds
+    /// absolute addresses, and `handle_trap` has no bus to read them).
+    qingke_vector_slot: Option<u32>,
     decode_cache: Box<[Option<RiscVDecodeCacheEntry>; 4096]>,
 
     /// Side-effect-free instruction-fetch window over flash-XIP and linear
@@ -233,6 +310,24 @@ pub struct RiscV {
     jit_engine: Option<crate::cpu::jit_framework::riscv::RiscvJitEngine>,
 }
 
+/// QingKe trap bookkeeping for `mret`: the interrupt to retire from the
+/// PFIC's active set, and the registers HPE saved on entry.
+///
+/// QingKe V2 silicon pushes the HPE frame onto the stack; here it is held
+/// inside the core, so the registers come back exactly but the stack memory
+/// below `sp` is not written. Firmware never reads that frame.
+#[derive(Debug, Clone, Copy)]
+struct QingkeTrapFrame {
+    irq: Option<u32>,
+    saved: Option<[u32; QINGKE_HPE_REGS.len()]>,
+}
+
+/// The RV32E caller-saved registers HPE saves: ra, t0-t2, a0-a5.
+const QINGKE_HPE_REGS: [usize; 10] = [1, 5, 6, 7, 10, 11, 12, 13, 14, 15];
+/// HPE nests two levels on V2; deeper unreturned frames (a handler that
+/// never `mret`s, e.g. a fault loop) are dropped oldest-first.
+const QINGKE_MAX_FRAMES: usize = 8;
+
 /// Bytes of guest code held in the interpreter fetch window (power of two).
 const FETCH_WINDOW_BYTES: usize = 256;
 
@@ -248,6 +343,85 @@ impl Default for RiscV {
 }
 
 impl RiscV {
+    /// Connect the QingKe V2 PFIC the `qingke_pfic` peripheral exposes over
+    /// MMIO. Ignored on other profiles.
+    pub fn attach_qingke_pfic(
+        &mut self,
+        pfic: Arc<crate::peripherals::qingke_pfic::QingkePficState>,
+    ) {
+        if self.core_profile.is_qingke() {
+            self.qingke_pfic = Some(pfic);
+        }
+    }
+
+    /// The PFIC interrupt the core would take at the next boundary with
+    /// `mstatus.MIE` set.
+    fn qingke_next_interrupt(&self) -> Option<u32> {
+        self.qingke_pfic.as_ref()?.next_interrupt()
+    }
+
+    /// QingKe trap entry after the standard CSR updates in `handle_trap`.
+    ///
+    /// Vector numbers follow the CH32V003 table: interrupts use their PFIC
+    /// number; ecall from M-mode is 5, from U-mode 8, a breakpoint 9, and
+    /// every other exception is HardFault (3). mtvec MODE bit 0 selects
+    /// vectored entry and bit 1 whether a slot holds a handler address (WCH
+    /// startup and `ch32v003fun` both set 3) or a jump instruction. A VTF
+    /// channel bound to the interrupt bypasses the table.
+    fn qingke_trap_entry(&mut self, cause: u32) {
+        let interrupt = cause & 0x8000_0000 != 0;
+        let code = cause & 0x7FFF_FFFF;
+        let saved = (self.qingke_intsyscr & 1 != 0).then(|| QINGKE_HPE_REGS.map(|r| self.x[r]));
+        if self.qingke_frames.len() == QINGKE_MAX_FRAMES {
+            self.qingke_frames.remove(0);
+        }
+        self.qingke_frames.push(QingkeTrapFrame {
+            irq: interrupt.then_some(code),
+            saved,
+        });
+
+        let base = self.mtvec & !3;
+        if interrupt {
+            if let Some(target) = self.qingke_pfic.as_ref().and_then(|p| p.vtf_target(code)) {
+                self.pc = target;
+                return;
+            }
+        }
+        if self.mtvec & 1 == 0 {
+            self.pc = base;
+            return;
+        }
+        let vector = match (interrupt, code) {
+            (true, n) => n,
+            (false, 11) => 5,
+            (false, 8) => 8,
+            (false, 3) => 9,
+            (false, _) => 3,
+        };
+        let slot = base.wrapping_add(vector.wrapping_mul(4));
+        if self.mtvec & 2 != 0 {
+            self.qingke_vector_slot = Some(slot);
+        } else {
+            self.pc = slot;
+        }
+    }
+
+    /// QingKe `mret`: HPE restores what it saved, and the interrupt leaves
+    /// the PFIC's active set.
+    fn qingke_trap_return(&mut self) {
+        let Some(frame) = self.qingke_frames.pop() else {
+            return;
+        };
+        if let Some(saved) = frame.saved {
+            for (reg, value) in QINGKE_HPE_REGS.iter().zip(saved) {
+                self.x[*reg] = value;
+            }
+        }
+        if let (Some(irq), Some(pfic)) = (frame.irq, &self.qingke_pfic) {
+            pfic.complete(irq);
+        }
+    }
+
     pub fn new_for(core_profile: RiscVCoreProfile) -> Self {
         Self {
             core_profile,
@@ -263,9 +437,16 @@ impl RiscV {
             mtval: 0,
             mtime: 0,
             mtimecmp: 0,
+            f: [0; 32],
+            fcsr: 0,
             reservation: None,
             triggers: trigger::TriggerModule::default(),
             waiting_for_interrupt: false,
+            qingke_pfic: None,
+            qingke_intsyscr: 0,
+            qingke_corecfgr: 0,
+            qingke_frames: Vec::new(),
+            qingke_vector_slot: None,
             decode_cache: Box::new([None; 4096]),
             fetch_base: 0,
             fetch_len: 0,
@@ -812,7 +993,18 @@ impl RiscV {
             0x7A0..=0x7A5 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 return self.triggers.read_csr(csr)
             }
-            0x300 => self.mstatus,
+            0x300 => {
+                // SD summarises a dirty FS.
+                let sd = if self.mstatus & MSTATUS_FS == MSTATUS_FS {
+                    1 << 31
+                } else {
+                    0
+                };
+                self.mstatus | sd
+            }
+            0x001 if self.fp_enabled() => self.fcsr & 0x1F,
+            0x002 if self.fp_enabled() => (self.fcsr >> 5) & 0x7,
+            0x003 if self.fp_enabled() => self.fcsr & 0xFF,
             // medeleg / mideleg — M-mode only emulator; esp_intr_alloc on C6
             // does `csrrc mideleg` when binding CPU ints. Accept as RAZ/WI.
             0x302 | 0x303 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
@@ -844,24 +1036,13 @@ impl RiscV {
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
-            // The requested RV32E profile shares the baseline profile's cycle
-            // CSR behavior; this profile choice is separate from register count.
-            0xC00
-                if matches!(
-                    self.core_profile,
-                    RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
-                ) =>
-            {
+            0xC00 if self.core_profile.has_standard_rv32_counters() => {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
-            0xC80
-                if matches!(
-                    self.core_profile,
-                    RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
-                ) =>
-            {
-                (self.mtime >> 32) as u32
-            }
+            0xC80 if self.core_profile.has_standard_rv32_counters() => (self.mtime >> 32) as u32,
+            // QingKe INTSYSCR: see `RiscVCoreProfile::QingkeV2`.
+            0x804 if self.core_profile.is_qingke() => self.qingke_intsyscr,
+            0xBC0 if self.core_profile.is_qingke_v4() => self.qingke_corecfgr,
             _ => return None,
         })
     }
@@ -875,7 +1056,27 @@ impl RiscV {
             0x7A0..=0x7A5 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 return self.triggers.write_csr(csr, val)
             }
-            0x300 => self.mstatus = val & 0x0000_1888, // Minimal mstatus (MIE, MPP)
+            // Minimal mstatus (MIE, MPIE, MPP), plus FS with the F extension.
+            0x300 => {
+                let fs = if self.core_profile.has_f() {
+                    MSTATUS_FS
+                } else {
+                    0
+                };
+                self.mstatus = val & (0x0000_1888 | fs)
+            }
+            0x001 if self.fp_enabled() => {
+                self.fcsr = (self.fcsr & !0x1F) | (val & 0x1F);
+                self.mstatus |= MSTATUS_FS;
+            }
+            0x002 if self.fp_enabled() => {
+                self.fcsr = (self.fcsr & 0x1F) | ((val & 0x7) << 5);
+                self.mstatus |= MSTATUS_FS;
+            }
+            0x003 if self.fp_enabled() => {
+                self.fcsr = val & 0xFF;
+                self.mstatus |= MSTATUS_FS;
+            }
             // See read_csr: medeleg/mideleg RAZ/WI on Esp32C3 profile.
             0x302 | 0x303 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x304 => self.mie = val,
@@ -890,9 +1091,137 @@ impl RiscV {
             // See read_csr: accept PMA cfg/addr writes as no-ops.
             0xBC0..=0xBDF if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            0x804 if self.core_profile.is_qingke() => self.qingke_intsyscr = val & 0b11,
+            0xBC0 if self.core_profile.is_qingke_v4() => self.qingke_corecfgr = val,
             _ => return false,
         }
         true
+    }
+
+    /// FP instructions and `fcsr` are usable: the core has F and
+    /// `mstatus.FS` is not Off.
+    fn fp_enabled(&self) -> bool {
+        self.core_profile.has_f() && self.mstatus & MSTATUS_FS != 0
+    }
+
+    /// Execute one RV32F instruction (32-bit encoding). Returns `false` for
+    /// an illegal one — FS Off, a reserved rounding mode, or an encoding
+    /// outside single-precision F — which the caller traps without effect.
+    fn execute_fp(&mut self, bus: &mut dyn Bus, raw: u32) -> SimResult<bool> {
+        use super::riscv_fp as fp;
+        if !self.fp_enabled() {
+            return Ok(false);
+        }
+        let opcode = raw & 0x7F;
+        let rd = ((raw >> 7) & 0x1F) as usize;
+        let funct3 = (raw >> 12) & 0x7;
+        let rs1 = ((raw >> 15) & 0x1F) as u8;
+        let rs2 = ((raw >> 20) & 0x1F) as usize;
+        let rs3 = ((raw >> 27) & 0x1F) as usize;
+        let fmt = (raw >> 25) & 0x3;
+        let funct7 = raw >> 25;
+        let frm = (self.fcsr >> 5) & 0x7;
+        let rm = || fp::Rm::from_bits(if funct3 == 7 { frm } else { funct3 });
+        let (fa, fb) = (self.f[rs1 as usize], self.f[rs2]);
+
+        // Result destinations: an f register, or an x register.
+        enum Out {
+            F(u32, u8),
+            X(u32, u8),
+        }
+        let out = match opcode {
+            0x07 => {
+                if funct3 != 2 {
+                    return Ok(false);
+                }
+                let addr = self.read_reg(rs1).wrapping_add(((raw as i32) >> 20) as u32);
+                Out::F(bus.read_u32(addr as u64)?, 0)
+            }
+            0x27 => {
+                if funct3 != 2 {
+                    return Ok(false);
+                }
+                let imm = (((raw as i32) >> 25) << 5) as u32 | ((raw >> 7) & 0x1F);
+                let addr = self.read_reg(rs1).wrapping_add(imm);
+                bus.write_u32(addr as u64, fb)?;
+                self.invalidate_fetch_if_store_overlaps(addr, 4);
+                self.reservation = None;
+                return Ok(true);
+            }
+            0x43 | 0x47 | 0x4B | 0x4F => {
+                let Some(rm) = rm() else { return Ok(false) };
+                if fmt != 0 {
+                    return Ok(false);
+                }
+                let (np, na) = match opcode {
+                    0x43 => (false, false),
+                    0x47 => (false, true),
+                    0x4B => (true, false),
+                    _ => (true, true),
+                };
+                let (v, fl) = fp::fma(fa, fb, self.f[rs3], np, na, rm);
+                Out::F(v, fl)
+            }
+            0x53 => match funct7 {
+                0x00 | 0x04 | 0x08 | 0x0C => {
+                    let Some(rm) = rm() else { return Ok(false) };
+                    let (v, fl) = match funct7 {
+                        0x00 => fp::add(fa, fb, rm),
+                        0x04 => fp::sub(fa, fb, rm),
+                        0x08 => fp::mul(fa, fb, rm),
+                        _ => fp::div(fa, fb, rm),
+                    };
+                    Out::F(v, fl)
+                }
+                0x2C if rs2 == 0 => {
+                    let Some(rm) = rm() else { return Ok(false) };
+                    let (v, fl) = fp::sqrt(fa, rm);
+                    Out::F(v, fl)
+                }
+                0x10 => match fp::sign_inject(fa, fb, funct3) {
+                    Some(v) => Out::F(v, 0),
+                    None => return Ok(false),
+                },
+                0x14 if funct3 <= 1 => {
+                    let (v, fl) = fp::min_max(fa, fb, funct3 == 1);
+                    Out::F(v, fl)
+                }
+                0x60 if rs2 <= 1 => {
+                    let Some(rm) = rm() else { return Ok(false) };
+                    let (v, fl) = fp::to_int(fa, rs2 == 1, rm);
+                    Out::X(v, fl)
+                }
+                0x68 if rs2 <= 1 => {
+                    let Some(rm) = rm() else { return Ok(false) };
+                    let (v, fl) = fp::from_int(self.read_reg(rs1), rs2 == 1, rm);
+                    Out::F(v, fl)
+                }
+                0x50 => match fp::compare(fa, fb, funct3) {
+                    Some((v, fl)) => Out::X(v, fl),
+                    None => return Ok(false),
+                },
+                0x70 if rs2 == 0 && funct3 == 0 => Out::X(fa, 0),
+                0x70 if rs2 == 0 && funct3 == 1 => Out::X(fp::classify(fa), 0),
+                0x78 if rs2 == 0 && funct3 == 0 => Out::F(self.read_reg(rs1), 0),
+                _ => return Ok(false),
+            },
+            _ => return Ok(false),
+        };
+        match out {
+            Out::F(v, fl) => {
+                self.f[rd] = v;
+                self.fcsr |= fl as u32;
+                self.mstatus |= MSTATUS_FS;
+            }
+            Out::X(v, fl) => {
+                self.write_reg(rd as u8, v);
+                if fl != 0 {
+                    self.fcsr |= fl as u32;
+                    self.mstatus |= MSTATUS_FS;
+                }
+            }
+        }
+        Ok(true)
     }
 
     fn csr_read_or_trap(&mut self, csr: u16, opcode: u32) -> Option<u32> {
@@ -948,6 +1277,9 @@ impl RiscV {
         self.mstatus |= 0b11 << 11; // MPP <- M-mode
                                     // tcontrol: mpte <- mte, mte <- 0, so no trigger fires in the handler.
         self.triggers.on_trap_entry();
+        if self.core_profile.is_qingke() {
+            self.qingke_trap_entry(cause);
+        }
     }
 
     /// The trigger-module check for the instruction about to execute
@@ -1218,33 +1550,15 @@ impl RiscV {
     }
 }
 
-impl Cpu for RiscV {
-    fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
-        self.pc = 0;
-        self.invalidate_fetch_window();
-        Ok(())
-    }
-
-    /// Mirror the RV32IMC JIT engine's counters into the feature-agnostic
-    /// [`crate::CpuJitStats`] so generic callers can prove non-vacuity. Only
-    /// present under `jit`; without it the trait default (`None`) applies.
-    #[cfg(feature = "jit")]
-    fn jit_engine_stats(&self) -> Option<crate::CpuJitStats> {
-        self.jit_stats().map(|s| crate::CpuJitStats {
-            compiled: s.compiled,
-            block_runs: s.block_runs,
-            block_instrs: s.block_instrs,
-            interpreted: s.interpreted,
-        })
-    }
-
-    fn step(
+impl RiscV {
+    /// One interpreted instruction: [`Cpu::step`] minus the QingKe
+    /// vector-table load, which needs the bus after the trap is raised.
+    fn step_instruction(
         &mut self,
         bus: &mut dyn Bus,
         observers: &[Arc<dyn SimulationObserver>],
         _config: &crate::SimulationConfig,
     ) -> SimResult<()> {
-        self.waiting_for_interrupt = false;
         let opcode = self.fetch_opcode_u32(bus)?;
 
         let retired_pc = self.pc;
@@ -1262,8 +1576,18 @@ impl Cpu for RiscV {
         let (instruction, inst_len) = if let Some(entry) = cached {
             (entry.instruction, entry.inst_len as u32)
         } else {
-            let instruction = decode_rv32(opcode);
+            let mut instruction = decode_rv32(opcode);
             let inst_len = if (opcode & 0x3) == 0x3 { 4 } else { 2 };
+            // WCH XW (`-march=rv32imacxw`, WCH's Arduino core) lives in RVC
+            // slots the base decoder leaves Unknown; only a QingKe core asks.
+            if self.core_profile.is_qingke()
+                && inst_len == 2
+                && matches!(instruction, Instruction::Unknown(_))
+            {
+                if let Some(xw) = crate::decoder::riscv::decode_wch_xw(opcode as u16) {
+                    instruction = xw;
+                }
+            }
             if _config.decode_cache_enabled {
                 self.decode_cache[cache_idx] = Some(RiscVDecodeCacheEntry {
                     tag: self.pc,
@@ -1285,7 +1609,7 @@ impl Cpu for RiscV {
         // RV32E reserves every integer register field above x15. Check all
         // operands before trigger handling or instruction execution so an
         // illegal register use cannot perform a partial memory/CSR effect.
-        if self.core_profile == RiscVCoreProfile::Rv32e && rv32e_uses_high_register(&instruction) {
+        if self.core_profile.is_rv32e() && rv32e_uses_high_register(&instruction) {
             self.mtval = 0;
             self.handle_trap(2, self.pc);
             return Ok(());
@@ -1505,6 +1829,15 @@ impl Cpu for RiscV {
                 // loop already polls pending interrupts every instruction, so
                 // the idle task's WFI spin wakes as soon as a line asserts.
                 self.waiting_for_interrupt = true;
+                // QingKe SCTLR.WFITOWFE turns `wfi` into a WFE: consume a
+                // raised event and continue, or stay on this `wfi` until an
+                // event or a deliverable interrupt arrives. The interrupt is
+                // then taken after the `wfi`, so `mret` returns past it.
+                if let Some(pfic) = &self.qingke_pfic {
+                    if pfic.wfi_is_wfe() && !pfic.take_event() && pfic.next_interrupt().is_none() {
+                        next_pc = self.pc;
+                    }
+                }
             }
             Instruction::Ecall | Instruction::Ebreak => {
                 // Should trap. For now, we can just log or halt.
@@ -1528,6 +1861,9 @@ impl Cpu for RiscV {
                 self.mstatus |= mpie << 3; // MIE <- MPIE
                 self.mstatus |= 1 << 7; // MPIE <- 1
                 self.triggers.on_mret();
+                if self.core_profile.is_qingke() {
+                    self.qingke_trap_return();
+                }
                 return Ok(());
             }
             Instruction::Csrrw { rd, rs1, csr } => {
@@ -1845,7 +2181,18 @@ impl Cpu for RiscV {
                 self.reservation = None;
             }
 
-            Instruction::Unknown(inst) => {
+            Instruction::Fp(raw) if self.core_profile.has_f() => {
+                if !self.execute_fp(bus, raw)? {
+                    self.mtval = if inst_len == 2 {
+                        opcode & 0xFFFF
+                    } else {
+                        opcode
+                    };
+                    self.handle_trap(2, self.pc);
+                    return Ok(());
+                }
+            }
+            Instruction::Fp(inst) | Instruction::Unknown(inst) => {
                 tracing::error!("Unknown instruction {:#x} at {:#x}", inst, self.pc);
                 return Err(crate::SimulationError::DecodeError(self.pc as u64));
             }
@@ -1860,6 +2207,27 @@ impl Cpu for RiscV {
         // lines level-sensitively via `external_irq_lines()` after routing
         // asserted sources through the interrupt matrix. OR them into the local
         // mip view so a line stays asserted only while its source does.
+        // QingKe V2: the PFIC arbitrates (enable, priority, threshold) and
+        // the core takes its pick while `mstatus.MIE` is set.
+        if (self.mstatus & (1 << 3)) != 0 {
+            if let Some(irq) = self.qingke_next_interrupt() {
+                if !observers.is_empty() {
+                    crate::emit_trace_event(
+                        observers,
+                        labwired_hw_trace::TraceEvent::InstructionRetired {
+                            pc: retired_pc,
+                            opcode,
+                        },
+                    );
+                }
+                if let Some(pfic) = &self.qingke_pfic {
+                    pfic.acknowledge(irq);
+                }
+                self.handle_trap(0x8000_0000 | irq, next_pc);
+                return Ok(());
+            }
+        }
+
         if (self.mstatus & (1 << 3)) != 0 {
             // Standard machine sources are masked by `mie`; ESP32-C3 external
             // lines arrive already gated (enable + priority/threshold) by the
@@ -1928,6 +2296,45 @@ impl Cpu for RiscV {
 
         Ok(())
     }
+}
+
+impl Cpu for RiscV {
+    fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
+        self.pc = 0;
+        self.qingke_intsyscr = 0;
+        self.qingke_corecfgr = 0;
+        self.qingke_frames.clear();
+        self.qingke_vector_slot = None;
+        self.invalidate_fetch_window();
+        Ok(())
+    }
+
+    /// Mirror the RV32IMC JIT engine's counters into the feature-agnostic
+    /// [`crate::CpuJitStats`] so generic callers can prove non-vacuity. Only
+    /// present under `jit`; without it the trait default (`None`) applies.
+    #[cfg(feature = "jit")]
+    fn jit_engine_stats(&self) -> Option<crate::CpuJitStats> {
+        self.jit_stats().map(|s| crate::CpuJitStats {
+            compiled: s.compiled,
+            block_runs: s.block_runs,
+            block_instrs: s.block_instrs,
+            interpreted: s.interpreted,
+        })
+    }
+
+    fn step(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &crate::SimulationConfig,
+    ) -> SimResult<()> {
+        self.step_instruction(bus, observers, config)?;
+        // A QingKe trap through an address table: load the handler.
+        if let Some(slot) = self.qingke_vector_slot.take() {
+            self.pc = bus.read_u32(u64::from(slot))? & !1;
+        }
+        Ok(())
+    }
 
     fn step_batch(
         &mut self,
@@ -1952,6 +2359,7 @@ impl Cpu for RiscV {
         {
             self.jit_enabled = config.riscv_jit_enabled;
             if self.jit_enabled
+                && !self.core_profile.is_rv32e()
                 && max_count > 1
                 && !self.triggers.armed()
                 && self.jit_gate_allows(bus, observers)
@@ -2084,6 +2492,11 @@ impl Cpu for RiscV {
         self.write_reg(2, val); // x2 is SP
     }
     fn set_exception_pending(&mut self, _exception_num: u32) {
+        // QingKe V2: a peripheral's `irq:` is its PFIC interrupt number.
+        if let Some(pfic) = &self.qingke_pfic {
+            pfic.pend(_exception_num);
+            return;
+        }
         // For RISC-V Machine mode, external interrupts are routed to MEIP (bit 11).
         // The specific 'exception_num' (IRQ) would be tracked by a PLIC.
         // Since we don't have a PLIC yet, we pend a generic external interrupt.
@@ -2095,6 +2508,9 @@ impl Cpu for RiscV {
             return None;
         }
         if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 {
+            return None;
+        }
+        if self.qingke_next_interrupt().is_some() {
             return None;
         }
         if self.mtimecmp == u64::MAX {
@@ -2151,6 +2567,13 @@ impl Cpu for RiscV {
             mtime: self.mtime,
             mtimecmp: self.mtimecmp,
             triggers: Some(self.triggers.snapshot()),
+            fp: self
+                .core_profile
+                .has_f()
+                .then(|| crate::snapshot::RiscVFpSnapshot {
+                    f: self.f.to_vec(),
+                    fcsr: self.fcsr,
+                }),
         })
     }
 
@@ -2178,6 +2601,14 @@ impl Cpu for RiscV {
                 Some(t) => self.triggers.restore(t),
                 None => self.triggers = trigger::TriggerModule::default(),
             }
+            self.f = [0; 32];
+            self.fcsr = 0;
+            if let Some(fp) = &s.fp {
+                for (i, &val) in fp.f.iter().enumerate().take(32) {
+                    self.f[i] = val;
+                }
+                self.fcsr = fp.fcsr & 0xFF;
+            }
         }
     }
 
@@ -2202,7 +2633,16 @@ impl Cpu for RiscV {
             base,
             triggers: self.triggers.snapshot(),
         };
-        let bytes = bincode::serialize(&snap).expect("bincode serialize RiscVRuntimeSnapshot");
+        let bytes = if self.core_profile.has_f() {
+            bincode::serialize(&crate::runtime_snapshot::RiscVRuntimeSnapshotV3 {
+                v2: snap,
+                f: self.f,
+                fcsr: self.fcsr,
+            })
+        } else {
+            bincode::serialize(&snap)
+        }
+        .expect("bincode serialize RiscVRuntimeSnapshot");
         Some((crate::runtime_snapshot::CpuKind::RiscV, bytes))
     }
 
@@ -2221,7 +2661,18 @@ impl Cpu for RiscV {
         // it decodes exactly as the bare V1 layout. A V1 blob carries no
         // trigger state, so the module comes back at reset — what a machine
         // that never programmed a trigger has.
-        let (snap, triggers) = match bincode::deserialize::<RiscVRuntimeSnapshotV2>(bytes) {
+        let v3 =
+            bincode::deserialize::<crate::runtime_snapshot::RiscVRuntimeSnapshotV3>(bytes).ok();
+        let (f, fcsr) = v3
+            .as_ref()
+            .map_or(([0; 32], 0), |v3| (v3.f, v3.fcsr & 0xFF));
+        let v2 = match v3 {
+            Some(v3) => Ok(v3.v2),
+            None => bincode::deserialize::<RiscVRuntimeSnapshotV2>(bytes),
+        };
+        self.f = f;
+        self.fcsr = fcsr;
+        let (snap, triggers) = match v2 {
             Ok(v2) => (v2.base, Some(v2.triggers)),
             Err(_) => {
                 let v1: RiscVRuntimeSnapshot = bincode::deserialize(bytes).map_err(|e| {

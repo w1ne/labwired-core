@@ -1,0 +1,250 @@
+# ESP32-S2 (single-core Xtensa LX7) profile for stock Arduino-ESP32 apps.
+#
+# What runs: an ESP-IDF / Arduino-ESP32 application ELF, entered the way the
+# 2nd-stage bootloader enters it (crates/core/src/boot/esp32s2.rs), on the
+# genuine ESP32-S2 mask ROM (crates/core/roms/esp32s2). Modelled: the S2
+# memory map, external flash behind the MMU-translated cache windows and SPI1
+# (crates/core/src/system/xtensa/esp32s2.rs), UART0, SYSTIMER, TIMG0/1, the
+# interrupt matrix + FROM_CPU doorbells, the WDEV RNG, the EXTMEM cache
+# controller, RMT transmit (symbols played out through the GPIO matrix),
+# LEDC PWM (channel waveforms on the pads the matrix routes them to), the
+# I2C0 master command list (classic-ESP32 I2C design) and the GP-SPI2/3
+# CPU-driven master data phase (no DMA, no pad waveform, no interrupt) and
+# the TWAI controller's register-level self-reception (no CAN bus).
+# Blocks marked "register file" below store what is written and read it
+# back; they carry no behaviour, and nothing that depends on them (clock tree,
+# RF, eFuse values, IO_MUX pad function) is claimed.
+#
+# Not modelled: Wi-Fi, USB OTG, PSRAM, I2C1, I2C slave mode, GP-SPI DMA/slave, RMT RX, ADC, TWAI bus traffic, touch.
+# The narrow freestanding DevKitM-1 smoke profile is configs/chips/esp32s2.yaml.
+#
+# Addresses: ESP-IDF components/soc/esp32s2/include/soc/reg_base.h and
+# ext_mem_defs.h. Memory map: ESP32-S2 TRM, "System and Memory".
+name: "esp32s2-arduino"
+arch: "xtensa-lx7"
+cpu_hz: 240_000_000
+
+# 4 MB external flash (ESP32-S2-MINI-2 N4 and ESP32-S2-SOLO-2 N4 modules).
+# The bus maps it through the S2 MMU, not at this address directly:
+# attach_esp32s2_flash replaces this window with the IRAM0-cache view.
+flash:
+  base: 0x40080000
+  size: "4096KB"
+# Internal SRAM, data-bus view 0x3FFB_0000..0x3FFF_E000. The top 8 KiB is the
+# boot ROM's own data and stack (rom_data below), the same physical SRAM.
+ram:
+  base: 0x3FFB0000
+  size: "312KB"
+memory_regions:
+  # The ROM's initialised `.data_*`, which its reset handler copies to SRAM.
+  - name: "rom_data"
+    base: 0x3FFFE000
+    size: "8KB"
+    image_env: "LABWIRED_ESP32S2_ROM_DATA"
+  # Instruction-bus view of the same SRAM (IBUS = DBUS + 0x7_0000).
+  - name: "iram"
+    base: 0x40020000
+    size: "320KB"
+    alias_of: 0x3FFB0000
+  - name: "irom"
+    base: 0x40000000
+    size: "128KB"
+    image_env: "LABWIRED_ESP32S2_ROM"
+  - name: "drom"
+    base: 0x3FFA0000
+    size: "64KB"
+    image_env: "LABWIRED_ESP32S2_DROM"
+  # RTC FAST memory (data view) and its instruction-bus view.
+  - name: "rtc_fast"
+    base: 0x3FF9E000
+    size: "8KB"
+  - name: "rtc_fast_i"
+    base: 0x40070000
+    size: "8KB"
+    alias_of: 0x3FF9E000
+  - name: "rtc_slow"
+    base: 0x50000000
+    size: "8KB"
+  # PeriBus2: the same peripheral registers as PeriBus1 (0x3F40_0000).
+  # IDF reaches the UART FIFO (UART_FIFO_AHB_REG) and the WDEV RNG through it.
+  - name: "peribus2"
+    base: 0x60000000
+    size: "768KB"
+    alias_of: 0x3F400000
+
+# Only the pad this profile's tests exercise: the WS2812 data line of the
+# Saola-1 / DevKitM-1 RGB pixel (RMT ch0 through the GPIO matrix).
+pins:
+  GPIO18: { gpio: "gpio", bit: 18 }
+
+peripherals:
+  - id: "uart0"
+    type: "esp32s2_uart"
+    base_address: 0x3F400000
+    size: "512B"
+    irq: 37 # ETS_UART0_INTR_SOURCE
+  - id: "gpio"
+    type: "esp32s2_gpio"
+    base_address: 0x3F404000
+    size: "4KB"
+  # TIMG layout = the classic ESP32's (two timers, LACT, INT at 0x98); the
+  # RTC-clock calibration (RTCCALICFG START -> RDY) is what boot needs.
+  - id: "timg0"
+    type: "esp32_timg"
+    base_address: 0x3F41F000
+    size: "4KB"
+  - id: "timg1"
+    type: "esp32_timg"
+    base_address: 0x3F420000
+    size: "4KB"
+  - id: "systimer"
+    type: "esp32s2_systimer"
+    base_address: 0x3F423000
+    size: "4KB"
+    irq: 71 # ETS_SYSTIMER_TARGET0_INTR_SOURCE
+  # Classic-ESP32 RMT design with 4 channels; RMTMEM at +0x400 is inside
+  # this window. TX plays out through the GPIO matrix (signals 87..90).
+  - id: "rmt"
+    type: "esp32s2_rmt"
+    base_address: 0x3F416000
+    size: "4KB"
+    irq: 50 # ETS_RMT_INTR_SOURCE
+  # LEDC: the S3 block (same ledc_reg.h map), 8 low-speed channels whose
+  # outputs reach pads through the GPIO matrix (signals 79..86).
+  - id: "ledc"
+    type: "esp32s2_ledc"
+    base_address: 0x3F419000
+    size: "4KB"
+    irq: 45 # ETS_LEDC_INTR_SOURCE
+  # I2C0: the classic-ESP32 design (16 COMD slots, original opcodes,
+  # I2CEXT0 matrix signals 29/30). IDF's i2c_ll reaches the FIFO through
+  # PeriBus2 (0x6001_301C), which the peribus2 alias above maps here.
+  - id: "i2c0"
+    type: "esp32s2_i2c"
+    base_address: 0x3F413000
+    size: "4KB"
+    irq: 52 # ETS_I2C_EXT0_INTR_SOURCE
+  # GP-SPI2 (FSPI, Arduino's default SPI) and SPI3: the S2's own register
+  # file (USR at CMD bit 24, split MOSI/MISO DLEN, W0 at 0x98). Polled data
+  # phase only; ETS_SPI2/3_INTR_SOURCE (33/34) are never raised.
+  - id: "spi2"
+    type: "esp32s2_spi"
+    base_address: 0x3F424000
+    size: "4KB"
+    irq: 33 # ETS_SPI2_INTR_SOURCE
+  - id: "spi3"
+    type: "esp32s2_spi"
+    base_address: 0x3F425000
+    size: "4KB"
+    irq: 34 # ETS_SPI3_INTR_SOURCE
+  # TWAI (SJA1000-style CAN): soc/esp32s2/register/soc/twai_struct.h is the
+  # S3 struct field for field (only BRP is 14 bits instead of 13, and
+  # BUS_TIMING_0 stores 16), so the S3 model runs here with the S2 source.
+  # Base from esp32s2.peripherals.ld (TWAI = 0x3f42B000). No bus attached:
+  # TX completes at once and only self-reception produces an RX frame.
+  - id: "twai"
+    type: "esp32s3_twai"
+    base_address: 0x3F42B000
+    size: "4KB"
+    irq: 47 # ETS_TWAI_INTR_SOURCE
+  - id: "rng"
+    type: "esp32s2_rng"
+    base_address: 0x3F435000
+    size: "512B"
+  - id: "intmatrix"
+    type: "esp32s2_intmatrix"
+    base_address: 0x3F4C2000
+    size: "4KB"
+  # DPORT_CPU_INTR_FROM_CPU_0..3: the FreeRTOS yield doorbell (sources 28..31).
+  - id: "crosscore_ipi"
+    type: "esp32s2_crosscore_ipi"
+    base_address: 0x3F4C0058
+    size: "16B"
+  # Cache controller: done/idle status from ESP-IDF's extmem_reg.h.
+  - id: "extmem"
+    type: "declarative"
+    base_address: 0x61800000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32s2/extmem.yaml"
+
+  # ── Register files (no behaviour; see header) ──────────────────────────
+  # Each is a block stock Arduino-ESP32 boot writes and reads back.
+  - id: "spi0"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F403000
+    size: "4KB"
+  - id: "fe2"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F405000
+    size: "4KB"
+  - id: "fe"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F406000
+    size: "4KB"
+  # RTC_CNTL (+0x000) and RTCIO (+0x400) share the first half of this page;
+  # SENS (+0x800) and RTC_I2C (+0xC00) are their own windows below.
+  - id: "rtc_cntl"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F408000
+    size: "2KB"
+  # SENS: the RTC-domain SAR controller IDF's oneshot ADC driver uses on the
+  # S2. Boot's adc_hw_calibration constructor polls MEAS1_DONE_SAR here, and
+  # analogRead() reads MEAS1_DATA_SAR. Oneshot completes at once with a fixed
+  # 0x800 (or the injected channel input). No analog cells, touch, or ULP.
+  - id: "sens"
+    type: "esp32s2_sens"
+    base_address: 0x3F408800
+    size: "1KB"
+  - id: "rtc_i2c"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F408C00
+    size: "1KB"
+  # APB_SARADC (digital controller): register file only. The S2 oneshot
+  # path converts in SENS and just configures CTRL/ARB_CTRL here.
+  - id: "apb_saradc"
+    type: "esp32s2_apb_saradc"
+    base_address: 0x3F440000
+    size: "1KB"
+  - id: "io_mux"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F409000
+    size: "4KB"
+  # Analog I2C master (regi2c): BUSY reads clear, so ROM regi2c writes complete.
+  - id: "regi2c"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F40E000
+    size: "4KB"
+  - id: "i2s0"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F40F000
+    size: "4KB"
+  - id: "efuse"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F41A000
+    size: "4KB"
+  - id: "nrx"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F41C000
+    size: "4KB"
+  - id: "bb"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F41D000
+    size: "4KB"
+  - id: "syscon"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F426000
+    size: "4KB"
+  # SYSTEM, in two windows around the FROM_CPU doorbells at +0x58..+0x68.
+  - id: "system"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F4C0000
+    size: "88B"
+  - id: "system_hi"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F4C0068
+    size: "3992B"
+  - id: "sensitive"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F4C1000
+    size: "4KB"

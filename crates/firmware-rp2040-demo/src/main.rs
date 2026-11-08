@@ -9,8 +9,14 @@ const UART0_BASE: u32 = 0x40034000;
 const RESETS_BASE: u32 = 0x4000C000;
 const CLOCKS_BASE: u32 = 0x40008000;
 const IO_BANK0_BASE: u32 = 0x40014000;
-// We'll use a mocked "LED" mapped to a scratch register or standard PIO base for demonstration
-const MOCK_LED_REG: *mut u32 = 0x50200000 as *mut u32;
+const ADC_BASE: u32 = 0x4004C000;
+const SIO_BASE: u32 = 0xD0000000;
+const GPIO25_CTRL: *mut u32 = (IO_BANK0_BASE + 0x04 + 25 * 8) as *mut u32;
+const SIO_GPIO_OUT_SET: *mut u32 = (SIO_BASE + 0x14) as *mut u32;
+const SIO_GPIO_OUT_CLR: *mut u32 = (SIO_BASE + 0x18) as *mut u32;
+const SIO_GPIO_OE_SET: *mut u32 = (SIO_BASE + 0x24) as *mut u32;
+const LED_PIN: u32 = 25;
+const GPIO_FUNC_SIO: u32 = 5;
 
 // RESETS (RP2040 datasheet §2.14, pp.174-178): RESET @ 0x00, RESET_DONE @ 0x08.
 // Every peripheral comes out of power-on HELD IN RESET — RESET's reset value is
@@ -35,6 +41,19 @@ const GPIO0_CTRL: *mut u32 = (IO_BANK0_BASE + 0x04) as *mut u32;
 /// GP0 function F2 is `UART0 TX` (datasheet Table 279, p.238). F1 is SPI0 RX
 /// and F5 is SIO, so the number is not interchangeable with another pin's.
 const GPIO_FUNC_UART: u32 = 2;
+
+// ADC CS and RESULT registers (RP2040 SVD: ADC at 0x4004_C000). Channel 4 is
+// the on-die temperature sensor; TS_EN powers it and START_ONCE launches one
+// conversion. The Pico's pin-connected ADC channels 0..3 are not involved.
+const ADC_CS: *mut u32 = ADC_BASE as *mut u32;
+const ADC_RESULT: *const u32 = (ADC_BASE + 0x04) as *const u32;
+const ADC_EN: u32 = 1 << 0;
+const ADC_TS_EN: u32 = 1 << 1;
+const ADC_START_ONCE: u32 = 1 << 2;
+const ADC_READY: u32 = 1 << 8;
+const ADC_TEMP_CHANNEL: u32 = 4;
+const ADC_CHANNEL_SHIFT: u32 = 12;
+const ADC_RESULT_MASK: u32 = 0x0FFF;
 
 // UART0 is a PL011 (datasheet Table 425, p.430).
 const UART0_DR: *mut u32 = UART0_BASE as *mut u32;
@@ -116,24 +135,45 @@ fn uart0_init() {
 
 #[entry]
 fn main() -> ! {
-    let mut led_state = 0u32;
-
     uart0_init();
 
-    loop {
-        // "Blink" the mocked LED by toggling the register
-        led_state ^= 1;
-        unsafe {
-            core::ptr::write_volatile(MOCK_LED_REG, led_state);
+    // Read the internal temperature-sensor input through the RP2040 ADC. Give
+    // the sensor a short settle interval after enabling it, then start a
+    // single conversion and require a non-zero 12-bit result before reporting
+    // the marker asserted by the Pico onboarding smoke.
+    let adc_code = read_temperature_sensor();
+    match adc_code {
+        Some(code) if code != 0 => {
+            print_uart("RP2040_ADC_TEMP_OK raw=");
+            print_u16(code);
+            print_uart("\n");
         }
+        _ => print_uart("RP2040_ADC_TEMP_FAIL\n"),
+    }
+
+    // Raspberry Pi Pico's onboard LED is driven by GP25. Select SIO and enable
+    // the output, then use the real GPIO_OUT_SET / GPIO_OUT_CLR registers.
+    unsafe {
+        core::ptr::write_volatile(GPIO25_CTRL, GPIO_FUNC_SIO);
+        core::ptr::write_volatile(SIO_GPIO_OE_SET, 1 << LED_PIN);
+    }
+
+    loop {
+        unsafe { core::ptr::write_volatile(SIO_GPIO_OUT_SET, 1 << LED_PIN) };
+        delay(1000);
+        unsafe { core::ptr::write_volatile(SIO_GPIO_OUT_CLR, 1 << LED_PIN) };
 
         // Write a message to UART
         print_uart("RP2040_SMOKE_OK\n");
 
         // Small delay
-        for _ in 0..1000u32 {
-            cortex_m::asm::nop();
-        }
+        delay(1000);
+    }
+}
+
+fn delay(n: u32) {
+    for _ in 0..n {
+        cortex_m::asm::nop();
     }
 }
 
@@ -142,5 +182,42 @@ fn print_uart(s: &str) {
         unsafe {
             core::ptr::write_volatile(UART0_DR, b as u32);
         }
+    }
+}
+
+fn read_temperature_sensor() -> Option<u16> {
+    let control = ADC_EN | ADC_TS_EN | (ADC_TEMP_CHANNEL << ADC_CHANNEL_SHIFT);
+    unsafe {
+        core::ptr::write_volatile(ADC_CS, control);
+    }
+
+    // A short instruction delay lets the analog temperature sensor settle on
+    // hardware. The smoke model uses a deterministic sensor level and does not
+    // model this startup latency.
+    delay(10_000);
+
+    unsafe {
+        if core::ptr::read_volatile(ADC_CS) & ADC_READY == 0 {
+            return None;
+        }
+        core::ptr::write_volatile(ADC_CS, control | ADC_START_ONCE);
+        let result = (core::ptr::read_volatile(ADC_RESULT) & ADC_RESULT_MASK) as u16;
+        Some(result)
+    }
+}
+
+fn print_u16(mut value: u16) {
+    let mut digits = [0u8; 5];
+    let mut start = digits.len();
+    loop {
+        start -= 1;
+        digits[start] = b'0' + (value % 10) as u8;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    for digit in &digits[start..] {
+        unsafe { core::ptr::write_volatile(UART0_DR, *digit as u32) };
     }
 }

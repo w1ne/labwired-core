@@ -2,7 +2,7 @@
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-nucleo-f103rb-smoke"
-  system: "./system.yaml"
+  system: "../../configs/systems/nucleo-f103rb.yaml"
 limits:
   max_steps: 200000
 assertions:

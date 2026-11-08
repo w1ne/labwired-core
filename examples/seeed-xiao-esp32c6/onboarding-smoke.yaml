@@ -1,0 +1,12 @@
+# XIAO ESP32-C6: toggle the onboard active-low USER LED on GPIO15.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-xiao-esp32c6-gpio-smoke"
+  system: "../../configs/systems/seeed-xiao-esp32c6.yaml"
+limits:
+  max_steps: 5000
+assertions:
+  - gpio_edges:
+      pin: "gpio:15"
+      min_edges: 8
+  - expected_stop_reason: max_steps

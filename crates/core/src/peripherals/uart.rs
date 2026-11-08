@@ -819,6 +819,20 @@ const SCI_SSR_FIFO_RDF: u8 = 1 << 6;
 const SCI_SSR_FIFO_TEND: u8 = 1 << 2;
 const SCI_SSR_FIFO_DR: u8 = 1 << 0;
 
+/// The WCH TX pad table a USART on the F1 register map uses instead of the
+/// STM32F1 one ([`crate::bus::SystemBus::wire_stm32_uart_pads`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum WchPadMap {
+    #[default]
+    None,
+    /// CH32V003: USART1_TX on PD5 (`pad_map: ch32v003`).
+    Ch32v003,
+    /// CH32V002..V007: USART1/USART2 TX behind AFIO_PCFR1 (`pad_map: ch32v00x`).
+    Ch32v00x,
+    /// CH32X035: USART1_TX on PB10 behind AFIO_PCFR1 (`pad_map: ch32x03x`).
+    Ch32x03x,
+}
+
 /// Minimal UART mock with selectable register layout.
 #[derive(serde::Serialize)]
 pub struct Uart {
@@ -853,6 +867,10 @@ pub struct Uart {
     /// console (unit tests, every other layout).
     #[serde(skip)]
     tx_console_af: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// Which WCH TX pad table replaces the STM32F1 one (`pad_map:`). The WCH
+    /// parts reuse the F1 USART register map, not the F1 pin map.
+    #[serde(skip)]
+    wch_pad_map: WchPadMap,
     #[serde(skip)]
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     #[serde(skip)]
@@ -1116,6 +1134,7 @@ impl Uart {
             enable_value: 0,
             route_gate: None,
             tx_console_af: None,
+            wch_pad_map: WchPadMap::None,
             sink: None,
             rx_buf: Arc::new(Mutex::new(VecDeque::new())),
             echo_stdout: !matches!(layout, UartRegisterLayout::Avr),
@@ -1189,6 +1208,42 @@ impl Uart {
     pub fn set_full_featured(mut self, yes: bool) -> Self {
         self.full_featured = yes;
         self
+    }
+
+    /// Select the CH32V003 USART1 default TX pad route (PD5). The caller must
+    /// use this only with the STM32F1-shaped USART layout and a sourced
+    /// CH32V003 GPIO descriptor.
+    pub fn set_ch32v003_pad_map(mut self) -> Self {
+        self.wch_pad_map = WchPadMap::Ch32v003;
+        self
+    }
+
+    pub(crate) fn uses_ch32v003_pad_map(&self) -> bool {
+        self.wch_pad_map == WchPadMap::Ch32v003
+    }
+
+    /// Select the CH32V00x USART TX pad routes (USART1 PD5, USART2 PD2,
+    /// each under its AFIO_PCFR1 remap value). Same caller contract as
+    /// [`Self::set_ch32v003_pad_map`].
+    pub fn set_ch32v00x_pad_map(mut self) -> Self {
+        self.wch_pad_map = WchPadMap::Ch32v00x;
+        self
+    }
+
+    /// Select the CH32X035 USART1 TX pad route (PB10 while AFIO_PCFR1
+    /// USART1_RM [6:5] is 0). Same caller contract as
+    /// [`Self::set_ch32v003_pad_map`].
+    pub fn set_ch32x03x_pad_map(mut self) -> Self {
+        self.wch_pad_map = WchPadMap::Ch32x03x;
+        self
+    }
+
+    pub(crate) fn uses_ch32x03x_pad_map(&self) -> bool {
+        self.wch_pad_map == WchPadMap::Ch32x03x
+    }
+
+    pub(crate) fn uses_ch32v00x_pad_map(&self) -> bool {
+        self.wch_pad_map == WchPadMap::Ch32v00x
     }
 
     /// Mark this instance as an STM32 LPUART on the V2 register map.
@@ -1573,8 +1628,14 @@ impl Uart {
         let sci_b_rx_armed = self.sci_b_irq.is_some()
             && sci_b_irq::SciBIrq::rx_armed(self.sci_irq_ctrl())
             && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
+        // CR3.DMAR with a character waiting: the consumer is the DMA, not the
+        // NVIC, so this is work even on a USART with no IRQ line (ch32fun's
+        // usart_dma_rx_circular). Without it the RX request is never raised.
+        let dmar_rx_pending =
+            dmar_armed && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
         level_irq_observable
             || sci_b_rx_armed
+            || dmar_rx_pending
             || !self.attached_streams.is_empty()
             || self.dma_tx_pending
             || !self.wire_chars.is_empty()
@@ -2698,6 +2759,31 @@ impl crate::Peripheral for Uart {
     /// (RA), or interrupt vectors the bus pends as-is (RX).
     fn explicit_irqs_are_link_events(&self) -> bool {
         self.sci_b_irq.is_some() && !self.sci_irq_vectors
+    }
+
+    /// STM32-shaped USARTs (F1/CH32 and V2): the TX request is CR3.DMAT
+    /// while TXE (status bit 7) is set; the RX request is CR3.DMAR while a
+    /// received character waits. Other layouts keep the edge-only requests.
+    fn dma_request_level(&self, line: u32) -> bool {
+        if !matches!(
+            self.layout,
+            UartRegisterLayout::Stm32F1 | UartRegisterLayout::Stm32V2
+        ) {
+            return false;
+        }
+        match line {
+            crate::DMA_SIGNAL_TX => {
+                self.cr3 & (1 << 7) != 0
+                    && self
+                        .read(self.status_offset())
+                        .is_ok_and(|sr| sr & 0x80 != 0)
+            }
+            crate::DMA_SIGNAL_RX => {
+                self.cr3 & self.layout.dmar_mask() != 0
+                    && self.rx_buf.lock().is_ok_and(|g| !g.is_empty())
+            }
+            _ => false,
+        }
     }
 
     /// Phase 2B.3b (issue #192): the shared `Uart` is migrated to the event
@@ -3892,5 +3978,28 @@ mod wakeup_observability_tests {
             vec![(0, UART_WAKE_TOKEN)],
             "stream pacing must still arm on an IRQ-less bus"
         );
+    }
+
+    #[test]
+    fn irqless_uart_with_dmar_wakes_for_a_waiting_character() {
+        // ch32fun usart_dma_rx_circular: USART1 has no IRQ line, CR3.DMAR
+        // feeds a circular DMA channel. An injected byte must wake the UART
+        // so it raises the RX request; an empty receiver must not.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
+        uart.attach_irq_line(None);
+        uart.write(0x14, 1 << 6).unwrap(); // CR3.DMAR
+        assert!(
+            !uart.has_active_work(),
+            "DMAR with an empty receiver is not work on an IRQ-less bus"
+        );
+
+        uart.rx_buf.lock().unwrap().push_back(b't');
+        assert!(
+            uart.has_active_work(),
+            "DMAR with a waiting character is work: the DMA consumes it"
+        );
+        assert_eq!(uart.take_scheduled_events(), vec![(0, UART_WAKE_TOKEN)]);
+        let (_, dma_signals) = uart.advance_one_tick();
+        assert_eq!(dma_signals, vec![crate::DMA_SIGNAL_RX]);
     }
 }

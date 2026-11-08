@@ -1,0 +1,5 @@
+2026-11-04T17:13:45.307332Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/nrf54l15.yaml
+2026-11-04T17:13:45.340420Z  INFO labwired_loader: ELF Entry Point: 0x45
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: idle_ff skipped 199119 of 200000 device cycles (881 interpreted)
+PASS  5/5 checks · io-smoke · 200000 steps · 0.00s

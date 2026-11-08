@@ -1,0 +1,12 @@
+# NUCLEO-H533RE: boot Cortex-M33 firmware and toggle onboard LD2 on PA5.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-h533re-smoke"
+  system: "../../configs/systems/nucleo-h533re.yaml"
+limits:
+  max_steps: 5000
+assertions:
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 16
+  - expected_stop_reason: max_steps

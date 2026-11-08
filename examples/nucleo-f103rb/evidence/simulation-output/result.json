@@ -1,0 +1,1074 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioa:5",
+          "min_edges": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073809408,
+      32,
+      2097152,
+      7750,
+      0,
+      0,
+      0,
+      536891376,
+      0,
+      0,
+      0,
+      0,
+      4294947296,
+      536891376,
+      134219291,
+      134219212
+    ],
+    "pc": 134219212,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "6fecbf569312c1cf2dffa2f62aacf82cab83972490919016b74a24f396d39739",
+  "config": {
+    "firmware": "examples/nucleo-f103rb/../../target/thumbv7m-none-eabi/release/firmware-nucleo-f103rb-smoke",
+    "system": "examples/nucleo-f103rb/../../configs/systems/nucleo-f103rb.yaml",
+    "script": "examples/nucleo-f103rb/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [
+          {
+            "name": "CR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CFGR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CIR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB2RSTR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1RSTR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHBENR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB2ENR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1ENR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BDCR",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CSR",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [
+          {
+            "name": "CRL",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CRH",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "ODR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BSRR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "BRR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "LCKR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [
+          {
+            "name": "CRL",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CRH",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "ODR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BSRR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "BRR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "LCKR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "uart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [
+          {
+            "name": "SR",
+            "offset": 0,
+            "size": 32,
+            "value": 192,
+            "fields": [
+              {
+                "name": "CTS",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBD",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "TC",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "RXNE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "ORE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "FE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "PE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DR",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DR",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 8,
+            "size": 32,
+            "value": 69,
+            "fields": [
+              {
+                "name": "DIV_Mantissa",
+                "bits": [
+                  15,
+                  4
+                ],
+                "value": 4
+              },
+              {
+                "name": "DIV_Fraction",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 5
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR1",
+            "offset": 12,
+            "size": 32,
+            "value": 8200,
+            "fields": [
+              {
+                "name": "UE",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 1
+              },
+              {
+                "name": "M",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKE",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "PCE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "PS",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "PEIE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXEIE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNEIE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLEIE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "TE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "RE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "RWU",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBK",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR2",
+            "offset": 16,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LINEN",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOP",
+                "bits": [
+                  13,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "CLKEN",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "CPOL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CPHA",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBCL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADD",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR3",
+            "offset": 20,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CTSIE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTSE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "DMAT",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "DMAR",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCEN",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACK",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "HDSEL",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IRLP",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "IREN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "EIE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GTPR",
+            "offset": 24,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "GT",
+                "bits": [
+                  15,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "PSC",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "button_b1",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 200000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioa",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 72,
+            "value": 1
+          },
+          {
+            "cycle": 20874,
+            "value": 0
+          },
+          {
+            "cycle": 41677,
+            "value": 1
+          },
+          {
+            "cycle": 62479,
+            "value": 0
+          },
+          {
+            "cycle": 83282,
+            "value": 1
+          },
+          {
+            "cycle": 104084,
+            "value": 0
+          },
+          {
+            "cycle": 124887,
+            "value": 1
+          },
+          {
+            "cycle": 145689,
+            "value": 0
+          },
+          {
+            "cycle": 166492,
+            "value": 1
+          },
+          {
+            "cycle": 187294,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 41,
+            "state": "0"
+          },
+          {
+            "cycle": 72,
+            "state": "1"
+          },
+          {
+            "cycle": 20874,
+            "state": "0"
+          },
+          {
+            "cycle": 41677,
+            "state": "1"
+          },
+          {
+            "cycle": 62479,
+            "state": "0"
+          },
+          {
+            "cycle": 83282,
+            "state": "1"
+          },
+          {
+            "cycle": 104084,
+            "state": "0"
+          },
+          {
+            "cycle": 124887,
+            "state": "1"
+          },
+          {
+            "cycle": 145689,
+            "state": "0"
+          },
+          {
+            "cycle": 166492,
+            "state": "1"
+          },
+          {
+            "cycle": 187294,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 10
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioa",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1568,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1568,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 131072,
+    "ram_total_bytes": 20480,
+    "flash_used_pct": 1.2,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 20480,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 20464,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536891392,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 20480,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 20464,
+    "heap_base": 536870912,
+    "heap_top": 536891392
+  },
+  "metrics": {
+    "cycles": 200000,
+    "instructions": 200000,
+    "steps_executed": 200000,
+    "memory_reads": 206,
+    "memory_writes": 6,
+    "peripheral_accesses": 26,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134219198,
+        "count": 40,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219072,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219086,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219090,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219100,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219104,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219114,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219118,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219132,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219146,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219162,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219180,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219184,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219212,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219228,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219242,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      }
+    ]
+  }
+}

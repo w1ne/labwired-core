@@ -6,7 +6,7 @@
 //! must load its chip descriptor and build through `SystemBus::from_config`.
 //!
 //! Six one-test files (`atsamd21_config`, `atsamd51_config`, `ra4m1_config`,
-//! `imxrt1064_config`, `stm32f746_config`, `stm32g071_config`) copied the same
+//! `teensy41_gpio_config`, `stm32f746_config`, `stm32g071_config`) copied the same
 //! loader skeleton — `workspace_root()` + `SystemManifest::from_file` +
 //! `ChipDescriptor::from_file` + `SystemBus::from_config` — differing only in
 //! the board path and the per-peripheral presence asserts. The skeleton lives
@@ -14,8 +14,8 @@
 //! for CI attribution.
 //!
 //! Provenance carried over from the retired per-board files:
-//! * `imxrt1064_config` — Teensy 4.1 silicon is MIMXRT1062; this model is the
-//!   RT1064-class cousin (GPIO / LPUART / CCM class). SIM-DERIVED.
+//! * `teensy41_gpio_config` — MIMXRT1062 profile shared by Teensy 4.0/4.1,
+//!   narrowed to the D13 LED's modeled CCM and GPIO2 path. SIM-DERIVED.
 //! * `stm32f746_config` — SIM-DERIVED — F4-class RCC/GPIO/USART reuse +
 //!   Cortex-M7 DTCM map. Not silicon-verified.
 
@@ -48,12 +48,50 @@ fn atsamd21_from_config_builds() {
 }
 
 #[test]
+fn arduino_nano_esp32_from_config_builds() {
+    let (chip, bus) = from_config(
+        "configs/systems/arduino-nano-esp32.yaml",
+        "esp32s3 / arduino-nano-esp32 must build",
+    );
+    assert_eq!(chip.name, "esp32s3-arduino-nano-smoke");
+    assert_eq!(chip.flash.base, 0x4200_0000);
+    assert_eq!(chip.flash.size, 16 * 1024 * 1024);
+    assert!(
+        bus.find_peripheral_index_by_name("gpio").is_some(),
+        "bus must expose esp32s3_gpio for the red RGB LED on GPIO46"
+    );
+    assert!(
+        bus.find_peripheral_index_by_name("i2c0").is_none(),
+        "the focused Nano ESP32 smoke profile must omit the unresolved I2C pin map"
+    );
+}
+
+#[test]
+fn arduino_nano_esp32_bme280_from_config_builds() {
+    let (chip, bus) = from_config(
+        "configs/systems/arduino-nano-esp32-bme280.yaml",
+        "esp32s3 / arduino-nano-esp32-bme280 must build",
+    );
+    assert_eq!(chip.name, "esp32s3-arduino-nano-bme280-smoke");
+    assert!(
+        bus.find_peripheral_index_by_name("gpio").is_some(),
+        "bus must expose esp32s3_gpio for the Nano's GPIO matrix"
+    );
+    assert!(
+        bus.find_peripheral_index_by_name("i2c0").is_some(),
+        "bus must expose esp32s3_i2c for A4/GPIO11 and A5/GPIO12"
+    );
+}
+
+#[test]
 fn atsamd51_from_config_builds() {
-    let (_chip, bus) = from_config(
+    let (chip, bus) = from_config(
         "configs/systems/metro-m4.yaml",
         "atsamd51 / metro-m4 must build",
     );
-    // Metro M4 Serial1 is SERCOM3 on PA22/PA23 (Adafruit variants/metro_m4/variant.cpp).
+    assert_eq!(chip.name, "atsamd51j19a-metro-m4-smoke");
+    // Metro M4 Serial1 is SERCOM3 on PA22/PA23, and the profile claims only
+    // the modeled board path (Adafruit variants/metro_m4/variant.cpp).
     assert!(
         bus.find_peripheral_index_by_name("sercom3").is_some(),
         "bus must expose sercom3 (Serial1)"
@@ -63,9 +101,23 @@ fn atsamd51_from_config_builds() {
         "bus must expose mclk"
     );
     assert!(
+        bus.find_peripheral_index_by_name("oscctrl").is_some(),
+        "bus must expose oscctrl for the SERCOM3 DFLL48M clock source"
+    );
+    assert!(
         bus.find_peripheral_index_by_name("gclk").is_some(),
         "bus must expose gclk"
     );
+    assert!(
+        bus.find_peripheral_index_by_name("porta").is_some(),
+        "bus must expose porta for the D13 LED and SERCOM3 pads"
+    );
+    for omitted in ["usb", "qspi", "portb"] {
+        assert!(
+            bus.find_peripheral_index_by_name(omitted).is_none(),
+            "the focused Metro M4 smoke profile must omit {omitted}"
+        );
+    }
 }
 
 #[test]
@@ -91,47 +143,95 @@ fn ra4m1_from_config_builds() {
 }
 
 #[test]
-fn imxrt1064_from_config_builds() {
-    let (chip, bus) = from_config(
+fn teensy4_gpio_from_config_builds() {
+    for system in [
+        "configs/systems/teensy-40.yaml",
         "configs/systems/teensy-41.yaml",
-        "imxrt1064 / teensy-41 must build",
+    ] {
+        let (chip, bus) = from_config(system, "MIMXRT1062 / Teensy 4.x D13 profile must build");
+
+        assert_eq!(chip.name, "mimxrt1062-teensy4-gpio-smoke");
+        assert_eq!(chip.core.as_deref(), Some("cortex-m7"));
+        // XIP is outside the focused profile; the smoke image is linked into DTCM.
+        assert_eq!(chip.flash.base, 0x2000_0000);
+        assert!(
+            (0x2000_0000..0x2002_0000).contains(&chip.ram.base),
+            "ram must sit in DTCM @ 0x20000000..0x20020000, got {:#x}",
+            chip.ram.base
+        );
+
+        assert!(
+            bus.find_peripheral_index_by_name("gpio2").is_some(),
+            "bus must expose gpio2 (LED GPIO2_IO03)"
+        );
+        assert!(
+            bus.find_peripheral_index_by_name("ccm").is_some(),
+            "bus must expose ccm (imx_ccm)"
+        );
+        assert!(bus.find_peripheral_index_by_name("lpuart6").is_none());
+        assert!(bus.find_peripheral_index_by_name("iomuxc").is_none());
+        assert!(bus.find_peripheral_index_by_name("flexspi").is_none());
+    }
+}
+
+#[test]
+fn itsybitsy_rp2040_from_config_builds() {
+    let (chip, bus) = from_config(
+        "configs/systems/adafruit-itsybitsy-rp2040.yaml",
+        "rp2040 / adafruit-itsybitsy-rp2040 GPIO profile must build",
     );
 
-    assert_eq!(chip.name, "imxrt1064");
-    assert_eq!(chip.core.as_deref(), Some("cortex-m7"));
-    // XIP skipped: image linked in DTCM. cortex-m-rt needs non-overlapping
-    // FLASH/RAM, so lower DTCM is flash and upper DTCM is ram.
-    assert_eq!(chip.flash.base, 0x2000_0000);
-    assert!(
-        (0x2000_0000..0x2002_0000).contains(&chip.ram.base),
-        "ram must sit in DTCM @ 0x20000000..0x20020000, got {:#x}",
-        chip.ram.base
-    );
+    assert_eq!(chip.name, "rp2040-itsybitsy-smoke");
+    assert_eq!(chip.core.as_deref(), Some("cortex-m0+"));
+    assert_eq!(chip.flash.base, 0x1000_0000);
+    assert_eq!(chip.flash.size, 8 * 1024 * 1024);
+    assert_eq!(chip.ram.size, 264 * 1024);
+    assert_eq!(chip.pins.get("GP11").map(|pin| pin.bit), Some(11));
 
     assert!(
-        bus.find_peripheral_index_by_name("lpuart6").is_some(),
-        "bus must expose lpuart6 (Teensy Serial1)"
+        bus.find_peripheral_index_by_name("io_bank0").is_some(),
+        "bus must expose io_bank0 for the GP11 SIO route"
     );
     assert!(
-        bus.find_peripheral_index_by_name("gpio2").is_some(),
-        "bus must expose gpio2 (LED GPIO2_IO03)"
+        bus.find_peripheral_index_by_name("sio").is_some(),
+        "bus must expose sio for the onboard D13 LED"
+    );
+    for omitted in ["uart0", "i2c0", "spi0", "adc", "pwm"] {
+        assert!(
+            bus.find_peripheral_index_by_name(omitted).is_none(),
+            "the focused ItsyBitsy profile must omit {omitted}"
+        );
+    }
+}
+
+#[test]
+fn adafruit_feather_rp2350_from_config_builds() {
+    let (chip, bus) = from_config(
+        "configs/systems/adafruit-feather-rp2350.yaml",
+        "rp2350 / adafruit-feather-rp2350 GPIO profile must build",
+    );
+
+    assert_eq!(chip.name, "rp2350-feather-smoke");
+    assert_eq!(chip.core.as_deref(), Some("cortex-m33"));
+    assert_eq!(chip.flash.base, 0x1000_0000);
+    assert_eq!(chip.flash.size, 8 * 1024 * 1024);
+    assert_eq!(chip.ram.size, 520 * 1024);
+    assert_eq!(chip.pins.get("GP7").map(|pin| pin.bit), Some(7));
+
+    assert!(
+        bus.find_peripheral_index_by_name("io_bank0").is_some(),
+        "bus must expose io_bank0 for the GP7 SIO route"
     );
     assert!(
-        bus.find_peripheral_index_by_name("ccm").is_some(),
-        "bus must expose ccm (imx_ccm)"
+        bus.find_peripheral_index_by_name("sio").is_some(),
+        "bus must expose sio for the onboard red LED on GP7"
     );
-    assert!(
-        bus.find_peripheral_index_by_name("iomuxc").is_some(),
-        "bus must expose iomuxc (imx_iomuxc)"
-    );
-    assert!(
-        bus.find_peripheral_index_by_name("systick").is_some(),
-        "bus must expose systick"
-    );
-    assert!(
-        bus.find_peripheral_index_by_name("flexspi").is_some(),
-        "bus must expose flexspi stub"
-    );
+    for omitted in ["uart0", "i2c0", "spi0", "pwm", "pio0", "usb"] {
+        assert!(
+            bus.find_peripheral_index_by_name(omitted).is_none(),
+            "the focused Feather RP2350 profile must omit {omitted}"
+        );
+    }
 }
 
 #[test]

@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      2554,
+      536872876,
+      536871932,
+      0,
+      1,
+      7,
+      536872940,
+      536870924,
+      479,
+      66,
+      60,
+      61,
+      66,
+      32,
+      61,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 2392,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 2022,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 59999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 60000000,
+  "cycles": 162678862,
+  "instructions": 60000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 60000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 60000000
+    }
+  },
+  "limits": {
+    "max_steps": 200000000,
+    "max_cycles": 60000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "bb44750ac0a16f48ca66714d90db31d44445514ca8f82d74b35fe5202954fec0",
+  "config": {
+    "firmware": "examples/ch32v003-evt/ch32fun/spi_oled.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-ch32fun-spi-oled-smoke.yaml",
+    "script": "examples/ch32v003-evt/ch32fun-spi-oled-smoke.yaml"
+  }
+}

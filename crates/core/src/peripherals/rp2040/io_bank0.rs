@@ -50,8 +50,10 @@ pub const GPIO_FUNC_SPI: u32 = 1;
 pub const GPIO_FUNC_UART: u32 = 2;
 pub const GPIO_FUNC_I2C: u32 = 3;
 pub const GPIO_FUNC_PWM: u32 = 4;
-/// `GPIO_FUNC_PIO0`; PIO1 and PIO2 (RP2350) follow at 7 and 8.
+/// `GPIO_FUNC_PIO0`: the pad is driven by the PIO0 output block.
 pub const GPIO_FUNC_PIO0: u32 = 6;
+/// `GPIO_FUNC_PIO1`: the pad is driven by the PIO1 output block.
+pub const GPIO_FUNC_PIO1: u32 = 7;
 
 /// Live per-pad function selection, shared with whoever needs to know which
 /// peripheral owns a pad (the SIO GPIO model, for pad reads).

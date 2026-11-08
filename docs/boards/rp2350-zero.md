@@ -18,12 +18,15 @@ carrier**. USB-C is native USB — there is no UART-bridge chip.
 
 | Aspect | Status |
 |--------|--------|
-| Chip descriptor | [`configs/chips/rp2350.yaml`](../../configs/chips/rp2350.yaml) |
+| Chip descriptor | [`configs/chips/rp2350-zero-smoke.yaml`](../../configs/chips/rp2350-zero-smoke.yaml) |
 | System YAML | [`configs/systems/rp2350-zero.yaml`](../../configs/systems/rp2350-zero.yaml) |
 | Example | [`examples/rp2350-zero/`](../../examples/rp2350-zero/README.md) |
 | Playground board id | `rp2350-zero` |
-| Reference firmware | `crates/firmware-rp2350-demo/` (UART0 smoke) |
-| Tier (snapshot) | smoke-manual (UART0). **No silicon capture.** |
+| Reference firmware | `crates/firmware-rp2350-zero-ws2812-smoke/` (UART0 + WS2812) |
+| Tier (snapshot) | smoke-manual (UART0 + modeled WS2812). **No silicon capture.** |
+
+The copy-paste Arduino example and reproducible smoke command are in
+[`examples/rp2350-zero/README.md`](../../examples/rp2350-zero/README.md).
 
 Pico 2 (GP25 LED, different USB connector) is [`rp2350.md`](rp2350.md) /
 [`examples/pico2/`](../../examples/pico2/README.md).
@@ -34,7 +37,7 @@ Pico 2 (GP25 LED, different USB connector) is [`rp2350.md`](rp2350.md) /
 
 | Use | Artifact | Notes |
 |-----|----------|--------|
-| Twin / CLI | **ELF** linked at XIP `0x10000000` | `firmware-rp2350-demo` |
+| Twin / CLI | **ELF** linked at XIP `0x10000000` | `firmware-rp2350-zero-ws2812-smoke` |
 | Bench | **UF2** | Hold BOOT, tap RUN, copy to the UF2 disk |
 | Arduino-Pico | `waveshare_rp2350_zero` | Hosted compile id `rp2350-zero`. Browser flash is **not** wired (UF2 on the bench). |
 
@@ -49,7 +52,7 @@ Pico 2 (GP25 LED, different USB connector) is [`rp2350.md`](rp2350.md) /
 | | Twin | USB-C cable |
 |---|---|---|
 | Console | UART0 PL011 @ `0x40070000` | CDC (desk capture: VID `2e8a` PID `0009`) |
-| LED | `board_io` LED on SIO GP16 (WS2812 stand-in) | WS2812 DIN GP16 |
+| LED | WS2812 decoder attached to SIO GP16 | WS2812 DIN GP16 |
 | Load | ELF into XIP | UF2 |
 
 ---
@@ -102,7 +105,7 @@ from pico-sdk `waveshare_rp2350_zero.h`. Authored drawing:
 
 | Silk | GPIO | Notes |
 |------|------|--------|
-| WS2812 DIN | GPIO16 | **Used.** Twin: `led_gp16` stand-in. Not a free header GPIO. |
+| WS2812 DIN | GPIO16 | **Used.** Twin: WS2812 pixel decoder on the GPIO edge stream. Not a free header GPIO. |
 | GP17–GP25 | GPIO17–25 | Underside solder points (9 GPIOs + GND). Schematic P2/P3. |
 | SWCLK / SWDIO | debug | Pads; no onboard probe. |
 | BOOT / RUN | — | UF2 entry: BOOT then RUN. |
@@ -128,7 +131,7 @@ Always confirm with `labwired_describe` once the playground id exists.
 | Hazard3 RISC-V | ❌ | Unmodeled |
 | TrustZone | ❌ | Unmodeled |
 | Bootrom / IMAGE_DEF / UF2 | ❌ | Twin loads ELF. Bench uses UF2. |
-| `rp2350` clocks/resets | ✅ | Moved APB map vs RP2040 |
+| RP2350 clock/reset controller | ❌ | Omitted from this direct-ELF smoke profile |
 
 ### Console, GPIO, LED
 
@@ -136,17 +139,17 @@ Always confirm with `labwired_describe` once the playground id exists.
 |-------|--------|--------|
 | UART0 | ✅ | Twin console. Header GP0/GP1 — not the USB cable. |
 | USB CDC / USB device | ❌ | Bench only |
-| SIO GPIO | ⚠️ | Enough for the GP16 LED stand-in |
-| WS2812 on GP16 | ⚠️ | Stand-in LED. PIO/WS2812 timing not claimed |
-| ADC GP26–29 | ⚠️ | Partial analog |
+| SIO GPIO / IO_BANK0 | ✅ | Drives GP16; the smoke asserts at least 48 edges |
+| WS2812 on GP16 | ✅ | WS2812 decoder asserts one red pixel from timed GPIO edges; PIO output is outside this smoke |
+| ADC GP26–29 | ❌ | Omitted from this narrow profile |
 
 ### Buses
 
 | Block | Status | Notes |
 |-------|--------|--------|
-| I2C0/1, SPI0/1 | ⚠️ | RP2040-lane models on RP2350 bases |
-| PIO0/1/2 | ⚠️ | v1-compatible only; v2-only ops unmodeled |
-| DMA, PWM, TIMER0, WATCHDOG | ⚠️ | See chip page |
+| I2C0/1, SPI0/1 | ❌ | Omitted from this narrow profile |
+| PIO0/1/2 | ❌ | Omitted; PIO output is not used by this smoke |
+| DMA, PWM, TIMER0, WATCHDOG | ❌ | Omitted from this narrow profile |
 
 Firmware that touches unmodeled MMIO will hit `MemoryAccessViolation` or poll
 forever — that is intentional.
@@ -155,11 +158,12 @@ forever — that is intentional.
 
 ## What it catches vs what needs a bench
 
-**Twin is strong for:** UART0 bring-up of an RP2350 Thumb ELF; GP16 as a
-digital LED stand-in; deterministic CLI oracles that match UART0.
+**Twin is strong for:** UART0 bring-up of an RP2350 Thumb ELF; the SIO/IO_BANK0
+path to GP16; and a WS2812 pixel decode from the board's onboard LED input.
+The smoke uses explicit UART, GPIO-edge, and decoded-pixel assertions.
 
-**Needs the bench:** anything on USB CDC, UF2 boot, WS2812 color, SWD
-register parity, PIO v2, dual-core.
+**Needs the bench:** USB CDC, UF2 boot, physical WS2812 timing/color parity,
+SWD register parity, PIO v2, dual-core.
 
 ---
 
@@ -168,12 +172,14 @@ register parity, PIO v2, dual-core.
 ### CLI
 
 ```bash
-RUSTFLAGS="-C link-arg=-Tlink.x" cargo build -p firmware-rp2350-demo \
-  --release --target thumbv8m.main-none-eabi
-cargo run -q -p labwired-cli -- test \
+scripts/onboarding_smoke.sh \
+  --target-id rp2350-zero \
+  --crate firmware-rp2350-zero-ws2812-smoke \
+  --target thumbv8m.main-none-eabi \
   --script examples/rp2350-zero/uart-smoke.yaml \
-  --output-dir out/rp2350-zero/uart-smoke \
-  --no-uart-stdout
+  --system configs/systems/rp2350-zero.yaml \
+  --out-dir examples/rp2350-zero/evidence \
+  --firmware-build-dir crates/firmware-rp2350-zero-ws2812-smoke
 ```
 
 Details: [`examples/rp2350-zero/VALIDATION.md`](../../examples/rp2350-zero/VALIDATION.md).
@@ -185,8 +191,8 @@ on the cable is still unmodeled — serial in the twin is UART0.
 
 ### Agent
 
-[MCP](../agent/mcp.md) → describe the **chip** `rp2350` and run against
-`examples/rp2350-zero/system.yaml`. Do not claim USB or WS2812 success.
+[MCP](../agent/mcp.md) → describe the board `rp2350-zero` and use the local
+system profile for the GPIO/WS2812 scope above. USB CDC remains unsupported.
 
 ---
 

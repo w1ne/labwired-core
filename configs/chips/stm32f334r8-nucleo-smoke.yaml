@@ -1,0 +1,55 @@
+# Narrow STM32F334R8T6 profile for the NUCLEO-F334R8 board smoke.
+# It exposes reset-clock GPIOA/PA5 and USART2 for the board LED and VCP only.
+# No zero-answering peripheral windows are declared; other MCU blocks are
+# omitted and accesses to them remain unsupported.
+# Sources: ST DS9873, RM0364, PM0214, and UM1724 / MB1136.
+name: stm32f334r8-nucleo-smoke
+arch: arm
+core: cortex-m4
+cpu_hz: 8000000
+
+flash:
+  base: 0x08000000
+  size: 64KB
+ram:
+  base: 0x20000000
+  size: 12KB
+
+pins:
+  PA2: { gpio: gpioa, bit: 2, functions: [{ type: uart, peripheral: usart2, role: tx, af: 7 }] }
+  PA3: { gpio: gpioa, bit: 3, functions: [{ type: uart, peripheral: usart2, role: rx, af: 7 }] }
+  PA5: { gpio: gpioa, bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    # The firmware uses AHBENR@0x14 and APB1ENR@0x1C only. These offsets and
+    # gate bits are shared with the existing modeled STM32F0 slice; this does
+    # not claim the rest of the F334 clock tree or RCC register semantics.
+    size: 32
+    config:
+      profile: stm32f0
+
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x48000000
+    size: 1KB
+    clock: { reg: ahbenr, bit: 17 }
+    config:
+      profile: stm32v2
+      # Keep the reset alternate-function mode on SWD pins unchanged.
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x24000000
+
+  - id: usart2
+    type: uart
+    base_address: 0x40004400
+    size: 1KB
+    clock: { reg: apb1enr, bit: 17 }
+    config:
+      profile: stm32v2

@@ -1,0 +1,12 @@
+# NUCLEO-L4A6ZG: toggle the active-high LD3 user LED on PB14.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-l4a6zg-smoke"
+  system: "../../configs/systems/nucleo-l4a6zg.yaml"
+limits:
+  max_steps: 2000
+assertions:
+  - gpio_edges:
+      pin: "gpiob:14"
+      min_edges: 8
+  - expected_stop_reason: max_steps

@@ -18,6 +18,11 @@
 #  elif defined(STM32U545xx)
 // NUCLEO-U545RE-Q LD2 is PA5 = DAC1_OUT2 as well; use TIM2_CH1 on PA0.
 #    define LW_PWM_PIN PA0
+#  elif defined(ARDUINO_ESP32S2_DEV)
+// Saola-1 / DevKitM-1: LED_BUILTIN is the WS2812's virtual pin 64
+// (SOC_GPIO_PIN_COUNT + 18), and stock analogWrite ignores pins
+// >= SOC_GPIO_PIN_COUNT. Use a plain header GPIO so LEDC really runs.
+#    define LW_PWM_PIN 2
 #  elif defined(ARDUINO_BLACKPILL_F411CE)
 // WeAct Black Pill LED is PC13, which has no timer channel on F411, so
 // analogWrite would fall back to digitalWrite. Use TIM2_CH1 on PA0.
@@ -34,6 +39,12 @@
 // Uno/Nano LED_BUILTIN is D13 = PB5, which has no timer output on the
 // ATmega328P, so analogWrite(13, 128) is digitalWrite(HIGH). Use D9 = PB1 =
 // OC1A (Timer1, phase-correct 8-bit, 16 MHz / 64 / 510 = 490 Hz).
+#    define LW_PWM_PIN 9
+#  elif defined(ARDUINO_AVR_NANO_EVERY)
+// Nano Every LED_BUILTIN is D13 = PE2, which has no timer output on the
+// ATmega4809, so analogWrite(13, 128) is digitalWrite(HIGH). Use D9 = PB0 =
+// TCA0 WO0 (PORTMUX.TCAROUTEA = PORTB, single-slope, 16 MHz / 64 / 256 =
+// 976.6 Hz).
 #    define LW_PWM_PIN 9
 #  elif defined(LED_BUILTIN)
 #    define LW_PWM_PIN LED_BUILTIN

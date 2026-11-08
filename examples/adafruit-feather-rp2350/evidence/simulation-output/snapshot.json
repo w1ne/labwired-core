@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073905724,
+      5,
+      5,
+      0,
+      20,
+      128,
+      0,
+      537403368,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537403360,
+      268437631,
+      268437644
+    ],
+    "pc": 268437644,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "6540f4a18d1c37f4b873f3624c52ada1d9e01de9063ff4cbe25eb74442a0d008",
+  "config": {
+    "firmware": "examples/adafruit-feather-rp2350/../../target/thumbv8m.main-none-eabi/release/firmware-adafruit-feather-rp2350-smoke",
+    "system": "examples/adafruit-feather-rp2350/../../configs/systems/adafruit-feather-rp2350.yaml",
+    "script": "examples/adafruit-feather-rp2350/io-smoke.yaml"
+  }
+}

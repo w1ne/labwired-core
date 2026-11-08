@@ -1,0 +1,8195 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 1000000,
+  "cycles": 2118264,
+  "instructions": 1000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1000000
+    }
+  },
+  "limits": {
+    "max_steps": 1000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "BME280_ID=0x60"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_TEMP_RAW=0x082DC0"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1107297342,
+      1070481376,
+      1070073856,
+      0,
+      0,
+      1070481408,
+      0,
+      1107297522,
+      1107297532,
+      48,
+      10,
+      1610612736,
+      1107297520,
+      1107297533,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1107297486,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 1107296588,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 1000000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "7006cbd06b8f01b3db560007a103b68525be151678df4325858b58b656bb0986",
+  "config": {
+    "firmware": "examples/seeed-xiao-esp32c3-bme280/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c3-bme280-smoke",
+    "system": "examples/seeed-xiao-esp32c3-bme280/../../configs/systems/seeed-xiao-esp32c3-bme280.yaml",
+    "script": "examples/seeed-xiao-esp32c3-bme280/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1610612736,
+        "registers": [
+          {
+            "name": "FIFO",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ST",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ENA",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLKDIV",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RX_FILT",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CONF0",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CONF1",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "LOWPULSE",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "HIGHPULSE",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RXD_CNT",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FLOW_CONF",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SLEEP_CONF",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SWFC_CONF0",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SWFC_CONF1",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TXBRK_CONF",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDLE_CONF",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RS485_CONF",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_PRECNT",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_POSTCNT",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_GAPTOUT",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_CHAR",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_CONF",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_TX_STATUS",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_RX_STATUS",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FSM_STATUS",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "POSPULSE",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "NEGPULSE",
+            "offset": 116,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLK_CONF",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ID",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 1610629120,
+        "registers": [
+          {
+            "name": "BT_SELECT",
+            "offset": 0,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "BT_SEL",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OUT",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DATA_ORIG",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OUT_W1TS",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OUT_W1TS",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OUT_W1TC",
+            "offset": 12,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OUT_W1TC",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SDIO_SELECT",
+            "offset": 28,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SDIO_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE",
+            "offset": 32,
+            "size": 32,
+            "value": 192,
+            "fields": [
+              {
+                "name": "DATA",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 192
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE_W1TS",
+            "offset": 36,
+            "size": 32,
+            "value": 192,
+            "fields": [
+              {
+                "name": "ENABLE_W1TS",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 192
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE_W1TC",
+            "offset": 40,
+            "size": 32,
+            "value": 192,
+            "fields": [
+              {
+                "name": "ENABLE_W1TC",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 192
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STRAP",
+            "offset": 56,
+            "size": 32,
+            "value": 8,
+            "fields": [
+              {
+                "name": "STRAPPING",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 8
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "IN",
+            "offset": 60,
+            "size": 32,
+            "value": 192,
+            "fields": [
+              {
+                "name": "DATA_NEXT",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 192
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 68,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "INTERRUPT",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS_W1TS",
+            "offset": 72,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STATUS_W1TS",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS_W1TC",
+            "offset": 76,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STATUS_W1TC",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PCPU_INT",
+            "offset": 92,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PROCPU_INT",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PCPU_NMI_INT",
+            "offset": 96,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PROCPU_NMI_INT",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CPUSDIO_INT",
+            "offset": 100,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SDIO_INT",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN0",
+            "offset": 116,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN1",
+            "offset": 120,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN2",
+            "offset": 124,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN3",
+            "offset": 128,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN4",
+            "offset": 132,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN5",
+            "offset": 136,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN6",
+            "offset": 140,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN7",
+            "offset": 144,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN8",
+            "offset": 148,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN9",
+            "offset": 152,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN10",
+            "offset": 156,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN11",
+            "offset": 160,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN12",
+            "offset": 164,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN13",
+            "offset": 168,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN14",
+            "offset": 172,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN15",
+            "offset": 176,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN16",
+            "offset": 180,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN17",
+            "offset": 184,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN18",
+            "offset": 188,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN19",
+            "offset": 192,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN20",
+            "offset": 196,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN21",
+            "offset": 200,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN22",
+            "offset": 204,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN23",
+            "offset": 208,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN24",
+            "offset": 212,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PIN25",
+            "offset": 216,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SYNC2_BYPASS",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "SYNC1_BYPASS",
+                "bits": [
+                  4,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_TYPE",
+                "bits": [
+                  9,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKEUP_ENABLE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CONFIG",
+                "bits": [
+                  12,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "INT_ENA",
+                "bits": [
+                  17,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS_NEXT",
+            "offset": 332,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STATUS_INTERRUPT_NEXT",
+                "bits": [
+                  25,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC0_IN_SEL_CFG",
+            "offset": 340,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC1_IN_SEL_CFG",
+            "offset": 344,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC2_IN_SEL_CFG",
+            "offset": 348,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC3_IN_SEL_CFG",
+            "offset": 352,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC4_IN_SEL_CFG",
+            "offset": 356,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC5_IN_SEL_CFG",
+            "offset": 360,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC6_IN_SEL_CFG",
+            "offset": 364,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC7_IN_SEL_CFG",
+            "offset": 368,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC8_IN_SEL_CFG",
+            "offset": 372,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC9_IN_SEL_CFG",
+            "offset": 376,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC10_IN_SEL_CFG",
+            "offset": 380,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC11_IN_SEL_CFG",
+            "offset": 384,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC12_IN_SEL_CFG",
+            "offset": 388,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC13_IN_SEL_CFG",
+            "offset": 392,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC14_IN_SEL_CFG",
+            "offset": 396,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC15_IN_SEL_CFG",
+            "offset": 400,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC16_IN_SEL_CFG",
+            "offset": 404,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC17_IN_SEL_CFG",
+            "offset": 408,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC18_IN_SEL_CFG",
+            "offset": 412,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC19_IN_SEL_CFG",
+            "offset": 416,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC20_IN_SEL_CFG",
+            "offset": 420,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC21_IN_SEL_CFG",
+            "offset": 424,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC22_IN_SEL_CFG",
+            "offset": 428,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC23_IN_SEL_CFG",
+            "offset": 432,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC24_IN_SEL_CFG",
+            "offset": 436,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC25_IN_SEL_CFG",
+            "offset": 440,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC26_IN_SEL_CFG",
+            "offset": 444,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC27_IN_SEL_CFG",
+            "offset": 448,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC28_IN_SEL_CFG",
+            "offset": 452,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC29_IN_SEL_CFG",
+            "offset": 456,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC30_IN_SEL_CFG",
+            "offset": 460,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC31_IN_SEL_CFG",
+            "offset": 464,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC32_IN_SEL_CFG",
+            "offset": 468,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC33_IN_SEL_CFG",
+            "offset": 472,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC34_IN_SEL_CFG",
+            "offset": 476,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC35_IN_SEL_CFG",
+            "offset": 480,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC36_IN_SEL_CFG",
+            "offset": 484,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC37_IN_SEL_CFG",
+            "offset": 488,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC38_IN_SEL_CFG",
+            "offset": 492,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC39_IN_SEL_CFG",
+            "offset": 496,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC40_IN_SEL_CFG",
+            "offset": 500,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC41_IN_SEL_CFG",
+            "offset": 504,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC42_IN_SEL_CFG",
+            "offset": 508,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC43_IN_SEL_CFG",
+            "offset": 512,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC44_IN_SEL_CFG",
+            "offset": 516,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC45_IN_SEL_CFG",
+            "offset": 520,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC46_IN_SEL_CFG",
+            "offset": 524,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC47_IN_SEL_CFG",
+            "offset": 528,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC48_IN_SEL_CFG",
+            "offset": 532,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC49_IN_SEL_CFG",
+            "offset": 536,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC50_IN_SEL_CFG",
+            "offset": 540,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC51_IN_SEL_CFG",
+            "offset": 544,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC52_IN_SEL_CFG",
+            "offset": 548,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC53_IN_SEL_CFG",
+            "offset": 552,
+            "size": 32,
+            "value": 71,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 7
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC54_IN_SEL_CFG",
+            "offset": 556,
+            "size": 32,
+            "value": 70,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 6
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC55_IN_SEL_CFG",
+            "offset": 560,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC56_IN_SEL_CFG",
+            "offset": 564,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC57_IN_SEL_CFG",
+            "offset": 568,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC58_IN_SEL_CFG",
+            "offset": 572,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC59_IN_SEL_CFG",
+            "offset": 576,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC60_IN_SEL_CFG",
+            "offset": 580,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC61_IN_SEL_CFG",
+            "offset": 584,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC62_IN_SEL_CFG",
+            "offset": 588,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC63_IN_SEL_CFG",
+            "offset": 592,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC64_IN_SEL_CFG",
+            "offset": 596,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC65_IN_SEL_CFG",
+            "offset": 600,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC66_IN_SEL_CFG",
+            "offset": 604,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC67_IN_SEL_CFG",
+            "offset": 608,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC68_IN_SEL_CFG",
+            "offset": 612,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC69_IN_SEL_CFG",
+            "offset": 616,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC70_IN_SEL_CFG",
+            "offset": 620,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC71_IN_SEL_CFG",
+            "offset": 624,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC72_IN_SEL_CFG",
+            "offset": 628,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC73_IN_SEL_CFG",
+            "offset": 632,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC74_IN_SEL_CFG",
+            "offset": 636,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC75_IN_SEL_CFG",
+            "offset": 640,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC76_IN_SEL_CFG",
+            "offset": 644,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC77_IN_SEL_CFG",
+            "offset": 648,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC78_IN_SEL_CFG",
+            "offset": 652,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC79_IN_SEL_CFG",
+            "offset": 656,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC80_IN_SEL_CFG",
+            "offset": 660,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC81_IN_SEL_CFG",
+            "offset": 664,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC82_IN_SEL_CFG",
+            "offset": 668,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC83_IN_SEL_CFG",
+            "offset": 672,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC84_IN_SEL_CFG",
+            "offset": 676,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC85_IN_SEL_CFG",
+            "offset": 680,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC86_IN_SEL_CFG",
+            "offset": 684,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC87_IN_SEL_CFG",
+            "offset": 688,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC88_IN_SEL_CFG",
+            "offset": 692,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC89_IN_SEL_CFG",
+            "offset": 696,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC90_IN_SEL_CFG",
+            "offset": 700,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC91_IN_SEL_CFG",
+            "offset": 704,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC92_IN_SEL_CFG",
+            "offset": 708,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC93_IN_SEL_CFG",
+            "offset": 712,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC94_IN_SEL_CFG",
+            "offset": 716,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC95_IN_SEL_CFG",
+            "offset": 720,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC96_IN_SEL_CFG",
+            "offset": 724,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC97_IN_SEL_CFG",
+            "offset": 728,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC98_IN_SEL_CFG",
+            "offset": 732,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC99_IN_SEL_CFG",
+            "offset": 736,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC100_IN_SEL_CFG",
+            "offset": 740,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC101_IN_SEL_CFG",
+            "offset": 744,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC102_IN_SEL_CFG",
+            "offset": 748,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC103_IN_SEL_CFG",
+            "offset": 752,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC104_IN_SEL_CFG",
+            "offset": 756,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC105_IN_SEL_CFG",
+            "offset": 760,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC106_IN_SEL_CFG",
+            "offset": 764,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC107_IN_SEL_CFG",
+            "offset": 768,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC108_IN_SEL_CFG",
+            "offset": 772,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC109_IN_SEL_CFG",
+            "offset": 776,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC110_IN_SEL_CFG",
+            "offset": 780,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC111_IN_SEL_CFG",
+            "offset": 784,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC112_IN_SEL_CFG",
+            "offset": 788,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC113_IN_SEL_CFG",
+            "offset": 792,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC114_IN_SEL_CFG",
+            "offset": 796,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC115_IN_SEL_CFG",
+            "offset": 800,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC116_IN_SEL_CFG",
+            "offset": 804,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC117_IN_SEL_CFG",
+            "offset": 808,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC118_IN_SEL_CFG",
+            "offset": 812,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC119_IN_SEL_CFG",
+            "offset": 816,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC120_IN_SEL_CFG",
+            "offset": 820,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC121_IN_SEL_CFG",
+            "offset": 824,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC122_IN_SEL_CFG",
+            "offset": 828,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC123_IN_SEL_CFG",
+            "offset": 832,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC124_IN_SEL_CFG",
+            "offset": 836,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC125_IN_SEL_CFG",
+            "offset": 840,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC126_IN_SEL_CFG",
+            "offset": 844,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC127_IN_SEL_CFG",
+            "offset": 848,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IN_INV_SEL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC0_OUT_SEL_CFG",
+            "offset": 1364,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC1_OUT_SEL_CFG",
+            "offset": 1368,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC2_OUT_SEL_CFG",
+            "offset": 1372,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC3_OUT_SEL_CFG",
+            "offset": 1376,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC4_OUT_SEL_CFG",
+            "offset": 1380,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC5_OUT_SEL_CFG",
+            "offset": 1384,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC6_OUT_SEL_CFG",
+            "offset": 1388,
+            "size": 32,
+            "value": 54,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 54
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC7_OUT_SEL_CFG",
+            "offset": 1392,
+            "size": 32,
+            "value": 53,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 53
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC8_OUT_SEL_CFG",
+            "offset": 1396,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC9_OUT_SEL_CFG",
+            "offset": 1400,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC10_OUT_SEL_CFG",
+            "offset": 1404,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC11_OUT_SEL_CFG",
+            "offset": 1408,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC12_OUT_SEL_CFG",
+            "offset": 1412,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC13_OUT_SEL_CFG",
+            "offset": 1416,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC14_OUT_SEL_CFG",
+            "offset": 1420,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC15_OUT_SEL_CFG",
+            "offset": 1424,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC16_OUT_SEL_CFG",
+            "offset": 1428,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC17_OUT_SEL_CFG",
+            "offset": 1432,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC18_OUT_SEL_CFG",
+            "offset": 1436,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC19_OUT_SEL_CFG",
+            "offset": 1440,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC20_OUT_SEL_CFG",
+            "offset": 1444,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC21_OUT_SEL_CFG",
+            "offset": 1448,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC22_OUT_SEL_CFG",
+            "offset": 1452,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC23_OUT_SEL_CFG",
+            "offset": 1456,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC24_OUT_SEL_CFG",
+            "offset": 1460,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FUNC25_OUT_SEL_CFG",
+            "offset": 1464,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 128
+              },
+              {
+                "name": "INV_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_INV_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CLOCK_GATE",
+            "offset": 1580,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CLK_EN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "REG_DATE",
+            "offset": 1788,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "REG_DATE",
+                "bits": [
+                  27,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "i2c0",
+        "kind": "native",
+        "base": 1610690560,
+        "registers": [
+          {
+            "name": "SCL_LOW_PERIOD",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CTR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TO",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SLAVE_ADDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FIFO_ST",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FIFO_CONF",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATA",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ENA",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_STATUS",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SDA_HOLD",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SDA_SAMPLE",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_HIGH_PERIOD",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_START_HOLD",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_RSTART_SETUP",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STOP_HOLD",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STOP_SETUP",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FILTER_CFG",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLK_CONF",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD0",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD1",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD2",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD3",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD4",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD5",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD6",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD7",
+            "offset": 116,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_ST_TIME_OUT",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_MAIN_ST_TIME_OUT",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_SP_CONF",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STRETCH_CONF",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 248,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TXFIFO_START_ADDR",
+            "offset": 256,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RXFIFO_START_ADDR",
+            "offset": 384,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x77",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ],
+    "devices": [
+      {
+        "id": "bme280",
+        "device_type": "bme280",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c0",
+          "address": 119
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "bme280",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (160000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "BME280_ID=0x60",
+        "cycle_lo": 70000,
+        "cycle": 80000,
+        "end_cycle": 270000
+      },
+      {
+        "text": "BME280_TEMP_RAW=0x082DC0",
+        "cycle_lo": 280000,
+        "cycle": 290000,
+        "end_cycle": 620000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1472,
+    "data_bytes": 0,
+    "bss_bytes": 4096,
+    "flash_used_bytes": 1472,
+    "ram_static_bytes": 4096,
+    "flash_total_bytes": 4194304,
+    "ram_total_bytes": 409600,
+    "flash_used_pct": 0.04,
+    "ram_static_pct": 1.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 2118264,
+    "instructions": 1000000,
+    "steps_executed": 1000000,
+    "memory_reads": 38,
+    "memory_writes": 7,
+    "peripheral_accesses": 29562,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1107297486,
+        "count": 3008,
+        "symbol": "main"
+      },
+      {
+        "pc": 1107296958,
+        "count": 429,
+        "symbol": "firmware_esp32c3_bme280_smoke::read_register"
+      },
+      {
+        "pc": 1107296964,
+        "count": 235,
+        "symbol": "firmware_esp32c3_bme280_smoke::read_register"
+      },
+      {
+        "pc": 1107296950,
+        "count": 234,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      }
+    ]
+  }
+}

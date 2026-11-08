@@ -1,0 +1,18 @@
+# Run WCH's unmodified CH32V003 GPIO_Toggle example (build it first with
+# build-sdk-gpio-toggle.sh). Its SystemInit tries the 24 MHz HSE, times out
+# because the EVT's default fit leaves the crystal links open (the HSE is not
+# modeled), and stays on the 24 MHz HSI. Its printf banner goes out on USART1,
+# then Delay_Ms(250) paces the PD0 toggle through the QingKe SysTick.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/wch-sdk/ch32v003f4p6-wch-sdk-gpio-toggle.elf"
+  system: "../../configs/systems/ch32v003evt-systick-smoke.yaml"
+limits:
+  max_steps: 32000000
+assertions:
+  - uart_contains: "SystemClk:24000000"
+  - uart_contains: "GPIO Toggle TEST"
+  - gpio_edges:
+      pin: "gpiod:0"
+      min_edges: 4
+  - expected_stop_reason: max_steps

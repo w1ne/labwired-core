@@ -553,6 +553,189 @@ fn every_shipped_descriptor_is_ratcheted() {
         "atsamd21j16a",
         "atsamd21j17a",
         "atsamd21j18a",
+        // CH32V003F4P6 on the WCH evaluation board has GPIO and USART smoke
+        // profiles and workflow gates, but no Playground catalog board or
+        // physical-silicon differential. Promote only after both exist.
+        "ch32v003f4p6-gpio-smoke",
+        "ch32v003f4p6-usart-smoke",
+        // The SysTick profile adds the HSI-PLL handshake, QingKe STK and the
+        // INTSYSCR CSR, and runs WCH's unmodified GPIO_Toggle example, but
+        // still has no catalog board or physical-silicon differential.
+        "ch32v003f4p6-systick-smoke",
+        // The PFIC profile adds QingKe V2 interrupt delivery (SysTick and
+        // software interrupts) and runs WCH's unmodified SYSTICK_Interrupt
+        // example; same gap: no catalog board or silicon differential.
+        "ch32v003f4p6-pfic-smoke",
+        // The ch32fun profile adds GPIOA/C, ADC1 and the WCH-LinkE
+        // debug-printf channel and runs four unmodified ch32fun examples;
+        // same gap.
+        "ch32v003f4p6-ch32fun-smoke",
+        // Development-board smoke profiles and chip descriptors added by the
+        // new-hardware onboarding lane. Their evidence is the lane's local
+        // board smokes; none has a Playground catalog board or a
+        // physical-silicon differential, so none is shipped. Promote one only
+        // when both exist.
+        "atmega4809",
+        "atsamd21g18a-feather-m0-express-smoke",
+        "atsamd21g18a-mkr-wifi-1010-smoke",
+        "atsamd51-metro-m4-smoke",
+        "atsamd51j19a-feather-m4-smoke",
+        "ch32v003f4p6-sht31-smoke",
+        "esp32-devkitc-32e-gpio-smoke",
+        "esp32-feather-v2-bme280-smoke",
+        "esp32-feather-v2-smoke",
+        "esp32c3-devkit-rust-2-smoke",
+        "esp32c3-devkitm1-n4x-bme280-smoke",
+        "esp32c3-devkitm1-n4x-smoke",
+        "esp32c3-lcdkit-smoke",
+        "esp32c3-waveshare-c3-zero-smoke",
+        "esp32c3-xiao-bme280-smoke",
+        "esp32c3-xiao-gpio-smoke",
+        "esp32c5",
+        "esp32c6-devkitm1-n4-smoke",
+        "esp32c6-xiao-bme280-smoke",
+        "esp32c6-xiao-gpio-smoke",
+        "esp32c61",
+        "esp32h2-devkitm-1-n4s-smoke",
+        "esp32p4",
+        "esp32s2",
+        "esp32s3-arduino-nano-bme280-smoke",
+        "esp32s3-arduino-nano-smoke",
+        "esp32s3-atoms3-lite-smoke",
+        "esp32s3-cardputer-adv-smoke",
+        "esp32s3-devkitc-1-n16r8-smoke",
+        "esp32s3-devkitc-1-n16r8-v10-smoke",
+        "esp32s3-feather-8mb",
+        "esp32s3-heltec-wifi-lora-32-v4-s3r2-smoke",
+        "esp32s3-xiao-gpio-smoke",
+        "esp8684-devkitm-1-h4x-smoke",
+        "mimxrt1062-teensy4-gpio-smoke",
+        "nrf52833-microbit-v2-uart-smoke",
+        "nrf52840-dk-led-smoke",
+        "nrf52840-feather-uart-smoke",
+        "nrf5340-dk-smoke",
+        "nrf54l10",
+        "nrf54l15-xiao-smoke",
+        "nrf54lm20a-dk-led-smoke",
+        "r7fa4m1ab-uno-r4-wifi-smoke",
+        "ra4m1-nano-r4-smoke",
+        "rp2040-feather-smoke",
+        "rp2040-itsybitsy-smoke",
+        "rp2040-nano-rp2040-connect-smoke",
+        "rp2040-pico-w-bme280-smoke",
+        "rp2040-pico-w-smoke",
+        "rp2040-xiao-smoke",
+        "rp2350-feather-smoke",
+        "rp2350-pico2-bme280-smoke",
+        "rp2350-pico2-smoke",
+        "rp2350-pico2-w-bme280-smoke",
+        "rp2350-pico2-w-smoke",
+        "rp2350-xiao-smoke",
+        "rp2350-zero-smoke",
+        "stm32c031c6-nucleo-smoke",
+        "stm32c051c8-nucleo-smoke",
+        "stm32c071rb-nucleo-smoke",
+        "stm32c092rc-nucleo-smoke",
+        "stm32c542rc-nucleo-smoke",
+        "stm32c5a3zg-nucleo-gpio-smoke",
+        "stm32f030r8-nucleo-smoke",
+        "stm32f051r8-discovery-smoke",
+        "stm32f070rb-nucleo-smoke",
+        "stm32f072-nucleo-smoke",
+        "stm32f091rc-nucleo-smoke",
+        "stm32f103c6t6a-gpio-smoke",
+        "stm32f103c8-bluepill-smoke",
+        "stm32f103r6t6a-gpio-smoke",
+        "stm32f103rb-nucleo-smoke",
+        "stm32f207zg-nucleo-smoke",
+        "stm32f302r8-nucleo-smoke",
+        "stm32f303k8-nucleo-smoke",
+        "stm32f303re-nucleo-smoke",
+        "stm32f303vc-f3discovery-smoke",
+        "stm32f334c8-f3348-disco-smoke",
+        "stm32f334r8-nucleo-smoke",
+        "stm32f410rb-nucleo-smoke",
+        "stm32f411ceu6-blackpill-led-smoke",
+        "stm32f411re-nucleo-bme280-smoke",
+        "stm32f411re-nucleo-smoke",
+        "stm32f412zg-nucleo-smoke",
+        "stm32f413zh-nucleo-smoke",
+        "stm32f429zi-f429i-disc1-smoke",
+        "stm32f439zi-nucleo-smoke",
+        "stm32f446re-smoke",
+        "stm32f446ze-nucleo-smoke",
+        "stm32f722ze-nucleo-smoke",
+        "stm32f756zg-nucleo-smoke",
+        "stm32g031k8-nucleo-smoke",
+        "stm32g070rb-smoke",
+        "stm32g071rb-disco-smoke",
+        "stm32g071rb-nucleo-smoke",
+        "stm32g0b1re-nucleo-smoke",
+        "stm32g431kb-nucleo-smoke",
+        "stm32g431rb-nucleo-smoke",
+        "stm32g491re-nucleo-smoke",
+        "stm32h503rb-nucleo-smoke",
+        "stm32h533re-nucleo-gpio-smoke",
+        "stm32h573ii-dk-gpio-smoke",
+        "stm32h723zg-nucleo-smoke",
+        "stm32h735igk6-dk-smoke",
+        "stm32h753zi-nucleo-smoke",
+        "stm32h755zi-nucleo-m7-smoke",
+        "stm32h7a3zit6q-nucleo-smoke",
+        "stm32l010rb-nucleo-smoke",
+        "stm32l011k4-nucleo-smoke",
+        "stm32l031k6-nucleo-smoke",
+        "stm32l432kc-nucleo-smoke",
+        "stm32l452re-nucleo-smoke",
+        "stm32l496zg-nucleo-smoke",
+        "stm32l4a6zg-nucleo-smoke",
+        "stm32u031r8-nucleo-smoke",
+        "stm32u083rc-nucleo-smoke",
+        "stm32u385rg-nucleo-smoke",
+        "stm32u3c5zi-q-nucleo-smoke",
+        "stm32u545re-nucleo-smoke",
+        "stm32wba25ceu7-nucleo-smoke",
+        "stm32wba55cg-nucleo-smoke",
+        // CH32V203C8T6 on the WeAct BluePill-Plus-CH32 has a PB2 LED and
+        // USART1 TX smoke on reused STM32F1-shaped models, but no Playground
+        // catalog board or physical-silicon differential.
+        "ch32v203c8t6-smoke",
+        // The ch32fun profile adds the QingKe V4 PFIC, 64-bit SysTick, EXTI
+        // and the debug-printf channel, plus SPI2 + DMA1 on the PFIC and
+        // CAN1 (bxCAN), and runs five ch32fun CH32V20x examples (canbus_network
+        // as a two-node world); same gap.
+        "ch32v203c8t6-ch32fun-smoke",
+        // CH32V006F8U7 (QingKe V2C, CH32V00x AFIO/RCC): ch32fun's x00x blink,
+        // debugprintfdemo and dual_usart with remap-gated USART pads; no
+        // Playground catalog board or physical-silicon differential.
+        "ch32v006f8u7-ch32fun-smoke",
+        // ESP32-S2 (Xtensa LX7) on its genuine mask ROM: stock Arduino-ESP32
+        // L0/L1/L7 pass in the Arduino matrix (`esp32s2` row) and
+        // tests/esp32s2_arduino_boot.rs; no Playground catalog board or
+        // physical-silicon differential.
+        "esp32s2-arduino",
+        // CH32V307VCT6 on the WCH CH32V307V-EVT: the QingKe V4F core (RV32F
+        // checked against a host FPU oracle) runs ch32fun's V30x blink and
+        // debugprintfdemo plus an FPU self-test; no Playground catalog board
+        // or physical-silicon differential.
+        "ch32v307vct6-ch32fun-smoke",
+        // CH32X035 (QingKe V4C, 48 MHz HSI, no PLL): ch32fun's X035 blink and
+        // debugprintfdemo on the WeAct core board's CH32X035F8U6, and
+        // exti_pin_change_isr on the LQFP48 CH32X035C8T6 (the X035 AFIO and
+        // EXTI vector grouping); no Playground catalog board or
+        // physical-silicon differential.
+        "ch32x035c8t6-ch32fun-smoke",
+        "ch32x035f8u6-ch32fun-smoke",
+        // CH32X035G8U6 (QFN28, same die): WCH's official Arduino core runs
+        // the stock matrix (L0-L6) with USART1 on PB10, I2C1, SPI1, ADC1 and
+        // TIM1..3; no Playground catalog board or physical-silicon
+        // differential.
+        "ch32x035g8u6",
+        // CH32L103C8T6 (QingKe V4C, 96 MHz, LQFP48): ch32fun's L103 blink and
+        // debugprintfdemo; WCH's Arduino core cannot run on it as shipped
+        // (examples/ch32l103c8t6/README.md). No Playground catalog board or
+        // physical-silicon differential.
+        "ch32l103c8t6",
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
         "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)
         "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)
@@ -568,7 +751,13 @@ fn every_shipped_descriptor_is_ratcheted() {
         "stm32f103r4h",
         "stm32f103r6",
         "stm32f103r6h",
+        // Exact medium-density R8 geometry shares the F103 engine; its GPIO
+        // smoke passes on a narrow profile, but this bare part has no catalog
+        // board or R8-specific silicon differential yet.
         "stm32f103r8",
+        // The R8T6 smoke descriptor is a focused test fixture, not a catalog
+        // board or a claim that the full package profile has silicon parity.
+        "stm32f103r8-gpio-smoke",
         "stm32f103rb",
         "stm32f103t4",
         "stm32f103t6",

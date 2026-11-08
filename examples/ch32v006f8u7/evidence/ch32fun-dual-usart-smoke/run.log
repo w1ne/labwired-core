@@ -1,0 +1,16 @@
+2026-11-08T02:52:16.033095Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/ch32v006f8u7-ch32fun-smoke.yaml
+2026-11-08T02:52:16.035162Z  INFO labwired_loader: ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+
+CH32V00x dual_usart example
+USART1 ready
+
+CH32V00x dual_usart example
+USART2 ready
+tick 0 via USART1
+tick 0 via USART2
+tick 1 via USART1
+tick 1 via USART2
+tick 2 via USART1
+tick 2 via USART2
+PASS  5/5 checks · ch32fun-dual-usart-smoke · 110000000 steps · 51.11s

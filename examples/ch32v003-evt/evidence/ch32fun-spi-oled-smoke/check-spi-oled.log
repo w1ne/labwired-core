@@ -1,0 +1,27 @@
+# check-spi-oled.py over a run of the committed smoke with --inspect-bytes-max 4096
+# (labwired test --script examples/ch32v003-evt/ch32fun-spi-oled-smoke.yaml --output-dir /tmp/spi-oled --inspect-bytes-max 4096)
+ok  frame  0  t= 210709 us  blank (ssd1306_init refresh)
+ok  frame  1  t= 216655 us  random fill
+ok  frame  2  t= 264851 us  Life generation 1
+ok  frame  3  t= 312912 us  Life generation 2
+ok  frame  4  t= 360956 us  Life generation 3
+ok  frame  5  t= 408990 us  Life generation 4
+ok  frame  6  t= 457013 us  Life generation 5
+ok  frame  7  t= 505031 us  Life generation 6
+ok  frame  8  t= 553039 us  Life generation 7
+ok  frame  9  t= 601041 us  Life generation 8
+ok  frame 10  t= 649040 us  Life generation 9
+ok  frame 11  t= 697030 us  Life generation 10
+ok  frame 12  t= 745018 us  Life generation 11
+ok  frame 13  t= 793006 us  Life generation 12
+ok  frame 14  t= 840992 us  Life generation 13
+ok  frame 15  t= 888977 us  Life generation 14
+ok  frame 16  t= 936958 us  Life generation 15
+ok  frame 17  t= 984939 us  Life generation 16
+ok  frame 18  t=1032918 us  Life generation 17
+ok  frame 19  t=1080891 us  Life generation 18
+ok  frame 20  t=1128857 us  Life generation 19
+ok  frame 21  t=1176822 us  Life generation 20
+ok  frame 22  t=1224786 us  Life generation 21
+ok  live GDDRAM = Life generation 21, first 4 bytes already Life generation 22
+PASS: 23 frames, 21 Life generations, every frame exact

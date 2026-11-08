@@ -23,3 +23,7 @@ board_io:
     pin: 7          # PB7 / Mega D13 LED_BUILTIN
     signal: "output"
     active_high: true
+connectors:
+  - type: "uart"
+    peripheral: "usart0"
+    endpoint: "host_console"

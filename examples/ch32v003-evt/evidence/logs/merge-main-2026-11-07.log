@@ -1,0 +1,17 @@
+# All CH32V003 smokes after merging origin/main (ad31a9929) into lane/new-hw-onboarding
+# lane head before merge: b95e0a862; CLI: target/debug/labwired (debug, CARGO_PROFILE_DEV_DEBUG=0)
+PASS  10/10 checks · ch32fun-spi-max7219-smoke · 120000000 steps · 75.59s
+PASS  12/12 checks · ch32fun-i2c-oled-smoke · 130000000 steps · 81.80s
+PASS  2/2 checks · ch32fun-uartdemo-smoke · 30000000 steps · 20.00s
+PASS  2/2 checks · i2c-smoke · 500000 steps · 0.08s
+PASS  2/2 checks · onboarding-smoke · 100000 steps · 0.02s
+PASS  3/3 checks · sdk-systick-interrupt-smoke · 50000000 steps · 20.19s
+PASS  3/3 checks · usart-smoke · 100000 steps · 0.03s
+PASS  4/4 checks · ch32fun-blink-smoke · 90000000 steps · 60.54s
+PASS  4/4 checks · sdk-gpio-toggle-smoke · 32000000 steps · 14.17s
+PASS  5/5 checks · systick-smoke · 200000 steps · 0.16s
+PASS  7/7 checks · ch32fun-systick-irq-smoke · 80000000 steps · 53.85s
+PASS  7/7 checks · pfic-smoke · 3000000 steps · 1.31s
+PASS  8/8 checks · ch32fun-tim2-pwm-smoke · 37000000 steps · 24.63s
+PASS  9/9 checks · ch32fun-adc-polled-smoke · 55000000 steps · 40.84s
+PASS  9/9 checks · ch32fun-exti-smoke · 800000 steps · 0.56s

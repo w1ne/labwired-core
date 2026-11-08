@@ -14,26 +14,27 @@ rustup target add thumbv7em-none-eabi
 cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
 ```
 
-## 3) Run deterministic UART smoke
+## 3) Run the board UART + GPIO smoke
 
 ```bash
 cargo run -q -p labwired-cli -- test \
-  --script examples/nucleo-f401re/uart-smoke.yaml \
-  --output-dir out/nucleo-f401re/uart-smoke \
+  --script examples/nucleo-f401re/io-smoke.yaml \
+  --output-dir out/nucleo-f401re/io-smoke \
   --no-uart-stdout
 ```
 
 Pass criteria:
 1. exit code is `0`
-2. UART contains `OK`
+2. USART2 contains `NUCLEO_F401RE_OK`
+3. GPIOA5 records at least eight output edges
 
 ## 4) Run direct simulation for PC/SP evidence
 
 ```bash
 cargo run -q -p labwired-cli -- \
-  --firmware target/thumbv7em-none-eabi/release/firmware-f401-demo \
+  --firmware target/thumbv7em-none-eabi/release/firmware-nucleo-f401re-smoke \
   --system configs/systems/nucleo-f401re.yaml \
-  --max-steps 32 \
+  --max-steps 10000 \
   --json
 ```
 
@@ -41,7 +42,7 @@ cargo run -q -p labwired-cli -- \
 
 ```bash
 ./scripts/unsupported_instruction_audit.sh \
-  --firmware target/thumbv7em-none-eabi/release/firmware-f401-demo \
+  --firmware target/thumbv7em-none-eabi/release/firmware-nucleo-f401re-smoke \
   --system configs/systems/nucleo-f401re.yaml \
   --max-steps 200000 \
   --out-dir out/unsupported-audit/nucleo-f401re

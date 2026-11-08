@@ -1,0 +1,127 @@
+# NEGATIVE CONTROL, not a shipped profile: ch32v003f4p6-ch32fun-smoke with
+# ADC1 on the STM32F1 (12-bit) profile instead of ch32v003 (10-bit). The same
+# 1650 mV converts to 2047 instead of 511, so every "adc:" check of the smoke
+# must FAIL here while the boot, calibration and GPIO checks still pass.
+# Narrow CH32V003F4P6 profile for unmodified ch32fun (cnlohr/ch32fun)
+# examples: the pfic-smoke profile (HSI/PLL handshake, FLASH_ACTLR, QingKe V2
+# SysTick and PFIC, USART1 TX on PD5) with GPIOA/GPIOC added, because
+# ch32fun's funGpioInitAll() clocks all three ports, and the WCH-LinkE debug
+# printf channel that ch32fun uses as its default console, and ADC1 (the
+# STM32F1 ADC block at 10 bits) for ch32fun's adc_polled.
+#
+# Sources:
+# - ch32fun ch32v003hw.h (register map, DMDATA0/DMDATA1/sentinel at
+#   0xE00000F4..0xE00000FF), ch32fun.c (SystemInit: HSI x2 PLL to 48 MHz,
+#   SysTick CTLR = 5 free-running at HCLK; _write/putchar debug printf)
+# - minichlink DefaultPollTerminal (the probe side of the debug printf)
+# - CH32V003 reference manual, RCC/GPIO/STK/PFIC/ADC chapters
+#
+# ADC1 models software-started single conversions of the regular channel in
+# RSQR3, the RSTCAL/CAL handshakes, EOC, and 10-bit codes against a 3.3 V
+# reference. Not modeled on it: sample time (SAMPTR), the injected group,
+# scan/discontinuous mode, external triggers, the analog watchdog, DMA, the
+# internal V_REFINT/V_CAL channels (IN8/IN9) and calibration offsets.
+#
+# Not modeled: debug-printf input from the host, a detached probe, the rest
+# of the RISC-V debug module, TIM1/TIM2, EXTI, SPI, I2C, DMA, OPA, the
+# watchdogs, sleep/standby, the HSE, the option bytes, and everything listed
+# as not modeled in ch32v003f4p6-pfic-smoke.yaml.
+name: ch32v003f4p6-ch32fun-smoke
+arch: riscv
+core: qingke-v2a
+registers_count: 16
+# SYSCLK after ch32fun's SystemInit (HSI x2 PLL, FUNCONF_USE_PLL default).
+cpu_hz: 48_000_000
+
+flash:
+  base: 0x08000000
+  size: 16KB
+ram:
+  base: 0x20000000
+  size: 2KB
+
+pins:
+  PC0: { gpio: gpioc, bit: 0 }
+  PD0: { gpio: gpiod, bit: 0 }
+  PD4: { gpio: gpiod, bit: 4 }
+  PD5: { gpio: gpiod, bit: 5 }
+  PD6: { gpio: gpiod, bit: 6 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 32B
+    config:
+      profile: ch32v003
+
+  - id: flash_ctrl
+    type: flash
+    base_address: 0x40022000
+    size: 4B
+    config:
+      profile: stm32f1
+
+  # funGpioInitAll() sets AFIOEN with the port clocks; PCFR1 is storage only.
+  - id: afio
+    type: afio
+    base_address: 0x40010000
+    size: 8B
+    clock: { reg: apb2enr, bit: 0 }
+
+  # WCH-LinkE attached and polling like `minichlink -T`.
+  - id: debug_printf
+    type: wch_debug_printf
+    base_address: 0xE00000F4
+    size: 12B
+
+  - id: pfic
+    type: qingke_pfic
+    base_address: 0xE000E000
+    size: 4KB
+
+  - id: stk
+    type: qingke_v2_systick
+    base_address: 0xE000F000
+    size: 20B
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x40010800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 2 }
+    config:
+      profile: ch32v003
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x40011000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 4 }
+    config:
+      profile: ch32v003
+
+  - id: gpiod
+    type: gpio
+    base_address: 0x40011400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 5 }
+    config:
+      profile: ch32v003
+
+  - id: usart1
+    type: uart
+    base_address: 0x40013800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 14 }
+    config:
+      profile: stm32f1
+      pad_map: ch32v003
+
+  - id: adc1
+    type: adc
+    base_address: 0x40012400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 9 }
+    config:
+      profile: stm32f1

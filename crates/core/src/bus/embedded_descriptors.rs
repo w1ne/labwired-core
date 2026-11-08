@@ -36,6 +36,22 @@ macro_rules! packed {
 
 /// Every embedded descriptor, sorted by key so `lookup` can binary-search it.
 static DESCRIPTORS: &[(&str, &[u8])] = &[
+    ("atmega4809/bod.yaml", packed!("atmega4809/bod.yaml")),
+    (
+        "atmega4809/clkctrl.yaml",
+        packed!("atmega4809/clkctrl.yaml"),
+    ),
+    (
+        "atmega4809/rstctrl.yaml",
+        packed!("atmega4809/rstctrl.yaml"),
+    ),
+    ("atmega4809/sigrow.yaml", packed!("atmega4809/sigrow.yaml")),
+    (
+        "atmega4809/slpctrl.yaml",
+        packed!("atmega4809/slpctrl.yaml"),
+    ),
+    ("atmega4809/vref.yaml", packed!("atmega4809/vref.yaml")),
+    ("atsamd21g18a/dac.yaml", packed!("atsamd21g18a/dac.yaml")),
     ("atsamd21g18a/gclk.yaml", packed!("atsamd21g18a/gclk.yaml")),
     (
         "atsamd21g18a/nvmctrl.yaml",
@@ -46,7 +62,20 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
         "atsamd21g18a/sysctrl.yaml",
         packed!("atsamd21g18a/sysctrl.yaml"),
     ),
+    ("atsamd21g18a/usb.yaml", packed!("atsamd21g18a/usb.yaml")),
     ("atsamd21g18a/wdt.yaml", packed!("atsamd21g18a/wdt.yaml")),
+    ("ch32l10x/exten.yaml", packed!("ch32l10x/exten.yaml")),
+    ("ch32l10x/sys_info.yaml", packed!("ch32l10x/sys_info.yaml")),
+    ("ch32v003/exten.yaml", packed!("ch32v003/exten.yaml")),
+    ("ch32v20x/exten.yaml", packed!("ch32v20x/exten.yaml")),
+    (
+        "ch32v20x/flash_chip_rev.yaml",
+        packed!("ch32v20x/flash_chip_rev.yaml"),
+    ),
+    (
+        "ch32v30x/pll_cfg_word.yaml",
+        packed!("ch32v30x/pll_cfg_word.yaml"),
+    ),
     ("esp32/apb_ctrl.yaml", packed!("esp32/apb_ctrl.yaml")),
     ("esp32/dport.yaml", packed!("esp32/dport.yaml")),
     ("esp32/efuse.yaml", packed!("esp32/efuse.yaml")),
@@ -74,6 +103,8 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("esp32/uart1.yaml", packed!("esp32/uart1.yaml")),
     ("esp32/uart2.yaml", packed!("esp32/uart2.yaml")),
     ("esp32/uhci0.yaml", packed!("esp32/uhci0.yaml")),
+    ("esp32c2/gpio.yaml", packed!("esp32c2/gpio.yaml")),
+    ("esp32c2/io_mux.yaml", packed!("esp32c2/io_mux.yaml")),
     ("esp32c3/aes.yaml", packed!("esp32c3/aes.yaml")),
     ("esp32c3/apb_ctrl.yaml", packed!("esp32c3/apb_ctrl.yaml")),
     (
@@ -126,6 +157,14 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("esp32c3/wifi_mac.yaml", packed!("esp32c3/wifi_mac.yaml")),
     ("esp32c3/xts_aes.yaml", packed!("esp32c3/xts_aes.yaml")),
     (
+        "esp32c5/gpio_i2c_rgb.yaml",
+        packed!("esp32c5/gpio_i2c_rgb.yaml"),
+    ),
+    (
+        "esp32c5/io_mux_i2c_rgb.yaml",
+        packed!("esp32c5/io_mux_i2c_rgb.yaml"),
+    ),
+    (
         "esp32c6/apb_saradc.yaml",
         packed!("esp32c6/apb_saradc.yaml"),
     ),
@@ -148,6 +187,17 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("esp32c6/timg1.yaml", packed!("esp32c6/timg1.yaml")),
     ("esp32c6/uart0.yaml", packed!("esp32c6/uart0.yaml")),
     ("esp32c6/uart1.yaml", packed!("esp32c6/uart1.yaml")),
+    (
+        "esp32c61/gpio_gpio8.yaml",
+        packed!("esp32c61/gpio_gpio8.yaml"),
+    ),
+    (
+        "esp32c61/io_mux_gpio8.yaml",
+        packed!("esp32c61/io_mux_gpio8.yaml"),
+    ),
+    ("esp32p4/gpio.yaml", packed!("esp32p4/gpio.yaml")),
+    ("esp32p4/io_mux.yaml", packed!("esp32p4/io_mux.yaml")),
+    ("esp32s2/extmem.yaml", packed!("esp32s2/extmem.yaml")),
     ("esp32s3/dma.yaml", packed!("esp32s3/dma.yaml")),
     ("esp32s3/efuse.yaml", packed!("esp32s3/efuse.yaml")),
     ("esp32s3/gpio.yaml", packed!("esp32s3/gpio.yaml")),
@@ -404,6 +454,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("rp2350/adc.yaml", packed!("rp2350/adc.yaml")),
     ("rp2350/clocks.yaml", packed!("rp2350/clocks.yaml")),
     ("rp2350/dma.yaml", packed!("rp2350/dma.yaml")),
+    ("rp2350/io_bank0.yaml", packed!("rp2350/io_bank0.yaml")),
     ("rp2350/pio0.yaml", packed!("rp2350/pio0.yaml")),
     ("rp2350/pwm.yaml", packed!("rp2350/pwm.yaml")),
     ("rp2350/sio.yaml", packed!("rp2350/sio.yaml")),
@@ -518,6 +569,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("stm32f405/tim2.yaml", packed!("stm32f405/tim2.yaml")),
     ("stm32f405/usart1.yaml", packed!("stm32f405/usart1.yaml")),
     ("stm32f405/usart2.yaml", packed!("stm32f405/usart2.yaml")),
+    ("stm32f405/usart3.yaml", packed!("stm32f405/usart3.yaml")),
     ("stm32f407/adc1.yaml", packed!("stm32f407/adc1.yaml")),
     ("stm32f407/can1.yaml", packed!("stm32f407/can1.yaml")),
     ("stm32f407/dbg.yaml", packed!("stm32f407/dbg.yaml")),

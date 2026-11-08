@@ -1,0 +1,8 @@
+# CH32V003F4P6 with the ch32fun chip profile and nothing else on the board:
+# PC1 (SDA) and PC2 (SCL) go to gpio_nets in env.yaml, and PA2 is the LED
+# pin the example drives.
+name: "ch32v003-i2c-slave"
+chip: "../../../configs/chips/ch32v003f4p6-ch32fun-smoke.yaml"
+external_devices: []
+board_io:
+  - { id: led_pa2, kind: led, peripheral: gpioa, pin: 2, signal: output, active_high: true }

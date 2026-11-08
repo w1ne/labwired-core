@@ -1,0 +1,12 @@
+# Raspberry Pi Pico 2 W: toggle exposed GP0 through IO_BANK0 and SIO.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-pico2-w-smoke"
+  system: "../../configs/systems/raspberry-pi-pico-2-w.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "sio:0"
+      min_edges: 8
+  - expected_stop_reason: max_steps

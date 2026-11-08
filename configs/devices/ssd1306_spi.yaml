@@ -1,0 +1,126 @@
+# Solomon Systech SSD1306 OLED controller, 128x64, strapped for 4-wire SPI —
+# declarative `display` primitive.
+#
+# THE SAME CONTROLLER AS `ssd1306.yaml`, ON THE OTHER BUS. The 0.96" 128x64
+# module is sold in two strappings: the 4-pin I2C board (`oled-ssd1306`) and
+# the 7-pin SPI board (GND VCC D0 D1 RES DC CS). The SSD1306 picks its MCU
+# interface from the BS[2:0] pads (datasheet Rev 1.1, Table 8-1: BS = 000 is
+# 4-wire SPI); the module maker fixes them with resistors, so the strapping is
+# a property of the part a customer buys, not a runtime setting. Hence a
+# second `type:`. GDDRAM, the command table and the addressing rules are the
+# ones `ssd1306.yaml` states; only framing and the reset default differ here.
+#
+# FRAMING (section 8.1.3, 4-wire serial interface). D0 is SCLK, D1 is SDIN,
+# MSB first, sampled on the rising SCLK edge. The D/C# pad is sampled with
+# the eighth bit of each byte: low = command, high = GDDRAM data. There is no
+# control byte. Every byte that arrives with D/C# high IS frame memory
+# (`stream: always`), as on I2C.
+#
+# CS# DOES NOT RESET THE COMMAND DECODER. CS# only gates the shift register;
+# the datasheet gives it no effect on a half-received command. Drivers rely on
+# that. ch32fun's ssd1306_spi.h raises CS# after every byte, so `0x21`,
+# `0x00`, `0x7F` (SET COLUMN ADDRESS and its two arguments) arrive as three
+# separate CS# frames. A model that dropped the pending opcode on CS# would
+# decode both arguments as SET LOWER COLUMN commands and leave the column
+# window at reset. That is `cs_select: keeps_stream`.
+#
+# RESET DEFAULT ADDRESSING IS PAGE MODE. Table 9-1, 20h: "A[1:0] = 10b, Page
+# Addressing Mode (RESET)". In page mode the column pointer wraps to the
+# column start at the column end and the page pointer stays put (section
+# 10.1.3), so `page_wrap: wrap`. Firmware that sends `20 00` (every stock
+# init does) gets horizontal mode, as on the I2C descriptor.
+#
+# NOT modelled:
+#   - RES#. The pad's reset clears the command registers (section 8.9), which
+#     this model already holds at their reset values, and leaves GDDRAM
+#     undefined. The model has no undefined state to show, so it ignores the
+#     pad. Nothing pulses RES# while it expects frame data to survive.
+#   - The 3-wire SPI strapping (BS = 001, a ninth D/C# bit per byte), I2C on
+#     this part, and the 6800/8080 parallel interfaces.
+#   - Everything `ssd1306.yaml` lists: contrast, charge pump, multiplex,
+#     display offset, clock divide, pre-charge, COM pins, VCOMH, segment remap,
+#     COM scan direction, entire display on and inverse. Each opcode is listed
+#     with its parameter count so its arguments are consumed, then does
+#     nothing, because it changes the glass and not GDDRAM.
+type: oled-ssd1306-spi
+
+behavior:
+  primitive: display
+  display:
+    width: 128
+    height: 64
+    pixel_format: mono_page
+    artifact_format: ssd1306_page
+    ram: { pages: 8, bytes: 1024, layout: page_major, stream: always }
+    # Arguments ride D/C# LOW with their opcode (section 8.1.3), not the data
+    # level a MIPI panel uses: `params: command`.
+    dc: { source: pin, pin_role: dc, command_level: 0, params: command }
+    cs_select: keeps_stream
+    addressing:
+      modes: [horizontal, vertical, page]
+      default: page
+      page_wrap: wrap
+    # What the paint artifact publishes beside the pixels. Stated per panel
+    # because these key names are the contract the browser overlay and the
+    # CLI's `painted bytes=` line read.
+    artifact_meta: [ink_bytes, lit_pixels]
+    commands:
+      # 0x20 SET MEMORY ADDRESSING MODE. A[1:0]: 00 horizontal, 01 vertical,
+      # 10 page. 11 is "invalid" in the datasheet; the engine holds the last
+      # declared mode for it.
+      - { opcode: 0x20, name: SETMEMORYMODE, args: 1, do: [ { set_mode: { args: [0], mask: 0x03 } } ] }
+      # 0x21 SET COLUMN ADDRESS: start, end. Seven-bit fields, A[6:0], so an
+      # out-of-range byte is MASKED, not clamped.
+      - opcode: 0x21
+        name: SETCOLUMNADDR
+        args: 2
+        do:
+          - set_window: { axis: col, start: { args: [0], mask: 0x7F }, end: { args: [1], mask: 0x7F } }
+      # 0x22 SET PAGE ADDRESS: start, end. Three-bit fields, A[2:0].
+      - opcode: 0x22
+        name: SETPAGEADDR
+        args: 2
+        do:
+          - set_window: { axis: page, start: { args: [0], mask: 0x07 }, end: { args: [1], mask: 0x07 } }
+      - { opcode: 0xAE, name: DISPLAYOFF, do: [ { display_on: false } ] }
+      - { opcode: 0xAF, name: DISPLAYON,  do: [ { display_on: true } ] }
+      # 0xB0..0xB7 SET PAGE START ADDRESS (page addressing mode).
+      - opcode: 0xB0
+        opcode_end: 0xB7
+        name: SETPAGESTART
+        do:
+          - set_cursor: { axis: page, value: { opcode_mask: 0x07 } }
+      # 0x00..0x0F / 0x10..0x1F SET LOWER / HIGHER COLUMN START ADDRESS (page
+      # addressing mode), one nibble each.
+      - opcode: 0x00
+        opcode_end: 0x0F
+        name: SETLOWCOLUMN
+        do:
+          - set_cursor: { axis: col, part: low_nibble, value: { opcode_mask: 0x0F } }
+      - opcode: 0x10
+        opcode_end: 0x1F
+        name: SETHIGHCOLUMN
+        do:
+          - set_cursor: { axis: col, part: high_nibble, value: { opcode_mask: 0x0F } }
+      # Declared for their PARAMETER COUNTS only; see `ssd1306.yaml`.
+      - { opcode: 0x81, name: SETCONTRAST, args: 1 }
+      - { opcode: 0x8D, name: CHARGEPUMP, args: 1 }
+      - { opcode: 0xA8, name: SETMULTIPLEX, args: 1 }
+      - { opcode: 0xD3, name: SETDISPLAYOFFSET, args: 1 }
+      - { opcode: 0xD5, name: SETDISPLAYCLOCKDIV, args: 1 }
+      - { opcode: 0xD9, name: SETPRECHARGE, args: 1 }
+      - { opcode: 0xDA, name: SETCOMPINS, args: 1 }
+      - { opcode: 0xDB, name: SETVCOMDETECT, args: 1 }
+
+metadata:
+  label: "SSD1306 OLED (SPI)"
+  summary: "128×64 monochrome OLED, the 7-pin 4-wire SPI module, with a paged framebuffer."
+  detail: "Solomon Systech SSD1306 strapped for 4-wire SPI (D0 SCLK, D1 SDIN, D/C#, CS#, RES#). Command vs data comes from a host GPIO D/C line that the bus resolves to a GPIO output register at attach time. RES# is not modelled."
+  category: spi
+  config_keys:
+    - name: cs_pin
+      ty: str
+      doc: "Chip-select (CS#) GPIO pin label (e.g. \"PC3\")."
+    - name: dc_pin
+      ty: str
+      doc: "Data/command (D/C#) GPIO pin label (e.g. \"PC4\"). Required: low = command, high = GDDRAM data. It must resolve to a driveable GPIO output register, or every byte decodes as a command and the panel stays blank."

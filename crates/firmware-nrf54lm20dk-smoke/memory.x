@@ -1,0 +1,6 @@
+/* nRF54LM20A emulation target: 2036 KiB application RRAM and 511 KiB SRAM. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x00000000, LENGTH = 2036K
+  RAM   : ORIGIN = 0x20000000, LENGTH = 511K
+}

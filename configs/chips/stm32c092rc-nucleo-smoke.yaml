@@ -1,0 +1,42 @@
+# Narrow STM32C092RC profile for the NUCLEO-C092RC GPIO smoke.
+#
+# Only reset-clock boot, RCC_IOPENR GPIOA clock enable, and GPIOA output on
+# PA5 are represented. The C092's USART, CAN-FD, other GPIOs and other
+# peripherals are outside this profile.
+#
+# Sources: ST DS (STM32C091xB/xC and STM32C092xB/xC memory/core); RM0490
+# (C0 RCC_IOPENR at 0x34, GPIOAEN bit 0; reset HSISYS at 48 MHz); UM3353
+# (NUCLEO-C092RC LD1 on PA5, SB1 ON by default).
+
+name: stm32c092rc-nucleo-smoke
+arch: arm
+core: cortex-m0+
+cpu_hz: 48000000
+
+flash:
+  base: 0x08000000
+  size: 256KB
+ram:
+  base: 0x20000000
+  size: 30KB
+
+pins:
+  PA5: { gpio: gpioa, bit: 5 }
+
+peripherals:
+  # Only IOPENR@0x34 is needed. The narrow window makes other C0 RCC offsets
+  # fail instead of appearing modeled through this smoke profile.
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 56B
+    config:
+      profile: stm32c0
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x50000000
+    size: 1KB
+    config:
+      profile: stm32v2
+    clock: { reg: iopenr, bit: 0 }

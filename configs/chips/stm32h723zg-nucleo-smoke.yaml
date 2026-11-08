@@ -1,0 +1,64 @@
+# Narrow STM32H723ZGT6 profile for the NUCLEO-H723ZG board smoke.
+# This models only the reset-clock path, LD1 GPIO, USART3 VCP, and the Cortex-M
+# DTCM used by the smoke image. Other SRAM banks and MCU/board peripherals are
+# outside this profile and remain unsupported.
+#
+# Sources: ST DS13313 (H723 memory and Cortex-M7), RM0468 (H7 register map),
+# CMSIS stm32h723xx.h (base addresses and IRQs), and UM2407 Rev 6 (MB1364
+# board wiring: active-high LD1 on PB0; default ST-LINK VCP on USART3 PD8/PD9).
+# The engine's H7 peripheral profiles are model-derived from RM0468; this
+# H723 board profile has not been checked against physical H723 silicon.
+
+name: "stm32h723zgt6-nucleo-smoke"
+arch: "arm"
+core: "cortex-m7"
+registers_count: 140
+# The smoke leaves the reset HSI clock selected; HSI is 64 MHz.
+cpu_hz: 64_000_000
+
+flash:
+  base: 0x08000000
+  size: "1MiB"
+ram:
+  # The smoke uses the H723's 128 KiB DTCM. Other real SRAM regions are not
+  # mapped in this deliberately narrow profile.
+  base: 0x20000000
+  size: "128KiB"
+
+pins:
+  PB0: { gpio: "gpiob", bit: 0, functions: [{ type: gpio, peripheral: gpiob }] }
+  PD8: { gpio: "gpiod", bit: 8, functions: [{ type: uart, peripheral: usart3, role: tx, af: 7 }] }
+  PD9: { gpio: "gpiod", bit: 9, functions: [{ type: uart, peripheral: usart3, role: rx, af: 7 }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x58024400
+    size: "1KB"
+    config:
+      profile: "h7"
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x58020400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb4enr", bit: 1 }
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x58020C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb4enr", bit: 3 }
+
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      profile: "stm32v2"
+    clock: { reg: "apb1lenr", bit: 18 }

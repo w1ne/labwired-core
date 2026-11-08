@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="8" failures="0" errors="0" time="40.482948">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxCycles"/>
+    <property name="firmware_hash" value="bb44750ac0a16f48ca66714d90db31d44445514ca8f82d74b35fe5202954fec0"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="40.482948">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: peripheral_log: debug_printf.terminal contains &quot;spi_oled example&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: peripheral_log: debug_printf.terminal contains &quot;initializing spi oled...done.&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: peripheral_log: debug_printf.terminal contains &quot;Looping...&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: display_region: oled (64,0) 64x32 ink 0.12..=0.12" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: display_region: oled (0,32) 64x32 ink 0.20..=0.20" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: display_region: oled (64,32) 64x32 ink 0.13..=0.13" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: display_region: oled (0,0) *x* ink 0.10..=0.20" time="0.000000">
+  </testcase>
+</testsuite>

@@ -1,0 +1,32 @@
+# CLI: labwired test --script examples/ch32v003-evt/i2c-slave/test.yaml --output-dir out
+# An STM32F103 controller writes and reads ch32fun's i2c_slave example
+# (unmodified) on a CH32V003, bit by bit over two open-drain gpio_nets.
+# Rebuild the controller with build.sh; the slave comes from
+# ../build-ch32fun-examples.sh.
+schema_version: "1.0"
+inputs:
+  env: "env.yaml"
+limits:
+  # One world round is 100 ns (the nets' latency): 4 ms is 40 000 rounds.
+  max_steps: 400000
+assertions:
+  # Controller (STM32F103 RESULT block): step 4 read 01 AB 5A from offset 0
+  # and 0x00 past the end. Step 5 reads 0x00, not register 0. While the
+  # controller NACKed step 4's last byte, the slave's TXE handler had already
+  # loaded the next byte into DR (still past the end: 0x00). That
+  # byte stays in DR after the NACK, so the next read sends it first;
+  # ch32fun resets its position on ADDR, but DR is already full. Then step
+  # 6's 0x50 was NACKed, and the controller is done.
+  - memory_value: { node: master, address: 0x20000100, expected_value: 0x01, size: 32 }
+  - memory_value: { node: master, address: 0x20000104, expected_value: 0xAB, size: 32 }
+  - memory_value: { node: master, address: 0x20000108, expected_value: 0x5A, size: 32 }
+  - memory_value: { node: master, address: 0x2000010C, expected_value: 0x00, size: 32 }
+  - memory_value: { node: master, address: 0x20000110, expected_value: 0x00, size: 32 }
+  - memory_value: { node: master, address: 0x20000118, expected_value: 1, size: 32 }
+  - memory_value: { node: master, address: 0x2000011C, expected_value: 1, size: 32 }
+  # Slave (CH32V003): i2c_registers[3] at 0x20000000 holds 01 AB 5A, and the
+  # example's main loop has driven PA2 high (GPIOA OUTDR bit 2).
+  - memory_value: { node: slave, address: 0x20000000, expected_value: 0x01, size: 8 }
+  - memory_value: { node: slave, address: 0x20000001, expected_value: 0xAB, size: 8 }
+  - memory_value: { node: slave, address: 0x20000002, expected_value: 0x5A, size: 8 }
+  - memory_value: { node: slave, address: 0x4001080C, expected_value: 0x4, size: 32 }

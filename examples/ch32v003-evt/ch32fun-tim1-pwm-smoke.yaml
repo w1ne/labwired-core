@@ -1,0 +1,34 @@
+# ch32fun examples/tim1_pwm, unmodified (build-ch32fun-examples.sh). TIM1, the
+# advanced-control timer, at HCLK (48 MHz), PSC 0, ATRLR 255: a 256-cycle PWM
+# period on the complementary output CH1N (PD0) and on CH4 (PC4), MOE set in
+# BDTR. CH1 steps its compare by one count every Delay_Ms(5) and CH4 follows
+# 128 counts ahead. 37,000,000 cycles reach count ~131.
+#
+# This smoke checks the boot, the example's console output and the TIM1 setup
+# it leaves behind. The waveforms (period, the CH1N duty ramp as the inverse
+# of OC1REF, CH4's ramp 128 counts ahead) are decoded by check-tim1-pwm.py
+# from a run with --watch-gpio gpiod:0 --watch-gpio gpioc:4, committed as
+# evidence/ch32fun-tim1-pwm-smoke/pwm-capture.json.gz with the decoder's
+# output in pwm-check.log. gpio_edges assertions are left out for the reason
+# ch32fun-tim2-pwm-smoke.yaml gives.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/tim1_pwm.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-tim1-pwm-smoke.yaml"
+limits:
+  max_cycles: 37000000
+  max_steps: 60000000
+  wall_time_ms: 600000
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "tim1_pwm example" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "initializing tim1...done." }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "looping..." }
+  # TIM1 as the example leaves it: ATRLR 255, CEN, PWM mode 1 on CH1
+  # (CHCTLR1 0x0060) and CH4 (CHCTLR2 0x6000), CCER = CC1NE|CC1NP|CC4E|CC4P
+  # (0x300C), BDTR.MOE.
+  - memory_value: { address: 0x40012C2C, size: 16, expected_value: 255 }
+  - memory_value: { address: 0x40012C00, size: 16, mask: 0x0001, expected_value: 0x0001 }
+  - memory_value: { address: 0x40012C18, size: 16, expected_value: 0x0060 }
+  - memory_value: { address: 0x40012C1C, size: 16, expected_value: 0x6000 }
+  - memory_value: { address: 0x40012C20, size: 16, expected_value: 0x300C }
+  - memory_value: { address: 0x40012C44, size: 16, mask: 0x8000, expected_value: 0x8000 }

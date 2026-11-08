@@ -1,0 +1,25 @@
+# CH32V20x silicon-revision word at FLASH + 0x30 (0x40022030). Not in the
+# reference manual's FLASH map; WCH's own SPL reads it to tell first-revision
+# D6 silicon apart: ch32v20x_gpio.c:100 and :558 and ch32v20x_can.c:233 test
+# `(*(uint32_t *)0x40022030 & 0x0F000000) == 0` and, when it is zero, set
+# MCU_Version = 1 and take the old-silicon paths (GPIOC PC13..15 driven from
+# CFGHR bits 2..0, PCFR1 remap bits shifted, CAN filter bank copy). The
+# EEVblog thread "CH32V203 Chip errata issue - PORTC" describes the same
+# split between date codes 31170TC11 (old) and 31171TF38/31171TG20 (new).
+#
+# The model is current-production silicon, so bits 27:24 read non-zero. No
+# source gives the full word; 0x0100_0000 is the minimal value that selects
+# the new-silicon paths and claims nothing else. Read-only.
+peripheral: FLASH_CHIP_REV
+version: 0.1.0
+registers:
+- id: CHIP_REV
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x01000000
+  fields:
+  - name: REV
+    bit_range: [27, 24]
+    description: "Silicon revision; 0 = first-revision D6 parts (SPL MCU_Version = 1)"
+  side_effects: null

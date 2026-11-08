@@ -1,0 +1,27 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+   Compiling nb v1.1.0
+   Compiling void v1.0.2
+   Compiling vcell v0.1.3
+   Compiling bitfield v0.13.2
+   Compiling firmware-ra4m1-demo v0.1.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/firmware-ra4m1-demo)
+   Compiling cortex-m v0.7.7
+   Compiling cortex-m-rt v0.7.5
+   Compiling bare-metal v0.2.5
+   Compiling nb v0.1.3
+   Compiling volatile-register v0.2.2
+   Compiling embedded-hal v0.2.7
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.44s

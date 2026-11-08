@@ -1,0 +1,49 @@
+# Focused STM32H533RET6 profile for the NUCLEO-H533RE LD2 smoke.
+# Only the memory and peripherals needed by this test are exposed. SRAM1 is
+# modeled; SRAM2, SRAM3, backup SRAM, TrustZone attribution, and other H533
+# peripherals are outside this profile.
+#
+# Sources:
+# - ST DS14539, STM32H533xx: Cortex-M33, 512 KiB Flash, 272 KiB SRAM, 250 MHz max.
+# - ST RM0481 Rev 2: H533 RCC/GPIO address aliases and register layout.
+# - ST UM3121 Rev 6: NUCLEO-H533RE shares the MB1814 H5 Nucleo-64 wiring; LD2 is
+#   active-high on PA5.
+name: "stm32h533ret6-nucleo-gpio-smoke"
+arch: "arm"
+core: "cortex-m33"
+registers_count: 220
+# The smoke leaves the reset HSI64 clock in place.
+cpu_hz: 64_000_000
+
+flash:
+  base: 0x08000000
+  size: "512KiB"
+ram:
+  # SRAM1 only. The physical H533RET6 also has SRAM2/SRAM3 and backup SRAM;
+  # those banks are not represented by this focused GPIO profile.
+  base: 0x20000000
+  size: "128KiB"
+
+pins:
+  PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x44020C00
+    size: "1KB"
+    config:
+      profile: "h5"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"

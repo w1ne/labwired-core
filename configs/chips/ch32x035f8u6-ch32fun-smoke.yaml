@@ -1,0 +1,122 @@
+# Narrow CH32X035F8U6 profile for unmodified ch32fun (cnlohr/ch32fun) CH32X035
+# examples (examples/weact-ch32x035/build-ch32fun-examples.sh): the QingKe
+# V4C core with its PFIC and 64-bit SysTick, the 48 MHz HSI ch32fun's
+# SystemInit keeps (the X035 has no PLL and no HSE), GPIO A/B/C, and the
+# WCH-Link debug printf channel ch32fun uses as its default console, and EXTI
+# with the X035's own AFIO line mux and PFIC vector grouping.
+#
+# QingKe V4C (RV32IMAC), 62 KB flash, 20 KB SRAM, QFN20: the part on the
+# WeAct Studio CH32X035 core board. Same die and register map as
+# ch32x035c8t6-ch32fun-smoke.yaml (LQFP48); only the bonded pads differ.
+# Register blocks:
+# ch32fun ch32x03xhw.h. The RCC, flash interface and GPIO port registers used
+# here sit at the STM32F1 offsets with the F1 bits (GPIO CFGLR/CFGHR/INDR/
+# OUTDR/BSHR/BCR), so the F1 models serve them. The `ch32v20x` RCC profile
+# carries the X035's CTLR/CFGR0/APB2PCENR; it also models a PLL the X035
+# does not have, which ch32fun never enables here (FUNCONF_USE_PLL is an
+# error on the X03x). The X035's CFGXR/BSXR (pins 16..23) are not modelled,
+# so EXTI lines 16..23 have no pad source.
+#
+# Not modeled here: USART/I2C/SPI/timers/ADC/DMA/OPA/CMP/PIOC/USBFS/USBPD,
+# PFIC interrupt nesting and the V4 priority grouping, low-power modes, and
+# physical-board parity.
+name: ch32x035f8u6-ch32fun-smoke
+arch: riscv
+core: qingke-v4c
+registers_count: 32
+# SYSCLK after ch32fun's SystemInit: HSI 48 MHz, HPRE /1.
+cpu_hz: 48_000_000
+
+flash:
+  base: 0x08000000
+  size: 62KB
+ram:
+  base: 0x20000000
+  size: 20KB
+# ch32fun links at 0; the X035 aliases its flash there for reset fetch.
+flash_boot_alias: true
+
+package: QFN20
+pin_count: 20
+
+# The pads the smokes drive, all bonded on QFN20 (CH32X035 datasheet V1.7
+# pinout: PA0..PA7, PB0/1/3/11/12, PC14..PC19). PC7 is not bonded here, so
+# ch32fun's exti_pin_change_isr runs on the LQFP48 profile instead.
+pins:
+  PA0: { gpio: gpioa, bit: 0 }
+  PA2: { gpio: gpioa, bit: 2 }
+  PA4: { gpio: gpioa, bit: 4 }
+  PA7: { gpio: gpioa, bit: 7 }
+  PB12: { gpio: gpiob, bit: 12 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 1KB
+    config:
+      profile: ch32v20x
+
+  - id: flash_ctrl
+    type: flash
+    base_address: 0x40022000
+    size: 4B
+    config:
+      profile: stm32f1
+
+  # funGpioInitAll() clocks AFIO with the ports. EXTICR1 (0x08) and EXTICR2
+  # (0x0C) hold a 2-bit port field per EXTI line 0..15 and 16..23.
+  - id: afio
+    type: afio
+    base_address: 0x40010000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 0 }
+    config:
+      profile: ch32x03x
+
+  # Lines 7..0 -> PFIC 20, 15..8 -> 40, 23..16 -> 41, as level requests.
+  - id: exti
+    type: exti
+    base_address: 0x40010400
+    size: 24B
+    config:
+      profile: ch32x03x
+
+  - id: debug_printf
+    type: wch_debug_printf
+    base_address: 0xE0000380
+    size: 12B
+
+  - id: pfic
+    type: qingke_pfic
+    base_address: 0xE000E000
+    size: 4KB
+
+  - id: stk
+    type: qingke_v4_systick
+    base_address: 0xE000F000
+    size: 24B
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x40010800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 2 }
+    config:
+      profile: stm32f1
+
+  - id: gpiob
+    type: gpio
+    base_address: 0x40010C00
+    size: 1KB
+    clock: { reg: apb2enr, bit: 3 }
+    config:
+      profile: stm32f1
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x40011000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 4 }
+    config:
+      profile: stm32f1

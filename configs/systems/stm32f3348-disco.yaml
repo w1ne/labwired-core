@@ -1,0 +1,11 @@
+# STM32F3348-DISCO: only the active-high red user LED LD3 on PB6 is attached.
+name: stm32f3348-disco
+chip: ../chips/stm32f334c8-f3348-disco-smoke.yaml
+external_devices: []
+board_io:
+  - id: led_ld3_red
+    kind: led
+    peripheral: gpiob
+    pin: 6
+    signal: output
+    active_high: true

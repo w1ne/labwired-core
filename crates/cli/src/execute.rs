@@ -1501,6 +1501,11 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
                 (passed, None)
             }
             TestAssertion::PeripheralLog(a) => {
+                write_asserted_peripheral_log(
+                    ctx.args.output_dir.as_deref(),
+                    &ctx.machine.bus,
+                    &a.peripheral_log,
+                );
                 let passed = match evaluate_peripheral_log(&ctx.machine.bus, &a.peripheral_log) {
                     Ok(()) => true,
                     Err(msg) => {
@@ -1851,6 +1856,31 @@ const STALL_MIN_ACCESSES: u64 = 4096;
 /// The register the firmware was polling when the step budget ran out, if the
 /// run ended in such a poll: the streak is long and its latest access falls in
 /// the last 1% of the run.
+/// With `--output-dir`, write the whole log a `peripheral_log` assertion
+/// reads to `peripheral-logs/<peripheral>.<log>.log`, one line per entry,
+/// so the evidence carries what the assertion matched against, not only the
+/// five-line tail a failure prints. Several assertions on one log rewrite
+/// the same file.
+fn write_asserted_peripheral_log(
+    output_dir: Option<&std::path::Path>,
+    bus: &labwired_core::bus::SystemBus,
+    details: &labwired_config::PeripheralLogDetails,
+) {
+    let Some(dir) = output_dir else {
+        return;
+    };
+    let Ok(log) = resolve_peripheral_log(bus, details) else {
+        return;
+    };
+    let dir = dir.join("peripheral-logs");
+    let path = dir.join(format!("{}.{}.log", details.peripheral, details.log));
+    let mut text = log.lines().join("\n");
+    text.push('\n');
+    if let Err(e) = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&path, text)) {
+        error!("Failed to write {}: {}", path.display(), e);
+    }
+}
+
 fn stalled_poll(bus: &labwired_core::bus::SystemBus) -> Option<artifacts::StalledPoll> {
     let (peripheral, offset, accesses, last_cycle) = bus.mmio_poll_streak()?;
     // The streak is stamped with the bus's own cycle counter, so "now" must

@@ -1,0 +1,32 @@
+# CH32L10x EXTEND block at 0x40023800 (ch32l103.h EXTEN_TypeDef and the
+# EXTEN_* bit definitions). Storage only: EXTEN_CTR reads back what was
+# written and changes nothing else. WCH's SystemInit (system_ch32l103.c,
+# SYSCLK_FREQ_96MHz_HSI) sets PLL_HSI_PRE (bit 4, HSI undivided into the PLL);
+# the chip's cpu_hz states the resulting 96 MHz rather than deriving it, so
+# the bit has no effect here, and neither do the LOCKUP and LDO trim fields.
+# The reset value is taken as 0; the header does not state it.
+peripheral: EXTEN
+version: 0.1.0
+registers:
+- id: EXTEN_CTR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PLL_HSI_PRE
+    bit_range: [4, 4]
+    description: "PLL HSI input: 0 = HSI/2, 1 = HSI"
+  - name: LOCKUP_EN
+    bit_range: [6, 6]
+    description: LOCKUP enable
+  - name: LOCKUP_RSTF
+    bit_range: [7, 7]
+    description: LOCKUP reset flag
+  - name: ULLDO_TRIM
+    bit_range: [10, 8]
+    description: ULLDO trim
+  - name: LDO_TRIM
+    bit_range: [13, 12]
+    description: LDO trim
+  side_effects: null

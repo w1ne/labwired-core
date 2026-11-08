@@ -1,0 +1,16 @@
+# Raspberry Pi Pico W with an external BME280 on the modeled I2C0 route.
+# CYW43439 Wi-Fi/Bluetooth, its onboard LED, USB, and board power behavior are
+# outside this system profile.
+name: "raspberry-pi-pico-w-bme280"
+chip: "../chips/rp2040-pico-w-bme280-smoke.yaml"
+cpu_hz: 125_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GP4"
+      scl: "GP5"
+    config:
+      i2c_address: 0x77

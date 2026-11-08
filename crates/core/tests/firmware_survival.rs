@@ -959,8 +959,9 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         // ESP32-C6-DevKitC-1 / ESP32-C6 HP core (RV32IMAC on silicon; this
         // fixture links for riscv32imc — the smoke needs no A extension).
         // PCR ungates UART0 (no C3-style SYSTEM/APB_CTRL), IO_MUX routes
-        // GPIO16/U0TXD, then the ESP UART twin's FIFO shifts `OK\n` to the
-        // capture sink. The C6's unified flash window (0x4200_0000) and HP
+        // GPIO16/U0TXD, and firmware bit-bangs a red WS2812 frame through
+        // GPIO8 before the ESP UART twin shifts `OK\n` to the capture sink.
+        // The C6's unified flash window (0x4200_0000) and HP
         // SRAM (0x4080_0000) are its own, so the PC ranges pinned here do not
         // transfer from the C3. SIM-DERIVED — no silicon diff.
         name: "esp32c6_demo",
@@ -1893,13 +1894,13 @@ DONE\r\n",
         expected_uart_output: b"OK",
     },
     SurvivalCase {
-        // SAMD51J19A Metro M4 bare-metal UART smoke: MCLK APBBMASK + GCLK
-        // PCHCTRL[24] SERCOM3_CORE, then three DATA writes of "OK\n" on Serial1.
+        // SAMD51J19A Metro M4 bare-metal UART/LED smoke: clock SERCOM3,
+        // mux PA22/PA23 to its USART pads, send "METRO_M4_OK", and toggle D13.
         name: "atsamd51_metro_m4_smoke",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
         hal: Hal::Bare,
-        chip: "atsamd51",
+        chip: "atsamd51-metro-m4-smoke",
         system: "metro-m4",
         fixture: "atsamd51-metro-m4-smoke.elf",
         valid_pc_ranges: &[(0x0000_0000, 0x0007_FFFF), (0x2000_0000, 0x2002_FFFF)],
@@ -1919,16 +1920,16 @@ DONE\r\n",
         expected_uart_output: b"OK",
     },
     SurvivalCase {
-        // Teensy 4.1 / i.MX RT106x (chip yaml imxrt1064, RT1064-class cousin of
-        // MIMXRT1062): CCM CCGR ungating, LPUART6 DATA "OK\n", GPIO2_IO03
-        // DR_TOGGLE. Soft-float image linked in DTCM (XIP skipped).
-        name: "imxrt1064_teensy41_smoke",
+        // Internal imxrt1064 LPUART/GPIO regression fixture, not a Teensy 4.1
+        // board smoke: the serial sink is direct and bypasses IOMUXC pin routing.
+        // Soft-float image is linked in DTCM (XIP skipped).
+        name: "imxrt1064_lpuart_regression_fixture",
         core: "cortex-m7",
         family: CpuFamily::CortexM,
         hal: Hal::Bare,
         chip: "imxrt1064",
-        system: "teensy-41",
-        fixture: "imxrt1064-teensy41-smoke.elf",
+        system: "imxrt1064-lpuart-fixture",
+        fixture: "imxrt1064-lpuart-regression.elf",
         valid_pc_ranges: &[(0x2000_0000, 0x2001_FFFF)],
         expected_uart_output: b"OK",
     },
@@ -1979,7 +1980,7 @@ DONE\r\n",
         family: CpuFamily::Session,
         hal: Hal::Bare,
         chip: "esp32",
-        system: "esp32-wroom-32",
+        system: "esp32-wroom-32-tier1",
         fixture: "tier1/esp32.elf",
         valid_pc_ranges: &[],
         expected_uart_output: b"TIER1 done",
@@ -3287,8 +3288,8 @@ survival_gate!(
 survival_gate!(test_ra4m1_uno_r4_smoke_survival, "ra4m1_uno_r4_smoke");
 
 survival_gate!(
-    test_imxrt1064_teensy41_smoke_survival,
-    "imxrt1064_teensy41_smoke"
+    test_imxrt1064_lpuart_regression_fixture_survival,
+    "imxrt1064_lpuart_regression_fixture"
 );
 
 survival_gate!(

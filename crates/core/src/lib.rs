@@ -2424,7 +2424,14 @@ impl<C: Cpu> Machine<C> {
         // Phase 2B.3b: pend the peripheral's *own* configured NVIC line — the
         // event-path equivalent of the legacy `tick()` returning `irq: true`.
         if result.raise_own_irq {
-            if let Some(irq) = self.bus.peripherals[peripheral_idx].irq {
+            if let Some(irq) = self.bus.peripherals[peripheral_idx].irq.filter(|_| {
+                // QingKe: a level source drives the PFIC request level below.
+                self.bus.qingke_pfic.is_none()
+                    || self.bus.peripherals[peripheral_idx]
+                        .dev
+                        .irq_line_level()
+                        .is_none()
+            }) {
                 self.bus.pend_irq_for_event(irq, &mut fallthrough);
                 // A LEVEL source's event-path pend is marked, so the MMIO
                 // write choke can drop it again when the handler clears the
@@ -2437,6 +2444,13 @@ impl<C: Cpu> Machine<C> {
                 {
                     crate::bus::reconcile_nvic_level(&self.bus.nvic, irq, true);
                 }
+            }
+            if let (Some(irq), Some(level), Some(_)) = (
+                self.bus.peripherals[peripheral_idx].irq,
+                self.bus.peripherals[peripheral_idx].dev.irq_line_level(),
+                &self.bus.qingke_pfic,
+            ) {
+                self.bus.reconcile_line_level(irq, level);
             }
         }
         // Scheduler-driven interrupt delivery — ONE per-fabric choke. A

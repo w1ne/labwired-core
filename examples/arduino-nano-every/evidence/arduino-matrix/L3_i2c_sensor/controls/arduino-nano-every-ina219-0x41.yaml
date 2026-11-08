@@ -1,0 +1,25 @@
+# Arduino matrix system — Arduino Nano Every (ATmega4809 @ 16 MHz).
+# Serial = USART3 (the SAMD11 USB bridge on PB4/PB5); LED_BUILTIN = D13 = PE2.
+# L3: INA219 at 0x41 on Wire = TWI0 (SDA PA2 / SCL PA3, Nano Every A4/A5).
+# SPI0 is not modelled on this part yet, so L4 is skipped in boards.yaml
+# rather than attached to a stand-in.
+# L5: A0 (PD3 = AIN3) held at 2500 mV, half the board's 5 V VDD — a divider
+# on the pin. init() selects analogReference(VDD), so stock analogRead() must
+# return exactly 512 (10-bit).
+name: "arduino-matrix-arduino-nano-every-ina219-0x41"
+chip: "../../../../../../configs/chips/atmega4809.yaml"
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "twi0"
+    config:
+      i2c_address: 0x41
+peripherals:
+  - id: "adc0"
+    type: "megaavr_adc"
+    base_address: 0x00010600
+    size: "24"
+    config:
+      vdd_mv: 5000
+      input_mv: { 3: 2500 }
+board_io: []

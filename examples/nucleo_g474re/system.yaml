@@ -1,6 +1,7 @@
 schema_version: "1.0"
 name: "nucleo_g474re"
 chip: ../../configs/chips/stm32g474re.yaml
+debug_uart: "lpuart1"
 board_io:
   - id: "led_user"
     kind: "led"
@@ -13,5 +14,5 @@ board_io:
     peripheral: "gpioc"
     pin: 13
     signal: "input"
-    active_high: true
+    active_high: false
 

@@ -1,0 +1,64 @@
+{
+ "status": "pass",
+ "stop_reason": "assertions_passed",
+ "steps_executed": 289941,
+ "cycles": 1156990,
+ "assertions": [
+  {
+   "assertion": {
+    "uart_contains": "LW_L2_OK"
+   },
+   "passed": true
+  }
+ ],
+ "logic_edges": {
+  "dropped": 0,
+  "now_cycle": 289941,
+  "channels": [
+   {
+    "ch": 0,
+    "channel": "CH0",
+    "peripheral": "gpiob",
+    "pin": 12,
+    "initial": 0,
+    "transitions": [
+     {
+      "cycle": 97191,
+      "value": 1
+     },
+     {
+      "cycle": 192721,
+      "value": 0
+     },
+     {
+      "cycle": 289115,
+      "value": 1
+     }
+    ],
+    "gaps": [],
+    "initial_state": "z",
+    "states": [
+     {
+      "cycle": 847,
+      "state": "0"
+     },
+     {
+      "cycle": 97191,
+      "state": "1"
+     },
+     {
+      "cycle": 192721,
+      "state": "0"
+     },
+     {
+      "cycle": 289115,
+      "state": "1"
+     }
+    ],
+    "mode": "output",
+    "edge_count": 3
+   }
+  ]
+ },
+ "firmware_hash": "7c1312a5c8538ab3e5da01e3269e75834862e8a1324f3032aa275e8dee73ac70"
+}

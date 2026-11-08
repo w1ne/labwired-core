@@ -1,0 +1,18 @@
+# ESP8684-DevKitM-1-H4X: toggle each onboard discrete RGB LED channel.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp8684-devkitm1-h4x-smoke"
+  system: "../../configs/systems/esp8684-devkitm-1-h4x.yaml"
+limits:
+  max_steps: 250000
+assertions:
+  - gpio_edges:
+      pin: "gpio:0"
+      min_edges: 8
+  - gpio_edges:
+      pin: "gpio:1"
+      min_edges: 8
+  - gpio_edges:
+      pin: "gpio:8"
+      min_edges: 8
+  - expected_stop_reason: max_steps

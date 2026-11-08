@@ -85,6 +85,17 @@ fn pend_nvic(
 }
 
 impl SystemBus {
+    /// Reconcile a LEVEL source's own interrupt line: the NVIC level pend
+    /// ([`reconcile_nvic_level`]) and, on a QingKe chip, the PFIC request
+    /// level.
+    #[inline]
+    pub(crate) fn reconcile_line_level(&self, irq: u32, level: bool) {
+        reconcile_nvic_level(&self.nvic, irq, level);
+        if let Some(pfic) = &self.qingke_pfic {
+            pfic.set_level(irq, level);
+        }
+    }
+
     /// Reconcile every NVIC line peripheral `idx` reports through
     /// [`Peripheral::irq_line_levels`] (multi-line level sources: the STM32
     /// EXTI). One call per choke: the walk and the event path after they
@@ -151,7 +162,7 @@ impl SystemBus {
     pub(crate) fn reconcile_irq_levels_after_write(&self, idx: usize) {
         if let Some(irq_line) = self.peripherals[idx].irq {
             if let Some(level) = self.peripherals[idx].dev.irq_line_level() {
-                reconcile_nvic_level(&self.nvic, irq_line, level);
+                self.reconcile_line_level(irq_line, level);
             }
         }
         self.reconcile_multi_irq_levels(idx, LevelSync::DropOnly);
@@ -343,6 +354,44 @@ impl SystemBus {
 
     /// One routed request on channel `channel` of the DMA controller at
     /// `p_idx`.
+    /// A DMA request line is a LEVEL. After a store to the DMA controller at
+    /// `p_idx`, every peripheral-paced channel the store enabled asks the
+    /// sources routed to it whether their request is already asserted, and
+    /// is served if so (a USART whose CR3.DMAT was set before the channel's
+    /// EN). Edges keep arriving through [`Self::route_dma_signal`]; this only
+    /// covers the level that was standing when the channel came up.
+    pub(crate) fn poll_enabled_dma_request_levels(&mut self, p_idx: usize) {
+        let enabled = self.peripherals[p_idx].dev.take_enabled_dma_channels();
+        if enabled == 0 {
+            return;
+        }
+        let mut requests = Vec::new();
+        for channel in 1..=8u32 {
+            if enabled & (1 << (channel - 1)) == 0 {
+                continue;
+            }
+            requests.clear();
+            self.peripherals[p_idx]
+                .dev
+                .dma_requests_on_channel(channel, &mut requests);
+            let asserted = requests.iter().any(|request| {
+                let Some((source, line)) = request.rsplit_once('_') else {
+                    return false;
+                };
+                let line = match line {
+                    "tx" => crate::DMA_SIGNAL_TX,
+                    "rx" => crate::DMA_SIGNAL_RX,
+                    _ => return false,
+                };
+                self.find_peripheral_index_by_name(source)
+                    .is_some_and(|i| self.peripherals[i].dev.dma_request_level(line))
+            });
+            if asserted {
+                self.request_dma_channel(p_idx, channel);
+            }
+        }
+    }
+
     fn request_dma_channel(&mut self, p_idx: usize, channel: u32) {
         self.peripherals[p_idx].dev.dma_request(channel);
         // Walk-free B4: a routed request makes the channel active. On a
@@ -566,7 +615,7 @@ impl SystemBus {
             // way the walk and the MMIO write path do.
             if let Some(irq_line) = self.peripherals[i].irq {
                 if let Some(level) = self.peripherals[i].dev.irq_line_level() {
-                    reconcile_nvic_level(&self.nvic, irq_line, level);
+                    self.reconcile_line_level(irq_line, level);
                 }
             }
             let still_needs_bus_tick = self.refresh_bus_tick_index(i);
@@ -814,8 +863,8 @@ impl SystemBus {
             // held). Everything else keeps pulse semantics unchanged.
             match (self.peripherals[peripheral_index].dev.irq_line_level(), irq) {
                 (Some(level), Some(irq)) => {
-                    reconcile_nvic_level(&self.nvic, irq, level);
-                    if res.irq && self.nvic.is_none() {
+                    self.reconcile_line_level(irq, level);
+                    if res.irq && self.nvic.is_none() && self.qingke_pfic.is_none() {
                         interrupts.push(irq);
                     }
                 }

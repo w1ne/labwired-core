@@ -1,0 +1,6 @@
+# ESP32-P4X-Function-EV-Board. Focused profile: one HP core and J1 GPIO8 only.
+# The second HP core, LP core, C6 companion module, boot ROM, and the board's
+# multimedia/communications peripherals are not represented in this system.
+name: "esp32p4x-function-ev-board"
+chip: "../chips/esp32p4.yaml"
+cpu_hz: 400_000_000

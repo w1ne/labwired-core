@@ -171,12 +171,16 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     let itm = Itm::new();
     bus.replace_or_add_peripheral_at("itm", 0xE000_0000, 0x1000, None, Box::new(itm));
 
+    // CoreDebug is part of the Cortex-M system-control space even when no
+    // external SWD probe is attached. Firmware libraries (including
+    // STM32duino) use DEMCR.TRCENA to enable DWT, so keep the architectural
+    // register block available on ordinary firmware runs as well.
+    map_core_debug(bus, crate::peripherals::scs_debug::DebugHaltState::new());
+
     (cpu, nvic_state)
 }
 
-pub fn attach_swd_dp(bus: &mut SystemBus, cpu: &mut CortexM, idcode: u32) -> crate::debug::SwdDp {
-    let state = crate::peripherals::scs_debug::DebugHaltState::new();
-    cpu.set_debug_halt(state.clone());
+fn map_core_debug(bus: &mut SystemBus, state: Arc<crate::peripherals::scs_debug::DebugHaltState>) {
     bus.replace_or_add_peripheral(
         "scs_debug",
         0xE000_EDF0,
@@ -184,6 +188,12 @@ pub fn attach_swd_dp(bus: &mut SystemBus, cpu: &mut CortexM, idcode: u32) -> cra
         None,
         Box::new(crate::peripherals::scs_debug::ScsDebug::new(state)),
     );
+}
+
+pub fn attach_swd_dp(bus: &mut SystemBus, cpu: &mut CortexM, idcode: u32) -> crate::debug::SwdDp {
+    let state = crate::peripherals::scs_debug::DebugHaltState::new();
+    cpu.set_debug_halt(state.clone());
+    map_core_debug(bus, state);
     crate::debug::SwdDp::new(idcode)
 }
 

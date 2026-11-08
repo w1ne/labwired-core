@@ -1,0 +1,129 @@
+# ch32fun examples/tim2_encoder, unmodified (build-ch32fun-examples.sh).
+# TIM2 in encoder mode 3 (SMCFGR SMS = 011, both inputs counted, x4) on
+# partial remap 1: A = PC5 (TI1), B = PC2 (TI2), pulled up, CNT preset to
+# 0x8FFF (36863). main() polls CNT every 50 ms and prints
+# "Position relative=R absolute=N delta=D" whenever it moved.
+#
+# The encoder switches close to GND ("pressed" = low). Three detents
+# forward (A falls first: A↓ B↓ A↑ B↑, four counts each) from cycle
+# 6,000,000, then five detents back (B falls first) from cycle 13,000,000,
+# one edge every 10,000 cycles. The counter must read 36863 + 12 = 36875,
+# then 36875 - 20 = 36855: relative +12, then -8. A counter that counted
+# the 48 MHz clock instead would print on every poll from the start.
+schema_version: "1.2"
+inputs:
+  firmware: "ch32fun/tim2_encoder.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-tim2-encoder-smoke.yaml"
+limits:
+  max_cycles: 16000000
+  max_steps: 32000000
+  wall_time_ms: 600000
+stimuli:
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 6000000 }
+    value: 1.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 6010000 }
+    value: 1.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 6020000 }
+    value: 0.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 6030000 }
+    value: 0.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 6040000 }
+    value: 1.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 6050000 }
+    value: 1.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 6060000 }
+    value: 0.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 6070000 }
+    value: 0.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 6080000 }
+    value: 1.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 6090000 }
+    value: 1.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 6100000 }
+    value: 0.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 6110000 }
+    value: 0.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 13000000 }
+    value: 1.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 13010000 }
+    value: 1.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 13020000 }
+    value: 0.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 13030000 }
+    value: 0.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 13040000 }
+    value: 1.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 13050000 }
+    value: 1.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 13060000 }
+    value: 0.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 13070000 }
+    value: 0.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 13080000 }
+    value: 1.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 13090000 }
+    value: 1.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 13100000 }
+    value: 0.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 13110000 }
+    value: 0.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 13120000 }
+    value: 1.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 13130000 }
+    value: 1.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 13140000 }
+    value: 0.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 13150000 }
+    value: 0.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 13160000 }
+    value: 1.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 13170000 }
+    value: 1.0
+  - target: { component: encoder_b, channel: pressed }
+    trigger: !after_cycles { cycles: 13180000 }
+    value: 0.0
+  - target: { component: encoder_a, channel: pressed }
+    trigger: !after_cycles { cycles: 13190000 }
+    value: 0.0
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "Position relative=12 absolute=36875 delta=12" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "Position relative=-8 absolute=36855 delta=-20" }
+  # Only the two bursts move the counter: exactly two lines (the count is a
+  # floor here; the whole terminal is in evidence/.../terminal.log).
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "Position", min_count: 2 }
+  # TIM2 as the example leaves it: PCFR1 TIM2_RM = 01, SMCFGR SMS = 011,
+  # CEN, and CTLR1.DIR set by the last (downward) count.
+  - memory_value: { address: 0x40010004, size: 32, mask: 0x00000300, expected_value: 0x00000100 }
+  - memory_value: { address: 0x40000008, size: 16, mask: 0x0007, expected_value: 0x0003 }
+  - memory_value: { address: 0x40000000, size: 16, mask: 0x0011, expected_value: 0x0011 }
+  - memory_value: { address: 0x40000024, size: 16, expected_value: 36855 }

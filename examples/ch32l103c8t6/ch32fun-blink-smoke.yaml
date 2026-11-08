@@ -1,0 +1,18 @@
+# ch32fun examples_l103/blink, unmodified (build-ch32fun-examples.sh). PA0,
+# PA2, PA4 and PA7 toggle together every Delay_Ms(250) at 96 MHz (ch32fun's
+# default HSI 8 MHz x12 PLL): DelaySysTick waits 3,000,000 HCLK/8 counts of
+# the 64-bit QingKe V4 SysTick, 24,000,000 cycles per edge, so 100,000,000
+# cycles hold 4 edges on each pin.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/blink.elf"
+  system: "../../configs/systems/ch32l103c8t6-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 100000000
+  max_steps: 100000000
+  wall_time_ms: 600000
+assertions:
+  - gpio_edges: { pin: "gpioa:0", min_edges: 4 }
+  - gpio_edges: { pin: "gpioa:2", min_edges: 4 }
+  - gpio_edges: { pin: "gpioa:4", min_edges: 4 }
+  - gpio_edges: { pin: "gpioa:7", min_edges: 4 }

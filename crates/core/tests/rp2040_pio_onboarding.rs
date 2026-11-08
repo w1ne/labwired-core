@@ -42,7 +42,7 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::system::cortex_m::configure_cortex_m;
-use labwired_core::Machine;
+use labwired_core::{Machine, Peripheral};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -131,5 +131,54 @@ fn rp2040_pio_onboarding_reaches_pio_ok() {
     assert!(
         text.contains("PIO_OK"),
         "RP2040 PIO onboarding firmware did not reach PIO_OK. UART: {text:?}"
+    );
+
+    let io_bank0 = machine
+        .bus
+        .find_peripheral_index_by_name("io_bank0")
+        .expect("IO_BANK0");
+    assert_eq!(
+        machine.bus.peripherals[io_bank0]
+            .dev
+            .read_u32(25 * 8 + 4)
+            .expect("GPIO25_CTRL")
+            & 0x1f,
+        6,
+        "firmware must route GP25 to PIO0"
+    );
+
+    let pio0 = machine
+        .bus
+        .find_peripheral_index_by_name("pio0")
+        .expect("PIO0");
+    let pio = machine.bus.peripherals[pio0]
+        .dev
+        .as_any()
+        .and_then(|dev| dev.downcast_ref::<labwired_core::peripherals::pio::Pio>())
+        .expect("PIO0 model");
+    let pio_lines = pio.wire_lines().expect("PIO0 GPIO lines");
+    assert_eq!(
+        pio_lines.mode(25),
+        labwired_core::peripherals::pad_lines::LineDrive::PushPull,
+        "PIO0 must enable GP25's output driver"
+    );
+
+    let sio = machine
+        .bus
+        .find_peripheral_index_by_name("sio")
+        .expect("SIO");
+    let routing = machine.bus.peripherals[sio]
+        .dev
+        .gpio_routing(25)
+        .expect("GP25 routing");
+    assert_eq!(
+        routing.func.as_deref(),
+        Some("PIO0"),
+        "IO_BANK0's PIO0 selection must resolve to the pad wire"
+    );
+    assert_eq!(
+        machine.bus.peripherals[sio].dev.read_gpio_pad(25),
+        Some(pio_lines.level(25)),
+        "GP25 pad level must come from PIO0"
     );
 }

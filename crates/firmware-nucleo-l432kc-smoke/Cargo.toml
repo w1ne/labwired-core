@@ -1,0 +1,14 @@
+[package]
+name = "firmware-nucleo-l432kc-smoke"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+[dependencies]
+
+[[bin]]
+name = "firmware-nucleo-l432kc-smoke"
+path = "src/main.rs"
+test = false
+bench = false

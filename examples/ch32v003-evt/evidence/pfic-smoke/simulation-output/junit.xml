@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="8" failures="0" errors="0" time="1.326047">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="088c09a72b21dddb7a443a37c0dca0090a78842d04dff5eb3c0ccec7c89c3b22"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="1.326047">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: SystemClk:24000000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: CH32V003_SYSTICK_IRQ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: CH32V003_IRQ_MASK_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: CH32V003_SW_IPSR_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: CH32V003_SW_SWIE_OK hits=2" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: gpio_edges: gpiod:0 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

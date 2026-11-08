@@ -1,8 +1,7 @@
 # LabWired — NUCLEO-F767ZI TIER1 smoke test
 #
-# Runs the committed part-specific TIER1 fixture and asserts the whole
-# transcript. The firmware path is a blob in this repo, not a build output, so
-# this needs no cross toolchain and a workflow can run it on any runner.
+# Runs the committed part-specific Tier-1 fixture and asserts its transcript.
+# The source-built onboarding lane is `onboarding-smoke.yaml`.
 #
 # Why part-specific matters here: this board's other smoke borrows
 # firmware-f401-demo from a sibling part, and a sibling's image cannot see what

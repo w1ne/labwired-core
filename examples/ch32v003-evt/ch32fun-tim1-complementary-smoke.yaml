@@ -1,0 +1,38 @@
+# ch32fun examples/tim1_pwm_complementary_outputs, unmodified
+# (build-ch32fun-examples.sh). TIM1 remapped by AFIO_PCFR1.TIM1_RM = 01
+# (partial remap 1): CH1 on PC6, CH1N on PC3, both active low (CC1P|CC1NP).
+# PSC 9 and ATRLR 10000 at HCLK (48 MHz) give a 100,010-cycle period, CH1CVR
+# 5000 a 50% duty. The main loop writes BDTR.DTG = count & 255 every
+# Delay_Ms(20), so the dead time between the pair steps through all four DTG
+# encodings.
+#
+# The example prints nothing. This smoke checks the setup it leaves behind:
+# the remap, the pad modes, and TIM1 as programmed. The waveforms (period,
+# duty, the dead-time gap on both edges following DTG step by step) are
+# decoded by check-tim1-complementary.py from a longer run with
+# --watch-gpio gpioc:6 --watch-gpio gpioc:3, committed as
+# evidence/ch32fun-tim1-complementary-smoke/pwm-capture.json.gz with the
+# decoder's output in pwm-check.log. gpio_edges assertions are left out for
+# the reason ch32fun-tim2-pwm-smoke.yaml gives.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/tim1_pwm_complementary_outputs.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-tim1-complementary-smoke.yaml"
+limits:
+  max_cycles: 20000000
+  max_steps: 40000000
+  wall_time_ms: 600000
+assertions:
+  # AFIO_PCFR1.TIM1_RM = 01 (AFIO_PCFR1_TIM1_REMAP_PARTIALREMAP1).
+  - memory_value: { address: 0x40010004, size: 32, mask: 0x00C0, expected_value: 0x0040 }
+  # GPIOC CFGLR: PC3 and PC6 are 10 MHz alternate-function push-pull (0b1001).
+  - memory_value: { address: 0x40011000, size: 32, mask: 0x0F00F000, expected_value: 0x09009000 }
+  # TIM1 as programmed: CEN, PSC 9, ATRLR 10000, CH1CVR 5000, PWM mode 1 on
+  # CH1 (CHCTLR1 0x0060), CCER = CC1E|CC1P|CC1NE|CC1NP (0x000F), BDTR.MOE.
+  - memory_value: { address: 0x40012C00, size: 16, mask: 0x0001, expected_value: 0x0001 }
+  - memory_value: { address: 0x40012C28, size: 16, expected_value: 9 }
+  - memory_value: { address: 0x40012C2C, size: 16, expected_value: 10000 }
+  - memory_value: { address: 0x40012C34, size: 16, expected_value: 5000 }
+  - memory_value: { address: 0x40012C18, size: 16, expected_value: 0x0060 }
+  - memory_value: { address: 0x40012C20, size: 16, expected_value: 0x000F }
+  - memory_value: { address: 0x40012C44, size: 16, mask: 0x8000, expected_value: 0x8000 }

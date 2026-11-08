@@ -1,0 +1,24 @@
+{
+  "board": "esp32-s3-devkitc-1-n16r8",
+  "language": "arduino",
+  "entryPath": "src/main.ino",
+  "diagram": {
+    "board": "esp32-s3-devkitc-1-n16r8",
+    "parts": [
+      {
+        "id": "mcu",
+        "type": "esp32-s3-devkitc-1-n16r8"
+      }
+    ],
+    "wires": []
+  },
+  "oracle": {
+    "serial": [
+      {
+        "contains": "ESP32_S3_DEVKITC1_V11_RMT_OK"
+      }
+    ]
+  },
+  "source": "#include <Arduino.h>\ntypedef unsigned int u32;\ntypedef unsigned char u8;\n#define REG32(a) (*(volatile u32 *)(a))\n#define GPIO_OUT1_W1TC REG32(0x60004018u)\n#define GPIO_ENABLE1_W1TS REG32(0x60004030u)\n#define GPIO_FUNC38_OUT_SEL_CFG REG32(0x600045ECu)\n#define RMT_INT_RAW REG32(0x60016070u)\n#define RMT_INT_CLR REG32(0x6001607Cu)\n#define RMT_CH0_CONF0 REG32(0x60016020u)\n#define RMT_MEM ((volatile u32 *)0x60016400u)\n#define GPIO38_BIT (1u << 6)\n#define RMT_SIG_OUT0 81u\n#define RMT_TX_START (1u << 0)\n#define RMT_CONF_UPDATE (1u << 24)\n#define RMT_CH0_TX_END (1u << 0)\n\nstatic void write_byte(u8 value, u32 *index) {\n  for (u32 mask = 0x80u; mask != 0; mask >>= 1) {\n    u32 high = (value & mask) ? 56u : 28u;\n    u32 low = 100u - high;\n    RMT_MEM[*index] = high | (1u << 15) | (low << 16);\n    ++*index;\n  }\n}\n\nvoid setup() {\n  Serial0.begin(115200);\n  GPIO_ENABLE1_W1TS = GPIO38_BIT;\n  GPIO_OUT1_W1TC = GPIO38_BIT;\n  GPIO_FUNC38_OUT_SEL_CFG = RMT_SIG_OUT0;\n  RMT_INT_CLR = RMT_CH0_TX_END;\n  u32 i = 0;\n  write_byte(0x00u, &i);\n  write_byte(0xFFu, &i);\n  write_byte(0x00u, &i);\n  RMT_MEM[i] = 0;\n  const u32 conf = (1u << 8) | (1u << 16) | (1u << 6);\n  RMT_CH0_CONF0 = conf | RMT_CONF_UPDATE;\n  RMT_CH0_CONF0 = conf | RMT_TX_START;\n  bool complete = false;\n  for (u32 spin = 0; spin < 100000u; ++spin) {\n    if (RMT_INT_RAW & RMT_CH0_TX_END) { complete = true; break; }\n  }\n  if (complete) {\n    RMT_INT_CLR = RMT_CH0_TX_END;\n    delayMicroseconds(100);\n    Serial0.println(\"ESP32_S3_DEVKITC1_V11_RMT_OK\");\n  } else {\n    Serial0.println(\"ESP32_S3_DEVKITC1_RMT_TIMEOUT\");\n  }\n}\nvoid loop() { delay(1000); }",
+  "max_steps": 10000000
+}

@@ -1,0 +1,284 @@
+# Narrow CH32V203C8T6 profile for unmodified ch32fun (cnlohr/ch32fun) CH32V20x
+# examples (examples/weact-bluepill-plus-ch32v203/build-ch32fun-examples.sh):
+# the QingKe V4B core with its PFIC and 64-bit SysTick, the HSI x18 PLL
+# handshake ch32fun's SystemInit runs, EXTI on all sixteen GPIO lines, and
+# the WCH-LinkE debug printf channel ch32fun uses as its default console.
+#
+# QingKe V4B (RV32IMAC), 64 KB flash, 20 KB SRAM, LQFP48. Register blocks:
+# ch32fun ch32v20xhw.h and ch32-rs/ch32-data (systick_rv4, extend_v3,
+# chips/CH32V203C8T6: core `qingke-v4b`). The RCC, flash interface, AFIO and
+# GPIO registers used here share the STM32F1 offsets and bits, so the F1
+# models serve them. The RCC's PLLMUL field value 0b1111 means x18 on the
+# CH32V20x (x16 on the F1); the model does not derive SYSCLK from it, and
+# cpu_hz states the 144 MHz ch32fun configures.
+#
+# SPI2 + DMA1 carry the spidmatest smoke: SPI2 TX on the F1 default pads
+# (PB13 SCK, PB15 MOSI), fed by DMA1 channel 5 with the channel interrupts
+# as PFIC levels 27..33. USART1 is here because ch32fun's UART printf setup
+# programs it; the ch32fun smokes do not assert its output, the Arduino rows do.
+#
+# WCH's official Arduino core (validation/arduino-matrix row `ch32v203`) also
+# runs on this profile. It adds I2C1, SPI1, ADC1 and TIM1..TIM4 for Wire, SPI,
+# analogRead and analogWrite, and the FLASH + 0x30 silicon-revision word that
+# WCH's SPL reads before it touches GPIOC or AFIO remaps.
+#
+# CAN1 carries the canbus_network smoke: the bxCAN register block at
+# 0x40006400 (CTLR/STATR/TSTATR/RFIFO0, three TX mailboxes, two RX FIFOs,
+# FCTLR/FMCFGR/FSCFGR/FAFIFOR/FWR and the filter banks at +0x240), which the
+# CH32V20x RM gives at the STM32F1 bxCAN offsets and bits. PA11 RX / PA12 TX
+# (AFIO CAN_REMAP 00); the pins matter to a wire, not to the timed bus.
+#
+# USBFS carries the otg_device smoke: the USBOTG_FS device controller at
+# 0x50000000 (ch32fun USBOTG_FS_TypeDef, WCH EVT ch32v20x_usb.h) moving
+# SETUP/OUT/IN packets between a scripted full-speed host and endpoint
+# buffers in SRAM; see crates/core/src/peripherals/wch_usbfs.rs for what
+# it does not model (DATA0/1 sequencing, double buffering, SOF/suspend).
+#
+# Not modeled here: SPI1/I2C/timers/ADC/USBD (the 0x40005C00 USB device
+# block)/CAN2/RTC, the CAN interrupts,
+# PFIC interrupt nesting and the V4 priority grouping, the VTF table beyond the V2 channels, HSE,
+# low-power modes, and physical-board parity.
+name: ch32v203c8t6-ch32fun-smoke
+arch: riscv
+core: qingke-v4b
+registers_count: 32
+# SYSCLK after ch32fun's SystemInit: HSI 8 MHz undivided (EXTEN_CTR
+# PLL_HSI_PRE) x18.
+cpu_hz: 144_000_000
+
+flash:
+  base: 0x08000000
+  size: 64KB
+ram:
+  base: 0x20000000
+  size: 20KB
+# ch32fun links at 0; the CH32V20x aliases its flash there for reset fetch.
+flash_boot_alias: true
+
+package: LQFP48
+pin_count: 48
+
+# The pads the three smokes drive or read. PD0 is OSC_IN on this package; the
+# debugprintfdemo still toggles it (and PC0, which LQFP48 does not bond), and
+# that smoke asserts only the printed text.
+pins:
+  PA0: { gpio: gpioa, bit: 0 }
+  PA1: { gpio: gpioa, bit: 1 }
+  PA2: { gpio: gpioa, bit: 2 }
+  PA4: { gpio: gpioa, bit: 4 }
+  PA7: { gpio: gpioa, bit: 7 }
+  PA10: { gpio: gpioa, bit: 10 }
+  PA11: { gpio: gpioa, bit: 11 }
+  PA12: { gpio: gpioa, bit: 12 }
+  PB2: { gpio: gpiob, bit: 2 }
+  PB12: { gpio: gpiob, bit: 12 }
+  PB13: { gpio: gpiob, bit: 13 }
+  PB14: { gpio: gpiob, bit: 14 }
+  PB15: { gpio: gpiob, bit: 15 }
+
+peripherals:
+  # The F1 RCC map; `ch32v20x` also keeps AHBPCENR.OTG_FSEN (bit 12), the
+  # USBFS clock, which the F103's AHBENR mask discards.
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 1KB
+    config:
+      profile: ch32v20x
+
+  - id: flash_ctrl
+    type: flash
+    base_address: 0x40022000
+    size: 4B
+    config:
+      profile: stm32f1
+
+  # EXTEND at 0x40023800: storage only; SystemInit sets PLL_HSI_PRE.
+  - id: flash_chip_rev
+    type: declarative
+    base_address: 0x40022030
+    size: 4B
+    config:
+      path: "../peripherals/ch32v20x/flash_chip_rev.yaml"
+
+  - id: exten
+    type: declarative
+    base_address: 0x40023800
+    size: 4B
+    config:
+      path: "../peripherals/ch32v20x/exten.yaml"
+
+  # funGpioInitAll() clocks AFIO with the ports; EXTICR1..4 at 0x08..0x14
+  # select the EXTI line ports, F1 layout.
+  - id: afio
+    type: afio
+    base_address: 0x40010000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 0 }
+
+  # Lines 0..4 -> PFIC 22..26, 9..5 -> 39, 15..10 -> 56, as level requests.
+  - id: exti
+    type: exti
+    base_address: 0x40010400
+    size: 24B
+    config:
+      profile: ch32v20x
+
+  # WCH-LinkE attached and polling like `minichlink -T`; DMDATA0/1 and the
+  # attach sentinel sit at 0xE0000380 on the V4 (ch32v20xhw.h).
+  - id: debug_printf
+    type: wch_debug_printf
+    base_address: 0xE0000380
+    size: 12B
+
+  - id: pfic
+    type: qingke_pfic
+    base_address: 0xE000E000
+    size: 4KB
+
+  - id: stk
+    type: qingke_v4_systick
+    base_address: 0xE000F000
+    size: 24B
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x40010800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 2 }
+    config:
+      profile: stm32f1
+
+  - id: gpiob
+    type: gpio
+    base_address: 0x40010C00
+    size: 1KB
+    clock: { reg: apb2enr, bit: 3 }
+    config:
+      profile: stm32f1
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x40011000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 4 }
+    config:
+      profile: stm32f1
+
+  - id: gpiod
+    type: gpio
+    base_address: 0x40011400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 5 }
+    config:
+      profile: stm32f1
+
+  # FUNCONF_USE_UARTPRINTF examples program USART1 (TX on PA9) in SystemInit.
+  - id: usart1
+    type: uart
+    base_address: 0x40013800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 14 }
+    config:
+      profile: stm32f1
+
+  # SPI2: the F1 register block (CTLR1.DFF, BIDIMODE/BIDIOE, CTLR2.TXDMAEN).
+  # HSCR at 0x24 (the V20x high-speed bit): writes are accepted, it reads 0
+  # and has no effect.
+  # I2C1/SPI1/ADC1/TIM1..4: the F103 register layouts, which the CH32V20x RM
+  # keeps, at the ch32v20x.h bases. IRQ numbers are ch32v20x.h IRQn (the F1
+  # vector numbers + 16 on the PFIC); clock gates are RCC APB1PCENR /
+  # APB2PCENR bits, the same positions as the F103.
+  - id: i2c1
+    type: i2c
+    base_address: 0x40005400
+    size: 1KB
+    irq: 47
+    clock: { reg: apb1enr, bit: 21 }
+    config:
+      irq_error: 48
+
+  - id: spi1
+    type: spi
+    base_address: 0x40013000
+    size: 1KB
+    irq: 51
+    clock: { reg: apb2enr, bit: 12 }
+
+  - id: adc1
+    type: adc
+    base_address: 0x40012400
+    size: 1KB
+    irq: 34
+    clock: { reg: apb2enr, bit: 9 }
+    config:
+      profile: stm32f1
+
+  - id: tim1
+    type: timer
+    base_address: 0x40012C00
+    size: 1KB
+    irq: 41
+    clock: { reg: apb2enr, bit: 11 }
+    config:
+      advanced: true
+
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: 1KB
+    irq: 44
+    clock: { reg: apb1enr, bit: 0 }
+
+  - id: tim3
+    type: timer
+    base_address: 0x40000400
+    size: 1KB
+    irq: 45
+    clock: { reg: apb1enr, bit: 1 }
+
+  - id: tim4
+    type: timer
+    base_address: 0x40000800
+    size: 1KB
+    irq: 46
+    clock: { reg: apb1enr, bit: 2 }
+
+  - id: spi2
+    type: spi
+    base_address: 0x40003800
+    size: 1KB
+    clock: { reg: apb1enr, bit: 14 }
+
+  - id: dma1
+    type: dma
+    base_address: 0x40020000
+    size: 1KB
+    clock: { reg: ahbenr, bit: 0 }
+    config:
+      profile: ch32v20x
+      # Fixed request mapping, CH32V20x RM DMA1 request table (the F1 one;
+      # ch32fun spidmatest: "DMA1_Channel5 is for SPI2TX").
+      requests:
+        spi2_tx: 5
+
+  # CAN1 (bxCAN), clocked from APB1PCENR.CAN1EN (bit 25). Unclocked it never
+  # acknowledges INRQ. Bit time from the APB1 clock: on the CH32V203 (not
+  # CH32V20x_D8) ch32fun's SystemInit sets PPRE1 /2, so PCLK1 = 72 MHz.
+  - id: bxcan1
+    type: bxcan
+    base_address: 0x40006400
+    size: 1KB
+    clock: { reg: apb1enr, bit: 25 }
+
+  # USBFS (USBOTG_FS) in device mode, clocked from AHBPCENR.OTG_FSEN (bit 12;
+  # ch32fun RCC_USBFS). PFIC 59 is USBHD_IRQn, ch32fun's USBFS_IRQHandler.
+  # The scripted host enumerates the device once it pulls up D+; a system
+  # manifest can append class requests and report polls (`host_steps`).
+  # PA11 is USB D-, PA12 D+, shared with CAN1; the pads carry no USB signal.
+  - id: usbfs
+    type: wch_usbfs
+    base_address: 0x50000000
+    size: 256B
+    irq: 59
+    clock: { reg: ahbenr, bit: 12 }

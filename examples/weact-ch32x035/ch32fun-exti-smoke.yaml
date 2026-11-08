@@ -1,0 +1,38 @@
+# ch32fun examples_x035/exti_pin_change_isr, unmodified, on a CH32X035C8T6
+# (the WeAct board's QFN20 part does not bond PC7). EXTI line 7 takes PC7
+# (AFIO_EXTICR1 = 0x8000, the X035's 2-bit field: 10 = PC), both edges; the
+# EXTI7_0 handler (PFIC 20) writes PC14 = !PC7 and clears INTFR. PC7 has its
+# pull-up on and the button shorts it to GND.
+#
+# Press, release, press: PC14 goes 1, 0, 1, one edge per button edge and none
+# at boot (committed run: cycles 2,000,012, 4,000,011 and 6,000,012).
+# Negative control (evidence/.../negative-control/): the same run with the
+# F1 AFIO and V20x EXTI layouts fails 7/9 with no PC14 edge.
+schema_version: "1.2"
+inputs:
+  firmware: "ch32fun/exti_pin_change_isr.elf"
+  system: "../../configs/systems/ch32x035c8t6-ch32fun-exti-smoke.yaml"
+limits:
+  max_cycles: 8000000
+  max_steps: 8000000
+  wall_time_ms: 120000
+stimuli:
+  - target: { component: button_pc7, channel: pressed }
+    trigger: !after_cycles { cycles: 2000000 }
+    value: 1.0
+  - target: { component: button_pc7, channel: pressed }
+    trigger: !after_cycles { cycles: 4000000 }
+    value: 0.0
+  - target: { component: button_pc7, channel: pressed }
+    trigger: !after_cycles { cycles: 6000000 }
+    value: 1.0
+assertions:
+  - gpio_edges: { pin: "gpioc:14", min_edges: 3 }
+  - memory_value: { address: 0x40010008, size: 32, expected_value: 0x8000 }
+  - memory_value: { address: 0x40010400, size: 32, expected_value: 0x80 }
+  - memory_value: { address: 0x40010408, size: 32, expected_value: 0x80 }
+  - memory_value: { address: 0x4001040C, size: 32, expected_value: 0x80 }
+  - memory_value: { address: 0x40010414, size: 32, expected_value: 0x0 }
+  - memory_value: { address: 0xE000E000, size: 32, mask: 0x00100000, expected_value: 0x00100000 }
+  - memory_value: { address: 0xE000E020, size: 32, mask: 0x00100000, expected_value: 0 }
+  - memory_value: { address: 0xE000E300, size: 32, mask: 0x00100000, expected_value: 0 }

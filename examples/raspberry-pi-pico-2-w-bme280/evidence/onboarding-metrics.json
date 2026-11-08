@@ -1,0 +1,28 @@
+{
+  "target_id": "raspberry-pi-pico-2-w-bme280",
+  "status": "pass",
+  "crate": "firmware-pico2-w-bme280-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/raspberry-pi-pico-2-w-bme280/onboarding-smoke.yaml",
+  "system": "configs/systems/raspberry-pi-pico-2-w-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T05:26:07Z",
+  "finished_at_utc": "2026-11-06T05:26:08Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1289,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.326,
+    "build_firmware": 0.549,
+    "run_smoke": 0.374
+  },
+  "stages_ms": {
+    "build_cli": 326,
+    "build_firmware": 549,
+    "run_smoke": 374
+  }
+}

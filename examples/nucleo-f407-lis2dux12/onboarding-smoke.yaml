@@ -1,0 +1,13 @@
+# Read identity, configure 800 Hz / ±2 g, await DRDY, and read all three axes.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/nucleo-f407-lis2dux12"
+  system: "./system.yaml"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "LIS2DUX12_ID=0x47 XYZ=1000,-2000,4000 PASS"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 1
+  - expected_stop_reason: max_steps

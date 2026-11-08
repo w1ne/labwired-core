@@ -1,15 +1,15 @@
 # LabWired - ESP32-C6-DevKitC-1 System Configuration
 #
-# Board wiring per the ESP32-C6-DevKitC-1 v1.2 user guide
-# (docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c6/esp32-c6-devkitc-1):
-#   - On-board USB-to-UART bridge on U0TXD (GPIO16) / U0RXD (GPIO17) — this is
-#     the board's serial console socket (`debug_uart: uart0`).
-#   - Addressable RGB LED (WS2812) driven by GPIO8. NOTE: this is NOT a plain
-#     LED — a GPIO level does not light it; it needs an RMT/bit-banged WS2812
-#     frame, which L1 does not model. Declared as an honest pin stub.
-#   - BOOT button on GPIO9, active low. Holding it at reset enters download
-#     mode; as a running-system input it is a plain active-low button.
-#   - RESET button is wired to CHIP_EN, not a GPIO — not representable here.
+# Board wiring per the ESP32-C6-DevKitC-1 v1.2 user guide. This profile claims
+# UART0 and the on-board WS2812 RGB LED. The smoke drives the LED through RMT
+# channel 0 and GPIO8's output matrix; the USB-to-UART bridge and
+# GPIO16/GPIO17 pad-level propagation are not modeled. RMT RX capture, the
+# BOOT button, USB-device path, and radio remain omitted.
+# Physical pin map: GPIO16/U0TXD -> bridge RX; bridge TX -> GPIO17/U0RXD.
+# UART0 capture is direct to the host; GPIO8 pad transitions are decoded by
+# the attached WS2812 model. Neither path claims analog or power behavior.
+# RMT TX symbol playback and GPIO8 pad edges are modeled; analog and power
+# behavior are outside the profile. RESET is wired to CHIP_EN, not a GPIO.
 #
 # SIM-DERIVED / L1 smoke — no silicon diff. See docs/boards/esp32c6-devkitc.md.
 
@@ -17,17 +17,11 @@ name: "esp32c6-devkitc"
 chip: "../chips/esp32c6.yaml"
 cpu_hz: 160_000_000
 debug_uart: "uart0"
-external_devices: []
-board_io:
+external_devices:
   - id: "rgb_led"
-    kind: "led"
-    peripheral: "gpio"
-    pin: 8
-    signal: "output"
-    active_high: true
-  - id: "button_boot"
-    kind: "button"
-    peripheral: "gpio"
-    pin: 9
-    signal: "input"
-    active_high: false
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO8"
+      num_pixels: 1
+      cpu_hz: 160_000_000

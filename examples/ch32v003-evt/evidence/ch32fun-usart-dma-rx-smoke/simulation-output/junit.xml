@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="8" failures="0" errors="0" time="8.484362">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxCycles"/>
+    <property name="firmware_hash" value="b52fe629e642cfb44fdafb0346d782b9715ed464901736cdc769205c8e30df1f"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="8.484362">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;Horay!\r\n&quot;, &quot;Invalid cmd: bogus\r\n&quot;, &quot;Horay!\r\n&quot;, &quot;Horay!\r\n&quot;]" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpioc:7 &gt;= 3 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x4001100c=0x80" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x4002005c=0x1" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x40020058=0xa1" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x2000001c=0x6c67676f" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: memory_value: @0x20000028=0x740a0d65" time="0.000000">
+  </testcase>
+</testsuite>

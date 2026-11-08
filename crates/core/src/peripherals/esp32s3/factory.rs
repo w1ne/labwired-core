@@ -35,7 +35,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
     let src = |default: u32| p_cfg.irq.unwrap_or(default);
 
     let dev: Box<dyn Peripheral> = match canonical_type {
-        "esp32s3_uart" => {
+        "esp32s3_uart" | "esp32s2_uart" => {
             // uart0 echoes to stdout (source 27); uart1/uart2 do not (28/29).
             let echo = p_cfg
                 .config
@@ -73,7 +73,14 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         }
         "esp32s3_i2s" => Box::new(i2s::Esp32s3I2s::new(src(25))),
         "esp32s3_mcpwm" => Box::new(mcpwm::Esp32s3Mcpwm::new(src(38))),
-        "esp32s3_rmt" => Box::new(rmt::Esp32s3Rmt::new(src(40))),
+        "esp32s3_rmt" => {
+            let cpu_clock_hz = p_cfg
+                .config
+                .get("cpu_clock_hz")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(240_000_000);
+            Box::new(rmt::Esp32s3Rmt::new_with_cpu_clock(src(40), cpu_clock_hz))
+        }
         "esp32s3_pcnt" => Box::new(pcnt::Esp32s3Pcnt::new(src(41))),
         "esp32s3_lcd_cam" => Box::new(lcd_cam::Esp32s3LcdCam::new(src(24))),
         "esp32s3_sdmmc" => Box::new(sdmmc::Esp32s3Sdmmc::new(src(36))),
@@ -86,8 +93,16 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32s3_ds" => Box::new(ds::Esp32s3Ds::new(src(0))),
         "esp32s3_sha" => Box::new(sha::Esp32s3Sha::new()),
         "esp32s3_rng" => Box::new(rng::Esp32s3Rng::new()),
+        "esp32s2_rng" => Box::new(rng::Esp32s3Rng::new_esp32s2()),
         "esp32s3_ledc" => Box::new(ledc::Esp32s3Ledc::new()),
+        // Same LEDC block; S2 source 45 and matrix signals 79..86.
+        "esp32s2_ledc" => Box::new(ledc::Esp32s3Ledc::new_esp32s2(src(
+            ledc::ESP32S2_LEDC_INTR_SOURCE_ID,
+        ))),
         "esp32s3_sens" => Box::new(sens::Esp32s3Sens::new()),
+        // Same SAR oneshot fields at 0x00..0x58; the S2's own tail to 0x148.
+        "esp32s2_sens" => Box::new(sens::Esp32s3Sens::new_esp32s2()),
+        "esp32s2_apb_saradc" => Box::new(apb_saradc_s2::Esp32s2ApbSarAdc::new()),
         "esp32s3_extmem" => Box::new(extmem::Esp32s3Extmem::new()),
         "esp32s3_system" => Box::new(system::Esp32s3System::new()),
         "esp32s3_system_stub" => {
@@ -95,7 +110,15 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         }
         "esp32s3_core1_control" => Box::new(core1_control::Esp32s3Core1Control::new()),
         "esp32s3_crosscore_ipi" => Box::new(crosscore_ipi::Esp32s3CrossCoreIpi::new()),
-        "esp32s3_gpio" => Box::new(gpio::Esp32s3Gpio::new()),
+        "esp32s2_crosscore_ipi" => Box::new(crosscore_ipi::Esp32s3CrossCoreIpi::new_esp32s2()),
+        // The S3 interrupt-matrix model with the S2 map/status layout; the bus
+        // routes through any instance of it (`irq_fabric.esp32s3`).
+        "esp32s2_intmatrix" => Box::new(intmatrix::Esp32s3IntMatrix::new_esp32s2()),
+        // ESP32-S2 and S3 share the GPIO matrix register head exercised by
+        // the S2 DevKitM smoke (OUT/ENABLE/W1TS/W1TC and FUNCn_OUT_SEL_CFG).
+        // The S2 board profile limits its claim to those GPIO output paths;
+        // S3-only pads, matrix signal indices and reset data are not claimed.
+        "esp32s3_gpio" | "esp32s2_gpio" => Box::new(gpio::Esp32s3Gpio::new()),
         "esp32s3_io_mux" => Box::new(io_mux::Esp32s3IoMux::new()),
         // RTC IO MUX + RTC GPIO (`DR_REG_RTCIO_BASE` 0x6000_8400), shared with
         // the GPIO model through the bus (`rebuild_rtc_io_link`).
@@ -121,6 +144,16 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
                 57, // ETS_SYSTIMER_TARGET0_INTR_SOURCE
             ))
         }
+        // ESP32-S2 SYSTIMER: its own register map over the shared engine
+        // (`Systimer::new_esp32s2`), 80 MHz counter, sources 71/72/73.
+        "esp32s2_systimer" => {
+            let cpu_clock_hz = p_cfg
+                .config
+                .get("cpu_clock_hz")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(240_000_000) as u32;
+            Box::new(systimer::Systimer::new_esp32s2(cpu_clock_hz))
+        }
         // I2C0 default source 42, I2C1 = 43 (ETS_I2C_EXT{0,1}_INTR_SOURCE). The
         // built controller has no I²C slaves attached; board-specific slaves
         // (e.g. TMP102) are attached by the caller after construction.
@@ -133,6 +166,13 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
 /// Canonical type strings this factory owns. Kept next to [`try_build`] so the
 /// two cannot drift; the migration's Stage-3 chip YAML draws from this set.
 pub const SUPPORTED_TYPES: &[&str] = &[
+    "esp32s2_uart",
+    "esp32s2_gpio",
+    "esp32s2_systimer",
+    "esp32s2_rng",
+    "esp32s2_crosscore_ipi",
+    "esp32s2_intmatrix",
+    "esp32s2_ledc",
     "esp32s3_uart",
     "esp32s3_timer_group",
     "esp32s3_gdma",
@@ -154,6 +194,8 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32s3_rng",
     "esp32s3_ledc",
     "esp32s3_sens",
+    "esp32s2_sens",
+    "esp32s2_apb_saradc",
     "esp32s3_extmem",
     "esp32s3_system",
     "esp32s3_system_stub",

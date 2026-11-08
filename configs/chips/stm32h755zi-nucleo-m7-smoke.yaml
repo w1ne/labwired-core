@@ -1,0 +1,42 @@
+# Narrow STM32H755ZIT6 profile for the NUCLEO-H755ZI-Q M7/LD1 smoke.
+# The Cortex-M4 core and all peripherals except RCC + GPIOB are outside this
+# profile. The flash/stack ranges below are the portions needed by this image.
+#
+# Sources: ST DS12923 (H755 memory/core), RM0399 (H7 register map), and UM2408
+# Rev 6 (MB1363: active-high LD1 on PB0 when SB54 is ON and SB65 is OFF).
+# The H7 RCC and GPIO models are reused from existing H7 profiles; this exact
+# H755 board profile has not been checked against physical silicon.
+
+name: "stm32h755zit6-nucleo-m7-smoke"
+arch: "arm"
+core: "cortex-m7"
+registers_count: 140
+# Firmware leaves the HSI reset clock selected (64 MHz).
+cpu_hz: 64_000_000
+
+flash:
+  base: 0x08000000
+  size: "2MiB"
+ram:
+  # The M7 image uses the 128 KiB DTCM region. Other SRAM banks are omitted.
+  base: 0x20000000
+  size: "128KiB"
+
+pins:
+  PB0: { gpio: "gpiob", bit: 0, functions: [{ type: gpio, peripheral: gpiob }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x58024400
+    size: "1KB"
+    config:
+      profile: "h7"
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x58020400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb4enr", bit: 1 }

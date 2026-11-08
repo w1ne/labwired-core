@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      2034,
+      536872948,
+      536871932,
+      0,
+      536872793,
+      3,
+      10,
+      0,
+      1073812480,
+      1753407,
+      536872792,
+      536872851,
+      2293,
+      3758157824,
+      4294963879,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 516,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 516,
+    "mcause": 2147483685,
+    "mtval": 0,
+    "mtime": 13999995,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 14000000,
+  "cycles": 37333842,
+  "instructions": 14000000,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 14000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 14000000
+    }
+  },
+  "limits": {
+    "max_steps": 30000000,
+    "max_cycles": 14000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "030f2bb950a327c9d17b582eeaa42722a5cad9e975f76c5c0f721d6d93f76a9a",
+  "config": {
+    "firmware": "examples/ch32v003-evt/ch32fun/input_capture.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-ch32fun-input-capture-smoke.yaml",
+    "script": "examples/ch32v003-evt/ch32fun-input-capture-smoke.yaml"
+  }
+}

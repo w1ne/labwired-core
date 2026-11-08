@@ -1,0 +1,24 @@
+# Seeed Studio XIAO RP2040 profile: only the three onboard active-low LEDs
+# exercised by the smoke are attached to the modeled RP2040 GPIO path.
+name: "seeed-xiao-rp2040"
+chip: "../chips/rp2040-xiao-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_red"
+    kind: "led"
+    peripheral: "sio"
+    pin: 17
+    signal: "output"
+    active_high: false
+  - id: "led_green"
+    kind: "led"
+    peripheral: "sio"
+    pin: 16
+    signal: "output"
+    active_high: false
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "sio"
+    pin: 25
+    signal: "output"
+    active_high: false

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="8" failures="0" errors="0" time="12.678353">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxCycles"/>
+    <property name="firmware_hash" value="28248933f23ed156b55ccd5b20bb379eb5a64ff25336e663a2bc596fdf90f2b5"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="12.678353">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: peripheral_log: debug_printf.terminal contains &quot;Position relative=12 absolute=36875 delta=12&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: peripheral_log: debug_printf.terminal contains &quot;Position relative=-8 absolute=36855 delta=-20&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: peripheral_log: debug_printf.terminal contains &quot;Position&quot; x2" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x40010004=0x100" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x40000008=0x3" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x40000000=0x11" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: memory_value: @0x40000024=0x8ff7" time="0.000000">
+  </testcase>
+</testsuite>

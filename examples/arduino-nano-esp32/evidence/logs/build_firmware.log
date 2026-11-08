@@ -1,0 +1,37 @@
+Processing nano_esp32 (platform: espressif32@8.0.0; board: arduino_nano_esp32; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/arduino_nano_esp32.html
+PLATFORM: Espressif 32 (8.0.0) > Arduino Nano ESP32
+HARDWARE: ESP32S3 240MHz, 320KB RAM, 16MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, dfu, esp-bridge, esp-builtin, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES:
+ - framework-arduinoespressif32 @ 4.30312.261024 (3.3.12)
+ - framework-arduinoespressif32-esp32s3-libs @ 3.3.12
+ - tool-dfuutil-arduino @ 1.11.0
+ - tool-esptool @ 2.50400.0 (5.4.0)
+ - tool-riscv32-esp-elf-gdb @ 12.1.0+20221002
+ - tool-xtensa-esp-elf-gdb @ 12.1.0+20221002
+ - toolchain-riscv32-esp @ 14.2.0+20260121
+ - toolchain-xtensa-esp-elf @ 14.2.0+20260121
+Converting main.ino
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 44 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in debug mode
+Compiling .pio/build/nano_esp32/src/main.ino.cpp.o
+Linking .pio/build/nano_esp32/firmware.elf
+Retrieving maximum program size .pio/build/nano_esp32/firmware.elf
+Checking size .pio/build/nano_esp32/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [==        ]  16.8% (used 55140 bytes from 327680 bytes)
+Flash: [=         ]  12.1% (used 382030 bytes from 3145728 bytes)
+Building .pio/build/nano_esp32/firmware.bin
+esptool v5.4.0
+Creating ESP32-S3 image...
+Merged 3 ELF sections.
+Successfully created ESP32-S3 image.
+========================= [SUCCESS] Took 4.11 seconds =========================
+Using toolchain-xtensa-esp-elf@14.2.0+20260121 package

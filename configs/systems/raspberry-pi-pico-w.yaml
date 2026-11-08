@@ -1,0 +1,6 @@
+# Raspberry Pi Pico W (SC0918), narrowly scoped to the RP2040 GP0 header GPIO.
+# CYW43439 Wi-Fi/Bluetooth and its connection to the onboard LED are omitted.
+name: "raspberry-pi-pico-w"
+chip: "../chips/rp2040-pico-w-smoke.yaml"
+external_devices: []
+board_io: []

@@ -1,0 +1,17 @@
+# ch32fun examples_x00x/blink, unmodified (build-ch32fun-examples.sh). PD0,
+# PD4, PD6 and PC0 toggle together every Delay_Ms(250) at 48 MHz:
+# DelaySysTick waits 6,000,000 counts of the 32-bit QingKe V2 SysTick at
+# HCLK, so 90,000,000 cycles hold 7 edges on each pin.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/blink.elf"
+  system: "../../configs/systems/ch32v006f8u7-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 90000000
+  max_steps: 100000000
+  wall_time_ms: 600000
+assertions:
+  - gpio_edges: { pin: "gpiod:0", min_edges: 7 }
+  - gpio_edges: { pin: "gpiod:4", min_edges: 7 }
+  - gpio_edges: { pin: "gpiod:6", min_edges: 7 }
+  - gpio_edges: { pin: "gpioc:0", min_edges: 7 }

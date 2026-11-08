@@ -1,0 +1,13 @@
+# Adafruit Feather RP2350 with HSTX, scoped to its active-high red LED on GP7.
+# The standard-status NeoPixel (GP21), STEMMA QT I2C (GP2/GP3), HSTX port,
+# USB, optional PSRAM, and unexercised header pins are not represented.
+name: "adafruit-feather-rp2350"
+chip: "../chips/rp2350-feather-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "sio"
+    pin: 7
+    signal: "output"
+    active_high: true

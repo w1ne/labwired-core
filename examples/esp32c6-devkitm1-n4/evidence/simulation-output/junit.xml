@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.157207">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="a28cf04f2075c8661430257cae15e4d1dabaa64e9a49bf0b22e45ac897fb8e7a"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.157207">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: ESP32_C6_DEVKITM_N4_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpio:8 &gt;= 48 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: display_region: rgb_led (0,0) *x* ink 1.00..=1.00 colour 0xF800 min_colour_pixels=1" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

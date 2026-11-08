@@ -1,0 +1,12 @@
+# WCH CH32V003 evaluation board running unmodified ch32fun examples, with a
+# WCH-LinkE on the SWIO pin for the debug-printf console and USART1 TX on PD5
+# for uartdemo. The LEDs are the test connections the blink example drives,
+# not factory-installed LEDs on those pins.
+name: ch32v003evt-ch32fun-smoke
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+external_devices: []
+board_io:
+  - { id: external_led_pd0, kind: led, peripheral: gpiod, pin: 0, signal: output, active_high: true }
+  - { id: external_led_pd4, kind: led, peripheral: gpiod, pin: 4, signal: output, active_high: true }
+  - { id: external_led_pd6, kind: led, peripheral: gpiod, pin: 6, signal: output, active_high: true }
+  - { id: external_led_pc0, kind: led, peripheral: gpioc, pin: 0, signal: output, active_high: true }

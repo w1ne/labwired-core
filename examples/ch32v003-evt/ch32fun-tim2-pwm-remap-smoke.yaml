@@ -1,0 +1,35 @@
+# ch32fun examples/tim2_pwm_remap, unmodified (build-ch32fun-examples.sh).
+# TIM2 PWM mode 1 at HCLK, PSC 0, ATRLR 255, CH1 and CH2 active low, CH2
+# 180 degrees out of phase with CH1. The duty steps once per Delay_Ms(5);
+# after 255 steps (~1.275 s) ToggleRemap() sets AFIO_PCFR1.TIM2_RM = 11 and
+# prints "Full Remapping!", moving CH1/CH2 from PD4/PD3 to PC1/PC7 without
+# touching the timer or the pad modes.
+#
+# 70,000,000 cycles run past that first toggle. This smoke checks the
+# console, the remap and the TIM2 setup. Which pads carry the PWM before and
+# after the toggle is decoded by check-tim2-pwm-remap.py from a run with
+#   --watch-gpio gpiod:4 --watch-gpio gpiod:3 --watch-gpio gpioc:1 --watch-gpio gpioc:7
+# committed gzipped as evidence/ch32fun-tim2-pwm-remap-smoke/pwm-capture.json.gz
+# with the decoder's output in remap-check.log. gpio_edges assertions are
+# left out for the same reason as in ch32fun-tim2-pwm-smoke.yaml.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/tim2_pwm_remap.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-tim2-pwm-remap-smoke.yaml"
+limits:
+  max_cycles: 70000000
+  max_steps: 110000000
+  wall_time_ms: 600000
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "tim2_pwm example, with remap" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "initializing tim2...done." }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "looping..." }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "Full Remapping!" }
+  # AFIO_PCFR1.TIM2_RM = 11 after the first toggle.
+  - memory_value: { address: 0x40010004, size: 32, mask: 0x00000300, expected_value: 0x00000300 }
+  # TIM2 as the example leaves it: ATRLR 255, CEN|ARPE, PWM mode 1 with
+  # preload on CH1/CH2 (CHCTLR1 0x6868), CCER = CC1E|CC1P|CC2E|CC2P.
+  - memory_value: { address: 0x4000002C, size: 16, expected_value: 255 }
+  - memory_value: { address: 0x40000000, size: 16, mask: 0x0081, expected_value: 0x0081 }
+  - memory_value: { address: 0x40000018, size: 16, expected_value: 0x6868 }
+  - memory_value: { address: 0x40000020, size: 16, expected_value: 0x0033 }

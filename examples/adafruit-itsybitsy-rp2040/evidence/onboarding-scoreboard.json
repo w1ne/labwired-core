@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 16712,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 16.712
+  },
+  "targets": [
+    {
+      "target_id": "adafruit-itsybitsy-rp2040",
+      "status": "pass",
+      "crate": "firmware-itsybitsy-rp2040-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/adafruit-itsybitsy-rp2040/io-smoke.yaml",
+      "system": "configs/systems/adafruit-itsybitsy-rp2040.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T00:37:46Z",
+      "finished_at_utc": "2026-11-04T00:38:03Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16712,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.859,
+        "build_firmware": 0.535,
+        "run_smoke": 0.306
+      },
+      "stages_ms": {
+        "build_cli": 15859,
+        "build_firmware": 535,
+        "run_smoke": 306
+      },
+      "_artifact_path": "examples/adafruit-itsybitsy-rp2040/evidence"
+    }
+  ]
+}

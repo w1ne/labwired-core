@@ -3403,6 +3403,8 @@ pub enum DisplaySerialEncoding {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DisplayGpioControl {
     #[serde(default)]
+    pub power: Option<DisplayControlInput>,
+    #[serde(default)]
     pub reset: Option<DisplayControlInput>,
     #[serde(default)]
     pub backlight: Option<DisplayControlInput>,
@@ -4028,6 +4030,36 @@ pub struct DisplayDc {
     /// default would have silently changed one panel's picture.
     #[serde(default)]
     pub unwired: DisplayDcUnwired,
+    /// Which level a command's PARAMETER bytes arrive on. Omitted, it follows
+    /// `source`: a `control_byte` panel takes them on the command stream, a
+    /// D/C-pad panel on the data line, which is what every MIPI DCS panel does.
+    /// The SSD1306 strapped for 4-wire SPI is the exception the key exists
+    /// for: its datasheet (Rev 1.1, section 8.1.3) frames every command byte,
+    /// arguments included, with D/C# low, so a `pin` panel can declare
+    /// `params: command`.
+    #[serde(default)]
+    pub params: Option<DisplayDcParams>,
+}
+
+impl DisplayDc {
+    /// True when command parameters ride the data level. See [`Self::params`].
+    pub fn params_on_data_line(&self) -> bool {
+        match self.params {
+            Some(DisplayDcParams::Data) => true,
+            Some(DisplayDcParams::Command) => false,
+            None => self.source != DisplayDcSource::ControlByte,
+        }
+    }
+}
+
+/// See [`DisplayDc::params`].
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayDcParams {
+    /// Parameters ride the data level (D/C high on a MIPI panel).
+    Data,
+    /// Parameters ride the command level, counted after their opcode.
+    Command,
 }
 
 /// See [`DisplayDc::unwired`].

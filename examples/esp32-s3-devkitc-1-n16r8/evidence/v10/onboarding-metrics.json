@@ -1,0 +1,29 @@
+{
+  "target_id": "esp32-s3-devkitc-1-n16r8-v10",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/esp32-s3-devkitc-1-n16r8/v10-smoke.yaml",
+  "system": "configs/systems/esp32-s3-devkitc-1-n16r8-v10.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T16:13:29Z",
+  "finished_at_utc": "2026-11-06T16:13:31Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1477,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.384,
+    "build_firmware": 0.485,
+    "run_smoke": 0.568
+  },
+  "stages_ms": {
+    "build_cli": 384,
+    "build_firmware": 485,
+    "run_smoke": 568
+  },
+  "firmware_build_script": "examples/esp32-s3-devkitc-1-n16r8/ci/build-v10-firmware.sh"
+}

@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-f756zg",
+  "status": "pass",
+  "crate": "firmware-nucleo-f756zg-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/nucleo-f756zg/onboarding-smoke.yaml",
+  "system": "configs/systems/nucleo-f756zg.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T05:27:36Z",
+  "finished_at_utc": "2026-11-04T05:27:53Z",
+  "elapsed_seconds": 18,
+  "elapsed_ms": 17020,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 16.243,
+    "build_firmware": 0.464,
+    "run_smoke": 0.302
+  },
+  "stages_ms": {
+    "build_cli": 16243,
+    "build_firmware": 464,
+    "run_smoke": 302
+  }
+}

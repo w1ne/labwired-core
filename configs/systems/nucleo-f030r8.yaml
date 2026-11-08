@@ -1,0 +1,22 @@
+# LabWired - NUCLEO-F030R8 system manifest
+#
+# Board wiring per ST MB1136 / UM1724: LD2 on PA5, B1 on PC13, and USART2
+# PA2/PA3 connected to the on-board ST-LINK/V2-1 Virtual COM Port.
+# This board profile only claims the paths exercised by its smoke.
+name: nucleo-f030r8
+chip: "../chips/stm32f030r8-nucleo-smoke.yaml"
+debug_uart: usart2
+external_devices: []
+board_io:
+  - id: led_ld2
+    kind: led
+    peripheral: gpioa
+    pin: 5
+    signal: output
+    active_high: true
+  - id: button_b1
+    kind: button
+    peripheral: gpioc
+    pin: 13
+    signal: input
+    active_high: false

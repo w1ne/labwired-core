@@ -35,7 +35,7 @@ range and the descriptor validator rejects overlapping regions. The schema's
 single-IRQ field also means TIM1/TIM9/TIM10/TIM11 are modelled for register
 access and ticking without claiming full shared-IRQ fidelity.
 
-## Explicitly UNVERIFIED — do not treat these as facts
+## Sourced board surface and open points
 
 ### DBGMCU IDCODE
 
@@ -45,13 +45,19 @@ no IDCODE**, and no value is invented. The F401CDU6 descriptor's
 `0x10016433` is **F401's** and must not be copied across — anything that
 identifies a target by IDCODE will be wrong if you do.
 
-### Black Pill LED / button pinout
+### PC13 user LED
 
-`system.yaml` binds LED = PC13 (active-low) and user button = PA0 (active-high).
-These are carried over from the WeAct F401 Black Pill and are **believed** to be
-identical on the F411 board, but that is a board-level fact no chip-level source
-can settle, and nobody has had the board in hand. Verify against a physical
-board before relying on it for anything that drives real hardware.
+WeAct's MiniSTM32F4x1 product literature identifies the C13 LED, and the
+LaskaKit listing for the WeAct STM32F411CEU6 board says its user LED is on
+PC13. The linked V3.0 schematic connects the LED/resistor between 3.3 V and
+PC13, which makes it active-low. The board profile and smoke expose only that
+LED. This is source-supported mapping, not physical confirmation.
+
+### PA0 user key
+
+WeAct/LaskaKit documentation identifies the user key on PA0, but this board
+descriptor leaves it out because the pressed logic has not been checked against
+the switch net or on physical hardware.
 
 ### Max SYSCLK
 
@@ -71,9 +77,12 @@ rustup target add thumbv7em-none-eabi
 ```bash
 cargo run -q -p labwired-cli -- asset validate --chip configs/chips/stm32f411ceu6.yaml
 cargo run -q -p labwired-cli -- asset validate --system configs/systems/stm32f411ceu6-blackpill.yaml
+cargo run -q -p labwired-cli -- asset validate --chip configs/chips/stm32f411ceu6-blackpill-led-smoke.yaml
+cargo run -q -p labwired-cli -- asset validate --system configs/systems/stm32f411ceu6-blackpill-led-smoke.yaml
 ```
 
-Pass criteria: both exit `0` with `"valid": true` and zero errors.
+Pass criteria: all four commands exit `0` with `"valid": true` and zero
+errors.
 
 ## 3) Rebuild the tier-1 fixture blob (optional — a built blob is committed)
 
@@ -86,7 +95,33 @@ cd examples/tier1-fixture/stm32f411 && cargo build --release --target thumbv7em-
 The blob lives at `tests/fixtures/tier1/stm32f411.elf` and its sha256 is pinned
 in `tests/fixtures/tier1/MANIFEST.json`; update that hash if you rebuild.
 
-## 4) Run the io-smoke (this is the gate)
+## 4) Run the PC13 board LED smoke
+
+This target uses a separate narrow descriptor. It declares RCC and GPIOC as
+models and omits the unrelated chip peripherals and all stubs.
+
+```bash
+scripts/onboarding_smoke.sh \
+  --target-id stm32f411ceu6-blackpill-led-smoke \
+  --crate firmware-stm32f411-blackpill-smoke \
+  --target thumbv7em-none-eabi \
+  --script examples/stm32f411ceu6-blackpill/led-onboarding-smoke.yaml \
+  --system configs/systems/stm32f411ceu6-blackpill-led-smoke.yaml \
+  --out-dir examples/stm32f411ceu6-blackpill/evidence/led-smoke
+```
+
+Pass criteria: `run_smoke.log` says `PASS`, `result.json` records at least 16
+edges on `gpioc:13`, and the stop reason is `max_steps`.
+
+The hosted LabWired oracle also returned `model_verified` for PC13 with 48
+transitions. Its power-rail approximation and the C translation used because
+the hosted Rust scaffold could not link the interrupt table are recorded in
+[`evidence/labwired-verification.md`](evidence/labwired-verification.md).
+The local simulator likewise reports `unpowered_rail_assumed`: it supplies an
+ideal rail and does not model power-on or brown-out reset. Neither run is
+physical hardware evidence.
+
+## 5) Run the broader F411 chip self-test
 
 ```bash
 cargo run -q -p labwired-cli -- test \
@@ -111,7 +146,7 @@ that is why there is no separate `uart` line.
 peripheral instance, and its clock gate (RCC_APB2ENR bit 20) is declared in no
 public F411 SVD, so this assertion is the only executable check on that bit.
 
-## 5) Direct JSON/VCD simulation
+## 6) Direct JSON/VCD simulation
 
 ```bash
 cargo run -q -p labwired-cli -- \
@@ -124,10 +159,11 @@ cargo run -q -p labwired-cli -- \
 
 Pass criteria: JSON reports `status: "finished"` and the VCD exists.
 
-## 6) What would raise the tier
+## 7) What would raise the tier
 
 - Read the DBGMCU IDCODE off a real F411 over SWD and pin it in the chip yaml.
-- Confirm the LED/button pins on a physical WeAct F411 board.
+- Confirm the LED electrical behavior and PA0 pressed logic on a physical WeAct
+  F411 board.
 - A register reset-value capture (`reg_oracle.json`) diffed against the sim,
   which would let `chip_conformance` carry a `reset_oracle` for this chip.
 - An executing-fidelity test (walk-vs-scheduler differential or a silicon

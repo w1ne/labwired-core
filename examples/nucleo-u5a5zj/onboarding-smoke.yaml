@@ -1,0 +1,19 @@
+# NUCLEO-U5A5ZJ-Q: USART1 VCP banner and all three on-board user LED GPIOs.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/nucleo-u5a5zj-smoke"
+  system: "../../configs/systems/nucleo-u5a5zj.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "U5A5ZJ_OK"
+  - gpio_edges:
+      pin: "gpioc:7"
+      min_edges: 8
+  - gpio_edges:
+      pin: "gpiob:7"
+      min_edges: 8
+  - gpio_edges:
+      pin: "gpiog:2"
+      min_edges: 8
+  - expected_stop_reason: max_steps

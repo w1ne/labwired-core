@@ -1,0 +1,17 @@
+# ESP32-C3-DevKitM-1-N4X: drive the on-board addressable RGB LED red on GPIO8.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c3-devkitm1-smoke"
+  system: "../../configs/systems/esp32c3-devkitm1-n4x.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "gpio:8"
+      min_edges: 48
+  - display_region:
+      id: "rgb_led"
+      min_ink: 1.0
+      colour: "0xF800"
+      min_colour_pixels: 1
+  - expected_stop_reason: max_steps

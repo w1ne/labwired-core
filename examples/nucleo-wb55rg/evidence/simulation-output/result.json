@@ -1,0 +1,7029 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "NUCLEO-WB55RG ready"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "hb=0 ld1=on",
+          "hb=1 ld1=off",
+          "hb=2 ld2=on",
+          "hb=3 ld2=off"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiob:5",
+          "min_edges": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiob:0",
+          "min_edges": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiob:1",
+          "min_edges": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1207960596,
+      1073821724,
+      0,
+      537067494,
+      429496730,
+      100,
+      123648,
+      537067504,
+      57,
+      0,
+      19,
+      5,
+      61,
+      537067492,
+      134220960,
+      134220854
+    ],
+    "pc": 134220854,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "3c23397435af65437c73bb57ac6a42824838306ed1c761073c9b5ed8e9879483",
+  "config": {
+    "firmware": "examples/nucleo-wb55rg/../../target/thumbv7em-none-eabi/release/firmware-nucleo-wb55rg-demo",
+    "system": "examples/nucleo-wb55rg/../../configs/systems/mb1355c.yaml",
+    "script": "examples/nucleo-wb55rg/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1476395008,
+        "registers": [
+          {
+            "name": "CR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICSCR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CFGR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PLLCFGR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PLLSAI1CFGR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CIER",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CIFR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "CICR",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "SMPSCR",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB1RSTR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB2RSTR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB3RSTR",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1RSTR1",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1RSTR2",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB2RSTR",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB3RSTR",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB1ENR",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB2ENR",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB3ENR",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1ENR1",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1ENR2",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB2ENR",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB1SMENR",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB2SMENR",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB3SMENR",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1SMENR1",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1SMENR2",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB2SMENR",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCIPR",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BDCR",
+            "offset": 144,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CSR",
+            "offset": 148,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CRRCR",
+            "offset": 152,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "HSECR",
+            "offset": 156,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "EXTCFGR",
+            "offset": 264,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2AHB1ENR",
+            "offset": 328,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2AHB2ENR",
+            "offset": 332,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2AHB3ENR",
+            "offset": 336,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2APB1ENR1",
+            "offset": 344,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2APB1ENR2",
+            "offset": 348,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2APB2ENR",
+            "offset": 352,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2APB3ENR",
+            "offset": 356,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2AHB1SMENR",
+            "offset": 360,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2AHB2SMENR",
+            "offset": 364,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2AHB3SMENR",
+            "offset": 368,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2APB1SMENR1",
+            "offset": 376,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2APB1SMENR2",
+            "offset": 380,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2APB2SMENR",
+            "offset": 384,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2APB3SMENR",
+            "offset": 388,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1207959552,
+        "registers": [
+          {
+            "name": "MODER",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OTYPER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OSPEEDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUPDR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "ODR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BSRR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "LCKR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRL",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRH",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1207960576,
+        "registers": [
+          {
+            "name": "MODER",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OTYPER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OSPEEDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUPDR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "ODR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BSRR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "LCKR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRL",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRH",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1207961600,
+        "registers": [
+          {
+            "name": "MODER",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OTYPER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OSPEEDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUPDR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "ODR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BSRR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "LCKR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRL",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRH",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1207962624,
+        "registers": [
+          {
+            "name": "MODER",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OTYPER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OSPEEDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUPDR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "ODR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BSRR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "LCKR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRL",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRH",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [
+          {
+            "name": "CR1",
+            "offset": 0,
+            "size": 32,
+            "value": 9,
+            "fields": [
+              {
+                "name": "UE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "UESM",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "IDLEIE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNEIE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXEIE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "PEIE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "PS",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "PCE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKE",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "M0",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "MME",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMIE",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVER8",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT0",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT1",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT2",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT3",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT4",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT0",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT1",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT2",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT3",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT4",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOIE",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBIE",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 0
+              },
+              {
+                "name": "M1",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 0
+              },
+              {
+                "name": "FIFOEN",
+                "bits": [
+                  29,
+                  29
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFEIE",
+                "bits": [
+                  30,
+                  30
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFFIE",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR2",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SLVEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DIS_NSS",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDM7",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBCL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CPHA",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CPOL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CLKEN",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOP",
+                "bits": [
+                  13,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "LINEN",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "SWAP",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXINV",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXINV",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "TAINV",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSBFIRST",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABREN",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRMOD0",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRMOD1",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOEN",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADD0_3",
+                "bits": [
+                  27,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADD4_7",
+                "bits": [
+                  31,
+                  28
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR3",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EIE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IREN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "IRLP",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "HDSEL",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACK",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCEN",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "DMAR",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "DMAT",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTSE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSIE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "ONEBIT",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVRDIS",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "DDRE",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEM",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEP",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCARCNT",
+                "bits": [
+                  19,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUS",
+                "bits": [
+                  21,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUFIE",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFTIE",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGTIE",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFTCFG",
+                "bits": [
+                  27,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFTIE",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFTCFG",
+                "bits": [
+                  31,
+                  29
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 12,
+            "size": 32,
+            "value": 35,
+            "fields": [
+              {
+                "name": "BRR",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 35
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GTPR",
+            "offset": 16,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PSC",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "GT",
+                "bits": [
+                  15,
+                  8
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "RTOR",
+            "offset": 20,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RTO",
+                "bits": [
+                  23,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "BLEN",
+                "bits": [
+                  31,
+                  24
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "RQR",
+            "offset": 24,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ABRRQ",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBKRQ",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MMRQ",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFRQ",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFRQ",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "ISR",
+            "offset": 28,
+            "size": 32,
+            "value": 2097344,
+            "fields": [
+              {
+                "name": "PE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "FE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "NF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ORE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TC",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "TXE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "LBDF",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSIF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTS",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOF",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "UDR",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRE",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRF",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "BUSY",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMF",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBKF",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "RWU",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUF",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "TEACK",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 1
+              },
+              {
+                "name": "REACK",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFE",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFF",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGT",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFT",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFT",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "ICR",
+            "offset": 32,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PECF",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "FECF",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "NCF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ORECF",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLECF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFECF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCCF",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGTCF",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDCF",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSCF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOCF",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBCF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "UDRCF",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMCF",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUCF",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "RDR",
+            "offset": 36,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RDR",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "TDR",
+            "offset": 40,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TDR",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PRESC",
+            "offset": 44,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PRESCALER",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "lpuart1",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [
+          {
+            "name": "CR1",
+            "offset": 0,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "UE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "UESM",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLEIE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNEIE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXEIE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "PEIE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "PS",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "PCE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKE",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "M0",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "MME",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMIE",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVER8",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT0",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT1",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT2",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT3",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT4",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT0",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT1",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT2",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT3",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT4",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOIE",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBIE",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 0
+              },
+              {
+                "name": "M1",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 0
+              },
+              {
+                "name": "FIFOEN",
+                "bits": [
+                  29,
+                  29
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFEIE",
+                "bits": [
+                  30,
+                  30
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFFIE",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR2",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SLVEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DIS_NSS",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDM7",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBCL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CPHA",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CPOL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CLKEN",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOP",
+                "bits": [
+                  13,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "LINEN",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "SWAP",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXINV",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXINV",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "TAINV",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSBFIRST",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABREN",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRMOD0",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRMOD1",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOEN",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADD0_3",
+                "bits": [
+                  27,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADD4_7",
+                "bits": [
+                  31,
+                  28
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR3",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EIE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IREN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "IRLP",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "HDSEL",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACK",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCEN",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "DMAR",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "DMAT",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTSE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSIE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "ONEBIT",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVRDIS",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "DDRE",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEM",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEP",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCARCNT",
+                "bits": [
+                  19,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUS",
+                "bits": [
+                  21,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUFIE",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFTIE",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGTIE",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFTCFG",
+                "bits": [
+                  27,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFTIE",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFTCFG",
+                "bits": [
+                  31,
+                  29
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 12,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "BRR",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GTPR",
+            "offset": 16,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PSC",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "GT",
+                "bits": [
+                  15,
+                  8
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "RTOR",
+            "offset": 20,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RTO",
+                "bits": [
+                  23,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "BLEN",
+                "bits": [
+                  31,
+                  24
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "RQR",
+            "offset": 24,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ABRRQ",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBKRQ",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MMRQ",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFRQ",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFRQ",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "ISR",
+            "offset": 28,
+            "size": 32,
+            "value": 192,
+            "fields": [
+              {
+                "name": "PE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "FE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "NF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ORE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TC",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "TXE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "LBDF",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSIF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTS",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOF",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "UDR",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRE",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRF",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "BUSY",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMF",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBKF",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "RWU",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUF",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "TEACK",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "REACK",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFE",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFF",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGT",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFT",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFT",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "ICR",
+            "offset": 32,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PECF",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "FECF",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "NCF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ORECF",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLECF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFECF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCCF",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGTCF",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDCF",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSCF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOCF",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBCF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "UDRCF",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMCF",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUCF",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "RDR",
+            "offset": 36,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RDR",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "TDR",
+            "offset": 40,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TDR",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PRESC",
+            "offset": 44,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PRESCALER",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "flash",
+        "kind": "native",
+        "base": 1476411392,
+        "registers": [
+          {
+            "name": "ACR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "KEYR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "OPTKEYR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "SR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ECCR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OPTR",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PCROP1ASR",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PCROP1AER",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "WRP1AR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "WRP1BR",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PCROP1BSR",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PCROP1BER",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPCCBR",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2ACR",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2SR",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2CR",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SFR",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SRRVR",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "pwr",
+        "kind": "native",
+        "base": 1476396032,
+        "registers": [
+          {
+            "name": "CR1",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CR2",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CR3",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CR4",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SR1",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SR2",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SCR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "CR5",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUCRA",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PDCRA",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUCRB",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PDCRB",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUCRC",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PDCRC",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUCRD",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PDCRD",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUCRE",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PDCRE",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUCRH",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PDCRH",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2CR1",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2CR3",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "EXTSCR",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "hsem",
+        "kind": "native",
+        "base": 1476400128,
+        "registers": [
+          {
+            "name": "R0",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R1",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R2",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R3",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R4",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R5",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R6",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R7",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R8",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R9",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R10",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R11",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R12",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R13",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R14",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R15",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R16",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R17",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R18",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R19",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R20",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R21",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R22",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R23",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R24",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R25",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R26",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R27",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R28",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R29",
+            "offset": 116,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R30",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "R31",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RLR0",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR1",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR2",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR3",
+            "offset": 140,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR4",
+            "offset": 144,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR5",
+            "offset": 148,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR6",
+            "offset": 152,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR7",
+            "offset": 156,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR8",
+            "offset": 160,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR9",
+            "offset": 164,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR10",
+            "offset": 168,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR11",
+            "offset": 172,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR12",
+            "offset": 176,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR13",
+            "offset": 180,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR14",
+            "offset": 184,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR15",
+            "offset": 188,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR16",
+            "offset": 192,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR17",
+            "offset": 196,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR18",
+            "offset": 200,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR19",
+            "offset": 204,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR20",
+            "offset": 208,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR21",
+            "offset": 212,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR22",
+            "offset": 216,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR23",
+            "offset": 220,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR24",
+            "offset": 224,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR25",
+            "offset": 228,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR26",
+            "offset": 232,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR27",
+            "offset": 236,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR28",
+            "offset": 240,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR29",
+            "offset": 244,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR30",
+            "offset": 248,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "RLR31",
+            "offset": 252,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "C1IER0",
+            "offset": 256,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C1ICR",
+            "offset": 260,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C1ISR",
+            "offset": 264,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "C1MISR",
+            "offset": 268,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "C2IER0",
+            "offset": 272,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2ICR",
+            "offset": 276,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2ISR",
+            "offset": 280,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "C2MISR",
+            "offset": 284,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "CR",
+            "offset": 320,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "KEYR",
+            "offset": 324,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "HWCFGR2",
+            "offset": 1004,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "HWCFGR1",
+            "offset": 1008,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "VERR",
+            "offset": 1012,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "IPIDR",
+            "offset": 1016,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SIDR",
+            "offset": 1020,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "crc",
+        "kind": "native",
+        "base": 1073885184,
+        "registers": [
+          {
+            "name": "DR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INIT",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "POL",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "tim2",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [
+          {
+            "name": "CR1",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CR2",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SMCR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DIER",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "EGR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "CCMR1_Input",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCMR1_Output",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCMR2_Output",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCMR2_Input",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCER",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CNT",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PSC",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ARR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR1",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR2",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR3",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR4",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DCR",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DMAR",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OR",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AF",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "tim1_pwm",
+        "kind": "native",
+        "base": 1073818624,
+        "registers": [
+          {
+            "name": "CR1",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CR2",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SMCR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DIER",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "EGR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "CCMR1_Output",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCMR1_Input",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCMR2_Input",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCMR2_Output",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCER",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CNT",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PSC",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ARR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCR",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR1",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR2",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR3",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR4",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BDTR",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DCR",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DMAR",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OR",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCMR3_Output",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR5",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR6",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AF1",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AF2",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "native",
+        "base": 1073763328,
+        "registers": [
+          {
+            "name": "CR1",
+            "offset": 0,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXIE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXIE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDRIE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACKIE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOPIE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "ERRIE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "DNF",
+                "bits": [
+                  11,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "ANFOFF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXDMAEN",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXDMAEN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBC",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "NOSTRETCH",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUPEN",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "GCEN",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "SMBHEN",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "SMBDEN",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "ALERTEN",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "PECEN",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR2",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SADD",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "RD_WRN",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADD10",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "HEAD10R",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "START",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOP",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACK",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "NBYTES",
+                "bits": [
+                  23,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "RELOAD",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "AUTOEND",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "PECBYTE",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OAR1",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OA1",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "OA1MODE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "OA1EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OAR2",
+            "offset": 12,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OA2",
+                "bits": [
+                  7,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "OA2MSK",
+                "bits": [
+                  10,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OA2EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "TIMINGR",
+            "offset": 16,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SCLL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCLH",
+                "bits": [
+                  15,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "SDADEL",
+                "bits": [
+                  19,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCLDEL",
+                "bits": [
+                  23,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "PRESC",
+                "bits": [
+                  31,
+                  28
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "TIMEOUTR",
+            "offset": 20,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TIMEOUTA",
+                "bits": [
+                  11,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIDLE",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIMOUTEN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIMEOUTB",
+                "bits": [
+                  27,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "TEXTEN",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ISR",
+            "offset": 24,
+            "size": 32,
+            "value": 1,
+            "fields": [
+              {
+                "name": "TXE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "TXIS",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDR",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACKF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOPF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TC",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCR",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "BERR",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "ARLO",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVR",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "PECERR",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIMEOUT",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "ALERT",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "BUSY",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "DIR",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDCODE",
+                "bits": [
+                  23,
+                  17
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ICR",
+            "offset": 28,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ADDRCF",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACKCF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOPCF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BERRCF",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "ARLOCF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVRCF",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "PECCF",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIMOUTCF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "ALERTCF",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "PECR",
+            "offset": 32,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PEC",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "RXDR",
+            "offset": 36,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RXDATA",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "TXDR",
+            "offset": 40,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TXDATA",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 1073819648,
+        "registers": [
+          {
+            "name": "CR1",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CR2",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CRCPR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RXCRCR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "TXCRCR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1342439424,
+        "registers": [
+          {
+            "name": "ISR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CFGR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CFGR2",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SMPR1",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SMPR2",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TR1",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TR2",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TR3",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SQR1",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SQR2",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SQR3",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SQR4",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DR",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "JSQR",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OFR1",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OFR2",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OFR3",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OFR4",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "JDR1",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "JDR2",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "JDR3",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "JDR4",
+            "offset": 140,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "AWD2CR",
+            "offset": 160,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AWD3CR",
+            "offset": 164,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DIFSEL",
+            "offset": 176,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CALFACT",
+            "offset": 180,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR",
+            "offset": 776,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "dma1",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [
+          {
+            "name": "ISR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "IFCR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "CCR1",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CNDTR1",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CPAR1",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CMAR1",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR2",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CNDTR2",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CPAR2",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CMAR2",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR3",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CNDTR3",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CPAR3",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CMAR3",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR4",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CNDTR4",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CPAR4",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CMAR4",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR5",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CNDTR5",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CPAR5",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CMAR5",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR6",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CNDTR6",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CPAR6",
+            "offset": 116,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CMAR6",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCR7",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CNDTR7",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CPAR7",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CMAR7",
+            "offset": 140,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "iwdg",
+        "kind": "native",
+        "base": 1073754112,
+        "registers": [
+          {
+            "name": "KR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "PR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RLR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "WINR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "rtc",
+        "kind": "native",
+        "base": 1073752064,
+        "registers": [
+          {
+            "name": "TR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ISR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PRER",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "WUTR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ALRMAR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ALRMBR",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "WPR",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "SSR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SHIFTR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "TSTR",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "TSDR",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "TSSSR",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "CALR",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TAMPCR",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ALRMASSR",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ALRMBSSR",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OR",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP0R",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP1R",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP2R",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP3R",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP4R",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP5R",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP6R",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP7R",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP8R",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP9R",
+            "offset": 116,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP10R",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP11R",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP12R",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP13R",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP14R",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP15R",
+            "offset": 140,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP16R",
+            "offset": 144,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP17R",
+            "offset": 148,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP18R",
+            "offset": 152,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BKP19R",
+            "offset": 156,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dbgmcu",
+        "kind": "native",
+        "base": 3758366720,
+        "registers": [
+          {
+            "name": "IDCODE",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "CR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1FZR1",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2APB1FZR1",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1FZR2",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2APB1FZR2",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB2FZR",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "C2APB2FZR",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "button_sw1",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      },
+      {
+        "id": "button_sw2",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      },
+      {
+        "id": "button_sw3",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 4000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpiob",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 192,
+            "value": 1
+          },
+          {
+            "cycle": 206550,
+            "value": 0
+          },
+          {
+            "cycle": 1238355,
+            "value": 1
+          },
+          {
+            "cycle": 1444713,
+            "value": 0
+          },
+          {
+            "cycle": 2476552,
+            "value": 1
+          },
+          {
+            "cycle": 2682927,
+            "value": 0
+          },
+          {
+            "cycle": 3714817,
+            "value": 1
+          },
+          {
+            "cycle": 3921192,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 55,
+            "state": "0"
+          },
+          {
+            "cycle": 192,
+            "state": "1"
+          },
+          {
+            "cycle": 206550,
+            "state": "0"
+          },
+          {
+            "cycle": 1238355,
+            "state": "1"
+          },
+          {
+            "cycle": 1444713,
+            "state": "0"
+          },
+          {
+            "cycle": 2476552,
+            "state": "1"
+          },
+          {
+            "cycle": 2682927,
+            "state": "0"
+          },
+          {
+            "cycle": 3714817,
+            "state": "1"
+          },
+          {
+            "cycle": 3921192,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 8
+      },
+      {
+        "ch": 1,
+        "channel": "CH1",
+        "peripheral": "gpiob",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 412913,
+            "value": 1
+          },
+          {
+            "cycle": 619271,
+            "value": 0
+          },
+          {
+            "cycle": 1651076,
+            "value": 1
+          },
+          {
+            "cycle": 1857434,
+            "value": 0
+          },
+          {
+            "cycle": 2889307,
+            "value": 1
+          },
+          {
+            "cycle": 3095682,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 60,
+            "state": "0"
+          },
+          {
+            "cycle": 412913,
+            "state": "1"
+          },
+          {
+            "cycle": 619271,
+            "state": "0"
+          },
+          {
+            "cycle": 1651076,
+            "state": "1"
+          },
+          {
+            "cycle": 1857434,
+            "state": "0"
+          },
+          {
+            "cycle": 2889307,
+            "state": "1"
+          },
+          {
+            "cycle": 3095682,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 6
+      },
+      {
+        "ch": 2,
+        "channel": "CH2",
+        "peripheral": "gpiob",
+        "pin": 1,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 825634,
+            "value": 1
+          },
+          {
+            "cycle": 1031992,
+            "value": 0
+          },
+          {
+            "cycle": 2063797,
+            "value": 1
+          },
+          {
+            "cycle": 2270172,
+            "value": 0
+          },
+          {
+            "cycle": 3302062,
+            "value": 1
+          },
+          {
+            "cycle": 3508437,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 65,
+            "state": "0"
+          },
+          {
+            "cycle": 825634,
+            "state": "1"
+          },
+          {
+            "cycle": 1031992,
+            "state": "0"
+          },
+          {
+            "cycle": 2063797,
+            "state": "1"
+          },
+          {
+            "cycle": 2270172,
+            "state": "0"
+          },
+          {
+            "cycle": 3302062,
+            "state": "1"
+          },
+          {
+            "cycle": 3508437,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 6
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpiob",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    },
+    {
+      "pin": "CH1",
+      "peripheral": "gpiob",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    },
+    {
+      "pin": "CH2",
+      "peripheral": "gpiob",
+      "number": 1,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NUCLEO-WB55RG ready",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "hb=0 ld1=on",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "hb=1 ld1=off",
+        "cycle_lo": 200000,
+        "cycle": 210000,
+        "end_cycle": 210000
+      },
+      {
+        "text": "hb=2 ld2=on",
+        "cycle_lo": 410000,
+        "cycle": 420000,
+        "end_cycle": 420000
+      },
+      {
+        "text": "hb=3 ld2=off",
+        "cycle_lo": 610000,
+        "cycle": 620000,
+        "end_cycle": 620000
+      },
+      {
+        "text": "hb=4 ld3=on",
+        "cycle_lo": 820000,
+        "cycle": 830000,
+        "end_cycle": 830000
+      },
+      {
+        "text": "hb=5 ld3=off",
+        "cycle_lo": 1030000,
+        "cycle": 1040000,
+        "end_cycle": 1040000
+      },
+      {
+        "text": "hb=6 ld1=on",
+        "cycle_lo": 1230000,
+        "cycle": 1240000,
+        "end_cycle": 1240000
+      },
+      {
+        "text": "hb=7 ld1=off",
+        "cycle_lo": 1440000,
+        "cycle": 1450000,
+        "end_cycle": 1450000
+      },
+      {
+        "text": "hb=8 ld2=on",
+        "cycle_lo": 1650000,
+        "cycle": 1660000,
+        "end_cycle": 1660000
+      },
+      {
+        "text": "hb=9 ld2=off",
+        "cycle_lo": 1850000,
+        "cycle": 1860000,
+        "end_cycle": 1860000
+      },
+      {
+        "text": "hb=10 ld3=on",
+        "cycle_lo": 2060000,
+        "cycle": 2070000,
+        "end_cycle": 2070000
+      },
+      {
+        "text": "hb=11 ld3=off",
+        "cycle_lo": 2270000,
+        "cycle": 2280000,
+        "end_cycle": 2280000
+      },
+      {
+        "text": "hb=12 ld1=on",
+        "cycle_lo": 2470000,
+        "cycle": 2480000,
+        "end_cycle": 2480000
+      },
+      {
+        "text": "hb=13 ld1=off",
+        "cycle_lo": 2680000,
+        "cycle": 2690000,
+        "end_cycle": 2690000
+      },
+      {
+        "text": "hb=14 ld2=on",
+        "cycle_lo": 2880000,
+        "cycle": 2890000,
+        "end_cycle": 2890000
+      },
+      {
+        "text": "hb=15 ld2=off",
+        "cycle_lo": 3090000,
+        "cycle": 3100000,
+        "end_cycle": 3100000
+      },
+      {
+        "text": "hb=16 ld3=on",
+        "cycle_lo": 3300000,
+        "cycle": 3310000,
+        "end_cycle": 3310000
+      },
+      {
+        "text": "hb=17 ld3=off",
+        "cycle_lo": 3500000,
+        "cycle": 3510000,
+        "end_cycle": 3510000
+      },
+      {
+        "text": "hb=18 ld1=on",
+        "cycle_lo": 3710000,
+        "cycle": 3720000,
+        "end_cycle": 3720000
+      },
+      {
+        "text": "hb=19 ld1=off",
+        "cycle_lo": 3920000,
+        "cycle": 3930000,
+        "end_cycle": 3930000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 3292,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 3292,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 262144,
+    "flash_used_pct": 0.31,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 196608,
+    "main_stack_high_water_bytes": 28,
+    "main_stack_free_min_bytes": 196580,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537067520,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 196608,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 196580,
+    "heap_base": 536870912,
+    "heap_top": 537067520
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 612,
+    "memory_writes": 96,
+    "peripheral_accesses": 3876976,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134220926,
+        "count": 390,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220922,
+        "count": 354,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220858,
+        "count": 353,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220854,
+        "count": 352,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220934,
+        "count": 352,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220862,
+        "count": 351,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220866,
+        "count": 351,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220930,
+        "count": 351,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220806,
+        "count": 313,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134220870,
+        "count": 313,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220888,
+        "count": 313,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220824,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220828,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220892,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220896,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220918,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "gpiob",
+      "offset": 20,
+      "accesses": 76311
+    }
+  }
+}

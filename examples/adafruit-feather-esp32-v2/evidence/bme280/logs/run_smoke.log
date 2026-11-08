@@ -1,0 +1,12 @@
+2026-11-06T03:34:31.790388Z  INFO labwired_loader: ELF Entry Point: 0x40081d2c
+2026-11-06T03:34:31.791193Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32-feather-v2-bme280-smoke.yaml
+labwired-cli test: seeded examples/adafruit-feather-esp32-v2/firmware/.pio/build/feather_bme280/partitions.bin (3072 bytes) @ flash 0x8000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: seeded g_rom_flashchip @0x3ffae270 (post-BROM flash attach state)
+labwired-cli test: pxCurrentTCBs @0x3ffc2ab0 (hybrid preserve key)
+labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x400916ac
+E (0) quad_psram: PSRAM ID read error: 0x001640ef, PSRAM chip not found or not supBME280_POWER_OFF_NACK=1
+BME280_ID=0x60
+BME280_TEMP_RAW=0x082DC0
+labwired-cli test: idle_ff skipped 4678119 of 5415665 device cycles (737546 interpreted)
+PASS  3/3 checks · bme280-smoke · 5415665 steps · 1.44s

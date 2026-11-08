@@ -1,0 +1,6 @@
+/* nRF54L15 application core: 1524 KiB RRAM at 0 and 256 KiB RAM. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x00000000, LENGTH = 1524K
+  RAM   : ORIGIN = 0x20000000, LENGTH = 256K
+}

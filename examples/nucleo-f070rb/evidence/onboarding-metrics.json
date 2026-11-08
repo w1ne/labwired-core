@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-f070rb",
+  "status": "pass",
+  "crate": "firmware-nucleo-f070rb-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/nucleo-f070rb/onboarding-smoke.yaml",
+  "system": "configs/systems/nucleo-f070rb.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T00:50:01Z",
+  "finished_at_utc": "2026-11-05T00:50:19Z",
+  "elapsed_seconds": 19,
+  "elapsed_ms": 18052,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 17.177,
+    "build_firmware": 0.574,
+    "run_smoke": 0.288
+  },
+  "stages_ms": {
+    "build_cli": 17177,
+    "build_firmware": 574,
+    "run_smoke": 288
+  }
+}

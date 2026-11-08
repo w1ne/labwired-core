@@ -52,9 +52,9 @@ use std::collections::{BTreeMap, VecDeque};
 use anyhow::{bail, Context, Result};
 use labwired_config::{
     DeviceDescriptor, DisplayAction, DisplayAddressingMode, DisplayAxis, DisplayCommand,
-    DisplayCsSelect, DisplayCursorPart, DisplayDcSource, DisplayDcUnwired, DisplayMetaFlag,
-    DisplayMetaFormat, DisplayPageWrap, DisplayPixelFormat, DisplayPlaneOf, DisplayRamLayout,
-    DisplayRamStream, DisplaySpec, DisplayValue,
+    DisplayCsSelect, DisplayCursorPart, DisplayDcParams, DisplayDcSource, DisplayDcUnwired,
+    DisplayMetaFlag, DisplayMetaFormat, DisplayPageWrap, DisplayPixelFormat, DisplayPlaneOf,
+    DisplayRamLayout, DisplayRamStream, DisplaySpec, DisplayValue,
 };
 
 use super::declarative_display_gpio::{DisplayControlPin, DisplayGpioObserver, DisplaySpiHandle};
@@ -228,6 +228,7 @@ pub struct GenericDisplay {
     ram: Vec<u8>,
     /// Present only for an explicitly opted-in serial-colour descriptor.
     serial_color: Option<SerialColorState>,
+    gpio_power: Option<Option<bool>>,
     gpio_reset: Option<Option<bool>>,
     gpio_backlight: Option<Option<bool>>,
     /// WHAT IS ON THE GLASS. Equal to `ram` for every panel whose frame memory
@@ -341,10 +342,13 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
     let w = spec.width as usize;
     let h = spec.height as usize;
     if let Some(control) = &spec.gpio_control {
-        if spec.serial_color.is_none() || (control.reset.is_none() && control.backlight.is_none()) {
-            bail!("gpio_control currently requires serial_color and at least one declared input");
+        if control.power.is_none() && control.reset.is_none() && control.backlight.is_none() {
+            bail!("gpio_control requires at least one declared input");
         }
-        for input in [&control.reset, &control.backlight].into_iter().flatten() {
+        for input in [&control.power, &control.reset, &control.backlight]
+            .into_iter()
+            .flatten()
+        {
             if input.config_key.trim().is_empty() {
                 bail!("gpio_control config_key must not be empty");
             }
@@ -488,6 +492,13 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
             }
         }
         DisplayDcSource::ControlByte => {
+            if spec.dc.params == Some(DisplayDcParams::Data) {
+                bail!(
+                    "dc.params `data` puts command parameters on the data stream, and a \
+                     control-byte panel's data stream is frame memory: the first argument \
+                     would be a pixel"
+                );
+            }
             if spec.dc.command_value.is_none() {
                 bail!("dc.source control_byte needs a dc.command_value (the byte that opens the command stream)");
             }
@@ -538,9 +549,7 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
                      table declares a `ram_write` — one of the two is describing a different part"
                 );
             }
-            if spec.dc.source != DisplayDcSource::ControlByte
-                && spec.commands.iter().any(|c| c.args > 0)
-            {
+            if spec.dc.params_on_data_line() && spec.commands.iter().any(|c| c.args > 0) {
                 bail!(
                     "a D/C-pad panel whose data line is ALWAYS frame memory has nowhere to put a \
                      command's parameters: command 0x{:02X} declares {} of them",
@@ -1054,6 +1063,7 @@ impl GenericDisplay {
             page_end: 0,
             ram,
             serial_color,
+            gpio_power: None,
             gpio_reset: None,
             gpio_backlight: None,
             screen,
@@ -1166,28 +1176,38 @@ impl GenericDisplay {
     /// caller must sample the observer once before installing both handles.
     pub fn bind_gpio_controls(
         self,
+        power: Option<DisplayControlPin>,
         reset: Option<DisplayControlPin>,
         backlight: Option<DisplayControlPin>,
     ) -> Result<(DisplaySpiHandle, DisplayGpioObserver)> {
-        if self.serial_color.is_none() || (reset.is_none() && backlight.is_none()) {
-            bail!("GPIO display controls require serial_color and a bound input");
+        if power.is_none() && reset.is_none() && backlight.is_none() {
+            bail!("GPIO display controls require a bound input");
         }
-        if [reset, backlight]
+        if [power, reset, backlight]
             .into_iter()
             .flatten()
             .any(|pin| pin.bit >= 32)
         {
             bail!("display control pin must fit a 32-bit GPIO port");
         }
-        Ok(DisplaySpiHandle::bind(self, reset, backlight))
+        Ok(DisplaySpiHandle::bind(self, power, reset, backlight))
     }
 
-    pub(super) fn configure_gpio_controls(&mut self, reset: bool, backlight: bool) {
+    pub(super) fn configure_gpio_controls(&mut self, power: bool, reset: bool, backlight: bool) {
+        self.gpio_power = power.then_some(None);
         self.gpio_reset = reset.then_some(None);
         self.gpio_backlight = backlight.then_some(None);
     }
 
-    pub(super) fn update_gpio_controls(&mut self, reset: Option<bool>, backlight: Option<bool>) {
+    pub(super) fn update_gpio_controls(
+        &mut self,
+        power: Option<bool>,
+        reset: Option<bool>,
+        backlight: Option<bool>,
+    ) {
+        if self.gpio_power.is_some() {
+            self.gpio_power = Some(power);
+        }
         if let Some(previous) = self.gpio_reset {
             if previous != reset {
                 if reset == Some(true) {
@@ -1201,11 +1221,9 @@ impl GenericDisplay {
                     self.pending_idx = None;
                     self.unit_have = 0;
                     self.ram_remaining = None;
-                    self.serial_color
-                        .as_mut()
-                        .unwrap()
-                        .decoder
-                        .discard_partial();
+                    if let Some(color) = &mut self.serial_color {
+                        color.decoder.discard_partial();
+                    }
                 }
             }
             self.gpio_reset = Some(reset);
@@ -1274,12 +1292,12 @@ impl GenericDisplay {
     /// DISPON, and a supply to hold it. An unpowered controller cannot latch
     /// the bus at all, so this is the state rather than a second opinion over it.
     pub fn display_on(&self) -> bool {
-        self.powered && self.display_on
+        self.powered() && self.display_on
     }
 
     /// SLPOUT seen, and a supply. An unpowered panel is not asleep, it is off.
     pub fn awake(&self) -> bool {
-        self.powered && self.awake
+        self.powered() && self.awake
     }
 
     /// What a camera would see: DISPON, awake, and every `lit_requires` clause
@@ -1287,7 +1305,7 @@ impl GenericDisplay {
     /// however full frame memory is — and an emissive panel whose firmware
     /// never wrote a brightness is dark even with both.
     pub fn lit(&self) -> bool {
-        self.powered
+        self.powered()
             && self.gpio_reset.is_none_or(|state| state == Some(false))
             && self.gpio_backlight.is_none_or(|state| state == Some(true))
             && self.display_on
@@ -1313,7 +1331,7 @@ impl GenericDisplay {
     }
 
     pub fn powered(&self) -> bool {
-        self.powered
+        self.powered && self.gpio_power.is_none_or(|state| state == Some(true))
     }
 
     pub fn addressing_mode(&self) -> DisplayAddressingMode {
@@ -1691,10 +1709,12 @@ impl GenericDisplay {
         }
     }
 
-    /// True when command PARAMETERS ride the data line — the 4-wire SPI panel,
-    /// whose D/C pad goes high for a command's arguments as much as for pixels.
+    /// True when command PARAMETERS ride the data line — the 4-wire SPI MIPI
+    /// panel, whose D/C pad goes high for a command's arguments as much as for
+    /// pixels. A D/C-pad panel that declares `dc.params: command` (the SSD1306
+    /// on SPI) counts them on the command level instead, as I²C does.
     fn args_on_data_stream(&self) -> bool {
-        self.spec.dc.source != DisplayDcSource::ControlByte
+        self.spec.dc.params_on_data_line()
     }
 
     fn ram_byte(&mut self, byte: u8) {
@@ -2051,7 +2071,7 @@ impl GenericDisplay {
                 DisplayMetaFlag::DisplayOn => serde_json::json!(self.display_on()),
                 DisplayMetaFlag::Awake => serde_json::json!(self.awake()),
                 DisplayMetaFlag::Lit => serde_json::json!(self.lit()),
-                DisplayMetaFlag::Powered => serde_json::json!(self.powered),
+                DisplayMetaFlag::Powered => serde_json::json!(self.powered()),
                 DisplayMetaFlag::Inverted => serde_json::json!(self.inverted),
                 // The RAW sleep flag, not `!awake()`. See the enum's note: an
                 // unpowered panel has never been woken, so it is asleep.
@@ -2216,7 +2236,7 @@ impl I2cDevice for GenericDisplay {
     }
 
     fn write(&mut self, data: u8) {
-        if !self.powered {
+        if !self.powered() {
             return;
         }
         let Some(control) = self.control else {
@@ -2313,7 +2333,7 @@ impl SpiDevice for GenericDisplay {
         // keeps `display_on` / `awake` / `lit` / `painted_bytes` at their
         // power-on-dark values BY CONSTRUCTION rather than by masking them at
         // report time.
-        if !self.powered || self.gpio_reset.is_some_and(|state| state != Some(false)) {
+        if !self.powered() || self.gpio_reset.is_some_and(|state| state != Some(false)) {
             return 0;
         }
         // NO D/C LINE RESOLVED AT ATTACH. What a panel does then is its own
@@ -2591,9 +2611,11 @@ impl PeripheralKit for DeclarativeDisplayKit {
                     };
                     let reset = resolve(&controls.reset)?;
                     let backlight = resolve(&controls.backlight)?;
-                    if reset.is_some() || backlight.is_some() {
+                    let power = resolve(&controls.power)?;
+                    if power.is_some() || reset.is_some() || backlight.is_some() {
                         dev.set_component_id(ctx.device_id());
-                        let (handle, mut observer) = dev.bind_gpio_controls(reset, backlight)?;
+                        let (handle, mut observer) =
+                            dev.bind_gpio_controls(power, reset, backlight)?;
                         crate::bus::BusResidentDevice::service_edge(&mut observer, ctx.bus, 0);
                         ctx.attach_spi_device(Box::new(handle))?;
                         ctx.bus.gpio_devices.push(Box::new(observer));
@@ -3363,6 +3385,7 @@ mod tests {
     const SHIPPED: &[&str] = &[
         "oled-ssd1306",
         "oled-ssd1306-128x32",
+        "oled-ssd1306-spi",
         "st7789-170x320",
         "oled-sh1107",
         "pcd8544",
@@ -3545,6 +3568,63 @@ mod tests {
             paint(&sabotaged),
             0x3F,
             "SET X read in the extended set decodes 0xBF as column 63"
+        );
+    }
+
+    /// The SSD1306 on 4-wire SPI frames its command ARGUMENTS with D/C# low
+    /// (`dc.params: command`), and ch32fun's ssd1306_spi.h raises CS# after
+    /// every byte. Both must hold for SET COLUMN / SET PAGE ADDRESS to land:
+    /// flipping either back to the MIPI rule (`params: data`, refused by the
+    /// validator on this always-stream panel) or dropping the pending opcode
+    /// on CS# (`closes_stream`) moves the first data byte off its target.
+    #[test]
+    fn ssd1306_spi_takes_arguments_on_the_command_level_across_cs_frames() {
+        let yaml = labwired_config::embedded_device_yaml("oled-ssd1306-spi").expect("embedded");
+        let closing = yaml.replace("cs_select: keeps_stream", "cs_select: closes_stream");
+        assert_ne!(closing, yaml, "the sabotage did not apply");
+
+        let paint = |desc: &str| -> Option<usize> {
+            let mut d = GenericDisplay::from_yaml(desc).expect("descriptor builds");
+            let byte = |d: &mut GenericDisplay, dc: bool, b: u8| {
+                SpiDevice::set_dc_level(d, dc);
+                SpiDevice::cs_select(d);
+                SpiDevice::transfer(d, b);
+                SpiDevice::cs_release(d);
+            };
+            for b in [0x20u8, 0x00, 0x21, 0x02, 0x05, 0x22, 0x01, 0x01] {
+                byte(&mut d, false, b);
+            }
+            byte(&mut d, true, 0xA5);
+            d.framebuffer().iter().position(|&b| b != 0)
+        };
+        assert_eq!(paint(&yaml), Some(128 + 2), "page 1, column 2");
+        assert_ne!(
+            paint(&closing),
+            Some(128 + 2),
+            "CS# dropped the window arguments"
+        );
+
+        let data_params = yaml.replace("params: command", "params: data");
+        assert_ne!(data_params, yaml, "the sabotage did not apply");
+        let err = GenericDisplay::from_yaml(&data_params).expect_err("params on the pixel stream");
+        assert!(
+            format!("{err:#}").contains("nowhere to put"),
+            "got: {err:#}"
+        );
+    }
+
+    /// A control-byte panel's data stream is frame memory, so it cannot take
+    /// command parameters there.
+    #[test]
+    fn control_byte_panel_refuses_params_on_the_data_stream() {
+        let broken = ssd1306_yaml_with((
+            "dc: { source: control_byte, command_value: 0x00 }",
+            "dc: { source: control_byte, command_value: 0x00, params: data }",
+        ));
+        let err = GenericDisplay::from_yaml(&broken).expect_err("params: data on I2C");
+        assert!(
+            format!("{err:#}").contains("would be a pixel"),
+            "got: {err:#}"
         );
     }
 

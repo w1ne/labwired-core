@@ -11,6 +11,7 @@
 
 name: "nucleo-l073rz"
 chip: "../chips/stm32l073.yaml"
+debug_uart: "uart2"
 external_devices: []
 board_io:
   - id: "led_ld2"

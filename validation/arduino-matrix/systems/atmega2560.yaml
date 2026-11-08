@@ -1,0 +1,18 @@
+# Arduino matrix system — Arduino Mega 2560 Rev3 (ATmega2560 @ 16 MHz).
+# UART+GPIO+TWI+SPI on the CPU model; kits park on bus i2c/spi then drain to CPU.
+name: "arduino-matrix-atmega2560"
+chip: "../../../configs/chips/atmega2560.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on Wire (CPU TWI; Mega SDA/SCL = D20/D21).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c"
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on hardware SPI (CPU SPDR; CS = Arduino SS = D53 = PB0).
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi"
+    config:
+      cs_pin: "D53"
+board_io: []

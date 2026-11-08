@@ -1,0 +1,6 @@
+first SCK edge at cycle 4664; SCK rising-edge spacing within a word: [2] cycles
+word-to-word spacing: [33] cycles
+lap 1: words 0..255 = 0xAAAA x256
+laps 2+: words 256..1069 = 0x0AAF x814 (3.18 laps)
+trailing partial word: 14 bits, cut by the stop limit (ignored)
+PASS

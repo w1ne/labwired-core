@@ -1,0 +1,9 @@
+schema_version: '1.0'
+inputs:
+  firmware: validation/arduino-matrix/out/arduino-nano-every/L3_i2c_sensor/firmware.elf
+  system: validation/arduino-matrix/systems/arduino-nano-every.yaml
+limits:
+  max_steps: 500000
+  max_uart_bytes: 65536
+assertions:
+- uart_regex: '^LW_L3_BOOT\r?\nLW_L3_OK\r?\n$'

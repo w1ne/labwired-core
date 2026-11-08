@@ -1,0 +1,15 @@
+# NUCLEO-L011K4 board paths modeled by this smoke:
+#   - USART2 PA2/PA15 -> on-board ST-LINK VCP
+#   - active-high green user LED -> D13 / PB3
+# Other MCU and board peripherals are outside this narrow profile.
+name: "nucleo-l011k4"
+chip: "../chips/stm32l011k4-nucleo-smoke.yaml"
+debug_uart: "uart2"
+external_devices: []
+board_io:
+  - id: "user_led_d13"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 3
+    signal: "output"
+    active_high: true

@@ -1,0 +1,12 @@
+# NUCLEO-WBA25CE1 profile for LD1 blue user LED GPIO only.
+# Radio, buttons, other LEDs, ST-LINK and external QSPI are outside this profile.
+name: "nucleo-wba25ce1-smoke"
+chip: "../chips/stm32wba25ceu7-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld1_blue"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 7
+    signal: "output"
+    active_high: false

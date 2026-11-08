@@ -1,0 +1,35 @@
+# Narrow RP2350 profile for the Adafruit Feather RP2350 with HSTX (product
+# 6000, no-PSRAM variant). It models only the built-in red indicator LED.
+# The NeoPixel/PIO, STEMMA QT I2C, USB, HSTX, optional PSRAM and other header
+# functions are outside this smoke and are not claimed here.
+name: "rp2350-feather-smoke"
+arch: "arm"
+core: "cortex-m33"
+registers_count: 240
+cpu_hz: 150_000_000
+
+flash:
+  base: 0x10000000
+  # Binary units: the board's 8 MB flash is 8 MiB (8,388,608 bytes).
+  size: "8MiB"
+ram:
+  base: 0x20000000
+  size: "520KiB"
+
+reset_vector_offset: 0x0
+pins:
+  GP7: { gpio: "sio", bit: 7 } # Adafruit #7 red indicator LED
+
+peripherals:
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40028000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/io_bank0.yaml"
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/sio.yaml"

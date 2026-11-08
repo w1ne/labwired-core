@@ -106,33 +106,47 @@ impl SystemBus {
         Ok(())
     }
 
-    /// Wire the ESP32-C3 I²C0 bit engine to C3 GPIO in both directions: GPIO
-    /// reads the live SDA/SCL waveform, while I²C reads GPIO's live input/output
-    /// matrix state before allowing a physically routed slave to acknowledge.
-    /// No-op unless both C3 models are on the bus.
+    /// Wire the shared ESP32-C3/C5/C6 I²C0 bit engine to its GPIO matrix. GPIO
+    /// exposes the live SDA/SCL levels, while I²C checks the configured input
+    /// and output routes before a physically routed slave can acknowledge.
+    /// No-op unless a supported I²C controller and matching GPIO model exist.
     pub(crate) fn wire_esp32c3_i2c_pads(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
         use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
+        use crate::peripherals::esp32c5::gpio::Esp32c5Gpio;
         let i2c_idx = self.peripherals.iter().position(|p| {
             p.dev
                 .as_any()
                 .map(|a| a.is::<Esp32c3I2c>())
                 .unwrap_or(false)
         });
-        let gpio_idx = self.peripherals.iter().position(|p| {
+        let c3_gpio_idx = self.peripherals.iter().position(|p| {
             p.dev
                 .as_any()
                 .map(|a| a.is::<Esp32c3Gpio>())
                 .unwrap_or(false)
         });
-        let (Some(i2c_idx), Some(gpio_idx)) = (i2c_idx, gpio_idx) else {
+        let c5_gpio_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|a| a.is::<Esp32c5Gpio>())
+                .unwrap_or(false)
+        });
+        let (Some(i2c_idx), Some(gpio_idx)) = (i2c_idx, c3_gpio_idx.or(c5_gpio_idx)) else {
             return;
         };
         let matrix_route = self.peripherals[gpio_idx]
             .dev
             .as_any()
             .and_then(|a| a.downcast_ref::<Esp32c3Gpio>())
-            .map(|g| g.i2c_matrix_route_state());
+            .map(|g| g.i2c_matrix_route_state())
+            .or_else(|| {
+                self.peripherals[gpio_idx]
+                    .dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<Esp32c5Gpio>())
+                    .map(|g| g.i2c_matrix_route_state())
+            });
         let lines = self.peripherals[i2c_idx]
             .dev
             .as_any_mut()
@@ -143,14 +157,20 @@ impl SystemBus {
                     c.line_levels_arc()
                 })
             });
-        if let (Some(lines), Some(gpio)) = (
-            lines,
-            self.peripherals[gpio_idx]
+        if let Some(lines) = lines {
+            if let Some(gpio) = self.peripherals[gpio_idx]
                 .dev
                 .as_any_mut()
-                .and_then(|a| a.downcast_mut::<Esp32c3Gpio>()),
-        ) {
-            gpio.set_i2c_lines(lines);
+                .and_then(|a| a.downcast_mut::<Esp32c3Gpio>())
+            {
+                gpio.set_i2c_lines(lines);
+            } else if let Some(gpio) = self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32c5Gpio>())
+            {
+                gpio.set_i2c_lines(lines);
+            }
         }
     }
 
@@ -345,6 +365,27 @@ impl SystemBus {
         }
     }
 
+    /// Bind every peripheral's GPIO-matrix output wire
+    /// ([`crate::Peripheral::matrix_output_lines`], the ESP32-S2 RMT and LEDC) to the
+    /// `gpio` port, through capabilities rather than concrete types. A port
+    /// that does not route peripheral wires declines, and the peripheral
+    /// keeps whatever fallback it has.
+    pub(crate) fn wire_matrix_output_lines(&mut self) {
+        let Some(gpio_idx) = self.find_peripheral_index_by_name("gpio") else {
+            return;
+        };
+        for idx in 0..self.peripherals.len() {
+            if idx == gpio_idx {
+                continue;
+            }
+            if let Some((first, lines)) = self.peripherals[idx].dev.matrix_output_lines() {
+                self.peripherals[gpio_idx]
+                    .dev
+                    .bind_matrix_output_lines(first, &lines);
+            }
+        }
+    }
+
     /// Bind the classic-ESP32 LEDC controller's 16 channel outputs to the pads
     /// the GPIO output matrix can route them to (signals 71..86,
     /// `LEDC_HS_SIG_OUT0_IDX`..`LEDC_LS_SIG_OUT7_IDX`), so a pad attached with
@@ -356,7 +397,7 @@ impl SystemBus {
         use crate::peripherals::esp32::ledc::Ledc;
         self.wire_esp_ledc_pads(
             |_: &Esp32Gpio| true,
-            Ledc::pad_lines_arc,
+            |l: &mut Ledc| Some(l.pad_lines_arc()),
             Esp32Gpio::bind_ledc_lines,
         );
     }
@@ -401,7 +442,7 @@ impl SystemBus {
         use crate::peripherals::esp32c3::ledc::Esp32c3Ledc;
         self.wire_esp_ledc_pads(
             Esp32c3Gpio::has_ledc_signals,
-            Esp32c3Ledc::pad_lines_arc,
+            |l: &mut Esp32c3Ledc| Some(l.pad_lines_arc()),
             Esp32c3Gpio::bind_ledc_lines,
         );
     }
@@ -414,7 +455,7 @@ impl SystemBus {
         use crate::peripherals::esp32s3::ledc::Esp32s3Ledc;
         self.wire_esp_ledc_pads(
             |_: &Esp32s3Gpio| true,
-            Esp32s3Ledc::pad_lines_arc,
+            Esp32s3Ledc::s3_pad_lines,
             Esp32s3Gpio::bind_ledc_lines,
         );
     }
@@ -427,7 +468,7 @@ impl SystemBus {
     fn wire_esp_ledc_pads<G: 'static, L: 'static>(
         &mut self,
         gpio_accepts: fn(&G) -> bool,
-        lines_of: fn(&mut L) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        lines_of: fn(&mut L) -> Option<std::sync::Arc<crate::peripherals::pad_lines::PadLines>>,
         bind: fn(&mut G, &std::sync::Arc<crate::peripherals::pad_lines::PadLines>),
     ) {
         let (Some(ledc_idx), Some(gpio_idx)) = (
@@ -451,7 +492,7 @@ impl SystemBus {
             .dev
             .as_any_mut()
             .and_then(|a| a.downcast_mut::<L>())
-            .map(lines_of)
+            .and_then(lines_of)
         else {
             return;
         };
@@ -1279,6 +1320,119 @@ impl SystemBus {
         }
     }
 
+    /// Wire the C61 GPIO8 IO_MUX word into its GPIO slice so MCU_SEL gates the
+    /// DevKitC RGB LED output. Other C61 pads are outside this narrow model.
+    pub(crate) fn wire_esp32c61_pad_controls(&mut self) {
+        use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
+        use crate::peripherals::esp32c6::io_mux::Esp32c61IoMux;
+
+        let io_mux_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|any| any.is::<Esp32c61IoMux>())
+                .unwrap_or(false)
+        });
+        let gpio_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|any| any.is::<Esp32c3Gpio>())
+                .unwrap_or(false)
+        });
+        let (Some(io_mux_idx), Some(gpio_idx)) = (io_mux_idx, gpio_idx) else {
+            return;
+        };
+
+        let controls = self.peripherals[io_mux_idx]
+            .dev
+            .as_any()
+            .and_then(|any| any.downcast_ref::<Esp32c61IoMux>())
+            .map(Esp32c61IoMux::pad_controls);
+        if let (Some(controls), Some(gpio)) = (
+            controls,
+            self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32c3Gpio>()),
+        ) {
+            gpio.set_pad_controls(controls);
+        }
+    }
+
+    /// Share the C5 GPIO6/GPIO10/GPIO27 IO_MUX function-select words with the
+    /// narrow GPIO model so matrix routing and the onboard LED honor MCU_SEL.
+    pub(crate) fn wire_esp32c5_pad_controls(&mut self) {
+        use crate::peripherals::esp32c5::gpio::Esp32c5Gpio;
+        use crate::peripherals::esp32c5::io_mux::Esp32c5IoMux;
+
+        let io_mux_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|any| any.is::<Esp32c5IoMux>()));
+        let gpio_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|any| any.is::<Esp32c5Gpio>()));
+        let (Some(io_mux_idx), Some(gpio_idx)) = (io_mux_idx, gpio_idx) else {
+            return;
+        };
+
+        let controls = self.peripherals[io_mux_idx]
+            .dev
+            .as_any()
+            .and_then(|any| any.downcast_ref::<Esp32c5IoMux>())
+            .map(|mux| {
+                (
+                    mux.gpio6_pad_control(),
+                    mux.gpio10_pad_control(),
+                    mux.gpio27_pad_control(),
+                )
+            });
+        if let (Some((gpio6, gpio10, gpio27)), Some(gpio)) = (
+            controls,
+            self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32c5Gpio>()),
+        ) {
+            gpio.set_io_mux_gpio6(gpio6);
+            gpio.set_io_mux_gpio10(gpio10);
+            gpio.set_io_mux_gpio27(gpio27);
+        }
+    }
+
+    /// Share the P4 GPIO8 IO_MUX function-select word with its focused GPIO model.
+    pub(crate) fn wire_esp32p4_pad_controls(&mut self) {
+        use crate::peripherals::esp32p4::gpio::Esp32p4Gpio;
+        use crate::peripherals::esp32p4::io_mux::Esp32p4IoMux;
+
+        let io_mux_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|any| any.is::<Esp32p4IoMux>()));
+        let gpio_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|any| any.is::<Esp32p4Gpio>()));
+        let (Some(io_mux_idx), Some(gpio_idx)) = (io_mux_idx, gpio_idx) else {
+            return;
+        };
+
+        let control = self.peripherals[io_mux_idx]
+            .dev
+            .as_any()
+            .and_then(|any| any.downcast_ref::<Esp32p4IoMux>())
+            .map(Esp32p4IoMux::gpio8_pad_control);
+        if let (Some(control), Some(gpio)) = (
+            control,
+            self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32p4Gpio>()),
+        ) {
+            gpio.set_io_mux_gpio8(control);
+        }
+    }
+
     /// Does this bus have either peripheral the pad brackets exist for?
     ///
     /// The brackets run at the MMIO write choke, and before this they cost four
@@ -1885,6 +2039,13 @@ impl SystemBus {
             ("spi2", 'b', 13, Sck, "SPI2_SCK"),
             ("spi2", 'b', 15, Mosi, "SPI2_MOSI"),
         ];
+        // WCH CH32V003 (F1-style ports; `pad_map: ch32v003`): SPI1 default
+        // mapping, SCK/MOSI only, for the same reason as F1. See
+        // `SpiPadMap::Ch32v003`.
+        const CH32V003: &[(&str, char, u8, SpiSignal, &str)] = &[
+            ("spi1", 'c', 5, Sck, "SPI1_SCK"),
+            ("spi1", 'c', 6, Mosi, "SPI1_MOSI"),
+        ];
 
         // ── H5/H7 "SPI v3" parts ────────────────────────────────────────────
         //
@@ -2105,8 +2266,15 @@ impl SystemBus {
                             }
                         }
                     }
-                    GpioRegisterLayout::Stm32F1 => {
-                        for &(spi, p, pin, sig, func) in F1 {
+                    layout @ (GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch) => {
+                        // A WCH port with no declared map routes nothing: the
+                        // F1 rows are an STM32 pinout.
+                        let table = match (layout, pad_map) {
+                            (_, SpiPadMap::Ch32v003) => CH32V003,
+                            (GpioRegisterLayout::Stm32F1, _) => F1,
+                            _ => &[],
+                        };
+                        for &(spi, p, pin, sig, func) in table {
                             if spi == spi_name && p == port {
                                 gpio.add_pad_route(
                                     lines.pad_lines(),
@@ -2252,6 +2420,17 @@ impl SystemBus {
             ("i2c2", 'b', 10, LINE_SCL, "I2C2_SCL"),
             ("i2c2", 'b', 11, LINE_SDA, "I2C2_SDA"),
         ];
+        // WCH CH32V003RM v1.9, I2C1 pin-remap table: reset mapping is
+        // PC1/SDA + PC2/SCL. The controller uses the same CR1/CR2/DR event
+        // register layout as the legacy F1 model, but its default pads differ
+        // from STM32F103; select this table only when the chip's RCC profile is
+        // explicitly `ch32v003`.
+        const CH32V003: &[I2cPadF1] = &[
+            ("i2c1", 'c', 2, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'c', 1, LINE_SDA, "I2C1_SDA"),
+        ];
+
+        let ch32v003 = self.rcc_is_ch32v003();
 
         // Modern controller on an STM32G0 (`pad_map: stm32g0`): STM32G071
         // DS12232 port A/B alternate-function tables, AF6 column. The L4
@@ -2312,8 +2491,12 @@ impl SystemBus {
                     (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) if g0 => G0,
                     (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) => L4,
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32V2) => F4,
-                    (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32F1) => {
-                        for &(i2c, p, pin, line, func) in F1 {
+                    (
+                        I2cRegisterLayout::Stm32F1,
+                        GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch,
+                    ) => {
+                        let pads = if ch32v003 { CH32V003 } else { F1 };
+                        for &(i2c, p, pin, line, func) in pads {
                             if i2c == i2c_name && p == port {
                                 plan.push((port, pin, None, line, func));
                             }
@@ -2475,6 +2658,27 @@ impl SystemBus {
         // The remap pads need AFIO_PCFR1, which nothing decodes, so they are
         // left unbound.
         const WCH: &[(u8, char, u8, usize, &str)] = &[(1, 'd', 5, LINE_TX, "USART1_TX")];
+        // WCH CH32V00x (V002..V007; `pad_map: ch32v00x`): TX pads with the
+        // AFIO_PCFR1 field and value that select them, as
+        // `(instance, port, pin, line, func, shift, mask, value)`. USART1_RM
+        // is PCFR1 [9:6], USART2_RM [22:20] (ch32fun ch32x00xhw.h,
+        // ch32-data `afio_v00x.yaml`). USART1 RM 0 = PD5 TX (CH32V006DS0
+        // Table 2-1-1: PD5 default function USART1_TX); USART2 RM 3 = PD2 TX
+        // (ch32-data `V00X_USART2.yaml` remap 3, and ch32fun's dual_usart
+        // "USART2: PD2 TX, PD3 RX, remap value 3"). The other remap rows are
+        // not bound.
+        type V00xPad = (u8, char, u8, usize, &'static str, u32, u32, u32);
+        const V00X: &[V00xPad] = &[
+            (1, 'd', 5, LINE_TX, "USART1_TX", 6, 0xF, 0),
+            (2, 'd', 2, LINE_TX, "USART2_TX", 20, 0x7, 3),
+        ];
+        // WCH CH32X035 (`pad_map: ch32x03x`), same row shape as V00X.
+        // USART1_RM is PCFR1 [6:5] (ch32fun ch32x03xhw.h
+        // AFIO_PCFR1_USART1_REMAP 0x60; WCH SPL ch32x035_gpio.h
+        // GPIO_PartialRemap1_USART1 0x00150020 = 2-bit field at bit 5); RM 0
+        // puts TX on PB10 (openwch arduino_core_ch32 variant CH32X035G8U
+        // PinMap_UART_TX: PB10 USART1, AFIO_NONE). The remap rows are not bound.
+        const X03X: &[V00xPad] = &[(1, 'b', 10, LINE_TX, "USART1_TX", 5, 0x3, 0)];
 
         for instance in 1u8..=3 {
             // Chip configs name these both ways — `uart2` on the L4/F1 configs,
@@ -2486,12 +2690,39 @@ impl SystemBus {
             else {
                 continue;
             };
+            let (ch32v003_pad_map, remapped_table) = self.peripherals[uart_idx]
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<Uart>())
+                .map_or((false, None), |uart| {
+                    let table = if uart.uses_ch32v00x_pad_map() {
+                        Some(V00X)
+                    } else if uart.uses_ch32x03x_pad_map() {
+                        Some(X03X)
+                    } else {
+                        None
+                    };
+                    (uart.uses_ch32v003_pad_map(), table)
+                });
+            let v00x_remap = if remapped_table.is_some() {
+                self.remap_block_register()
+            } else {
+                None
+            };
             // Plan every binding BEFORE touching the UART: `pad_lines_arc`
             // CREATES the pad cell, and a UART owning a cell no route reaches
             // still buffers and narrates on every transmitted byte into a wire
             // nothing reads. A chip with no row for this instance therefore
             // must not reach `pad_lines_arc` at all.
-            let mut plan: Vec<(char, u8, Option<u8>, usize, &'static str)> = Vec::new();
+            type PlanRow = (
+                char,
+                u8,
+                Option<u8>,
+                usize,
+                &'static str,
+                Option<crate::peripherals::pad_routing::RemapGate>,
+            );
+            let mut plan: Vec<PlanRow> = Vec::new();
             for port in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] {
                 let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}"))
                 else {
@@ -2522,19 +2753,48 @@ impl SystemBus {
                         };
                         for &(inst, p, pin, af, line, func) in table {
                             if inst == instance && p == port {
-                                plan.push((port, pin, Some(af), line, func));
+                                plan.push((port, pin, Some(af), line, func, None));
                             }
                         }
                     }
+                    GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch
+                        if remapped_table.is_some() =>
+                    {
+                        // No AFIO on the bus: nothing moves a pad, so only
+                        // the reset-mapping (value 0) rows apply.
+                        for &(inst, p, pin, line, func, shift, mask, value) in
+                            remapped_table.unwrap_or_default()
+                        {
+                            if inst != instance || p != port {
+                                continue;
+                            }
+                            let gate = match &v00x_remap {
+                                Some(register) => {
+                                    Some(crate::peripherals::pad_routing::RemapGate {
+                                        register: register.clone(),
+                                        shift,
+                                        mask,
+                                        value,
+                                    })
+                                }
+                                None if value == 0 => None,
+                                None => continue,
+                            };
+                            plan.push((port, pin, None, line, func, gate));
+                        }
+                    }
                     GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch => {
-                        let table = if gpio_layout == GpioRegisterLayout::Wch {
+                        // The lane's ch32fun profiles select the WCH table
+                        // through the UART's `ch32v003` pad map; main's
+                        // descriptor selects it through the `Wch` GPIO layout.
+                        let table = if gpio_layout == GpioRegisterLayout::Wch || ch32v003_pad_map {
                             WCH
                         } else {
                             F1
                         };
                         for &(inst, p, pin, line, func) in table {
                             if inst == instance && p == port {
-                                plan.push((port, pin, None, line, func));
+                                plan.push((port, pin, None, line, func, None));
                             }
                         }
                     }
@@ -2564,7 +2824,7 @@ impl SystemBus {
                 }
                 uart.pad_lines_arc()
             };
-            for (port, pin, af, line, func) in plan {
+            for (port, pin, af, line, func, gate) in plan {
                 let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}"))
                 else {
                     continue;
@@ -2576,7 +2836,11 @@ impl SystemBus {
                 else {
                     continue;
                 };
-                gpio.add_pad_route(&lines, pin, af, line, func);
+                if gate.is_some() {
+                    gpio.add_gated_pad_route(&lines, pin, line, func, gate);
+                } else {
+                    gpio.add_pad_route(&lines, pin, af, line, func);
+                }
                 if af.is_none() {
                     if let Some(gate) = &console_gate {
                         gpio.watch_console_af(pin, gate.clone());
@@ -2613,7 +2877,7 @@ impl SystemBus {
     ///   NOT imply this map — L4/G4/H5/U5 move several of these pads — so a
     ///   V2 part without the declaration is routed nowhere, fail-closed.
     pub(crate) fn wire_stm32_timer_capture_pads(&mut self) {
-        // (timer, port, pin, channel 0-based, func)
+        // (timer, port, pin, wire line: channel 0-based, or 4.. for CHxN, func)
         const F1: &[(&str, char, u8, u8, &str)] = &[
             ("tim1", 'a', 8, 0, "TIM1_CH1"),
             ("tim1", 'a', 9, 1, "TIM1_CH2"),
@@ -2690,6 +2954,12 @@ impl SystemBus {
             Some((idx, bus.peripherals[idx].dev.timer_input_stage()?))
         };
         let mut wired = false;
+        if self.rcc_is_ch32v003() {
+            // The F1 table names pads this package does not have (PA8..PA11)
+            // and puts TIM2 on PA1/PA2, which are TIM1 pads here.
+            self.timer_capture_wired = self.wire_ch32v003_timer_capture_pads();
+            return;
+        }
         for port in ['a', 'b', 'c', 'd', 'e'] {
             let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}")) else {
                 continue;
@@ -2724,6 +2994,63 @@ impl SystemBus {
         // `|=`: an ESP32 PCNT wired by `wire_esp32_pcnt_inputs` uses the same
         // delivery path and must not be switched off by an STM32-less re-wire.
         self.timer_capture_wired |= wired;
+    }
+
+    /// CH32V003 input capture: each TIM1/TIM2 channel's pad feeds its TIy
+    /// while the pad is a digital input AND AFIO_PCFR1 selects the mapping
+    /// the row belongs to ([`CH32V003_TIMER_PADS`]). With no AFIO block only
+    /// the reset-mapping rows are bound.
+    fn wire_ch32v003_timer_capture_pads(&mut self) -> bool {
+        use crate::peripherals::pad_routing::RemapGate;
+        use crate::peripherals::timer::TimerInputStage;
+        let remap = self.remap_block_register();
+        let mut wired = false;
+        for &(tim, port, pin, ch, func, shift, value) in CH32V003_TIMER_PADS {
+            if ch > 3 || (remap.is_none() && value != 0) {
+                continue;
+            }
+            let Some(t_idx) = self
+                .find_peripheral_index_by_name(tim)
+                .or_else(|| self.find_peripheral_index_by_name(&format!("{tim}_pwm")))
+            else {
+                continue;
+            };
+            if self.peripherals[t_idx].dev.timer_input_stage() != Some(TimerInputStage::F1) {
+                continue;
+            }
+            let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}")) else {
+                continue;
+            };
+            let gate = remap.as_ref().map(|register| RemapGate {
+                register: register.clone(),
+                shift,
+                mask: 0b11,
+                value,
+            });
+            wired |= self.peripherals[gpio_idx]
+                .dev
+                .bind_remapped_timer_capture_pad(pin, t_idx, ch as u8, func, gate);
+        }
+        wired
+    }
+
+    /// The CH32V003 AFIO's remap register, recording the block as the bus's
+    /// [`SystemBus::remap_block`] so a store to it re-syncs the pads.
+    fn remap_block_register(&mut self) -> Option<std::sync::Arc<std::sync::atomic::AtomicU32>> {
+        let idx = self.find_peripheral_index_by_name("afio")?;
+        let register = self.peripherals[idx].dev.remap_register()?;
+        self.remap_block = Some(idx);
+        Some(register)
+    }
+
+    /// Whether the chip's RCC is the narrow WCH CH32V003 profile. Its I²C1
+    /// and TIM2 reuse the F1 register blocks on different default pads, so
+    /// the F1 pad routers pick a CH32V003 table from this.
+    fn rcc_is_ch32v003(&self) -> bool {
+        self.find_peripheral_index_by_name("rcc")
+            .and_then(|idx| self.peripherals[idx].dev.as_any())
+            .and_then(|any| any.downcast_ref::<crate::peripherals::rcc::Rcc>())
+            .is_some_and(crate::peripherals::rcc::Rcc::is_ch32v003)
     }
 
     /// Route each STM32F1 timer's channel OUTPUTS (OC1..OC4) onto the GPIO
@@ -2766,8 +3093,44 @@ impl SystemBus {
             ("tim4", 'b', 8, 2, "TIM4_CH3"),
             ("tim4", 'b', 9, 3, "TIM4_CH4"),
         ];
+        use crate::peripherals::pad_routing::RemapGate;
+        let remap = if self.rcc_is_ch32v003() {
+            // No AFIO block on the bus: nothing can move a pad, so the reset
+            // rows stand alone.
+            Some(self.remap_block_register())
+        } else {
+            None
+        };
+        // (timer, port, pin, channel, func, remap gate)
+        type PadRow = (
+            &'static str,
+            char,
+            u8,
+            usize,
+            &'static str,
+            Option<RemapGate>,
+        );
+        let rows: Vec<PadRow> = match &remap {
+            None => F1
+                .iter()
+                .map(|&(t, port, pin, ch, func)| (t, port, pin, ch, func, None))
+                .collect(),
+            Some(cell) => CH32V003_TIMER_PADS
+                .iter()
+                .filter(|row| cell.is_some() || row.6 == 0)
+                .map(|&(t, port, pin, ch, func, shift, value)| {
+                    let gate = cell.as_ref().map(|register| RemapGate {
+                        register: register.clone(),
+                        shift,
+                        mask: 0b11,
+                        value,
+                    });
+                    (t, port, pin, ch, func, gate)
+                })
+                .collect(),
+        };
         use crate::peripherals::timer::TimerInputStage;
-        for &(tim, port, pin, ch, func) in F1 {
+        for (tim, port, pin, ch, func, gate) in rows {
             let Some(t_idx) = self
                 .find_peripheral_index_by_name(tim)
                 .or_else(|| self.find_peripheral_index_by_name(&format!("{tim}_pwm")))
@@ -2785,10 +3148,12 @@ impl SystemBus {
             let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
                 continue;
             };
-            if self.peripherals[gpio_idx]
-                .dev
-                .bind_timer_output_pad(&lines, pin, ch, func)
-            {
+            let gpio = &mut self.peripherals[gpio_idx].dev;
+            let bound = match gate {
+                Some(gate) => gpio.bind_remapped_timer_output_pad(&lines, pin, ch, func, gate),
+                None => gpio.bind_timer_output_pad(&lines, pin, ch, func),
+            };
+            if bound {
                 // A pad can carry it: the timer starts generating its outputs.
                 self.peripherals[t_idx].dev.timer_output_lines(true);
             }
@@ -2868,6 +3233,144 @@ impl SystemBus {
         }
     }
 
+    /// Route each SAMD21 TCC's waveform outputs WO[x] onto the pads that carry
+    /// them on PMUX function E or F, so `analogWrite` on a TCC pin is a
+    /// waveform on the pad rather than the PORT latch. Pads from CMSIS
+    /// `pio/samd21g18a.h` (`PIN_PxyyE/F_TCCn_WOx`); the route is live only
+    /// while the pad's PINCFG.PMUXEN selects that function. Only `samd21_tcc`
+    /// instances on a chip with `gpio_a`/`gpio_b` SAM ports are wired.
+    pub(crate) fn wire_samd21_tcc_output_pads(&mut self) {
+        const E: u32 = 4;
+        const F: u32 = 5;
+        // (TCC, WO, port, pin, PMUX function)
+        const PADS: &[(u8, usize, char, u8, u32)] = &[
+            (0, 0, 'a', 4, E),
+            (0, 0, 'a', 8, E),
+            (0, 1, 'a', 5, E),
+            (0, 1, 'a', 9, E),
+            (0, 2, 'a', 10, F),
+            (0, 2, 'a', 18, F),
+            (0, 3, 'a', 11, F),
+            (0, 3, 'a', 19, F),
+            (0, 4, 'a', 14, F),
+            (0, 4, 'a', 22, F),
+            (0, 4, 'b', 10, F),
+            (0, 5, 'a', 15, F),
+            (0, 5, 'a', 23, F),
+            (0, 5, 'b', 11, F),
+            (0, 6, 'a', 12, F),
+            (0, 6, 'a', 20, F),
+            (0, 6, 'a', 16, F),
+            (0, 7, 'a', 13, F),
+            (0, 7, 'a', 21, F),
+            (0, 7, 'a', 17, F),
+            (1, 0, 'a', 6, E),
+            (1, 0, 'a', 10, E),
+            (1, 0, 'a', 30, E),
+            (1, 1, 'a', 7, E),
+            (1, 1, 'a', 11, E),
+            (1, 1, 'a', 31, E),
+            (1, 2, 'a', 8, F),
+            (1, 2, 'a', 24, F),
+            (1, 3, 'a', 9, F),
+            (1, 3, 'a', 25, F),
+            (2, 0, 'a', 12, E),
+            (2, 0, 'a', 16, E),
+            (2, 0, 'a', 0, E),
+            (2, 1, 'a', 13, E),
+            (2, 1, 'a', 17, E),
+            (2, 1, 'a', 1, E),
+        ];
+        const FUNCS: [[&str; 8]; 3] = [
+            [
+                "TCC0_WO0", "TCC0_WO1", "TCC0_WO2", "TCC0_WO3", "TCC0_WO4", "TCC0_WO5", "TCC0_WO6",
+                "TCC0_WO7",
+            ],
+            [
+                "TCC1_WO0", "TCC1_WO1", "TCC1_WO2", "TCC1_WO3", "", "", "", "",
+            ],
+            ["TCC2_WO0", "TCC2_WO1", "", "", "", "", "", ""],
+        ];
+        for &(tcc, wo, port, pin, function) in PADS {
+            let Some(t_idx) = self.find_peripheral_index_by_name(&format!("tcc{tcc}")) else {
+                continue;
+            };
+            if self.peripherals[t_idx].dev.timer_output_family() != Some("samd21_tcc") {
+                continue;
+            }
+            let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio_{port}")) else {
+                continue;
+            };
+            let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
+                continue;
+            };
+            if self.peripherals[gpio_idx]
+                .dev
+                .bind_timer_output_pad_function(
+                    &lines,
+                    pin,
+                    function,
+                    wo,
+                    FUNCS[usize::from(tcc)][wo],
+                )
+            {
+                self.peripherals[t_idx].dev.timer_output_lines(true);
+            }
+        }
+    }
+
+    /// Route TCA0's waveform outputs WO0..WO2 onto pins 0..2 of the port
+    /// PORTMUX.TCAROUTEA selects (0 = PORTA .. 5 = PORTF; DS40002173 §15.3.5
+    /// and the I/O multiplexing table, non-split mode), so `analogWrite` on a
+    /// TCA0 pin is a waveform on the pad rather than the OUT latch. Each
+    /// route is live while TCAROUTEA selects its port, the pad is an output
+    /// and CTRLB.CMPnEN has the timer drive the line. Only a `megaavr_tc`
+    /// block (`timers`) with a `megaavr_portmux` (`portmux`) is wired; the
+    /// split-mode outputs WO3..WO5 are refused by the timer.
+    pub(crate) fn wire_megaavr_tca_output_pads(&mut self) {
+        let Some(t_idx) = self.find_peripheral_index_by_name("timers") else {
+            return;
+        };
+        if self.peripherals[t_idx].dev.timer_output_family() != Some("megaavr_tca") {
+            return;
+        }
+        let Some(mux_idx) = self.find_peripheral_index_by_name("portmux") else {
+            return;
+        };
+        let Some(register) = self.peripherals[mux_idx].dev.remap_register() else {
+            return;
+        };
+        let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
+            return;
+        };
+        const FUNCS: [&str; 3] = ["TCA0_WO0", "TCA0_WO1", "TCA0_WO2"];
+        let mut wired = false;
+        for (route, port) in ["porta", "portb", "portc", "portd", "porte", "portf"]
+            .into_iter()
+            .enumerate()
+        {
+            let Some(gpio_idx) = self.find_peripheral_index_by_name(port) else {
+                continue;
+            };
+            for (wo, func) in FUNCS.into_iter().enumerate() {
+                let gate = crate::peripherals::pad_routing::RemapGate {
+                    register: register.clone(),
+                    shift: 0,
+                    mask: 0x7,
+                    value: route as u32,
+                };
+                wired |= self.peripherals[gpio_idx]
+                    .dev
+                    .bind_remapped_timer_output_pad(&lines, wo as u8, wo, func, gate);
+            }
+        }
+        if wired {
+            // A TCAROUTEA store re-syncs the watched pads.
+            self.remap_block = Some(mux_idx);
+            self.peripherals[t_idx].dev.timer_output_lines(true);
+        }
+    }
+
     /// Route each Renesas RA GPT's GTIOCnA/B wires onto the pads its chip
     /// YAML names (`gtioc_pads`), so a pad whose `PmnPFS` hands it to the GPT
     /// (PMR = 1, PSEL = 00011) reads, and the logic analyzer records, the PWM
@@ -2901,6 +3404,55 @@ impl SystemBus {
                 }
             }
         }
+    }
+
+    /// Wire each timer's internal triggers ITR0..ITR3 to the master timers'
+    /// TRGO outputs the chip yaml names (`config: { itr: [tim1, ~, ...] }`,
+    /// index = ITRx; `~` leaves that input unconnected), so a slave in
+    /// external clock mode 1 counts its master's update events. A name that
+    /// is not a timer on this bus is an error, not a silent no-op.
+    pub(crate) fn wire_timer_trigger_links(
+        &mut self,
+        peripherals: &[labwired_config::PeripheralConfig],
+    ) -> anyhow::Result<()> {
+        for p_cfg in peripherals {
+            let Some(itr) = p_cfg.config.get("itr") else {
+                continue;
+            };
+            let names = itr.as_sequence().ok_or_else(|| {
+                anyhow::anyhow!("timer '{}': config.itr must be a list", p_cfg.id)
+            })?;
+            if names.len() > 4 {
+                anyhow::bail!("timer '{}': config.itr has more than ITR0..ITR3", p_cfg.id);
+            }
+            let Some(slave) = self.find_peripheral_index_by_name(&p_cfg.id) else {
+                continue;
+            };
+            for (index, name) in names.iter().enumerate() {
+                if name.is_null() {
+                    continue;
+                }
+                let master_name = name.as_str().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "timer '{}': config.itr[{index}] must be a timer id",
+                        p_cfg.id
+                    )
+                })?;
+                let link = self
+                    .find_peripheral_index_by_name(master_name)
+                    .and_then(|master| self.peripherals[master].dev.timer_trgo())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "timer '{}': ITR{index} names '{master_name}', which is not a timer",
+                            p_cfg.id
+                        )
+                    })?;
+                if !self.peripherals[slave].dev.attach_timer_itr(index, link) {
+                    anyhow::bail!("'{}' has no internal trigger inputs", p_cfg.id);
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Bind each ADC channel a board wires to an analog output (the ADC's
@@ -3905,3 +4457,88 @@ fn edge_sampling_unsupported(controller: &str, engine: &str) -> anyhow::Error {
          implements it (STM32 classic/FIFO SPI)."
     )
 }
+
+// WCH CH32V003 timer pads, shared by the output and input-capture
+// routers. The register block is the F1 timer; only the pads differ, and AFIO_PCFR1 moves them, so every row names the remap
+// field value it is live under: (timer, port, pin, channel, func,
+// PCFR1 shift, value). The complementary outputs are wire lines 4..6
+// (`complementary_line`).
+//
+// TIM1_RM is PCFR1 [7:6]. Pads from ch32fun's ch32v003hw.h
+// (AFIO_PCFR1_TIM1_REMAP_* comments) cross-checked against the
+// remap table in examples/tim1_pwm_complementary_outputs; 00 and 10
+// put the channels on the same pads (only ETR/BKIN differ):
+//   00/10: CH1/CH1N PD2/PD0, CH2/CH2N PA1/PA2, CH3/CH3N PC3/PD1, CH4 PC4
+//   01:    CH1/CH1N PC6/PC3, CH2/CH2N PC7/PC4, CH3/CH3N PC0/PD1, CH4 PD3
+//   11:    CH1/CH1N PC4/PC3, CH2/CH2N PC7/PD2, CH3/CH3N PC5/PC6
+//   11:    CH4 PD4
+// Full-remap CH4 was first left out because the header puts it on PD4
+// and the example's table on PD2 (already CH2N there). The reference
+// manual's TIM1_RM field text, quoted verbatim in ch32-rs/ch32-data
+// (data/family/CH32V003.yaml: "11：完全映射(ETR/PC2，CH1/PC4，CH2/PC7，
+// CH3/PC5，CH4/PD4，…)"), settles it on PD4.
+//
+// TIM2_RM is PCFR1 [9:8]. The RM's field text (same ch32-data file) and
+// the remap tables in ch32fun's examples/tim2_pwm_remap and
+// examples/tim2_encoder agree on all sixteen pads:
+//   00: CH1/ETR PD4, CH2 PD3, CH3 PC0, CH4 PD7
+//   01: CH1/ETR PC5, CH2 PC2, CH3 PD2, CH4 PC1
+//   10: CH1/ETR PC1, CH2 PD3, CH3 PC0, CH4 PD7
+//   11: CH1/ETR PC1, CH2 PC7, CH3 PD6, CH4 PD5
+// ch32v003hw.h's AFIO_PCFR1_TIM2_REMAP_* comments have two typos (CH4
+// at 00 and CH3 at 01 both "PD4") and are not used. tim2_encoder's code
+// comments call PC2 "T2CH1_" and PC5 "T2CH2_" under 01; the RM and both
+// tables say the reverse, which only flips the encoder's count direction.
+//
+// A TxCHy pad is also that channel's input TIy (CH32V003 RM, "TIMx_CHy"
+// is input capture or output compare), so the rows with channel 0..3 are
+// the capture inputs too; the CHxN rows (4..6) are output only.
+type Ch32Row = (&'static str, char, u8, usize, &'static str, u32, u32);
+const TIM1_RM: u32 = 6;
+const TIM2_RM: u32 = 8;
+const CH32V003_TIMER_PADS: &[Ch32Row] = &[
+    ("tim1", 'd', 2, 0, "TIM1_CH1", TIM1_RM, 0b00),
+    ("tim1", 'a', 1, 1, "TIM1_CH2", TIM1_RM, 0b00),
+    ("tim1", 'c', 3, 2, "TIM1_CH3", TIM1_RM, 0b00),
+    ("tim1", 'c', 4, 3, "TIM1_CH4", TIM1_RM, 0b00),
+    ("tim1", 'd', 0, 4, "TIM1_CH1N", TIM1_RM, 0b00),
+    ("tim1", 'a', 2, 5, "TIM1_CH2N", TIM1_RM, 0b00),
+    ("tim1", 'd', 1, 6, "TIM1_CH3N", TIM1_RM, 0b00),
+    ("tim1", 'c', 6, 0, "TIM1_CH1", TIM1_RM, 0b01),
+    ("tim1", 'c', 7, 1, "TIM1_CH2", TIM1_RM, 0b01),
+    ("tim1", 'c', 0, 2, "TIM1_CH3", TIM1_RM, 0b01),
+    ("tim1", 'd', 3, 3, "TIM1_CH4", TIM1_RM, 0b01),
+    ("tim1", 'c', 3, 4, "TIM1_CH1N", TIM1_RM, 0b01),
+    ("tim1", 'c', 4, 5, "TIM1_CH2N", TIM1_RM, 0b01),
+    ("tim1", 'd', 1, 6, "TIM1_CH3N", TIM1_RM, 0b01),
+    ("tim1", 'd', 2, 0, "TIM1_CH1", TIM1_RM, 0b10),
+    ("tim1", 'a', 1, 1, "TIM1_CH2", TIM1_RM, 0b10),
+    ("tim1", 'c', 3, 2, "TIM1_CH3", TIM1_RM, 0b10),
+    ("tim1", 'c', 4, 3, "TIM1_CH4", TIM1_RM, 0b10),
+    ("tim1", 'd', 0, 4, "TIM1_CH1N", TIM1_RM, 0b10),
+    ("tim1", 'a', 2, 5, "TIM1_CH2N", TIM1_RM, 0b10),
+    ("tim1", 'd', 1, 6, "TIM1_CH3N", TIM1_RM, 0b10),
+    ("tim1", 'c', 4, 0, "TIM1_CH1", TIM1_RM, 0b11),
+    ("tim1", 'c', 7, 1, "TIM1_CH2", TIM1_RM, 0b11),
+    ("tim1", 'c', 5, 2, "TIM1_CH3", TIM1_RM, 0b11),
+    ("tim1", 'c', 3, 4, "TIM1_CH1N", TIM1_RM, 0b11),
+    ("tim1", 'd', 2, 5, "TIM1_CH2N", TIM1_RM, 0b11),
+    ("tim1", 'c', 6, 6, "TIM1_CH3N", TIM1_RM, 0b11),
+    ("tim1", 'd', 4, 3, "TIM1_CH4", TIM1_RM, 0b11),
+    ("tim2", 'd', 4, 0, "TIM2_CH1", TIM2_RM, 0b00),
+    ("tim2", 'd', 3, 1, "TIM2_CH2", TIM2_RM, 0b00),
+    ("tim2", 'c', 0, 2, "TIM2_CH3", TIM2_RM, 0b00),
+    ("tim2", 'd', 7, 3, "TIM2_CH4", TIM2_RM, 0b00),
+    ("tim2", 'c', 5, 0, "TIM2_CH1", TIM2_RM, 0b01),
+    ("tim2", 'c', 2, 1, "TIM2_CH2", TIM2_RM, 0b01),
+    ("tim2", 'd', 2, 2, "TIM2_CH3", TIM2_RM, 0b01),
+    ("tim2", 'c', 1, 3, "TIM2_CH4", TIM2_RM, 0b01),
+    ("tim2", 'c', 1, 0, "TIM2_CH1", TIM2_RM, 0b10),
+    ("tim2", 'd', 3, 1, "TIM2_CH2", TIM2_RM, 0b10),
+    ("tim2", 'c', 0, 2, "TIM2_CH3", TIM2_RM, 0b10),
+    ("tim2", 'd', 7, 3, "TIM2_CH4", TIM2_RM, 0b10),
+    ("tim2", 'c', 1, 0, "TIM2_CH1", TIM2_RM, 0b11),
+    ("tim2", 'c', 7, 1, "TIM2_CH2", TIM2_RM, 0b11),
+    ("tim2", 'd', 6, 2, "TIM2_CH3", TIM2_RM, 0b11),
+    ("tim2", 'd', 5, 3, "TIM2_CH4", TIM2_RM, 0b11),
+];

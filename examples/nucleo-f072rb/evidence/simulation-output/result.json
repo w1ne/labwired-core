@@ -1,0 +1,339 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "NUCLEO_F072RB_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioa:5",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073759260,
+      10,
+      3221225472,
+      3221225472,
+      1207959576,
+      2097152,
+      32,
+      536887280,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536887280,
+      134218593,
+      134218592
+    ],
+    "pc": 134218592,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "9b49e8ce7dc76d4b2e9ea6fd44b860af642df310a1a6f4e2f0526cae17c1ac01",
+  "config": {
+    "firmware": "examples/nucleo-f072rb/../../target/thumbv6m-none-eabi/release/firmware-nucleo-f072rb-smoke",
+    "system": "examples/nucleo-f072rb/../../configs/systems/nucleo-f072rb.yaml",
+    "script": "examples/nucleo-f072rb/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1207959552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1207961600,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "button_b1",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 100000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioa",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 141,
+            "value": 1
+          },
+          {
+            "cycle": 275,
+            "value": 0
+          },
+          {
+            "cycle": 408,
+            "value": 1
+          },
+          {
+            "cycle": 541,
+            "value": 0
+          },
+          {
+            "cycle": 674,
+            "value": 1
+          },
+          {
+            "cycle": 807,
+            "value": 0
+          },
+          {
+            "cycle": 940,
+            "value": 1
+          },
+          {
+            "cycle": 1073,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 40,
+            "state": "0"
+          },
+          {
+            "cycle": 141,
+            "state": "1"
+          },
+          {
+            "cycle": 275,
+            "state": "0"
+          },
+          {
+            "cycle": 408,
+            "state": "1"
+          },
+          {
+            "cycle": 541,
+            "state": "0"
+          },
+          {
+            "cycle": 674,
+            "state": "1"
+          },
+          {
+            "cycle": 807,
+            "state": "0"
+          },
+          {
+            "cycle": 940,
+            "state": "1"
+          },
+          {
+            "cycle": 1073,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 8
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioa",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NUCLEO_F072RB_OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1164,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1164,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 131072,
+    "ram_total_bytes": 16384,
+    "flash_used_pct": 0.89,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 16384,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 16360,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536887296,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 16384,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 16360,
+    "heap_base": 536870912,
+    "heap_top": 536887296
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 330,
+    "memory_writes": 22,
+    "peripheral_accesses": 52,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134218592,
+        "count": 46,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      }
+    ]
+  }
+}

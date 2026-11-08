@@ -1,0 +1,28 @@
+   text	   data	    bss	    dec	    hex	filename
+    708	      0	      0	    708	    2c4	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/blink.elf
+   text	   data	    bss	    dec	    hex	filename
+   1700	      0	      4	   1704	    6a8	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/uartdemo.elf
+   text	   data	    bss	    dec	    hex	filename
+   2332	      0	      4	   2336	    920	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/systick_irq.elf
+   text	   data	    bss	    dec	    hex	filename
+   2176	      0	      0	   2176	    880	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/adc_polled.elf
+   text	   data	    bss	    dec	    hex	filename
+   6792	      0	    512	   7304	   1c88	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/i2c_oled.elf
+   text	   data	    bss	    dec	    hex	filename
+   2144	      0	      0	   2144	    860	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/tim2_pwm.elf
+   text	   data	    bss	    dec	    hex	filename
+    684	      0	      0	    684	    2ac	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/exti_pin_change_isr.elf
+In file included from /home/andrii/.cache/labwired/ch32fun-b28d285460ce052a179dba8f4a22c6f73ff8e328/examples/spi_max7219/max7219_spi_driver.h:31,
+                 from /home/andrii/.cache/labwired/ch32fun-b28d285460ce052a179dba8f4a22c6f73ff8e328/examples/spi_max7219/spi_max7219.c:24:
+/home/andrii/.cache/labwired/ch32fun-b28d285460ce052a179dba8f4a22c6f73ff8e328/extralibs/ch32v003_SPI.h:123:9: note: '#pragma message: SPI_CLK_PRESCALER=((((((24000000))*(2)) / 1000000)) == 0 ? -1 : __builtin_ctz(((((24000000))*(2)) / 1000000)))'
+  123 | #pragma message(VAR_NAME_VALUE(SPI_CLK_PRESCALER))
+      |         ^~~~~~~
+   text	   data	    bss	    dec	    hex	filename
+   5960	      0	      0	   5960	   1748	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/spi_max7219.elf
+   text	   data	    bss	    dec	    hex	filename
+    812	      0	      0	    812	    32c	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/uart_tx_dma.elf
+/home/andrii/tools/riscv64-deb/root/usr/bin/../lib/gcc/riscv64-unknown-elf/13.2.0/../../../riscv64-unknown-elf/bin/ld: warning: /home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/ws2812bdemo.elf has a LOAD segment with RWX permissions
+   text	   data	    bss	    dec	    hex	filename
+   2548	      0	    496	   3044	    be4	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/ws2812bdemo.elf
+   text	   data	    bss	    dec	    hex	filename
+   2120	      0	      0	   2120	    848	/home/andrii/worktrees/labwired-core/hw-onboarding/examples/ch32v003-evt/ch32fun/tim1_pwm.elf

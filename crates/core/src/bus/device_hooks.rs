@@ -128,6 +128,16 @@ impl SystemBus {
             {
                 self.collect_scheduled_events(edge.timer);
             }
+            // QingKe: the capture flag requests the PFIC on the edge's cycle,
+            // as the NVIC path's walk/event re-pend would.
+            if self.qingke_pfic.is_some() {
+                if let (Some(irq), Some(level)) = (
+                    self.peripherals[edge.timer].irq,
+                    self.peripherals[edge.timer].dev.irq_line_level(),
+                ) {
+                    self.reconcile_line_level(irq, level);
+                }
+            }
         }
     }
 
@@ -145,7 +155,7 @@ impl SystemBus {
         }
         if let Some(irq) = p.irq {
             if p.dev.irq_line_level() == Some(false) {
-                super::reconcile_nvic_level(&self.nvic, irq, false);
+                self.reconcile_line_level(irq, false);
             }
         }
         p.dev.irq_line_levels(&mut |irq, level| {
@@ -340,6 +350,9 @@ impl SystemBus {
         // A select pad of an analog mux may have moved: re-route before the
         // next instruction can start a conversion.
         self.route_analog_muxes_on_write(idx);
+        if self.remap_block == Some(idx) {
+            self.remap_changed();
+        }
         // A store to a GPIO input register (a device driving a pad through
         // `drive_idr_bit`) is an external edge like `set_gpio_input`.
         if self.timer_capture_wired {
@@ -352,6 +365,26 @@ impl SystemBus {
             return;
         }
         self.service_edge_driven_gpio_devices_cold(idx);
+    }
+
+    /// A remap register was written: pads may have changed hands with no write
+    /// to any GPIO port (ch32fun's tim2_pwm_remap flips AFIO_PCFR1.TIM2_RM
+    /// while TIM2 runs). Every port re-registers its watched pads and
+    /// observers with the lines that drive them now and reports the timer
+    /// inputs a newly live route sees, and those edges are delivered.
+    #[inline(never)]
+    pub(crate) fn remap_changed(&mut self) {
+        for i in 0..self.peripherals.len() {
+            if i == self.remap_block.unwrap_or(usize::MAX) {
+                continue;
+            }
+            if let Some(port) = self.peripherals[i].dev.pins_mut() {
+                port.routes_changed();
+            }
+            if self.timer_capture_wired {
+                self.deliver_timer_input_edges(i);
+            }
+        }
     }
 
     /// The body. Outlined so a bus with no GPIO devices pays one length check.

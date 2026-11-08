@@ -1,0 +1,28 @@
+{
+  "id": "max7219",
+  "device_type": "led-matrix",
+  "declared": true,
+  "attachment": {
+    "transport": "spi",
+    "bus": "spi1",
+    "cs_pin": "PD0"
+  },
+  "artifacts": [
+    {
+      "kind": "framebuffer",
+      "id": "max7219",
+      "meta": {
+        "format": "max7219_rows",
+        "generation": 6253320882722783797,
+        "h": 8,
+        "ink_bytes": 7,
+        "intensity": 15,
+        "lit_pixels": 12,
+        "powered": true,
+        "scan_limit": 7,
+        "shutdown": false,
+        "w": 8
+      }
+    }
+  ]
+}

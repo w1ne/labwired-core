@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      238,
+      1,
+      134218916,
+      0,
+      1073874944,
+      536870912,
+      8192,
+      537001960,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537001960,
+      134218883,
+      134218894
+    ],
+    "pc": 134218894,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "f901bbf5e350238cd311e8067eba34ac0d22b5c9f7e78fc45913edb40eed95ae",
+  "config": {
+    "firmware": "examples/stm32f411ceu6-blackpill/../../target/thumbv7em-none-eabi/release/firmware-stm32f411-blackpill-smoke",
+    "system": "examples/stm32f411ceu6-blackpill/../../configs/systems/stm32f411ceu6-blackpill-led-smoke.yaml",
+    "script": "examples/stm32f411ceu6-blackpill/led-onboarding-smoke.yaml"
+  }
+}

@@ -1,0 +1,37 @@
+# Focused WeAct STM32F411CEU6 Black Pill profile for the PC13 user-LED smoke.
+# Only reset/boot memory, RCC and GPIOC are declared; all unrelated F411
+# peripherals, including zero-answering stubs in the broad chip descriptor,
+# are absent from this board smoke.
+#
+# Memory and register layout follow ST DS10314 / RM0383 and the existing
+# STM32F411 model. GPIOC's AHB1 gate is retained so firmware must enable GPIOC.
+name: "stm32f411ceu6-blackpill-led-smoke"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 16_000_000
+
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+
+pins:
+  PC13: { gpio: "gpioc", bit: 13 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40020800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 2 }

@@ -1,0 +1,61 @@
+# Focused STM32L011K4T6 profile for NUCLEO-L011K4.
+# Only reset clock control, GPIOA/B, and USART2 used by the smoke are exposed.
+# Other STM32L011 blocks remain unsupported in this profile.
+#
+# Sources: ST DS10685 for STM32L011K4 memory/core and alternate functions,
+# RM0377 for the L0x1 RCC/GPIO/USART register map, and UM1956 Rev 6 for the
+# NUCLEO-L011K4 PB3 user LED and ST-LINK VCP wiring. The UART model captures
+# peripheral TX bytes; this profile does not simulate the ST-LINK USB bridge.
+
+name: "stm32l011k4-nucleo-smoke"
+arch: "arm"
+core: "cortex-m0+"
+registers_count: 80
+# Firmware selects HSI16 from the L0 reset MSI clock before configuring USART2.
+cpu_hz: 16_000_000
+
+flash:
+  base: 0x08000000
+  size: "16KB"
+ram:
+  base: 0x20000000
+  size: "2KB"
+
+# Only pads exercised or used by the board VCP path are included.
+pins:
+  PA2: { gpio: "gpioa", bit: 2, functions: [{ type: gpio, peripheral: gpioa }, { type: uart, peripheral: uart2, role: tx, af: 4 }] }
+  PA15: { gpio: "gpioa", bit: 15, functions: [{ type: gpio, peripheral: gpioa }, { type: uart, peripheral: uart2, role: rx, af: 4 }] }
+  PB3: { gpio: "gpiob", bit: 3, functions: [{ type: gpio, peripheral: gpiob }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32l0"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x50000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "iopenr", bit: 0 }
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x50000400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "iopenr", bit: 1 }
+
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 28
+    config:
+      profile: "stm32v2"
+    clock: { reg: "apb1enr", bit: 17 }

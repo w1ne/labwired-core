@@ -1,0 +1,1348 @@
+{
+  "summary": {
+    "targets_total": 46,
+    "pass": 46,
+    "fail": 0,
+    "median_elapsed_ms": 2040,
+    "threshold_seconds": 3600,
+    "threshold_met": 46,
+    "median_elapsed_seconds": 2.04
+  },
+  "targets": [
+    {
+      "target_id": "adafruit-feather-rp2040",
+      "status": "pass",
+      "crate": "firmware-feather-rp2040-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/adafruit-feather-rp2040/io-smoke.yaml",
+      "system": "configs/systems/adafruit-feather-rp2040.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T17:53:26Z",
+      "finished_at_utc": "2026-11-03T17:53:27Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1026,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.302,
+        "build_firmware": 0.426,
+        "run_smoke": 0.287
+      },
+      "stages_ms": {
+        "build_cli": 302,
+        "build_firmware": 426,
+        "run_smoke": 287
+      },
+      "_artifact_path": "examples/adafruit-feather-rp2040/evidence"
+    },
+    {
+      "target_id": "arduino-mega-2560",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/arduino-mega-2560-io/io-smoke.yaml",
+      "system": "examples/arduino-mega-2560-io/system.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T17:00:48Z",
+      "finished_at_utc": "2026-11-03T17:00:50Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2178,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.275,
+        "build_firmware": 0.874,
+        "run_smoke": 1.018
+      },
+      "stages_ms": {
+        "build_cli": 275,
+        "build_firmware": 874,
+        "run_smoke": 1018
+      },
+      "firmware_build_script": "examples/arduino-mega-2560-io/ci/build-firmware.sh",
+      "_artifact_path": "examples/arduino-mega-2560-io/evidence"
+    },
+    {
+      "target_id": "arduino-nano-rp2040-connect",
+      "status": "pass",
+      "crate": "firmware-nano-rp2040-connect-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/arduino-nano-rp2040-connect/io-smoke.yaml",
+      "system": "configs/systems/arduino-nano-rp2040-connect.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T18:32:21Z",
+      "finished_at_utc": "2026-11-03T18:32:37Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16082,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.307,
+        "build_firmware": 0.447,
+        "run_smoke": 0.316
+      },
+      "stages_ms": {
+        "build_cli": 15307,
+        "build_firmware": 447,
+        "run_smoke": 316
+      },
+      "_artifact_path": "examples/arduino-nano-rp2040-connect/evidence"
+    },
+    {
+      "target_id": "arduino-uno-r4-minima",
+      "status": "pass",
+      "crate": "firmware-ra4m1-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/arduino-uno-r4-minima/io-smoke.yaml",
+      "system": "configs/systems/arduino-uno-r4-minima.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T11:57:34Z",
+      "finished_at_utc": "2026-11-03T11:57:35Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1024,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.286,
+        "build_firmware": 0.475,
+        "run_smoke": 0.253
+      },
+      "stages_ms": {
+        "build_cli": 286,
+        "build_firmware": 475,
+        "run_smoke": 253
+      },
+      "_artifact_path": "examples/arduino-uno-r4-minima/evidence"
+    },
+    {
+      "target_id": "arduino-uno-r4-wifi",
+      "status": "pass",
+      "crate": "firmware-uno-r4-wifi-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/arduino-uno-r4-wifi/io-smoke.yaml",
+      "system": "configs/systems/arduino-uno-r4-wifi.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T21:33:18Z",
+      "finished_at_utc": "2026-11-03T21:33:32Z",
+      "elapsed_seconds": 15,
+      "elapsed_ms": 14662,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.081,
+        "build_firmware": 0.311,
+        "run_smoke": 0.26
+      },
+      "stages_ms": {
+        "build_cli": 14081,
+        "build_firmware": 311,
+        "run_smoke": 260
+      },
+      "_artifact_path": "examples/arduino-uno-r4-wifi/evidence"
+    },
+    {
+      "target_id": "esp32c6-devkitc",
+      "status": "pass",
+      "crate": "firmware-esp32c6-demo",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32c6-devkitc/io-smoke.yaml",
+      "system": "configs/systems/esp32c6-devkitc.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T18:45:28Z",
+      "finished_at_utc": "2026-11-03T18:45:30Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2052,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.288,
+        "build_firmware": 1.095,
+        "run_smoke": 0.659
+      },
+      "stages_ms": {
+        "build_cli": 288,
+        "build_firmware": 1095,
+        "run_smoke": 659
+      },
+      "_artifact_path": "examples/esp32c6-devkitc/evidence"
+    },
+    {
+      "target_id": "feather-m4-express",
+      "status": "pass",
+      "crate": "firmware-feather-m4-express-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/feather-m4-express/io-smoke.yaml",
+      "system": "configs/systems/feather-m4-express.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T19:40:23Z",
+      "finished_at_utc": "2026-11-03T19:40:24Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 975,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.339,
+        "build_firmware": 0.374,
+        "run_smoke": 0.253
+      },
+      "stages_ms": {
+        "build_cli": 339,
+        "build_firmware": 374,
+        "run_smoke": 253
+      },
+      "_artifact_path": "examples/feather-m4-express/evidence"
+    },
+    {
+      "target_id": "metro-m4",
+      "status": "pass",
+      "crate": "firmware-atsamd51-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/metro-m4/onboarding-smoke.yaml",
+      "system": "configs/systems/metro-m4.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T14:24:44Z",
+      "finished_at_utc": "2026-11-03T14:24:45Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 899,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.265,
+        "build_firmware": 0.311,
+        "run_smoke": 0.312
+      },
+      "stages_ms": {
+        "build_cli": 265,
+        "build_firmware": 311,
+        "run_smoke": 312
+      },
+      "_artifact_path": "examples/metro-m4/evidence"
+    },
+    {
+      "target_id": "nrf52-dk",
+      "status": "pass",
+      "crate": "firmware-nrf52-dk-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nrf52-dk/io-smoke.yaml",
+      "system": "configs/systems/nrf52-dk.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T17:11:16Z",
+      "finished_at_utc": "2026-11-03T17:11:19Z",
+      "elapsed_seconds": 4,
+      "elapsed_ms": 3208,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.276,
+        "build_firmware": 0.807,
+        "run_smoke": 2.114
+      },
+      "stages_ms": {
+        "build_cli": 276,
+        "build_firmware": 807,
+        "run_smoke": 2114
+      },
+      "_artifact_path": "examples/nrf52-dk/evidence"
+    },
+    {
+      "target_id": "nucleo-c071rb",
+      "status": "pass",
+      "crate": "firmware-nucleo-c071rb-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-c071rb/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-c071rb.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T20:17:46Z",
+      "finished_at_utc": "2026-11-03T20:18:40Z",
+      "elapsed_seconds": 54,
+      "elapsed_ms": 53134,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 52.448,
+        "build_firmware": 0.423,
+        "run_smoke": 0.253
+      },
+      "stages_ms": {
+        "build_cli": 52448,
+        "build_firmware": 423,
+        "run_smoke": 253
+      },
+      "_artifact_path": "examples/nucleo-c071rb/evidence"
+    },
+    {
+      "target_id": "nucleo-f030r8",
+      "status": "pass",
+      "crate": "firmware-nucleo-f030r8-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-f030r8/io-smoke.yaml",
+      "system": "configs/systems/nucleo-f030r8.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T19:12:17Z",
+      "finished_at_utc": "2026-11-03T19:12:32Z",
+      "elapsed_seconds": 15,
+      "elapsed_ms": 14381,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 13.803,
+        "build_firmware": 0.307,
+        "run_smoke": 0.26
+      },
+      "stages_ms": {
+        "build_cli": 13803,
+        "build_firmware": 307,
+        "run_smoke": 260
+      },
+      "_artifact_path": "examples/nucleo-f030r8/evidence"
+    },
+    {
+      "target_id": "nucleo-f072rb",
+      "status": "pass",
+      "crate": "firmware-nucleo-f072rb-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-f072rb/io-smoke.yaml",
+      "system": "configs/systems/nucleo-f072rb.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T12:09:50Z",
+      "finished_at_utc": "2026-11-03T12:09:51Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 828,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.264,
+        "build_firmware": 0.298,
+        "run_smoke": 0.256
+      },
+      "stages_ms": {
+        "build_cli": 264,
+        "build_firmware": 298,
+        "run_smoke": 256
+      },
+      "_artifact_path": "examples/nucleo-f072rb/evidence"
+    },
+    {
+      "target_id": "nucleo-f091rc",
+      "status": "pass",
+      "crate": "firmware-nucleo-f091rc-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-f091rc/io-smoke.yaml",
+      "system": "configs/systems/nucleo-f091rc.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T20:59:57Z",
+      "finished_at_utc": "2026-11-03T21:00:13Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15741,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.938,
+        "build_firmware": 0.534,
+        "run_smoke": 0.257
+      },
+      "stages_ms": {
+        "build_cli": 14938,
+        "build_firmware": 534,
+        "run_smoke": 257
+      },
+      "_artifact_path": "examples/nucleo-f091rc/evidence"
+    },
+    {
+      "target_id": "nucleo-f103rb",
+      "status": "pass",
+      "crate": "firmware-nucleo-f103rb-smoke",
+      "target_triple": "thumbv7m-none-eabi",
+      "script": "examples/nucleo-f103rb/io-smoke.yaml",
+      "system": "configs/systems/nucleo-f103rb.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T17:40:10Z",
+      "finished_at_utc": "2026-11-03T17:40:25Z",
+      "elapsed_seconds": 15,
+      "elapsed_ms": 14972,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.516,
+        "build_firmware": 0.143,
+        "run_smoke": 0.304
+      },
+      "stages_ms": {
+        "build_cli": 14516,
+        "build_firmware": 143,
+        "run_smoke": 304
+      },
+      "_artifact_path": "examples/nucleo-f103rb/evidence"
+    },
+    {
+      "target_id": "nucleo-f303re",
+      "status": "pass",
+      "crate": "firmware-nucleo-f303re-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f303re/io-smoke.yaml",
+      "system": "configs/systems/nucleo-f303re.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T19:26:21Z",
+      "finished_at_utc": "2026-11-03T19:26:36Z",
+      "elapsed_seconds": 15,
+      "elapsed_ms": 14501,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.092,
+        "build_firmware": 0.147,
+        "run_smoke": 0.252
+      },
+      "stages_ms": {
+        "build_cli": 14092,
+        "build_firmware": 147,
+        "run_smoke": 252
+      },
+      "_artifact_path": "examples/nucleo-f303re/evidence"
+    },
+    {
+      "target_id": "nucleo-f401re",
+      "status": "pass",
+      "crate": "firmware-f401-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f401re/io-smoke.yaml",
+      "system": "configs/systems/nucleo-f401re.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T11:16:21Z",
+      "finished_at_utc": "2026-11-03T11:16:23Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1888,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.433,
+        "build_firmware": 0.539,
+        "run_smoke": 0.905
+      },
+      "stages_ms": {
+        "build_cli": 433,
+        "build_firmware": 539,
+        "run_smoke": 905
+      },
+      "_artifact_path": "examples/nucleo-f401re/evidence"
+    },
+    {
+      "target_id": "nucleo-f411re",
+      "status": "pass",
+      "crate": "firmware-nucleo-f411re-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f411re/io-smoke.yaml",
+      "system": "configs/systems/nucleo-f411re.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T12:57:59Z",
+      "finished_at_utc": "2026-11-03T12:58:15Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15715,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.236,
+        "build_firmware": 0.145,
+        "run_smoke": 0.323
+      },
+      "stages_ms": {
+        "build_cli": 15236,
+        "build_firmware": 145,
+        "run_smoke": 323
+      },
+      "_artifact_path": "examples/nucleo-f411re/evidence"
+    },
+    {
+      "target_id": "nucleo-f439zi",
+      "status": "pass",
+      "crate": "firmware-nucleo-f439zi-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f439zi/io-smoke.yaml",
+      "system": "configs/systems/nucleo-f439zi.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T19:51:14Z",
+      "finished_at_utc": "2026-11-03T19:51:29Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15078,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.642,
+        "build_firmware": 0.147,
+        "run_smoke": 0.279
+      },
+      "stages_ms": {
+        "build_cli": 14642,
+        "build_firmware": 147,
+        "run_smoke": 279
+      },
+      "_artifact_path": "examples/nucleo-f439zi/evidence"
+    },
+    {
+      "target_id": "nucleo-f446re",
+      "status": "pass",
+      "crate": "firmware-f446-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f446re/io-smoke.yaml",
+      "system": "configs/systems/nucleo-f446re.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T11:34:15Z",
+      "finished_at_utc": "2026-11-03T11:34:15Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 692,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.267,
+        "build_firmware": 0.158,
+        "run_smoke": 0.255
+      },
+      "stages_ms": {
+        "build_cli": 267,
+        "build_firmware": 158,
+        "run_smoke": 255
+      },
+      "_artifact_path": "examples/nucleo-f446re/evidence"
+    },
+    {
+      "target_id": "nucleo-f767zi",
+      "status": "pass",
+      "crate": "tier1-fixture-stm32f767",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f767zi/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-f767zi.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T12:43:58Z",
+      "finished_at_utc": "2026-11-03T12:44:00Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2028,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.301,
+        "build_firmware": 0.041,
+        "run_smoke": 1.67
+      },
+      "stages_ms": {
+        "build_cli": 301,
+        "build_firmware": 41,
+        "run_smoke": 1670
+      },
+      "_artifact_path": "examples/nucleo-f767zi/evidence"
+    },
+    {
+      "target_id": "nucleo-g070rb",
+      "status": "pass",
+      "crate": "firmware-stm32g0-demo",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-g070rb/io-smoke.yaml",
+      "system": "configs/systems/nucleo-g070rb.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T11:47:01Z",
+      "finished_at_utc": "2026-11-03T11:47:02Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1451,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.313,
+        "build_firmware": 0.747,
+        "run_smoke": 0.384
+      },
+      "stages_ms": {
+        "build_cli": 313,
+        "build_firmware": 747,
+        "run_smoke": 384
+      },
+      "_artifact_path": "examples/nucleo-g070rb/evidence"
+    },
+    {
+      "target_id": "nucleo-g071rb",
+      "status": "pass",
+      "crate": "firmware-nucleo-g071rb-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-g071rb/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-g071rb-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T13:11:09Z",
+      "finished_at_utc": "2026-11-03T13:11:24Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15261,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.604,
+        "build_firmware": 0.3,
+        "run_smoke": 0.346
+      },
+      "stages_ms": {
+        "build_cli": 14604,
+        "build_firmware": 300,
+        "run_smoke": 346
+      },
+      "_artifact_path": "examples/nucleo-g071rb/evidence"
+    },
+    {
+      "target_id": "nucleo-g0b1re",
+      "status": "pass",
+      "crate": "firmware-nucleo-g0b1re-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-g0b1re/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-g0b1re-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T13:24:12Z",
+      "finished_at_utc": "2026-11-03T13:24:13Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 709,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.27,
+        "build_firmware": 0.143,
+        "run_smoke": 0.287
+      },
+      "stages_ms": {
+        "build_cli": 270,
+        "build_firmware": 143,
+        "run_smoke": 287
+      },
+      "_artifact_path": "examples/nucleo-g0b1re/evidence/no-stub-smoke"
+    },
+    {
+      "target_id": "nucleo-g0b1re",
+      "status": "pass",
+      "crate": "firmware-stm32g0-demo",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-g0b1re/io-smoke.yaml",
+      "system": "configs/systems/nucleo-g0b1re.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T10:05:01Z",
+      "finished_at_utc": "2026-11-03T10:05:01Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 833,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.287,
+        "build_firmware": 0.162,
+        "run_smoke": 0.373
+      },
+      "stages_ms": {
+        "build_cli": 287,
+        "build_firmware": 162,
+        "run_smoke": 373
+      },
+      "_artifact_path": "examples/nucleo-g0b1re/evidence"
+    },
+    {
+      "target_id": "nucleo-g431kb",
+      "status": "pass",
+      "crate": "firmware-nucleo-g431kb-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-g431kb/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-g431kb-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T13:36:33Z",
+      "finished_at_utc": "2026-11-03T13:36:50Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16597,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.854,
+        "build_firmware": 0.453,
+        "run_smoke": 0.279
+      },
+      "stages_ms": {
+        "build_cli": 15854,
+        "build_firmware": 453,
+        "run_smoke": 279
+      },
+      "_artifact_path": "examples/nucleo-g431kb/evidence"
+    },
+    {
+      "target_id": "nucleo-g431rb",
+      "status": "pass",
+      "crate": "firmware-nucleo-g431rb-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-g431rb/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-g431rb.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T15:18:46Z",
+      "finished_at_utc": "2026-11-03T15:18:47Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 765,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.286,
+        "build_firmware": 0.157,
+        "run_smoke": 0.312
+      },
+      "stages_ms": {
+        "build_cli": 286,
+        "build_firmware": 157,
+        "run_smoke": 312
+      },
+      "_artifact_path": "examples/nucleo-g431rb/evidence"
+    },
+    {
+      "target_id": "nucleo-g491re",
+      "status": "pass",
+      "crate": "firmware-nucleo-g491re-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-g491re/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-g491re.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T21:48:43Z",
+      "finished_at_utc": "2026-11-03T21:48:59Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16077,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.449,
+        "build_firmware": 0.291,
+        "run_smoke": 0.326
+      },
+      "stages_ms": {
+        "build_cli": 15449,
+        "build_firmware": 291,
+        "run_smoke": 326
+      },
+      "_artifact_path": "examples/nucleo-g491re/evidence"
+    },
+    {
+      "target_id": "nucleo-h503rb",
+      "status": "pass",
+      "crate": "firmware-nucleo-h503rb-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-h503rb/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-h503rb.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T20:02:32Z",
+      "finished_at_utc": "2026-11-03T20:02:33Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 841,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.279,
+        "build_firmware": 0.291,
+        "run_smoke": 0.258
+      },
+      "stages_ms": {
+        "build_cli": 279,
+        "build_firmware": 291,
+        "run_smoke": 258
+      },
+      "_artifact_path": "examples/nucleo-h503rb/evidence"
+    },
+    {
+      "target_id": "nucleo-h723zg",
+      "status": "pass",
+      "crate": "firmware-nucleo-h723zg-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-h723zg/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-h723zg.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T20:30:26Z",
+      "finished_at_utc": "2026-11-03T20:30:27Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 850,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.277,
+        "build_firmware": 0.296,
+        "run_smoke": 0.267
+      },
+      "stages_ms": {
+        "build_cli": 277,
+        "build_firmware": 296,
+        "run_smoke": 267
+      },
+      "_artifact_path": "examples/nucleo-h723zg/evidence"
+    },
+    {
+      "target_id": "nucleo-l073rz",
+      "status": "pass",
+      "crate": "firmware-l073-demo",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-l073rz/io-smoke.yaml",
+      "system": "examples/nucleo-l073rz/system.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T12:28:11Z",
+      "finished_at_utc": "2026-11-03T12:28:12Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1054,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.269,
+        "build_firmware": 0.145,
+        "run_smoke": 0.629
+      },
+      "stages_ms": {
+        "build_cli": 269,
+        "build_firmware": 145,
+        "run_smoke": 629
+      },
+      "_artifact_path": "examples/nucleo-l073rz/evidence"
+    },
+    {
+      "target_id": "nucleo-l452re-p",
+      "status": "pass",
+      "crate": "firmware-nucleo-l452re-p-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-l452re-p/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-l452re-p-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T15:54:52Z",
+      "finished_at_utc": "2026-11-03T15:54:53Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 888,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.279,
+        "build_firmware": 0.294,
+        "run_smoke": 0.305
+      },
+      "stages_ms": {
+        "build_cli": 279,
+        "build_firmware": 294,
+        "run_smoke": 305
+      },
+      "_artifact_path": "examples/nucleo-l452re-p/evidence"
+    },
+    {
+      "target_id": "nucleo-l476rg",
+      "status": "pass",
+      "crate": "firmware-l476-demo",
+      "target_triple": "thumbv7em-none-eabihf",
+      "script": "examples/nucleo-l476rg/io-smoke.yaml",
+      "system": "configs/systems/nucleo-l476rg.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T16:18:41Z",
+      "finished_at_utc": "2026-11-03T16:18:42Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 941,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.286,
+        "build_firmware": 0.147,
+        "run_smoke": 0.496
+      },
+      "stages_ms": {
+        "build_cli": 286,
+        "build_firmware": 147,
+        "run_smoke": 496
+      },
+      "_artifact_path": "examples/nucleo-l476rg/evidence"
+    },
+    {
+      "target_id": "nucleo-u545re",
+      "status": "pass",
+      "crate": "firmware-nucleo-u545re-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-u545re/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-u545re-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T15:32:27Z",
+      "finished_at_utc": "2026-11-03T15:32:28Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 896,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.3,
+        "build_firmware": 0.299,
+        "run_smoke": 0.287
+      },
+      "stages_ms": {
+        "build_cli": 300,
+        "build_firmware": 299,
+        "run_smoke": 287
+      },
+      "_artifact_path": "examples/nucleo-u545re/evidence"
+    },
+    {
+      "target_id": "stm32u575-nucleo",
+      "status": "pass",
+      "crate": "firmware-stm32u575-demo",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-u575zi/io-smoke.yaml",
+      "system": "configs/systems/nucleo-u575zi.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T16:33:36Z",
+      "finished_at_utc": "2026-11-03T16:33:37Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 938,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.273,
+        "build_firmware": 0.144,
+        "run_smoke": 0.509
+      },
+      "stages_ms": {
+        "build_cli": 273,
+        "build_firmware": 144,
+        "run_smoke": 509
+      },
+      "_artifact_path": "examples/nucleo-u575zi/evidence"
+    },
+    {
+      "target_id": "nucleo-wb55rg",
+      "status": "pass",
+      "crate": "firmware-nucleo-wb55rg-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-wb55rg/io-smoke.yaml",
+      "system": "configs/systems/mb1355c.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T19:01:05Z",
+      "finished_at_utc": "2026-11-03T19:01:22Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17103,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.333,
+        "build_firmware": 0.149,
+        "run_smoke": 1.611
+      },
+      "stages_ms": {
+        "build_cli": 15333,
+        "build_firmware": 149,
+        "run_smoke": 1611
+      },
+      "_artifact_path": "examples/nucleo-wb55rg/evidence"
+    },
+    {
+      "target_id": "nucleo-wba55cg",
+      "status": "pass",
+      "crate": "firmware-nucleo-wba55cg-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-wba55cg/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-wba55cg-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T16:07:44Z",
+      "finished_at_utc": "2026-11-03T16:07:45Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 876,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.275,
+        "build_firmware": 0.295,
+        "run_smoke": 0.297
+      },
+      "stages_ms": {
+        "build_cli": 275,
+        "build_firmware": 295,
+        "run_smoke": 297
+      },
+      "_artifact_path": "examples/nucleo-wba55cg/evidence"
+    },
+    {
+      "target_id": "nucleo-g474re",
+      "status": "pass",
+      "crate": "firmware-nucleo_g474re-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo_g474re/uart-smoke.yaml",
+      "system": "configs/systems/nucleo_g474re.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T10:47:41Z",
+      "finished_at_utc": "2026-11-03T10:47:57Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15619,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.771,
+        "build_firmware": 0.025,
+        "run_smoke": 0.812
+      },
+      "stages_ms": {
+        "build_cli": 14771,
+        "build_firmware": 25,
+        "run_smoke": 812
+      },
+      "_artifact_path": "examples/nucleo_g474re/evidence"
+    },
+    {
+      "target_id": "pico",
+      "status": "pass",
+      "crate": "firmware-rp2040-demo",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/pico/io-smoke.yaml",
+      "system": "configs/systems/rp2040-pico.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T10:59:51Z",
+      "finished_at_utc": "2026-11-03T10:59:52Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1231,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.267,
+        "build_firmware": 0.497,
+        "run_smoke": 0.458
+      },
+      "stages_ms": {
+        "build_cli": 267,
+        "build_firmware": 497,
+        "run_smoke": 458
+      },
+      "_artifact_path": "examples/pico/evidence"
+    },
+    {
+      "target_id": "pico2",
+      "status": "pass",
+      "crate": "firmware-pico2-demo",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/pico2/io-smoke.yaml",
+      "system": "configs/systems/pico2.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T10:34:14Z",
+      "finished_at_utc": "2026-11-03T10:34:15Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1082,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.294,
+        "build_firmware": 0.507,
+        "run_smoke": 0.27
+      },
+      "stages_ms": {
+        "build_cli": 294,
+        "build_firmware": 507,
+        "run_smoke": 270
+      },
+      "_artifact_path": "examples/pico2/evidence"
+    },
+    {
+      "target_id": "raspberry-pi-pico-2-w",
+      "status": "pass",
+      "crate": "firmware-pico2-w-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/raspberry-pi-pico-2-w/io-smoke.yaml",
+      "system": "configs/systems/raspberry-pi-pico-2-w.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T18:20:45Z",
+      "finished_at_utc": "2026-11-03T18:21:02Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16615,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.826,
+        "build_firmware": 0.494,
+        "run_smoke": 0.283
+      },
+      "stages_ms": {
+        "build_cli": 15826,
+        "build_firmware": 494,
+        "run_smoke": 283
+      },
+      "_artifact_path": "examples/raspberry-pi-pico-2-w/evidence"
+    },
+    {
+      "target_id": "raspberry-pi-pico-w",
+      "status": "pass",
+      "crate": "firmware-pico-w-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/raspberry-pi-pico-w/io-smoke.yaml",
+      "system": "configs/systems/raspberry-pi-pico-w.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T18:03:02Z",
+      "finished_at_utc": "2026-11-03T18:03:18Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16433,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.713,
+        "build_firmware": 0.424,
+        "run_smoke": 0.286
+      },
+      "stages_ms": {
+        "build_cli": 15713,
+        "build_firmware": 424,
+        "run_smoke": 286
+      },
+      "_artifact_path": "examples/raspberry-pi-pico-w/evidence"
+    },
+    {
+      "target_id": "seeed-xiao-rp2040",
+      "status": "pass",
+      "crate": "firmware-xiao-rp2040-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/seeed-xiao-rp2040/io-smoke.yaml",
+      "system": "configs/systems/seeed-xiao-rp2040.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T21:14:01Z",
+      "finished_at_utc": "2026-11-03T21:14:18Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17084,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.315,
+        "build_firmware": 0.444,
+        "run_smoke": 0.313
+      },
+      "stages_ms": {
+        "build_cli": 16315,
+        "build_firmware": 444,
+        "run_smoke": 313
+      },
+      "_artifact_path": "examples/seeed-xiao-rp2040/evidence"
+    },
+    {
+      "target_id": "stm32f4-discovery",
+      "status": "pass",
+      "crate": "firmware-f4-discovery-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/stm32f4-discovery/io-smoke.yaml",
+      "system": "configs/systems/stm32f4-discovery.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T17:27:50Z",
+      "finished_at_utc": "2026-11-03T17:27:53Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2284,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.269,
+        "build_firmware": 0.339,
+        "run_smoke": 1.665
+      },
+      "stages_ms": {
+        "build_cli": 269,
+        "build_firmware": 339,
+        "run_smoke": 1665
+      },
+      "_artifact_path": "examples/stm32f4-discovery/evidence"
+    },
+    {
+      "target_id": "stm32f746-discovery",
+      "status": "pass",
+      "crate": "firmware-stm32f746-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/stm32f7-discovery/io-smoke.yaml",
+      "system": "configs/systems/stm32f7-discovery.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T16:44:38Z",
+      "finished_at_utc": "2026-11-03T16:44:39Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1123,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.412,
+        "build_firmware": 0.444,
+        "run_smoke": 0.257
+      },
+      "stages_ms": {
+        "build_cli": 412,
+        "build_firmware": 444,
+        "run_smoke": 257
+      },
+      "_artifact_path": "examples/stm32f7-discovery/evidence"
+    },
+    {
+      "target_id": "stm32g071b-disco",
+      "status": "pass",
+      "crate": "firmware-stm32g071b-disco-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/stm32g071b-disco/onboarding-smoke.yaml",
+      "system": "configs/systems/stm32g071b-disco.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T14:56:24Z",
+      "finished_at_utc": "2026-11-03T14:56:41Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17351,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.597,
+        "build_firmware": 0.482,
+        "run_smoke": 0.26
+      },
+      "stages_ms": {
+        "build_cli": 16597,
+        "build_firmware": 482,
+        "run_smoke": 260
+      },
+      "_artifact_path": "examples/stm32g071b-disco/evidence"
+    },
+    {
+      "target_id": "xiao-nrf54l15",
+      "status": "pass",
+      "crate": "firmware-xiao-nrf54l15-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/xiao-nrf54l15/io-smoke.yaml",
+      "system": "configs/systems/xiao-nrf54l15.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T20:42:11Z",
+      "finished_at_utc": "2026-11-03T20:42:29Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17659,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.945,
+        "build_firmware": 0.449,
+        "run_smoke": 0.254
+      },
+      "stages_ms": {
+        "build_cli": 16945,
+        "build_firmware": 449,
+        "run_smoke": 254
+      },
+      "_artifact_path": "examples/xiao-nrf54l15/evidence"
+    }
+  ]
+}

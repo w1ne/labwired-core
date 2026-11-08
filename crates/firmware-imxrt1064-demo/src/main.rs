@@ -4,8 +4,10 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 //
-// i.MX RT106x / Teensy 4.1 smoke: ungating CCM clocks, print OK\n via LPUART6
-// DATA, toggle GPIO2 pin 3 (LED) via DR_TOGGLE. Bare-register — no HAL.
+// Internal i.MX RT106x peripheral fixture: ungate CCM clocks, print OK\n via
+// LPUART6 DATA, toggle GPIO2 pin 3 via DR_TOGGLE. This is not board pin-route
+// evidence because the IOMUXC alternate-function path is not modeled.
+// Bare-register — no HAL.
 // Soft-float thumbv7em-none-eabi. Same binary targets the LabWired model.
 
 #![no_std]

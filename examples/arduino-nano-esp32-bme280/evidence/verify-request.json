@@ -1,0 +1,38 @@
+{
+  "tool": "labwired_pcb_labwired_verify",
+  "board": "arduino-nano-esp32",
+  "target": "arduino-nano-esp32",
+  "language": "arduino",
+  "entryPath": "src/main.ino",
+  "diagram": {
+    "board": "arduino-nano-esp32",
+    "parts": [
+      {
+        "id": "mcu",
+        "type": "esp32-s3-devkitc-1",
+        "attrs": {
+          "internal_pullups": "GPIO11,GPIO12"
+        }
+      },
+      {
+        "id": "bme280",
+        "type": "bme280"
+      }
+    ],
+    "wires": [
+      { "from": { "part": "mcu", "pin": "GPIO11" }, "to": { "part": "bme280", "pin": "SDA" } },
+      { "from": { "part": "mcu", "pin": "GPIO12" }, "to": { "part": "bme280", "pin": "SCL" } },
+      { "from": { "part": "mcu", "pin": "3V3" }, "to": { "part": "bme280", "pin": "VCC" } },
+      { "from": { "part": "mcu", "pin": "GND" }, "to": { "part": "bme280", "pin": "GND" } },
+      { "from": { "part": "mcu", "pin": "3V3" }, "to": { "part": "bme280", "pin": "SDO" } }
+    ]
+  },
+  "oracle": {
+    "serial": [
+      { "contains": "BME280_ID=0x60" },
+      { "contains": "BME280_TEMP_RAW=0x082DC0" }
+    ]
+  },
+  "max_steps": 100000000,
+  "source_file": "../src/main.ino"
+}

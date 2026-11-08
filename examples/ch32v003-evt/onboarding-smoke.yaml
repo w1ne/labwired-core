@@ -1,0 +1,12 @@
+# Boot a freshly built RV32EC image and observe actual CH32V003 GPIO output.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/ch32v003f4p6-pd0-blinky.elf"
+  system: "../../configs/systems/ch32v003evt-gpio-smoke.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - gpio_edges:
+      pin: "gpiod:0"
+      min_edges: 8
+  - expected_stop_reason: max_steps

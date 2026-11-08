@@ -1,11 +1,13 @@
-# LabWired - NUCLEO-F103RB system manifest
+# LabWired - NUCLEO-F103RB smoke system manifest
 #
 # Board wiring per ST UM1724: LD2 (green user LED) on PA5, active high;
 # B1 (USER button) on PC13; and USART2 PA2/PA3 connected to the default
-# ST-LINK/V2-1 virtual COM port through SB13/SB14.
+# ST-LINK/V2-1 virtual COM port through SB13/SB14. The chip profile is scoped
+# to these modeled board paths; it deliberately omits USB and backup-register
+# stub windows from the wider STM32F103RB profile.
 
 name: "nucleo-f103rb"
-chip: "../chips/stm32f103rb.yaml"
+chip: "../chips/stm32f103rb-nucleo-smoke.yaml"
 external_devices: []
 board_io:
   - id: "led_ld2"
@@ -20,3 +22,7 @@ board_io:
     pin: 13
     signal: "input"
     active_high: false
+connectors:
+  - type: "uart"
+    peripheral: "uart2"
+    endpoint: "host_console"

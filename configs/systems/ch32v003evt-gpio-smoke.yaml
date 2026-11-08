@@ -1,0 +1,14 @@
+# WCH CH32V003 evaluation board profile with one explicitly attached external
+# LED test circuit on PD0. The vendor board exposes LEDs through its LED-row
+# header; the PD0 connection below is a smoke fixture, not a claim about a
+# factory-installed PD0 LED.
+name: ch32v003evt-gpio-smoke
+chip: ../chips/ch32v003f4p6-gpio-smoke.yaml
+external_devices: []
+board_io:
+  - id: external_led_pd0
+    kind: led
+    peripheral: gpiod
+    pin: 0
+    signal: output
+    active_high: true

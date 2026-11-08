@@ -5,6 +5,9 @@
 > capture on `/dev/ttyACM1`) and the simulator reproduces the byte
 > stream verbatim.
 
+The repository onboarding smoke and its committed evidence are documented in
+[`ONBOARDING.md`](ONBOARDING.md).
+
 ## Quick start
 
 ```bash

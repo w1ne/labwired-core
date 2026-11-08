@@ -1,0 +1,13 @@
+# NUCLEO-L452RE-P: LPUART1 VCP output plus LD4 (PB13) GPIO transitions.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-l452re-p-smoke"
+  system: "../../configs/systems/nucleo-l452re-p-smoke.yaml"
+limits:
+  max_steps: 512
+assertions:
+  - uart_contains: "NUCLEO_L452RE_P_OK"
+  - gpio_edges:
+      pin: "gpiob:13"
+      min_edges: 8
+  - expected_stop_reason: max_steps

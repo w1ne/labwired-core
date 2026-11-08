@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1073742156,
+      1341915120,
+      1341392896,
+      0,
+      0,
+      1341915136,
+      0,
+      0,
+      0,
+      1343094784,
+      256,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1073742684,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 1073742156,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 200000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 200000,
+  "cycles": 400152,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "d238cc2edbc632eeb4710150ea061d337c41538fc05ad9a9e17266163647da36",
+  "config": {
+    "firmware": "examples/esp32p4x-function-ev-board/../../target/riscv32imac-unknown-none-elf/release/firmware-esp32p4x-function-ev-board-smoke",
+    "system": "examples/esp32p4x-function-ev-board/../../configs/systems/esp32p4x-function-ev-board.yaml",
+    "script": "examples/esp32p4x-function-ev-board/onboarding-smoke.yaml"
+  }
+}

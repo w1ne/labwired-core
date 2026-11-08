@@ -1,0 +1,12 @@
+# ItsyBitsy RP2040 D13 / GP11: IO_BANK0 routes GP11 to SIO; SIO toggles the red LED.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-itsybitsy-rp2040-smoke"
+  system: "../../configs/systems/adafruit-itsybitsy-rp2040.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "sio:11"
+      min_edges: 8
+  - expected_stop_reason: max_steps

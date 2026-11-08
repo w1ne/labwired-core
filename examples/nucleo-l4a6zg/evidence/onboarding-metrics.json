@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-l4a6zg",
+  "status": "pass",
+  "crate": "firmware-nucleo-l4a6zg-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/nucleo-l4a6zg/onboarding-smoke.yaml",
+  "system": "configs/systems/nucleo-l4a6zg.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T04:18:09Z",
+  "finished_at_utc": "2026-11-04T04:18:25Z",
+  "elapsed_seconds": 17,
+  "elapsed_ms": 16241,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 15.373,
+    "build_firmware": 0.441,
+    "run_smoke": 0.417
+  },
+  "stages_ms": {
+    "build_cli": 15373,
+    "build_firmware": 441,
+    "run_smoke": 417
+  }
+}

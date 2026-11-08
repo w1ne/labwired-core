@@ -4,8 +4,9 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# BBC micro:bit v2 (Nordic nRF52833). UART is bridged to the interface MCU
-# (KL27 / DAPLink): target TX = P0.06, target RX = P1.08
+# BBC micro:bit v2 (Nordic nRF52833). The target UART is captured at the
+# host-console connector; the interface MCU / USB CDC bridge is abstracted.
+# Target TX = P0.06, target RX = P1.08
 # (tech.microbit.org/hardware/schematic/). The display is row/column
 # multiplexed; its GPIO/GPIOTE pad levels feed the matrix model.
 

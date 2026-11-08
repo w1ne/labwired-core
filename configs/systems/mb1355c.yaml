@@ -1,6 +1,11 @@
 schema_version: "1.0"
 name: "mb1355c"
 chip: "../chips/stm32wb55.yaml"
+debug_uart: "usart1"
+
+# Scope: STM32WB55 application core, user LEDs/buttons, and USART1 TX/RX on
+# the default ST-LINK VCP jumpers. The M0+ radio core and RF stacks are not
+# represented by this system profile.
 
 board_io:
   - id: "led_blue"

@@ -732,6 +732,24 @@ pub fn artifact_region_ink(
                 bytes[i] != 0 || bytes[i + 1] != 0 || bytes[i + 2] != 0
             })
         }
+        // One byte per channel in WS2812 wire order: G, R, B. Like the other
+        // emissive formats, any non-zero channel means the pixel is lit.
+        artifact_format::WS2812_GRB => {
+            let need = pw
+                .checked_mul(ph)
+                .and_then(|n| n.checked_mul(3))
+                .ok_or_else(|| "ws2812_grb geometry overflows payload length".to_string())?;
+            if bytes.len() < need {
+                return Err(format!(
+                    "ws2812_grb payload is {} bytes, expected {need} for {pw}x{ph}",
+                    bytes.len()
+                ));
+            }
+            Box::new(move |x, y| {
+                let i = (y * pw + x) * 3;
+                bytes[i] != 0 || bytes[i + 1] != 0 || bytes[i + 2] != 0
+            })
+        }
         // Page-addressed 1bpp: byte (page * width + column), bit = row within
         // the page, LSB = topmost row. Ground is unlit (bit clear).
         artifact_format::SSD1306_PAGE | artifact_format::SH1107_PAGE => {
@@ -746,6 +764,18 @@ pub fn artifact_region_ink(
                 let i = (y / 8) * pw + x;
                 (bytes[i] >> (y % 8)) & 1 != 0
             })
+        }
+        // One byte per matrix row, row 0 first, bit 7 = leftmost column (SEG
+        // A), as `get_led_matrix_framebuffer` documents. The model has already
+        // applied shutdown (all clear) and display test (all set).
+        artifact_format::MAX7219_ROWS => {
+            if pw > 8 || bytes.len() < ph {
+                return Err(format!(
+                    "{format} payload is {} bytes, expected one row byte per row of {pw}x{ph} (w <= 8)",
+                    bytes.len()
+                ));
+            }
+            Box::new(move |x, y| (bytes[y] >> (7 - x)) & 1 != 0)
         }
         // Black plane then red plane, each 1bpp row-major, MSB = leftmost
         // pixel. Ground is WHITE, so a set bit is blank and a CLEAR bit is ink;
@@ -773,12 +803,14 @@ pub fn artifact_region_ink(
             return Err(format!(
                 "display format `{other}` has no pixel decoder here, so this region cannot be \
                  measured. Reporting it as unpainted would make the assertion pass or fail on a \
-                 measurement that was never taken. Supported: {}, {}, {}, {}, {}",
+                 measurement that was never taken. Supported: {}, {}, {}, {}, {}, {}, {}",
                 artifact_format::RGB565_BE,
                 artifact_format::RGB888,
                 artifact_format::SSD1306_PAGE,
                 artifact_format::SH1107_PAGE,
                 artifact_format::EPAPER_TRICOLOR_PLANES,
+                artifact_format::WS2812_GRB,
+                artifact_format::MAX7219_ROWS,
             ))
         }
     };
@@ -818,8 +850,10 @@ pub fn rgb565_to_serial_color_rgb888(colour: u16) -> [u8; 3] {
 ///
 /// `rgb565_be` matches the packed big-endian value directly (ST7789 / ILI9341 /
 /// RM67162). `rgb888` matches the serial-color expansion of that same RGB565
-/// spelling (ILI9488 / ST7735R memory). Other formats return an error rather
-/// than a silent zero — same fail-closed rule as [`artifact_region_ink`].
+/// spelling (ILI9488 / ST7735R memory). `ws2812_grb` is converted from wire-order
+/// GRB to RGB565 for the user-facing colour clause. Other formats return an
+/// error rather than a silent zero — same fail-closed rule as
+/// [`artifact_region_ink`].
 pub fn artifact_region_colour_count(
     format: &str,
     meta: &serde_json::Value,
@@ -907,8 +941,34 @@ pub fn artifact_region_colour_count(
             }
             Ok(n)
         }
+        artifact_format::WS2812_GRB => {
+            let need = pw
+                .checked_mul(ph)
+                .and_then(|n| n.checked_mul(3))
+                .ok_or_else(|| "ws2812_grb geometry overflows payload length".to_string())?;
+            if bytes.len() < need {
+                return Err(format!(
+                    "ws2812_grb payload is {} bytes, expected {need} for {pw}x{ph}",
+                    bytes.len()
+                ));
+            }
+            let mut n = 0usize;
+            for y in region.y..(region.y + region.h) {
+                for x in region.x..(region.x + region.w) {
+                    let i = (y * pw + x) * 3;
+                    let green = u16::from(bytes[i]);
+                    let red = u16::from(bytes[i + 1]);
+                    let blue = u16::from(bytes[i + 2]);
+                    let pixel = ((red >> 3) << 11) | ((green >> 2) << 5) | (blue >> 3);
+                    if pixel == colour {
+                        n += 1;
+                    }
+                }
+            }
+            Ok(n)
+        }
         other => Err(format!(
-            "colour count is not implemented for framebuffer format '{other}' (only rgb565_be, rgb888)"
+            "colour count is not implemented for framebuffer format '{other}' (rgb565_be, rgb888 and ws2812_grb)"
         )),
     }
 }
@@ -1301,6 +1361,28 @@ mod tests {
     }
 
     #[test]
+    fn ws2812_grb_region_measures_ink_and_rgb565_colour() {
+        use artifact_format::WS2812_GRB;
+        let bytes = [0x00, 0xFF, 0x00, 0x00, 0x00, 0x00]; // red, black
+        let meta = meta(2, 1);
+        let region = PixelRegion {
+            x: 0,
+            y: 0,
+            w: 2,
+            h: 1,
+        };
+        assert_eq!(
+            artifact_region_ink(WS2812_GRB, &meta, &bytes, region).unwrap(),
+            (1, 2)
+        );
+        assert_eq!(
+            artifact_region_colour_count(WS2812_GRB, &meta, &bytes, region, 0xF800).unwrap(),
+            1,
+            "wire-order GRB red converts to RGB565 red"
+        );
+    }
+
+    #[test]
     fn rgb888_short_payload_is_an_error_not_an_unpainted_frame() {
         let result = artifact_region_ink(
             artifact_format::RGB888,
@@ -1406,6 +1488,41 @@ mod tests {
     }
 
     #[test]
+    fn max7219_rows_bit7_is_the_leftmost_column() {
+        use artifact_format::MAX7219_ROWS;
+        // Row 2 = 0b1000_0001: columns 0 and 7 lit.
+        let mut fb = [0u8; 8];
+        fb[2] = 0x81;
+        let at = |x, y| {
+            artifact_region_ink(
+                MAX7219_ROWS,
+                &meta(8, 8),
+                &fb,
+                PixelRegion { x, y, w: 1, h: 1 },
+            )
+            .unwrap()
+        };
+        assert_eq!(at(0, 2), (1, 1), "bit 7 is column 0");
+        assert_eq!(at(7, 2), (1, 1), "bit 0 is column 7");
+        assert_eq!(at(1, 2), (0, 1));
+        assert_eq!(at(0, 3), (0, 1), "the next row is its own byte");
+        let full = PixelRegion {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 8,
+        };
+        assert_eq!(
+            artifact_region_ink(MAX7219_ROWS, &meta(8, 8), &fb, full).unwrap(),
+            (2, 64)
+        );
+        assert!(
+            artifact_region_ink(MAX7219_ROWS, &meta(8, 8), &fb[..4], full).is_err(),
+            "a short payload is an error, not a dark half-panel"
+        );
+    }
+
+    #[test]
     fn epaper_counts_cleared_bits_as_ink() {
         use artifact_format::EPAPER_TRICOLOR_PLANES;
         let (w, h) = (128usize, 8usize);
@@ -1441,7 +1558,7 @@ mod tests {
     #[test]
     fn unknown_format_is_an_error_not_an_empty_measurement() {
         let err = artifact_region_ink(
-            artifact_format::WS2812_GRB,
+            "custom_unknown_format",
             &meta(8, 8),
             &[0u8; 64],
             PixelRegion {
@@ -1452,7 +1569,10 @@ mod tests {
             },
         )
         .unwrap_err();
-        assert!(err.contains("ws2812_grb"), "the gap names itself: {err}");
+        assert!(
+            err.contains("custom_unknown_format"),
+            "the gap names itself: {err}"
+        );
     }
 
     #[test]

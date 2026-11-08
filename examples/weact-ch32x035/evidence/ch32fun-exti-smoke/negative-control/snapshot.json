@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      576,
+      536891376,
+      536871932,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      720,
+      536870912,
+      16777216,
+      32768,
+      1048576,
+      3758153728,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 662,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 570,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 7999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 8000000,
+  "cycles": 16000088,
+  "instructions": 8000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 8000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 8000000
+    }
+  },
+  "limits": {
+    "max_steps": 8000000,
+    "max_cycles": 8000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 120000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "2c4785fdea9b0c6df8d8e12ab08a5db4dd079910d89f9e15d0dbb007d5f41067",
+  "config": {
+    "firmware": "/dev/shm/negctl/examples/weact-ch32x035/ch32fun/exti_pin_change_isr.elf",
+    "system": "/dev/shm/negctl/examples/weact-ch32x035/../../configs/systems/weact-ch32x035-ch32fun-exti-smoke.yaml",
+    "script": "/dev/shm/negctl/examples/weact-ch32x035/ch32fun-exti-smoke.yaml"
+  }
+}

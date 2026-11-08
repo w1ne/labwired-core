@@ -1,0 +1,14 @@
+# nRF54LM20 DK, running the nRF54LM20A emulation target: boot, use UARTE20,
+# and toggle the board's active-high LED0 on P1.22.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nrf54lm20dk-smoke"
+  system: "../../configs/systems/nrf54lm20dk-led-smoke.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "NRF54LM20DK_LED_SMOKE_OK"
+  - gpio_edges:
+      pin: "gpio1:22"
+      min_edges: 16
+  - expected_stop_reason: max_steps

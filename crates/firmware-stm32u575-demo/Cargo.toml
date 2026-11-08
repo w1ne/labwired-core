@@ -23,3 +23,9 @@ name = "nucleo-u575-star-catcher"
 path = "src/star_catcher.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "nucleo-u5a5zj-smoke"
+path = "src/u5a5zj_smoke.rs"
+test = false
+bench = false

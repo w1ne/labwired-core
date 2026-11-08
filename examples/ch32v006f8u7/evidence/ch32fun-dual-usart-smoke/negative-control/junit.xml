@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="1" errors="0" time="50.273897">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxCycles"/>
+    <property name="firmware_hash" value="e26df0e0d07db84b22336e83d3c5f38099f05a56d104af7031069b1fc64b20f3"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="50.273897">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: USART1 ready
+" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: USART2 ready
+" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_ordered: [&quot;tick 0 via USART1\r\n&quot;, &quot;tick 0 via USART2\r\n&quot;, &quot;tick 1 via USART1\r\n&quot;, &quot;tick 1 via USART2\r\n&quot;, &quot;tic…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpiod:5 &gt;= 100 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: gpio_edges: gpiod:2 &gt;= 100 edges" time="0.000000">
+    <failure message="assertion failed">assertion 5: gpio_edges: gpiod:2 &gt;= 100 edges
+
+result_schema_version=1.0
+stop_reason=MaxCycles
+stop_reason_details.triggered_stop_condition=MaxCycles
+stop_reason_details.triggered_limit.max_cycles=110000000
+stop_reason_details.observed.cycles=110000000
+steps_executed=110000000
+cycles=293333250
+instructions=110000000
+limits:
+  - max_steps=120000000
+  - max_cycles=110000000
+  - wall_time_ms=600000
+firmware_hash=e26df0e0d07db84b22336e83d3c5f38099f05a56d104af7031069b1fc64b20f3
+firmware=<negctl>/examples/ch32v006f8u7/ch32fun/dual_usart.elf
+system=<negctl>/examples/ch32v006f8u7/../../configs/systems/ch32v006f8u7-ch32fun-smoke.yaml
+script=<negctl>/examples/ch32v006f8u7/ch32fun-dual-usart-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;USART1 ready\r\n&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;USART2 ready\r\n&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;tick 0 via USART1\r\n&quot;, &quot;tick 0 via USART2\r\n&quot;, &quot;tick 1 via USART1\r\n&quot;, &quot;tick 1 via USART2\r\n&quot;, &quot;tick 2 via USART1\r\n&quot;, &quot;tick 2 via USART2\r\n&quot;] }): true
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpiod:5&quot;, min_edges: 100 } }): true
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpiod:2&quot;, min_edges: 100 } }): false
+</failure>
+  </testcase>
+</testsuite>

@@ -1,0 +1,13 @@
+# NUCLEO-F334R8: USART2 marker and repeated LD2 GPIOA5 transitions.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-f334r8-smoke"
+  system: "../../configs/systems/nucleo-f334r8.yaml"
+limits:
+  max_steps: 2000
+assertions:
+  - uart_contains: "NUCLEO_F334R8_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

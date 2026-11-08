@@ -1,0 +1,12 @@
+# WCH CH32V003 evaluation board running ch32fun's exti_pin_change_isr,
+# unmodified: a push button from PD3 to 3.3 V (the example leaves PD3 a
+# floating input, so the button stands for a contact with an external
+# pull-down) and an LED on PC1, the pad the EXTI7_0 handler blips. Both are
+# test connections, not factory-installed parts. A WCH-LinkE on SWIO is
+# assumed, as for the other ch32fun profiles.
+name: ch32v003evt-ch32fun-exti-smoke
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+external_devices: []
+board_io:
+  - { id: button_pd3, kind: button, peripheral: gpiod, pin: 3, signal: input, active_high: true }
+  - { id: external_led_pc1, kind: led, peripheral: gpioc, pin: 1, signal: output, active_high: true }

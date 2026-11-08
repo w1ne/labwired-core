@@ -1,0 +1,5 @@
+2026-11-05T04:18:31.131152Z  INFO labwired_loader: ELF Entry Point: 0x4008001c
+2026-11-05T04:18:31.131327Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32s2.yaml
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: ESP32-S2 descriptor fast-boot entry=0x4008001c
+PASS  4/4 checks · onboarding-smoke · 1000000 steps · 0.22s

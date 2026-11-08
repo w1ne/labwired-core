@@ -1,0 +1,13 @@
+# WeAct Studio BluePill-Plus-CH32 (CH32V203C8T6 fitted). Blue user LED on PB2,
+# active high; USART1 TX on PA9 is the WCH SDK's default printf console.
+# The PA0 user key, USB-C, SWD/SDI and the unplaced SPI flash are not modeled.
+name: weact-bluepill-plus-ch32v203-smoke
+chip: ../chips/ch32v203c8t6-smoke.yaml
+external_devices: []
+board_io:
+  - id: blue_led
+    kind: led
+    peripheral: gpiob
+    pin: 2
+    signal: output
+    active_high: true

@@ -1,0 +1,28 @@
+{
+  "target_id": "esp32c6-devkitc",
+  "status": "pass",
+  "crate": "firmware-esp32c6-demo",
+  "target_triple": "riscv32imc-unknown-none-elf",
+  "script": "examples/esp32c6-devkitc/io-smoke.yaml",
+  "system": "configs/systems/esp32c6-devkitc.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T07:12:52Z",
+  "finished_at_utc": "2026-11-05T07:13:35Z",
+  "elapsed_seconds": 44,
+  "elapsed_ms": 43044,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 40.225,
+    "build_firmware": 0.229,
+    "run_smoke": 2.561
+  },
+  "stages_ms": {
+    "build_cli": 40225,
+    "build_firmware": 229,
+    "run_smoke": 2561
+  }
+}

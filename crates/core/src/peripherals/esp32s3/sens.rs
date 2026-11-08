@@ -57,6 +57,20 @@
 //!
 //! Touch, TSENS, RTC-I2C arbitration, the ULP coprocessor interrupts and the
 //! hall sensor are register-file-only (no invented behavior).
+//!
+//! ## ESP32-S2 (`esp32s2_sens`, base `0x3F40_8800`)
+//!
+//! The S2 SENS block shares 0x000..0x058 with the S3 field for field (the
+//! oneshot START/DONE/DATA bits, `SAR1_EN_PAD`, and `SAR_SLAVE_ADDR1.MEAS_STATUS`
+//! at [29:22]). Past 0x05C the S2 has its own touch/DAC/COCPU layout and ends at
+//! `SENS_SARDATE` @ 0x148. [`Esp32s3Sens::new_esp32s2`] swaps in that map
+//! ([`spec_s2`], from the ESP32-S2 SVD shipped with arduino-esp32
+//! `tools/ide-debug/svd/esp32s2.svd`). The oneshot behavior is the same code.
+//! IDF's boot-time `adc_hw_calibration` constructor busy-polls `MEAS1_DONE_SAR`
+//! on the S2, so without this block stock Arduino never reaches `setup()` once
+//! `analogRead()` is linked. The S2's RTC SAR is 13-bit, so its codes are
+//! too: mid-scale 0x1000 when nothing is injected, and `millivolts * 8191 /
+//! 3300` for an injected channel.
 
 use crate::{Peripheral, SimResult};
 
@@ -117,6 +131,12 @@ const MEAS_DATA_MASK: u32 = 0x0000_FFFF;
 /// injected on the selected channel: mid-scale of the 12-bit SAR range.
 /// Deterministic — LabWired runs must be reproducible.
 const MEAS_DATA_FIXED: u32 = 0x800;
+/// Full-scale code of the S3's 12-bit RTC SAR.
+const FULL_SCALE_12: u32 = 4095;
+/// The S2's RTC SAR is 13-bit (`SOC_ADC_RTC_MAX_BITWIDTH` = 13): full scale
+/// 8191, mid-scale 0x1000.
+const FULL_SCALE_13: u32 = 8191;
+const MEAS_DATA_FIXED_13: u32 = 0x1000;
 /// `SENS_SAR1_EN_PAD` (bits [30:19] of `SAR_MEAS1_CTRL2`) — the 12-bit channel
 /// enable mask esp-hal sets to `1 << channel` before launching a oneshot.
 const SAR1_EN_PAD_S: u32 = 19;
@@ -124,6 +144,10 @@ const SAR1_EN_PAD_M: u32 = 0x0FFF;
 
 /// One word past the last architected register (`SAR_SARDATE` @ 0x1FC).
 const NWORDS: usize = 0x200 / 4;
+
+/// `(reset value, writable-bit mask)` for one architected register, or `None`
+/// for a hole in the register map (reads 0, ignores writes).
+type RegSpec = fn(usize) -> Option<(u32, u32)>;
 
 /// `(reset value, writable-bit mask)` for the architected register at word
 /// index `word` (offset `word * 4`), exactly per the ESP32-S3 SVD `SENS`
@@ -174,6 +198,33 @@ const fn spec(word: usize) -> Option<(u32, u32)> {
     }
 }
 
+/// The ESP32-S2 SENS map, per the ESP32-S2 SVD `SENS` block. 0x000..0x058
+/// carries the S3's offsets; the S2 differs there only in `SAR_MEAS1_CTRL1`
+/// (writable from bit 22) and `SAR_TSENS_CTRL2` (17 writable bits).
+const fn spec_s2(word: usize) -> Option<(u32, u32)> {
+    match (word as u64) * 4 {
+        SAR_MEAS1_CTRL1 => Some((0x0000_0000, 0xFFC0_0000)),
+        SAR_TSENS_CTRL2 => Some((0x0000_4002, 0x0001_FFFF)),
+        off @ SAR_READER1_CTRL..=SAR_TOUCH_CONF => spec((off / 4) as usize),
+        0x060..=0x094 => Some((0x0000_0000, 0x003F_FFFF)), // TOUCH_THRES1..14
+        0x0D4 => Some((0x0000_0000, 0x3FFF_8000)),         // TOUCH_CHN_ST
+        0x0D8..=0x118 => Some((0x0000_0000, 0x0000_0000)), // TOUCH_STATUS* (RO)
+        0x11C => Some((0x0000_0000, 0x0FFF_FFFF)),         // DAC_CTRL1
+        0x120 => Some((0x0300_0000, 0x03FF_FFFF)),         // DAC_CTRL2
+        0x124 => Some((0x0000_0000, 0x0200_0000)),         // COCPU_STATE
+        0x128 => Some((0x0000_0000, 0x0000_0000)),         // COCPU_INT_RAW (RO)
+        0x12C => Some((0x0000_0000, 0x0000_01FF)),         // COCPU_INT_ENA
+        0x130 => Some((0x0000_0000, 0x0000_0000)),         // COCPU_INT_ST (RO)
+        0x134 => Some((0x0000_0000, 0x0000_01FF)),         // COCPU_INT_CLR
+        0x138 => Some((0x0000_0000, 0x0000_0000)),         // COCPU_DEBUG (RO)
+        0x13C => Some((0xA000_0000, 0xF000_0000)),         // HALL_CTRL
+        0x140 => Some((0x0000_0000, 0xFFFF_FFFF)),         // NOUSE
+        0x144 => Some((0x0000_0000, 0xC000_0000)),         // IO_MUX_CONF
+        0x148 => Some((0x0190_6140, 0x0FFF_FFFF)),         // SARDATE
+        _ => None,
+    }
+}
+
 pub struct Esp32s3Sens {
     /// Register file for the architected map (word-indexed; holes stay 0 and
     /// are never read back — `spec()` gates both directions).
@@ -184,6 +235,12 @@ pub struct Esp32s3Sens {
     /// position-driven value instead of the fixed mid-scale placeholder. This is
     /// the SENS path esp-hal's ESP32-S3 ADC oneshot actually reads.
     channel_inputs: [u16; 10],
+    /// Register map: [`spec`] (S3) or [`spec_s2`] (S2).
+    spec: RegSpec,
+    /// Full-scale code (S3 12-bit 4095, S2 13-bit 8191) and the mid-scale
+    /// placeholder latched when nothing is injected.
+    full_scale: u32,
+    fixed: u32,
 }
 
 impl std::fmt::Debug for Esp32s3Sens {
@@ -205,23 +262,35 @@ impl Default for Esp32s3Sens {
 
 impl Esp32s3Sens {
     pub fn new() -> Self {
+        Self::with_spec(spec, FULL_SCALE_12, MEAS_DATA_FIXED)
+    }
+
+    /// The ESP32-S2 SENS block at `0x3F40_8800` (see the module header):
+    /// the S2 register map and 13-bit conversion codes.
+    pub fn new_esp32s2() -> Self {
+        Self::with_spec(spec_s2, FULL_SCALE_13, MEAS_DATA_FIXED_13)
+    }
+
+    fn with_spec(spec: RegSpec, full_scale: u32, fixed: u32) -> Self {
         let mut regs = [0u32; NWORDS];
-        let mut w = 0;
-        while w < NWORDS {
+        for (w, r) in regs.iter_mut().enumerate() {
             if let Some((reset, _)) = spec(w) {
-                regs[w] = reset;
+                *r = reset;
             }
-            w += 1;
         }
         Self {
             regs,
             channel_inputs: [0xFFFF; 10],
+            spec,
+            full_scale,
+            fixed,
         }
     }
 
     /// Inject a millivolt reading for an ADC1 channel (CH0..9 = GPIO1..10). The
-    /// next SENS oneshot that selects this channel returns the equivalent 12-bit
-    /// count (3.3 V Vref) instead of the fixed mid-scale placeholder.
+    /// next SENS oneshot that selects this channel returns the equivalent count
+    /// (3.3 V Vref; 12-bit on the S3, 13-bit on the S2) instead of the fixed
+    /// mid-scale placeholder.
     /// Read back the injected 12-bit count for a channel (`0xFFFF` = nothing
     /// injected). The read-back counterpart of [`Self::set_channel_input`], so
     /// a stimulus test can assert what the next conversion will return without
@@ -235,14 +304,14 @@ impl Esp32s3Sens {
 
     pub fn set_channel_input(&mut self, channel: u8, millivolts: u16) {
         if (channel as usize) < self.channel_inputs.len() {
-            let count = ((millivolts as u32 * 4095) / 3300).min(4095) as u16;
+            let count = ((millivolts as u32 * self.full_scale) / 3300).min(self.full_scale) as u16;
             self.channel_inputs[channel as usize] = count;
         }
     }
 
     fn reg(&self, off: u64) -> u32 {
         let w = (off / 4) as usize;
-        if w < NWORDS && spec(w).is_some() {
+        if w < NWORDS && (self.spec)(w).is_some() {
             self.regs[w]
         } else {
             0
@@ -254,7 +323,7 @@ impl Esp32s3Sens {
     fn set_reg_masked(&mut self, off: u64, value: u32) {
         let w = (off / 4) as usize;
         if w < NWORDS {
-            if let Some((_, wmask)) = spec(w) {
+            if let Some((_, wmask)) = (self.spec)(w) {
                 self.regs[w] = (self.regs[w] & !wmask) | (value & wmask);
             }
         }
@@ -290,16 +359,16 @@ impl Esp32s3Sens {
     /// keeps the fixed placeholder.
     fn meas_data(&self, off: u64, stored: u32) -> u32 {
         if off != SAR_MEAS1_CTRL2 {
-            return MEAS_DATA_FIXED;
+            return self.fixed;
         }
         let en_pad = (stored >> SAR1_EN_PAD_S) & SAR1_EN_PAD_M;
         if en_pad == 0 {
-            return MEAS_DATA_FIXED;
+            return self.fixed;
         }
         let channel = en_pad.trailing_zeros() as usize;
         match self.channel_inputs.get(channel) {
             Some(&c) if c != 0xFFFF => (c as u32) & MEAS_DATA_MASK,
-            _ => MEAS_DATA_FIXED,
+            _ => self.fixed,
         }
     }
 }
@@ -475,6 +544,50 @@ mod tests {
         s.write_u32(SAR_MEAS1_CTRL2, 0xFFF8_0000).unwrap();
         let v = s.read_u32(SAR_MEAS1_CTRL2).unwrap();
         assert_eq!(v, 0xFFF8_0000, "config bits store, DONE/DATA stay 0");
+    }
+
+    #[test]
+    fn esp32s2_map_resets_and_masks_follow_its_svd() {
+        let mut s = Esp32s3Sens::new_esp32s2();
+        assert_eq!(s.read_u32(SAR_READER1_CTRL).unwrap(), 0x2004_0002);
+        assert_eq!(s.read_u32(SAR_MEAS2_CTRL1).unwrap(), 0x0702_0200);
+        assert_eq!(s.read_u32(0x120).unwrap(), 0x0300_0000, "DAC_CTRL2");
+        assert_eq!(s.read_u32(0x13C).unwrap(), 0xA000_0000, "HALL_CTRL");
+        assert_eq!(s.read_u32(0x148).unwrap(), 0x0190_6140, "SARDATE");
+        // The S3's SARDATE offset is a hole on the S2, and vice versa.
+        assert_eq!(s.read_u32(SAR_SARDATE).unwrap(), 0);
+        assert_eq!(Esp32s3Sens::new().read_u32(0x148).unwrap(), 0);
+        // S2-specific masks inside the shared range.
+        s.write_u32(SAR_MEAS1_CTRL1, 0xFFFF_FFFF).unwrap();
+        assert_eq!(s.read_u32(SAR_MEAS1_CTRL1).unwrap(), 0xFFC0_0000);
+        s.write_u32(SAR_TSENS_CTRL2, 0xFFFF_FFFF).unwrap();
+        assert_eq!(s.read_u32(SAR_TSENS_CTRL2).unwrap(), 0x0001_FFFF);
+        // MEAS_STATUS [29:22] stays 0, so adc_oneshot_ll_start's poll exits.
+        s.write_u32(SAR_SLAVE_ADDR1, 0xFFFF_FFFF).unwrap();
+        assert_eq!(s.read_u32(SAR_SLAVE_ADDR1).unwrap(), 0x003F_FFFF);
+    }
+
+    #[test]
+    fn esp32s2_oneshot_completes_like_the_s3() {
+        let mut s = Esp32s3Sens::new_esp32s2();
+        s.write_u32(SAR_MEAS1_CTRL2, 1 << (SAR1_EN_PAD_S + 3))
+            .unwrap();
+        s.write_u32(SAR_MEAS1_CTRL2, (1 << (SAR1_EN_PAD_S + 3)) | MEAS_START_SAR)
+            .unwrap();
+        let v = s.read_u32(SAR_MEAS1_CTRL2).unwrap();
+        assert_eq!(v & MEAS_DONE_SAR, MEAS_DONE_SAR);
+        assert_eq!(v & MEAS_DATA_MASK, MEAS_DATA_FIXED_13, "13-bit mid-scale");
+        s.set_channel_input(3, 1650);
+        s.write_u32(SAR_MEAS1_CTRL2, 1 << (SAR1_EN_PAD_S + 3))
+            .unwrap();
+        s.write_u32(SAR_MEAS1_CTRL2, (1 << (SAR1_EN_PAD_S + 3)) | MEAS_START_SAR)
+            .unwrap();
+        // 1650 mV on the 13-bit scale: 1650 * 8191 / 3300 = 4095.
+        assert_eq!(s.read_u32(SAR_MEAS1_CTRL2).unwrap() & MEAS_DATA_MASK, 4095);
+        assert_eq!(s.channel_input_count(3), 4095);
+        // Full scale clamps at 8191, not the S3's 4095.
+        s.set_channel_input(3, 3300);
+        assert_eq!(s.channel_input_count(3), 8191);
     }
 
     #[test]

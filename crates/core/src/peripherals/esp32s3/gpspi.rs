@@ -435,6 +435,21 @@ impl Esp32s3Spi {
         winner
     }
 
+    /// The attached-device link represents the controller's selected SPI
+    /// target. Keep its frame boundary aligned with each hardware USR
+    /// transaction; command-oriented devices reset their parser on CS edges.
+    fn cs_select_devices(&mut self) {
+        for device in &mut self.attached_devices {
+            device.cs_select();
+        }
+    }
+
+    fn cs_release_devices(&mut self) {
+        for device in &mut self.attached_devices {
+            device.cs_release();
+        }
+    }
+
     /// Launch the user transaction.
     ///
     /// In DMA mode (`SPI_DMA_TX_ENA` or `SPI_DMA_RX_ENA` set in `DMA_CONF`):
@@ -455,6 +470,7 @@ impl Esp32s3Spi {
             // GDMA finishes the descriptor walk — exactly the silicon
             // ordering the ESP-IDF spi_master ISR depends on. The W buffer
             // is NOT touched in this mode (it is the CPU data path).
+            self.cs_select_devices();
             let bits = (self.reg(MS_DLEN) & MS_DATA_BITLEN) as usize + 1;
             self.pending_dma = Some(SpiDmaPending {
                 total_bytes: bits.div_ceil(8),
@@ -479,6 +495,7 @@ impl Esp32s3Spi {
                 .collect();
             self.wire_push_bytes(&mosi);
         }
+        self.cs_select_devices();
         for word_index in 0..bytes.div_ceil(4) {
             let off = W0 + (word_index as u64) * 4;
             let mosi_word = self.reg(off);
@@ -494,6 +511,7 @@ impl Esp32s3Spi {
             }
             self.set_reg_raw(off, miso_word);
         }
+        self.cs_release_devices();
         // Clear the USR start bit (auto-clear on done) so `!(CMD & USR)` exits.
         let cmd = self.reg(CMD) & !USR_BIT;
         self.set_reg_raw(CMD, cmd);
@@ -546,6 +564,7 @@ impl Esp32s3Spi {
     /// deliberately untouched — DMA-mode data lives in the descriptor
     /// buffers, not the CPU-path W0..W15 window.
     pub(crate) fn dma_complete(&mut self) {
+        self.cs_release_devices();
         let cmd = self.reg(CMD) & !USR_BIT;
         self.set_reg_raw(CMD, cmd);
         self.int_raw |= TRANS_DONE;
@@ -707,7 +726,9 @@ impl Peripheral for Esp32s3Spi {
                     // transaction on the next GDMA tick. Also drop USR so the
                     // launch state machine returns to idle. No TRANS_DONE:
                     // the transaction was aborted, not completed.
-                    self.pending_dma = None;
+                    if self.pending_dma.take().is_some() {
+                        self.cs_release_devices();
+                    }
                     let cmd = self.reg(CMD) & !USR_BIT;
                     self.set_reg_raw(CMD, cmd);
                 }

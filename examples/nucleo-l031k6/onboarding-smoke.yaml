@@ -1,0 +1,12 @@
+# NUCLEO-L031K6: boot the STM32L031K6 and exercise user LED LD3 on PB3/D13.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nucleo-l031k6-smoke"
+  system: "../../configs/systems/nucleo-l031k6.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - gpio_edges:
+      pin: "gpiob:3"
+      min_edges: 16
+  - expected_stop_reason: max_steps

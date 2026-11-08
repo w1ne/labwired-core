@@ -1,0 +1,442 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 250000,
+  "cycles": 416633,
+  "instructions": 250000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 250000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 250000
+    }
+  },
+  "limits": {
+    "max_steps": 250000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "XPLAINED_MINI_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "portb:5",
+          "min_edges": 16
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      255,
+      0,
+      32,
+      0,
+      0,
+      0,
+      0,
+      0,
+      36,
+      3,
+      0,
+      0,
+      251,
+      8,
+      18,
+      1
+    ],
+    "pc": 100,
+    "sp": 2299,
+    "sreg": 1
+  },
+  "firmware_hash": "36924e98b77c3c1a98acaa77fe9b4e3d6d2504a0c59a2e71575ec7a9f1923aaf",
+  "config": {
+    "firmware": "examples/atmega328pb-xplained-mini/../../tests/fixtures/avr/atmega328pb-xplained-mini.elf",
+    "system": "examples/atmega328pb-xplained-mini/../../configs/systems/atmega328pb-xplained-mini.yaml",
+    "script": "examples/atmega328pb-xplained-mini/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "spi",
+        "kind": "native",
+        "base": 65536,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c",
+        "kind": "i2c",
+        "base": 65552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 65571,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 65574,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 65577,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 65728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 65736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "native",
+        "base": 65584,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 5 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 416633,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "portb",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 244,
+            "value": 1
+          },
+          {
+            "cycle": 20259,
+            "value": 0
+          },
+          {
+            "cycle": 40274,
+            "value": 1
+          },
+          {
+            "cycle": 60289,
+            "value": 0
+          },
+          {
+            "cycle": 80304,
+            "value": 1
+          },
+          {
+            "cycle": 100319,
+            "value": 0
+          },
+          {
+            "cycle": 120334,
+            "value": 1
+          },
+          {
+            "cycle": 140349,
+            "value": 0
+          },
+          {
+            "cycle": 160364,
+            "value": 1
+          },
+          {
+            "cycle": 180379,
+            "value": 0
+          },
+          {
+            "cycle": 200394,
+            "value": 1
+          },
+          {
+            "cycle": 220409,
+            "value": 0
+          },
+          {
+            "cycle": 240424,
+            "value": 1
+          },
+          {
+            "cycle": 260439,
+            "value": 0
+          },
+          {
+            "cycle": 280454,
+            "value": 1
+          },
+          {
+            "cycle": 300469,
+            "value": 0
+          },
+          {
+            "cycle": 320484,
+            "value": 1
+          },
+          {
+            "cycle": 340499,
+            "value": 0
+          },
+          {
+            "cycle": 360514,
+            "value": 1
+          },
+          {
+            "cycle": 380529,
+            "value": 0
+          },
+          {
+            "cycle": 400544,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 17,
+            "state": "0"
+          },
+          {
+            "cycle": 244,
+            "state": "1"
+          },
+          {
+            "cycle": 20259,
+            "state": "0"
+          },
+          {
+            "cycle": 40274,
+            "state": "1"
+          },
+          {
+            "cycle": 60289,
+            "state": "0"
+          },
+          {
+            "cycle": 80304,
+            "state": "1"
+          },
+          {
+            "cycle": 100319,
+            "state": "0"
+          },
+          {
+            "cycle": 120334,
+            "state": "1"
+          },
+          {
+            "cycle": 140349,
+            "state": "0"
+          },
+          {
+            "cycle": 160364,
+            "state": "1"
+          },
+          {
+            "cycle": 180379,
+            "state": "0"
+          },
+          {
+            "cycle": 200394,
+            "state": "1"
+          },
+          {
+            "cycle": 220409,
+            "state": "0"
+          },
+          {
+            "cycle": 240424,
+            "state": "1"
+          },
+          {
+            "cycle": 260439,
+            "state": "0"
+          },
+          {
+            "cycle": 280454,
+            "state": "1"
+          },
+          {
+            "cycle": 300469,
+            "state": "0"
+          },
+          {
+            "cycle": 320484,
+            "state": "1"
+          },
+          {
+            "cycle": 340499,
+            "state": "0"
+          },
+          {
+            "cycle": 360514,
+            "state": "1"
+          },
+          {
+            "cycle": 380529,
+            "state": "0"
+          },
+          {
+            "cycle": 400544,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 21
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "portb",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "XPLAINED_MINI_OK",
+        "cycle_lo": 0,
+        "cycle": 16666,
+        "end_cycle": 16666
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 132,
+    "data_bytes": 18,
+    "bss_bytes": 0,
+    "flash_used_bytes": 150,
+    "ram_static_bytes": 18,
+    "flash_total_bytes": 32768,
+    "ram_total_bytes": 2048,
+    "flash_used_pct": 0.46,
+    "ram_static_pct": 0.88,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 416633,
+    "instructions": 250000,
+    "steps_executed": 250000,
+    "memory_reads": 0,
+    "memory_writes": 41671,
+    "peripheral_accesses": 77,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 116,
+        "count": 234
+      },
+      {
+        "pc": 104,
+        "count": 195
+      },
+      {
+        "pc": 100,
+        "count": 156
+      },
+      {
+        "pc": 112,
+        "count": 156
+      },
+      {
+        "pc": 96,
+        "count": 118
+      },
+      {
+        "pc": 108,
+        "count": 117
+      }
+    ]
+  }
+}

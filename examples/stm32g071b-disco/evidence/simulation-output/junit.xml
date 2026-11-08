@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.010504">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="8d61b4503056f1b2ce870b9c2fb1105cb9045528c3b192b12806d798d7046740"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.010504">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STM32G071B_DISCO_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

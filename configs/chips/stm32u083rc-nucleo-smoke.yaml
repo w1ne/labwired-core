@@ -1,0 +1,37 @@
+# Narrow STM32U083RCT6 profile for NUCLEO-U083RC.
+# Only the reset-clock RCC GPIOA gate and GPIOA are declared for the LD4 smoke.
+# All other MCU peripherals, including USART2/VCP and USB, remain out of scope.
+# Sources: ST DS14463, RM0503 Rev 4, and NUCLEO-64 UM3256 Rev 2.
+name: "stm32u083rct6-nucleo-smoke"
+arch: "arm"
+core: "cortex-m0+"
+# RM0503: MSI at its reset range is the 4 MHz SYSCLK.
+cpu_hz: 4_000_000
+
+flash:
+  base: 0x08000000
+  size: "256KB"
+ram:
+  base: 0x20000000
+  size: "40KB"
+
+# The ST board manual maps the default PA5 connection to LD4 / Arduino D13.
+pins:
+  PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    # RCC_IOPENR is at offset 0x4C on U0 (RM0503 §5.4.13).
+    size: "80B"
+    config:
+      profile: "stm32u0"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x50000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "iopenr", bit: 0 }

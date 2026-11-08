@@ -1,0 +1,12 @@
+# Standard Seeed Studio XIAO ESP32-S3, limited to the built-in active-low
+# user LED on GPIO21. This is not the Sense or Plus board variant.
+name: "seeed-xiao-esp32s3"
+chip: "../chips/esp32s3-xiao-gpio-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 21
+    signal: "output"
+    active_high: false

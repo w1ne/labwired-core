@@ -1,0 +1,207 @@
+# CH32X035G8U6 profile for WCH's official Arduino core (openwch/arduino_core_ch32,
+# variant CH32X035/CH32X035G8U, the only X035 variant the core ships). Same
+# die and register map as ch32x035c8t6-ch32fun-smoke.yaml (LQFP48) and
+# ch32x035f8u6-ch32fun-smoke.yaml (QFN20); only the bonded pads differ, plus
+# the peripherals the core's Serial / Wire / SPI / analogRead / analogWrite
+# reach.
+#
+# QingKe V4C (RV32IMAC), 62 KB flash, 20 KB SRAM, QFN28.
+# Register blocks: ch32x035.h (core system/CH32X035). USART1, I2C1, SPI1,
+# ADC1 and TIM1..3 sit at the ch32x035.h bases with the F1 register layout
+# (USART_TypeDef, I2C_TypeDef, SPI_TypeDef, TIM_TypeDef match the F1 ones;
+# ADC_TypeDef is the F1 block up to RDATAR, then X035-only CTLR3/WDTR1..3,
+# which are not modelled). IRQn are ch32x035.h's. RCC enable bits are
+# ch32x035.h RCC_*EN.
+#
+# Timer outputs reach pads through the STM32F1 default table: TIM3_CH1/CH2
+# on PA6/PA7 match the X035 variant (PinMap_TIM, AFIO_NONE); the F1 TIM1 and
+# TIM2 pad rows are not the X035's and are not corrected here.
+#
+# Not modeled here: USART2..4, DMA, OPA/CMP, PIOC, USBFS/USBPD, the ADC's
+# CTLR3 clock divider and window registers, GPIO CFGXR/BSXR (pins 16..23:
+# pinMode on PC16..PC19 is not reflected on those pads, and EXTI lines
+# 16..23 have no pad source), PFIC nesting, low-power modes, and
+# physical-board parity.
+name: ch32x035g8u6
+arch: riscv
+core: qingke-v4c
+registers_count: 32
+# SYSCLK: HSI 48 MHz, HPRE /1 (the core's F_CPU 48000000L).
+cpu_hz: 48_000_000
+
+flash:
+  base: 0x08000000
+  size: 62KB
+ram:
+  base: 0x20000000
+  size: 20KB
+# The X035 aliases its flash at 0 for reset fetch.
+flash_boot_alias: true
+
+package: QFN28
+pin_count: 28
+
+# The pads the Arduino variant numbers (variant_CH32X035G8U.h: PA0..PA7,
+# PB0/1/3/4/6..12, PC0/3/14..19), all bonded on QFN28.
+pins:
+  PA0: { gpio: gpioa, bit: 0 }
+  PA1: { gpio: gpioa, bit: 1 }
+  PA2: { gpio: gpioa, bit: 2 }
+  PA3: { gpio: gpioa, bit: 3 }
+  PA4: { gpio: gpioa, bit: 4 }
+  PA5: { gpio: gpioa, bit: 5 }
+  PA6: { gpio: gpioa, bit: 6 }
+  PA7: { gpio: gpioa, bit: 7 }
+  PB0: { gpio: gpiob, bit: 0 }
+  PB1: { gpio: gpiob, bit: 1 }
+  PB3: { gpio: gpiob, bit: 3 }
+  PB4: { gpio: gpiob, bit: 4 }
+  PB6: { gpio: gpiob, bit: 6 }
+  PB7: { gpio: gpiob, bit: 7 }
+  PB8: { gpio: gpiob, bit: 8 }
+  PB9: { gpio: gpiob, bit: 9 }
+  PB10: { gpio: gpiob, bit: 10 }
+  PB11: { gpio: gpiob, bit: 11 }
+  PB12: { gpio: gpiob, bit: 12 }
+  PC0: { gpio: gpioc, bit: 0 }
+  PC3: { gpio: gpioc, bit: 3 }
+  PC14: { gpio: gpioc, bit: 14 }
+  PC15: { gpio: gpioc, bit: 15 }
+  PC16: { gpio: gpioc, bit: 16 }
+  PC17: { gpio: gpioc, bit: 17 }
+  PC18: { gpio: gpioc, bit: 18 }
+  PC19: { gpio: gpioc, bit: 19 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 1KB
+    config:
+      profile: ch32v20x
+
+  - id: flash_ctrl
+    type: flash
+    base_address: 0x40022000
+    size: 4B
+    config:
+      profile: stm32f1
+
+  # funGpioInitAll() clocks AFIO with the ports. EXTICR1 (0x08) and EXTICR2
+  # (0x0C) hold a 2-bit port field per EXTI line 0..15 and 16..23.
+  - id: afio
+    type: afio
+    base_address: 0x40010000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 0 }
+    config:
+      profile: ch32x03x
+
+  # Lines 7..0 -> PFIC 20, 15..8 -> 40, 23..16 -> 41, as level requests.
+  - id: exti
+    type: exti
+    base_address: 0x40010400
+    size: 24B
+    config:
+      profile: ch32x03x
+
+  - id: debug_printf
+    type: wch_debug_printf
+    base_address: 0xE0000380
+    size: 12B
+
+  - id: pfic
+    type: qingke_pfic
+    base_address: 0xE000E000
+    size: 4KB
+
+  - id: stk
+    type: qingke_v4_systick
+    base_address: 0xE000F000
+    size: 24B
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x40010800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 2 }
+    config:
+      profile: stm32f1
+
+  - id: gpiob
+    type: gpio
+    base_address: 0x40010C00
+    size: 1KB
+    clock: { reg: apb2enr, bit: 3 }
+    config:
+      profile: stm32f1
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x40011000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 4 }
+    config:
+      profile: stm32f1
+
+  # TX on PB10 while AFIO_PCFR1 USART1_RM [6:5] is 0 (`pad_map: ch32x03x`).
+  - id: usart1
+    type: uart
+    base_address: 0x40013800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 14 }
+    config:
+      profile: stm32f1
+      pad_map: ch32x03x
+
+  - id: i2c1
+    type: i2c
+    base_address: 0x40005400
+    size: 1KB
+    irq: 30
+    clock: { reg: apb1enr, bit: 21 }
+    config:
+      irq_error: 31
+
+  - id: spi1
+    type: spi
+    base_address: 0x40013000
+    size: 1KB
+    irq: 33
+    clock: { reg: apb2enr, bit: 12 }
+
+  - id: adc1
+    type: adc
+    base_address: 0x40012400
+    size: 1KB
+    irq: 29
+    clock: { reg: apb2enr, bit: 9 }
+    config:
+      profile: stm32f1
+
+  # TIM1 update is IRQ 35; TIM2 (advanced-style, with BDTR and CHxN on the
+  # X035) update is 38; TIM3 is one vector, 54.
+  - id: tim1
+    type: timer
+    base_address: 0x40012C00
+    size: 1KB
+    irq: 35
+    clock: { reg: apb2enr, bit: 11 }
+    config:
+      advanced: true
+
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: 1KB
+    irq: 38
+    clock: { reg: apb1enr, bit: 0 }
+    config:
+      advanced: true
+
+  - id: tim3
+    type: timer
+    base_address: 0x40000400
+    size: 1KB
+    irq: 54
+    clock: { reg: apb1enr, bit: 1 }

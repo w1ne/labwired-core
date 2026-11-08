@@ -1,0 +1,412 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 8000000,
+  "cycles": 16000088,
+  "instructions": 8000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 8000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 8000000
+    }
+  },
+  "limits": {
+    "max_steps": 8000000,
+    "max_cycles": 8000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 120000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioc:14",
+          "min_edges": 3
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073807368,
+          "expected_value": 32768,
+          "mask": null,
+          "size": 32
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073808384,
+          "expected_value": 128,
+          "mask": null,
+          "size": 32
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073808392,
+          "expected_value": 128,
+          "mask": null,
+          "size": 32
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073808396,
+          "expected_value": 128,
+          "mask": null,
+          "size": 32
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073808404,
+          "expected_value": 0,
+          "mask": null,
+          "size": 32
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 3758153728,
+          "expected_value": 1048576,
+          "mask": 1048576,
+          "size": 32
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 3758153760,
+          "expected_value": 0,
+          "mask": 1048576,
+          "size": 32
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 3758154496,
+          "expected_value": 0,
+          "mask": 1048576,
+          "size": 32
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      576,
+      536891376,
+      536871932,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      720,
+      536870912,
+      16777216,
+      32768,
+      1048576,
+      3758153728,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 662,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 570,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 7999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "2c4785fdea9b0c6df8d8e12ab08a5db4dd079910d89f9e15d0dbb007d5f41067",
+  "config": {
+    "firmware": "/dev/shm/negctl/examples/weact-ch32x035/ch32fun/exti_pin_change_isr.elf",
+    "system": "/dev/shm/negctl/examples/weact-ch32x035/../../configs/systems/weact-ch32x035-ch32fun-exti-smoke.yaml",
+    "script": "/dev/shm/negctl/examples/weact-ch32x035/ch32fun-exti-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "exti",
+        "kind": "native",
+        "base": 1073808384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "debug_printf",
+        "kind": "native",
+        "base": 3758097280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfic",
+        "kind": "native",
+        "base": 3758153728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1073810432,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "button_pc7",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 8000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioc",
+        "pin": 14,
+        "initial": 0,
+        "transitions": [],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 67,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 0
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioc",
+      "number": 14,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "stimuli": [
+    {
+      "channel": "pressed",
+      "component": "button_pc7",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 2000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 2000000
+    },
+    {
+      "channel": "pressed",
+      "component": "button_pc7",
+      "value": 0.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 4000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 4000000
+    },
+    {
+      "channel": "pressed",
+      "component": "button_pc7",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 6000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 6000000
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 720,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 720,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 63488,
+    "ram_total_bytes": 20480,
+    "flash_used_pct": 1.13,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 16000088,
+    "instructions": 8000000,
+    "steps_executed": 8000000,
+    "memory_reads": 8000000,
+    "memory_writes": 1,
+    "peripheral_accesses": 19,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 662,
+        "count": 31250
+      }
+    ]
+  }
+}

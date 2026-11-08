@@ -117,7 +117,7 @@ impl FromStr for GpioRegisterLayout {
         match v.as_str() {
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
             "wch" | "ch32v003" => Ok(Self::Wch),
-            "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" => Ok(Self::Stm32V2),
+            "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" | "c5" | "stm32c5" => Ok(Self::Stm32V2),
             "nrf52" | "nordic" => Ok(Self::Nrf52),
             "nrf54l" | "nrf54lm20a" | "nrf54l15" => Ok(Self::Nrf54l),
             "kinetis" | "kw41z" | "nxp" => Ok(Self::Kinetis),
@@ -126,7 +126,7 @@ impl FromStr for GpioRegisterLayout {
             "ra_port" | "ra4m1" | "renesas_port" => Ok(Self::RaPort),
             "imxrt" | "imxrt_gpio" => Ok(Self::Imxrt),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, sam_port, ra_port, imxrt",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, stm32c5, nrf52, nrf54l, kinetis, efr32s2, sam_port, ra_port, imxrt",
                 value
             )),
         }
@@ -1578,6 +1578,11 @@ struct CaptureRoute {
     ti: u8,
     /// Signal name for `gpio_routing().func`, e.g. `"TIM2_CH1"`.
     func: &'static str,
+    /// Remap field the route is live under (CH32V003 AFIO_PCFR1), if any.
+    gate: Option<crate::peripherals::pad_routing::RemapGate>,
+    /// The level this route last reported to the timer. Starts low, the
+    /// timer's own reset view of an unconnected input.
+    reported: bool,
 }
 
 /// A level change on a pad routed to a timer input, drained by the bus
@@ -1674,6 +1679,10 @@ pub struct GpioPort {
     /// (Kinetis PORTx, RA PFS, i.MX RT IOMUXC): its peripheral id and the
     /// encoding. Chip yaml `config: { pad_control: … }`.
     pad_control: Option<(String, crate::pins::PadControl)>,
+    /// Edge observers on this port's pads ([`Self::add_observer`]). They
+    /// hear pads a peripheral drives through [`Self::pad_routes`]; the
+    /// output latch does not report to them.
+    observers: Vec<std::sync::Arc<dyn crate::peripherals::device::GpioObserver>>,
 }
 
 impl Default for GpioPort {
@@ -1811,6 +1820,7 @@ impl GpioPort {
             wire_edges: Vec::new(),
             console_af: Vec::new(),
             pad_control: None,
+            observers: Vec::new(),
         }
     }
 
@@ -1993,6 +2003,8 @@ impl GpioPort {
             timer,
             ti,
             func,
+            gate: None,
+            reported: false,
         });
     }
 
@@ -2001,6 +2013,9 @@ impl GpioPort {
     /// (RM0008 §9.1.11: a timer channel input is an input-floating or pulled
     /// pad, not an AF output).
     fn capture_route_live(&self, route: &CaptureRoute) -> bool {
+        if route.gate.as_ref().is_some_and(|g| !g.open()) {
+            return false;
+        }
         match route.af {
             Some(af) => {
                 Self::selected_function(&self.family, self.pad_claims.as_ref(), route.pin)
@@ -2010,33 +2025,29 @@ impl GpioPort {
         }
     }
 
-    /// The input word timer routes watch, or 0 with no routes (no read).
-    #[inline]
-    fn capture_input_word(&self) -> u32 {
-        if self.capture_routes.is_empty() {
-            return 0;
-        }
-        self.read_reg(self.idr_offset())
-    }
-
-    /// Record an edge for every live timer route whose pad input moved since
-    /// `before` (a [`Self::capture_input_word`] taken ahead of the change).
-    fn record_timer_input_edges(&mut self, before: u32) {
+    /// Report the pad level of every live timer route that differs from the
+    /// level it last reported. A level is what the timer's input stage sees,
+    /// so this covers a pad moving (an outside driver, a pull switched on by
+    /// a CFGLR/OUTDR write) and a route going live on a pad that was already
+    /// high: an encoder input idling high behind its pull-up from reset, or
+    /// a remap that selects such a pad. The level is remembered per route,
+    /// so switching the remap between two pads that sit at different levels
+    /// reports the newly selected pad only when it next differs from what
+    /// that route last reported.
+    fn record_timer_input_edges(&mut self) {
         if self.capture_routes.is_empty() {
             return;
         }
-        let after = self.read_reg(self.idr_offset());
-        let diff = before ^ after;
-        if diff == 0 {
-            return;
-        }
+        let word = self.read_reg(self.idr_offset());
         for i in 0..self.capture_routes.len() {
             let route = self.capture_routes[i].clone();
-            if (diff >> route.pin) & 1 != 0 && self.capture_route_live(&route) {
+            let level = (word >> route.pin) & 1 != 0;
+            if level != route.reported && self.capture_route_live(&route) {
+                self.capture_routes[i].reported = level;
                 self.timer_edges.push(TimerInputEdge {
                     timer: route.timer,
                     ti: route.ti,
-                    level: (after >> route.pin) & 1 != 0,
+                    level,
                 });
             }
         }
@@ -2277,6 +2288,20 @@ impl GpioPort {
         self.add_pad_route_selector(cell, pin, af.map(u32::from), line, func);
     }
 
+    /// [`Self::add_pad_route`] for a fixed-map (F1-style) pad that carries
+    /// the signal only while `gate`'s remap field selects it.
+    pub(crate) fn add_gated_pad_route(
+        &mut self,
+        cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        pin: u8,
+        line: usize,
+        func: &'static str,
+        gate: Option<crate::peripherals::pad_routing::RemapGate>,
+    ) {
+        self.pad_routes
+            .bind_gated(cell, pin, None, line, func, gate);
+    }
+
     /// Install one pad route against a full-width selector.
     ///
     /// [`add_pad_route`](Self::add_pad_route) narrows to an AF NIBBLE because
@@ -2441,8 +2466,37 @@ impl GpioPort {
         crate::pins::watch_begin(self);
         let r = mutate(self);
         crate::pins::watch_end(self);
+        self.sync_pad_line_observers();
         self.sync_pin_cells();
         r
+    }
+
+    /// Attach an edge observer (an `nrz_gpio` LED strip on an SPI MOSI pad).
+    ///
+    /// Only pads a peripheral drives through a pad route report: the wire
+    /// stamps each edge with the cycle it happened at, which a pulse-width
+    /// decoder needs. Latch writes do not report — a register write here
+    /// has no cycle to give, so an observer on a bit-banged pad would decode
+    /// noise rather than nothing.
+    pub fn add_observer(
+        &mut self,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    ) {
+        self.observers.push(observer);
+        self.sync_pad_line_observers();
+    }
+
+    /// Re-register the edge observers with the wires the pads select now.
+    /// One `is_empty` on a port nobody observes.
+    fn sync_pad_line_observers(&mut self) {
+        if self.observers.is_empty() || self.pad_routes.is_empty() {
+            return;
+        }
+        let mut routes = std::mem::take(&mut self.pad_routes);
+        routes.sync_observers(&self.observers, |pin| {
+            Self::selected_function(&self.family, self.pad_claims.as_ref(), pin)
+        });
+        self.pad_routes = routes;
     }
 
     /// Re-register watched pads with the wires that drive them, so a pad that
@@ -2563,7 +2617,6 @@ impl crate::pins::PinPort for GpioPort {
             return None;
         }
         let before = crate::Peripheral::read_gpio_input(self, pin)?;
-        let capture_before = self.capture_input_word();
         let ok = self.mutate_pads(|s| match ext {
             crate::pins::External::Level(level) => {
                 let ok = s.family.set_external_input(pin, level);
@@ -2586,7 +2639,7 @@ impl crate::pins::PinPort for GpioPort {
         if ok {
             self.sync_wire_input(pin);
         }
-        self.record_timer_input_edges(capture_before);
+        self.record_timer_input_edges();
         let after = crate::Peripheral::read_gpio_input(self, pin)?;
         ok.then_some(crate::pins::InputChange { before, after })
     }
@@ -2647,6 +2700,9 @@ impl crate::pins::PinPort for GpioPort {
 
     fn routes_changed(&mut self) {
         self.sync_pad_line_taps();
+        self.sync_pad_line_observers();
+        // A remap can make a timer route live on a pad already high.
+        self.record_timer_input_edges();
         // A pad that just became routed to a peripheral line hands it the
         // level the outside already holds there.
         self.sync_wire_inputs();
@@ -2721,6 +2777,14 @@ impl GpioPort {
 }
 
 impl crate::Peripheral for GpioPort {
+    fn observe_port_pads(
+        &mut self,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    ) -> bool {
+        self.add_observer(observer);
+        true
+    }
+
     fn on_system_reset(&mut self) {
         // SAM PORT only: registers to power-on, the outside world's levels kept.
         if let GpioFamily::SamPort(g) = &mut self.family {
@@ -2729,6 +2793,22 @@ impl crate::Peripheral for GpioPort {
             g.external = external;
             g.in_latch = in_latch;
             self.sync_pin_cells();
+        }
+        // WCH CH32V003: CFGLR back to floating input and OUTDR to 0 (RM
+        // §7.3), so a pad the firmware drove high is released by a watchdog
+        // or software reset instead of staying lit across the reboot. The
+        // pins the outside world holds stay held.
+        if self.wch_single_config_register {
+            self.mutate_pads(|s| {
+                if let GpioFamily::Stm32F1(g) = &mut s.family {
+                    let (external, idr) = (g.external, g.idr);
+                    *g = F1Gpio::new();
+                    g.external = external;
+                    g.idr = idr & external;
+                }
+            });
+            self.sync_wire_inputs();
+            self.refresh_console_af();
         }
     }
     /// Not in the per-cycle walk: this model overrides neither `tick()` nor
@@ -2769,17 +2849,14 @@ impl crate::Peripheral for GpioPort {
         reg_val &= !mask;
         reg_val |= (value as u32) << (byte_offset * 8);
 
-        let before = if reg_offset == self.idr_offset() {
-            self.capture_input_word()
-        } else {
-            0
-        };
+        // Any write can move a timer input or make its route live: besides
+        // an IDR poke, a CFGLR or OUTDR write that turns a pull-up on, or that
+        // makes a pad a digital input, changes what the timer's input stage
+        // sees (an encoder needs the level of the input that is not moving).
         self.mutate_pads(|s| s.write_reg(reg_offset, reg_val));
         self.sync_wire_inputs();
         self.refresh_console_af();
-        if reg_offset == self.idr_offset() {
-            self.record_timer_input_edges(before);
-        }
+        self.record_timer_input_edges();
         Ok(())
     }
 
@@ -2796,18 +2873,11 @@ impl crate::Peripheral for GpioPort {
         // wins). Silicon performs the STR as one 32-bit transaction; mirror
         // that by handing write_reg the full word. Silicon-verified on the
         // bench STM32F103 (stm32f1_exec_oracle::gpioa_bsrr_set_reset).
-        let input_reg = (offset & !3) == self.idr_offset();
-        let before = if input_reg {
-            self.capture_input_word()
-        } else {
-            0
-        };
+        // See `write`: a configuration write can move a timer input too.
         self.mutate_pads(|s| s.write_reg(offset & !3, value));
         self.sync_wire_inputs();
         self.refresh_console_af();
-        if input_reg {
-            self.record_timer_input_edges(before);
-        }
+        self.record_timer_input_edges();
         Ok(())
     }
 
@@ -2935,6 +3005,29 @@ impl crate::Peripheral for GpioPort {
         fits
     }
 
+    fn bind_remapped_timer_capture_pad(
+        &mut self,
+        pin: u8,
+        timer: usize,
+        ti: u8,
+        func: &'static str,
+        gate: Option<crate::peripherals::pad_routing::RemapGate>,
+    ) -> bool {
+        if !matches!(self.family, GpioFamily::Stm32F1(_)) || pin >= 16 {
+            return false;
+        }
+        self.capture_routes.push(CaptureRoute {
+            pin,
+            af: None,
+            timer,
+            ti,
+            func,
+            gate,
+            reported: false,
+        });
+        true
+    }
+
     /// F1 only: the timer channel outputs share their DEFAULT pads with
     /// SPI1/USART/I²C, so the route is conditional — see
     /// [`crate::peripherals::pad_routing::PadRoutes::bind_when_driving`].
@@ -2961,6 +3054,41 @@ impl crate::Peripheral for GpioPort {
             GpioFamily::RaPort(_) if pin < 16 => {
                 self.pad_routes
                     .bind(cell, pin, Some(RA_PSEL_GPT), line, func);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn bind_remapped_timer_output_pad(
+        &mut self,
+        cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        pin: u8,
+        line: usize,
+        func: &'static str,
+        gate: crate::peripherals::pad_routing::RemapGate,
+    ) -> bool {
+        match self.family {
+            GpioFamily::Stm32F1(_) if pin < 16 => {
+                self.pad_routes
+                    .bind_when_driving_gated(cell, pin, None, line, func, Some(gate));
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn bind_timer_output_pad_function(
+        &mut self,
+        cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        pin: u8,
+        function: u32,
+        line: usize,
+        func: &'static str,
+    ) -> bool {
+        match self.family {
+            GpioFamily::SamPort(_) if pin < 32 && function < 16 => {
+                self.pad_routes.bind(cell, pin, Some(function), line, func);
                 true
             }
             _ => false,
@@ -3388,6 +3516,80 @@ mod tests {
         assert_eq!(rd32(&gpio, 0x00), 0x4444_4444); // CRL
         assert_eq!(rd32(&gpio, 0x04), 0x4444_4444); // CRH
         assert_eq!(rd32(&gpio, 0x0C) & 0xFFFF, 0); // ODR
+    }
+
+    #[derive(Debug, Default)]
+    struct Edges(std::sync::Mutex<Vec<(u8, bool, u64)>>);
+
+    impl crate::peripherals::device::GpioObserver for Edges {
+        fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
+            self.0.lock().unwrap().push((pin, to, sim_cycle));
+        }
+    }
+
+    /// CH32V003 PC6 carries SPI1_MOSI only while CFGLR selects the
+    /// alternate function, and only then does an observer on the port hear
+    /// the wire, at the cycle the wire stamps.
+    #[test]
+    fn wch_pc6_observer_hears_spi_mosi_only_in_af_mode() {
+        use crate::peripherals::pad_lines::PadLines;
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Wch);
+        let wire = std::sync::Arc::new(PadLines::new(
+            &["SCK", "MOSI", "MISO"],
+            &[false, false, false],
+        ));
+        gpio.add_pad_route(&wire, 6, None, 1, "SPI1_MOSI");
+        let edges = std::sync::Arc::new(Edges::default());
+        gpio.add_observer(edges.clone());
+
+        // Reset: PC6 is a floating input. The wire moves; the pad does not
+        // carry it.
+        wire.set_stamp(Some(100));
+        wire.set_line(1, true);
+        wire.set_line(1, false);
+        assert!(edges.0.lock().unwrap().is_empty());
+
+        // WS2812BDMAInit: PC6 = 10 MHz alternate-function push-pull.
+        gpio.write_u32(0x00, 0x9 << 24).unwrap();
+        wire.set_stamp(Some(200));
+        wire.set_line(1, true);
+        wire.set_stamp(Some(216));
+        wire.set_line(1, false);
+        // An edge with no known cycle is not reported.
+        wire.set_stamp(None);
+        wire.set_line(1, true);
+        assert_eq!(
+            *edges.0.lock().unwrap(),
+            vec![(6, true, 200), (6, false, 216)]
+        );
+
+        // Back to a plain output: the pad stops reporting the wire.
+        gpio.write_u32(0x00, 0x1 << 24).unwrap();
+        wire.set_stamp(Some(300));
+        wire.set_line(1, false);
+        assert_eq!(edges.0.lock().unwrap().len(), 2);
+    }
+
+    /// A system reset (the IWDG time-out in ch32fun's iwdg) puts a CH32V003
+    /// port back to floating inputs with OUTDR = 0, so a lit LED goes dark,
+    /// while a level the outside world holds on a pad stays.
+    #[test]
+    fn wch_system_reset_releases_driven_pads() {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Wch);
+        // PD0 10 MHz push-pull, driven high through BSHR.
+        gpio.write_u32(0x00, 0x1).unwrap();
+        gpio.write_u32(0x10, 0x1).unwrap();
+        gpio.family.set_external_input(3, true);
+        assert_eq!(gpio.pad_level(0), Some(true));
+        gpio.on_system_reset();
+        assert_eq!(gpio.read_u32(0x00).unwrap(), 0x4444_4444);
+        assert_eq!(gpio.read_u32(0x0C).unwrap(), 0);
+        assert_eq!(
+            gpio.read_u32(0x08).unwrap() & 0x8,
+            0x8,
+            "PD3 still held high"
+        );
+        assert_ne!(gpio.pad_level(0), Some(true));
     }
 
     #[test]

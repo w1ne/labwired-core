@@ -1,0 +1,29 @@
+{
+  "target_id": "m5stack-atoms3-lite",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/m5stack-atoms3-lite/onboarding-smoke.yaml",
+  "system": "configs/systems/m5stack-atoms3-lite.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T06:58:58Z",
+  "finished_at_utc": "2026-11-06T06:59:13Z",
+  "elapsed_seconds": 16,
+  "elapsed_ms": 15653,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 14.659,
+    "build_firmware": 0.485,
+    "run_smoke": 0.469
+  },
+  "stages_ms": {
+    "build_cli": 14659,
+    "build_firmware": 485,
+    "run_smoke": 469
+  },
+  "firmware_build_script": "examples/m5stack-atoms3-lite/ci/build-firmware.sh"
+}

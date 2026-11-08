@@ -1,0 +1,7 @@
+[2m2026-11-08T01:57:01.882612Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../chips/ch32x035c8t6-ch32fun-smoke.yaml
+[2m2026-11-08T01:57:01.884140Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+[2m2026-11-08T01:57:02.870623Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
+[2m2026-11-08T01:57:03.862719Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
+[2m2026-11-08T01:57:04.856578Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
+PASS  9/9 checks · ch32fun-exti-smoke · 8000000 steps · 3.97s

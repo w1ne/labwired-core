@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="10" failures="2" errors="0" time="3.951927">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="2c4785fdea9b0c6df8d8e12ab08a5db4dd079910d89f9e15d0dbb007d5f41067"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="3.951927">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: gpio_edges: gpioc:14 &gt;= 3 edges" time="0.000000">
+    <failure message="assertion failed">assertion 1: gpio_edges: gpioc:14 &gt;= 3 edges
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=8000000
+stop_reason_details.observed.steps_executed=8000000
+steps_executed=8000000
+cycles=16000088
+instructions=8000000
+limits:
+  - max_steps=8000000
+  - max_cycles=8000000
+  - wall_time_ms=120000
+firmware_hash=2c4785fdea9b0c6df8d8e12ab08a5db4dd079910d89f9e15d0dbb007d5f41067
+firmware=/dev/shm/negctl/examples/weact-ch32x035/ch32fun/exti_pin_change_isr.elf
+system=/dev/shm/negctl/examples/weact-ch32x035/../../configs/systems/weact-ch32x035-ch32fun-exti-smoke.yaml
+script=/dev/shm/negctl/examples/weact-ch32x035/ch32fun-exti-smoke.yaml
+assertions:
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioc:14&quot;, min_edges: 3 } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073807368, expected_value: 32768, mask: None, size: Some(32), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073808384, expected_value: 128, mask: None, size: Some(32), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073808392, expected_value: 128, mask: None, size: Some(32), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073808396, expected_value: 128, mask: None, size: Some(32), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073808404, expected_value: 0, mask: None, size: Some(32), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 3758153728, expected_value: 1048576, mask: Some(1048576), size: Some(32), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 3758153760, expected_value: 0, mask: Some(1048576), size: Some(32), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 3758154496, expected_value: 0, mask: Some(1048576), size: Some(32), node: None } }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x40010008=0x8000" time="0.000000">
+    <failure message="assertion failed">assertion 2: memory_value: @0x40010008=0x8000
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=8000000
+stop_reason_details.observed.steps_executed=8000000
+steps_executed=8000000
+cycles=16000088
+instructions=8000000
+limits:
+  - max_steps=8000000
+  - max_cycles=8000000
+  - wall_time_ms=120000
+firmware_hash=2c4785fdea9b0c6df8d8e12ab08a5db4dd079910d89f9e15d0dbb007d5f41067
+firmware=/dev/shm/negctl/examples/weact-ch32x035/ch32fun/exti_pin_change_isr.elf
+system=/dev/shm/negctl/examples/weact-ch32x035/../../configs/systems/weact-ch32x035-ch32fun-exti-smoke.yaml
+script=/dev/shm/negctl/examples/weact-ch32x035/ch32fun-exti-smoke.yaml
+assertions:
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioc:14&quot;, min_edges: 3 } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073807368, expected_value: 32768, mask: None, size: Some(32), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073808384, expected_value: 128, mask: None, size: Some(32), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073808392, expected_value: 128, mask: None, size: Some(32), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073808396, expected_value: 128, mask: None, size: Some(32), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073808404, expected_value: 0, mask: None, size: Some(32), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 3758153728, expected_value: 1048576, mask: Some(1048576), size: Some(32), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 3758153760, expected_value: 0, mask: Some(1048576), size: Some(32), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 3758154496, expected_value: 0, mask: Some(1048576), size: Some(32), node: None } }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x40010400=0x80" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x40010408=0x80" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x4001040c=0x80" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x40010414=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: memory_value: @0xe000e000=0x100000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: memory_value: @0xe000e020=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: memory_value: @0xe000e300=0x0" time="0.000000">
+  </testcase>
+</testsuite>

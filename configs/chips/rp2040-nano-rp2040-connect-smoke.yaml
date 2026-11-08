@@ -1,0 +1,49 @@
+# Arduino Nano RP2040 Connect (ABX00052), narrowed to GP0 / header TX and the
+# onboard LSM6DSOX on I2C0 / GP12-GP13. NINA-W102, microphone, crypto device,
+# RGB LED, USB and QSPI remain outside this profile.
+name: "rp2040-nano-rp2040-connect-smoke"
+arch: "arm"
+core: "cortex-m0+"
+registers_count: 240
+cpu_hz: 133_000_000
+flash:
+  base: 0x10000000
+  size: "16384KB"
+ram:
+  base: 0x20000000
+  size: "264KB"
+pins:
+  # Arduino's pinout maps header TX to RP2040 GPIO0 / UART0 TX.
+  GP0: { gpio: "sio", bit: 0 }
+  # The board's onboard LSM6DSOX is wired to the A4/A5 I2C0 pair.
+  GP12: { gpio: "sio", bit: 12 }
+  GP13: { gpio: "sio", bit: 13 }
+reset_vector_offset: 0x100
+peripherals:
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x40034000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/uart0.yaml"
+      profile: "pl011"
+  - id: "i2c0"
+    type: "rp2040_i2c"
+    base_address: 0x40044000
+    size: "4KB"
+    irq: 23
+    config:
+      debug_schema: "../peripherals/rp2040/i2c0.yaml"
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40014000
+    size: "4KB"
+    irq: 13
+    config:
+      debug_schema: "../peripherals/rp2040/io_bank0.yaml"
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/sio.yaml"

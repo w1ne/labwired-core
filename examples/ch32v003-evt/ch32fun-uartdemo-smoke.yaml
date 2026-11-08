@@ -1,0 +1,13 @@
+# ch32fun examples/uartdemo, unmodified: FUNCONF_USE_UARTPRINTF routes printf
+# to USART1 (PD5, 115200). One "Count: N" line per 100 ms loop at 48 MHz.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/uartdemo.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 30000000
+  max_steps: 40000000
+  wall_time_ms: 600000
+assertions:
+  - uart_ordered: ["Count: 0\n", "Count: 1\n", "Count: 2\n", "Count: 3\n"]
+  - gpio_edges: { pin: "gpiod:0", min_edges: 8 }

@@ -1,0 +1,14 @@
+# WCH CH32V003 evaluation board profile for the 48 MHz PLL bring-up and
+# SysTick-timed PD0 toggle, with USART1 TX on PD5 reporting each check. The
+# external LED is the test connection used by the smoke, not a factory
+# installed LED on PD0.
+name: ch32v003evt-systick-smoke
+chip: ../chips/ch32v003f4p6-systick-smoke.yaml
+external_devices: []
+board_io:
+  - id: external_led_pd0
+    kind: led
+    peripheral: gpiod
+    pin: 0
+    signal: output
+    active_high: true

@@ -1,0 +1,70 @@
+# Narrow shared profile for Seeed Studio XIAO nRF54L15 and XIAO nRF54L15 Sense.
+#
+# This profile models reset memory and the three nRF54L GPIO ports. The board
+# header map, active-low user LED and active-low user key pins are exposed
+# below. Board system profiles select the board IO they actually claim. The
+# Sense-only IMU, microphone, and their power control are not modeled. USB/
+# SAMD11 debug, UARTE, wireless, ADC, and battery management are also outside
+# this smoke profile.
+#
+# Sources: Nordic nRF54L15 Product Specification and Seeed XIAO nRF54L15 board
+# guide / schematic. The GPIO block layout is the nRF54L profile used by
+# configs/chips/nrf54l15.yaml.
+
+name: "nrf54l15-xiao-smoke"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 128_000_000
+
+flash:
+  base: 0x00000000
+  size: "1524KB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+
+# Seeed's board guide maps the XIAO connector names to nRF54L15 GPIO pads.
+# Only GPIO is claimed here; peripheral alternate functions are intentionally
+# omitted from this narrow profile.
+pins:
+  D0: { gpio: "gpio1", bit: 4, functions: [{ type: gpio, peripheral: gpio1 }] }
+  D1: { gpio: "gpio1", bit: 5, functions: [{ type: gpio, peripheral: gpio1 }] }
+  D2: { gpio: "gpio1", bit: 6, functions: [{ type: gpio, peripheral: gpio1 }] }
+  D3: { gpio: "gpio1", bit: 7, functions: [{ type: gpio, peripheral: gpio1 }] }
+  D4: { gpio: "gpio1", bit: 10, functions: [{ type: gpio, peripheral: gpio1 }] }
+  D5: { gpio: "gpio1", bit: 11, functions: [{ type: gpio, peripheral: gpio1 }] }
+  D6: { gpio: "gpio2", bit: 8, functions: [{ type: gpio, peripheral: gpio2 }] }
+  D7: { gpio: "gpio2", bit: 7, functions: [{ type: gpio, peripheral: gpio2 }] }
+  D8: { gpio: "gpio2", bit: 1, functions: [{ type: gpio, peripheral: gpio2 }] }
+  D9: { gpio: "gpio2", bit: 4, functions: [{ type: gpio, peripheral: gpio2 }] }
+  D10: { gpio: "gpio2", bit: 2, functions: [{ type: gpio, peripheral: gpio2 }] }
+  D11: { gpio: "gpio0", bit: 3, functions: [{ type: gpio, peripheral: gpio0 }] }
+  D12: { gpio: "gpio0", bit: 4, functions: [{ type: gpio, peripheral: gpio0 }] }
+  D13: { gpio: "gpio2", bit: 10, functions: [{ type: gpio, peripheral: gpio2 }] }
+  D14: { gpio: "gpio2", bit: 9, functions: [{ type: gpio, peripheral: gpio2 }] }
+  D15: { gpio: "gpio2", bit: 6, functions: [{ type: gpio, peripheral: gpio2 }] }
+  USER_LED: { gpio: "gpio2", bit: 0, functions: [{ type: gpio, peripheral: gpio2 }] }
+  USER_KEY: { gpio: "gpio0", bit: 0, functions: [{ type: gpio, peripheral: gpio0 }] }
+
+peripherals:
+  - id: "gpio0"
+    type: "gpio"
+    base_address: 0x5010A000
+    size: 768
+    config:
+      profile: "nrf54l"
+      num_pins: 7
+  - id: "gpio1"
+    type: "gpio"
+    base_address: 0x500D8200
+    size: 768
+    config:
+      profile: "nrf54l"
+      num_pins: 17
+  - id: "gpio2"
+    type: "gpio"
+    base_address: 0x50050400
+    size: 768
+    config:
+      profile: "nrf54l"
+      num_pins: 11

@@ -1,0 +1,29 @@
+{
+  "target_id": "ch32v003f4p6-sht31-i2c",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/ch32v003-evt/i2c-smoke.yaml",
+  "system": "configs/systems/ch32v003evt-sht31-smoke.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T20:30:04Z",
+  "finished_at_utc": "2026-11-06T20:30:06Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1728,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.638,
+    "build_firmware": 0.174,
+    "run_smoke": 0.824
+  },
+  "stages_ms": {
+    "build_cli": 638,
+    "build_firmware": 174,
+    "run_smoke": 824
+  },
+  "firmware_build_script": "examples/ch32v003-evt/build-sht31-firmware.sh"
+}

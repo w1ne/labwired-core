@@ -82,6 +82,17 @@ pub const LEDC_SIZE: u64 = 0x1000;
 /// matrix source id; `new()` hard-codes it, `new_with_source` allows override.
 pub const LEDC_INTR_SOURCE_ID: u32 = 35;
 
+/// ESP32-S2: the same LEDC block (register map and `LEDC_DATE` reset are
+/// identical in `soc/esp32s2/register/soc/ledc_reg.h`) at `0x3F41_9000`.
+/// What differs: `ETS_LEDC_INTR_SOURCE = 45` (`soc/esp32s2/.../interrupts.h`),
+/// `LEDC_LS_SIG_OUT0_IDX = 79` (`gpio_sig_map.h`), and RC_FAST ≈ 8.5 MHz
+/// (`SOC_CLK_RC_FAST_FREQ_APPROX`, `clk_tree_defs.h`) for `APB_CLK_SEL = 2`.
+pub const ESP32S2_LEDC_INTR_SOURCE_ID: u32 = 45;
+const ESP32S2_LEDC_LS_SIG_OUT0: u32 = 79;
+const ESP32S2_RC_FAST_HZ: u64 = 8_500_000;
+/// S3 RC_FAST (`APB_CLK_SEL = 2`).
+const ESP32S3_RC_FAST_HZ: u64 = 17_500_000;
+
 const NUM_CHANNELS: usize = 8;
 const NUM_TIMERS: usize = 4;
 
@@ -176,6 +187,12 @@ pub struct Esp32s3Ledc {
     /// Per timer: the cycle its counter last restarted (pad waveform phase).
     timer_origin: [u64; NUM_TIMERS],
     cpu_hz: u64,
+    /// RC_FAST frequency, the timer source when `LEDC_CONF.APB_CLK_SEL = 2`.
+    rc_fast_hz: u64,
+    /// ESP32-S2: the output-matrix signal of channel 0, published through
+    /// [`Peripheral::matrix_output_lines`]. `None` on the S3, whose GPIO
+    /// binds 73..80 itself (`SystemBus::wire_esp32s3_ledc_pads`).
+    matrix_sig_out0: Option<u32>,
 
     /// Notified on each committed channel duty (`ledcWrite`), the hook the
     /// classic ESP32 and ESP32-C3 LEDC offer, so PWM-driven parts (a servo)
@@ -212,7 +229,18 @@ impl Esp32s3Ledc {
             pads: LedcPads::new(LEDC_LINES),
             timer_origin: [0; NUM_TIMERS],
             cpu_hz: DEFAULT_CPU_HZ,
+            rc_fast_hz: ESP32S3_RC_FAST_HZ,
+            matrix_sig_out0: None,
             duty_observers: Vec::new(),
+        }
+    }
+
+    /// The ESP32-S2 LEDC (see [`ESP32S2_LEDC_INTR_SOURCE_ID`]).
+    pub fn new_esp32s2(intr_source_id: u32) -> Self {
+        Self {
+            rc_fast_hz: ESP32S2_RC_FAST_HZ,
+            matrix_sig_out0: Some(ESP32S2_LEDC_LS_SIG_OUT0),
+            ..Self::new_with_source(intr_source_id)
         }
     }
 
@@ -242,6 +270,15 @@ impl Esp32s3Ledc {
     /// `LEDC_LS_SIG_OUT0..7` (73..80); see `SystemBus::wire_esp32s3_ledc_pads`.
     pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
         self.pads.lines_arc()
+    }
+
+    /// [`Self::pad_lines_arc`] for the S3 binding only: `None` for the S2
+    /// variant, whose signals are not 73..80.
+    pub(crate) fn s3_pad_lines(&mut self) -> Option<Arc<PadLines>> {
+        if self.matrix_sig_out0.is_some() {
+            return None;
+        }
+        Some(self.pads.lines_arc())
     }
 
     /// Active (committed) duty for channel `ch`, as exposed at DUTY_R. The
@@ -344,7 +381,7 @@ impl Esp32s3Ledc {
         self.pads.advance_to(now);
         let slow_hz = match self.conf & 0b11 {
             1 => 80_000_000,
-            2 => 17_500_000,
+            2 => self.rc_fast_hz,
             3 => 40_000_000,
             _ => 0,
         };
@@ -534,6 +571,11 @@ impl Peripheral for Esp32s3Ledc {
             reschedule_delay,
             ..Default::default()
         }
+    }
+
+    fn matrix_output_lines(&mut self) -> Option<(u32, Arc<PadLines>)> {
+        let first = self.matrix_sig_out0?;
+        Some((first, self.pads.lines_arc()))
     }
 
     fn line_names(&self) -> &'static [&'static str] {
@@ -752,5 +794,26 @@ mod tests {
 
         // An unconfigured timer (DUTY_RES 0) reports no PWM.
         assert_eq!(Esp32s3Ledc::new().channel_duty_fraction(0), 0.0);
+    }
+
+    #[test]
+    fn esp32s2_variant_publishes_signals_79_and_source_45() {
+        let mut s2 = Esp32s3Ledc::new_esp32s2(ESP32S2_LEDC_INTR_SOURCE_ID);
+        let (first, lines) = s2.matrix_output_lines().expect("S2 publishes its wire");
+        assert_eq!(first, 79, "LEDC_LS_SIG_OUT0_IDX on the S2");
+        assert_eq!(lines.names(), LEDC_LINES);
+        // The S3 binding must not also claim 73..80 for the S2 wire.
+        assert!(s2.s3_pad_lines().is_none());
+        assert_eq!(s2.read_u32(REG_DATE).unwrap(), DATE_RESET);
+
+        s2.write_u32(REG_INT_ENA, duty_chng_end_bit(0)).unwrap();
+        s2.write_u32(ch_off(0, CH_CONF1), CONF1_DUTY_START).unwrap();
+        let mut out = Vec::new();
+        s2.matrix_irq_sources_into(&mut out);
+        assert_eq!(out, vec![45]);
+
+        let mut s3 = Esp32s3Ledc::new();
+        assert!(s3.matrix_output_lines().is_none());
+        assert!(s3.s3_pad_lines().is_some());
     }
 }

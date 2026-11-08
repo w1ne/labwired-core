@@ -1,0 +1,42 @@
+# Narrow ESP32-C3-DevKitM-1-N4X profile for UART0 and the wired BME280 I2C0
+# path. Only the memory map, GPIO matrix, UART console, and I2C0 controller
+# required by the smoke are declared.
+name: "esp32c3-devkitm1-n4x-bme280-smoke"
+arch: "riscv"
+core: "rv32imc"
+registers_count: 31
+cpu_hz: 160_000_000
+
+flash:
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  base: 0x3FC80000
+  size: "400KB"
+
+pins:
+  GPIO4: { gpio: "gpio", bit: 4 }
+  GPIO5: { gpio: "gpio", bit: 5 }
+
+peripherals:
+  - id: "uart0"
+    type: "esp32c3_uart"
+    irq: 21
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32c3/uart0.yaml"
+
+  - id: "gpio"
+    type: "esp32c3_gpio"
+    base_address: 0x60004000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/gpio.yaml"
+
+  - id: "i2c0"
+    type: "esp32c3_i2c"
+    base_address: 0x60013000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/i2c0.yaml"

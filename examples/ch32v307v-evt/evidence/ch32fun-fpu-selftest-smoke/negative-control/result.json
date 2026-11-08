@@ -1,0 +1,379 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 0,
+  "cycles": 360,
+  "instructions": 114,
+  "stop_reason": "decode_error",
+  "stop_reason_details": {
+    "triggered_stop_condition": "decode_error",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 100000000,
+    "max_cycles": 100000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "all 194d1e10",
+          "min_count": 1
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "static-rtz 3eaaaaaa",
+          "min_count": 1
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "newton-sqrt2 3fb504f3",
+          "min_count": 1
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "harmonic64 4097cdf6",
+          "min_count": 1
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "mstatus-fs-sd 00000013",
+          "min_count": 1
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "done",
+          "min_count": 1
+        }
+      },
+      "passed": false
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      3348,
+      536903280,
+      536871932,
+      0,
+      0,
+      0,
+      0,
+      2166136832,
+      0,
+      3716,
+      536870928,
+      536870928,
+      1073876992,
+      4096,
+      3758097280,
+      0,
+      0,
+      0,
+      0,
+      28672,
+      0,
+      0,
+      0,
+      16777216,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1950,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 3340,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 112,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "6064c2a773f0849d1b0ae39ac858c866ad4be106b595b9afbb71290a3f51d7cd",
+  "config": {
+    "firmware": "./examples/ch32v307v-evt/ch32fun/fpu_selftest.elf",
+    "system": "negative-control/sys.yaml",
+    "script": "negative-control/smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "exten",
+        "kind": "declarative",
+        "base": 1073887232,
+        "registers": [
+          {
+            "name": "EXTEN_CTR",
+            "offset": 0,
+            "size": 32,
+            "value": 16,
+            "fields": [
+              {
+                "name": "USBDLS",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "USBDPU",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "PLL_HSI_PRE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "LOCKUP_EN",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "LOCKUP_RSTF",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "ULLDO_TRIM",
+                "bits": [
+                  9,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "LDO_TRIM",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "HSE_KEEP_LP",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "debug_printf",
+        "kind": "native",
+        "base": 3758097280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfic",
+        "kind": "native",
+        "base": 3758153728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1073810432,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioe",
+        "kind": "native",
+        "base": 1073813504,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 3716,
+    "data_bytes": 0,
+    "bss_bytes": 4,
+    "flash_used_bytes": 3716,
+    "ram_static_bytes": 4,
+    "flash_total_bytes": 294912,
+    "ram_total_bytes": 32768,
+    "flash_used_pct": 1.26,
+    "ram_static_pct": 0.01,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 360,
+    "instructions": 114,
+    "steps_executed": 0,
+    "memory_reads": 118,
+    "memory_writes": 19,
+    "peripheral_accesses": 13,
+    "exceptions": 0
+  }
+}

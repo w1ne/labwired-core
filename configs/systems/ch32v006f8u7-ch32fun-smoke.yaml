@@ -1,0 +1,12 @@
+# Bare CH32V006F8U7 (QFN20) running unmodified ch32fun CH32V00x examples,
+# with a WCH-LinkE on SWIO for the debug-printf console and serial taps on
+# USART1 TX (PD5) and USART2 TX (PD2). PD0/PD4/PD6/PC0 are the pins
+# ch32fun's examples_x00x/blink drives.
+name: ch32v006f8u7-ch32fun-smoke
+chip: ../chips/ch32v006f8u7-ch32fun-smoke.yaml
+external_devices: []
+board_io:
+  - { id: led_pd0, kind: led, peripheral: gpiod, pin: 0, signal: output, active_high: true }
+  - { id: led_pd4, kind: led, peripheral: gpiod, pin: 4, signal: output, active_high: true }
+  - { id: led_pd6, kind: led, peripheral: gpiod, pin: 6, signal: output, active_high: true }
+  - { id: led_pc0, kind: led, peripheral: gpioc, pin: 0, signal: output, active_high: true }

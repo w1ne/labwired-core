@@ -1,0 +1,43 @@
+# ESP32-S3-DevKitC-1 v1.0 N16R8 narrow smoke: UART0, the GPIO48 RGB LED, and
+# GPIO4 for the external LEDC-servo system. The v1.1 board's RGB LED is on
+# GPIO38; see its separate profile. GPIO4 is J1 pin 4 on both revisions.
+name: "esp32s3-devkitc-1-n16r8-v10-smoke"
+arch: "xtensa-lx7"
+cpu_hz: 240_000_000
+
+flash:
+  base: 0x42000000
+  size: "16384KB"
+ram:
+  base: 0x3FC88000
+  size: "512KB"
+
+pins:
+  GPIO4: { gpio: "gpio", bit: 4, functions: [{ type: gpio, peripheral: gpio }] }
+  GPIO8: { gpio: "gpio", bit: 8, functions: [{ type: gpio, peripheral: gpio }] }
+  GPIO9: { gpio: "gpio", bit: 9, functions: [{ type: gpio, peripheral: gpio }] }
+  GPIO43: { gpio: "gpio", bit: 43, functions: [{ type: uart, peripheral: uart0, role: tx }] }
+  GPIO44: { gpio: "gpio", bit: 44, functions: [{ type: uart, peripheral: uart0, role: rx }] }
+  GPIO48: { gpio: "gpio", bit: 48, functions: [{ type: gpio, peripheral: gpio }] }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32s3_gpio"
+    base_address: 0x60004000
+    size: "2KB"
+
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32s3/uart0.yaml"
+
+  - id: "rmt"
+    type: "esp32s3_rmt"
+    base_address: 0x60016000
+    size: "4KB"
+    irq: 40
+    config:
+      cpu_clock_hz: 240000000
+      debug_schema: "../peripherals/esp32s3/rmt.yaml"

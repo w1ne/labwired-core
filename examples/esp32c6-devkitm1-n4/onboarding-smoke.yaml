@@ -1,0 +1,18 @@
+# Focused ESP32-C6-DevKitM-1-N4 L1 smoke: UART0 plus the built-in GPIO8 RGB LED.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c6-devkitm1-n4-smoke"
+  system: "../../configs/systems/esp32c6-devkitm1-n4.yaml"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "ESP32_C6_DEVKITM_N4_OK"
+  - gpio_edges:
+      pin: "gpio:8"
+      min_edges: 48
+  - display_region:
+      id: "rgb_led"
+      min_ink: 1.0
+      colour: "0xF800"
+      min_colour_pixels: 1
+  - expected_stop_reason: max_steps

@@ -1,0 +1,47 @@
+# Narrow STM32H503RBT6 profile for the NUCLEO-H503RB board smoke.
+# The descriptor exposes the reset-clock RCC block, GPIOA, and SysTick only.
+# The smoke exercises PA5/LD2. Other MCU and board peripherals are omitted and
+# remain unsupported in this profile.
+#
+# Sources:
+# - ST DS14053, STM32H503xx: Cortex-M33, 128 KiB Flash, 32 KiB SRAM, 250 MHz max.
+# - ST RM0492, STM32H503 line: H5 RCC and GPIO register layout.
+# - ST CMSIS stm32h503xx.h: memory and RCC/GPIO base addresses.
+# - ST UM3121 Rev 6, STM32H5 Nucleo-64 (MB1814): LD2 is active-high on PA5.
+
+name: "stm32h503rbt6-nucleo-smoke"
+arch: "arm"
+core: "cortex-m33"
+# The smoke leaves the reset HSI64 clock in place.
+cpu_hz: 64_000_000
+
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "32KB"
+
+pins:
+  PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x44020C00
+    size: "1KB"
+    config:
+      profile: "h5"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"

@@ -972,7 +972,7 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
     ),
     (
         "system_stub",
-        "ESP32 / ESP32-S3 SYSTEM (and classic I2S/PCNT/RMT/UHCI) windows, authored as \
+        "ESP32 / ESP32-S3 SYSTEM (and classic I2S/PCNT/UHCI) windows, authored as \
          explicit placeholders so the address decodes. Used by: esp32, esp32s3, esp32s3-zero.",
     ),
     (

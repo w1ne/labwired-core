@@ -84,9 +84,11 @@ use std::sync::Arc;
 /// - **32-bit `ARR == 0xFFFF_FFFF` never wraps**: the walk's `cnt > arr`
 ///   check can never fire (u32 wrapping_add), so the counter free-runs
 ///   mod 2^32 with no UIF — reproduced exactly.
-/// - **SMCR (external clock / encoder modes) is a pure register bank bit**:
-///   the walk ignores it and always counts the CPU clock, so scheduler mode
-///   is exactly as expressive — no configuration needs to stay on the walk.
+/// - **SMCR encoder modes (SMS = 001/010/011) count input edges**, not the
+///   CPU clock: the counter moves only on a TI1FP1/TI2FP2 edge
+///   ([`Timer::encoder_step`]), so neither the walk nor the lazy replay
+///   counts while one is selected. The external-clock, gated and trigger
+///   modes stay register bits; the counter keeps counting the CPU clock.
 ///
 /// ### Tick-cost normalization (B2/B3)
 ///
@@ -178,8 +180,9 @@ pub struct Timer {
     /// 1st/2nd/4th/8th accepted edge. Reset when CCxE is cleared.
     #[serde(skip)]
     ic_psc_count: [u8; 4],
-    /// Filtered level of TI1..TI4 as last accepted (informational: the GPIO
-    /// port only ever reports real level changes).
+    /// Filtered level of TI1..TI4 as last accepted. The encoder reads the
+    /// still input's level from here; the GPIO port reports every real level
+    /// change, a pull-up being switched on included.
     #[serde(skip)]
     ti_level: [bool; 4],
     /// Channel OUTPUT waveform (OC1..OC4) published onto the GPIO pads the
@@ -191,6 +194,16 @@ pub struct Timer {
     /// Only populated in scheduler mode with a non-zero filter.
     #[serde(skip)]
     ic_pending: Vec<PendingInputEdge>,
+    /// This timer's TRGO, once a slave timer's ITRx is wired to it.
+    #[serde(skip)]
+    trgo: Option<Arc<TrgoLink>>,
+    /// The masters' TRGO links on internal triggers ITR0..ITR3 (chip yaml
+    /// `config: { itr: [...] }`).
+    #[serde(skip)]
+    itr: [Option<Arc<TrgoLink>>; 4],
+    /// The TRGI pulse count external clock mode 1 has consumed.
+    #[serde(skip)]
+    trgi_seen: Cell<u64>,
 }
 
 /// One raw TIx edge that has not yet been stable for its filter's N samples.
@@ -202,8 +215,66 @@ struct PendingInputEdge {
     accept: u64,
 }
 
-/// Line names of a timer's channel-output wire, in channel order.
-pub const TIMER_OUTPUT_LINES: &[&str] = &["CH1", "CH2", "CH3", "CH4"];
+/// Line names of a timer's channel-output wire: OC1..OC4 in channel order,
+/// then the advanced-control timers' complementary OC1N..OC3N (a TIM2-class
+/// timer never drives those three).
+pub const TIMER_OUTPUT_LINES: &[&str] = &["CH1", "CH2", "CH3", "CH4", "CH1N", "CH2N", "CH3N"];
+
+/// Capture/compare channels per timer.
+const TIMER_CHANNELS: usize = 4;
+
+/// Wire line of channel `ch`'s complementary output `OCxN`; CH4 has none.
+pub const fn complementary_line(ch: usize) -> Option<usize> {
+    if ch < 3 {
+        Some(TIMER_CHANNELS + ch)
+    } else {
+        None
+    }
+}
+
+/// BDTR bits (RM0008 §14.4.18).
+const BDTR_MOE: u32 = 1 << 15;
+const BDTR_OSSR: u32 = 1 << 11;
+const BDTR_OSSI: u32 = 1 << 10;
+
+/// One output's active level over time, before polarity: a constant, or a
+/// pulse `[hpoint, hpoint + duty)` repeating every `period` time units.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OcWave {
+    Const(bool),
+    Pulse(u64, u64, u64),
+}
+
+impl OcWave {
+    fn scaled(self, k: u64) -> Self {
+        match self {
+            OcWave::Pulse(h, d, p) => OcWave::Pulse(h * k, d * k, p * k),
+            c => c,
+        }
+    }
+
+    fn inverted(self) -> Self {
+        match self {
+            OcWave::Const(level) => OcWave::Const(!level),
+            OcWave::Pulse(h, d, p) => OcWave::Pulse((h + d) % p, p - d.min(p), p),
+        }
+    }
+
+    /// Every rising edge `dead` units later; a pulse no longer than that
+    /// disappears. A flat 0 % / 100 % waveform has no edge to delay.
+    fn delayed(self, dead: u64) -> Self {
+        match self {
+            OcWave::Pulse(h, d, p) if dead > 0 && d > 0 && d < p => {
+                if d > dead {
+                    OcWave::Pulse((h + dead) % p, d - dead, p)
+                } else {
+                    OcWave::Const(false)
+                }
+            }
+            w => w,
+        }
+    }
+}
 
 /// The channel outputs OC1..OC4 as a waveform in engine cycles.
 ///
@@ -248,12 +319,93 @@ pub enum TimerInputStage {
 
 /// SR flag bits the input-capture path sets (RM0368 §13.4.5 / RM0008 §15.4.5).
 const SR_TIF: u32 = 1 << 6;
+/// CR1.DIR: 1 = the counter counts down.
+const CR1_DIR: u32 = 1 << 4;
 /// CCxOF (over-capture) for channel `ch` (0-based) sits at SR bit 9 + ch.
 const SR_CCOF_SHIFT: u32 = 9;
 
 /// Full 32-bit ARR sentinel: the walk's `cnt > arr` overflow check can never
 /// fire, so the counter free-runs mod 2^32 with no update events.
 const ARR_NEVER_WRAPS: u32 = u32::MAX;
+
+/// A master timer's TRGO output, shared with the slave timers whose internal
+/// trigger ITRx the chip wires to it (RM0008 §15.3.15 "Timer synchronization",
+/// Table 86; CH32V003 RM §10.2.6: TIM2's ITR0 is TIM1).
+///
+/// Only the update-event source is modelled (CR2.MMS = 010): one TRGO pulse
+/// per update event, the counter's wrap past ARR and an EGR.UG alike. The
+/// master publishes a closed-form plan of its future updates whenever its
+/// state changes, so a slave reads the pulse count at any cycle without the
+/// master being advanced first; in legacy (walk) mode the master counts each
+/// update as it happens and the plan stays empty.
+#[derive(Debug, Default)]
+pub struct TrgoLink {
+    plan: std::sync::Mutex<TrgoPlan>,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct TrgoPlan {
+    /// TRGO pulses up to and including cycle `anchor`.
+    base: u64,
+    anchor: u64,
+    /// The master counting with MMS = update, from its state at `anchor`.
+    live: Option<TrgoSchedule>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TrgoSchedule {
+    /// Cycles from `anchor` to the first counter increment.
+    k1: u64,
+    /// Cycles per increment (PSC + 1).
+    period: u64,
+    /// Increments to the first update event.
+    to_wrap: u64,
+    /// Increments per update after the first (ARR + 1).
+    lap: u64,
+    /// The increment after which the master's counter freezes (an enabled
+    /// flag held as an interrupt level), if one is reached.
+    freeze_after: Option<u64>,
+}
+
+impl TrgoLink {
+    /// TRGO pulses the master has produced up to cycle `now`.
+    pub fn pulses_at(&self, now: u64) -> u64 {
+        let plan = *self.plan.lock().unwrap();
+        plan.base
+            + plan
+                .live
+                .map_or(0, |s| s.updates_within(now.saturating_sub(plan.anchor)))
+    }
+
+    fn publish(&self, anchor: u64, live: Option<TrgoSchedule>) {
+        let mut plan = self.plan.lock().unwrap();
+        let base = plan.base
+            + plan
+                .live
+                .map_or(0, |s| s.updates_within(anchor.saturating_sub(plan.anchor)));
+        *plan = TrgoPlan { base, anchor, live };
+    }
+
+    /// One pulse now (an EGR.UG, or an update on the legacy walk).
+    fn pulse(&self) {
+        self.plan.lock().unwrap().base += 1;
+    }
+}
+
+impl TrgoSchedule {
+    fn updates_within(&self, e: u64) -> u64 {
+        if e < self.k1 {
+            return 0;
+        }
+        let n = 1 + (e - self.k1) / self.period;
+        let m = self.freeze_after.map_or(n, |f| n.min(f));
+        if m < self.to_wrap {
+            0
+        } else {
+            1 + (m - self.to_wrap) / self.lap
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TimerChannelOutputSnapshot {
@@ -347,6 +499,9 @@ impl Timer {
             ti_level: [false; 4],
             ic_pending: Vec::new(),
             wave: TimerOutputWave::default(),
+            trgo: None,
+            itr: Default::default(),
+            trgi_seen: Cell::new(0),
         }
     }
 
@@ -487,105 +642,208 @@ impl Timer {
         self.wave.pads.advance_to(now);
         let lines = self.wave.pads.lines_arc();
         let mut running = false;
-        for ch in 0..TIMER_OUTPUT_LINES.len() {
-            let (drive, drives) = self.channel_output_drive(ch, now);
-            running |= matches!(drive, LedcDrive::Pwm { .. });
-            self.wave.pads.set_drive(ch, drive, now);
-            lines.set_mode(
-                ch,
-                if drives {
-                    LineDrive::PushPull
-                } else {
-                    LineDrive::Input
-                },
-            );
+        for ch in 0..TIMER_CHANNELS {
+            let [main, complementary] = self.channel_output_drives(ch, now);
+            let comp_line = complementary_line(ch);
+            for (line, (drive, drives)) in [(Some(ch), main), (comp_line, complementary)] {
+                let Some(line) = line else { continue };
+                running |= matches!(drive, LedcDrive::Pwm { .. });
+                self.wave.pads.set_drive(line, drive, now);
+                lines.set_mode(
+                    line,
+                    if drives {
+                        LineDrive::PushPull
+                    } else {
+                        LineDrive::Input
+                    },
+                );
+            }
         }
         self.wave.running = running;
     }
 
-    /// What channel `ch` (0-based) puts on its `OCx` output, and whether the
-    /// timer drives the pad at all.
+    /// What channel `ch` (0-based) puts on its `OCx` output and, on an
+    /// advanced-control timer's CH1..CH3, on its complementary `OCxN`
+    /// output, each with whether the timer drives that pad at all.
     ///
     /// RM0008 Rev 21 §15.4.7 (TIMx_CCMR1 `OCxM`) and §15.4.9 (TIMx_CCER) for
-    /// TIM2-5, §14.4.7 / §14.4.9 / §14.4.18 (BDTR) for TIM1:
+    /// TIM2-5, §14.4.7 / §14.4.9 / §14.4.18 (BDTR) and Table 83 for TIM1:
     ///
     /// * `CCxS != 00` — the channel is an input; nothing driven.
-    /// * `CCxE = 0` — output off; the timer does not drive the pad.
+    /// * `CCxE = 0` (and `CCxNE = 0`) — output off; the timer does not drive
+    ///   the pad.
     /// * TIM1 with `BDTR.MOE = 0` — outputs off, unless `OSSI = 1` holds an
-    ///   enabled channel at its idle level `CR2.OISx`.
-    /// * `OCxM` = 110 PWM mode 1: active while `CNT < CCRx`; 111 PWM mode 2:
-    ///   inactive while `CNT < CCRx`; 011 toggle on `CNT == CCRx`; 100 / 101
-    ///   forced inactive / active. `CCxP = 1` inverts (active low).
+    ///   enabled output at its idle level `CR2.OISx` / `OISxN`.
+    /// * `OCxM` = 110 PWM mode 1: `OCxREF` active while `CNT < CCRx`; 111 PWM
+    ///   mode 2: inactive while `CNT < CCRx`; 011 toggle on `CNT == CCRx`;
+    ///   100 / 101 forced inactive / active. `CCxP` / `CCxNP = 1` inverts
+    ///   (active low).
     /// * 000 frozen and the one-shot 001 / 010 match modes hold the present
     ///   level (the one-shot set/clear on match is not modelled).
+    /// * TIM1, `MOE = 1` (Table 83): `CCxE` alone gives `OCx = OCxREF`;
+    ///   `CCxNE` alone gives `OCxN = OCxREF` (not inverted); both give
+    ///   `OCx = OCxREF` and `OCxN = !OCxREF`, each rising edge delayed by the
+    ///   `BDTR.DTG` dead time in `tDTS` (CK_INT x `CR1.CKD`) units, a pulse
+    ///   shorter than the dead time vanishing. With `OSSR = 1` the disabled
+    ///   one of a pair is driven at its inactive level instead of released.
     ///
     /// Edge-aligned up-counting only, like the counter model itself; CMS /
-    /// DIR, dead time and the complementary `OCxN` outputs are not generated.
-    fn channel_output_drive(&self, ch: usize, now: u64) -> (LedcDrive, bool) {
+    /// DIR, the break input and OCxM's one-shot match modes are not modelled.
+    fn channel_output_drives(&self, ch: usize, now: u64) -> [(LedcDrive, bool); 2] {
         let held = self.wave.pads.level(ch);
+        let comp_line = complementary_line(ch).filter(|_| self.advanced);
+        let held_n = comp_line.is_some_and(|l| self.wave.pads.level(l));
+        let off = [
+            (LedcDrive::Level(held), false),
+            (LedcDrive::Level(held_n), false),
+        ];
         if self.basic || self.ccs(ch) != 0 {
-            return (LedcDrive::Level(held), false);
+            return off;
         }
         let nibble = self.ccer >> (ch * 4);
         let enabled = nibble & 1 != 0;
         let active_low = nibble & 2 != 0;
-        if self.advanced && self.bdtr & (1 << 15) == 0 {
-            if enabled && self.bdtr & (1 << 10) != 0 {
-                let ois = (self.cr2 >> (8 + 2 * ch)) & 1 != 0;
-                return (LedcDrive::Level(ois), true);
+        let n_enabled = comp_line.is_some() && nibble & 4 != 0;
+        let n_active_low = comp_line.is_some() && nibble & 8 != 0;
+        if self.advanced && self.bdtr & BDTR_MOE == 0 {
+            if self.bdtr & BDTR_OSSI == 0 {
+                return off;
             }
-            return (LedcDrive::Level(held), false);
+            let ois = (self.cr2 >> (8 + 2 * ch)) & 1 != 0;
+            let ois_n = (self.cr2 >> (9 + 2 * ch)) & 1 != 0;
+            return [
+                if enabled {
+                    (LedcDrive::Level(ois), true)
+                } else {
+                    off[0]
+                },
+                if n_enabled {
+                    (LedcDrive::Level(ois_n), true)
+                } else {
+                    off[1]
+                },
+            ];
         }
-        if !enabled {
-            return (LedcDrive::Level(held), false);
+        if !enabled && !n_enabled {
+            return off;
         }
         let mask = self.cnt_mask();
         let period = u64::from(self.arr & mask) + 1;
         let ccr = u64::from(self.ccr_value(ch) & mask);
-        // (hpoint, duty, waveform period) of OCxREF, before polarity.
-        let (hpoint, duty, wave_period) = match (self.ic_lane(ch) >> 4) & 0x7 {
-            0b100 => return (LedcDrive::Level(active_low), true),
-            0b101 => return (LedcDrive::Level(!active_low), true),
-            0b110 => (0, ccr.min(period), period),
-            0b111 => (ccr.min(period), period - ccr.min(period), period),
-            0b011 if ccr < period => (ccr, period, 2 * period),
-            _ => return (LedcDrive::Level(held), true),
+        // OCxREF as (hpoint, duty, waveform period) in counts, or a constant.
+        let reference = match (self.ic_lane(ch) >> 4) & 0x7 {
+            0b100 => OcWave::Const(false),
+            0b101 => OcWave::Const(true),
+            0b110 => OcWave::Pulse(0, ccr.min(period), period),
+            0b111 => OcWave::Pulse(ccr.min(period), period - ccr.min(period), period),
+            0b011 if ccr < period => OcWave::Pulse(ccr, period, 2 * period),
+            _ => {
+                // Frozen / one-shot match modes hold whatever each output
+                // shows now.
+                return [
+                    if enabled {
+                        (LedcDrive::Level(held), true)
+                    } else {
+                        off[0]
+                    },
+                    if n_enabled {
+                        (LedcDrive::Level(held_n), true)
+                    } else {
+                        off[1]
+                    },
+                ];
+            }
         };
-        let (hpoint, duty) = if active_low {
-            ((hpoint + duty) % wave_period, wave_period - duty)
+        let div = u64::from(self.psc) + 1;
+        // Dead time only separates a complementary pair; in CK_INT cycles.
+        let dead = if enabled && n_enabled {
+            let ckd = match (self.cr1 >> 8) & 0x3 {
+                0b01 => 2,
+                0b10 => 4,
+                _ => 1,
+            };
+            u64::from(decode_dead_time_ticks((self.bdtr & 0xff) as u8)) * ckd
         } else {
-            (hpoint, duty)
+            0
         };
+        // With a dead time the waveform is laid out in CK_INT cycles rather
+        // than counts, so a delay that is not a whole count stays exact.
+        let scale = if dead > 0 { div } else { 1 };
+        let reference = reference.scaled(scale);
         // Phase: count index 0 is the cycle CNT last read 0 with an empty
         // prescaler, so the waveform lines up with the counter firmware reads.
-        let div = u64::from(self.psc) + 1;
         let elapsed =
             (u64::from(self.cnt.get()) % period) * div + u64::from(self.psc_cnt.get()).min(div - 1);
-        let timer = LedcTimebase {
+        let origin = now.saturating_sub(elapsed);
+        let timebase = |wave_period: u64| LedcTimebase {
             period: wave_period,
-            num: u128::from(div),
+            num: u128::from(div / scale),
             den: 1,
-            origin: now.saturating_sub(elapsed),
+            origin,
         };
-        let mut drive = LedcDrive::Pwm {
-            timer,
-            hpoint,
-            duty,
+        let reference = match reference {
+            OcWave::Pulse(hpoint, duty, wave_period) if wave_period != period * scale => {
+                // Toggle mode: the output's present level, not the counter
+                // alone, says which half of the double period this is.
+                let held_ref = if enabled {
+                    held != active_low
+                } else {
+                    held_n != n_active_low
+                };
+                let drive = LedcDrive::Pwm {
+                    timer: timebase(wave_period),
+                    hpoint,
+                    duty,
+                };
+                if drive.level_at(now) != held_ref {
+                    OcWave::Pulse((hpoint + period * scale) % wave_period, duty, wave_period)
+                } else {
+                    reference
+                }
+            }
+            _ => reference,
         };
-        if wave_period != period && drive.level_at(now) != held {
-            // Toggle mode: the output's present level, not the counter alone,
-            // says which half of the double period this is.
-            drive = LedcDrive::Pwm {
-                timer,
-                hpoint: (hpoint + period) % wave_period,
-                duty,
+        let (main_active, n_active) = if enabled && n_enabled {
+            (reference.delayed(dead), reference.inverted().delayed(dead))
+        } else {
+            // A lone CCxNE output follows OCxREF itself (Table 83).
+            (reference, reference)
+        };
+        let stopped = (self.cr1 & 1) == 0 || self.counter_frozen() || self.encoder_mode().is_some();
+        let to_drive = |active: OcWave, low: bool| {
+            let drive = match if low { active.inverted() } else { active } {
+                OcWave::Const(level) => LedcDrive::Level(level),
+                OcWave::Pulse(hpoint, duty, wave_period) => LedcDrive::Pwm {
+                    timer: timebase(wave_period),
+                    hpoint,
+                    duty,
+                },
             };
-        }
-        if (self.cr1 & 1) == 0 || self.counter_frozen() {
-            // A stopped counter holds its compare result.
-            return (LedcDrive::Level(drive.level_at(now)), true);
-        }
-        (drive, true)
+            if stopped {
+                // A stopped counter holds its compare result.
+                LedcDrive::Level(drive.level_at(now))
+            } else {
+                drive
+            }
+        };
+        // OSSR = 1: the disabled half of a pair sits at its inactive level.
+        let ossr = self.advanced && self.bdtr & BDTR_OSSR != 0;
+        [
+            if enabled {
+                (to_drive(main_active, active_low), true)
+            } else if ossr && n_enabled {
+                (LedcDrive::Level(active_low), true)
+            } else {
+                off[0]
+            },
+            if n_enabled {
+                (to_drive(n_active, n_active_low), true)
+            } else if ossr && enabled && comp_line.is_some() {
+                (LedcDrive::Level(n_active_low), true)
+            } else {
+                off[1]
+            },
+        ]
     }
 
     /// IRQ-level / counter-freeze predicate: the legacy `tick()` returns the
@@ -759,7 +1017,11 @@ impl Timer {
             self.advance_to(at);
         }
         let frozen_before = self.counter_frozen();
+        let moved = self.ti_level[ti as usize] != level;
         self.ti_level[ti as usize] = level;
+        if moved {
+            self.encoder_step(ti);
+        }
         for ch in 0..4 {
             if self.ic_source(ch) == Some(ti) && self.polarity_accepts(ch, level) {
                 self.capture_channel(ch);
@@ -785,8 +1047,12 @@ impl Timer {
             self.sr.set(self.sr.get() | SR_TIF);
             // SMS=100 reset mode: reinitialise the counter and generate an
             // update event — UIF unless CR1.URS restricts it to overflow.
-            // Gated (101), trigger (110) and external-clock (111) modes are
-            // not modelled.
+            // SMS=111 external clock mode 1: the trigger edge is one counter
+            // clock. Gated (101) and trigger (110) modes are not modelled.
+            if self.external_clock() {
+                let frozen = self.counter_frozen();
+                self.count_ticks(1, frozen);
+            }
             if self.smcr & 0x7 == 0b100 {
                 self.cnt.set(0);
                 self.psc_cnt.set(0);
@@ -801,6 +1067,127 @@ impl Timer {
             self.freeze_revision
                 .set(self.freeze_revision.get().wrapping_add(1));
         }
+        self.publish_trgo();
+    }
+
+    /// SMCR.SMS = 111, external clock mode 1: rising edges of TRGI clock the
+    /// counter and CK_INT does not.
+    fn external_clock(&self) -> bool {
+        !self.basic && self.smcr & 0x7 == 0b111
+    }
+
+    /// The master's TRGO on internal trigger ITR0..ITR3 (SMCR.TS = 000..011)
+    /// when external clock mode 1 selects one the chip wired. TS = 100..110
+    /// count TI edges in `apply_filtered_edge`; ETR (111) is not modelled.
+    fn itr_clock(&self) -> Option<&Arc<TrgoLink>> {
+        let ts = ((self.smcr >> 4) & 0x7) as usize;
+        if self.external_clock() && ts < 4 {
+            self.itr[ts].as_ref()
+        } else {
+            None
+        }
+    }
+
+    /// CR2.MMS = 010: TRGO pulses on every update event.
+    fn trgo_on_update(&self) -> bool {
+        (self.cr2 >> 4) & 0x7 == 0b010
+    }
+
+    /// Republish this timer's TRGO plan from its state at the anchor, after
+    /// anything the plan cannot predict (a register write, an input edge).
+    /// Legacy mode counts pulses in `tick_counter` instead.
+    fn publish_trgo(&self) {
+        let Some(link) = &self.trgo else {
+            return;
+        };
+        if !self.scheduler_mode() {
+            return;
+        }
+        let counting = self.trgo_on_update()
+            && self.cr1 & 0x1 != 0
+            && !self.counter_frozen()
+            && self.encoder_mode().is_none()
+            && !self.external_clock();
+        let live = if counting {
+            self.increments_to_wrap(self.cnt.get())
+                .map(|to_wrap| TrgoSchedule {
+                    k1: self.ticks_to_first_increment(),
+                    period: self.psc as u64 + 1,
+                    to_wrap,
+                    lap: self.arr as u64 + 1,
+                    freeze_after: self.first_enabled_event(),
+                })
+        } else {
+            None
+        };
+        link.publish(self.anchor.get(), live);
+    }
+
+    /// The encoder mode SMCR.SMS selects: 1 counts TI1FP1 edges, 2 TI2FP2
+    /// edges, 3 both (RM0008 §15.3.12; WCH's `TIM_EncoderMode_TI1/TI2/TI12`
+    /// are the same 1/2/3).
+    fn encoder_mode(&self) -> Option<u32> {
+        let sms = self.smcr & 0x7;
+        (!self.basic && (1..=3).contains(&sms)).then_some(sms)
+    }
+
+    /// TIxFPx: input `ti` through its CCxP polarity (1 = inverted).
+    fn encoder_input(&self, ti: usize) -> bool {
+        self.ti_level[ti] ^ ((self.ccer >> (ti * 4 + 1)) & 1 != 0)
+    }
+
+    /// One encoder count after input `ti` moved (RM0008 Table 79): an edge
+    /// on one input counts up or down by the edge's direction and the other
+    /// input's level. TI1FP1 rising counts up while TI2FP2 is low and down
+    /// while it is high; TI2FP2 rising counts up while TI1FP1 is high and
+    /// down while it is low; falling edges count the other way. The edge
+    /// clocks the prescaler, CR1.DIR shows the direction, and running past
+    /// ARR upward or 0 downward is an update event (UIF).
+    fn encoder_step(&mut self, ti: u8) {
+        let Some(sms) = self.encoder_mode() else {
+            return;
+        };
+        if self.cr1 & 1 == 0 || ti > 1 || sms & (1 << ti) == 0 {
+            return;
+        }
+        let this = self.encoder_input(ti as usize);
+        let other = self.encoder_input(1 - ti as usize);
+        let up = if ti == 0 {
+            this != other
+        } else {
+            this == other
+        };
+        if up {
+            self.cr1 &= !CR1_DIR;
+        } else {
+            self.cr1 |= CR1_DIR;
+        }
+        self.psc_cnt.set(self.psc_cnt.get() + 1);
+        if self.psc_cnt.get() <= self.psc {
+            return;
+        }
+        self.psc_cnt.set(0);
+        let cnt = self.cnt.get();
+        let next = if up {
+            if cnt >= self.arr {
+                None
+            } else {
+                Some(cnt + 1)
+            }
+        } else if cnt == 0 || cnt > self.arr {
+            None
+        } else {
+            Some(cnt - 1)
+        };
+        match next {
+            Some(v) => self.cnt.set(v),
+            None => {
+                self.cnt.set(if up { 0 } else { self.arr });
+                self.sr.set(self.sr.get() | 1);
+            }
+        }
+        self.latch_compare_match_flags();
+        self.phase_revision = self.phase_revision.wrapping_add(1);
     }
 
     /// Apply every filtered edge whose acceptance cycle is at or before `now`.
@@ -981,7 +1368,7 @@ impl Timer {
     /// line on the same tick (`irq_line_level` — a level tracks its flag), so
     /// this one number serves the freeze and the event chain alike.
     fn first_enabled_event(&self) -> Option<u64> {
-        if (self.cr1 & 0x1) == 0 {
+        if (self.cr1 & 0x1) == 0 || self.encoder_mode().is_some() {
             return None;
         }
         let v = self.cnt.get();
@@ -1026,12 +1413,28 @@ impl Timer {
             return;
         }
         self.anchor.set(now);
-        if self.counter_frozen() || (self.cr1 & 0x1) == 0 {
+        // External clock mode 1 counts the master's TRGO pulses in the window
+        // instead of CK_INT cycles; the pulses go by whether or not CEN is set.
+        let e = match self.itr_clock() {
+            Some(link) => {
+                let pulses = link.pulses_at(now);
+                pulses.saturating_sub(self.trgi_seen.replace(pulses))
+            }
+            None if self.external_clock() => 0,
+            None => now - anchor,
+        };
+        self.count_ticks(e, frozen_before);
+    }
+
+    /// Replay `e` counter-clock ticks (CK_INT cycles, or TRGI pulses in
+    /// external clock mode 1) from the current state.
+    fn count_ticks(&self, e: u64, frozen_before: bool) {
+        if e == 0 || self.counter_frozen() || (self.cr1 & 0x1) == 0 || self.encoder_mode().is_some()
+        {
             // Frozen (held IRQ level) or not enabled: the window elapses with
             // no counting — exactly the walk's early returns.
             return;
         }
-        let e = now - anchor;
         let k1 = self.ticks_to_first_increment();
         if e < k1 {
             // No increment in the window: only the prescaler phase advances.
@@ -1137,8 +1540,11 @@ impl Timer {
             .ic_pending
             .first()
             .map(|p| p.accept.saturating_sub(anchor).max(1));
+        // In external clock mode the increments are TRGI pulses, not cycles,
+        // so there is no cycle to arm: the flags latch on the next sync.
         let counter = self
             .first_enabled_event()
+            .filter(|_| !self.external_clock())
             .map(|j| self.ticks_to_first_increment() + (j - 1) * (self.psc as u64 + 1));
         match (counter, filter) {
             (Some(a), Some(b)) => Some(a.min(b)),
@@ -1192,7 +1598,15 @@ impl Timer {
         );
         let explicit_update = offset == 0x14 && (value & 1) != 0;
         match offset {
-            0x00 => self.cr1 = value & 0x3FF,
+            // CR1.DIR is read-only in encoder mode: the inputs set it.
+            0x00 => {
+                let keep = if self.encoder_mode().is_some() {
+                    CR1_DIR
+                } else {
+                    0
+                };
+                self.cr1 = ((value & 0x3FF) & !keep) | (self.cr1 & keep);
+            }
             // CR2 writable bits differ by layout. General-purpose (TIM2-5):
             // CCDS(3)+MMS(6:4)+TI1S(7) = 0xF8, silicon-confirmed on F103 TIM2.
             // Advanced (TIM1) adds CCPC/CCUS/OISx — left at the wider mask
@@ -1207,7 +1621,18 @@ impl Timer {
             }
             // SMCR is 16-bit on every layout (bit 3 reserved): 0xFFF7,
             // silicon-confirmed on F103 TIM2.
-            0x08 => self.smcr = value & 0x0000_FFF7,
+            0x08 => {
+                self.smcr = value & 0x0000_FFF7;
+                // External clock mode 1 counts the pulses from here on.
+                if let Some(link) = self.itr_clock() {
+                    let at = if self.scheduler_mode() {
+                        link.pulses_at(self.anchor.get())
+                    } else {
+                        link.pulses_at(0)
+                    };
+                    self.trgi_seen.set(at);
+                }
+            }
             // DIER: general-purpose has no COMIE(5)/BIE(7)/COMDE(13) — 0x5F5F,
             // silicon-confirmed on F103 TIM2. Advanced (TIM1) exposes them (0x7FFF).
             0x0C => {
@@ -1341,6 +1766,13 @@ impl Timer {
             self.freeze_revision
                 .set(self.freeze_revision.get().wrapping_add(1));
         }
+        // UG is an update event, so TRGO pulses with MMS = update.
+        if explicit_update && self.trgo_on_update() {
+            if let Some(link) = &self.trgo {
+                link.pulse();
+            }
+        }
+        self.publish_trgo();
     }
 }
 
@@ -1405,8 +1837,26 @@ impl Timer {
             };
         }
 
-        // Counter Enable (bit 0)
-        if (self.cr1 & 0x1) == 0 {
+        // External clock mode 1: count the TRGI pulses since the last tick.
+        if self.external_clock() {
+            let e = match self.itr_clock() {
+                Some(link) => {
+                    let pulses = link.pulses_at(0);
+                    pulses.saturating_sub(self.trgi_seen.replace(pulses))
+                }
+                None => 0,
+            };
+            self.count_ticks(e, frozen_before);
+            return crate::PeripheralTickResult {
+                irq: self.irq_level_held(),
+                cycles: 0,
+                ..Default::default()
+            };
+        }
+
+        // Counter Enable (bit 0). An encoder-mode counter only moves on an
+        // input edge.
+        if (self.cr1 & 0x1) == 0 || self.encoder_mode().is_some() {
             return crate::PeripheralTickResult {
                 irq: self.capture_irq_held(),
                 cycles: 0,
@@ -1422,6 +1872,11 @@ impl Timer {
             if self.cnt.get() > self.arr {
                 self.cnt.set(0);
                 self.sr.set(self.sr.get() | 1); // Set UIF (Update Interrupt Flag)
+                if self.trgo_on_update() {
+                    if let Some(link) = &self.trgo {
+                        link.pulse();
+                    }
+                }
                 if !self.basic {
                     self.latch_compare_match_flags();
                 }
@@ -1527,8 +1982,9 @@ impl crate::Peripheral for Timer {
     fn needs_legacy_walk(&self) -> bool {
         // Everything this model's `tick()` can ever do (prescaled up-count,
         // UIF/CCxIF latching, held-level NVIC pend) is event-expressible —
-        // SMCR external-clock/encoder modes are inert register bits the walk
-        // ignores identically, so no configuration needs a dynamic fallback.
+        // an encoder counts on input edges, which arrive as
+        // `timer_input_edge`, not as ticks — so no configuration needs a
+        // dynamic fallback.
         // In legacy mode (no clock / feature off) the walk does real work and
         // the conservative `true` stands.
         !self.scheduler_mode()
@@ -1558,6 +2014,20 @@ impl crate::Peripheral for Timer {
     fn reads_can_deassert_irq(&self) -> bool {
         // Only a channel in input-capture mode has a read-to-clear flag.
         !self.basic && (self.ccmr1 & 0x0303 != 0 || self.ccmr2 & 0x0303 != 0)
+    }
+
+    fn timer_trgo(&mut self) -> Option<Arc<TrgoLink>> {
+        let link = self.trgo.get_or_insert_with(Default::default).clone();
+        self.publish_trgo();
+        Some(link)
+    }
+
+    fn attach_timer_itr(&mut self, index: usize, link: Arc<TrgoLink>) -> bool {
+        if self.basic || index >= 4 {
+            return false;
+        }
+        self.itr[index] = Some(link);
+        true
     }
 
     fn timer_input_edge(&mut self, ti: u8, level: bool, cycle: u64) -> bool {
@@ -1698,7 +2168,9 @@ impl crate::Peripheral for Timer {
 
 #[cfg(test)]
 mod tests {
-    use super::{Timer, TimerChannelOutputMode};
+    use super::{
+        complementary_line, Timer, TimerChannelOutputMode, BDTR_MOE, BDTR_OSSI, BDTR_OSSR,
+    };
     use crate::Peripheral;
 
     #[test]
@@ -1994,6 +2466,123 @@ mod tests {
         assert!(lines.level(0), "OC1M=101 forced active");
     }
 
+    /// A walk-driven TIM1-class timer with its output wire armed: PSC =
+    /// `psc`, ARR = 9, channel 1 in PWM mode 1 at CCR1 = `ccr1`, CCER =
+    /// `ccer`, BDTR = `bdtr`.
+    fn advanced_output_timer(psc: u32, ccr1: u32, ccer: u32, bdtr: u32) -> Timer {
+        let mut t = Timer::new_with_layout(16, true);
+        t.output_lines_arc();
+        t.write_u32(0x28, psc).unwrap();
+        t.write_u32(0x2C, 9).unwrap();
+        t.write_u32(0x34, ccr1).unwrap();
+        t.write_u32(0x18, 0b110 << 4).unwrap();
+        t.write_u32(0x20, ccer).unwrap();
+        t.write_u32(0x44, bdtr).unwrap();
+        t.write_u32(0x00, 1).unwrap();
+        t
+    }
+
+    /// (OC1, OC1N) sampled once per tick for `n` ticks.
+    fn sample_pair(t: &mut Timer, n: usize) -> Vec<(bool, bool)> {
+        let n_line = complementary_line(0).unwrap();
+        (0..n)
+            .map(|_| {
+                t.tick();
+                (t.output_level(0), t.output_level(n_line))
+            })
+            .collect()
+    }
+
+    /// RM0008 Table 83, MOE = 1: CC1E|CC1NE gives OC1 = OC1REF and OC1N =
+    /// !OC1REF; with no dead time they are exact complements.
+    #[test]
+    fn complementary_pair_without_dead_time_is_an_exact_inverse() {
+        let mut t = advanced_output_timer(0, 3, 0b0101, BDTR_MOE);
+        sample_pair(&mut t, 10);
+        let s = sample_pair(&mut t, 100);
+        assert!(s.iter().all(|&(p, n)| p != n), "{s:?}");
+        assert_eq!(s.iter().filter(|&&(p, _)| p).count(), 30);
+    }
+
+    /// CC1NE alone gives OC1N = OC1REF, not its inverse; CC1NP inverts it.
+    /// This is what ch32fun's tim1_pwm relies on for PD0.
+    #[test]
+    fn lone_ccxne_output_follows_ocxref() {
+        let mut t = advanced_output_timer(0, 3, 0b0100, BDTR_MOE);
+        sample_pair(&mut t, 10);
+        let high = sample_pair(&mut t, 100).iter().filter(|&&(_, n)| n).count();
+        assert_eq!(high, 30, "OC1N = OC1REF, active for CNT < 3");
+        let mut inv = advanced_output_timer(0, 3, 0b1100, BDTR_MOE);
+        sample_pair(&mut inv, 10);
+        let high = sample_pair(&mut inv, 100)
+            .iter()
+            .filter(|&&(_, n)| n)
+            .count();
+        assert_eq!(high, 70, "CC1NP inverts");
+        let lines = inv.output_lines_arc();
+        use crate::peripherals::pad_lines::LineDrive;
+        assert_eq!(lines.mode(0), LineDrive::Input, "OSSR = 0 releases OC1");
+    }
+
+    /// DTG delays each rising edge by DT tDTS; with PSC = 1 (two cycles per
+    /// count) a 3-cycle dead time is not a whole count. Period 20 cycles,
+    /// OC1REF active for 6 (CCR1 = 3): OC1 is high 6 - 3 = 3 cycles, OC1N
+    /// 14 - 3 = 11, and both are low for the 3 + 3 dead-time cycles.
+    #[test]
+    fn dead_time_delays_both_rising_edges_in_ck_int_cycles() {
+        let mut t = advanced_output_timer(1, 3, 0b0101, BDTR_MOE | 3);
+        sample_pair(&mut t, 40);
+        let s = sample_pair(&mut t, 200);
+        assert!(s.iter().all(|&(p, n)| !(p && n)), "never both active");
+        assert_eq!(s.iter().filter(|&&(p, _)| p).count(), 30);
+        assert_eq!(s.iter().filter(|&&(_, n)| n).count(), 110);
+        assert_eq!(s.iter().filter(|&&(p, n)| !p && !n).count(), 60);
+        // CKD = 10 doubles tDTS twice: 12 cycles swallow OC1's 6-cycle pulse.
+        let mut t = advanced_output_timer(1, 3, 0b0101, BDTR_MOE | 3);
+        t.write_u32(0x00, 1 | (0b10 << 8)).unwrap();
+        sample_pair(&mut t, 40);
+        let s = sample_pair(&mut t, 200);
+        assert!(s.iter().all(|&(p, _)| !p), "pulse shorter than DT vanishes");
+        assert_eq!(s.iter().filter(|&&(_, n)| n).count(), 20 * (14 - 12) / 2);
+    }
+
+    /// MOE = 0: OSSI = 0 releases both pads; OSSI = 1 holds each enabled
+    /// output at CR2.OIS1 / OIS1N. MOE = 1 with OSSR = 1 drives the disabled
+    /// half of a pair at its inactive level (CC1P = 0 → low).
+    #[test]
+    fn idle_and_off_state_levels() {
+        use crate::peripherals::pad_lines::LineDrive;
+        let n_line = complementary_line(0).unwrap();
+        let mut t = advanced_output_timer(0, 3, 0b0101, 0);
+        let lines = t.output_lines_arc();
+        assert_eq!(lines.mode(0), LineDrive::Input);
+        assert_eq!(lines.mode(n_line), LineDrive::Input);
+        t.write_u32(0x04, 0b10 << 8).unwrap(); // OIS1 = 0, OIS1N = 1
+        t.write_u32(0x44, BDTR_OSSI).unwrap();
+        assert_eq!(lines.mode(0), LineDrive::PushPull);
+        assert_eq!((t.output_level(0), t.output_level(n_line)), (false, true));
+        let mut t = advanced_output_timer(0, 3, 0b0100, BDTR_MOE | BDTR_OSSR);
+        let lines = t.output_lines_arc();
+        assert_eq!(lines.mode(0), LineDrive::PushPull);
+        sample_pair(&mut t, 10);
+        assert!(sample_pair(&mut t, 30).iter().all(|&(p, _)| !p));
+    }
+
+    /// A general-purpose timer has no OCxN: CCER bit 2 does not stick and
+    /// the complementary lines stay released.
+    #[test]
+    fn general_purpose_timer_never_drives_complementary_lines() {
+        use crate::peripherals::pad_lines::LineDrive;
+        let mut t = output_timer(0b110, 3, 0b0101);
+        let lines = t.output_lines_arc();
+        for ch in 0..3 {
+            assert_eq!(
+                lines.mode(complementary_line(ch).unwrap()),
+                LineDrive::Input
+            );
+        }
+    }
+
     #[test]
     fn capture_latches_cnt_and_sets_flag_on_the_selected_edge_only() {
         let mut t = ic_timer();
@@ -2119,6 +2708,117 @@ mod tests {
         assert_ne!(t.read_reg(0x10) & 1, 0, "UIF from the reset update (URS=0)");
     }
 
+    /// TIM2 as ch32fun's tim2_encoder leaves it: SMS=011 (both inputs),
+    /// CC1S/CC2S left at 00, CNT at mid-scale, CEN.
+    fn encoder_timer(sms: u32) -> Timer {
+        let mut t = Timer::new_with_layout(16, false);
+        t.write_reg(0x2C, 0xFFFF);
+        t.write_reg(0x08, sms);
+        t.write_reg(0x24, 0x8FFF);
+        t.write_reg(0x00, 0x01);
+        t
+    }
+
+    /// One full quadrature cycle, A leading B (00 -> 10 -> 11 -> 01 -> 00).
+    fn quadrature_forward(t: &mut Timer) {
+        t.input_edge(0, true, 0);
+        t.input_edge(1, true, 0);
+        t.input_edge(0, false, 0);
+        t.input_edge(1, false, 0);
+    }
+
+    fn quadrature_reverse(t: &mut Timer) {
+        t.input_edge(1, true, 0);
+        t.input_edge(0, true, 0);
+        t.input_edge(1, false, 0);
+        t.input_edge(0, false, 0);
+    }
+
+    #[test]
+    fn encoder_mode_counts_quadrature_edges_not_the_clock() {
+        let mut t = encoder_timer(3);
+        walk(&mut t, 1000);
+        assert_eq!(
+            t.read_reg(0x24),
+            0x8FFF,
+            "no CK_INT counting in encoder mode"
+        );
+        quadrature_forward(&mut t);
+        assert_eq!(
+            t.read_reg(0x24),
+            0x8FFF + 4,
+            "x4: every edge of both inputs"
+        );
+        assert_eq!(t.read_reg(0x00) & super::CR1_DIR, 0, "counting up");
+        quadrature_reverse(&mut t);
+        quadrature_reverse(&mut t);
+        assert_eq!(t.read_reg(0x24), 0x8FFF - 4);
+        assert_ne!(
+            t.read_reg(0x00) & super::CR1_DIR,
+            0,
+            "DIR shows down-counting"
+        );
+    }
+
+    #[test]
+    fn encoder_modes_1_and_2_count_one_input() {
+        let mut t1 = encoder_timer(1);
+        quadrature_forward(&mut t1);
+        assert_eq!(
+            t1.read_reg(0x24),
+            0x8FFF + 2,
+            "SMS=001 counts TI1 edges only"
+        );
+        let mut t2 = encoder_timer(2);
+        quadrature_forward(&mut t2);
+        assert_eq!(
+            t2.read_reg(0x24),
+            0x8FFF + 2,
+            "SMS=010 counts TI2 edges only"
+        );
+        quadrature_reverse(&mut t2);
+        assert_eq!(t2.read_reg(0x24), 0x8FFF);
+    }
+
+    #[test]
+    fn encoder_polarity_inverts_an_input() {
+        // CC1P inverts TI1FP1: the forward sequence now counts down.
+        let mut t = encoder_timer(3);
+        t.write_reg(0x20, 0x0002);
+        quadrature_forward(&mut t);
+        assert_eq!(t.read_reg(0x24), 0x8FFF - 4);
+    }
+
+    #[test]
+    fn encoder_wraps_at_arr_and_zero_with_an_update() {
+        let mut t = encoder_timer(3);
+        t.write_reg(0x2C, 9);
+        t.write_reg(0x24, 8);
+        quadrature_forward(&mut t);
+        assert_eq!(t.read_reg(0x24), 2, "8, 9, 0, 1, 2");
+        assert_ne!(t.read_reg(0x10) & 1, 0, "UIF on the upward wrap");
+        t.write_reg(0x10, 0);
+        quadrature_reverse(&mut t);
+        assert_eq!(t.read_reg(0x24), 8, "2, 1, 0, 9, 8");
+        assert_ne!(t.read_reg(0x10) & 1, 0, "UIF on the downward wrap");
+    }
+
+    #[test]
+    fn encoder_edges_clock_the_prescaler_and_need_cen() {
+        let mut t = encoder_timer(3);
+        t.write_reg(0x28, 3); // one count per four edges
+        quadrature_forward(&mut t);
+        quadrature_forward(&mut t);
+        assert_eq!(t.read_reg(0x24), 0x8FFF + 2);
+        t.write_reg(0x00, 0);
+        quadrature_forward(&mut t);
+        assert_eq!(
+            t.read_reg(0x24),
+            0x8FFF + 2,
+            "CEN clear: edges do not count"
+        );
+    }
+
     #[test]
     fn egr_ccxg_is_a_software_capture_on_input_channels() {
         let mut t = ic_timer();
@@ -2126,6 +2826,28 @@ mod tests {
         t.write_reg(0x14, 0x02); // CC1G
         assert_eq!(t.read_reg(0x34), 7);
         assert_eq!(t.read_reg(0x10) & 0x2, 0x2);
+    }
+
+    /// Legacy walk: the master counts each TRGO pulse as it updates and the
+    /// slave in external clock mode 1 picks them up on its next tick.
+    #[test]
+    fn itr_external_clock_on_the_legacy_walk() {
+        use crate::Peripheral;
+        let mut master = Timer::new_with_layout(16, true);
+        let mut slave = Timer::new();
+        let link = master.timer_trgo().unwrap();
+        assert!(slave.attach_timer_itr(0, link));
+        master.write_reg(0x28, 9);
+        master.write_reg(0x2C, 4);
+        master.write_reg(0x04, 0x20);
+        slave.write_reg(0x08, 0x07);
+        master.write_reg(0x00, 1);
+        slave.write_reg(0x00, 1);
+        for _ in 0..1000 {
+            master.tick();
+            slave.tick();
+        }
+        assert_eq!(slave.read_reg(0x24), 20);
     }
 
     #[cfg(feature = "event-scheduler")]
@@ -2539,6 +3261,87 @@ mod tests {
                 t.sync_to(400);
                 assert_eq!(t.read_reg(0x34), 308, "CNT as of edge + filter");
             }
+        }
+
+        /// A master that updates every 50 cycles (PSC 9, ARR 4, MMS =
+        /// update) and a slave on ITR0 in external clock mode 1, sharing one
+        /// clock, as ch32fun's tim1_tim2_cascade sets TIM1/TIM2 up.
+        fn cascade(clock: &CycleClock) -> (Timer, Timer) {
+            use crate::Peripheral;
+            let mut master = Timer::new_with_layout(16, true);
+            let mut slave = Timer::new();
+            master.attach_cycle_clock(clock.clone());
+            slave.attach_cycle_clock(clock.clone());
+            let link = master.timer_trgo().unwrap();
+            assert!(slave.attach_timer_itr(0, link));
+            master.write_reg(0x28, 9);
+            master.write_reg(0x2C, 4);
+            master.write_reg(0x04, 0x20);
+            slave.write_reg(0x08, 0x07);
+            master.write_reg(0x00, 1);
+            slave.write_reg(0x00, 1);
+            (master, slave)
+        }
+
+        #[test]
+        fn itr_external_clock_counts_master_updates_without_syncing_the_master() {
+            let clock = CycleClock::default();
+            let (mut master, slave) = cascade(&clock);
+            clock.publish(1000);
+            // The master is never advanced here: the slave reads its plan.
+            assert_eq!(slave.read_u32(0x24).unwrap(), 20, "1000 / 50 updates");
+            clock.publish(1049);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 20);
+            clock.publish(1050);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 21);
+            // Reconfigure the master mid-run: from cycle 1050 it updates every
+            // 100 cycles, and an EGR.UG is one more TRGO pulse.
+            master.sync_to(1050);
+            master.write_reg(0x2C, 9);
+            master.write_reg(0x14, 1);
+            // The slave already synced to 1050; the next read is a later cycle.
+            clock.publish(1051);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 22, "UG pulses TRGO");
+            clock.publish(2050);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 32);
+            assert_eq!(master.read_u32(0x24).unwrap(), 0);
+        }
+
+        #[test]
+        fn itr_external_clock_runs_the_slave_prescaler_and_wrap() {
+            let clock = CycleClock::default();
+            let (_master, mut slave) = cascade(&clock);
+            slave.sync_to(0);
+            slave.write_reg(0x28, 1); // two pulses per count
+            slave.write_reg(0x2C, 3); // wrap after four counts
+            clock.publish(50 * 7);
+            // Seven pulses: three counts and a half, no wrap yet.
+            assert_eq!(slave.read_u32(0x24).unwrap(), 3);
+            assert_eq!(slave.read_u32(0x10).unwrap() & 1, 0);
+            clock.publish(50 * 8);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 0);
+            assert_eq!(slave.read_u32(0x10).unwrap() & 1, 1, "UIF on the wrap");
+        }
+
+        #[test]
+        fn external_clock_mode_does_not_count_ck_int() {
+            let clock = CycleClock::default();
+            let (_master, mut slave) = cascade(&clock);
+            // TS = ITR1, which this chip leaves unconnected.
+            slave.sync_to(0);
+            slave.write_reg(0x08, 0x17);
+            clock.publish(5000);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 0);
+        }
+
+        #[test]
+        fn trgo_needs_mms_update() {
+            let clock = CycleClock::default();
+            let (mut master, slave) = cascade(&clock);
+            master.sync_to(0);
+            master.write_reg(0x04, 0x00); // MMS = reset
+            clock.publish(1000);
+            assert_eq!(slave.read_u32(0x24).unwrap(), 0);
         }
 
         #[test]

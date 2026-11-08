@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="58.921807">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="6064c2a773f0849d1b0ae39ac858c866ad4be106b595b9afbb71290a3f51d7cd"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="58.921807">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: peripheral_log: debug_printf.terminal contains &quot;all 194d1e10&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: peripheral_log: debug_printf.terminal contains &quot;static-rtz 3eaaaaaa&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: peripheral_log: debug_printf.terminal contains &quot;newton-sqrt2 3fb504f3&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: peripheral_log: debug_printf.terminal contains &quot;harmonic64 4097cdf6&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: peripheral_log: debug_printf.terminal contains &quot;mstatus-fs-sd 00000013&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: peripheral_log: debug_printf.terminal contains &quot;done&quot;" time="0.000000">
+  </testcase>
+</testsuite>

@@ -1,0 +1,16 @@
+# ch32fun examples/blink, unmodified (build-ch32fun-examples.sh). Four pins
+# toggle together every Delay_Ms(250) at 48 MHz: 12,000,000 cycles per edge,
+# so 90,000,000 cycles hold 7 edges on each pin.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/blink.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 90000000
+  max_steps: 100000000
+  wall_time_ms: 600000
+assertions:
+  - gpio_edges: { pin: "gpiod:0", min_edges: 7 }
+  - gpio_edges: { pin: "gpiod:4", min_edges: 7 }
+  - gpio_edges: { pin: "gpiod:6", min_edges: 7 }
+  - gpio_edges: { pin: "gpioc:0", min_edges: 7 }

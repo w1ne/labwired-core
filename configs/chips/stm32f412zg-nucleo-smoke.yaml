@@ -1,0 +1,42 @@
+# Focused STM32F412ZGT6 profile for the NUCLEO-F412ZG LD2 smoke.
+# Only reset-clock boot, RCC_AHB1ENR, GPIOB, and SysTick are exposed. Other
+# F412 peripherals and the Nucleo-144 board's USB/Ethernet paths are outside
+# this profile.
+# Sources: ST DS11139 (STM32F412xE/G memory and core), RM0402 (F4 RCC/GPIO),
+# and UM1974 (NUCLEO-F412ZG / MB1137: blue LD2 on PB7, active high).
+name: stm32f412zgt6-nucleo-smoke
+arch: arm
+core: cortex-m4
+cpu_hz: 16000000
+
+flash:
+  base: 0x08000000
+  size: 1MiB
+ram:
+  base: 0x20000000
+  size: 256KiB
+
+pins:
+  PB7: { gpio: gpiob, bit: 7, functions: [{ type: gpio, peripheral: gpiob }] }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40023800
+    # RCC_AHB1ENR is the last register used by this profile (offset 0x30).
+    size: "52"
+    config:
+      profile: stm32f4
+
+  - id: gpiob
+    type: gpio
+    base_address: 0x40020400
+    # GPIOB is used through BSRR (offset 0x18).
+    size: "32"
+    config:
+      profile: stm32v2
+    clock: { reg: ahb1enr, bit: 1 }
+
+  - id: systick
+    type: systick
+    base_address: 0xE000E010

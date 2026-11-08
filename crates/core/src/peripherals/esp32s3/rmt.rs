@@ -102,6 +102,9 @@ use crate::{Bus, CycleClock, Peripheral, PeripheralTickResult, SimResult};
 const TX_CHANNELS: usize = 4;
 /// Number of RX channels (4..7).
 const RX_CHANNELS: usize = 4;
+/// Default RMT source selected by `SYS_CONF.SCLK_SEL=1` on ESP32-S3. This is a
+/// vendor-SVD claim; the runtime models the default source only.
+const DEFAULT_RMT_SOURCE_HZ: u64 = 80_000_000;
 
 /// Total channels (0..7) exposing a CHnDATA APB-FIFO port at 0x00..0x1C.
 const TOTAL_CHANNELS: usize = 8;
@@ -198,6 +201,8 @@ struct TxPlayback {
 pub struct Esp32s3Rmt {
     /// Interrupt-matrix source ID (ETS_RMT_INTR_SOURCE = 40 on ESP32-S3).
     source_id: u32,
+    /// CPU simulation cycles per RMT source-clock tick before CHn DIV_CNT.
+    cpu_cycles_per_rmt_source_tick: u64,
 
     /// CH0..3 CONF0 (TX channels). Offsets 0x20, 0x24, 0x28, 0x2C.
     tx_conf0: [u32; TX_CHANNELS],
@@ -294,10 +299,19 @@ const RMT_HOLDOFF_TOKEN: u32 = 1;
 
 impl Esp32s3Rmt {
     /// Construct the RMT with the given interrupt-matrix `source_id`.
-    /// On ESP32-S3 this is `ETS_RMT_INTR_SOURCE = 40`.
+    /// On ESP32-S3 this is `ETS_RMT_INTR_SOURCE = 40`. Assumes the normal
+    /// 240 MHz CPU clock and default 80 MHz RMT source clock.
     pub fn new(source_id: u32) -> Self {
+        Self::new_with_cpu_clock(source_id, 240_000_000)
+    }
+
+    /// Construct the RMT with the board's CPU clock. The default RMT source
+    /// clock is 80 MHz (`SYS_CONF.SCLK_SEL=1`); source-divider fields and
+    /// alternate source selections are outside this model slice.
+    pub fn new_with_cpu_clock(source_id: u32, cpu_clock_hz: u64) -> Self {
         Self {
             source_id,
+            cpu_cycles_per_rmt_source_tick: (cpu_clock_hz / DEFAULT_RMT_SOURCE_HZ).max(1),
             // TX CONF0 reset default: DIV_CNT=2 (bits[15:8]), MEM_SIZE=1
             // (bits[19:16]), CARRIER_EFF_EN=1 (20), CARRIER_EN=1 (21),
             // CARRIER_OUT_LV=1 (22) → 0x0071_0200.
@@ -503,13 +517,15 @@ impl Esp32s3Rmt {
     }
 
     /// Sim cycles per RMT-clock tick for TX channel `ch` — its `DIV_CNT`
-    /// (`CHnCONF0[15:8]`, min 1). The model treats the RMT source clock as one
-    /// tick per sim cycle, so a symbol duration of `d` RMT ticks spans
-    /// `d * DIV_CNT` sim cycles. (The SYS_CONF fractional divider is not applied
-    /// — a documented Stage-2 approximation; integer `DIV_CNT` carries the WS2812
-    /// bit-timing that matters.)
+    /// (`CHnCONF0[15:8]`, min 1). The base conversion is `cpu_hz / 80 MHz`,
+    /// matching the default S3 RMT source selected by `SYS_CONF.SCLK_SEL`; a
+    /// symbol duration of `d` ticks spans `d * DIV_CNT * base` sim cycles.
+    /// The SYS_CONF fractional divider and alternate clock selections are not
+    /// applied.
     fn cycles_per_rmt_tick(&self, ch: usize) -> u64 {
-        (((self.tx_conf0[ch] >> 8) & 0xFF) as u64).max(1)
+        (((self.tx_conf0[ch] >> 8) & 0xFF) as u64)
+            .max(1)
+            .saturating_mul(self.cpu_cycles_per_rmt_source_tick)
     }
 
     /// Decode TX channel `ch`'s RMTMEM window into an ascending list of pad
@@ -1483,7 +1499,8 @@ mod tests {
     // ── RMT Stage 2: timed pad playback → GpioObserver ────────────────────
 
     /// Symbol decode is pure: entries → ascending pad-level transitions, honoring
-    /// the idle level, END markers, and the DIV_CNT sim-cycle scaling.
+    /// the idle level, END markers, the default 240/80 MHz clock ratio, and
+    /// the DIV_CNT sim-cycle scaling.
     #[test]
     fn decode_tx_edges_builds_timed_transition_list() {
         let mut r = rmt();
@@ -1493,24 +1510,25 @@ mod tests {
         r.mem[0] = 3 | (1 << 15) | (2 << 16);
         r.mem[1] = 4 | (1 << 15) | (2 << 16);
         r.mem[2] = 0;
-        // Cumulative offsets: H@0, L@3, H@(3+2)=5, L@(5+4)=9.
+        // RMT source ticks are 3 CPU simulation cycles at 240/80 MHz.
+        // Cumulative offsets: H@0, L@9, H@(9+6)=15, L@(15+12)=27.
         assert_eq!(
             r.decode_tx_edges(0),
-            vec![(0, true), (3, false), (5, true), (9, false)]
+            vec![(0, true), (9, false), (15, true), (27, false)]
         );
 
-        // DIV_CNT=4 scales every offset by 4.
+        // DIV_CNT=4 scales every offset by 4 on top of the source-clock ratio.
         r.write_word(0x20, (4 << 8) | (1 << 16));
         assert_eq!(
             r.decode_tx_edges(0),
-            vec![(0, true), (12, false), (20, true), (36, false)]
+            vec![(0, true), (36, false), (60, true), (108, false)]
         );
 
         // A leading same-as-idle (low) pulse emits no edge until the first high.
         r.write_word(0x20, (1 << 8) | (1 << 16));
         r.mem[0] = 5 | (2 << 16) | (1 << 31); // (5,L)(2,H) — level0 low (bit15=0)
         r.mem[1] = 0;
-        assert_eq!(r.decode_tx_edges(0), vec![(5, true)]);
+        assert_eq!(r.decode_tx_edges(0), vec![(15, true)]);
     }
 
     /// End-to-end: an RMT TX channel routed to GPIO48 through the output matrix
@@ -1565,7 +1583,8 @@ mod tests {
 
         // Load a 2-entry symbol sequence into CH0's RMTMEM (direct aperture,
         // 0x400). Entry = dur0 | lvl0<<15 | dur1<<16 | lvl1<<31.
-        //   E0: (3,H)(2,L)  E1: (4,H)(2,L)  E2: END → H@0, L@3, H@5, L@9.
+        //   E0: (3,H)(2,L)  E1: (4,H)(2,L)  E2: END → H@0, L@9, H@15, L@27
+        // at the default 240/80 MHz CPU/source clock ratio.
         bus.write_u32(RMT_BASE + 0x400, 3 | (1 << 15) | (2 << 16))
             .unwrap();
         bus.write_u32(RMT_BASE + 0x404, 4 | (1 << 15) | (2 << 16))
@@ -1584,7 +1603,7 @@ mod tests {
         // GPIO stamps via the bus CycleClock (walk-free path), so the test must
         // publish the cycle the way Machine::commit_advance_boundary does —
         // bare tick_peripherals does not advance current_cycle on its own.
-        for c in 0..12u64 {
+        for c in 0..36u64 {
             bus.set_current_cycle(c);
             bus.tick_peripherals();
         }
@@ -1593,9 +1612,9 @@ mod tests {
             *obs.events.lock().unwrap(),
             vec![
                 (48, false, true, 0),
-                (48, true, false, 3),
-                (48, false, true, 5),
                 (48, true, false, 9),
+                (48, false, true, 15),
+                (48, true, false, 27),
             ],
             "RMT must drive GPIO48 with the exact timed edge sequence"
         );
@@ -1611,7 +1630,7 @@ mod tests {
             .unwrap();
         assert!(
             r.playback.is_none(),
-            "timed pad schedule must finish within the 12-cycle window"
+            "timed pad schedule must finish within the 36-cycle window"
         );
         assert!(
             r.needs_bus_tick(),

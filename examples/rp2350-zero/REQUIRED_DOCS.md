@@ -10,7 +10,8 @@
 
 ## Board (this carrier — not Pico 2)
 
-1. Waveshare RP2350-Zero product page:
+1. Waveshare RP2350-Zero product page (live availability receipt in
+   `evidence/vendor-status.md`):
    https://www.waveshare.com/rp2350-zero.htm
 2. Waveshare wiki (UF2: BOOT then RESET; WS2812; dimensions 18.00 × 23.50 mm):
    https://www.waveshare.com/wiki/RP2350-Zero

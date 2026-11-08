@@ -1,0 +1,62 @@
+# Narrow STM32F411RE profile for the NUCLEO-F411RE smoke.
+#
+# The MCU is STM32F411RET6 (Cortex-M4F, 512 KiB flash, 128 KiB SRAM,
+# LQFP64). This profile declares only the board-connected paths used by the
+# smoke: RCC, GPIOA, SysTick, and USART2. Other peripheral windows are
+# unsupported and intentionally omitted; no zero-answering stubs are used.
+#
+# Sources:
+# - ST DS10314, STM32F411xC/xE datasheet: memory, core, and peripheral limits.
+#   https://www.st.com/resource/en/datasheet/stm32f411re.pdf
+# - ST RM0383, STM32F411 reference manual: RCC/GPIO/USART register maps.
+# - ST UM1724, NUCLEO-64 board manual: LD2 PA5 and ST-LINK VCP USART2 PA2/PA3.
+#   https://www.st.com/resource/en/user_manual/um1724-stlinkv21-in-circuit-debuggerprogrammer-for-stm8-and-stm32-stmicroelectronics.pdf
+
+name: "stm32f411re-nucleo-smoke"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 150
+# Smoke firmware keeps the reset HSI clock at 16 MHz; this is not the device's
+# 100 MHz maximum.
+cpu_hz: 16_000_000
+
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+
+# Only the pads wired to the tested LD2 and VCP signals are named here.
+pins:
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA3: { gpio: "gpioa", bit: 3 }
+  PA5: { gpio: "gpioa", bit: 5 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x64000000
+    clock: { reg: "ahb1enr", bit: 0 }
+
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      # F411 USART2 uses the classic SR/DR register layout.
+      cr3_mask: 0xFFF
+    clock: { reg: "apb1enr", bit: 17 }

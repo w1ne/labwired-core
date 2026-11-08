@@ -1,0 +1,24 @@
+# ESP32-C5-DevKitC-1 v1.2, current N8R8 variant, plus an Adafruit BME280
+# breakout on I2C0. The profile exercises UART0, GPIO27's onboard RGB LED, and
+# the GPIO6/GPIO10 I2C route. RMT, USB, PSRAM, radios, and the LP core remain
+# outside this slice.
+name: "esp32c5-devkitc"
+chip: "../chips/esp32c5.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO27"
+      num_pixels: 1
+      cpu_hz: 240_000_000
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO6"
+      scl: "GPIO10"
+    config:
+      i2c_address: 0x77

@@ -1,0 +1,18 @@
+# Negative control for env.yaml: the same two CH32V203 nodes and ELFs, but
+# the bus runs at the 25 kbit/s the example's BAUD_25kbps names. That rate is
+# right for its CH32V208 target, not for these nodes, which run 12.5 kbit/s.
+schema_version: "1.0"
+name: ch32v203-canbus-network-wrong-bitrate
+nodes:
+  - id: tx
+    system: "system.yaml"
+    firmware: "../ch32fun/canbus_network_tx.elf"
+  - id: rx
+    system: "system.yaml"
+    firmware: "../ch32fun/canbus_network.elf"
+interconnects:
+  - type: can_bus
+    nodes: [tx, rx]
+    config:
+      peripheral: bxcan1
+      bitrate: 25000

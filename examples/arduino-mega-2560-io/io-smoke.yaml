@@ -13,3 +13,6 @@ limits:
 assertions:
   - uart_contains: "MEGA READY"
   - uart_contains: "k=1 a8=512 a9=512 a0=512 ms=200 f=6"
+  - gpio_edges:
+      pin: "portb:7"
+      min_edges: 1

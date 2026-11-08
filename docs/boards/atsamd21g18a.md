@@ -89,11 +89,13 @@ Stated plainly, because a fidelity table that only lists successes is marketing:
 | Cortex-M0+ core, NVIC, SysTick | ✅ | Shared Arm models |
 | PORT (GROUP 0/1) | ✅ behavioural | DIR/OUT + aliases, IN, WRCONFIG, PMUX, PINCFG |
 | SERCOM0–5, USART mode | ✅ behavioural | 8N1, TX/RX, DRE/TXC/RXC, IRQ on the enabled-flag edge |
-| SERCOM SPI / I²C modes | ❌ | Instance goes inert rather than answering wrongly |
+| SERCOM3 I²C master, SERCOM4 SPI master | ✅ behavioural | The Zero variant roles (Wire, SPI); other instances are USART-only and go inert in SPI/I²C mode |
 | SYSCTRL, GCLK, PM, WDT, NVMCTRL | ⚠️ declarative | Register banks; ready flags modelled, no clock tree |
 | EIC (`attachInterrupt`) | ❌ | Window unmapped — an access is reported, not absorbed |
 | USB | ❌ | A sketch whose console is `SerialUSB` prints nothing yet |
-| TCC0–2, TC3–5, ADC, DAC, AC, I²S, DMAC, EVSYS, RTC, DSU | ❌ | Declared not modelled in the chip yaml |
+| ADC | ✅ behavioural | Single-ended software conversions, 8/10/12-bit, gain, internal references (`samd21_adc`) |
+| TCC0–2 | ✅ behavioural | Counter, compare IRQs, CCB/PERB buffering, single-slope NPWM on the PMUX E/F pads (`samd21_tcc`); counts at the CPU clock (GCLK not checked) |
+| TC3–5, DAC, AC, I²S, DMAC, EVSYS, RTC, DSU | ❌ | Declared not modelled in the chip yaml (DAC is a register bank) |
 
 ## Pins
 

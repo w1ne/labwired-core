@@ -65,6 +65,35 @@ struct Route {
     /// while its line's output stage drives the pad, and then ahead of every
     /// ordinary route on the same pin.
     when_driving: bool,
+    /// A remap field the route also needs ([`RemapGate`]); `None` for a pad
+    /// whose mapping no register moves.
+    gate: Option<RemapGate>,
+}
+
+/// A remap-register field a route is live under: the route carries its
+/// signal only while `(register >> shift) & mask == value`.
+///
+/// This is the second selector input an F1-style pad needs. Its CRL/CRH say
+/// only "alternate-function output"; WHICH peripheral signal reaches it is
+/// set elsewhere, in `AFIO_PCFR1` on the CH32V003 (`TIM1_RM`, bits [7:6]).
+/// The AFIO block owns the register cell and stores every write into it
+/// ([`crate::Peripheral::remap_register`]); the pad reads it
+/// lock-free on each resolve.
+#[derive(Debug, Clone)]
+pub struct RemapGate {
+    pub register: Arc<std::sync::atomic::AtomicU32>,
+    pub shift: u32,
+    pub mask: u32,
+    pub value: u32,
+}
+
+impl RemapGate {
+    /// `true` while the register selects this route's mapping.
+    #[inline]
+    pub fn open(&self) -> bool {
+        (self.register.load(std::sync::atomic::Ordering::Relaxed) >> self.shift) & self.mask
+            == self.value
+    }
 }
 
 /// Every pad-to-peripheral-wire binding on one GPIO port.
@@ -79,7 +108,16 @@ pub struct PadRoutes {
     /// Per cell, per line: the watch channels last registered with that wire.
     /// Cached so an unrelated register write costs no mutex traffic.
     registered: Vec<Vec<Vec<u32>>>,
+    /// Per cell: the `(line, pad)` pairs GPIO observers were last registered
+    /// on ([`Self::sync_observers`]), cached for the same reason.
+    observed: Vec<Vec<(usize, u8)>>,
+    /// This table's owner token on the cells' observer lists; 0 until the
+    /// first observer sync.
+    owner: u64,
 }
+
+/// Source of [`PadRoutes::owner`] tokens.
+static NEXT_OBSERVER_OWNER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 impl PadRoutes {
     pub fn new() -> Self {
@@ -124,6 +162,21 @@ impl PadRoutes {
         line: usize,
         func: &'static str,
     ) {
+        self.bind_gated(cell, pin, selector, line, func, None);
+    }
+
+    /// [`Self::bind`], live only while `gate` is open as well: a pad that
+    /// carries the signal under one remap setting only (CH32V00x PD2 is
+    /// `USART2_TX` at `USART2_RM = 3`).
+    pub fn bind_gated(
+        &mut self,
+        cell: &Arc<PadLines>,
+        pin: u8,
+        selector: Option<u32>,
+        line: usize,
+        func: &'static str,
+        gate: Option<RemapGate>,
+    ) {
         let cell_idx = match self.cells.iter().position(|c| Arc::ptr_eq(c, cell)) {
             Some(i) => i,
             None => {
@@ -139,6 +192,7 @@ impl PadRoutes {
             func,
             cell: cell_idx,
             when_driving: false,
+            gate,
         });
     }
 
@@ -163,6 +217,21 @@ impl PadRoutes {
         line: usize,
         func: &'static str,
     ) {
+        self.bind_when_driving_gated(cell, pin, selector, line, func, None);
+    }
+
+    /// [`Self::bind_when_driving`], live only while `gate` is open as well:
+    /// a pad that carries the signal under one remap setting only (CH32V003
+    /// PC3 is `TIM1_CH3` at `TIM1_RM = 00` and `TIM1_CH1N` at `01`).
+    pub fn bind_when_driving_gated(
+        &mut self,
+        cell: &Arc<PadLines>,
+        pin: u8,
+        selector: Option<u32>,
+        line: usize,
+        func: &'static str,
+        gate: Option<RemapGate>,
+    ) {
         let cell_idx = match self.cells.iter().position(|c| Arc::ptr_eq(c, cell)) {
             Some(i) => i,
             None => {
@@ -178,7 +247,52 @@ impl PadRoutes {
             func,
             cell: cell_idx,
             when_driving: true,
+            gate,
         });
+    }
+
+    /// Register `observers` with the wire each routed pad selects now, so a
+    /// peripheral-driven pad reports its edges to them (at the cycles the
+    /// wire stamps). A pad taken back for plain GPIO stops reporting. Call
+    /// after any register write, like [`Self::sync_taps`]; only wires whose
+    /// pad set changed are touched.
+    pub fn sync_observers<F>(
+        &mut self,
+        observers: &[Arc<dyn crate::peripherals::device::GpioObserver>],
+        selector_of: F,
+    ) where
+        F: Fn(u8) -> Option<u32>,
+    {
+        if self.routes.is_empty() || (observers.is_empty() && self.owner == 0) {
+            return;
+        }
+        if self.owner == 0 {
+            self.owner = NEXT_OBSERVER_OWNER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.observed.resize(self.cells.len(), Vec::new());
+        let mut per_cell: Vec<Vec<(usize, u8)>> = vec![Vec::new(); self.cells.len()];
+        if !observers.is_empty() {
+            let mut pins: Vec<u8> = self.routes.iter().map(|r| r.pin).collect();
+            pins.sort_unstable();
+            pins.dedup();
+            for pin in pins {
+                if let Some(route) = self.active(pin, &selector_of) {
+                    per_cell[route.cell].push((route.line, pin));
+                }
+            }
+        }
+        for (idx, pairs) in per_cell.into_iter().enumerate() {
+            if self.observed[idx] != pairs {
+                let add = pairs
+                    .iter()
+                    .flat_map(|&(line, pin)| {
+                        observers.iter().map(move |o| (line, pin, Arc::clone(o)))
+                    })
+                    .collect();
+                self.cells[idx].set_observers(self.owner, add);
+                self.observed[idx] = pairs;
+            }
+        }
     }
 
     /// The route currently driving `pin`, if any.
@@ -199,13 +313,17 @@ impl PadRoutes {
             r.pin == pin
                 && r.when_driving
                 && r.selector.is_none_or(|want| want == current)
+                && r.gate.as_ref().is_none_or(RemapGate::open)
                 && self.cells[r.cell].drives(r.line)
         });
         if conditional.is_some() {
             return conditional;
         }
         self.routes.iter().find(|r| {
-            r.pin == pin && !r.when_driving && r.selector.is_none_or(|want| want == current)
+            r.pin == pin
+                && !r.when_driving
+                && r.selector.is_none_or(|want| want == current)
+                && r.gate.as_ref().is_none_or(RemapGate::open)
         })
     }
 
@@ -274,13 +392,15 @@ impl PadRoutes {
             // this port (a timer enabling its channel output), and only a
             // port write re-syncs taps. So its line reports to the watch
             // channel whenever the pad is handed to a peripheral at all; it
-            // publishes nothing while it does not drive.
+            // publishes nothing while it does not drive. A gated route
+            // whose remap field selects another mapping does not report: the
+            // remap moved its signal to a different pad. A remap written
+            // after the pads were configured re-syncs through the port's
+            // `routes_changed` (`SystemBus::remap_changed`).
             if selector_of(pin).is_some() {
-                for r in self
-                    .routes
-                    .iter()
-                    .filter(|r| r.when_driving && r.pin == pin)
-                {
+                for r in self.routes.iter().filter(|r| {
+                    r.when_driving && r.pin == pin && r.gate.as_ref().is_none_or(RemapGate::open)
+                }) {
                     if let Some(slot) = per_cell[r.cell].get_mut(r.line) {
                         if !slot.contains(&channel) {
                             slot.push(channel);

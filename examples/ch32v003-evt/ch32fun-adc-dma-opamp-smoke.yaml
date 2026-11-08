@@ -1,0 +1,51 @@
+# ch32fun examples/adc_dma_opamp, unmodified (build-ch32fun-examples.sh).
+# ADC1 scans AIN7, AIN4, AIN3, AIN2 (RSQR1.L = 3, RSQR3 = 7/4/3/2) in
+# continuous mode; CTLR2.DMA moves every conversion through DMA1 channel 1
+# (half-words, MINC, circular, CNTR 4) into adc_buffer[4], which the CPU
+# never fills itself. Every 200 ms (two Delay_Ms(100)) main prints the
+# buffer on the debug printf channel as "%4d %4d %4d %4d".
+#
+# The pots start at PD3 100 %, PD2 50 %, PC4 0 % (codes 1023, 511, 0) and
+# are moved at 30M cycles to PD3 25 %, PD2 75 %, PC4 100 % (255, 767,
+# 1023). A model that converted one channel, lost the scan order, or let
+# the DMA drift off the buffer start prints the columns in the wrong place.
+#
+# Column 1 is PD4, the op-amp output. The OPA is not modelled and nothing
+# is wired to PD4, so that column is not asserted.
+schema_version: "1.2"
+inputs:
+  firmware: "ch32fun/adc_dma_opamp.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-adc-dma-smoke.yaml"
+limits:
+  max_cycles: 55000000
+  max_steps: 100000000
+  wall_time_ms: 900000
+stimuli:
+  - target: { component: "pot_pd3", channel: "position" }
+    trigger: !after_cycles { cycles: 1 }
+    value: 100
+  - target: { component: "pot_pd2", channel: "position" }
+    trigger: !after_cycles { cycles: 1 }
+    value: 50
+  - target: { component: "pot_pc4", channel: "position" }
+    trigger: !after_cycles { cycles: 1 }
+    value: 0
+  - target: { component: "pot_pd3", channel: "position" }
+    trigger: !after_cycles { cycles: 30000000 }
+    value: 25
+  - target: { component: "pot_pd2", channel: "position" }
+    trigger: !after_cycles { cycles: 30000000 }
+    value: 75
+  - target: { component: "pot_pc4", channel: "position" }
+    trigger: !after_cycles { cycles: 30000000 }
+    value: 100
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "adc_dma_opamp example" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "initializing adc...done." }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "initializing op-amp..." }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "looping..." }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: " 1023  511    0", min_count: 2 }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "  255  767 1023", min_count: 2 }
+  # EXTEN_CTR.OPA_EN (bit 16) set by opamp_init().
+  - memory_value: { address: 0x40023800, mask: 0x00010000, expected_value: 0x00010000 }
+  - gpio_edges: { pin: "gpioc:1", min_edges: 8 }

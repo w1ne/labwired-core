@@ -1,0 +1,14 @@
+# NUCLEO-F334R8: ST-LINK VCP USART2 on PA2/PA3 and user LED LD2 on PA5.
+# Board wiring follows ST UM1724 / MB1136; only these smoke-tested paths are
+# attached to this narrow profile.
+name: nucleo-f334r8
+chip: ../chips/stm32f334r8-nucleo-smoke.yaml
+debug_uart: usart2
+external_devices: []
+board_io:
+  - id: led_ld2
+    kind: led
+    peripheral: gpioa
+    pin: 5
+    signal: output
+    active_high: true

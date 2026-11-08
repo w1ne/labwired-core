@@ -63,6 +63,9 @@ fn default_region_image_path(env: &str) -> Option<PathBuf> {
     let rel = match env {
         "LABWIRED_ESP32C3_ROM" => "roms/esp32c3/esp32c3_rom.bin",
         "LABWIRED_ESP32C3_ROM_DATA" => "roms/esp32c3/esp32c3_drom.bin",
+        "LABWIRED_ESP32S2_ROM" => "roms/esp32s2/esp32s2_rom.bin",
+        "LABWIRED_ESP32S2_DROM" => "roms/esp32s2/esp32s2_drom.bin",
+        "LABWIRED_ESP32S2_ROM_DATA" => "roms/esp32s2/esp32s2_rom_data.bin",
         // Same image as `embedded_region_image`; kept so an operator can
         // still point the env var at a replacement file. Bare-metal ELFs
         // that need the Cortex-M flash boot alias at 0 (PIO onboarding) set
@@ -427,6 +430,7 @@ impl SystemBus {
             external_device_decls: Vec::new(),
             semihost: SemihostState::new(),
             nvic: None,
+            qingke_pfic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             // The board's clock beats the chip's rated one: the NUCLEO-L476RG
@@ -508,6 +512,7 @@ impl SystemBus {
             flash_models_ops: false,
             nordic_gpio_service: false,
             timer_capture_wired: false,
+            remap_block: None,
             wire_inputs_live: false,
             resident_scheduling_disabled: false,
             flash_error_flags_idx: None,
@@ -613,6 +618,8 @@ impl SystemBus {
                 .or_else(|| crate::peripherals::esp32s3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c6::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32c5::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32p4::factory::try_build(&canonical_type, p_cfg))
                 // ESP32-classic was missing from this chain. Its factory has
                 // always existed with all 14 `esp32_*` types, but only the
                 // Xtensa builder called it, so a plain `from_config` bus --
@@ -845,6 +852,23 @@ impl SystemBus {
                             .set_full_featured(full)
                             .set_stm32_lpuart(stm32_lpuart)
                             .set_u5_features(u5_features);
+                    // WCH parts reuse the F1 USART register map with their own TX pads.
+                    if let Some(map) = p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
+                        if matches!(map, "ch32v003" | "ch32v00x" | "ch32x03x") {
+                            anyhow::ensure!(
+                                matches!(layout, crate::peripherals::uart::UartRegisterLayout::Stm32F1),
+                                "Peripheral '{}' selects the {} pad map but not the STM32F1 USART register layout",
+                                p_cfg.id,
+                                map
+                            );
+                        }
+                        uart = match map {
+                            "ch32v003" => uart.set_ch32v003_pad_map(),
+                            "ch32v00x" => uart.set_ch32v00x_pad_map(),
+                            "ch32x03x" => uart.set_ch32x03x_pad_map(),
+                            _ => uart,
+                        };
+                    }
                     // Renesas SCI_B and classic SCI: `elc_event` is the
                     // channel's RXI event (TXI/TEI follow); the events reach
                     // the NVIC through the RA ICU. `clock_hz` is the rate the
@@ -1403,14 +1427,24 @@ impl SystemBus {
         // `INPUT_PULLUP` changes the floating input level. No-op for every
         // other chip.
         bus.wire_esp32c3_pad_controls();
+        // ESP32-C61: the narrow GPIO8 output profile shares its IO_MUX
+        // function-select word with GPIO so a wrong MCU_SEL disconnects the
+        // attached WS2812B model from the output pad.
+        bus.wire_esp32c61_pad_controls();
+        // ESP32-C5: share GPIO6/GPIO10/GPIO27 IO_MUX function-select words
+        // with GPIO so sensor matrix routing and the onboard LED honor MCU_SEL.
+        bus.wire_esp32c5_pad_controls();
+        // ESP32-P4: share the GPIO8 IO_MUX word so the GPIO pad follows the
+        // firmware-selected GPIO function on the P4X Function EV profile.
+        bus.wire_esp32p4_pad_controls();
         // Same for the ESP32-S3. (The S3's IO_MUX is registered by the coded
         // `configure_xtensa_esp32s3` path rather than the chip yaml, which
         // wires it there too; this keeps the declarative path honest if the
         // peripheral is ever declared.)
         bus.wire_esp32s3_pad_controls();
-        // ESP32-C3: share the I²C0 bit engine's live SDA/SCL line levels with
-        // the C3 GPIO model so matrix-routed pads carry the real waveform.
-        // No-op for every other chip.
+        // ESP32-C3/C5/C6: share the I²C0 bit engine's live SDA/SCL line levels
+        // with the chip's GPIO model so matrix-routed pads carry the real
+        // waveform. No-op when the controller/GPIO pair is absent.
         bus.wire_esp32c3_i2c_pads();
         // And GP-SPI2's SCK/MOSI/CS plus each UART's TX, so those buses are
         // measurable on the C3 too rather than reading as a flat line. MISO/RX
@@ -1438,6 +1472,8 @@ impl SystemBus {
         bus.wire_esp32_uart_pads();
         // …and its LEDC outputs (signals 71..86).
         bus.wire_esp32_ledc_pads();
+        // Matrix output wires published through capabilities (S2 RMT).
+        bus.wire_matrix_output_lines();
         // RP2040: bind I²C wires to the pads IO_BANK0's FUNCSEL can route them to.
         bus.wire_rp2040_i2c_pads();
         // Same for the RP2040 UARTs' TX/RX, so serial output is a waveform on
@@ -1470,10 +1506,16 @@ impl SystemBus {
         bus.wire_stm32_timer_output_pads();
         // SAMD51 TC waveform outputs onto their PMUX-E pads (samd51_tc only).
         bus.wire_samd51_tc_output_pads();
+        // SAMD21 TCC WO[x] onto their PMUX-E/F pads (samd21_tcc only).
+        bus.wire_samd21_tcc_output_pads();
+        // megaAVR TCA0 WO0..2 onto the port PORTMUX.TCAROUTEA selects.
+        bus.wire_megaavr_tca_output_pads();
         // RA GPT GTIOCnA/B onto the pads the chip YAML names (PSEL 00011).
         bus.wire_ra_gpt_output_pads();
         // Board wires from an analog output (a DAC pin) to an ADC input.
         bus.wire_analog_links();
+        // Timer master/slave: each slave's ITRx reads its master's TRGO.
+        bus.wire_timer_trigger_links(&merged_peripherals)?;
         // nRF52: bind every TWIM/SPIM/UARTE wire to every pad its PSEL can
         // name. Unlike the four above this is not a datasheet AF table — the
         // pad has no function register on this family, so the peripherals
@@ -1626,7 +1668,8 @@ impl SystemBus {
         }
     }
 
-    /// Install a GPIO edge observer on ESP32 / ESP32-S3 GPIO models when present.
+    /// Install a GPIO edge observer on modeled GPIO pads, including the
+    /// ESP32-family GPIO blocks and RP2040/RP2350 SIO.
     ///
     /// Public so kits (`Transport::GpioGroup`) and hand arms share one choke
     /// point — the same path `AttachCtx::install_gpio_observer` uses.
@@ -1644,6 +1687,29 @@ impl SystemBus {
                 return true;
             }
         }
+        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+            if let Some(gpio) = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32c5::gpio::Esp32c5Gpio>())
+            {
+                gpio.add_observer(observer);
+                return true;
+            }
+        }
+        // The C3 model is also the C6 GPIO implementation (with C6's matrix
+        // layout and interrupt source). Both chips expose pad transitions to
+        // attached GPIO devices.
+        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+            if let Some(gpio) = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32c3::gpio::Esp32c3Gpio>())
+            {
+                gpio.add_observer(observer);
+                return true;
+            }
+        }
         // Classic ESP32 GPIO (separate type).
         if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
             if let Some(gpio) = bus.peripherals[idx]
@@ -1655,7 +1721,34 @@ impl SystemBus {
                 return true;
             }
         }
+        if let Some(idx) = bus.find_peripheral_index_by_name("sio") {
+            if let Some(sio) = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::rp2040::sio::Rp2040Sio>())
+            {
+                sio.add_gpio_observer(observer);
+                return true;
+            }
+        }
         false
+    }
+
+    /// Install a GPIO edge observer on ONE STM32-style port (`gpioc`), for
+    /// a part wired to a port pad (`PC6`). The port reports the pads a
+    /// peripheral drives through its pad routes (an SPI MOSI), each edge at
+    /// the cycle the peripheral's wire stamps; see
+    /// [`crate::peripherals::gpio::GpioPort::add_observer`]. Returns whether
+    /// a port of that name took it.
+    pub fn install_port_gpio_observer(
+        bus: &mut SystemBus,
+        port: &str,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    ) -> bool {
+        let Some(idx) = bus.find_peripheral_index_by_name(port) else {
+            return false;
+        };
+        bus.peripherals[idx].dev.observe_port_pads(observer)
     }
 
     #[allow(dead_code)] // residual GPIO helpers kept for CAN/tester arms that may re-use them

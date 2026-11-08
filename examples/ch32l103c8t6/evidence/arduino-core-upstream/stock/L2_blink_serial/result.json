@@ -1,0 +1,39 @@
+{
+ "status": "fail",
+ "stop_reason": "max_steps",
+ "steps_executed": 20000000,
+ "cycles": 79818328,
+ "assertions": [
+  {
+   "assertion": {
+    "uart_contains": "LW_L2_OK"
+   },
+   "passed": false
+  }
+ ],
+ "logic_edges": {
+  "dropped": 0,
+  "now_cycle": 20000000,
+  "channels": [
+   {
+    "ch": 0,
+    "channel": "CH0",
+    "peripheral": "gpiob",
+    "pin": 12,
+    "initial": 0,
+    "transitions": [],
+    "gaps": [],
+    "initial_state": "z",
+    "states": [
+     {
+      "cycle": 630,
+      "state": "0"
+     }
+    ],
+    "mode": "output",
+    "edge_count": 0
+   }
+  ]
+ },
+ "firmware_hash": "d81723bd8c96e5484a4991ae1ae80ce8268b93d62c239f5f8112d2a7cb17cf23"
+}

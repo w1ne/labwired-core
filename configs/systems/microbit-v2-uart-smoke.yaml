@@ -1,0 +1,10 @@
+# BBC micro:bit v2, scoped to target-MCU UARTE0 TX/RX and GPIO pads P0.06/P1.08.
+# host_console captures the SoC UART output; the interface MCU and physical USB
+# CDC bridge are not modeled. The broader board profile is microbit-v2.yaml.
+name: "microbit-v2-uart-smoke"
+chip: "../chips/nrf52833-microbit-v2-uart-smoke.yaml"
+external_devices: []
+connectors:
+  - type: "uart"
+    peripheral: "uart0"
+    endpoint: "host_console"

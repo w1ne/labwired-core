@@ -32,6 +32,28 @@ ram:
   base: 0x20000000
   size: "32KB"
 
+# Every Arduino SAMD board ships with an 8 KB bootloader (SAM-BA / UF2) at the
+# flash base, and the core's linker script (`flash_with_bootloader.ld`) puts
+# the sketch's vector table at 0x2000. The simulator does not run the
+# bootloader; when the flash-base vectors are not a valid image it enters the
+# application at this offset, which is what the bootloader's jump does on
+# silicon. A bare-metal image linked at 0x0 is unaffected.
+reset_vector_offset: 0x2000
+
+memory_regions:
+  # NVM calibration and auxiliary space, 0x0080_0000..0x0080_A0FF (datasheet
+  # §10.3.1, "NVM Calibration and Auxiliary Space"), mapped to the next whole
+  # KiB (0x0080_A3FF) because region sizes are KiB-granular: user row at 0x804000,
+  # the software calibration row (OTP4) at 0x806020, the 128-bit serial number
+  # at 0x80A00C..0x80A048. The Arduino core's SystemInit reads the DFLL48M
+  # coarse value and the ADC LINEARITY/BIASCAL from OTP4 before main().
+  #
+  # Factory calibration is per unit and not published, so the window reads
+  # ERASED (0xFF) rather than an invented row. On those values the core takes
+  # its own documented fallback (coarse 0x3F -> 0x1F); the ADC gets
+  # LINEARITY 0xFF / BIASCAL 7 written to CALIB, which this model does not use.
+  - { name: "nvm_aux", base: 0x00800000, size: "41KB", erased: true }
+
 # ── Pin map ─────────────────────────────────────────────────────────────────
 # WHY THIS IS DECLARED RATHER THAN LEFT TO THE LABEL PARSE.
 #
@@ -201,18 +223,28 @@ peripherals:
       num_pins: 32
 
   # ── SERCOM 0..5 ────────────────────────────────────────────────────────────
-  # Six identical SERCOM instances on APB-C at a 0x400 stride, each modelled in
-  # USART mode. A SERCOM whose firmware puts it into SPI or I²C mode
-  # (CTRLA.MODE) goes inert rather than answering out of the wrong register
-  # map — those modes are not implemented yet.
+  # Six identical SERCOM instances on APB-C at a 0x400 stride. On silicon each
+  # one becomes a USART, an SPI or an I²C controller by CTRLA.MODE; here each
+  # window is ONE of those models, because a LabWired peripheral has a single
+  # register map. The roles are the Arduino Zero's (ArduinoCore-samd
+  # variants/arduino_zero/variant.h, shared by arduino_mzero and Adafruit's
+  # Feather M0 / Metro M0):
+  #
+  #   SERCOM0 USART  Serial1 (D0/D1 = PA11/PA10)
+  #   SERCOM1 USART  unused by the Zero variant
+  #   SERCOM2 USART  unused by the Zero variant
+  #   SERCOM3 I²C    Wire    (SDA PA22 / SCL PA23, PMUX C)
+  #   SERCOM4 SPI    SPI     (MISO PA12 PAD0, MOSI PB10 PAD2, SCK PB11 PAD3, PMUX D)
+  #   SERCOM5 USART  Serial  (EDBG virtual COM port, PB22/PB23)
+  #
+  # ⚠️ So a sketch that runs SERCOM3 or SERCOM4 as a UART, or SPI/I²C on one of
+  # the USART instances (the MKR variants put Wire on SERCOM2 and SPI on
+  # SERCOM1), does not get it here. A USART instance put into SPI or I²C mode
+  # goes inert rather than answering out of the wrong register map.
   #
   # `size` is the SVD addressBlock (0x40), not the 0x400 APB slot: the gap
   # between instances stays UNMAPPED on purpose, so a driver reaching past the
   # register block is reported instead of being quietly absorbed.
-  #
-  # Which SERCOM is the console is a BOARD fact, not a chip fact — the Arduino
-  # Zero's `Serial1` is SERCOM0 while its EDBG virtual COM port is SERCOM5.
-  # The system manifest picks; this file only declares the silicon.
   - id: "sercom0"
     type: "sam_sercom_usart"
     base_address: 0x42000800
@@ -228,21 +260,101 @@ peripherals:
     base_address: 0x42001000
     size: "64B"
     irq: 11
+  # SERCOM3 as the I²C master slice (crates/core/src/peripherals/sam/
+  # sercom_i2cm.rs, SAMD21 instance table): 7-bit addressing, writes, reads,
+  # repeated start, STOP and the MB/SB/RXNACK handshake, gated by
+  # PM.APBCMASK.SERCOM3 and by PAD0/PAD1 being muxed to the SERCOM. The model
+  # reports its own line (IRQ 12). Operations complete on the next bus tick:
+  # the SAMD21 core clock (GCLK.CLKCTRL is indirect) is not resolved, so no SCL
+  # timing and no BAUD pacing.
   - id: "sercom3"
-    type: "sam_sercom_usart"
+    type: "samd21_sercom_i2cm"
     base_address: 0x42001400
     size: "64B"
-    irq: 12
+  # SERCOM4 as the SPI master (sercom_spi.rs): 8-bit, MODE=3, transfers only
+  # while DOPO = 1 and SCK (PB11) / MOSI (PB10) are muxed to function D. No IRQ
+  # is declared: that model reports DRE/TXC/RXC/ERROR on four consecutive
+  # lines, which is the SAMD51 layout; a SAMD21 SERCOM has one (IRQ 13), so
+  # interrupt-driven SPI is not claimed. The Arduino SPI library polls.
   - id: "sercom4"
-    type: "sam_sercom_usart"
+    type: "sam_sercom_spi"
     base_address: 0x42001800
     size: "64B"
-    irq: 13
+    config:
+      port_base: 0x41004480
+      sck_bit: 11
+      mosi_bit: 10
+      pad_mux: 3
+      dopo: 1
   - id: "sercom5"
     type: "sam_sercom_usart"
     base_address: 0x42001C00
     size: "64B"
     irq: 14
+
+  # ── Analog and USB — register banks the Arduino core touches at boot ───────
+  # ArduinoCore-samd's init() calibrates and configures the ADC and DAC, and
+  # its main() calls USBDevice.init()/attach() on EVERY board, including a
+  # Zero whose `Serial` is the EDBG UART. Without these windows the first
+  # access bus-faults before setup() runs.
+  #
+  # ⚠️ Declarative register banks from the SVD, not behavioural models: the
+  # DAC drives no pad and the USB block enumerates nothing (`SerialUSB` prints
+  # nothing here). The ADC is a behavioural model, below.
+  - id: "dac"
+    type: "declarative"
+    base_address: 0x42004800
+    size: "16B"
+    irq: 25
+    config:
+      path: "../peripherals/atsamd21g18a/dac.yaml"
+      profile: "sam"
+      num_pins: 32
+  - id: "usb"
+    type: "declarative"
+    base_address: 0x41005000
+    size: "4KB"
+    irq: 7
+    config:
+      path: "../peripherals/atsamd21g18a/usb.yaml"
+      profile: "sam"
+      num_pins: 32
+  # The ADC converts (`samd21_adc`): single-ended AINn against GND, software
+  # START, 8/10/12-bit, gain 1x..16x and DIV2, internal references. That is
+  # every path stock analogRead() takes (AR_DEFAULT = GAIN DIV2 against
+  # INTVCC1, full scale VDDANA). Inputs read 0 mV unless the host or the board
+  # (`input_mv: { <ain>: <mV> }`) drives them. No IRQ line (23) is declared:
+  # the model raises none. Averaging, freerun, scan, window, events, external
+  # references and differential mode are refused, not ignored.
+  - id: "adc"
+    type: "samd21_adc"
+    base_address: 0x42004000
+    size: "64B"
+
+  # ── TCC0..TCC2 (`samd21_tcc`) ──────────────────────────────────────────────
+  # Counters with compare matches, buffered CC/PER (CCB/PERB) and single-slope
+  # NPWM waveform outputs published onto the pads PMUX E/F hands them (bus
+  # `wire_samd21_tcc_output_pads`). That is what stock analogWrite() does on a
+  # TCC pin (Zero D13 = PA17 = TCC2/WO1, PER 0xFFFF, GCLK0). Counts at the CPU
+  # clock over the prescaler while PM.APBCMASK enables it; GCLK.CLKCTRL is a
+  # plain bank above, so the generic clock is NOT checked. Dual-slope, MFRQ,
+  # dithering, faults, capture, dead time, patterns, events and DMA are
+  # refused, not ignored. Size is the SVD addressBlock (0x80).
+  - id: "tcc0"
+    type: "samd21_tcc"
+    base_address: 0x42002000
+    size: "128B"
+    irq: 15
+  - id: "tcc1"
+    type: "samd21_tcc"
+    base_address: 0x42002400
+    size: "128B"
+    irq: 16
+  - id: "tcc2"
+    type: "samd21_tcc"
+    base_address: 0x42002800
+    size: "128B"
+    irq: 17
 
   # ── Cortex-M0+ core peripherals ────────────────────────────────────────────
   # No `debug_schema` on either: they are Arm core blocks in the PPB, which the
@@ -262,8 +374,8 @@ peripherals:
 # plausible zero:
 #   EIC 0x40001800 (external interrupts / attachInterrupt), RTC 0x40001400,
 #   DSU 0x41002000 (device identity, CoreSight), DMAC 0x41004800,
-#   USB 0x41005000 (the native-USB `Serial` on a Zero/Feather M0 — a board
-#   whose console is USB CDC cannot print here yet), EVSYS 0x42000400,
-#   TCC0-2 0x42002000..0x42002800, TC3-5 0x42002C00..0x42003400,
-#   ADC 0x42004000, AC 0x42004400, DAC 0x42004800, I2S 0x42005000,
+#   EVSYS 0x42000400,
+#   TC3-5 0x42002C00..0x42003400 (so analogWrite on a TC pin — Zero D10/D12
+#   — faults; the TCC pins work),
+#   AC 0x42004400, I2S 0x42005000,
 #   PAC0/1/2, HMATRIX, MTB, and the PORT_IOBUS alias at 0x60000000.

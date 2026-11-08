@@ -1,0 +1,240 @@
+# Narrow CH32V307VCT6 profile for ch32fun (cnlohr/ch32fun) CH32V30x firmware
+# (examples/ch32v307v-evt/build-ch32fun-examples.sh): the QingKe V4F core —
+# RV32IMAFC, with the single-precision F extension (f0..f31, fcsr,
+# mstatus.FS) — its PFIC and 64-bit SysTick, the HSI PLL handshake ch32fun's
+# SystemInit runs, and the WCH-Link debug printf channel ch32fun uses as its
+# default console.
+#
+# QingKe V4F, LQFP100. The 128 KB of SRAM is split between zero-wait flash
+# and RAM by the option bytes (RM USER SRAM_CODE_MODE: 192K/128K, 224K/96K,
+# 256K/64K, 288K/32K). The two firmware sets here link two different
+# splits: ch32fun's TARGET_MCU_MEMORY_SPLIT 3 (288 KB flash, 32 KB RAM;
+# its SystemInit also writes the value to FLASH->OBR) and WCH's Arduino
+# core Link.ld (256 KB flash, 64 KB RAM, stack top 0x20010000). The windows
+# below are the union of the two — 288 KB flash, 64 KB RAM — so the model
+# does not fault an access that one split forbids and the other allows.
+#
+# Register blocks: ch32fun ch32v30xhw.h and the CH32FV2x_V3x reference
+# manual. The RCC, flash interface, GPIO and USART registers used here share
+# the STM32F1 offsets and bits (as on the CH32V20x), so the F1 models serve
+# them; the RCC's PLLMUL value is not decoded into SYSCLK, and cpu_hz states
+# the 144 MHz ch32fun (and WCH's Arduino core) configures.
+#
+# HPE saves the integer registers only; an interrupt handler that touches
+# the FPU keeps its own f registers (nothing here takes an interrupt).
+#
+# WCH's official Arduino core (validation/arduino-matrix row `ch32v307`)
+# also runs on this profile. It adds I2C1, I2C2 (the variant's Wire), SPI1,
+# ADC1, TIM1..TIM4 and CAN1 for Wire, SPI, analogRead, analogWrite and the
+# bxCAN loopback, at the CH32V20x/F103 layouts the CH32FV2x_V3x RM keeps.
+#
+# Not modeled here: the V30x extras over the V20x (USART3..8, TIM8..10,
+# DVP, SDIO, FSMC, ETH, USBHS, CAN2, DAC, OPA, RNG), SPI2/3, ADC2, DMA,
+# EXTI, the CAN interrupts, PFIC interrupt nesting and priority grouping,
+# HSE, low-power modes, and physical-board parity.
+name: ch32v307vct6-ch32fun-smoke
+arch: riscv
+core: qingke-v4f
+registers_count: 32
+cpu_hz: 144_000_000
+
+flash:
+  base: 0x08000000
+  size: 288KB
+ram:
+  base: 0x20000000
+  size: 64KB
+# ch32fun links at 0; the CH32V30x aliases its flash there for reset fetch.
+flash_boot_alias: true
+
+package: LQFP100
+pin_count: 100
+
+pins:
+  PA3: { gpio: gpioa, bit: 3 }
+  PC0: { gpio: gpioc, bit: 0 }
+  PD0: { gpio: gpiod, bit: 0 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 1KB
+    config:
+      profile: ch32v20x
+
+  # The F1 flash interface. SystemInit writes TARGET_MCU_MEMORY_SPLIT to
+  # OBR (+0x1C), a read-only register: the write is accepted and ignored.
+  - id: flash_ctrl
+    type: flash
+    base_address: 0x40022000
+    size: 1KB
+    config:
+      profile: stm32f1
+
+  # Factory word in the system area; WCH's SPL picks the CH32V307 PLL table
+  # from its bit 14 (see the descriptor).
+  - id: pll_cfg_word
+    type: declarative
+    base_address: 0x1FFFF70C
+    size: 4B
+    config:
+      path: "../peripherals/ch32v30x/pll_cfg_word.yaml"
+
+  # EXTEND at 0x40023800: storage only.
+  - id: exten
+    type: declarative
+    base_address: 0x40023800
+    size: 4B
+    config:
+      path: "../peripherals/ch32v20x/exten.yaml"
+
+  - id: afio
+    type: afio
+    base_address: 0x40010000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 0 }
+
+  # WCH-Link attached and polling like `minichlink -T`; DMDATA0/1 and the
+  # attach sentinel sit at 0xE0000380 on the V4.
+  - id: debug_printf
+    type: wch_debug_printf
+    base_address: 0xE0000380
+    size: 12B
+
+  - id: pfic
+    type: qingke_pfic
+    base_address: 0xE000E000
+    size: 4KB
+
+  - id: stk
+    type: qingke_v4_systick
+    base_address: 0xE000F000
+    size: 24B
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x40010800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 2 }
+    config:
+      profile: stm32f1
+
+  - id: gpiob
+    type: gpio
+    base_address: 0x40010C00
+    size: 1KB
+    clock: { reg: apb2enr, bit: 3 }
+    config:
+      profile: stm32f1
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x40011000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 4 }
+    config:
+      profile: stm32f1
+
+  - id: gpiod
+    type: gpio
+    base_address: 0x40011400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 5 }
+    config:
+      profile: stm32f1
+
+  - id: gpioe
+    type: gpio
+    base_address: 0x40011800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 6 }
+    config:
+      profile: stm32f1
+
+  # USART1 (TX on PA9), the F1 block: FUNCONF_USE_UARTPRINTF firmware
+  # programs it; nothing in these smokes asserts its output.
+  - id: usart1
+    type: uart
+    base_address: 0x40013800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 14 }
+    config:
+      profile: stm32f1
+
+  # I2C1/I2C2/SPI1/ADC1/TIM1..4/CAN1: the F103 register layouts, which the
+  # CH32FV2x_V3x RM keeps, at the ch32v30x.h bases. IRQ numbers are
+  # ch32v30x.h IRQn (the F1 vector numbers + 16 on the PFIC); clock gates are
+  # RCC APB1PCENR / APB2PCENR bits, the same positions as the F103.
+  - id: i2c1
+    type: i2c
+    base_address: 0x40005400
+    size: 1KB
+    irq: 47
+    clock: { reg: apb1enr, bit: 21 }
+    config:
+      irq_error: 48
+
+  # Wire in WCH's CH32V307VCT6 variant: PB10 SCL / PB11 SDA.
+  - id: i2c2
+    type: i2c
+    base_address: 0x40005800
+    size: 1KB
+    irq: 49
+    clock: { reg: apb1enr, bit: 22 }
+    config:
+      irq_error: 50
+
+  - id: spi1
+    type: spi
+    base_address: 0x40013000
+    size: 1KB
+    irq: 51
+    clock: { reg: apb2enr, bit: 12 }
+
+  - id: adc1
+    type: adc
+    base_address: 0x40012400
+    size: 1KB
+    irq: 34
+    clock: { reg: apb2enr, bit: 9 }
+    config:
+      profile: stm32f1
+
+  - id: tim1
+    type: timer
+    base_address: 0x40012C00
+    size: 1KB
+    irq: 41
+    clock: { reg: apb2enr, bit: 11 }
+    config:
+      advanced: true
+
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: 1KB
+    irq: 44
+    clock: { reg: apb1enr, bit: 0 }
+
+  - id: tim3
+    type: timer
+    base_address: 0x40000400
+    size: 1KB
+    irq: 45
+    clock: { reg: apb1enr, bit: 1 }
+
+  - id: tim4
+    type: timer
+    base_address: 0x40000800
+    size: 1KB
+    irq: 46
+    clock: { reg: apb1enr, bit: 2 }
+
+  # CAN1 (bxCAN), clocked from APB1PCENR.CAN1EN (bit 25); unclocked it never
+  # acknowledges INRQ.
+  - id: bxcan1
+    type: bxcan
+    base_address: 0x40006400
+    size: 1KB
+    clock: { reg: apb1enr, bit: 25 }

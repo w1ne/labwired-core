@@ -1,0 +1,75 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      212,
+      210,
+      0,
+      0,
+      0,
+      0,
+      51,
+      0,
+      0,
+      0,
+      128,
+      207,
+      149,
+      0,
+      0,
+      4,
+      4,
+      0,
+      226,
+      4
+    ],
+    "pc": 1378,
+    "sp": 16371,
+    "sreg": 149
+  },
+  "steps_executed": 500000,
+  "cycles": 851152,
+  "instructions": 499949,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 500000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 500000
+    }
+  },
+  "limits": {
+    "max_steps": 500000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "e46c90f55ab75e8901c1d5305dc8ab5f98349b4dbd6197f43349ae90885b736e",
+  "config": {
+    "firmware": "examples/arduino-nano-every/firmware/.pio/build/nano_every/firmware.elf",
+    "system": "examples/arduino-nano-every/../../configs/systems/arduino-nano-every.yaml",
+    "script": "examples/arduino-nano-every/io-smoke.yaml"
+  }
+}

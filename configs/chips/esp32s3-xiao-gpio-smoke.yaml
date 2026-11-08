@@ -1,0 +1,23 @@
+# Narrow chip profile for the standard Seeed Studio XIAO ESP32-S3.
+# It exposes only the real GPIO block exercised by the onboard user LED.
+# Flash is 8 MiB; internal SRAM is mapped for direct-entry firmware. PSRAM,
+# radio, USB, UART, I2C, SPI, ADC, and other blocks are not claimed here.
+name: "esp32s3-xiao-gpio-smoke"
+arch: "xtensa-lx7"
+cpu_hz: 240_000_000
+
+flash:
+  base: 0x42000000
+  size: "8192KB"
+ram:
+  base: 0x3FC88000
+  size: "512KB"
+
+pins:
+  GPIO21: { gpio: "gpio", bit: 21, functions: [{ type: gpio, peripheral: gpio }] }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32s3_gpio"
+    base_address: 0x60004000
+    size: "2KB"

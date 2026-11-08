@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-f030r8",
+  "status": "pass",
+  "crate": "firmware-nucleo-f030r8-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/nucleo-f030r8/io-smoke.yaml",
+  "system": "configs/systems/nucleo-f030r8.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T19:12:17Z",
+  "finished_at_utc": "2026-11-03T19:12:32Z",
+  "elapsed_seconds": 15,
+  "elapsed_ms": 14381,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 13.803,
+    "build_firmware": 0.307,
+    "run_smoke": 0.26
+  },
+  "stages_ms": {
+    "build_cli": 13803,
+    "build_firmware": 307,
+    "run_smoke": 260
+  }
+}

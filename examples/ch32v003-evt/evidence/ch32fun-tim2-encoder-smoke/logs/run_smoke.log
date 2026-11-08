@@ -1,0 +1,36 @@
+2026-11-07T10:59:46.045855Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+2026-11-07T10:59:46.049618Z  INFO labwired_loader: ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-07T10:59:50.784520Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:50.792292Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:50.799970Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:50.807691Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:50.815401Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:50.823099Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:50.830898Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:50.838605Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:50.846335Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:50.854088Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:50.861822Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:50.869667Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:56.428113Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:56.435825Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:56.443501Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:56.451190Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:56.458909Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:56.466593Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:56.474586Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:56.482494Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:56.490256Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:56.497927Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:56.505589Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:56.513252Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:56.520916Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:56.528625Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:56.536391Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:56.544086Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:56.551836Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:56.559483Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-07T10:59:56.567139Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-07T10:59:56.574800Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+PASS  7/7 checks · ch32fun-tim2-encoder-smoke · 16000000 steps · 12.68s

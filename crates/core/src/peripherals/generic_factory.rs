@@ -115,6 +115,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c3_gdma",
     "esp32c3_gpio",
     "esp32c3_io_mux",
+    // ESP8684/C2 exposes only the register-compatible direct GPIO + IO_MUX
+    // subset used by the DevKitM-1 H4X onboard LED smoke.
+    "esp32c2_gpio",
+    "esp32c2_io_mux",
     "esp32c3_apb_saradc",
     "esp32c3_ledc",
     "esp32c3_rmt",
@@ -132,6 +136,30 @@ pub const MODEL_TYPES: &[&str] = &[
     // would resolve them to the STM32 maps.
     "esp32c6_uart",
     "esp32c6_gpio",
+    // The C61 GPIO8 direct-output slice is built by the Espressif family
+    // factory; keep it canonical so the generic `gpio` heuristic cannot map
+    // it onto the STM32 placeholder before that factory runs.
+    "esp32c61_gpio",
+    "esp32c61_io_mux",
+    // C5 uses the same modern UART register map, with its own interrupt ids
+    // and fixed PLL_F80M source clock for the onboarding profile.
+    "esp32c5_uart",
+    "esp32c5_pcr",
+    "esp32c5_gpio",
+    "esp32c5_io_mux",
+    "esp32p4_gpio",
+    // P4 IO MUX and the RMT TX models are built by the Espressif family
+    // factories; canonical so the fuzzy fallbacks never coerce them first.
+    "esp32p4_io_mux",
+    "esp32_rmt",
+    "esp32s2_rmt",
+    "esp32s2_i2c",
+    "esp32s2_spi",
+    "esp32c6_rmt",
+    // H2's narrowly reused GPIO output model is built by the Espressif family
+    // factory. Keep its name canonical so the generic `gpio` fallback cannot
+    // replace it with a register-layout placeholder before that factory runs.
+    "esp32h2_gpio",
     // C6-only behavioral blocks: PCR (clock/reset, full SVD register map) and
     // GDMA (3 channels, C6 register layout). The fuzzy `contains("dma")`
     // fallback would otherwise coerce `esp32c6_gdma` onto the STM32 DMA
@@ -188,8 +216,14 @@ pub const MODEL_TYPES: &[&str] = &[
     "samd51_eic",
     "samd51_dac",
     "samd51_adc",
+    // The SAMD21 ADC: a different register layout, same conversion slice.
+    "samd21_adc",
+    // The same TCC slice on the SAMD21 instances (single IRQ line, PM clock gate).
+    "samd21_tcc",
     "samd51_pac",
     "samd51_sercom_i2cm",
+    // The same I2C master slice on SAMD21 SERCOM instances.
+    "samd21_sercom_i2cm",
     "samd51_sercom_usart",
     "sam_dmac_byte",
     "sam_dmac_sercom4_tx_byte",
@@ -262,6 +296,16 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32s3_usb_otg",
     "esp32s3_usb_serial_jtag",
     "esp32s3_wifi_mac",
+    // ESP32-S2's narrow GPIO/UART smoke models share the corresponding S3 heads.
+    "esp32s2_apb_saradc",
+    "esp32s2_crosscore_ipi",
+    "esp32s2_gpio",
+    "esp32s2_intmatrix",
+    "esp32s2_ledc",
+    "esp32s2_rng",
+    "esp32s2_sens",
+    "esp32s2_systimer",
+    "esp32s2_uart",
     // nRF52 behavioral models the factory builds but this table never named.
     // Alias spellings are deliberately NOT here -- `canonical_peripheral_type`
     // maps those to their canonical output, and listing an alias INPUT would
@@ -356,6 +400,13 @@ pub const MODEL_TYPES: &[&str] = &[
     "pic32_uart",
     // Microchip PIC32MZ 16-bit timer (TxCON/TMRx/PRx, Type A or B).
     "pic32_timer",
+    // Microchip megaAVR 0-series USART, the TCA0 + TCB0..3 timer block and ADC0.
+    "megaavr_usart",
+    "megaavr_tc",
+    "megaavr_adc",
+    "megaavr_twi",
+    "megaavr_spi",
+    "megaavr_portmux",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -390,6 +441,20 @@ pub const MODEL_TYPES: &[&str] = &[
     // type or the fuzzy `contains("timer")` fallback would coerce it onto the
     // STM32 timer map.
     "litex_timer",
+    // WCH QingKe V2 STK (CH32V003 SysTick at 0xE000F000). Listed so the fuzzy
+    // fallbacks never coerce it onto the Cortex-M `systick` map, whose
+    // CSR/RVR/CVR layout and down-counting semantics differ.
+    "qingke_v2_systick",
+    // WCH QingKe V4 STK (CH32V20x/V30x): 64-bit CNT/CMP, up or down.
+    "qingke_v4_systick",
+    // WCH USBFS / USBOTG_FS device controller + scripted host (CH32V20x).
+    "wch_usbfs",
+    // WCH QingKe V2 PFIC (CH32V003 interrupt controller at 0xE000E000). Its
+    // banks sit at NVIC offsets but number interrupts from 0, not 16.
+    "qingke_pfic",
+    // WCH-LinkE debug printf channel (DMDATA0/1 at 0xE00000F4), the default
+    // ch32fun console. Listed so no fuzzy fallback claims it.
+    "wch_debug_printf",
     // LiteX Control-and-Status (LED/switch/button CSR block).
     "litex_controlandstatus",
     // Microchip Mi-V reference-design peripherals. MUST be listed: without
@@ -504,7 +569,9 @@ fn build_samd51_board_model(
     // master's is the board's SCL rise time.
     let admitted = |key: &String| match kind {
         "samd51_dac" => key == "vrefa_mv" || key == "vddana_mv",
-        "samd51_sercom_i2cm" => key == "scl_rise_ns",
+        "samd51_sercom_i2cm" | "samd21_sercom_i2cm" => key == "scl_rise_ns",
+        // Board-level static levels on the AIN inputs: `input_mv: { <ain>: <mV> }`.
+        "samd21_adc" => key == "input_mv",
         _ => false,
     };
     if !p_cfg.config.keys().all(admitted) {
@@ -527,8 +594,29 @@ fn build_samd51_board_model(
             }
             Box::new(Samd51Adc::new(*instance))
         }
+        "samd21_adc" => {
+            use crate::peripherals::sam::adc21::Samd21Adc;
+            if p_cfg.base_address != 0x42004000 {
+                anyhow::bail!("SAMD21 ADC requires base 0x42004000");
+            }
+            if p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD21 ADC interrupts are not modelled");
+            }
+            let mut adc = Samd21Adc::new();
+            if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                for (k, v) in map {
+                    match (k.as_u64(), v.as_u64()) {
+                        (Some(ain), Some(mv)) if ain < 20 => {
+                            adc.set_input_millivolts(ain as usize, mv as u32)
+                        }
+                        _ => anyhow::bail!("SAMD21 ADC input_mv wants {{ <ain 0..19>: <mV> }}"),
+                    }
+                }
+            }
+            Box::new(adc)
+        }
         "samd51_tcc" => {
-            use crate::peripherals::sam::tcc::{Samd51Tcc, TCC_INSTANCES};
+            use crate::peripherals::sam::tcc::{SamTcc, TCC_INSTANCES};
             let Some(instance) = TCC_INSTANCES.iter().find(|i| i.base == p_cfg.base_address) else {
                 anyhow::bail!("SAMD51 TCC base must be one of TCC0..TCC4");
             };
@@ -536,7 +624,20 @@ fn build_samd51_board_model(
             if p_cfg.irq.is_some_and(|irq| irq != instance.irq) {
                 anyhow::bail!("SAMD51 TCC IRQ must be its first line {}", instance.irq);
             }
-            Box::new(Samd51Tcc::new(*instance))
+            Box::new(SamTcc::new(*instance))
+        }
+        "samd21_tcc" => {
+            use crate::peripherals::sam::tcc::{SamTcc, SAMD21_TCC_INSTANCES};
+            let Some(instance) = SAMD21_TCC_INSTANCES
+                .iter()
+                .find(|i| i.base == p_cfg.base_address)
+            else {
+                anyhow::bail!("SAMD21 TCC base must be one of TCC0..TCC2");
+            };
+            if p_cfg.irq.is_some_and(|irq| irq != instance.irq) {
+                anyhow::bail!("SAMD21 TCC IRQ must be {}", instance.irq);
+            }
+            Box::new(SamTcc::new(*instance))
         }
         "samd51_dac" | "samd51_pac" => {
             let base = if kind == "samd51_dac" {
@@ -557,17 +658,22 @@ fn build_samd51_board_model(
                 Box::new(crate::peripherals::sam::pac::Samd51Pac::new())
             }
         }
-        "samd51_sercom_i2cm" => {
-            use crate::peripherals::sam::sercom_i2cm::{Samd51SercomI2cm, SERCOM_INSTANCES};
-            let Some(instance) = SERCOM_INSTANCES
-                .iter()
-                .find(|i| i.base == p_cfg.base_address)
-            else {
-                anyhow::bail!("SAMD51 SERCOM base must be one of SERCOM0..SERCOM5");
+        "samd51_sercom_i2cm" | "samd21_sercom_i2cm" => {
+            use crate::peripherals::sam::sercom_i2cm::{
+                Samd51SercomI2cm, SAMD21_SERCOM_INSTANCES, SERCOM_INSTANCES,
             };
-            // Four lines (first_irq..first_irq+3) are reported by the model itself.
+            let instances = if kind == "samd21_sercom_i2cm" {
+                &SAMD21_SERCOM_INSTANCES
+            } else {
+                &SERCOM_INSTANCES
+            };
+            let Some(instance) = instances.iter().find(|i| i.base == p_cfg.base_address) else {
+                anyhow::bail!("{kind} base must be one of SERCOM0..SERCOM5");
+            };
+            // The model reports its own lines: four on the SAMD51, the
+            // instance's single line on the SAMD21.
             if p_cfg.irq.is_some() {
-                anyhow::bail!("SAMD51 SERCOM I2C master takes no single IRQ");
+                anyhow::bail!("{kind} takes no single IRQ");
             }
             let rise = p_cfg.config.get("scl_rise_ns").and_then(|v| v.as_u64());
             Box::new(Samd51SercomI2cm::new(*instance).with_scl_rise_ns(rise.unwrap_or(0)))
@@ -838,8 +944,11 @@ pub fn try_build(
                         pin_count as u8,
                     ),
                 ),
+                Some("megaavr_port") => Box::new(
+                    crate::peripherals::avr_gpio::AvrGpioPort::new_megaavr_port(pin_count as u8),
+                ),
                 Some(other) => anyhow::bail!(
-                    "avr_gpio '{}': unknown config.layout '{other}' (supported: atmega, avrxt_vport)",
+                    "avr_gpio '{}': unknown config.layout '{other}' (supported: atmega, avrxt_vport, megaavr_port)",
                     p_cfg.id
                 ),
             }
@@ -885,7 +994,8 @@ pub fn try_build(
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
         }
         "samd51_oscctrl" | "samd51_gclk" | "samd51_tc" | "samd51_tcc" | "samd51_eic"
-        | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm" => {
+        | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm"
+        | "samd21_sercom_i2cm" | "samd21_adc" | "samd21_tcc" => {
             build_samd51_board_model(canonical_type, p_cfg)?
         }
         "samd51_sercom_usart" => {
@@ -1089,6 +1199,15 @@ pub fn try_build(
                 // F4 has only PWR_CR/PWR_CSR (RM0368 §5.4) — a distinct reset
                 // shape from the L4 CR1..CR4 / PUCRx set.
                 Some("stm32f4") | Some("f4") => Box::new(crate::peripherals::pwr::PwrF4::new()),
+                // CH32V003: CTLR/CSR plus the LSI-clocked auto-wakeup unit
+                // that pulses EXTI line 9 (`lsi_hz`, default 128 kHz).
+                Some("ch32v003") => Box::new(crate::peripherals::pwr::PwrCh32v003::new(
+                    p_cfg
+                        .config
+                        .get("lsi_hz")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(128_000),
+                )),
                 _ => Box::new(crate::peripherals::pwr::Pwr::new()),
             }
         }
@@ -1199,7 +1318,16 @@ pub fn try_build(
         "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
         "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
         "rtc_v3" => Box::new(crate::peripherals::rtc_v3::RtcV3::new()),
-        "iwdg" => Box::new(crate::peripherals::iwdg::Iwdg::new()),
+        "iwdg" => {
+            // `config: { lsi_hz: N }` turns on the counting watchdog that
+            // resets the core on time-out; without it the IWDG only latches
+            // its registers (see the model's header).
+            let iwdg = crate::peripherals::iwdg::Iwdg::new();
+            match p_cfg.config.get("lsi_hz").and_then(|v| v.as_u64()) {
+                Some(hz) if hz > 0 => Box::new(iwdg.with_lsi_hz(hz)),
+                _ => Box::new(iwdg),
+            }
+        }
         "wwdg" => Box::new(crate::peripherals::wwdg::Wwdg::new()),
         "dac" => Box::new(crate::peripherals::dac::Dac::new()),
         "lptim" => Box::new(crate::peripherals::lptim::Lptim::new()),
@@ -1232,7 +1360,20 @@ pub fn try_build(
                 layout, line_mask,
             ))
         }
-        "afio" => Box::new(crate::peripherals::afio::Afio::new()),
+        "afio" => {
+            use crate::peripherals::afio::{Afio, AfioLayout};
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                None | Some("stm32f1") => AfioLayout::Stm32F1,
+                Some("ch32v003") => AfioLayout::Ch32v003,
+                Some("ch32v00x") => AfioLayout::Ch32v00x,
+                Some("ch32x03x") => AfioLayout::Ch32x03x,
+                Some(other) => anyhow::bail!(
+                    "afio `{}`: unsupported profile `{other}`; supported: stm32f1, ch32v003, ch32v00x, ch32x03x",
+                    p_cfg.id
+                ),
+            };
+            Box::new(Afio::new_with_layout(layout))
+        }
         // Channel-based DMA (F1/L0/L4/G0). `config: { requests: { spi1_tx: 3,
         // spi1_rx: [2, 1] } }` hard-wires a peripheral request to a channel
         // (F1), or — `[channel, selector]` — to a channel while its L4
@@ -1241,6 +1382,8 @@ pub fn try_build(
             let mut dma = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
                 None | Some("legacy") => crate::peripherals::dma::Dma1::new(),
                 Some("stm32g0") => crate::peripherals::dma::Dma1::new_stm32g0(),
+                Some("ch32v003") => crate::peripherals::dma::Dma1::new_ch32v003(),
+                Some("ch32v20x") => crate::peripherals::dma::Dma1::new_ch32v20x(),
                 Some(profile) => {
                     anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
                 }
@@ -1532,6 +1675,100 @@ pub fn try_build(
                 get("pbclk_hz").unwrap_or(u::DEFAULT_PBCLK_HZ),
             ))
         }
+        // `irqs`: the part's vector numbers [rxc, dre, txc].
+        "megaavr_usart" => {
+            let irqs = u32_list(p_cfg, "irqs", 3).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "megaavr_usart '{}' needs `irqs: [rxc, dre, txc]` (vector numbers)",
+                    p_cfg.id
+                )
+            })?;
+            Box::new(crate::peripherals::megaavr::usart::MegaAvrUsart::new([
+                irqs[0], irqs[1], irqs[2],
+            ]))
+        }
+        // `tcb_irqs`: the TCB0..3 vector numbers.
+        "megaavr_tc" => {
+            let irqs = u32_list(p_cfg, "tcb_irqs", 4).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "megaavr_tc '{}' needs `tcb_irqs: [tcb0, tcb1, tcb2, tcb3]` (vector numbers)",
+                    p_cfg.id
+                )
+            })?;
+            Box::new(crate::peripherals::megaavr::tc::MegaAvrTimers::new([
+                irqs[0], irqs[1], irqs[2], irqs[3],
+            ]))
+        }
+        // `irq`: the TWIM (host) vector number.
+        "megaavr_twi" => {
+            let irq = p_cfg.irq.ok_or_else(|| {
+                anyhow::anyhow!("megaavr_twi '{}' needs `irq` (the TWIM vector)", p_cfg.id)
+            })?;
+            if let Some(k) = p_cfg.config.keys().next() {
+                anyhow::bail!("megaavr_twi '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            Box::new(crate::peripherals::megaavr::twi::MegaAvrTwi::new(irq))
+        }
+        // Host mode only; interrupts are refused, so there is no `irq`.
+        "megaavr_spi" => {
+            if p_cfg.irq.is_some() {
+                anyhow::bail!(
+                    "megaavr_spi '{}' models no interrupt (drop `irq`)",
+                    p_cfg.id
+                );
+            }
+            if let Some(k) = p_cfg.config.keys().next() {
+                anyhow::bail!("megaavr_spi '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            Box::new(crate::peripherals::megaavr::spi::MegaAvrSpi::new())
+        }
+        // TCAROUTEA moves the TCA0 waveform-output pads; the rest is stored.
+        "megaavr_portmux" => {
+            if let Some(k) = p_cfg.config.keys().next() {
+                anyhow::bail!("megaavr_portmux '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            Box::new(crate::peripherals::megaavr::portmux::MegaAvrPortmux::new())
+        }
+        // `vdd_mv`: the board's VDD (the VDDREF reference, default 5000);
+        // `input_mv: { <ain>: <mV> }`: static levels on AIN0..AIN15.
+        "megaavr_adc" => {
+            use crate::peripherals::megaavr::adc::MegaAvrAdc;
+            if let Some(k) = p_cfg
+                .config
+                .keys()
+                .find(|k| !matches!(k.as_str(), "vdd_mv" | "input_mv"))
+            {
+                anyhow::bail!("megaavr_adc '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            if p_cfg.irq.is_some() {
+                anyhow::bail!(
+                    "megaavr_adc '{}': ADC0 interrupts are not modelled",
+                    p_cfg.id
+                );
+            }
+            let vdd_mv = p_cfg
+                .config
+                .get("vdd_mv")
+                .map_or(Some(5000), |v| v.as_u64());
+            let Some(vdd_mv @ 1..) = vdd_mv else {
+                anyhow::bail!(
+                    "megaavr_adc '{}': vdd_mv wants a positive millivolt count",
+                    p_cfg.id
+                );
+            };
+            let mut adc = MegaAvrAdc::new(vdd_mv as u32);
+            if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                for (k, v) in map {
+                    match (k.as_u64(), v.as_u64()) {
+                        (Some(ain), Some(mv)) if ain < 16 => {
+                            adc.set_input_millivolts(ain as usize, mv as u32)
+                        }
+                        _ => anyhow::bail!("megaavr_adc input_mv wants {{ <ain 0..15>: <mV> }}"),
+                    }
+                }
+            }
+            Box::new(adc)
+        }
         "rx_flash" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::new()),
         "rx_rtc" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::rtc()),
         // `vectors`: the two channels' CMI vectors; `clock_hz`: the CPU
@@ -1789,6 +2026,28 @@ pub fn try_build(
         // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
         // load/reload/en/update_value/value plus the zero-event manager.
         "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
+        // WCH QingKe V2 STK: 32-bit up-counter CTLR/SR/CNT/CMP (CH32V003).
+        "qingke_v2_systick" => Box::new(crate::peripherals::qingke_systick::QingkeV2Systick::new()),
+        // WCH QingKe V4 STK: 64-bit CNTL/CNTH, CMPLR/CMPHR (CH32V20x/V30x).
+        "qingke_v4_systick" => Box::new(crate::peripherals::qingke_systick::QingkeV4Systick::new()),
+        "wch_usbfs" => {
+            let mut usb = crate::peripherals::wch_usbfs::WchUsbfs::new();
+            // `host: false` leaves the port unplugged (no enumeration).
+            if p_cfg.config.get("host").and_then(|v| v.as_bool()) == Some(false) {
+                usb.set_host_enabled(false);
+            }
+            // `host_steps:` run after enumeration (usb_host::parse_host_steps).
+            if let Some(steps) = p_cfg.config.get("host_steps") {
+                let steps = crate::peripherals::usb_host::parse_host_steps(steps)
+                    .map_err(|e| anyhow::anyhow!("wch_usbfs host_steps: {e}"))?;
+                usb.queue_host_steps(steps);
+            }
+            Box::new(usb)
+        }
+        // WCH QingKe V2 PFIC; `configure_riscv` shares its state with the core.
+        "qingke_pfic" => Box::new(crate::peripherals::qingke_pfic::QingkePfic::new()),
+        // WCH-LinkE debug printf channel, probe attached (`minichlink -T`).
+        "wch_debug_printf" => Box::new(crate::peripherals::wch_debug_printf::WchDebugPrintf::new()),
         "litex_controlandstatus" => {
             let active_low = p_cfg
                 .config
@@ -2108,4 +2367,19 @@ mod registry_agreement {
             );
         }
     }
+}
+
+/// `config.<key>`: exactly `len` unsigned integers, or `None`.
+fn u32_list(p_cfg: &PeripheralConfig, key: &str, len: usize) -> Option<Vec<u32>> {
+    p_cfg
+        .config
+        .get(key)
+        .and_then(|v| v.as_sequence())
+        .map(|s| {
+            s.iter()
+                .filter_map(|v| v.as_u64())
+                .map(|v| v as u32)
+                .collect::<Vec<_>>()
+        })
+        .filter(|v| v.len() == len)
 }

@@ -3021,6 +3021,14 @@ pub static SHT31_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
     .expect("sht31.yaml is a valid declarative i2c descriptor")
 });
 
+/// Sensirion SHTC3 temperature + humidity sensor (declarative `shtc3.yaml`).
+pub static SHTC3_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("shtc3").expect("shtc3 descriptor is embedded"),
+    )
+    .expect("shtc3.yaml is a valid declarative i2c descriptor")
+});
+
 /// Microchip MCP9808 temperature sensor (declarative `mcp9808.yaml`).
 pub static MCP9808_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
     DeclarativeI2cKit::from_yaml(

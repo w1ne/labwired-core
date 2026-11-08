@@ -374,6 +374,10 @@ pub struct PeripheralLogDetails {
     /// Default 1.
     #[serde(default = "default_first_occurrence")]
     pub min_count: u32,
+    /// Target node for a multi-node environment assertion. Single-node
+    /// scripts leave this unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -901,6 +905,13 @@ pub(crate) fn reject_explicit_memory_nodes(
             if memory.memory_value.node.is_some() {
                 anyhow::bail!(
                     "{script_kind} test scripts do not support 'node' on memory_value assertions (assertions[{index}])"
+                );
+            }
+        }
+        if let TestAssertion::PeripheralLog(log) = assertion {
+            if log.peripheral_log.node.is_some() {
+                anyhow::bail!(
+                    "{script_kind} test scripts do not support 'node' on peripheral_log assertions (assertions[{index}])"
                 );
             }
         }
@@ -1572,11 +1583,24 @@ impl EnvTestScript {
             ) {
                 continue;
             }
+            if let TestAssertion::PeripheralLog(log) = assertion {
+                let has_node = log
+                    .peripheral_log
+                    .node
+                    .as_deref()
+                    .is_some_and(|node| !node.trim().is_empty());
+                if !has_node {
+                    anyhow::bail!(
+                        "Environment peripheral_log assertion at assertions[{index}] requires a non-empty 'node'"
+                    );
+                }
+                continue;
+            }
             let TestAssertion::MemoryValue(memory) = assertion else {
                 anyhow::bail!(
                     "Environment test scripts support only uart_contains / uart_regex / \
-                     uart_ordered and node-qualified memory_value assertions (assertions[{index}]); \
-                     the world runner cannot observe the others"
+                     uart_ordered and node-qualified memory_value / peripheral_log assertions \
+                     (assertions[{index}]); the world runner cannot observe the others"
                 );
             };
             let has_node =

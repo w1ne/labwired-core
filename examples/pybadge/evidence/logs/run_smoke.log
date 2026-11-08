@@ -1,0 +1,4 @@
+2026-11-04T01:39:54.489147Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../configs/chips/atsamd51-pybadge.yaml
+2026-11-04T01:39:54.493657Z  INFO labwired_loader: ELF Entry Point: 0x4401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  3/3 checks · onboarding-smoke · 200000 steps · 0.06s

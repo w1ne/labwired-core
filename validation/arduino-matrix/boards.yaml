@@ -48,6 +48,29 @@ boards:
     notes: "Arduino-ESP32-S3 — SPI L4, SAR ADC L5, TWAI L8 via programmatic bank"
     # L5: sar_adc_s3 @ 0x60040000 (esp32s3_sar_adc); L8: twai @ 0x6002B000
 
+  - id: esp32s2
+    chip: esp32s2-arduino
+    system: systems/esp32s2.yaml
+    # esp32-s2-saola-1 = Espressif's generic S2 devkit (variant esp32s2).
+    # Serial is UART0 through the board's USB-UART bridge (no CDC on boot),
+    # the same console the ESP32-S2-DevKitM-1 has.
+    pio: { platform: espressif32, board: esp32-s2-saola-1, framework: arduino }
+    max_steps: 50000000
+    budget_reason: "single-core S2 FreeRTOS boot ~0.6M; same cap as the other ESP32 rows"
+    # LED_BUILTIN is the WS2812 on GPIO18: digitalWrite -> rgbLedWrite -> RMT
+    # ch0, routed by the GPIO matrix (signal 87). The probe is the pad: two
+    # 24-bit frames before LW_L2_OK are 96 edges, so 48 is one whole frame.
+    led_watch: "gpio:18"
+    led_min_edges: 48
+    min_rmt_tx: 1
+    # L6: analogWrite(2, 128) through LEDC LS ch0 routed by the matrix
+    # (signal 79). The sketch uses GPIO2 because LED_BUILTIN is the RGB
+    # pixel's virtual pin 64, which stock analogWrite ignores.
+    pwm_watch: "gpio:2"
+    pwm_min_edges: 4
+    family: esp32
+    notes: "Arduino-ESP32-S2 on the genuine S2 mask ROM; L0/L1/L7 (UART0, FreeRTOS tick, 80 MHz SYSTIMER), L2 (RMT WS2812 waveform on GPIO18), L3 (I2C0 Wire reads INA219 CONFIG/BUS), L4 (FSPI/SPI2 reads the MAX31855 frame), L5 (SENS oneshot: analogRead(A0) = 2048), L6 (LEDC PWM on GPIO2), L8 (TWAI self-RX at 0x3F42B000)"
+
   - id: nrf52832
     chip: nrf52832
     system: systems/nrf52832.yaml
@@ -270,7 +293,7 @@ boards:
     led_watch: "gpiob:4"
     led_min_edges: 2
     family: stm32
-    sketches_skip: [L5_adc, L8_can]
+    sketches_skip: [L5_adc]
     sketches_skip_reason:
       L5_adc: "No ADC model in stm32wba52 chip yaml yet"
       L8_can: "No CAN model in matrix path"
@@ -329,6 +352,65 @@ boards:
     sketches_skip_reason:
       L8_can: "ATmega328P has no CAN controller"
 
+  - id: atmega2560
+    chip: atmega2560
+    system: systems/atmega2560.yaml
+    pio: { platform: atmelavr, board: megaatmega2560, framework: arduino }
+    max_steps: 500000
+    budget_reason: "AVR 16 MHz, same budget as the Nano row"
+    # LED_BUILTIN = D13 = PB7 on the Mega.
+    led_watch: "portb:7"
+    led_min_edges: 2
+    # L6 keeps LED_BUILTIN: on the Mega D13 = PB7 = OC0A (Timer0 fast PWM,
+    # 16 MHz / 64 / 256 = 976.6 Hz), unlike the Nano's D13.
+    pwm_watch: "portb:7"
+    pwm_min_edges: 20
+    family: avr
+    notes: "Arduino Mega 2560 Rev3"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "ATmega2560 has no CAN controller"
+
+  - id: arduino-nano-every
+    chip: atmega4809
+    system: systems/arduino-nano-every.yaml
+    # ArduinoCore-megaavr `nona4809`: Serial is USART3 behind the SAMD11 USB
+    # bridge (PB4/PB5), millis() runs on TCB3 clocked from TCA0 (CLK_PER/64).
+    pio: { platform: atmelmegaavr@1.10.0, board: nano_every, framework: arduino }
+    max_steps: 500000
+    budget_reason: "AVR 16 MHz, same budget as the Nano and Mega rows"
+    led_watch: "porte:2"
+    led_min_edges: 2
+    # L6 drives D9 = PB0 = TCA0 WO0 (TCAROUTEA = PORTB, 976.6 Hz). D13 = PE2
+    # has no timer output, so analogWrite(LED_BUILTIN, 128) was digitalWrite.
+    pwm_watch: "portb:0"
+    pwm_min_edges: 20
+    family: avr
+    notes: "Arduino Nano Every (ATmega4809, megaAVR 0-series)"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "ATmega4809 has no CAN controller"
+
+  - id: arduino-zero
+    chip: atsamd21g18a
+    system: systems/arduino-zero.yaml
+    # `zero` = "Arduino Zero (Programming/Debug Port)": Serial is the EDBG
+    # UART (SERCOM5), not native USB CDC. The sketch is linked at 0x2000
+    # behind the bootloader; the chip's reset_vector_offset enters it there.
+    pio: { platform: atmelsam@9.0.0, board: zero, framework: arduino }
+    max_steps: 3000000
+    budget_reason: "Cortex-M0+ 48 MHz; L0 reaches loop() in well under 1M steps"
+    led_watch: "gpio_a:17"
+    led_min_edges: 2
+    # L6: analogWrite(LED_BUILTIN = D13 = PA17) runs TCC2 WO1 in NPWM on PMUX
+    # E; the pad must carry the waveform, not the PORT latch.
+    pwm_watch: "gpio_a:17"
+    family: sam
+    notes: "Arduino Zero (ArduinoCore-samd), Programming Port"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "ATSAMD21G18A has no CAN controller"
+
   # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────
   #
   # ⚠️ The ONLY board here that does not compile through PlatformIO. Silicon
@@ -364,6 +446,114 @@ boards:
     sketches_skip_reason:
       L8_can: "EFR32MG26 has no CAN controller"
 
+
+  - id: ch32v203
+    chip: ch32v203c8t6-ch32fun-smoke
+    system: systems/ch32v203.yaml
+    # WCH's official core (openwch/arduino_core_ch32) via the community ch32v
+    # platform, pinned to the same revisions as the ch32v003 row.
+    pio:
+      platform: https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7
+      board: genericCH32V203C8T6
+      framework: arduino
+      platform_packages:
+        - "framework-arduino-openwch-ch32 @ https://github.com/Community-PIO-CH32V/arduino_core_ch32.git#3820604346d0a9f0ee9a72cab8b7583e488e6674"
+      # The CH32V203C8 variant leaves LED_BUILTIN as PNUM_NOT_DEFINED. PB2 is
+      # the WeAct BluePill-Plus-CH32 blue user LED (active high), a board fact.
+      # PB2 has no timer channel, so L6 drives TIM2_CH1 on PA0 (variant
+      # PeripheralPins.c PinMap_TIM, reset mapping) instead.
+      build_flags: ["-DLED_BUILTIN=PB2", "-DLW_PWM_PIN=PA0"]
+    max_steps: 20000000
+    budget_reason: "144 MHz QingKe V4; L0 prints LW_L0_OK well inside 20M steps"
+    led_watch: "gpiob:2"
+    led_min_edges: 2
+    # Stock analogWrite(PA0, 128) must toggle the pad. A pin that falls back to
+    # digitalWrite (no TIM route) holds one level and fails this.
+    pwm_watch: "gpioa:0"
+    pwm_min_edges: 4
+    family: wch
+    notes: "QingKe V4 RV32IMAC + XW on WeAct BluePill-Plus-CH32; L8 bxCAN1 loopback"
+    sketches_skip: [L7_timer]
+    sketches_skip_reason:
+      # Measured 2026-11-08 (Serial.print, since the core's libprintf drops
+      # %lu): t0=1999 t1=3999 t2=3929 t3=4999, micros() falling inside each ms.
+      L7_timer: >-
+        Upstream core bug, not a model gap: getCurrentMicros() (ch32/clock.c)
+        computes (CMP+1-CNT), which assumes a down-counter, but hw_config.c
+        starts the V4 STK with CTLR=0xF, MODE (bit 4) clear = count up, so
+        micros() runs backwards inside each millisecond (same bug as ch32v003)
+
+  - id: ch32v307
+    chip: ch32v307vct6-ch32fun-smoke
+    system: systems/ch32v307.yaml
+    # WCH's official core (openwch/arduino_core_ch32) via the community ch32v
+    # platform, pinned to the same revisions as the ch32v203 row.
+    pio:
+      platform: https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7
+      board: genericCH32V307VCT6
+      framework: arduino
+      platform_packages:
+        - "framework-arduino-openwch-ch32 @ https://github.com/Community-PIO-CH32V/arduino_core_ch32.git#3820604346d0a9f0ee9a72cab8b7583e488e6674"
+      # The CH32V307VCT6 variant leaves LED_BUILTIN as PNUM_NOT_DEFINED, and
+      # the CH32V307V-EVT wires its LEDs to nothing (jumpered by the user).
+      # PA3 is the pad the ch32v307v-evt ch32fun smoke drives; it is TIM2_CH4
+      # (variant PeripheralPins.c PinMap_TIM, reset mapping), so it also
+      # carries L6's analogWrite.
+      build_flags: ["-DLED_BUILTIN=PA3", "-DLW_PWM_PIN=PA3"]
+    max_steps: 20000000
+    budget_reason: "144 MHz QingKe V4F; same budget as the ch32v203 row"
+    led_watch: "gpioa:3"
+    led_min_edges: 2
+    pwm_watch: "gpioa:3"
+    pwm_min_edges: 4
+    family: wch
+    notes: "QingKe V4F on CH32V307V-EVT; Wire is I2C2 (PB10/PB11) in WCH's variant; L8 bxCAN1 loopback"
+    sketches_skip: [L7_timer]
+    sketches_skip_reason:
+      # Measured 2026-11-08 with a Serial.print probe (the core's libprintf
+      # drops %lu): t0=1996 t1=3999 t2=3929 t3=4999, STK CTLR=0xF.
+      L7_timer: >-
+        Upstream core bug, not a model gap: getCurrentMicros() (ch32/clock.c)
+        computes (CMP+1-CNT), which assumes a down-counter, but hw_config.c
+        starts the V4 STK with CTLR=0xF, MODE (bit 4) clear = count up, so
+        micros() runs backwards inside each millisecond (same bug as the
+        ch32v003 and ch32v203 rows)
+
+  - id: ch32x035
+    chip: ch32x035g8u6
+    system: systems/ch32x035.yaml
+    # WCH's official core (openwch/arduino_core_ch32) via the community ch32v
+    # platform, pinned to the same revisions as the ch32v203 row. The core
+    # ships one X035 variant, CH32X035G8U (QFN28).
+    pio:
+      platform: https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7
+      board: genericCH32X035G8U6
+      framework: arduino
+      platform_packages:
+        - "framework-arduino-openwch-ch32 @ https://github.com/Community-PIO-CH32V/arduino_core_ch32.git#3820604346d0a9f0ee9a72cab8b7583e488e6674"
+      # The variant leaves LED_BUILTIN as PNUM_NOT_DEFINED (this is a chip
+      # row, no board LED). PB12 is a plain GPIO pad. L6 drives TIM3_CH1 on
+      # PA6 (variant PeripheralPins.c PinMap_TIM, AFIO_NONE = reset mapping).
+      build_flags: ["-DLED_BUILTIN=PB12", "-DLW_PWM_PIN=PA6"]
+    max_steps: 20000000
+    budget_reason: "48 MHz QingKe V4C; same budget as the other WCH rows"
+    led_watch: "gpiob:12"
+    led_min_edges: 2
+    pwm_watch: "gpioa:6"
+    pwm_min_edges: 4
+    family: wch
+    notes: "QingKe V4C on CH32X035G8U6; Wire is I2C1 on PC16/PC17 (PartialRemap2) in WCH's variant"
+    sketches_skip: [L7_timer, L8_can]
+    sketches_skip_reason:
+      # Measured 2026-11-08 with a Serial.print probe (the core's libprintf
+      # drops %lu): t0=1999 t1=3999 t2=3788 t3=4999, STK CTLR=0xF.
+      L7_timer: >-
+        Upstream core bug, not a model gap: getCurrentMicros() (ch32/clock.c)
+        computes (CMP+1-CNT), which assumes a down-counter, but hw_config.c
+        starts the V4 STK with CTLR=0xF, MODE (bit 4) clear = count up, so
+        micros() runs backwards inside each millisecond (same bug as the
+        ch32v003, ch32v203 and ch32v307 rows)
+      L8_can: "No CAN on the CH32X035 (ch32x035.h has no CAN block)"
 
 sketches:
   - id: L0_serial_boot

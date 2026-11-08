@@ -1,0 +1,29 @@
+{
+  "target_id": "ch32v003f4p6-systick",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/ch32v003-evt/systick-smoke.yaml",
+  "system": "configs/systems/ch32v003evt-systick-smoke.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T18:41:45Z",
+  "finished_at_utc": "2026-11-06T18:43:21Z",
+  "elapsed_seconds": 96,
+  "elapsed_ms": 95747,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 95.147,
+    "build_firmware": 0.089,
+    "run_smoke": 0.47
+  },
+  "stages_ms": {
+    "build_cli": 95147,
+    "build_firmware": 89,
+    "run_smoke": 470
+  },
+  "firmware_build_script": "examples/ch32v003-evt/build-systick-firmware.sh"
+}

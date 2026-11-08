@@ -1,0 +1,52 @@
+peripheral: GPIO (GPIO8 output slice)
+version: 0.1.0
+registers:
+  - id: GPIO_OUT
+    address_offset: 0x04
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+  - id: GPIO_OUT_W1TS
+    address_offset: 0x08
+    size: 32
+    access: WRITE_ONLY
+    reset_value: 0
+  - id: GPIO_OUT_W1TC
+    address_offset: 0x0C
+    size: 32
+    access: WRITE_ONLY
+    reset_value: 0
+  - id: GPIO_ENABLE
+    address_offset: 0x20
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+  - id: GPIO_ENABLE_W1TS
+    address_offset: 0x24
+    size: 32
+    access: WRITE_ONLY
+    reset_value: 0
+  - id: GPIO_ENABLE_W1TC
+    address_offset: 0x28
+    size: 32
+    access: WRITE_ONLY
+    reset_value: 0
+  - id: GPIO_IN
+    address_offset: 0x3C
+    size: 32
+    access: READ_ONLY
+    reset_value: 0
+  - id: GPIO_FUNC8_OUT_SEL_CFG
+    address_offset: 0x578
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x100
+    fields:
+      - name: OUT_SEL
+        bit_range: [0, 8]
+      - name: OUT_INV_SEL
+        bit_range: [9, 9]
+      - name: OEN_SEL
+        bit_range: [10, 10]
+      - name: OEN_INV_SEL
+        bit_range: [11, 11]

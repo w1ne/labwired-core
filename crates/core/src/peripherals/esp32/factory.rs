@@ -36,15 +36,28 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
             Box::new(uart::Esp32Uart::new(echo, p_cfg.irq.unwrap_or(34)))
         }
         "esp32_spi" => Box::new(spi::Esp32Spi::new()),
+        // The S2's own GP-SPI register file (neither the classic nor the S3's).
+        "esp32s2_spi" => Box::new(spi_s2::Esp32s2Spi::new()),
         "esp32_sar_adc" => Box::new(sar_adc::Esp32SarAdc::new()),
         // I2C0 asserts source 49, I2C1 50 (`ETS_I2C_EXT{0,1}_INTR_SOURCE`).
         "esp32_i2c" => Box::new(i2c::Esp32I2c::with_intr_source(
             p_cfg.irq.unwrap_or(i2c::I2C0_INTR_SOURCE_ID),
         )),
+        // Classic I2C design on the S2; I2C_EXT0 is source 52, I2C_EXT1 53.
+        "esp32s2_i2c" => Box::new(i2c::Esp32I2c::new_esp32s2(
+            p_cfg.irq.unwrap_or(i2c::ESP32S2_I2C0_INTR_SOURCE_ID),
+        )),
         "esp32_gpio" | "gpio_esp32" => Box::new(gpio::Esp32Gpio::new()),
         "esp32_dport" => Box::new(dport::Dport::new()),
         "esp32_sha" => Box::new(sha::Sha::new()),
         "esp32_rtc_cntl" => Box::new(rtc_cntl::RtcCntl::new()),
+        "esp32_rmt" => Box::new(rmt::Esp32Rmt::new(p_cfg.irq.unwrap_or(47))),
+        // Same RMT design, 4 channels and moved offsets; ETS_RMT_INTR_SOURCE
+        // is 50 on the S2.
+        "esp32s2_rmt" => Box::new(rmt::Esp32Rmt::with_layout(
+            rmt::RmtLayout::ESP32S2,
+            p_cfg.irq.unwrap_or(50),
+        )),
         // ESP32-classic is the only chip in this model that HAS a LACT timer
         // (the C3 path in generic_factory.rs deliberately does not opt in —
         // it put INT_ST/INT_CLR/RTCCALICFG2 at those offsets).
@@ -74,6 +87,10 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32_dport",
     "esp32_sha",
     "esp32_rtc_cntl",
+    "esp32_rmt",
+    "esp32s2_rmt",
+    "esp32s2_i2c",
+    "esp32s2_spi",
     "esp32_timg",
     "esp32_efuse",
     "esp32_syscon",

@@ -1,0 +1,39 @@
+# Narrow STM32F303VCT6 profile for STM32F3DISCOVERY's LD3 GPIO smoke.
+# Only the reset-clock gate for GPIOE and GPIOE itself are declared. The other
+# LEDs, USER button, USB, ST-LINK/VCP, gyroscope, and e-compass are outside this
+# system's claims. The separate 8 KiB CCM SRAM bank is omitted; only the 40 KiB
+# SRAM region at 0x20000000 is mapped.
+# Sources: ST DS5847, RM0316, PM0214, and UM1570 / MB1035.
+name: stm32f303vc-f3discovery-smoke
+arch: arm
+core: cortex-m4
+cpu_hz: 8000000
+
+flash:
+  base: 0x08000000
+  size: 256KB
+ram:
+  base: 0x20000000
+  size: 40KB
+
+# The smoke uses only the on-board user LED LD3 (PE9).
+pins:
+  PE9: { gpio: gpioe, bit: 9 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    # The smoke uses AHBENR@0x14 only; the rest of the STM32F3 RCC behavior
+    # is intentionally not claimed by this board slice.
+    size: 32
+    config:
+      profile: stm32f0
+
+  - id: gpioe
+    type: gpio
+    base_address: 0x48001000
+    size: 1KB
+    clock: { reg: ahbenr, bit: 21 }
+    config:
+      profile: stm32v2

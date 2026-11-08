@@ -1,0 +1,58 @@
+# Narrow STM32G031K8T6 profile for the NUCLEO-G031K8 GPIO/UART smoke.
+# Only reset-clock RCC, GPIOA, GPIOC, and USART2 paths used by the smoke are
+# exposed. Other peripherals and unlisted pins remain unsupported.
+# Board wiring follows ST UM2591 Rev 2 and MB1455-G031K8-D01; memory and
+# alternate functions follow ST DS12992 Rev 4. Register layout and clock
+# gates follow RM0444.
+name: stm32g031k8-nucleo-smoke
+arch: arm
+core: cortex-m0+
+cpu_hz: 16000000
+
+flash:
+  base: 0x08000000
+  size: 64KB
+ram:
+  base: 0x20000000
+  size: 8KB
+
+# The default MB1455 solder-bridge routing connects the user LED to PC6;
+# USART2 PA2/PA3 is routed to the on-board ST-LINK VCP.
+pins:
+  PA2: { gpio: gpioa, bit: 2, functions: [{ type: uart, peripheral: usart2, role: tx, af: 1 }] }
+  PA3: { gpio: gpioa, bit: 3, functions: [{ type: uart, peripheral: usart2, role: rx, af: 1 }] }
+  PC6: { gpio: gpioc, bit: 6, functions: [{ type: gpio, peripheral: gpioc }] }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    # Includes RCC_CR, IOPENR, and APBENR1 used by the smoke only.
+    size: 64B
+    config:
+      profile: stm32g0
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x50000000
+    size: 1KB
+    config:
+      profile: stm32v2
+    clock: { reg: iopenr, bit: 0 }
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x50000800
+    size: 1KB
+    config:
+      profile: stm32v2
+    clock: { reg: iopenr, bit: 2 }
+
+  - id: usart2
+    type: uart
+    base_address: 0x40004400
+    size: 1KB
+    irq: 28
+    config:
+      profile: stm32v2
+    clock: { reg: apbenr1, bit: 17 }

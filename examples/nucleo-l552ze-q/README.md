@@ -6,6 +6,11 @@ board with an **STM32L552ZET6Q**: Cortex-M33 (Armv8-M), 512 KiB flash,
 runnable path for the board; the staged descriptor under
 `configs/chips/onboarding/` remains inventory only.
 
+The current onboarding run and live ST availability receipt are committed in
+[`evidence/`](evidence/). ST's eStore listed the board as Active and In Stock
+with Add to Cart on 2026-11-04; ST lists the exact MCU as Active and in volume
+production. The receipt is in [`evidence/vendor-status.md`](evidence/vendor-status.md).
+
 ## What runs here
 
 A bare-register smoke firmware (`crates/firmware-l552ze-smoke`) that:
@@ -28,6 +33,22 @@ cargo build -p firmware-l552ze-smoke --release --target thumbv8m.main-none-eabi
 ./target/release/labwired test \
   --script examples/nucleo-l552ze-q/io-smoke.yaml \
   --output-dir out/nucleo-l552ze-q-smoke --no-uart-stdout
+```
+
+Reproduce the committed onboarding evidence from the repository root:
+
+```bash
+scripts/onboarding_smoke.sh \
+  --target-id nucleo-l552ze-q \
+  --crate firmware-l552ze-smoke \
+  --target thumbv8m.main-none-eabi \
+  --script examples/nucleo-l552ze-q/io-smoke.yaml \
+  --system examples/nucleo-l552ze-q/system.yaml \
+  --out-dir examples/nucleo-l552ze-q/evidence
+python3 scripts/generate_onboarding_scoreboard.py \
+  --metrics-root examples/nucleo-l552ze-q/evidence \
+  --markdown-out examples/nucleo-l552ze-q/evidence/onboarding-scoreboard.md \
+  --json-out examples/nucleo-l552ze-q/evidence/onboarding-scoreboard.json
 ```
 
 Interactive run (UART to stdout):

@@ -1,0 +1,94 @@
+# Focused NUCLEO-F411RE profile for the ST-LINK VCP and I2C1 sensor smokes.
+# Wire defaults to Arduino D14/D15 (PB9/PB8) on the Nucleo variant. The rest of
+# the F411RE peripheral map is omitted and therefore unsupported in this smoke.
+
+name: "stm32f411re-nucleo-i2c-smoke"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 150
+# STM32duino's NUCLEO-F411RE startup configures the HSE/PLL for 100 MHz.
+cpu_hz: 100_000_000
+
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+
+pins:
+  PA2: { gpio: "gpioa", bit: 2, functions: [{ type: uart, peripheral: "usart2", role: tx }] }
+  PA3: { gpio: "gpioa", bit: 3, functions: [{ type: uart, peripheral: "usart2", role: rx }] }
+  PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: "gpioa" }] }
+  PB9: { gpio: "gpiob", bit: 9, functions: [{ type: i2c, peripheral: "i2c1", role: sda }] }
+  PB8: { gpio: "gpiob", bit: 8, functions: [{ type: i2c, peripheral: "i2c1", role: scl }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+
+  # STM32duino HAL_Init configures FLASH_ACR before it initializes the
+  # application peripherals. Keep the real F411 flash-register model present.
+  - id: "flash_ctrl"
+    type: "flash"
+    base_address: 0x40023C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f411/flash.yaml"
+      profile: "stm32f4"
+
+  # The Arduino clock setup may change voltage scaling before enabling PLL.
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f411/pwr.yaml"
+      profile: "stm32f4"
+
+  # HAL_Init configures the Cortex-M SysTick used by its millisecond clock.
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x64000000
+    clock: { reg: "ahb1enr", bit: 0 }
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40020400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 1 }
+
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      debug_schema: "../peripherals/stm32f411/usart2.yaml"
+      cr3_mask: 0xFFF
+    clock: { reg: "apb1enr", bit: 17 }
+
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    config:
+      debug_schema: "../peripherals/stm32f411/i2c1.yaml"
+      irq_error: 32
+    clock: { reg: "apb1enr", bit: 21 }

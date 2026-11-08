@@ -1,0 +1,298 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioc:9",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      0,
+      0,
+      524308,
+      0,
+      1,
+      1207961600,
+      0,
+      536879088,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536879088,
+      134218043,
+      134218048
+    ],
+    "pc": 134218048,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "a10eb8911a6615b311ff1cdd541d97a69ffef3b7fff320469b2292b64cae3c86",
+  "config": {
+    "firmware": "examples/stm32f0-discovery/../../target/thumbv6m-none-eabi/release/firmware-stm32f0-discovery-smoke",
+    "system": "examples/stm32f0-discovery/../../configs/systems/stm32f0-discovery.yaml",
+    "script": "examples/stm32f0-discovery/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1207961600,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157296,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 100000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioc",
+        "pin": 9,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 37,
+            "value": 1
+          },
+          {
+            "cycle": 140,
+            "value": 0
+          },
+          {
+            "cycle": 245,
+            "value": 1
+          },
+          {
+            "cycle": 348,
+            "value": 0
+          },
+          {
+            "cycle": 453,
+            "value": 1
+          },
+          {
+            "cycle": 556,
+            "value": 0
+          },
+          {
+            "cycle": 661,
+            "value": 1
+          },
+          {
+            "cycle": 764,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 34,
+            "state": "0"
+          },
+          {
+            "cycle": 37,
+            "state": "1"
+          },
+          {
+            "cycle": 140,
+            "state": "0"
+          },
+          {
+            "cycle": 245,
+            "state": "1"
+          },
+          {
+            "cycle": 348,
+            "state": "0"
+          },
+          {
+            "cycle": 453,
+            "state": "1"
+          },
+          {
+            "cycle": 556,
+            "state": "0"
+          },
+          {
+            "cycle": 661,
+            "state": "1"
+          },
+          {
+            "cycle": 764,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 8
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioc",
+      "number": 9,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 360,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 360,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 65536,
+    "ram_total_bytes": 8192,
+    "flash_used_pct": 0.55,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 8192,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 8168,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536879104,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 8192,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 8168,
+    "heap_base": 536870912,
+    "heap_top": 536879104
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 82,
+    "memory_writes": 22,
+    "peripheral_accesses": 12,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134218048,
+        "count": 3,
+        "symbol": "firmware_stm32f0_discovery_smoke::__cortex_m_rt_main"
+      }
+    ]
+  }
+}

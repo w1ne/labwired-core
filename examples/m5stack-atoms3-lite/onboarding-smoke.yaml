@@ -1,0 +1,17 @@
+# M5Stack AtomS3-Lite: send one red GRB frame to the onboard WS2812C on GPIO35.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-m5stack-atoms3-lite-smoke"
+  system: "../../configs/systems/m5stack-atoms3-lite.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "gpio:35"
+      min_edges: 48
+  - display_region:
+      id: "rgb_led"
+      min_ink: 1.0
+      colour: "0xF800"
+      min_colour_pixels: 1
+  - expected_stop_reason: max_steps

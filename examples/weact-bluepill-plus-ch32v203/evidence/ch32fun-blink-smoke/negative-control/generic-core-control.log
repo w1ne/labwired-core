@@ -1,0 +1,12 @@
+2026-11-07T19:34:08.845869Z  INFO labwired_core::system::builder: Loading chip descriptor: chip.yaml
+2026-11-07T19:34:08.848599Z  INFO labwired_loader: ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-07T19:34:20.487767Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpioa:0", min_edges: 1 } }) (captured len=0)
+2026-11-07T19:34:20.487804Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpioa:2", min_edges: 1 } }) (captured len=0)
+2026-11-07T19:34:20.487809Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpioa:4", min_edges: 1 } }) (captured len=0)
+2026-11-07T19:34:20.487813Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpioa:7", min_edges: 1 } }) (captured len=0)
+2026-11-07T19:34:20.487821Z ERROR labwired_cli::execute: Memory assertion failed at 0x40021004 (size 32): expected 0x3c000a, got 0x0 (mask 0x3c000f)
+2026-11-07T19:34:20.487825Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073876996, expected_value: 3932170, mask: Some(3932175), size: Some(32), node: None } }) (captured len=0)
+2026-11-07T19:34:20.487847Z ERROR labwired_cli::execute: Memory assertion failed at 0x40023800 (size 32): expected 0x10, got 0x0 (mask 0x10)
+2026-11-07T19:34:20.487849Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073887232, expected_value: 16, mask: Some(16), size: Some(32), node: None } }) (captured len=0)
+FAIL  0/6 checks · generic-core-control · 20000000 steps · 11.64s

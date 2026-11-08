@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="2" failures="1" errors="0" time="13.056761">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="10f1bed8634ceaf71b72986550ccfe8331a64692bcc6a6a186b6046b2b01e366"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="13.056761">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: LW_L5_OK" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_contains: LW_L5_OK
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=20000000
+stop_reason_details.observed.steps_executed=20000000
+steps_executed=20000000
+cycles=79870760
+instructions=20000000
+limits:
+  - max_steps=20000000
+  - max_uart_bytes=65536
+firmware_hash=10f1bed8634ceaf71b72986550ccfe8331a64692bcc6a6a186b6046b2b01e366
+firmware=/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/ch32l103/L5_adc/firmware.elf
+system=/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/systems/ch32l103.yaml
+script=/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/ch32l103/L5_adc/test.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;LW_L5_OK&quot; }): false
+</failure>
+  </testcase>
+</testsuite>

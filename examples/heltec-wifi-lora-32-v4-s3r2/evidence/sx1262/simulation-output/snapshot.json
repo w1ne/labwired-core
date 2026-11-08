@@ -1,0 +1,61 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      0,
+      1070628800,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1070628800,
+      2151088352,
+      1070628736,
+      1077347352,
+      1070628808,
+      4,
+      0,
+      0,
+      1070628736
+    ],
+    "pc": 1077346577,
+    "ps": 262144,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "steps_executed": 1000000,
+  "cycles": 1000000,
+  "instructions": 1000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1000000
+    }
+  },
+  "limits": {
+    "max_steps": 1000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "eb85efa958204826dac54079cdf9d9676793f2115059a394ac30c6066a58b53c",
+  "config": {
+    "firmware": "examples/heltec-wifi-lora-32-v4-s3r2/../../target/xtensa-esp32s3-none-elf/release/firmware-heltec-wifi-lora-32-v4-s3r2-sx1262-smoke",
+    "system": "examples/heltec-wifi-lora-32-v4-s3r2/../../configs/systems/heltec-wifi-lora-32-v4-s3r2.yaml",
+    "script": "examples/heltec-wifi-lora-32-v4-s3r2/radio-onboarding-smoke.yaml"
+  }
+}

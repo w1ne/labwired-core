@@ -96,6 +96,51 @@ fn test_i2c_start_bit() {
     );
 }
 
+/// RM0008 §26.3.3: the START condition sets SB, BUSY and MSL together.
+/// StdPeriph's I2C_EVENT_MASTER_MODE_SELECT (0x0003_0001) and ch32fun's
+/// ssd1306_i2c driver wait for all three before writing the address.
+#[test]
+fn f1_start_sets_msl_and_busy_with_sb() {
+    let mut i2c = I2c::new_with_layout(super::I2cRegisterLayout::Stm32F1);
+    i2c.write_u16(0x00, 0x0101).unwrap(); // PE | START
+    let event = (i2c.read_u16(0x14).unwrap() as u32) | ((i2c.read_u16(0x18).unwrap() as u32) << 16);
+    assert_eq!(
+        event & 0x0003_0001,
+        0x0003_0001,
+        "SB, MSL and BUSY after START"
+    );
+}
+
+/// WCH's headers declare DATAR as a uint16_t, so a data byte is one halfword
+/// store. It must put that byte on the bus once, not once per byte lane.
+#[test]
+fn f1_halfword_dr_store_sends_one_byte() {
+    struct Sink(Arc<std::sync::Mutex<Vec<u8>>>);
+    impl I2cDevice for Sink {
+        fn address(&self) -> u8 {
+            0x3C
+        }
+        fn read(&mut self) -> u8 {
+            0
+        }
+        fn write(&mut self, data: u8) {
+            self.0.lock().unwrap().push(data);
+        }
+    }
+    let got = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut i2c = I2c::new_with_layout(super::I2cRegisterLayout::Stm32F1);
+    i2c.push_slave(Box::new(Sink(got.clone())));
+    i2c.write_u16(0x00, 0x0101).unwrap(); // PE | START
+    i2c.write_u16(0x10, 0x3C << 1).unwrap(); // address, write
+    let _ = i2c.read_u16(0x14).unwrap();
+    let _ = i2c.read_u16(0x18).unwrap();
+    for b in [0x40u16, 0x12, 0x34] {
+        i2c.write_u16(0x10, b).unwrap();
+    }
+    i2c.write_u16(0x00, 0x0201).unwrap(); // PE | STOP
+    assert_eq!(*got.lock().unwrap(), vec![0x40, 0x12, 0x34]);
+}
+
 #[test]
 fn test_i2c_full_transfer_flow() {
     use crate::peripherals::components::declarative_i2c::GenericI2cDevice;

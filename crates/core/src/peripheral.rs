@@ -599,8 +599,9 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// `n` (an STM32/nRF/SAM/EFR32/Kinetis `GpioPort`, an ATmega `PORTx`).
     ///
     /// `None` for everything else, including a GPIO block that banks its pads
-    /// across several registers (the ESP32 family's single `gpio` block, whose
-    /// pads 32 and up sit in a second output register as bank-relative bits).
+    /// across several registers (most ESP32-family chips have one `gpio` block
+    /// whose pads 32 and up sit in a second output register as bank-relative
+    /// bits; ESP32-C3 is the exception because all 26 pads fit in the low bank).
     /// Pin resolution and co-simulation ask this instead of downcasting to each
     /// port model they know about.
     fn gpio_port_offsets(&self) -> Option<crate::peripherals::gpio::GpioPortOffsets> {
@@ -804,6 +805,44 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// AFIO capability: the pin-remap register (`MAPR`, CH32V003 `PCFR1`) as
+    /// a shared cell the pad routes it moves read through a
+    /// [`crate::peripherals::pad_routing::RemapGate`]. Default: no remap
+    /// register.
+    fn remap_register(&self) -> Option<std::sync::Arc<std::sync::atomic::AtomicU32>> {
+        None
+    }
+
+    /// GPIO capability: [`Self::bind_timer_output_pad`] for a pad that
+    /// carries the line under ONE remap setting only — live while `gate`'s
+    /// field selects it as well (CH32V003 `AFIO_PCFR1.TIM1_RM`). Only an F1
+    /// port takes it; default `false`.
+    fn bind_remapped_timer_output_pad(
+        &mut self,
+        _cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        _pin: u8,
+        _line: usize,
+        _func: &'static str,
+        _gate: crate::peripherals::pad_routing::RemapGate,
+    ) -> bool {
+        false
+    }
+
+    /// GPIO capability: bind pad `pin` to `line` of a timer's output wire
+    /// `cell`, live while the pad selects peripheral function `function`
+    /// (SAM PMUX: E = 4, F = 5). A port without that selector refuses it and
+    /// returns `false`.
+    fn bind_timer_output_pad_function(
+        &mut self,
+        _cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        _pin: u8,
+        _function: u32,
+        _line: usize,
+        _func: &'static str,
+    ) -> bool {
+        false
+    }
+
     /// GPIO capability: bind pad `pin` to input `ti` of the timer at bus
     /// index `timer` — live while the pad selects `af` (an STM32 V2 AFR
     /// nibble), or while it is a digital input when `af` is `None` (STM32 F1
@@ -816,6 +855,36 @@ pub trait Peripheral: std::fmt::Debug + Send {
         _timer: usize,
         _ti: u8,
         _func: &'static str,
+    ) -> bool {
+        false
+    }
+
+    /// GPIO capability: [`Self::bind_timer_capture_pad`] for an F1-shaped
+    /// port (no AF), additionally gated by a remap field when `gate` is set
+    /// (CH32V003 AFIO_PCFR1). A port that is not F1-shaped returns `false`.
+    fn bind_remapped_timer_capture_pad(
+        &mut self,
+        _pin: u8,
+        _timer: usize,
+        _ti: u8,
+        _func: &'static str,
+        _gate: Option<crate::peripherals::pad_routing::RemapGate>,
+    ) -> bool {
+        false
+    }
+
+    /// Timer capability: this timer's TRGO output, as the shared link a
+    /// slave timer's internal trigger reads. Default: no TRGO.
+    fn timer_trgo(&mut self) -> Option<std::sync::Arc<crate::peripherals::timer::TrgoLink>> {
+        None
+    }
+
+    /// Timer capability: wire internal trigger ITR`index` (0..=3) to a
+    /// master's TRGO. Returns `false` when this peripheral has no ITR inputs.
+    fn attach_timer_itr(
+        &mut self,
+        _index: usize,
+        _link: std::sync::Arc<crate::peripherals::timer::TrgoLink>,
     ) -> bool {
         false
     }
@@ -1064,6 +1133,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// The register state of a WCH QingKe V2 PFIC, which `configure_riscv`
+    /// shares with the core. Named capability rather than a downcast.
+    /// Default `None` = not a PFIC.
+    fn qingke_pfic_state(&self) -> Option<Arc<crate::peripherals::qingke_pfic::QingkePficState>> {
+        None
+    }
+
+    /// Route this peripheral's interrupt requests to a QingKe V2 PFIC (the
+    /// QingKe SysTick's STIE/SWIE level sources). Default: no-op, for
+    /// peripherals that raise no PFIC level request.
+    fn attach_qingke_pfic(&mut self, _pfic: Arc<crate::peripherals::qingke_pfic::QingkePficState>) {
+    }
+
     /// Stimulus reachability: call `f` once for every device attached to this
     /// controller that accepts simulated input, in attach order.
     ///
@@ -1216,6 +1298,37 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn drain_attached_pin_drives(&mut self, _out: &mut Vec<(String, String, bool)>) {}
 
     fn dma_request(&mut self, _request_id: u32) {}
+    /// DMA controller only: a bitmask (bit `n - 1` for channel `n`) of the
+    /// peripheral-paced channels whose EN went 0 -> 1 since the last call,
+    /// cleared by the call. The bus asks each source routed to those
+    /// channels for its request LEVEL ([`Self::dma_request_level`]), because
+    /// a request line is a level: a source already asking when the channel
+    /// is enabled is served at once (CH32V003 ch32fun sets USART CTLR3.DMAT
+    /// before it enables the channel). Default: never.
+    fn take_enabled_dma_channels(&mut self) -> u8 {
+        0
+    }
+    /// DMA controller only: append the request names (`<peripheral id>_tx` /
+    /// `_rx`) hard-wired to `channel` (1-based) as the routing registers
+    /// stand now. Default: none.
+    fn dma_requests_on_channel(&self, _channel: u32, _out: &mut Vec<String>) {}
+    /// Request source only: whether request line `line` ([`DMA_SIGNAL_TX`] /
+    /// [`DMA_SIGNAL_RX`]) is asserted NOW. Only consulted when a DMA channel
+    /// routed to it is enabled. Default: not asserted.
+    fn dma_request_level(&self, _line: u32) -> bool {
+        false
+    }
+    /// GPIO port capability: attach an edge observer to this port's pads,
+    /// returning whether the port took it. The STM32-style port reports the
+    /// pads a peripheral drives through a pad route, at the cycles the
+    /// peripheral's wire stamps (an SPI MOSI feeding a WS2812 strip).
+    /// Default: not a port that reports pad edges.
+    fn observe_port_pads(
+        &mut self,
+        _observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    ) -> bool {
+        false
+    }
     /// Flash-controller capability: `true` for the peripheral that decides what
     /// a CPU store into the flash region does (NXP JN51xx / K32W flash
     /// controllers latch addresses and program pages through stores to the
@@ -1303,6 +1416,38 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Espressif GDMA → GP-SPI: the IN link has the received bytes in
     /// memory; the transaction may complete.
     fn gdma_in_delivered(&mut self) {}
+    /// Espressif GPIO matrix: the pads whose `FUNCn_OUT_SEL` selects matrix
+    /// output signal `signal` (an RMT channel, say). Default: not a GPIO
+    /// matrix, so no pad carries any signal.
+    fn pads_for_output_signal(&self, _signal: u32) -> Vec<u8> {
+        Vec::new()
+    }
+    /// Espressif GPIO matrix: a peripheral routed to `pin` drives it to
+    /// `level` at bus cycle `cycle`. `false` when this is not a GPIO matrix
+    /// or the pad does not exist.
+    fn drive_matrix_pad(&mut self, _pin: u8, _level: bool, _cycle: u64) -> bool {
+        false
+    }
+    /// Espressif GPIO-matrix output peripheral: the wire cell its outputs are
+    /// published on, and the matrix signal of line 0 (line n is signal
+    /// `first + n`). The bus hands it to the GPIO matrix through
+    /// [`Self::bind_matrix_output_lines`]. Default: publishes no wire.
+    fn matrix_output_lines(
+        &mut self,
+    ) -> Option<(u32, std::sync::Arc<crate::peripherals::pad_lines::PadLines>)> {
+        None
+    }
+    /// Espressif GPIO matrix: carry `lines` (line n = output signal
+    /// `first_signal + n`) on whichever pad `FUNCn_OUT_SEL` routes it to, so
+    /// pad reads and the logic analyzer see the peripheral's waveform.
+    /// `false`: this port does not route peripheral wires.
+    fn bind_matrix_output_lines(
+        &mut self,
+        _first_signal: u32,
+        _lines: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+    ) -> bool {
+        false
+    }
     /// Level of one of this peripheral's DMA request lines, for DMA engines
     /// that sample requests (the i.MX RT eDMA through its DMAMUX). `line` is
     /// peripheral-specific (e.g. 0 = transmit, 1 = receive). Default: never

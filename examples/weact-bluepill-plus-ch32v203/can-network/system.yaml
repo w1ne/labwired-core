@@ -1,0 +1,9 @@
+# WeAct Studio BluePill-Plus-CH32 (CH32V203C8T6) with the ch32fun chip
+# profile; CAN1 (PA11 RX / PA12 TX) goes to the can_bus in env.yaml. The
+# board has no CAN transceiver: the bus stands for the two-node link in the
+# example's README (a pair of transceivers or its diode test PHY).
+name: weact-bluepill-plus-ch32v203-can-node
+chip: "../../../configs/chips/ch32v203c8t6-ch32fun-smoke.yaml"
+external_devices: []
+board_io:
+  - { id: blue_led, kind: led, peripheral: gpiob, pin: 2, signal: output, active_high: true }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.170708">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="89151f533789c8ea6aecc785b6fbff16b09bdecf1184bc24eb09c7642a3076bb"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.170708">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: ESP32_C3_LCDKIT_GC9A01_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: display_region: lcd (0,0) 8x8 ink 1.00..=1.00 colour 0xF800 min_colour_pixels=64" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

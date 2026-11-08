@@ -1,0 +1,42 @@
+# Narrow STM32H7A3ZIT6Q profile for the NUCLEO-H7A3ZI-Q smoke.
+# Only reset-clock RCC, GPIOB/PB0, 2 MiB flash, and the 128 KiB DTCM used by
+# this firmware are exposed. Other SRAM banks, clock setup, and MCU/board
+# peripherals are outside this profile.
+#
+# Sources: ST DS13195 Rev 8 (H7A3 memory/core), RM0455 (RCC/GPIO register map), and
+# UM2408 Rev 6 (MB1363 LD1 on PB0 for SB54 ON/SB65 OFF; LEDs active high).
+# The H7 RCC and STM32V2 GPIO models are reused; this profile is SIM-DERIVED
+# and has not been checked against physical H7A3 silicon.
+
+name: stm32h7a3zit6q-nucleo-smoke
+arch: arm
+core: cortex-m7
+registers_count: 140
+cpu_hz: 64000000
+
+flash:
+  base: 0x08000000
+  size: 2MiB
+ram:
+  # The smoke image uses H7A3 DTCM; the remaining SRAM banks are omitted.
+  base: 0x20000000
+  size: 128KiB
+
+pins:
+  PB0: { gpio: gpiob, bit: 0, functions: [{ type: gpio, peripheral: gpiob }] }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x58024400
+    size: 1KB
+    config:
+      profile: h7
+
+  - id: gpiob
+    type: gpio
+    base_address: 0x58020400
+    size: 1KB
+    config:
+      profile: stm32v2
+    clock: { reg: ahb4enr, bit: 1 }

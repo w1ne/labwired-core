@@ -1,0 +1,16 @@
+# NEGATIVE CONTROL: the adc_polled system on the 12-bit ADC chip.yaml here.
+# WCH CH32V003 evaluation board running ch32fun's adc_polled, unmodified, with
+# a potentiometer wiper on PD4 (AIN7) between GND and the 3.3 V rail, and a
+# WCH-LinkE on SWIO for the debug-printf console. The pot is the test
+# connection the example reads, not a factory-installed part on the board.
+name: ch32v003evt-ch32fun-adc-smoke
+chip: chip.yaml
+external_devices:
+  - id: pot
+    type: potentiometer
+    connection: adc1
+    config:
+      channel: 7
+board_io:
+  - { id: external_led_pd0, kind: led, peripheral: gpiod, pin: 0, signal: output, active_high: true }
+  - { id: pot, kind: adc_input, peripheral: adc1, pin: 7, signal: input, active_high: true, device_type: potentiometer }

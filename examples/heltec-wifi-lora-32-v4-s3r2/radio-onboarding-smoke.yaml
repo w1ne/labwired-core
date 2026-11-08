@@ -1,0 +1,11 @@
+# Configure the onboard SX1262 for LoRa, then assert the twin's TxDone IRQ on
+# GPIO14. This is a radio control-plane smoke; it does not model RF or packets.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-heltec-wifi-lora-32-v4-s3r2-sx1262-smoke"
+  system: "../../configs/systems/heltec-wifi-lora-32-v4-s3r2.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "HELTEC_SX1262_OK"
+  - expected_stop_reason: max_steps

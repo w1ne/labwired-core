@@ -1,0 +1,17 @@
+# ESP32-H2-DevKitM-1-N4S smoke: decode the onboard GPIO8 WS2812 as red.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32h2-demo"
+  system: "../../configs/systems/esp32h2-devkitm-1-n4s.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "gpio:8"
+      min_edges: 48
+  - display_region:
+      id: "rgb_led"
+      min_ink: 1.0
+      colour: "0xF800"
+      min_colour_pixels: 1
+  - expected_stop_reason: max_steps

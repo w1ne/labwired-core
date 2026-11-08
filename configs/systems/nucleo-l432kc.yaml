@@ -1,0 +1,16 @@
+# NUCLEO-L432KC (MB1180): default ST-LINK VCP USART2 on PA2 TX / PA15 RX,
+# and active-high user LED LD3 on PB3 with the default SB15 connection.
+# This focused system omits the reset button and every unmodeled MCU block.
+
+name: "nucleo-l432kc"
+chip: "../chips/stm32l432kc-nucleo-smoke.yaml"
+debug_uart: "uart2"
+cpu_hz: 4_000_000
+external_devices: []
+board_io:
+  - id: "led_ld3"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 3
+    signal: "output"
+    active_high: true

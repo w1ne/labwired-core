@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      786432,
+      0,
+      44,
+      10,
+      0,
+      0,
+      0,
+      537001968,
+      0,
+      0,
+      0,
+      0,
+      134219008,
+      537001968,
+      1476528128,
+      134218984
+    ],
+    "pc": 134218984,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 16000,
+  "cycles": 16000,
+  "instructions": 16000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 16000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 16000
+    }
+  },
+  "limits": {
+    "max_steps": 16000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "6010ef7a95ce3b018db3dfe76b51540860475d4a70347baddbcb2b41593631fe",
+  "config": {
+    "firmware": "examples/stm32h735g-dk/../../target/thumbv7em-none-eabi/release/firmware-stm32h735g-dk-smoke",
+    "system": "examples/stm32h735g-dk/../../configs/systems/stm32h735g-dk.yaml",
+    "script": "examples/stm32h735g-dk/onboarding-smoke.yaml"
+  }
+}

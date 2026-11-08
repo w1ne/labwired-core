@@ -20,16 +20,35 @@ members = [
     "crates/firmware-atsamd51-demo",
     "crates/firmware-atsamd51-pybadge-demo",
     "crates/firmware-ra4m1-demo",
+    "crates/firmware-arduino-nano-r4-smoke",
+    "crates/firmware-uno-r4-wifi-smoke",
     "crates/firmware-imxrt1064-demo",
+    "crates/firmware-teensy4-smoke",
     "crates/firmware-itm-smoke",
     "crates/firmware-stm32f746-demo",
+    "crates/firmware-nucleo-f756zg-smoke",
     "crates/firmware-ci-fixture",
     "crates/firmware-uart-echo-fixture",
     "crates/firmware-comparative-benchmark",
     "crates/firmware-esp32c3-demo",
+    "crates/firmware-xiao-esp32c3-smoke",
+    "crates/firmware-esp32c3-devkitm1-smoke",
+    "crates/firmware-esp32c3-waveshare-c3-zero-smoke",
+    "crates/firmware-esp32c3-rust2-smoke",
+    "crates/firmware-esp32c3-bme280-smoke",
+    "crates/firmware-esp32c3-lcdkit-smoke",
+    "crates/firmware-esp8684-devkitm1-h4x-smoke",
     "crates/firmware-esp32c6-demo",
+    "crates/firmware-esp32c6-devkitm1-n4-smoke",
+    "crates/firmware-esp32c6-bme280-smoke",
+    "crates/firmware-xiao-esp32c6-bme280-smoke",
+    "crates/firmware-esp32c5-devkitc-smoke",
+    "crates/firmware-esp32c61-devkitc-smoke",
+    "crates/firmware-esp32p4x-function-ev-board-smoke",
+    "crates/firmware-esp32h2-demo",
     "crates/firmware-f103-i2c-demo",
     "crates/firmware-f401-demo",
+    "crates/firmware-f446-demo",
     "crates/firmware-f103-conformance",
     "crates/firmware-f103-fuzztarget",
     "crates/labwired-fuzz",
@@ -39,11 +58,13 @@ members = [
     "crates/firmware-h563-fullchip-demo",
     "crates/firmware-h563-io-demo",
     "crates/firmware-stm32u575-demo",
+    "crates/firmware-nucleo-u545re-smoke",
     "crates/firmware-hil-showcase",
     "crates/firmware-l073-demo",
     "crates/firmware-stm32g0-demo",
     "crates/firmware-stm32g0b1-demo",
     "crates/firmware-l476-demo",
+    "crates/firmware-nucleo-l496zg-p-smoke",
     "crates/firmware-mg26-deck",
     "crates/firmware-mg26-demo",
     "crates/firmware-mg26-ble",
@@ -62,6 +83,7 @@ members = [
     "crates/firmware-nrf52840-conformance",
     "crates/firmware-nrf52840-cpu-conformance",
     "crates/firmware-nrf52840-demo",
+    "crates/firmware-nrf52840-dk-smoke",
     "crates/firmware-nrf52840-isr-blinky",
     "crates/firmware-nrf52840-obd2-scanner",
     "crates/firmware-nrf52840-proximity",
@@ -73,9 +95,69 @@ members = [
     "crates/firmware-nrf52840-secure-boot",
     "crates/firmware-nrf52840-timer-blinky",
     "crates/firmware-nrf5340-dk-demo",
+    "crates/firmware-nrf54l10-smoke",
+    "crates/firmware-nrf54lm20dk-smoke",
     "crates/firmware-nucleo-f407-demo",
     "crates/firmware-f4-discovery-smoke",
+    "crates/firmware-nucleo-f070rb-smoke",
+    "crates/firmware-nucleo-f072rb-smoke",
+    "crates/firmware-nucleo-f091rc-smoke",
+    "crates/firmware-nucleo-f302r8-smoke",
+    "crates/firmware-nucleo-f303k8-smoke",
+    "crates/firmware-nucleo-f303re-smoke",
+    "crates/firmware-stm32f3-discovery-smoke",
+    "crates/firmware-stm32f3348-disco-smoke",
+    "crates/firmware-stm32f429i-disc1-smoke",
+    "crates/firmware-nucleo-f722ze-smoke",
+    "crates/firmware-nucleo-f334r8-smoke",
+    "crates/firmware-nucleo-f030r8-smoke",
+    "crates/firmware-stm32f0-discovery-smoke",
+    "crates/firmware-nucleo-l011k4-smoke",
+    "crates/firmware-nucleo-l010rb-smoke",
+    "crates/firmware-nucleo-l031k6-smoke",
+    "crates/firmware-nucleo-c071rb-smoke",
+    "crates/firmware-nucleo-c051c8-smoke",
+    "crates/firmware-nucleo-c031c6-smoke",
+    "crates/firmware-nucleo-c092rc-smoke",
+    "crates/firmware-nucleo-f411re-smoke",
+    "crates/firmware-stm32f411-blackpill-smoke",
+    "crates/firmware-nucleo-f413zh-smoke",
+    "crates/firmware-nucleo-f412zg-smoke",
+    "crates/firmware-nucleo-f410rb-smoke",
+    "crates/firmware-nucleo-f439zi-smoke",
+    "crates/firmware-nucleo-g031k8-smoke",
+    "crates/firmware-nucleo-g071rb-smoke",
+    "crates/firmware-stm32g071b-disco-smoke",
+    "crates/firmware-nucleo-g0b1re-smoke",
+    "crates/firmware-nucleo-g431kb-smoke",
+    "crates/firmware-nucleo-g431rb-smoke",
+    "crates/firmware-nucleo-g491re-smoke",
+    "crates/firmware-nucleo-l432kc-smoke",
+    "crates/firmware-nucleo-l4a6zg-smoke",
+    "crates/firmware-nucleo-l452re-p-smoke",
+    "crates/firmware-nucleo-wba55cg-smoke",
+    "crates/firmware-nucleo-wba25ce1-smoke",
+    "crates/firmware-nucleo-h503rb-smoke",
+    "crates/firmware-nucleo-h533re-smoke",
+    "crates/firmware-nucleo-c5a3zg-smoke",
+    "crates/firmware-nucleo-c542rc-smoke",
+    "crates/firmware-nucleo-u3c5zi-q-smoke",
+    "crates/firmware-nucleo-u385rg-q-smoke",
+    "crates/firmware-stm32h573i-dk-smoke",
+    "crates/firmware-nucleo-u083rc-smoke",
+    "crates/firmware-nucleo-u031r8-smoke",
+    "crates/firmware-nucleo-h723zg-smoke",
+    "crates/firmware-nucleo-h753zi-smoke",
+    "crates/firmware-nucleo-h755zi-q-smoke",
+    "crates/firmware-nucleo-h7a3zi-q-smoke",
+    "crates/firmware-stm32h735g-dk-smoke",
+    "crates/firmware-xiao-nrf54l15-smoke",
     "crates/firmware-nucleo-f103rb-smoke",
+    "crates/firmware-stm32f103c6-gpio-smoke",
+    "crates/firmware-stm32f103r8-gpio-smoke",
+    "crates/firmware-stm32f103r6-gpio-smoke",
+    "crates/firmware-stm32f103c8-bluepill-smoke",
+    "crates/firmware-nucleo-f207zg-smoke",
     "crates/firmware-stm32f103-lowdensity-smoke",
     "crates/firmware-f401-lowram-smoke",
     "crates/firmware-arty-litex-smoke",
@@ -101,10 +183,27 @@ members = [
     "crates/firmware-perf-spin",
     "crates/firmware-perf-spin-riscv",
     "crates/firmware-rp2040-demo",
+    "crates/firmware-feather-rp2040-smoke",
+    "crates/firmware-itsybitsy-rp2040-smoke",
+    "crates/firmware-feather-m4-express-smoke",
+    "crates/firmware-feather-m0-express-smoke",
+    "crates/firmware-pico-w-smoke",
+    "crates/firmware-pico-w-bme280-smoke",
+    "crates/firmware-xiao-rp2040-smoke",
+    "crates/firmware-xiao-rp2350-smoke",
+    "crates/firmware-adafruit-feather-rp2350-smoke",
+    "crates/firmware-nano-rp2040-connect-smoke",
+    "crates/firmware-pico2-w-smoke",
     "crates/firmware-samd21-demo",
     "crates/firmware-samd21-lowram-smoke",
     "crates/firmware-arduino-zero-demo",
+    "crates/firmware-mkr-wifi-1010-smoke",
+    "crates/firmware-feather-nrf52840-express-smoke",
     "crates/firmware-rp2350-demo",
+    "crates/firmware-pico2-demo",
+    "crates/firmware-pico2-bme280-smoke",
+    "crates/firmware-pico2-w-bme280-smoke",
+    "crates/firmware-rp2350-zero-ws2812-smoke",
     "crates/firmware-kw41z-demo",
     "crates/firmware-kw41z-lcd",
     "crates/firmware-rp2040-pio-onboarding",
@@ -122,6 +221,7 @@ members = [
     "crates/wasm",
     "examples/demo-blinky",
     "examples/nucleo-f407-i2c",
+    "examples/nucleo-f767zi-lsm6dsox",
     "examples/riscv-virt",
     "examples/adxl345-sensor-lab",
     "examples/ina219-power-lab",
@@ -254,6 +354,10 @@ overflow-checks = true
 # (opt-level = "s") with single-codegen-unit for cleaner inlining. Cargo does
 # not support globs or inheritance in profile sections, so each crate gets
 # its own block. Keep alphabetical.
+[profile.release.package.firmware-arduino-nano-r4-smoke]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-ci-fixture]
 codegen-units = 1
 opt-level = "s"
@@ -266,11 +370,123 @@ opt-level = "s"
 codegen-units = 1
 opt-level = "s"
 
+[profile.release.package.firmware-xiao-esp32c3-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32c3-bme280-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32c3-lcdkit-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32c3-devkitm1-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32c3-waveshare-c3-zero-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32c3-rust2-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp8684-devkitm1-h4x-smoke]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-esp32c6-demo]
 codegen-units = 1
 opt-level = "s"
 
+[profile.release.package.firmware-esp32c6-devkitm1-n4-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32c61-devkitc-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32c6-bme280-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-xiao-esp32c6-bme280-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32h2-demo]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-f401-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-f411re-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-f070rb-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-stm32f411-blackpill-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-f302r8-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-f303k8-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-stm32f0-discovery-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-stm32f3-discovery-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-stm32f3348-disco-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-stm32f429i-disc1-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-f722ze-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-f410rb-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-l010rb-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-g031k8-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-g0b1re-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-u031r8-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nrf54lm20dk-smoke]
 codegen-units = 1
 opt-level = "s"
 
@@ -291,6 +507,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-h563-io-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-stm32h735g-dk-smoke]
 codegen-units = 1
 opt-level = "s"
 
@@ -378,7 +598,51 @@ opt-level = "s"
 codegen-units = 1
 opt-level = "s"
 
+[profile.release.package.firmware-pico2-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-pico2-bme280-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-pico2-w-bme280-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-rp2350-zero-ws2812-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-pico-w-bme280-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-pico2-w-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-xiao-rp2350-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-adafruit-feather-rp2350-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nano-rp2040-connect-smoke]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-rp2040-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-feather-rp2040-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-itsybitsy-rp2040-smoke]
 codegen-units = 1
 opt-level = "s"
 

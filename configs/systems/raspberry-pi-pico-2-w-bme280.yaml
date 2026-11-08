@@ -1,0 +1,14 @@
+# Raspberry Pi Pico 2 W with an external BME280 on I2C0.
+# The CYW43439 wireless module and its wireless-controlled onboard LED are omitted.
+name: "raspberry-pi-pico-2-w-bme280"
+chip: "../chips/rp2350-pico2-w-bme280-smoke.yaml"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
+    config:
+      i2c_address: 0x77
+board_io: []

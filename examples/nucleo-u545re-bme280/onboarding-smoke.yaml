@@ -1,0 +1,13 @@
+# NUCLEO-U545RE-Q: read the attached BME280 chip ID over Arduino I2C1 and blink LD2.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-u545re-bme280"
+  system: "../../configs/systems/nucleo-u545re-bme280.yaml"
+limits:
+  max_steps: 2000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "NUCLEO_U545RE_BME280_OK=0x60"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 2

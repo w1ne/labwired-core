@@ -1,0 +1,31 @@
+# Narrow RP2350 profile for the Raspberry Pi Pico 2 W GP0 header smoke.
+# The CYW43439 wireless module and its connected onboard LED are omitted.
+name: "rp2350-pico2-w-smoke"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 150_000_000
+reset_vector_offset: 0x0
+
+flash:
+  base: 0x10000000
+  size: "4096KB"
+ram:
+  base: 0x20000000
+  size: "520KB"
+
+pins:
+  # RP2350 GP0 is exposed at Raspberry Pi Pico 2 W physical header pin 1.
+  GP0: { gpio: "sio", bit: 0 }
+
+peripherals:
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40028000
+    size: "4KB"
+
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/sio.yaml"

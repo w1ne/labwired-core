@@ -1,0 +1,38 @@
+# NEGATIVE CONTROL for ch32fun-spidmatest-smoke (see chip.yaml): expected FAIL.
+# ch32fun examples_v20x/spidmatest, unmodified (build-ch32fun-examples.sh).
+# SPI2 is a 16-bit, 1-line-TX master at PCLK1/2 (the example clears PPRE1, so
+# 72 MHz at the 144 MHz SystemInit leaves), fed by DMA1 channel 5 from the
+# 256-word `sendbuff`. The example memsets the buffer to 0xAA, arms the
+# channel circular with HT and TC interrupts, and DMA1_Channel5_IRQHandler
+# (PFIC 31) refills each half it has just sent with 0x0AAF. So the wire must
+# carry exactly 256 x 0xAAAA and then 0x0AAF from the second lap on.
+#
+# The wire is decoded by check-spidmatest.py from a run with
+#   --watch-gpio gpiob:13 --watch-gpio gpiob:15
+# committed as evidence/ch32fun-spidmatest-smoke/spi-capture.json.gz, with
+# the decoder's output in spi-check.log. 40,000 cycles (~3 laps) keep every
+# SCK edge from the first one inside the capture ring, so the word framing
+# is read from the start of the transfer, not guessed.
+schema_version: "1.0"
+inputs:
+  firmware: "../../../ch32fun/spidmatest.elf"
+  system: "system.yaml"
+limits:
+  max_cycles: 40000
+  max_steps: 80000
+  wall_time_ms: 600000
+assertions:
+  # Both halves of sendbuff (0x20000000, nm) were rewritten by the HT and TC
+  # passes of the channel 5 handler: it only runs from the PFIC.
+  - memory_value: { address: 0x20000000, size: 16, expected_value: 0x0AAF }
+  - memory_value: { address: 0x200000FE, size: 16, expected_value: 0x0AAF }
+  - memory_value: { address: 0x20000100, size: 16, expected_value: 0x0AAF }
+  - memory_value: { address: 0x200001FE, size: 16, expected_value: 0x0AAF }
+  # DMA1 channel 5 CFGR as the example leaves it: PL very high, 16/16-bit,
+  # MINC, CIRC, memory-to-peripheral, HTIE|TCIE, EN.
+  - memory_value: { address: 0x40020058, size: 32, expected_value: 0x35B7 }
+  # SPI2 CTLR1: BIDIMODE|BIDIOE, DFF, SSM, SPE, SSI|MSTR (SPI_Mode_Master).
+  - memory_value: { address: 0x40003800, size: 16, expected_value: 0xCB44 }
+  # SCK and MOSI moved on the F1 default SPI2 pads.
+  - gpio_edges: { pin: "gpiob:13", min_edges: 30000 }
+  - gpio_edges: { pin: "gpiob:15", min_edges: 4000 }

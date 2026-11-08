@@ -1,0 +1,26 @@
+# Adafruit ESP32 Feather V2 with its STEMMA QT BME280 sensor rail enabled by GPIO2.
+# Only UART0, the GPIO2 rail-control path, and I2C0 to the BME280 are represented.
+name: "adafruit-feather-esp32-v2-bme280"
+chip: "../chips/esp32-feather-v2-bme280-smoke.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO22"
+      scl: "GPIO20"
+    config:
+      i2c_address: 0x77
+      supply_domain: "stemma_qt_3v3"
+      supply_min_v: 2.7
+      supply_control_pin: "GPIO2"
+      supply_on_v: 3.3
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 13
+    signal: "output"
+    active_high: true

@@ -1,0 +1,13 @@
+# ch32fun examples_v30x/blink, unmodified, built for the CH32V307VCT6
+# (rv32imafc/ilp32f). PA3 toggles every Delay_Ms(1000) on the QingKe V4
+# 64-bit SysTick.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/blink.elf"
+  system: "../../configs/systems/ch32v307v-evt-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 300000000
+  max_steps: 300000000
+  wall_time_ms: 900000
+assertions:
+  - gpio_edges: { pin: "gpioa:3", min_edges: 2 }

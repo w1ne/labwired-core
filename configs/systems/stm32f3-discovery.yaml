@@ -1,0 +1,13 @@
+# STM32F3DISCOVERY smoke system. Only the STM32F303VCT6 GPIOE/PE9-to-LD3
+# connection is represented; onboard MEMS, USB, ST-LINK, button, and other
+# user LEDs are not modeled in this narrow profile.
+name: stm32f3-discovery
+chip: "../chips/stm32f303vc-f3discovery-smoke.yaml"
+external_devices: []
+board_io:
+  - id: led_ld3_red
+    kind: led
+    peripheral: gpioe
+    pin: 9
+    signal: output
+    active_high: true

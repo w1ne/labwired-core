@@ -1,0 +1,7 @@
+2026-11-08T04:36:29.413655Z  INFO labwired_core::system::builder: Loading chip descriptor: configs/chips/ch32x035g8u6.yaml
+2026-11-08T04:36:29.488830Z  INFO labwired_loader: ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+LW_L3_BOOT
+LW_L3_FAIL nack
+2026-11-08T04:36:40.748311Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "LW_L3_OK" }) (captured len=29)
+FAIL  0/1 checks · t2 · 20000000 steps · 11.26s

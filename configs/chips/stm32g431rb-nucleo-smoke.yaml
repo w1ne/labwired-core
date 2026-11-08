@@ -1,0 +1,52 @@
+# Narrow NUCLEO-G431RB profile for its board-connected LPUART1 VCP and LD2 LED.
+# RCC, GPIOA and LPUART1 are real modeled peripherals; all other MCU and board
+# features are outside this smoke profile.
+#
+# Sources:
+# - ST UM2505, STM32G4 Nucleo-64 (MB1367), §§6.6.1, 6.6.4 and 8:
+#   LD2=PA5; default STLINK-V3E VCP=LPUART1 on PA2/PA3.
+# - ST DS12589, STM32G431x6/x8/xB alternate-function table: PA2/PA3 LPUART1 AF12.
+# - ST RM0440, STM32G4 reference manual: RCC, GPIO and LPUART register maps.
+
+name: "stm32g431rb-nucleo-smoke"
+arch: "arm"
+core: "cortex-m4"
+# The smoke leaves the reset HSI16 clock in place.
+cpu_hz: 16_000_000
+
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "32KB"
+
+pins:
+  PA2: { gpio: "gpioa", bit: 2, functions: [{ type: uart, peripheral: lpuart1, role: tx }] }
+  PA3: { gpio: "gpioa", bit: 3, functions: [{ type: uart, peripheral: lpuart1, role: rx }] }
+  PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32g4"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x40008000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32g474re/lpuart1.yaml"
+      profile: "stm32v2"
+    clock: { reg: "apb1enr2", bit: 0 }

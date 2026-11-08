@@ -1,0 +1,50 @@
+# Narrow ESP32-C6 HP profile for the XIAO GPIO-matrix I2C0 BME280 smoke.
+# Only the exercised UART0, GPIO, I2C0, PCR clock gates, and memory are loaded.
+name: "esp32c6-xiao-bme280-smoke"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 160_000_000
+
+flash:
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  base: 0x40800000
+  size: "512KB"
+
+pins:
+  GPIO16: { gpio: "gpio", bit: 16, functions: [{ type: uart, peripheral: "uart0", role: tx }] }
+  GPIO17: { gpio: "gpio", bit: 17, functions: [{ type: uart, peripheral: "uart0", role: rx }] }
+  GPIO22: { gpio: "gpio", bit: 22, functions: [{ type: i2c, peripheral: "i2c0", role: sda }] }
+  GPIO23: { gpio: "gpio", bit: 23, functions: [{ type: i2c, peripheral: "i2c0", role: scl }] }
+
+peripherals:
+  - id: "uart0"
+    type: "esp32c6_uart"
+    irq: 43
+    base_address: 0x60000000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c6/uart0.yaml"
+  - id: "gpio"
+    type: "esp32c6_gpio"
+    base_address: 0x60091000
+    size: "3840"
+    config:
+      debug_schema: "../peripherals/esp32c6/gpio.yaml"
+  - id: "i2c0"
+    type: "esp32c3_i2c"
+    irq: 50
+    base_address: 0x60004000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "I2C0_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c6/i2c0.yaml"
+  - id: "pcr"
+    type: "esp32c6_pcr"
+    base_address: 0x60096000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c6/pcr.yaml"

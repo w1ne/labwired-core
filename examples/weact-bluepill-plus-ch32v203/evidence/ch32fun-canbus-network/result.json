@@ -1,0 +1,147 @@
+{
+  "result_schema_version": "1.0-environment",
+  "run_type": "environment",
+  "status": "pass",
+  "steps_executed": 2000,
+  "cycles": 28790293,
+  "instructions": 4000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000
+    }
+  },
+  "limits": {
+    "max_steps": 2000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 120000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "CAN Baud Rate: 12500bps",
+          "min_count": 1,
+          "node": "rx"
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "Exiting CAN Init mode...Done",
+          "min_count": 1,
+          "node": "rx"
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "FIFO: 1/3: 8 bytes from 0x0BADC0DE: FE 7A BE E5 C0 FF EE 45",
+          "min_count": 1,
+          "node": "rx"
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073767448,
+          "expected_value": 0,
+          "mask": null,
+          "size": null,
+          "node": "rx"
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073767432,
+          "expected_value": 3,
+          "mask": 15,
+          "size": null,
+          "node": "tx"
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073767448,
+          "expected_value": 0,
+          "mask": null,
+          "size": null,
+          "node": "tx"
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "Sending message with ID 0x0BADC0DE: FE 7A BE E5 C0 FF EE 45",
+          "min_count": 1,
+          "node": "tx"
+        }
+      },
+      "passed": true
+    }
+  ],
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "config": {
+    "script": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/weact-bluepill-plus-ch32v203/can-network/test.yaml",
+    "environment": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/weact-bluepill-plus-ch32v203/can-network/env.yaml",
+    "world_firmware_hash": "648ecab647cfc1aac8c85bd303d92ab6c00903070e5fe1208c65cee324de54e0",
+    "nodes": [
+      {
+        "id": "rx",
+        "system": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/weact-bluepill-plus-ch32v203/can-network/system.yaml",
+        "firmware": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/weact-bluepill-plus-ch32v203/ch32fun/canbus_network.elf",
+        "system_hash": "12c2b826978972742370a5630ccb3c8d47fc27dae3e31efbdc2e60a34ae70ffd",
+        "firmware_hash": "cb63342d5fb6f7f528fab57bbaa3ac240db7ccc409773abbb600368bff4d50e5"
+      },
+      {
+        "id": "tx",
+        "system": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/weact-bluepill-plus-ch32v203/can-network/system.yaml",
+        "firmware": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/weact-bluepill-plus-ch32v203/ch32fun/canbus_network_tx.elf",
+        "system_hash": "12c2b826978972742370a5630ccb3c8d47fc27dae3e31efbdc2e60a34ae70ffd",
+        "firmware_hash": "b6aa284162d4504ac6050fbff69dec0fdc93794445bf5a88329af8ded0c1bcf6"
+      }
+    ]
+  }
+}

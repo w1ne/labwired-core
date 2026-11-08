@@ -1,0 +1,25 @@
+# ESP8684-DevKitM-1-H4X board smoke profile.
+# The profile models the three common-anode RGB LED channels only.
+name: "esp8684-devkitm-1-h4x"
+chip: "../chips/esp8684-devkitm-1-h4x-smoke.yaml"
+cpu_hz: 120_000_000
+external_devices: []
+board_io:
+  - id: "rgb_red"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 0
+    signal: "output"
+    active_high: false
+  - id: "rgb_green"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 1
+    signal: "output"
+    active_high: false
+  - id: "rgb_blue"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 8
+    signal: "output"
+    active_high: false

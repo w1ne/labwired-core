@@ -1,0 +1,43 @@
+# Focused STM32U3C5ZIT6Q profile for the NUCLEO-U3C5ZI-Q LD1 GPIO smoke.
+# Only main flash, SRAM, RCC AHB2ENR1.GPIOAEN, GPIOA, and SysTick are mapped.
+# UART/VCP, USB, I3C, FDCAN, timers, HSP, and other peripherals remain out of scope.
+# Sources: ST DS15096 / RM0487 Rev 1 / UM3599 / CMSIS stm32u3c5xx.h.
+name: "stm32u3c5zit6q-nucleo-gpio-smoke"
+arch: "arm"
+core: "cortex-m33"
+registers_count: 220
+cpu_hz: 96_000_000
+
+flash:
+  base: 0x08000000
+  size: "2MiB"
+ram:
+  base: 0x20000000
+  size: "640KiB"
+
+# UM3599 maps default LD1 wiring to PA5 via SB61; the MB2222 schematic shows
+# the GPIO-driven LED switch, active high.
+pins:
+  PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40030C00
+    size: "1KB"
+    config:
+      profile: "stm32u3"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    # RM0487: RCC_AHB2ENR1 is RCC+0x8C; GPIOAEN is bit 0.
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"

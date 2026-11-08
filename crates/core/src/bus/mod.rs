@@ -429,6 +429,11 @@ pub struct SystemBus {
     /// HashMap; explicit downstream HashMap assignments must migrate.
     pub debug_schemas: std::collections::BTreeMap<String, Vec<crate::inspect::RegisterSchema>>,
     pub nvic: Option<Arc<NvicState>>,
+    /// The QingKe V2 PFIC (WCH CH32V003), when the chip has one. A level
+    /// source's own `irq:` line drives its request level here
+    /// ([`Self::reconcile_line_level`]) instead of latching a pend, so the
+    /// request drops with the flag, as it does on silicon.
+    pub qingke_pfic: Option<Arc<crate::peripherals::qingke_pfic::QingkePficState>>,
     pub observers: Vec<Arc<dyn crate::SimulationObserver>>,
     pub config: crate::SimulationConfig,
     /// The clock this system's core runs at, in Hz: the manifest's `cpu_hz:`
@@ -845,6 +850,11 @@ pub struct SystemBus {
     /// feed a timer input, so the post-write hook drains timer-input edges
     /// only on buses that have any. One predictable false branch elsewhere.
     pub(crate) timer_capture_wired: bool,
+    /// Bus index of the block whose register moves pads at run time (the
+    /// CH32V003 AFIO, `Peripheral::remap_register`), once a pad router has
+    /// bound a route gated on it. A store there re-syncs every GPIO port's
+    /// routes ([`Self::remap_changed`]). `None` elsewhere.
+    pub(crate) remap_block: Option<usize>,
     /// Set when a world `gpio_net` puts a pad on a net (`join_net_pads`):
     /// from then on the post-write and external-input hooks hand outside pad
     /// levels to the peripheral lines they are routed to. False elsewhere.

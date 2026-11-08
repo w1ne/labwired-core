@@ -1,0 +1,13 @@
+# WCH CH32V003 evaluation board running ch32fun's
+# tim1_pwm_complementary_outputs, unmodified. The example remaps TIM1 with
+# AFIO_PCFR1.TIM1_RM = 01 (partial remap 1), which puts T1CH1 on PC6 and
+# T1CH1N on PC3, and sets CC1P|CC1NP, so both pads are active low. An LED
+# from each pad to 3.3 V shows the half-bridge pair: one is lit at a time,
+# both dark through the dead time. They are test connections, not
+# factory-installed parts.
+name: ch32v003evt-ch32fun-tim1-complementary-smoke
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+external_devices: []
+board_io:
+  - { id: external_led_pc6, kind: led, peripheral: gpioc, pin: 6, signal: output, active_high: false }
+  - { id: external_led_pc3, kind: led, peripheral: gpioc, pin: 3, signal: output, active_high: false }

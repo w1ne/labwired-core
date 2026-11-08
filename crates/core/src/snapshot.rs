@@ -437,6 +437,17 @@ pub struct RiscVCpuSnapshot {
     /// trigger module at reset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub triggers: Option<crate::cpu::riscv::trigger::TriggerSnapshot>,
+
+    /// F extension registers, present only for a core with F.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fp: Option<RiscVFpSnapshot>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RiscVFpSnapshot {
+    /// `f0..f31` as raw binary32 bits.
+    pub f: Vec<u32>,
+    pub fcsr: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

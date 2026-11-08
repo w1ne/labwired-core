@@ -1,0 +1,28 @@
+{
+  "target_id": "arduino-nano-r4",
+  "status": "pass",
+  "crate": "firmware-arduino-nano-r4-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/arduino-nano-r4/onboarding-smoke.yaml",
+  "system": "configs/systems/arduino-nano-r4.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T05:45:01Z",
+  "finished_at_utc": "2026-11-04T05:45:16Z",
+  "elapsed_seconds": 15,
+  "elapsed_ms": 14856,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 14.338,
+    "build_firmware": 0.21,
+    "run_smoke": 0.299
+  },
+  "stages_ms": {
+    "build_cli": 14338,
+    "build_firmware": 210,
+    "run_smoke": 299
+  }
+}

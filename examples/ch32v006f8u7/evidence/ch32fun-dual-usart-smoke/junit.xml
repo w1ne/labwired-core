@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="51.107348">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxCycles"/>
+    <property name="firmware_hash" value="e26df0e0d07db84b22336e83d3c5f38099f05a56d104af7031069b1fc64b20f3"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="51.107348">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: USART1 ready
+" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: USART2 ready
+" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_ordered: [&quot;tick 0 via USART1\r\n&quot;, &quot;tick 0 via USART2\r\n&quot;, &quot;tick 1 via USART1\r\n&quot;, &quot;tick 1 via USART2\r\n&quot;, &quot;tic…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpiod:5 &gt;= 100 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: gpio_edges: gpiod:2 &gt;= 100 edges" time="0.000000">
+  </testcase>
+</testsuite>

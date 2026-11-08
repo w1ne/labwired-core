@@ -1,14 +1,15 @@
 # LabWired - Waveshare RP2350-Zero example
 #
-# Same wiring as configs/systems/rp2350-zero.yaml. LED/WS2812 stand-in on
-# GP16 via SIO — not Pico 2 GP25. Twin UART is UART0, not the USB-C CDC.
+# Waveshare RP2350-Zero: its WS2812 DIN is GP16. The NeoPixel component
+# decodes the actual SIO waveform. Twin UART is UART0, not USB-C CDC.
 name: "rp2350-zero-example"
-chip: "../../configs/chips/rp2350.yaml"
-external_devices: []
-board_io:
-  - id: "led_gp16"
-    kind: "led"
-    peripheral: "sio"
-    pin: 16
-    signal: "output"
-    active_high: true
+chip: "../../configs/chips/rp2350-zero-smoke.yaml"
+cpu_hz: 150_000_000
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO16"
+      num_pixels: 1
+      cpu_hz: 150_000_000

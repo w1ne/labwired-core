@@ -1,0 +1,14 @@
+# NUCLEO-H7A3ZI-Q (MB1363) smoke profile.
+# Only the active-high LD1 route to PB0 is attached. Firmware assumes SB54 ON
+# and SB65 OFF; serial, buttons, ST-LINK, expansion connectors, and other MCU
+# peripherals are outside this descriptor.
+name: nucleo-h7a3zi-q
+chip: "../chips/stm32h7a3zit6q-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: led_ld1
+    kind: led
+    peripheral: gpiob
+    pin: 0
+    signal: output
+    active_high: true

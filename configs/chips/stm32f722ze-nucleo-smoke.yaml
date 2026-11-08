@@ -1,0 +1,35 @@
+# Focused STM32F722ZET6 model for NUCLEO-F722ZE's LD1 GPIO smoke.
+# SIM-DERIVED: this profile exposes only the flash, DTCM stack RAM, RCC, and
+# GPIOB/PB0 used by the smoke. Other MCU and board peripherals are omitted.
+#
+# Board: ST UM1974, NUCLEO-F722ZE (MB1137), default LD1 bridge route.
+# MCU memory: ST DS11853 Rev 9; registers: ST RM0431.
+
+name: "stm32f722zet6-nucleo-smoke"
+arch: "arm"
+core: "cortex-m7"
+cpu_hz: 216_000_000
+flash:
+  base: 0x08000000
+  size: "512KiB"
+ram:
+  # DTCM is the initial stack/data RAM used by this smoke image.
+  base: 0x20000000
+  size: "64KiB"
+pins:
+  # Board user LED LD1: PB0 when SB120 is ON and SB119 is OFF.
+  PB0: { gpio: gpiob, bit: 0, functions: [{ type: gpio, peripheral: gpiob }] }
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40020400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 1 }

@@ -1,0 +1,12 @@
+# Arduino Nano R4: exercise the RA4M1 PORT2 GPIO wired to LED_BUILTIN / P204.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-arduino-nano-r4-smoke"
+  system: "../../configs/systems/arduino-nano-r4.yaml"
+limits:
+  max_steps: 16000
+assertions:
+  - gpio_edges:
+      pin: "port2:4"
+      min_edges: 16
+  - expected_stop_reason: max_steps

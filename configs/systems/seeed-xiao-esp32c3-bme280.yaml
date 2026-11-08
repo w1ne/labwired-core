@@ -1,0 +1,15 @@
+# Seeed Studio XIAO ESP32-C3 plus a BME280 breakout on the documented D4/D5 I2C0 path.
+# This smoke profile covers only UART0, the GPIO-matrix I2C route and the sensor.
+name: "seeed-xiao-esp32c3-bme280"
+chip: "../chips/esp32c3-xiao-bme280-smoke.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO6"
+      scl: "GPIO7"
+    config:
+      i2c_address: 0x77

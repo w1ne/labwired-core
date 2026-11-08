@@ -1,0 +1,4 @@
+# Negative control system; see chip.yaml.
+name: ch32v003evt-ch32fun-no-probe-control
+chip: chip.yaml
+external_devices: []

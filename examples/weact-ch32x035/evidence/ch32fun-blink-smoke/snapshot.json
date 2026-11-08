@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      776,
+      536891344,
+      536871932,
+      0,
+      0,
+      0,
+      0,
+      1073809408,
+      1073810432,
+      9999996,
+      0,
+      0,
+      1,
+      4294967295,
+      10500021,
+      3758157824,
+      0,
+      262144,
+      268435456,
+      128,
+      16,
+      4,
+      4096,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 358,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 626,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 79999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 80000000,
+  "cycles": 297142724,
+  "instructions": 80000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 80000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 80000000
+    }
+  },
+  "limits": {
+    "max_steps": 80000000,
+    "max_cycles": 80000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "aaf887f644a56384a5c4dc29ff07c09d49bf186ce7884b89762383072ffccfbc",
+  "config": {
+    "firmware": "examples/weact-ch32x035/ch32fun/blink.elf",
+    "system": "examples/weact-ch32x035/../../configs/systems/weact-ch32x035-ch32fun-smoke.yaml",
+    "script": "examples/weact-ch32x035/ch32fun-blink-smoke.yaml"
+  }
+}

@@ -22,6 +22,7 @@ static uint8_t k = 0;
 void setup() {
   Serial.begin(9600);
   for (uint8_t i = 0; i < 12; i++) pinMode(PINS[i], OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
   Serial.println(F("MEGA READY"));
 }
 

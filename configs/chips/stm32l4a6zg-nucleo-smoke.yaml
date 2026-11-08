@@ -1,0 +1,39 @@
+# Focused STM32L4A6ZG profile for the NUCLEO-L4A6ZG LD3 smoke.
+# The model exposes only RCC and GPIOB for the documented PB14 user LED.
+# SRAM2 and the remaining MCU peripherals are intentionally omitted.
+# Register layout follows STM32L4 RM0351; the GPIO peripheral model is the
+# existing STM32v2 implementation used by the L4 family.
+
+name: "stm32l4a6zg-nucleo-smoke"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 80_000_000
+
+flash:
+  base: 0x08000000
+  size: "1024KB"
+ram:
+  # SRAM1 only. SRAM2 is not included in this focused profile.
+  base: 0x20000000
+  size: "256KB"
+
+pins:
+  PB14: { gpio: "gpiob", bit: 14, functions: [{ type: gpio, peripheral: gpiob }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32l4"
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x48000400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpiob.yaml"
+      profile: "stm32v2"
+    # GPIOB clock: RCC_AHB2ENR.GPIOBEN (bit 1).
+    clock: { reg: "ahb2enr", bit: 1 }

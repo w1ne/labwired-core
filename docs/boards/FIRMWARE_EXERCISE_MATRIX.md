@@ -125,7 +125,157 @@ _Shares the nRF52 model with nrf52840/nrf52832; tier-1 drives 12 rubric classes 
 
 ### `rp2040`
 
-_tier1 fixture drives clock/timer/gpio/spi/i2c (PL022/DW_apb); boots unmodified Zephyr. PIO0 is exercised by the required nightly PIO onboarding lane — not by a tier-1 fixture: firmware-rp2040-pio-onboarding boots through this descriptor and must reach PIO_OK (crates/core/tests/rp2040_pio_onboarding.rs:82-135), built and required by the core-full job's LABWIRED_REQUIRE_FIRMWARE (core-ci.yml:2014, :2034, run at :2062; cross-build-excluded from the PR shards)._
+_The Raspberry Pi Pico 1 system now has an onboarding smoke in core-onboarding-smoke.yml that drives UART0 and toggles the onboard GP25 LED through IO_BANK0/SIO; the assertions require the RP2040_SMOKE_OK transcript and at least eight GP25 edges. The tier1 fixture separately drives clock/timer/gpio/spi/i2c and boots unmodified Zephyr. PIO0 is exercised by the required nightly PIO onboarding lane — not by a tier-1 fixture: firmware-rp2040-pio-onboarding boots through this descriptor and must reach PIO_OK (crates/core/tests/rp2040_pio_onboarding.rs:82-135), built and required by the core-full job's LABWIRED_REQUIRE_FIRMWARE (core-ci.yml:2014, :2034, run at :2062; cross-build-excluded from the PR shards). The Pico smoke does not exercise USB CDC or the TBMAN zero stub._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- Raspberry Pi Pico D13 LED and UART0 console — onboard GP25 GPIO edges plus RP2040_SMOKE_OK transcript — `firmware-rp2040-demo` · examples/pico/io-smoke.yaml + examples/pico/evidence/simulation-output/result.json (nightly CI)
+
+### `rp2040-itsybitsy-smoke`
+
+_Board-bound ItsyBitsy profile exercises the standard GPIO rubric only; its smoke toggles the onboard D13/GP11 LED._
+
+### `atsamd51-metro-m4-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `atsamd51j19a-feather-m4-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-arduino-nano-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-devkitc-1-n16r8-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `nrf54l15-xiao-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `r7fa4m1ab-uno-r4-wifi-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2040-feather-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2040-nano-rp2040-connect-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2040-pico-w-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2040-xiao-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2350-pico2-w-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2350-xiao-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2350-feather-smoke`
+
+_Adafruit Feather RP2350 HSTX board-bound smoke toggles the onboard active-high red indicator LED on GPIO7 through IO_BANK0/SIO. The profile omits NeoPixel/PIO, STEMMA QT I2C, USB, HSTX, optional PSRAM and other unexercised board functions._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- Adafruit Feather RP2350 red indicator LED — GPIO7 transitions through IO_BANK0/SIO — `firmware-adafruit-feather-rp2350-smoke` · examples/adafruit-feather-rp2350/io-smoke.yaml + examples/adafruit-feather-rp2350/evidence/simulation-output/result.json (nightly CI)
+
+### `stm32c071rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f030r8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f091rc-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f103rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f303re-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f303vc-f3discovery-smoke`
+
+_Board-bound smoke profile; the firmware toggles the on-board LD3 LED through GPIOE pin 9._
+
+### `stm32f411re-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f439zi-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f446ze-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g071rb-disco-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g071rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g0b1re-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g431kb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g431rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g491re-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h503rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h533re-nucleo-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h723zg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l432kc-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l452re-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32u545re-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32wba55cg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
 
 ### `stm32h563`
 
@@ -308,7 +458,7 @@ _Exact orderable geometry slice for stm32f401ve on the shared F401 peripheral en
 
 ### `stm32f405`
 
-_No tier-1 target (absent from tier1-matrix.json), so this entry carries the whole story: the committed part-specific fixture runs nightly via examples/feather-f405/tier1-smoke.yaml and PR-gated firmware_survival::test_stm32f405_tier1_survival, driving clock/gpio/timer/i2c/spi/adc/wdt/rtc over USART2 and explicitly leaving dma/irq/pwm unclaimed; PWR and both DMA controllers are modeled but firmware-untouched, and DBGMCU is never exercised at all._
+_No tier-1 target (absent from tier1-matrix.json): the committed part-specific fixture runs nightly via examples/feather-f405/tier1-smoke.yaml and PR-gated firmware_survival::test_stm32f405_tier1_survival, driving clock/gpio/timer/i2c/spi/adc/wdt/rtc over USART2 and explicitly leaving dma/irq/pwm unclaimed. The Adafruit Feather STM32F405 Express has a separate local CLI smoke at examples/feather-f405/io-smoke.yaml that checks the exposed USART3 TX on PB10 and D13/PC1 GPIO edges; it is not a CI or hosted-verifier result. PWR and both DMA controllers are modeled but firmware-untouched, and DBGMCU is never exercised at all._
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `PWR`, `DMA1`, `DMA2`
 
@@ -409,9 +559,13 @@ _SIM-DERIVED first G0 port: its committed tier-1 fixture drives all 12 declared 
 - `WWDG` (configs/chips/stm32g071.yaml:349 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it (unlike the L476, no misc fingerprint reads its CR/CFR/SR).
 - `SYSCFG` (configs/chips/stm32g071.yaml:375 (type: syscfg; crates/core/src/peripherals/generic_factory.rs:739)) — CLOSABLE: hardcoded StubPeripheral — reads return 0 (plus a canned CCCSR=READY at 0x20 that is an H7-HAL seed, meaningless on G0) and writes are dropped, so EXTI source-select is not modelled; the tier-1 fixture pends its NVIC line via ISPR0 and nothing reads the window back.
 
+### `stm32g070rb-smoke`
+
+_NUCLEO-G070RB onboarding smoke covers the board's USART2 and LED GPIO path; this entry makes no beyond-rubric peripheral claim._
+
 ### `stm32g0b1re`
 
-_No tier-1 target. This is the narrow IO-Link customer firmware descriptor: the PR-triggered iolinki-reference workflow builds pinned STM32G0B1RE/TIOL112 sources and requires g0_reference_firmware in both execution modes, asserting TIM2 at 1 MHz, the actual falling-edge WAKE ISR clearing FPR, and USART1 configured for COM2. GPIO mux/polarity/W1C and AF1 UART pad routing have separate regressions. This proves startup and interrupt prerequisites, not electrical C/Q, master exchange or physical hardware. No beyond-rubric functional device read or advanced peripheral is modeled by this slice; SYSCFG is the only declared non-rubric block and remains a stub._
+_No tier-1 target. The NUCLEO-G0B1RE smoke now runs the shared G0 UART/LED firmware against the STM32G0B1RE profile, asserting USART2 output through the ST-LINK VCP and at least eight LD4/PA5 edges; it exercises the board's real GPIO and UART paths. Separately, the PR-triggered iolinki-reference workflow builds pinned STM32G0B1RE/TIOL112 sources and requires g0_reference_firmware in both execution modes, asserting TIM2 at 1 MHz, the actual falling-edge WAKE ISR clearing FPR, and USART1 configured for COM2. GPIO mux/polarity/W1C and AF1 UART pad routing have separate regressions. All evidence is simulator-derived, not a silicon capture; the IO-Link test proves startup and interrupt prerequisites, not electrical C/Q or master exchange. No beyond-rubric functional device read or advanced peripheral is modeled by this slice; SYSCFG is the only declared non-rubric block and remains a stub._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `SYSCFG` (configs/chips/stm32g0b1re.yaml (type: syscfg); crates/core/src/peripherals/generic_factory.rs (syscfg arm)) — CLOSABLE: StubPeripheral returns zero except a canned H7-style CCCSR readiness bit at 0x20, and drops writes. This is not a G0 SYSCFG behavioral model. GPIO source selection is modeled in the separate G0 EXTI-owned EXTICR registers, not through this stub.
@@ -422,7 +576,7 @@ _All 12 declared rubric classes are driven by its committed tier-1 fixture (test
 
 ### `stm32g474re`
 
-_All 12 declared rubric classes are driven by its committed tier-1 fixture (nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step (core-ci.yml:2087), fast_boot target, USART2 console), and the two PR-gated vendor firmwares cover the non-rubric blocks: the Zephyr hello's SoC init read-modify-writes DBGMCU_CR (the reason the descriptor declares DBGMCU) and the Arduino serial startup calls HAL_PWREx_ControlVoltageScaling (PWR_CR VOS + SR2.VOSF poll) plus HAL_CRC_Init (CRC_POL/INIT/CR — the reason that survival case exists), so PWR/CRC/DBGMCU are all firmware-driven and no non-rubric block is left unexercised. The CRC polynomial engine itself is still driven by no firmware: its always-run coverage is the H563 bench oracle (h563_conformance.rs:144) plus the F103 sim-only thumb oracle (stm32f1_exec_oracle.rs:300) and IDR-width masking (crc.rs:204), and no G4-specific test asserts a computed value._
+_All 12 declared rubric classes are driven by its committed tier-1 fixture (nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step (core-ci.yml:2087), fast_boot target, USART2 console). The NUCLEO-G474RE board smoke boots bare-metal firmware on the canonical system manifest, enables the GPIOA and LPUART1 clock gates, emits the default ST-LINK VCP marker on LPUART1, and asserts eight LD2/PA5 edges (examples/nucleo_g474re/uart-smoke.yaml). The two PR-gated vendor firmwares cover non-rubric blocks: the Zephyr hello's SoC init read-modify-writes DBGMCU_CR and the Arduino serial startup calls HAL_PWREx_ControlVoltageScaling (PWR_CR VOS + SR2.VOSF poll) plus HAL_CRC_Init (CRC_POL/INIT/CR), so PWR/CRC/DBGMCU are firmware-driven. The CRC polynomial engine itself is still driven by no firmware: its always-run coverage is the H563 bench oracle (h563_conformance.rs:144) plus the F103 sim-only thumb oracle (stm32f1_exec_oracle.rs:300) and IDR-width masking (crc.rs:204), and no G4-specific test asserts a computed value. ADC1's model covers power-up only; the board smoke does not claim ADC conversions or exercise other declared peripherals._
 
 ### `stm32h735`
 
@@ -440,14 +594,14 @@ _SIM-DERIVED first Cortex-M7 part. Its committed tier-1 fixture is PR-gated (`fi
 
 ### `stm32l073`
 
-_Silicon-diffed L0 part (SWD capture). Its committed tier-1 fixture (nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step (core-ci.yml:2087), fixture drift checked on Sundays) drives clock/gpio/timer/dma/irq/i2c/spi/adc/wdt/rtc over USART2 — pwm is n/a, there is no advanced timer — and three PR-gated firmwares run on it: the hardware-validated firmware-l073-demo reads DBGMCU_IDCODE (`DEV=20086447`, asserted byte-for-byte against silicon) and computes CRC-32 by value (`CRC=B874177A`, also silicon-exact), the Arduino serial startup programs PWR_CR.VOS (and chip_conformance's reset oracle pins PWR's reset words), and the Zephyr hello boots. RNG is firmware-driven: the PR-gated demo enables HSI48, completes the DRDY handshake and reads a word (the drawn value is informational — the survival transcript asserts only DEV/CLK/CRC/DMA), and rcc_kernel_clock_gate.rs additionally pins that gate over the production bus. DAC and LPTIM1 are modeled but never exercised; SYSCFG/USB FS/LCD are stubs and WWDG an inert register bank. SCB is a core block installed by `configure_cortex_m` for every Cortex-M part (9 scb.rs tests plus the SCB ratchet at nvic_masking_config_path.rs:163; the fixture's IRQ handler reads ICSR), so it is not listed per-chip._
+_Silicon-diffed L0 part (SWD capture). Its committed tier-1 fixture (nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step (core-ci.yml:2087), fixture drift checked on Sundays) drives clock/gpio/timer/dma/irq/i2c/spi/adc/wdt/rtc over USART2 — pwm is n/a, there is no advanced timer — and three PR-gated firmwares run on it: the hardware-validated firmware-l073-demo reads DBGMCU_IDCODE (`DEV=20086447`, asserted byte-for-byte against silicon) and computes CRC-32 by value (`CRC=B874177A`, also silicon-exact), the Arduino serial startup programs PWR_CR.VOS (and chip_conformance's reset oracle pins PWR's reset words), and the Zephyr hello boots. RNG is firmware-driven: the PR-gated demo enables HSI48, completes the DRDY handshake and reads a word (the drawn value is informational — the survival transcript asserts only DEV/CLK/CRC/DMA), and rcc_kernel_clock_gate.rs additionally pins that gate over the production bus. DAC and LPTIM1 are modeled but never exercised; USB FS and LCD are zero-answering stubs, SYSCFG has an L0 register model, COMP1/2 have control-register storage but no analog comparison behavior, and WWDG is an inert register bank. SCB is a core block installed by `configure_cortex_m` for every Cortex-M part (9 scb.rs tests plus the SCB ratchet at nvic_masking_config_path.rs:163; the fixture's IRQ handler reads ICSR), so it is not listed per-chip._
 
 **Dead** (2 modeled, never exercised): `DAC`, `LPTIM1`
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `SYSCFG` (configs/chips/stm32l073.yaml:408 (type: stub; configs/peripherals/stm32l073/syscfg_comp.yaml; docs/coverage/silent-path-census.md:381)) — CLOSABLE: author-declared stub — read 0, writes dropped (examples/nucleo-l073rz/VALIDATION.md:284); the PR-gated Arduino startup read-modify-writes SYSCFG+0x20 during HAL_RCC_OscConfig, but the RMW is fed 0 and its write is dropped, and the tier-1 fixture pends its NVIC line via ISPR0, so nothing depends on the window.
-- `USB FS` (configs/chips/stm32l073.yaml:416 (type: stub; configs/peripherals/stm32l073/usb_fs.yaml)) — CLOSABLE: author-declared stub — read 0, writes dropped (VALIDATION.md:284); the L0 USB-FS device engine (EPnR/CNTR/ISTR/BTABLE/PMA) is not modelled and no gated firmware opens the window.
-- `LCD` (configs/chips/stm32l073.yaml:425 (type: stub; configs/peripherals/stm32l073/lcd.yaml)) — CLOSABLE: author-declared stub — the L073's glass controller (the L072-vs-L073 differentiator) is not modelled and no gated firmware opens the window.
+- `COMP1/2` (configs/chips/stm32l073.yaml:417-424 (syscfg profile stm32l0; crates/core/src/peripherals/syscfg.rs)) — PARTIAL: COMP CSR control fields retain state, but the comparator has no analog inputs or output model; COMPxVALUE remains zero.
+- `USB FS` (configs/chips/stm32l073.yaml:427-433 (type: stub; configs/peripherals/stm32l073/usb_fs.yaml)) — CLOSABLE: explicit zero-answering stub — reads return 0 and writes are dropped; the L0 USB-FS device engine (EPnR/CNTR/ISTR/BTABLE/PMA) is not modeled and no gated firmware opens the window.
+- `LCD` (configs/chips/stm32l073.yaml:436-441 (type: stub; configs/peripherals/stm32l073/lcd.yaml)) — CLOSABLE: explicit zero-answering stub — the L073 glass controller is not modeled and no gated firmware opens the window.
 - `WWDG` (configs/chips/stm32l073.yaml:358 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it (the L073 reset capture does not cover its window).
 
 ### `stm32u575`
@@ -568,7 +722,7 @@ _No tier-1 target. The firmware that runs is the PR-gated `firmware_survival::te
 
 ### `atsamd51-pybadge`
 
-_No tier-1 target and no firmware runs on this descriptor. It is the atsamd51 descriptor with the PyBadge application layout (reset_vector_offset 0x4000, UF2 bootloader resident below). Its only gate, crates/core/tests/pybadge_config.rs, builds the PyBadge bus from configs/systems/pybadge.yaml and checks the reset SP/PC fetched from a stub vector table at 0x4000; it steps no firmware. The Metro M4 smoke that exercises atsamd51 loads atsamd51.yaml, not this file. Beyond the rubric it declares the same two zero windows as atsamd51, USB and QSPI._
+_No tier-1 target. The Adafruit PyBadge onboarding smoke (core-onboarding-smoke.yml matrix id adafruit-pybadge; examples/pybadge/onboarding-smoke.yaml) rebuilds firmware-atsamd51-pybadge-demo against the PyBadge system, boots its image behind the resident UF2 bootloader at 0x4000, prints OK on SERCOM1, and asserts at least four PA23 (D13) GPIO edges. The smoke uses examples/pybadge/system.yaml, which narrows the exercised board surface to that UART and LED; the ST7735 display is not attached, and buttons and NeoPixels are not exercised. Its QSPI and native USB windows remain zero stubs, neither accessed by this smoke. The simulator evidence and live board/MCU status receipt are committed under examples/pybadge/evidence/._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `USB` (configs/chips/atsamd51-pybadge.yaml:159 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window, same as atsamd51: reads return 0 and writes are dropped; the SAMD51 native-USB device is not modelled (configs/systems/pybadge.yaml lists native USB as a stub).
@@ -589,11 +743,19 @@ _L2 on the conformance board (silicon reset oracle, 243/243 registers — docs/c
 
 ### `imxrt1064`
 
-_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the committed Teensy 4.1 smoke ELF, PR-gated as firmware_survival::test_imxrt1064_teensy41_smoke_survival (case firmware_survival.rs:1359-1372) and rebuilt by the nightly coverage-matrix cell examples/teensy-41/uart-smoke.yaml (core-coverage-matrix-smoke.yml:96-102); it un-gates CCM CCGR0/CCGR3, configures GPIO2_IO03 and prints OK over LPUART6 from a soft-float image linked in DTCM because FlexSPI/XIP is not modelled — the chip yaml deliberately claims neither 4 MiB SiP flash nor FlexSPI (configs/chips/imxrt1064.yaml:7-9). board_config_gates.rs builds the same descriptor. Beyond the rubric there are exactly two blocks, both below; the CCM is the clock class and is firmware-driven._
+_No tier-1 target. The committed ELF is an internal RT1064-class LPUART/GPIO peripheral regression fixture, not a Teensy 4.1 board smoke: firmware_survival::test_imxrt1064_lpuart_regression_fixture_survival captures LPUART6 directly, bypassing IOMUXC pad routing. The image runs from DTCM because FlexSPI/XIP is not modeled. The focused Teensy board smoke instead uses the exact MIMXRT1062 GPIO profile below. The older class descriptor retains two unused shims, listed here; the board profile omits them._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `iomuxc` (configs/chips/imxrt1064.yaml:37-41 (type imx_iomuxc; crates/core/src/peripherals/imx_iomuxc.rs:7-11)) — CLOSABLE: sticky register stub — every SW_MUX_CTL/SW_PAD_CTL/SELECT_INPUT word is stored and read back (2 unit tests pin only that read-back), but no alternate-function routing follows; the smoke never opens the window and a DTCM-linked image cannot reveal a pin-mux mistake.
 - `flexspi` (configs/chips/imxrt1064.yaml:59-62 (type stub; no schema)) — CLOSABLE: zero window at 0x402A8000 — the FlexSPI controller and XIP are not modelled and the descriptor claims no 4 MiB SiP flash; firmware is linked into DTCM because XIP cannot boot here, and nothing opens the window.
+
+### `mimxrt1062-teensy4-gpio-smoke`
+
+_No tier-1 target. Focused Teensy 4.0/4.1 descriptors use the MIMXRT1062 identity and only CCM/GPIO2. The board pin maps put D13 on GPIO_B0_03 / GPIO2_IO03; the simulator maps it directly and does not validate IOMUXC or the silicon pad route. Images run from DTCM; external flash/XIP and unrelated peripherals are omitted._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- Teensy 4.0 D13 LED path — CCM clock ungating and repeated GPIO2_IO03 transitions, asserted at >=8 edges — `firmware-teensy4-smoke` · examples/teensy-40/onboarding-smoke.yaml + examples/teensy-40/evidence/simulation-output/result.json (nightly CI)
+- Teensy 4.1 D13 LED path — CCM clock ungating and repeated GPIO2_IO03 transitions, asserted at >=8 edges — `firmware-teensy4-smoke` · examples/teensy-41/onboarding-smoke.yaml + examples/teensy-41/evidence/simulation-output/result.json (nightly CI)
 
 ### `mkw41z4`
 
@@ -618,7 +780,7 @@ _No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware th
 
 ### `rp2350`
 
-_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the committed bare-metal M33 UART0 smoke, PR-gated as firmware_survival::test_rp2350_demo_survival (case firmware_survival.rs:1523-1533) and rebuilt by the nightly coverage-matrix cell examples/rp2350-demo/io-smoke.yaml (core-coverage-matrix-smoke.yml:276-283); strict_onboarding builds and runs the same ELF through examples/pico2/io-smoke.yaml in the nightly core-full workspace step (core-ci.yml:2062; cross-build-excluded from the PR shards — scripts/ci/workspace-test-shards.json strict_onboarding entry). It proves the RP2350 base map (UART0 at 0x40070000, not the RP2040's 0x40034000) and that a cortex-m-rt image boots from XIP flash 0x10000000; its only other MMIO is a scratch store into the PIO0 window used as a mocked LED (crates/firmware-rp2350-demo/src/main.rs:9-10), so no PIO program is loaded and no state machine is observed. rp2350_clkrst_profile.rs (3 unit tests) pins the moved CLOCKS/RESETS/XOSC/PLL map. Beyond the rubric SYSINFO/XIP_CTRL are engine-less declarative files and POWERMAN/TBMAN are zero stubs; PIO0/1/2 are the shared RP2040 PIO model (9 pio.rs unit tests; hardware_fidelity.rs:194-268 drives it at the RP2040 base, and the PIO onboarding lane boots the rp2040 descriptor, not this one), so all three are firmware-untouched here._
+_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). The Pico 2 board system uses the narrow configs/chips/rp2350-pico2-smoke.yaml slice. Its firmware-pico2-demo binary writes the UART0 PL011 data register and selects SIO for GP25, then toggles the SIO output; examples/pico2/io-smoke.yaml asserts the UART transcript and eight GPIO edges. This is a local CLI smoke, with no silicon capture or USB/ROM startup claim. The broader configs/chips/rp2350.yaml remains separate: POWMAN/TICKS and TBMAN are explicit zero stubs, while SYSINFO/XIP_CTRL are declarative; PIO0/1/2 reuse the RP2040 model and are not exercised by this Pico 2 smoke. The older firmware_survival::test_rp2350_demo_survival and examples/rp2350-demo/io-smoke.yaml still cover the generic UART0 boot path._
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `PIO0`, `PIO1`, `PIO2`
 
@@ -627,6 +789,10 @@ _No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware th
 - `POWERMAN/TICKS` (configs/chips/rp2350.yaml:68-71 (type stub)) — CLOSABLE: 48 KiB zero window — reads 0 and writes are dropped, with no power sequencing and no TICKS time source; no firmware opens it.
 - `xip_ctrl` (configs/chips/rp2350.yaml:124-129 (type declarative; configs/peripherals/rp2350/xip_ctrl.yaml)) — CLOSABLE: declarative cache-control storage — no XIP cache behaviour; firmware executes out of the flash region through the flat memory map and never opens the window.
 - `tbman` (configs/chips/rp2350.yaml:156-160 (type stub)) — STRUCTURAL: zero window — PLATFORM reads 0, which is the pico-sdk's ASIC path and the correct answer for the twin (configs/chips/rp2350.yaml:156-160); no firmware polls it.
+
+### `rp2350-pico2-smoke`
+
+_Narrow smoke-only descriptor slice used by configs/systems/pico2.yaml. The Pico 2 board firmware smoke exercises UART0, the modeled IO_BANK0 function selector, and SIO GP25 output. This is a profile slice for the RP2350, not a separate chip or a claim that the broader RP2350 descriptor is fully bootable; ROM, USB, TrustZone, second-core, Hazard3, PADS_BANK0 electrical behavior, and PIO v2 remain out of scope._
 
 ### `nrf51822`
 
@@ -728,6 +894,14 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the PMC clock enables (P
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the F0 clock gates (AHBENR/APB2ENR), the USART1 console and the four-LED GPIO walk with GPIOC ODR readback are proven by tests/fixtures/stm32f072b-disco-smoke.elf and examples/stm32f072b-disco/io-smoke.yaml. USB, TSC and CRS are declared stubs (examples/stm32f072b-disco/VALIDATION.md), so no advanced blocks exist to list._
 
+### `stm32f072-nucleo-smoke`
+
+_NUCLEO-F072RB onboarding smoke covers the board's USART2 and LED GPIO path; this entry makes no beyond-rubric peripheral claim._
+
+### `stm32f446re-smoke`
+
+_NUCLEO-F446RE onboarding smoke covers the board's USART2 and LED GPIO path; this entry makes no beyond-rubric peripheral claim._
+
 ### `arty-litex-vexriscv`
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console, the countdown-timer one-shot and the Control-and-Status LED/switch/button CSR are proven by tests/fixtures/arty-litex-smoke.elf and examples/arty-litex-vexriscv/io-smoke.yaml. SPI flash, Ethernet and MMCM are declared stubs (examples/arty-litex-vexriscv/VALIDATION.md), so no advanced blocks exist to list._
@@ -755,3 +929,383 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real
 ### `xck26-rpu`
 
 _L1 + stock RTOS, SIM-DERIVED. First Cortex-R part: the Zynq UltraScale+ XCK26 RPU core 0 (Cortex-R5F, PMSAv7 16-region MPU, VFPv3-D16 on the pinned tlib engine) runs unmodified Zephyr v4.1.0 hello_world, synchronization (TTC0 match IRQs through the RPU GIC, WFI idle) and tests/kernel/common (12 suites, 61 pass / 2 skip / 0 fail of 63, userspace syscalls through the MPU) on the PS UART1 console (examples/kv260-r5, native CLI). Only the GIC, Cadence UART0/1 and TTC0 are installed (native_rpu_peripherals), so no advanced blocks exist to list._
+
+### `atmega4809`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `atsamd21g18a-feather-m0-express-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `atsamd21g18a-mkr-wifi-1010-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v003f4p6-ch32fun-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v003f4p6-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v003f4p6-pfic-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v003f4p6-sht31-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v003f4p6-systick-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v003f4p6-usart-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v203c8t6-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v203c8t6-ch32fun-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v307vct6-ch32fun-smoke`
+
+_Board-bound smoke profile; the RV32F self-test is a CPU check, not a peripheral one, so no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v006f8u7-ch32fun-smoke`
+
+_Chip smoke profile; ch32fun blink, debugprintfdemo and dual_usart are rubric-level GPIO/console/UART checks, so no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32x035c8t6-ch32fun-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32x035f8u6-ch32fun-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32x035g8u6`
+
+_Chip profile; the Arduino matrix's stock L0-L6 (Serial, GPIO, Wire, SPI, analogRead, analogWrite) are rubric-level checks, so no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32l103c8t6`
+
+_Chip profile; ch32fun blink and debugprintfdemo are rubric-level GPIO/console checks, so no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32-devkitc-32e-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32-feather-v2-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32-feather-v2-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-devkit-rust-2-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-devkitm1-n4x-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-devkitm1-n4x-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-lcdkit-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-waveshare-c3-zero-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-xiao-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-xiao-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c5`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `esp32c6-devkitm1-n4-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c6-xiao-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c6-xiao-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c61`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `esp32h2-devkitm-1-n4s-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32p4`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `esp32s2-arduino`
+
+_Arduino matrix profile of the ESP32-S2 (genuine mask ROM); no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s2`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `esp32s3-arduino-nano-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-atoms3-lite-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-cardputer-adv-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-devkitc-1-n16r8-v10-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-feather-8mb`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `esp32s3-heltec-wifi-lora-32-v4-s3r2-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-xiao-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp8684-devkitm-1-h4x-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `nrf52833-microbit-v2-uart-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `nrf52840-dk-led-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `nrf52840-feather-uart-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `nrf5340-dk-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `nrf54l10`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `nrf54lm20a-dk-led-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ra4m1-nano-r4-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2040-pico-w-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2350-pico2-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2350-pico2-w-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2350-zero-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32c031c6-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32c051c8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32c092rc-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32c542rc-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32c5a3zg-nucleo-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f051r8-discovery-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f070rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f103c6t6a-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f103c8-bluepill-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f103r6t6a-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f103r8-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f207zg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f302r8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f303k8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f334c8-f3348-disco-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f334r8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f410rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f411ceu6-blackpill-led-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f411re-nucleo-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f412zg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f413zh-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f429zi-f429i-disc1-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f722ze-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f756zg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g031k8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h573ii-dk-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h735igk6-dk-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h753zi-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h755zi-nucleo-m7-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h7a3zit6q-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l010rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l011k4-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l031k6-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l496zg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l4a6zg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32u031r8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32u083rc-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32u385rg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32u3c5zi-q-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32wba25ceu7-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._

@@ -1,0 +1,22 @@
+# Negative control for ch32fun-otg-device-smoke.yaml: the same firmware and
+# host script, minus the keyboard LED SET_REPORT after GET_REPORT
+# (configs/systems/weact-bluepill-plus-ch32v203-ch32fun-usb-no-trailing-in-smoke.yaml).
+# The last control transfer is then a read, so ch32fun's
+# USBOTG_errata_dont_send_endpoint_in_window stays set after its status OUT.
+# USBOTG_SendEndpoint refuses every interrupt endpoint. The three polls
+# already armed before GET_REPORT still complete, but after the 470 ms
+# wait endpoint 1 is never re-armed, and the host times out. The mouse step
+# is lost: the main loop recomputes it into a buffer it cannot send.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/otg_device.elf"
+  system: "../../configs/systems/weact-bluepill-plus-ch32v203-ch32fun-usb-no-trailing-in-smoke.yaml"
+limits:
+  max_cycles: 200000000
+  max_steps: 240000000
+  wall_time_ms: 600000
+assertions:
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "control a1 01 03aa 0000 00ff ok aa 01 02" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "in 1 00 00 00 00" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "in 3 00 00 00 00" }
+  - peripheral_log: { peripheral: usbfs, log: host, contains: "note in 1 timed out: the device kept NAKing" }

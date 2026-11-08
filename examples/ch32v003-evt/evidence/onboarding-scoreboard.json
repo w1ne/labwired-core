@@ -1,0 +1,103 @@
+{
+  "summary": {
+    "targets_total": 3,
+    "pass": 3,
+    "fail": 0,
+    "median_elapsed_ms": 906,
+    "threshold_seconds": 3600,
+    "threshold_met": 3,
+    "median_elapsed_seconds": 0.906
+  },
+  "targets": [
+    {
+      "target_id": "ch32v003f4p6-gpio",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/onboarding-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-gpio-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T11:08:55Z",
+      "finished_at_utc": "2026-11-05T11:09:18Z",
+      "elapsed_seconds": 24,
+      "elapsed_ms": 23523,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 23.141,
+        "build_firmware": 0.065,
+        "run_smoke": 0.305
+      },
+      "stages_ms": {
+        "build_cli": 23141,
+        "build_firmware": 65,
+        "run_smoke": 305
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-firmware.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence"
+    },
+    {
+      "target_id": "ch32v003f4p6-sht31-i2c",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/i2c-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-sht31-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T05:03:51Z",
+      "finished_at_utc": "2026-11-06T05:03:52Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 906,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.339,
+        "build_firmware": 0.06,
+        "run_smoke": 0.468
+      },
+      "stages_ms": {
+        "build_cli": 339,
+        "build_firmware": 60,
+        "run_smoke": 468
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-sht31-firmware.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/sht31-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-usart",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/usart-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-usart-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T11:09:24Z",
+      "finished_at_utc": "2026-11-05T11:09:25Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 692,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.308,
+        "build_firmware": 0.07,
+        "run_smoke": 0.302
+      },
+      "stages_ms": {
+        "build_cli": 308,
+        "build_firmware": 70,
+        "run_smoke": 302
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-usart-firmware.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/usart-smoke"
+    }
+  ]
+}

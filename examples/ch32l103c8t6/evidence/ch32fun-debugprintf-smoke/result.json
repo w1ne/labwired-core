@@ -1,0 +1,522 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 80000000,
+  "cycles": 296748676,
+  "instructions": 80000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 80000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 80000000
+    }
+  },
+  "limits": {
+    "max_steps": 80000000,
+    "max_cycles": 80000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "+0",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "-1[",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "+4",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "debug_printf",
+          "log": "terminal",
+          "contains": "-5[",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 3758097280,
+          "expected_value": 0,
+          "mask": 192,
+          "size": null
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1974,
+      536891344,
+      536871932,
+      0,
+      0,
+      536891192,
+      0,
+      1073812480,
+      8192,
+      9999995,
+      0,
+      0,
+      4294091600,
+      4294967295,
+      10875691,
+      3758157824,
+      56,
+      0,
+      3758097280,
+      1073811456,
+      1,
+      0,
+      0,
+      0,
+      132,
+      0,
+      0,
+      9,
+      0,
+      0,
+      0
+    ],
+    "pc": 676,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 1840,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 79999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "782da4eca32e9af88432e540bb22366a0510cff988d63b26d5044a532850ce74",
+  "config": {
+    "firmware": "ch32fun/debugprintfdemo.elf",
+    "system": "../../configs/systems/ch32l103c8t6-ch32fun-smoke.yaml",
+    "script": "ch32fun-debugprintf-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sys_info",
+        "kind": "declarative",
+        "base": 536868612,
+        "registers": [
+          {
+            "name": "CHIPID",
+            "offset": 0,
+            "size": 32,
+            "value": 271648512,
+            "fields": [
+              {
+                "name": "DEVID",
+                "bits": [
+                  31,
+                  8
+                ],
+                "value": 1061127
+              },
+              {
+                "name": "REV",
+                "bits": [
+                  7,
+                  4
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "TS",
+            "offset": 28,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OPA_TRIM",
+            "offset": 32,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "ADC_HSI_LP_TRIM",
+            "offset": 36,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "exten",
+        "kind": "declarative",
+        "base": 1073887232,
+        "registers": [
+          {
+            "name": "EXTEN_CTR",
+            "offset": 0,
+            "size": 32,
+            "value": 16,
+            "fields": [
+              {
+                "name": "PLL_HSI_PRE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "LOCKUP_EN",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "LOCKUP_RSTF",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "ULLDO_TRIM",
+                "bits": [
+                  10,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "LDO_TRIM",
+                "bits": [
+                  13,
+                  12
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "exti",
+        "kind": "native",
+        "base": 1073808384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "debug_printf",
+        "kind": "native",
+        "base": 3758097280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfic",
+        "kind": "native",
+        "base": 3758153728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1073810432,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c2",
+        "kind": "i2c",
+        "base": 1073764352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 1073819648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1073816576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim1",
+        "kind": "native",
+        "base": 1073818624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim2",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim3",
+        "kind": "native",
+        "base": 1073742848,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim4",
+        "kind": "native",
+        "base": 1073743872,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2056,
+    "data_bytes": 0,
+    "bss_bytes": 8,
+    "flash_used_bytes": 2056,
+    "ram_static_bytes": 8,
+    "flash_total_bytes": 63488,
+    "ram_total_bytes": 20480,
+    "flash_used_pct": 3.24,
+    "ram_static_pct": 0.04,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 296748676,
+    "instructions": 80000000,
+    "steps_executed": 80000000,
+    "memory_reads": 80000794,
+    "memory_writes": 871,
+    "peripheral_accesses": 22804334,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 676,
+        "count": 44337
+      },
+      {
+        "pc": 686,
+        "count": 44337
+      },
+      {
+        "pc": 668,
+        "count": 44297
+      },
+      {
+        "pc": 680,
+        "count": 44297
+      },
+      {
+        "pc": 684,
+        "count": 44297
+      },
+      {
+        "pc": 664,
+        "count": 44296
+      },
+      {
+        "pc": 672,
+        "count": 44296
+      },
+      {
+        "pc": 1990,
+        "count": 391
+      },
+      {
+        "pc": 1994,
+        "count": 391
+      },
+      {
+        "pc": 702,
+        "count": 390
+      },
+      {
+        "pc": 704,
+        "count": 196
+      },
+      {
+        "pc": 700,
+        "count": 195
+      },
+      {
+        "pc": 740,
+        "count": 195
+      },
+      {
+        "pc": 1986,
+        "count": 195
+      },
+      {
+        "pc": 1992,
+        "count": 195
+      },
+      {
+        "pc": 1998,
+        "count": 195
+      }
+    ]
+  }
+}

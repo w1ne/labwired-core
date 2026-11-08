@@ -1,0 +1,16 @@
+# Espressif ESP32-DevKitC-32E plus a BME280 breakout on the header I2C pins.
+# The breakout is directly powered from 3V3/GND; no board power gate is used.
+name: "esp32-devkitc-32e-bme280"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO21"
+      scl: "GPIO22"
+    config:
+      i2c_address: 0x77
+      powered: true

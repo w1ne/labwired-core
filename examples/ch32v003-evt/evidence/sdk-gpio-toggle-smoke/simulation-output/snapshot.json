@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1246,
+      536872936,
+      536872984,
+      0,
+      1,
+      3,
+      40,
+      3758157824,
+      0,
+      750000,
+      0,
+      768000,
+      1,
+      0,
+      3758157824,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1268,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 660,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 31999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 32000000,
+  "cycles": 64027220,
+  "instructions": 32000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 32000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 32000000
+    }
+  },
+  "limits": {
+    "max_steps": 32000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "bcbf55bbb96fa34ddc161b8169f469222226e0ff68b41f98948fcc7db22a92a2",
+  "config": {
+    "firmware": "examples/ch32v003-evt/../../target/wch-sdk/ch32v003f4p6-wch-sdk-gpio-toggle.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-systick-smoke.yaml",
+    "script": "examples/ch32v003-evt/sdk-gpio-toggle-smoke.yaml"
+  }
+}

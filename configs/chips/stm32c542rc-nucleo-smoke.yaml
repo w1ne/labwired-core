@@ -1,0 +1,44 @@
+# Focused NUCLEO-C542RC profile for the onboard LD1 GPIO smoke.
+# Only main flash, SRAM1, the GPIOA clock gate, GPIOA, and SysTick are mapped.
+# SRAM2, VCP, USB, FDCAN, I3C, timers, and all other peripherals remain out of scope.
+# Sources: ST STM32C542xx DS / RM0522 Rev 1 / NUCLEO-C5x2 UM3615.
+name: "stm32c542rct6-nucleo-gpio-smoke"
+arch: "arm"
+core: "cortex-m33"
+registers_count: 220
+# RM0522: reset selects HSIDIV3 at 48 MHz; firmware leaves the clock unchanged.
+cpu_hz: 48_000_000
+
+flash:
+  base: 0x08000000
+  size: "256KB"
+ram:
+  # RM0522: SRAM1 is 32 KiB at 0x20000000; SRAM2 is deliberately unmapped.
+  base: 0x20000000
+  size: "32KB"
+
+# UM3615: LD1 defaults to active-high PA5 with SB8 ON.
+pins:
+  PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x44020C00
+    size: "1KB"
+    config:
+      profile: "stm32c5"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      profile: "stm32c5"
+    # RM0522: RCC_AHB2ENR is RCC+0x8C; GPIOAEN is bit 0.
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"

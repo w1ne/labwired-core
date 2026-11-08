@@ -1,0 +1,29 @@
+{
+  "tool": "labwired_verify",
+  "board": "stm32l476",
+  "mcu_component": "stm32-dev",
+  "language": "c",
+  "entry_path": "src/main.c",
+  "source_file": "mcp-oracle-check.c",
+  "oracle": {
+    "serial": [{"contains": "L476_BOARD_PATH_OK"}],
+    "gpio": [{"pin": "PA5", "state": "toggled"}]
+  },
+  "status": "model_verified",
+  "run_status": "pass",
+  "stop_reason": "max_steps",
+  "verification": "serial contains \"L476_BOARD_PATH_OK\"; PA5 toggled (gpio_pins pad). Model-verified deterministically.",
+  "oracle_results": [
+    {"kind": "serial", "passed": true, "detail": "serial contains \"L476_BOARD_PATH_OK\""},
+    {"kind": "gpio", "passed": true, "detail": "PA5 toggled (gpio_pins pad)"}
+  ],
+  "gaps": [
+    {
+      "code": "approximation",
+      "scope": "model",
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "max_steps": 500000,
+  "note": "Auxiliary C oracle check, separate from the Rust firmware in the committed local smoke. Not hardware evidence."
+}

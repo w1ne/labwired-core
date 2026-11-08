@@ -1,0 +1,43 @@
+# ch32fun examples/ws2812bdemo, unmodified (build-ch32fun-examples.sh): a
+# 191-LED WS2812B strip on PC6 driven by ch32fun's DMA + SPI driver. The
+# CPU never writes PC6. SPI1 (16-bit frames, CTLR1.BR = 3: 48 MHz / 16 =
+# 3 MHz) shifts four SPI bits per LED bit out of MOSI, 1000 for a 0 and
+# 1110 for a 1. DMA1 channel 3 feeds SPI1 DATAR from a 48-halfword buffer in
+# circular mode, and its half/complete interrupt (PFIC 24) refills the half
+# just sent from WS2812BLEDCallback(). Each frame starts with a CNTR store
+# on the enabled channel.
+#
+# The strip (configs/devices/ws2812.yaml) decodes the PC6 pad: each HIGH
+# pulse's width is a bit (333 ns = 0, 1000 ns = 1, threshold 500 ns), and
+# 40 us of LOW latches the frame. So the colours below come off the pad
+# waveform the SPI bit engine drove, timed in CPU cycles.
+#
+# 6.2M cycles = 129 ms at 48 MHz, a frame every ~12.5 ms (Delay_Ms(12) plus
+# the phase update and ~6.1 ms on the wire): the run ends between frames,
+# after frame 10 has run out. The strip shows frame 9. It sees only edges,
+# so it latches a frame when the NEXT frame's first rising edge closes the
+# 40 us gap; a real WS2812 latches on the gap itself and would show frame
+# 10. check-ws2812.py --frames 9 compares every latched LED with the demo's
+# colour math.
+#
+# The driver clocks out 190 of NR_LEDS = 191 LEDs: the refill that writes
+# LED 190 also clears CIRC, so that half is never sent (check-ws2812.py
+# replays the driver's buffer protocol to get this number).
+schema_version: "1.2"
+inputs:
+  firmware: "ch32fun/ws2812bdemo.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-ws2812.yaml"
+limits:
+  max_cycles: 6200000
+  max_steps: 12400000
+  wall_time_ms: 600000
+# No gpio_edges on PC6: it arms the logic capture, whose ring of ~22k edges
+# makes result.json 10 MB. The pad-level proof is check-ws2812.py: 190 LEDs
+# whose colours only decode if PC6 carried the right pulse widths.
+assertions:
+  # DMA1 channel 3: the last frame ran out (CNTR3 = 0) and the driver took
+  # it out of circular mode (CFGR3.CIRC, bit 5, clear) with EN still set.
+  - memory_value: { address: 0x40020034, size: 16, expected_value: 0 }
+  - memory_value: { address: 0x40020030, size: 32, mask: 0x21, expected_value: 0x01 }
+  # SPI1 CTLR2.TXDMAEN (bit 1) set by WS2812BDMAInit.
+  - memory_value: { address: 0x40013004, size: 16, mask: 0x2, expected_value: 0x2 }
