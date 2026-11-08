@@ -66,6 +66,7 @@ pub mod riscv_cycle_counter_pulse_in;
 pub mod bench_spi_engine;
 pub mod esp32_i2c_waveform;
 pub mod esp32_ledc_waveform;
+pub mod esp32_pcnt_inputs;
 pub mod esp32c3_s3_ledc_waveform;
 #[cfg(test)]
 pub mod esp32s3_i2c_waveform;
@@ -98,6 +99,7 @@ pub mod rp2040;
 #[cfg(test)]
 pub mod rp2040_i2c_waveform;
 #[cfg(test)]
+pub mod rp2040_pio_pads;
 pub mod rp2040_pwm_pads;
 #[cfg(test)]
 pub mod rp2040_spi_carries_a_byte;

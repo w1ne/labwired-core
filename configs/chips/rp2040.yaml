@@ -63,6 +63,14 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/rp2040/pio0.yaml"
+  # PIO1 (datasheet §3.7, PIO1_BASE): the second, identical PIO block.
+  # IO_BANK0 FUNCSEL 7 routes its pin outputs to the pads.
+  - id: "pio1"
+    type: "pio"
+    base_address: 0x50300000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/pio1.yaml"
   # CLOCKS / RESETS / PSM / XOSC / PLL_SYS / PLL_USB as one block. Models the
   # boot "ready" bits (RESET_DONE, XOSC STABLE, PLL LOCK, CLK_*_SELECTED) so
   # Zephyr's clock bring-up completes; everything else is register storage.

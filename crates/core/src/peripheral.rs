@@ -692,6 +692,18 @@ pub trait Peripheral: std::fmt::Debug + Send {
         Vec::new()
     }
 
+    /// GPIO capability: feed GPIO-matrix INPUT signals to the peripheral at
+    /// bus index `sink`, as its timer inputs. `taps` pairs a signal index
+    /// (the `GPIO_FUNCn_IN_SEL_CFG` it is routed by) with the input number the
+    /// sink's [`Self::timer_input_edge`] takes it as. From then on every level
+    /// change the signal sees — an outside edge on the selected pad, the pad's
+    /// own output, a routing write — is reported through
+    /// [`Self::take_timer_input_edges`]. The ESP32 pulse counter's inputs
+    /// arrive this way. `false`: this port has no input matrix.
+    fn bind_matrix_input_taps(&mut self, _taps: &[(u32, u8)], _sink: usize) -> bool {
+        false
+    }
+
     /// GPIO capability: drain the outside levels that reached pads routed to
     /// a peripheral line (an SPI MISO, an I²C SDA) since the last drain. Each
     /// names the line cell, which the bus maps back to the peripheral owning

@@ -52,7 +52,7 @@ This page covers the public models. For every chip we model — public and priva
 | nrf52833 | **L1** | ✓ | 48 | — | — | firmware_survival::test_nrf52833_microbit_v2_smoke_survival |
 | nrf52840 | **L1** | ✓ | 51 | — | — | firmware_survival::test_nrf52840_demo_survival |
 | nrf5340 | **L1** | ✓ | 21 | — | — | firmware_survival::test_nrf5340_zephyr_survival |
-| rp2040 | **L1** | ✓ | 22 | — | — | firmware_survival::test_rp2040_demo_survival |
+| rp2040 | **L1** | ✓ | 23 | — | — | firmware_survival::test_rp2040_demo_survival |
 | stm32f103 | **L1** | ✓ | 31 | — | — | stm32f1_exec_oracle |
 | stm32f103rb | **L0** | ✓ | 32 | — | — | — |
 | stm32f103c4 | **L0** | ✓ | 31 | — | — | — |
