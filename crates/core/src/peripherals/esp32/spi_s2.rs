@@ -330,7 +330,9 @@ mod tests {
     }
 
     fn read32(spi: &Esp32s2Spi, off: u64) -> u32 {
-        (0..4).fold(0, |acc, i| acc | (u32::from(spi.read(off + i).unwrap()) << (i * 8)))
+        (0..4).fold(0, |acc, i| {
+            acc | (u32::from(spi.read(off + i).unwrap()) << (i * 8))
+        })
     }
 
     /// The exact sequence `spiTransferByte` runs on the S2 after `spiStartBus`.
@@ -346,7 +348,8 @@ mod tests {
     fn started() -> Esp32s2Spi {
         let mut spi = Esp32s2Spi::new();
         // spiInitBus clears USER, then spiStartBus sets usr_mosi|usr_miso|doutdin.
-        spi.write_u32(REG_USER, USER_USR_MOSI | USER_USR_MISO | 1).unwrap();
+        spi.write_u32(REG_USER, USER_USR_MOSI | USER_USR_MISO | 1)
+            .unwrap();
         spi.write_u32(REG_CTRL, 0).unwrap();
         spi
     }
@@ -355,15 +358,22 @@ mod tests {
     fn resets_match_the_s2_header() {
         let spi = Esp32s2Spi::new();
         assert_eq!(read32(&spi, REG_DATE), 0x0190_7240);
-        assert_eq!(read32(&spi, REG_CLOCK) >> 31, 1, "CLK_EQU_SYSCLK resets to 1");
+        assert_eq!(
+            read32(&spi, REG_CLOCK) >> 31,
+            1,
+            "CLK_EQU_SYSCLK resets to 1"
+        );
         assert_eq!(read32(&spi, REG_USER1) >> 27, 23);
     }
 
     #[test]
     fn usr_exchanges_a_byte_with_the_attached_device() {
         let mut spi = started();
-        spi.attached_devices.push(Script::boxed(vec![0x01, 0x90, 0x16, 0x00]));
-        let frame = (0..4).fold(0u32, |acc, _| (acc << 8) | u32::from(transfer_byte(&mut spi, 0)));
+        spi.attached_devices
+            .push(Script::boxed(vec![0x01, 0x90, 0x16, 0x00]));
+        let frame = (0..4).fold(0u32, |acc, _| {
+            (acc << 8) | u32::from(transfer_byte(&mut spi, 0))
+        });
         assert_eq!(frame, 0x0190_1600);
         assert_eq!(spi.transactions(), 4);
         assert_ne!(read32(&spi, REG_SLAVE) & SLAVE_TRANS_DONE, 0);
@@ -378,7 +388,8 @@ mod tests {
     #[test]
     fn bit_order_bits_reverse_mosi_and_miso() {
         let mut spi = started();
-        spi.write_u32(REG_CTRL, CTRL_WR_BIT_ORDER | CTRL_RD_BIT_ORDER).unwrap();
+        spi.write_u32(REG_CTRL, CTRL_WR_BIT_ORDER | CTRL_RD_BIT_ORDER)
+            .unwrap();
         let dev = Script::boxed(vec![0x01]);
         let sent = dev.sent.clone();
         spi.attached_devices.push(dev);

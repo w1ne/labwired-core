@@ -28,7 +28,10 @@ fn run_l4(with_max31855: bool) -> String {
     let sys = root().join("validation/arduino-matrix/systems/esp32s2.yaml");
     let mut resolved = labwired_config::ResolvedSystem::from_manifest_file(&sys).expect("system");
     if !with_max31855 {
-        resolved.manifest.external_devices.retain(|d| d.id != "max31855");
+        resolved
+            .manifest
+            .external_devices
+            .retain(|d| d.id != "max31855");
     }
     let mut bus = build_system_bus(Some(&resolved)).expect("bus");
     let uart = Arc::new(Mutex::new(Vec::new()));
@@ -73,6 +76,9 @@ fn spi_reads_the_max31855_frame() {
 #[test]
 fn without_the_max31855_miso_idles_high() {
     let text = run_l4(false);
-    assert!(text.contains("LW_L4_FAIL frame=0xffffffff"), "UART0: {text:?}");
+    assert!(
+        text.contains("LW_L4_FAIL frame=0xffffffff"),
+        "UART0: {text:?}"
+    );
     assert!(!text.contains("LW_L4_OK"), "UART0: {text:?}");
 }

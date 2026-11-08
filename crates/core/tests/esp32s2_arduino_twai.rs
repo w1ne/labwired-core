@@ -44,8 +44,7 @@ fn twai_self_reception_returns_the_frame() {
     for _ in 0..12_000_000u64 {
         machine.step().expect("step");
         let out = uart.lock().unwrap();
-        if out.windows(8).any(|w| w == b"LW_L8_OK") || out.windows(10).any(|w| w == b"LW_L8_FAIL")
-        {
+        if out.windows(8).any(|w| w == b"LW_L8_OK") || out.windows(10).any(|w| w == b"LW_L8_FAIL") {
             break;
         }
     }
@@ -58,5 +57,8 @@ fn twai_self_reception_returns_the_frame() {
     assert_eq!(r(0x00) & 1, 0, "MODE.reset_mode still set");
     assert_eq!(r(0x08) & 1, 1, "STATUS.rx_buf_st clear");
     assert_eq!(r(0x74), 1, "RX_MSG_CNT");
-    assert_eq!([r(0x40), r(0x44), r(0x48), r(0x4C)], [0x01, 0x24, 0x60, 0xA5]);
+    assert_eq!(
+        [r(0x40), r(0x44), r(0x48), r(0x4C)],
+        [0x01, 0x24, 0x60, 0xA5]
+    );
 }
