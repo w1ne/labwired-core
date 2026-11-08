@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/efm32tg840-smoke.yaml",
   "system": "configs/systems/onboarding/efm32tg840.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-08T15:44:44Z",
-  "finished_at_utc": "2026-11-08T15:44:51Z",
-  "elapsed_seconds": 8,
-  "elapsed_ms": 7634,
+  "started_at_utc": "2026-11-08T16:25:49Z",
+  "finished_at_utc": "2026-11-08T16:26:01Z",
+  "elapsed_seconds": 13,
+  "elapsed_ms": 12018,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 7.177,
-    "build_firmware": 0.15,
-    "run_smoke": 0.296
+    "build_cli": 10.571,
+    "build_firmware": 1.03,
+    "run_smoke": 0.4
   },
   "stages_ms": {
-    "build_cli": 7177,
-    "build_firmware": 150,
-    "run_smoke": 296
+    "build_cli": 10571,
+    "build_firmware": 1030,
+    "run_smoke": 400
   }
 }

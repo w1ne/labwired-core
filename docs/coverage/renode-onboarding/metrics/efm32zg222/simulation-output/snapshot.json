@@ -17,10 +17,10 @@
       0,
       0,
       536873800,
-      134227113,
-      134228008
+      9385,
+      10280
     ],
-    "pc": 134228008,
+    "pc": 10280,
     "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "8392d5068fc67aedcde9de371cae0390b3e02735cbcbc0646fa1bf84b69e632b",
+  "firmware_hash": "9558d0ed308541a6103d471dc55b0c62fcd1cd20aa1cc3538c8a2c199004fabf",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-efm32zg222-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32zg222.yaml",

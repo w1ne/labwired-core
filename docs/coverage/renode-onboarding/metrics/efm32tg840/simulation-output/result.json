@@ -93,9 +93,9 @@
       536870912,
       536873936,
       1073790976,
-      134228602
+      10874
     ],
-    "pc": 134228602,
+    "pc": 10874,
     "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
@@ -108,7 +108,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "6c3eecd43f8645fd75456a86a2adbcfd5dd4347dd919ff5ff86c178990adf58a",
+  "firmware_hash": "6bab0b9a9a5cdcc4744d0b49dff88477cfa57aa21f7fc689f768571be7101125",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32tg840-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32tg840.yaml",
@@ -967,82 +967,82 @@
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134228632,
+        "pc": 10904,
         "count": 79,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134228634,
+        "pc": 10906,
         "count": 79,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134228594,
+        "pc": 10866,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228598,
+        "pc": 10870,
         "count": 78,
         "symbol": "firmware_efm32tg840_smoke::s0::run"
       },
       {
-        "pc": 134228600,
+        "pc": 10872,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134228602,
+        "pc": 10874,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134228606,
+        "pc": 10878,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134228610,
+        "pc": 10882,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228614,
+        "pc": 10886,
         "count": 78,
         "symbol": "firmware_efm32tg840_smoke::s0::run"
       },
       {
-        "pc": 134228618,
+        "pc": 10890,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134228622,
+        "pc": 10894,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134228626,
+        "pc": 10898,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228638,
+        "pc": 10910,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134228642,
+        "pc": 10914,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228646,
+        "pc": 10918,
         "count": 78,
         "symbol": "firmware_efm32tg840_smoke::s0::run"
       },
       {
-        "pc": 134228648,
+        "pc": 10920,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       }

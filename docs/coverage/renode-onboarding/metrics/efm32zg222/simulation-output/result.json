@@ -92,10 +92,10 @@
       0,
       0,
       536873800,
-      134227113,
-      134228008
+      9385,
+      10280
     ],
-    "pc": 134228008,
+    "pc": 10280,
     "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
@@ -108,7 +108,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "8392d5068fc67aedcde9de371cae0390b3e02735cbcbc0646fa1bf84b69e632b",
+  "firmware_hash": "9558d0ed308541a6103d471dc55b0c62fcd1cd20aa1cc3538c8a2c199004fabf",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-efm32zg222-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32zg222.yaml",
@@ -1415,57 +1415,57 @@
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134227996,
+        "pc": 10268,
         "count": 274,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228008,
+        "pc": 10280,
         "count": 234,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228016,
+        "pc": 10288,
         "count": 234,
         "symbol": "firmware_efm32zg222_smoke::s0::run"
       },
       {
-        "pc": 134228012,
+        "pc": 10284,
         "count": 195,
         "symbol": "firmware_efm32zg222_smoke::s0::run"
       },
       {
-        "pc": 134228024,
+        "pc": 10296,
         "count": 157,
         "symbol": "firmware_efm32zg222_smoke::s0::run"
       },
       {
-        "pc": 134228014,
+        "pc": 10286,
         "count": 117,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228018,
+        "pc": 10290,
         "count": 117,
         "symbol": "firmware_efm32zg222_smoke::s0::run"
       },
       {
-        "pc": 134228000,
+        "pc": 10272,
         "count": 78,
         "symbol": "firmware_efm32zg222_smoke::s0::run"
       },
       {
-        "pc": 134228022,
+        "pc": 10294,
         "count": 78,
         "symbol": "firmware_efm32zg222_smoke::s0::run"
       },
       {
-        "pc": 134227998,
+        "pc": 10270,
         "count": 39,
         "symbol": "firmware_efm32zg222_smoke::s0::run"
       },
       {
-        "pc": 134228020,
+        "pc": 10292,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       }

@@ -12,7 +12,9 @@ arch: arm
 # claimed here because the engine has no model-backed coverage for them.
 core: cortex-m0+
 flash:
-  base: 134217728
+  # EFM32ZG main flash is mapped at 0x00000000 (Renode efm32zg222.repl;
+  # EFM32ZG reference manual memory map).
+  base: 0
   size: 32768B
 ram:
   base: 536870912
