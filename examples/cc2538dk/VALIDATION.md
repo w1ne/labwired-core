@@ -24,7 +24,8 @@ ELFs are not run. No wider Renode parity claim is made.
 | SYS_CTRL gating effect on other blocks | **not modelled** | gates are storage only; UART0 works with the gate clear too |
 | UART0 (PL011-compatible) TX @ 115200 from 16 MHz, `IBRD 8` / `FBRD 44` | smoke-tested | `uart0 … ibrd=8 fbrd=44` + heartbeat lines on the console sink |
 | GPIO address-masked `GPIO_DATA` write + read | smoke-tested | `led=yellow on pin=1 leds=02` … (one masked store per LED; the nibble read proves no other pin moved); unit tests cover the SWRU319C Figure 9-2/9-3 examples |
-| Synthetic NTC and diode netlists on PC4/PC5 | co-simulation tested | `cosim_cc2538_analog.rs`: solved voltages cross the descriptor's GPIO thresholds and the test asserts GPIO DATA levels, including Schmitt-state retention; this does not cover the declared-stub SoC ADC |
+| Synthetic NTC and diode netlists on PC4/PC5 | co-simulation tested | `cosim_cc2538_analog.rs`: solved voltages cross the descriptor's GPIO thresholds and the test asserts GPIO DATA levels, including Schmitt-state retention; a second test covers the SoC ADC (next row) |
+| Synthetic NTC and diode netlists on PA4/PA5 = AIN4/AIN5, SoC ADC | co-simulation tested | `cosim_cc2538_analog.rs::cc2538dk_ntc_and_diode_netlists_convert_through_pa4_pa5_soc_adc`: `analog_pins` resolve the pads to AIN4/AIN5; Contiki-NG `adc_get()` (ADCCON3 write, EOC poll, ADCL then ADCH) reads the NTC at 12 bits against AVDD5 = 3.0 V, the diode against the internal 1.19 V at 12 and 9 bits, the signed AIN4-AIN5 pair, an unrouted AIN2 = 0 and VDD/3 back as 3.0 V through `cc2538-vdd3-sensor.c`'s formula. Unit tests: `cargo test -p labwired-core --lib cc2538_adc` (4). Negative control: `avdd_mv: 3300` fails "AIN4 converts the NTC divider" |
 | GPIO `GPIO_DIR` / `GPIO_AFSEL` | smoke-tested | LEDs driven only after DIR; PA0/PA1 handed to UART0 |
 | Key inputs at the reset IOC pull-up | smoke-tested | `keys select=1 left=1 right=1 up=1 down=1` |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
@@ -68,7 +69,8 @@ ELFs are not run. No wider Renode parity claim is made.
 | IOC pin mux / pad overrides | **not modelled** | the IOC window is a stub |
 | GPIO interrupts, AFSEL commit lock | **not modelled** | `GPIO_RIS`/`GPIO_MIS` read 0 |
 | CCA in the smoke image | pinned | the loader enters the smoke at its flash-base table; `test_cc2538dk_smoke_customer_configuration_area_boots` pins its 44 bytes |
-| PKA, SSI, I2C, GPTimers, USB, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
+| SoC ADC sequence conversions, temperature sensor, ADC IRQ/µDMA trigger, RNG, comparator | **not modelled** | `crates/core/src/peripherals/cc2538_adc.rs` |
+| PKA, SSI, I2C, GPTimers, USB | declared stubs | `configs/chips/cc2538sf53.yaml` |
 
 ## Commands and evidence (verified 2026-10-30)
 

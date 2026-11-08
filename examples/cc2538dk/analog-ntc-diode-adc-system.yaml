@@ -1,0 +1,40 @@
+# Generic Beta NTC divider and Shockley diode for the CC2538DK, routed as
+# analog levels: PA4 / AIN4 and PA5 / AIN5 resolve through the chip's
+# `analog_pins` to the SoC ADC. analog-ntc-diode-system.yaml next to this file
+# carries the same netlists onto the GPIOC inputs instead.
+name: cc2538dk-analog-adc
+chip: ../../configs/chips/cc2538sf53.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: ntc_divider
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      temperature: ui.ntc.temperature_c
+    outputs:
+      v_sense: board.analog.pa4_volts
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.0
+        Rpull vcc sense 10k
+        Rntc sense 0 10k beta=3950 tnom=25 temp=25
+      probes:
+        v_sense: v(sense)
+      sources:
+        temperature: Rntc
+      vdd: 3.0
+  - id: diode_load_line
+    adapter: analog
+    step_ns: 1000
+    outputs:
+      v_diode: board.analog.pa5_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.0
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: v(sense)
+      vdd: 3.0

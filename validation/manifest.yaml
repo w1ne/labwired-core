@@ -9991,6 +9991,7 @@ boards:
       - crates/core/src/peripherals/cc2538/flash_ctrl.rs
       - crates/core/src/peripherals/cc2538/aes.rs
       - crates/core/src/peripherals/cc2538/udma.rs
+      - crates/core/src/peripherals/cc2538_adc.rs
       - crates/core/src/peripherals/ieee802154_air.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs

@@ -32,6 +32,7 @@ const IDLE_CHANNEL: u8 = 7;
 /// Onboarding profiles whose ADC is converted end to end here.
 const CONVERTED: &[&str] = &[
     "ambiq-apollo4",
+    "cc2538",
     "imxrt1064",
     "mimxrt1064_evk",
     "nrf52840",
@@ -56,6 +57,7 @@ const CONVERTED: &[&str] = &[
     "stm32l071",
     "stm32l072",
     "stm32wba52",
+    "zolertia-firefly",
 ];
 
 /// Onboarding profiles that declare an ADC whose IP LabWired does not yet
@@ -133,6 +135,10 @@ enum Family {
     /// slot-tagged results in the FIFO with six fractional bits, against the
     /// 1.19 V internal reference, so the 3.3 V netlists saturate above it.
     Apollo4,
+    /// CC2538 SoC ADC: an `ADCCON3` write runs one extra conversion, EOC in
+    /// `ADCCON1` clears on the `ADCH` read, and the 2's-complement result
+    /// sits MSB-aligned in `ADCH:ADCL` (SWRU319C §15, Contiki-NG adc.c).
+    Cc2538,
 }
 
 struct Converter {
@@ -158,6 +164,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Sam4s
         } else if kind == "apollo4_adc" {
             Family::Apollo4
+        } else if kind == "cc2538_soc_adc" {
+            Family::Cc2538
         } else {
             match p.config.get("profile").and_then(|v| v.as_str()) {
                 Some("stm32f4") => Family::Stm32F4,
@@ -199,6 +207,9 @@ impl Converter {
             Family::Saadc { .. } => (mv * 4096 / 3300).min(4095),
             // 12-bit against VREF 1.19 V, truncated, clamped to full scale.
             Family::Apollo4 => (mv * 4095 / 1190).min(4095),
+            // Decimation 512 against AVDD5 (3.3 V): 12 bits including the
+            // sign, so single-ended full scale is 2047.
+            Family::Cc2538 => (mv * 2047 / 3300).min(2047),
         }
     }
 
@@ -206,6 +217,10 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Cc2538 => {
+                // adc_init(): ADCCON1.STSEL = 11, manual starts only.
+                bus.write_u32(self.base, 0x30).expect("ADCCON1.STSEL");
+            }
             Family::Apollo4 => {
                 // CFG.ADCEN with destructive FIFO reads (DFIFORDEN).
                 bus.write_u32(self.base, 1 | (1 << 12))
@@ -408,6 +423,20 @@ impl Converter {
                 bus.read_u32(self.base + 0x50 + 4 * u64::from(IDLE_CHANNEL))
                     .expect("drain the idle CDR");
                 codes
+            }
+            Family::Cc2538 => {
+                // One extra conversion per channel; EOC rises at the ADCCON3
+                // write and the ADCH read clears it before the next.
+                [NTC_CHANNEL, DIODE_CHANNEL].map(|channel| {
+                    let code = self.convert(bus, channel);
+                    assert_eq!(
+                        bus.read_u32(self.base).unwrap(),
+                        0x30,
+                        "{}: EOC clear after the ADCH read, STSEL kept",
+                        self.id
+                    );
+                    code
+                })
             }
             Family::Apollo4 => {
                 // Three slots, one SWT: each slot pushes one FIFO entry
@@ -1044,6 +1073,23 @@ impl Converter {
                 bus.write_u32(self.base + 0x0C, 0).expect("disable slot 0");
                 (word & 0xF_FFFF) >> 6
             }
+            Family::Cc2538 => {
+                // Contiki-NG adc_get(): EREF = AVDD5, EDIV = 512, ECH = AINn.
+                bus.write_u32(self.base + 0x08, (2 << 6) | (3 << 4) | u32::from(channel))
+                    .expect("ADCCON3 extra conversion");
+                assert_ne!(
+                    bus.read_u32(self.base).unwrap() & 0x80,
+                    0,
+                    "{}: ADCCON1.EOC",
+                    self.id
+                );
+                let low = bus.read_u32(self.base + 0x0C).expect("ADCL") & 0xFC;
+                let high = bus.read_u32(self.base + 0x10).expect("ADCH");
+                let raw = (low | (high << 8)) as u16 as i16;
+                assert!(raw >= 0, "{}: single-ended results are positive", self.id);
+                assert_eq!(raw & 0xF, 0, "{}: 12 significant bits", self.id);
+                (raw >> 4) as u32
+            }
             Family::Saadc { .. } => unreachable!("SAADC converts as a scan"),
         }
     }
@@ -1166,7 +1212,7 @@ fn assert_converter_routes_generic_analog(
         }
         if matches!(
             converter.family,
-            Family::Imxrt | Family::Sam4s | Family::Apollo4
+            Family::Imxrt | Family::Sam4s | Family::Apollo4 | Family::Cc2538
         ) {
             assert_eq!(
                 converter.convert(&mut bus, IDLE_CHANNEL),
@@ -1241,7 +1287,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 37,
+        instances, 39,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -1249,7 +1295,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 186,
+        without_adc, 184,
         "onboarding profiles that declare no modelled ADC"
     );
 }

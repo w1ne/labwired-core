@@ -40,6 +40,11 @@
 # - `cc2538_udma`               — µDMA (PL230, SWRU319C §10): software-
 #   requested basic/auto transfers, CHIS + IRQ 46
 #   (crates/core/src/peripherals/cc2538/udma.rs).
+# - `cc2538_soc_adc`            — SoC ADC (§15; register layout from
+#   Contiki-NG soc-adc.h): an ADCCON3 write runs one extra conversion of
+#   AIN0-7, a differential pair, GND or VDD/3 at 7/9/10/12 bits against the
+#   internal 1.19 V reference, AIN7, AVDD5 or AIN6-AIN7. The result is 2's
+#   complement, MSB-aligned in ADCH:ADCL, and EOC clears on the ADCH read.
 #
 # Tier: L1 UART+LED smoke — boot, UART0 console, the SmartRF06 LEDs with
 # GPIO_DATA readback and the five keys' reset pull-up levels — plus stock
@@ -67,8 +72,11 @@
 #   and the error IRQ (a channel moves only on a software request).
 # - flash controller: no CPU stall while executing from flash during an
 #   operation, no flash DMA trigger, no flash interrupt.
-# - PKA, SSI0/1, I2C, GPTimer0-3, USB,
-#   SoC ADC/analog: declared stubs.
+# - SoC ADC: only the ADCCON3 "extra" conversion is modelled; sequence
+#   conversions, the temperature sensor, the ADC IRQ/µDMA trigger, the RNG and
+#   the comparator are not (crates/core/src/peripherals/cc2538_adc.rs).
+# - PKA, SSI0/1, I2C, GPTimer0-3, USB, the analog regulator registers:
+#   declared stubs.
 #
 # Supersedes the staged configs/chips/onboarding/cc2538.yaml, whose memory map
 # (flash at 0x08000000/128 KiB, 256 KiB RAM) did not match Table 4-1.
@@ -226,10 +234,15 @@ peripherals:
     type: "stub"
     base_address: 0x400D6000
     size: "4KB"
+  # SoC ADC (§15). `int_ref_mv` is the internal reference Contiki-NG's
+  # VDD/3 sensor scales by (1190 mV); AVDD5 is the 3.0 V rail of io_voltage_v.
   - id: "soc_adc"
-    type: "stub"
+    type: "cc2538_soc_adc"
     base_address: 0x400D7000
     size: "4KB"
+    config:
+      int_ref_mv: 1190
+      avdd_mv: 3000
   - id: "ssi0"
     type: "stub"
     base_address: 0x40008000
@@ -306,3 +319,16 @@ peripherals:
     type: "stub"
     base_address: 0x44010000
     size: "64B"
+
+# ADC input pads: AIN0..AIN7 are PA0..PA7 ("ADC inputs can only be on port A",
+# Contiki-NG cc2538dk dev/board.h; adc_get() channel = AIN0 + port-A pin).
+# On the SmartRF06 EB, PA6 is the ambient light sensor output and PA7 powers it.
+analog_pins:
+  PA0: { peripheral: soc_adc, channel: 0 }
+  PA1: { peripheral: soc_adc, channel: 1 }
+  PA2: { peripheral: soc_adc, channel: 2 }
+  PA3: { peripheral: soc_adc, channel: 3 }
+  PA4: { peripheral: soc_adc, channel: 4 }
+  PA5: { peripheral: soc_adc, channel: 5 }
+  PA6: { peripheral: soc_adc, channel: 6 }
+  PA7: { peripheral: soc_adc, channel: 7 }

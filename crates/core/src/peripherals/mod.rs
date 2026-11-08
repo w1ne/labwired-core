@@ -16,6 +16,7 @@ pub mod ble_central;
 pub mod bxcan;
 pub mod can;
 pub mod cc2538;
+pub mod cc2538_adc;
 pub mod chip_map;
 pub mod comp;
 pub mod components;
