@@ -125,10 +125,9 @@ peripherals:
     size: "6"
     config: { path: "../peripherals/atmega4809/portmux.yaml" }
   - id: "adc0"
-    type: "declarative"
+    type: "megaavr_adc"
     base_address: 0x00010600
     size: "24"
-    config: { path: "../peripherals/atmega4809/adc0.yaml" }
   # Signature row: DEVICEID 1E 96 51 (data sheet); serial number, oscillator
   # calibration and error bytes read 0 (an ideal oscillator).
   - id: "sigrow"

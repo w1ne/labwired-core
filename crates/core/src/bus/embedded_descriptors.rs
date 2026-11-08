@@ -36,7 +36,6 @@ macro_rules! packed {
 
 /// Every embedded descriptor, sorted by key so `lookup` can binary-search it.
 static DESCRIPTORS: &[(&str, &[u8])] = &[
-    ("atmega4809/adc0.yaml", packed!("atmega4809/adc0.yaml")),
     ("atmega4809/bod.yaml", packed!("atmega4809/bod.yaml")),
     (
         "atmega4809/clkctrl.yaml",
