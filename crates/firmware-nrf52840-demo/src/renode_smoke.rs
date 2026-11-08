@@ -14,11 +14,10 @@
 //!           -> EVENTS_LFCLKSTARTED, LFCLKSTAT
 //!   GPIO    P0.13 output with the input buffer connected: OUT and IN read back
 //!   GPIOTE  CONFIG[0] task mode on P0.14: TASKS_OUT toggles the pad (GPIO IN);
-//!           the GPIO OUT latch is not GPIOTE's to change. P0.14 stays a GPIO
-//!           input (PIN_CNF = 0, buffer connected) — task mode overrides the
-//!           direction on silicon. The engine does NOT yet show a GPIOTE drive
-//!           in IN when PIN_CNF.DIR = output (it returns OUT), so that
-//!           nrfx-style configuration is deliberately not claimed here.
+//!           the GPIO OUT latch is not GPIOTE's to change. P0.14 is a GPIO
+//!           output driving OUT = 0 with its input buffer connected (PIN_CNF =
+//!           1), so IN only follows the toggles if it samples the GPIOTE-driven
+//!           pad rather than OUT.
 //!   TIMER0  32-bit timer, CC[0] compare event, CAPTURE advances, CLEAR resets
 //!   RTC0    COUNTER advances, CC[0] compare event (EVTEN.COMPARE0 on, as
 //!           nrfx does; the INTEN-only event path is not exercised)
@@ -233,8 +232,10 @@ fn main() -> ! {
     summary |= (pass as u32) << 2;
 
     // GPIOTE: task mode (3), PSEL=14, POLARITY=Toggle (3), OUTINIT=low.
-    // PIN_CNF = 0: GPIO input, input buffer connected so IN shows the pad.
-    wr(GPIO_PIN_CNF + GPIOTE_PIN * 4, 0);
+    // PIN_CNF = 1: GPIO output (OUT = 0), input buffer connected so IN shows
+    // the pad. GPIOTE owns the pin while in task mode, whatever DIR/OUT say.
+    wr(GPIO_OUTCLR, 1 << GPIOTE_PIN);
+    wr(GPIO_PIN_CNF + GPIOTE_PIN * 4, 1);
     wr(GPIOTE_CONFIG0, 3 | (GPIOTE_PIN << 8) | (3 << 16));
     let latch = rd(GPIO_OUT) & (1 << GPIOTE_PIN);
     wr(GPIOTE_TASKS_OUT0, 1);

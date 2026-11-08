@@ -15,9 +15,9 @@
       255,
       536870912,
       200000,
-      4519,
+      4523,
       537133024,
-      4519,
+      4523,
       4262
     ],
     "pc": 4262,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "05fa15391b7eb1797c05ef63971fe04ffec69583ac9b1435362650507632d192",
+  "firmware_hash": "e6617ca5b5313dedf8e3fda50d798111d997d02f012f1b63a5942f6cf755c4c5",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nrf52840-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nrf52840.yaml",

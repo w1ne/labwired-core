@@ -2139,7 +2139,57 @@ impl GpioPort {
         if self.wch_single_config_register && offset == 0x04 {
             return 0;
         }
-        self.family.read_reg(offset)
+        let value = self.family.read_reg(offset);
+        match &self.family {
+            GpioFamily::Nrf52(g) if offset == 0x510 => self.nrf52_in_with_claims(g, value),
+            _ => value,
+        }
+    }
+
+    /// nRF52 IN with the pads a peripheral has claimed (GPIOTE Task mode,
+    /// UARTE TXD, PWM OUT, ...) reading the level that peripheral drives.
+    ///
+    /// `Nrf52Gpio::effective_in` reads OUT for a DIR = output pin, which is
+    /// the pad level only while the GPIO block itself drives it. A claimed pad
+    /// is driven by its peripheral whatever DIR/OUT say (nRF52840 PS, GPIOTE
+    /// "Task mode": the task drives the pin, OUT is untouched), and IN samples
+    /// the pad through the input buffer (GPIO pin configuration). So a GPIOTE
+    /// Task pin left as a GPIO output with its input buffer connected reads
+    /// its GPIOTE level in IN.
+    ///
+    /// Only pins with PIN_CNF.INPUT = Connect (bit 1 clear) are overlaid, and
+    /// only DIR = output ones: a DIR = input claimed pin already reads the
+    /// per-pin latch GPIOTE writes (`NRF52_GPIO_PAD_LATCH`). PIN_CNF.INPUT =
+    /// Disconnect is otherwise not modelled (IN still reads OUT there), so
+    /// this changes nothing for those pins.
+    fn nrf52_in_with_claims(&self, g: &Nrf52Gpio, value: u32) -> u32 {
+        if self.pad_routes.is_empty() || self.pad_claims.is_none() {
+            return value;
+        }
+        let mut value = value;
+        let mut candidates = g.dir & g.pin_mask();
+        while candidates != 0 {
+            let pin = candidates.trailing_zeros() as u8;
+            candidates &= candidates - 1;
+            if g.pin_cnf[pin as usize] & 0b10 != 0 {
+                continue;
+            }
+            let Some((cell, line)) = self.pad_routes.active_line(pin, |p| {
+                Self::selected_function(&self.family, self.pad_claims.as_ref(), p)
+            }) else {
+                continue;
+            };
+            if !cell.drives(line) {
+                continue;
+            }
+            let bit = 1u32 << pin;
+            if cell.level(line) {
+                value |= bit;
+            } else {
+                value &= !bit;
+            }
+        }
+        value
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -2839,7 +2889,7 @@ impl crate::Peripheral for GpioPort {
                 if (!self.nrf54l_offsets && self.window_offset <= 0x510)
                     || (self.nrf54l_offsets && self.window_offset <= 0x00C) =>
             {
-                g.effective_in()
+                self.nrf52_in_with_claims(g, g.effective_in())
             }
             _ => self.read_reg(self.idr_offset()),
         }

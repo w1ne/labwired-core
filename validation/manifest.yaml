@@ -2470,8 +2470,13 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 75dee90ef166e309c6022694135415b4d1de8502533abb3762c6df86de1a3105
+    # 2026-11-08 (lane/renode-coverage): peripherals/gpio.rs adds an nRF52-only
+    # IN overlay (GpioPort::nrf52_in_with_claims, matched on GpioFamily::Nrf52):
+    # a claimed pad on a DIR=output, input-connected pin reads its peripheral's
+    # level. STM32 GPIO families are untouched; digest-only drift for this board.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-08
+    drift_ack_digest: 727b122e339a82f24c3ea44a455f0d192611e7a0765e482fe3d7f2df88ff6d8a
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -4696,8 +4701,13 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: a9329dce0a41db0ce793d9b5abf9dee47617018f64796099d93a2736ced19f4a
+    # 2026-11-08 (lane/renode-coverage): peripherals/gpio.rs adds an nRF52-only
+    # IN overlay (GpioPort::nrf52_in_with_claims, matched on GpioFamily::Nrf52):
+    # a claimed pad on a DIR=output, input-connected pin reads its peripheral's
+    # level. STM32 GPIO families are untouched; digest-only drift for this board.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-08
+    drift_ack_digest: 66dc51881fc48d725f7db9185503a7443b1c5f48f23bb0408c186237268be16e
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -5766,8 +5776,13 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 4aebc65abc994334173419722b6b0bdda8409ae3e3e6edccada6855d1f953530
+    # 2026-11-08 (lane/renode-coverage): peripherals/gpio.rs adds an nRF52-only
+    # IN overlay (GpioPort::nrf52_in_with_claims, matched on GpioFamily::Nrf52):
+    # a claimed pad on a DIR=output, input-connected pin reads its peripheral's
+    # level. STM32 GPIO families are untouched; digest-only drift for this board.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-08
+    drift_ack_digest: ab634a28de2a50e3373c97cee6e0b4c1df6806482940e4e94ab8e767b4c68a72
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -6990,8 +7005,13 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 7cb681d829ec23d482ca32b6a6ad45586447bb23382029aa6aec07b5875382c9
+    # 2026-11-08 (lane/renode-coverage): peripherals/gpio.rs adds an nRF52-only
+    # IN overlay (GpioPort::nrf52_in_with_claims, matched on GpioFamily::Nrf52):
+    # a claimed pad on a DIR=output, input-connected pin reads its peripheral's
+    # level. STM32 GPIO families are untouched; digest-only drift for this board.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-08
+    drift_ack_digest: 85385bfe0fe16902051f8cfa62bafc147fedddc6aac368d08dbe531f61102b7a
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -8083,8 +8103,13 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 85ba00081630efc724c4d70529dd606ae02f064dbfce8f6ddb8b2cf4f6135225
+    # 2026-11-08 (lane/renode-coverage): peripherals/gpio.rs adds an nRF52-only
+    # IN overlay (GpioPort::nrf52_in_with_claims, matched on GpioFamily::Nrf52):
+    # a claimed pad on a DIR=output, input-connected pin reads its peripheral's
+    # level. STM32 GPIO families are untouched; digest-only drift for this board.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-08
+    drift_ack_digest: 2218e8f16a9282d04ce66086e9cf0ede913143cfb7b771d6bc27db613cee4f1a
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
