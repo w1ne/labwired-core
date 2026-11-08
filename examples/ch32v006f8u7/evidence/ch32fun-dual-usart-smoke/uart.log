@@ -1,0 +1,12 @@
+
+CH32V00x dual_usart example
+USART1 ready
+
+CH32V00x dual_usart example
+USART2 ready
+tick 0 via USART1
+tick 0 via USART2
+tick 1 via USART1
+tick 1 via USART2
+tick 2 via USART1
+tick 2 via USART2

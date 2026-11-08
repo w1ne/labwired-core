@@ -858,6 +858,10 @@ pub struct Uart {
     /// PD5 route; it reuses the F1 USART register map, not the F1 pin map.
     #[serde(skip)]
     ch32v003_pad_map: bool,
+    /// The CH32V00x (V002..V007) USART1/USART2 TX pads, behind their
+    /// AFIO_PCFR1 remap fields (`pad_map: ch32v00x`).
+    #[serde(skip)]
+    ch32v00x_pad_map: bool,
     #[serde(skip)]
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     #[serde(skip)]
@@ -1122,6 +1126,7 @@ impl Uart {
             route_gate: None,
             tx_console_af: None,
             ch32v003_pad_map: false,
+            ch32v00x_pad_map: false,
             sink: None,
             rx_buf: Arc::new(Mutex::new(VecDeque::new())),
             echo_stdout: !matches!(layout, UartRegisterLayout::Avr),
@@ -1207,6 +1212,18 @@ impl Uart {
 
     pub(crate) fn uses_ch32v003_pad_map(&self) -> bool {
         self.ch32v003_pad_map
+    }
+
+    /// Select the CH32V00x USART TX pad routes (USART1 PD5, USART2 PD2,
+    /// each under its AFIO_PCFR1 remap value). Same caller contract as
+    /// [`Self::set_ch32v003_pad_map`].
+    pub fn set_ch32v00x_pad_map(mut self) -> Self {
+        self.ch32v00x_pad_map = true;
+        self
+    }
+
+    pub(crate) fn uses_ch32v00x_pad_map(&self) -> bool {
+        self.ch32v00x_pad_map
     }
 
     /// Mark this instance as an STM32 LPUART on the V2 register map.

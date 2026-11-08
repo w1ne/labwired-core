@@ -162,6 +162,21 @@ impl PadRoutes {
         line: usize,
         func: &'static str,
     ) {
+        self.bind_gated(cell, pin, selector, line, func, None);
+    }
+
+    /// [`Self::bind`], live only while `gate` is open as well: a pad that
+    /// carries the signal under one remap setting only (CH32V00x PD2 is
+    /// `USART2_TX` at `USART2_RM = 3`).
+    pub fn bind_gated(
+        &mut self,
+        cell: &Arc<PadLines>,
+        pin: u8,
+        selector: Option<u32>,
+        line: usize,
+        func: &'static str,
+        gate: Option<RemapGate>,
+    ) {
         let cell_idx = match self.cells.iter().position(|c| Arc::ptr_eq(c, cell)) {
             Some(i) => i,
             None => {
@@ -177,7 +192,7 @@ impl PadRoutes {
             func,
             cell: cell_idx,
             when_driving: false,
-            gate: None,
+            gate,
         });
     }
 

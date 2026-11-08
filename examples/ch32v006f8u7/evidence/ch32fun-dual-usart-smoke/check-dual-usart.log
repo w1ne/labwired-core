@@ -1,0 +1,15 @@
+--- gpiod:5 (USART1_TX) ---
+
+CH32V00x dual_usart example
+USART1 ready
+tick 0 via USART1
+tick 1 via USART1
+tick 2 via USART1
+--- gpiod:2 (USART2_TX) ---
+
+CH32V00x dual_usart example
+USART2 ready
+tick 0 via USART2
+tick 1 via USART2
+tick 2 via USART2
+OK: PD5 carries only USART1, PD2 only USART2, all frames 8N1

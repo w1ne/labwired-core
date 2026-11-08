@@ -978,6 +978,10 @@ _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in th
 
 _Board-bound smoke profile; the RV32F self-test is a CPU check, not a peripheral one, so no beyond-rubric firmware exercise is recorded in this ledger._
 
+### `ch32v006f8u7-ch32fun-smoke`
+
+_Chip smoke profile; ch32fun blink, debugprintfdemo and dual_usart are rubric-level GPIO/console/UART checks, so no beyond-rubric firmware exercise is recorded in this ledger._
+
 ### `ch32x035c8t6-ch32fun-smoke`
 
 _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._

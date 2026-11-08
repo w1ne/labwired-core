@@ -2576,6 +2576,20 @@ impl SystemBus {
         // The remap pads need AFIO_PCFR1, which nothing decodes, so they are
         // left unbound.
         const WCH: &[(u8, char, u8, usize, &str)] = &[(1, 'd', 5, LINE_TX, "USART1_TX")];
+        // WCH CH32V00x (V002..V007; `pad_map: ch32v00x`): TX pads with the
+        // AFIO_PCFR1 field and value that select them, as
+        // `(instance, port, pin, line, func, shift, mask, value)`. USART1_RM
+        // is PCFR1 [9:6], USART2_RM [22:20] (ch32fun ch32x00xhw.h,
+        // ch32-data `afio_v00x.yaml`). USART1 RM 0 = PD5 TX (CH32V006DS0
+        // Table 2-1-1: PD5 default function USART1_TX); USART2 RM 3 = PD2 TX
+        // (ch32-data `V00X_USART2.yaml` remap 3, and ch32fun's dual_usart
+        // "USART2: PD2 TX, PD3 RX, remap value 3"). The other remap rows are
+        // not bound.
+        type V00xPad = (u8, char, u8, usize, &'static str, u32, u32, u32);
+        const V00X: &[V00xPad] = &[
+            (1, 'd', 5, LINE_TX, "USART1_TX", 6, 0xF, 0),
+            (2, 'd', 2, LINE_TX, "USART2_TX", 20, 0x7, 3),
+        ];
 
         for instance in 1u8..=3 {
             // Chip configs name these both ways — `uart2` on the L4/F1 configs,
@@ -2587,17 +2601,32 @@ impl SystemBus {
             else {
                 continue;
             };
-            let ch32v003_pad_map = self.peripherals[uart_idx]
+            let (ch32v003_pad_map, ch32v00x_pad_map) = self.peripherals[uart_idx]
                 .dev
                 .as_any()
                 .and_then(|a| a.downcast_ref::<Uart>())
-                .is_some_and(Uart::uses_ch32v003_pad_map);
+                .map_or((false, false), |uart| {
+                    (uart.uses_ch32v003_pad_map(), uart.uses_ch32v00x_pad_map())
+                });
+            let v00x_remap = if ch32v00x_pad_map {
+                self.remap_block_register()
+            } else {
+                None
+            };
             // Plan every binding BEFORE touching the UART: `pad_lines_arc`
             // CREATES the pad cell, and a UART owning a cell no route reaches
             // still buffers and narrates on every transmitted byte into a wire
             // nothing reads. A chip with no row for this instance therefore
             // must not reach `pad_lines_arc` at all.
-            let mut plan: Vec<(char, u8, Option<u8>, usize, &'static str)> = Vec::new();
+            type PlanRow = (
+                char,
+                u8,
+                Option<u8>,
+                usize,
+                &'static str,
+                Option<crate::peripherals::pad_routing::RemapGate>,
+            );
+            let mut plan: Vec<PlanRow> = Vec::new();
             for port in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] {
                 let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}"))
                 else {
@@ -2628,8 +2657,30 @@ impl SystemBus {
                         };
                         for &(inst, p, pin, af, line, func) in table {
                             if inst == instance && p == port {
-                                plan.push((port, pin, Some(af), line, func));
+                                plan.push((port, pin, Some(af), line, func, None));
                             }
+                        }
+                    }
+                    GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch if ch32v00x_pad_map => {
+                        // No AFIO on the bus: nothing moves a pad, so only
+                        // the reset-mapping (value 0) rows apply.
+                        for &(inst, p, pin, line, func, shift, mask, value) in V00X {
+                            if inst != instance || p != port {
+                                continue;
+                            }
+                            let gate = match &v00x_remap {
+                                Some(register) => {
+                                    Some(crate::peripherals::pad_routing::RemapGate {
+                                        register: register.clone(),
+                                        shift,
+                                        mask,
+                                        value,
+                                    })
+                                }
+                                None if value == 0 => None,
+                                None => continue,
+                            };
+                            plan.push((port, pin, None, line, func, gate));
                         }
                     }
                     GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch => {
@@ -2643,7 +2694,7 @@ impl SystemBus {
                         };
                         for &(inst, p, pin, line, func) in table {
                             if inst == instance && p == port {
-                                plan.push((port, pin, None, line, func));
+                                plan.push((port, pin, None, line, func, None));
                             }
                         }
                     }
@@ -2673,7 +2724,7 @@ impl SystemBus {
                 }
                 uart.pad_lines_arc()
             };
-            for (port, pin, af, line, func) in plan {
+            for (port, pin, af, line, func, gate) in plan {
                 let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}"))
                 else {
                     continue;
@@ -2685,7 +2736,11 @@ impl SystemBus {
                 else {
                     continue;
                 };
-                gpio.add_pad_route(&lines, pin, af, line, func);
+                if gate.is_some() {
+                    gpio.add_gated_pad_route(&lines, pin, line, func, gate);
+                } else {
+                    gpio.add_pad_route(&lines, pin, af, line, func);
+                }
                 if af.is_none() {
                     if let Some(gate) = &console_gate {
                         gpio.watch_console_af(pin, gate.clone());

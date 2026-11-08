@@ -92,6 +92,9 @@ pub enum RccRegisterLayout {
     /// WCH CH32V003 RCC register layout. Offsets and control bits are checked
     /// against WCH's `ch32v00x.h` (see [`WchRcc`]).
     Wch,
+    /// WCH CH32V002/V004/V005/V006/V007: the [`Self::Wch`] register map with
+    /// the USART2 gate (APB2PCENR bit 13) writable (see [`WchRcc::new_v00x`]).
+    Ch32v00x,
     /// STM32G0 family (RM0444 §5). Its own map: CR/ICSCR/CFGR/PLLCFGR at
     /// 0x00–0x0C with 3-bit SW/SWS fields in CFGR (SW[2:0] bits 0–2,
     /// SWS[2:0] bits 3–5), the clock-interrupt block at 0x18–0x20, and the
@@ -163,8 +166,9 @@ impl FromStr for RccRegisterLayout {
             "stm32u0" | "u0" => Ok(Self::Stm32U0),
             "stm32u3" | "u3" => Ok(Self::Stm32U3),
             "ch32v20x" => Ok(Self::Ch32v20x),
+            "ch32v00x" => Ok(Self::Ch32v00x),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32f0, stm32c0, stm32c5, stm32u0, stm32u3, ch32v20x",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32f0, stm32c0, stm32c5, stm32u0, stm32u3, ch32v20x, ch32v00x",
                 value
             )),
         }
@@ -2793,6 +2797,11 @@ const WCH_APB2PCENR_MODELED: u32 =
 /// bit 28 (`RCC_APB1Periph_TIM2` 0x0000_0001, `RCC_APB1Periph_I2C1`
 /// 0x0020_0000, `RCC_APB1Periph_PWR` 0x1000_0000).
 const WCH_APB1PCENR_MODELED: u32 = (1 << 0) | (1 << 21) | (1 << 28);
+/// CH32V00x APB2PCENR: the CH32V003 gates plus USART2EN, bit 13
+/// (`RCC_APB2Periph_USART2` 0x0000_2000 in ch32fun's ch32x00xhw.h; ch32-data
+/// `rcc_v00x.yaml` PB2PCENR.USART2EN). USART2 sits at 0x4000_4400 on APB1
+/// but is clocked from APB2PCENR.
+const WCH_V00X_APB2PCENR_MODELED: u32 = WCH_APB2PCENR_MODELED | (1 << 13);
 
 // ── WCH CH32V003 ────────────────────────────────────────────────────────────
 
@@ -2837,6 +2846,12 @@ pub struct WchRcc {
     rstsckr: u32,
     hse_present: bool,
     hse_hz: Option<u32>,
+    /// APB2PCENR gates with a model on this part.
+    #[serde(skip)]
+    apb2_modeled: u32,
+    /// A CH32V00x (V002..V007) rather than the CH32V003.
+    #[serde(skip)]
+    v00x: bool,
 }
 
 impl WchRcc {
@@ -2879,9 +2894,23 @@ impl WchRcc {
             rstsckr: 0,
             hse_present: false,
             hse_hz: None,
+            apb2_modeled: WCH_APB2PCENR_MODELED,
+            v00x: false,
         };
         this.refresh();
         this
+    }
+
+    /// CH32V00x (V002/V004/V005/V006/V007). ch32fun's ch32x00xhw.h keeps the
+    /// CH32V003's RCC offsets, CTLR/CFGR0 bits and `RCC_PLLSRC_HSI_Mul2`, and
+    /// ch32fun.h its 24 MHz HSI, so the clock tree is the same; the part adds
+    /// USART2, whose clock enable is APB2PCENR bit 13.
+    pub fn new_v00x() -> Self {
+        Self {
+            apb2_modeled: WCH_V00X_APB2PCENR_MODELED,
+            v00x: true,
+            ..Self::new()
+        }
     }
 
     /// Set the fitted HSE frequency. Values outside 4–25 MHz are rejected; that
@@ -3017,7 +3046,7 @@ impl RccModel for WchRcc {
             }
             Self::INTR => self.intr = value & Self::INTR_WRITABLE,
             Self::AHBPCENR => self.ahbpcenr = value,
-            Self::APB2PCENR => self.apb2pcenr = value & WCH_APB2PCENR_MODELED,
+            Self::APB2PCENR => self.apb2pcenr = value & self.apb2_modeled,
             Self::APB1PCENR => self.apb1pcenr = value & WCH_APB1PCENR_MODELED,
             // The LSI is ready as soon as it is switched on.
             Self::RSTSCKR => {
@@ -3093,6 +3122,7 @@ impl Rcc {
             RccRegisterLayout::Stm32U0 => Self::Stm32U0(U0Rcc::default()),
             RccRegisterLayout::Stm32U3 => Self::Stm32U3(U3Rcc::default()),
             RccRegisterLayout::Wch => Self::Wch(WchRcc::new()),
+            RccRegisterLayout::Ch32v00x => Self::Wch(WchRcc::new_v00x()),
             // Same V2 model, RM0434 enable/reset placement.
             RccRegisterLayout::Stm32Wb => Self::Stm32V2(V2Rcc::new_wb()),
             // Same V2 model, RM0493 PLL1RCLKPRE→PLL1RCLKPRERDY status.
@@ -3102,7 +3132,7 @@ impl Rcc {
 
     /// Whether this instance is the WCH CH32V003 clock tree.
     pub fn is_ch32v003(&self) -> bool {
-        matches!(self, Self::Wch(_))
+        matches!(self, Self::Wch(rcc) if !rcc.v00x)
     }
 
     /// Board option: an external HSE oscillator is fitted. Only the U5/V2
@@ -4692,6 +4722,26 @@ mod tests {
             rcc.read_u32(0x1C).unwrap(),
             (1 << 0) | (1 << 21) | (1 << 28)
         );
+    }
+
+    /// ch32fun dual_usart: `RCC->APB2PCENR |= RCC_APB2Periph_USART2` (bit
+    /// 13). The CH32V00x layout keeps it; the CH32V003 has no USART2 and
+    /// drops it. The V00x is not the CH32V003 for the V003 pad tables.
+    #[test]
+    fn ch32v00x_apb2pcenr_keeps_usart2en_the_ch32v003_mask_drops() {
+        let mut v00x = Rcc::new_with_layout("ch32v00x".parse().unwrap());
+        let mut v003 = Rcc::new_with_layout(RccRegisterLayout::Wch);
+        for rcc in [&mut v00x, &mut v003] {
+            rcc.write_u32(0x18, (1 << 13) | (1 << 14) | (1 << 5) | 1)
+                .unwrap();
+        }
+        assert_eq!(
+            v00x.read_u32(0x18).unwrap(),
+            (1 << 13) | (1 << 14) | (1 << 5) | 1
+        );
+        assert_eq!(v003.read_u32(0x18).unwrap(), (1 << 14) | (1 << 5) | 1);
+        assert!(v003.is_ch32v003());
+        assert!(!v00x.is_ch32v003());
     }
 
     /// ch32fun otg_device `USBOTGSetup`: `RCC->AHBPCENR |= RCC_USBFS |

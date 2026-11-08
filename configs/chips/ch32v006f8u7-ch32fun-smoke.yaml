@@ -1,0 +1,160 @@
+# Narrow CH32V006F8U7 (QFN20) profile for unmodified ch32fun (cnlohr/ch32fun)
+# CH32V00x examples: the QingKe V2C core (RV32EC + Zmmul), the CH32V003's
+# clock tree and QingKe V2 SysTick/PFIC, GPIOA/GPIOC/GPIOD (ch32fun's
+# funGpioInitAll() clocks those three), the WCH-LinkE debug printf channel
+# ch32fun uses as its default console, the V00x AFIO, and USART1 + USART2
+# for ch32fun's examples_x00x/dual_usart.
+#
+# Sources:
+# - WCH CH32V006DS0 datasheet (wch-ic.com download id 396, read 2026-11-08):
+#   62 KB flash, 8 KB SRAM, 48 MHz QingKe RISC-V2C; Table 2-1-1 pin
+#   definitions (QFN20 F8U7 column: PA1 1, PA2 2, PD0 5, PC0 7, PD2 16,
+#   PD3 17, PD4 18, PD5 19, PD6 20; PD5 default USART1_TX, PD6 USART1_RX).
+# - ch32fun ch32x00xhw.h (register map, AFIO EXTICR at 0x08 and PCFR1 at
+#   0x0C, USART2 at 0x40004400, RCC_APB2Periph_USART2 = bit 13, DMDATA0/1 at
+#   0xE00000F4/F8), ch32fun.mk (rv32ec_zmmul, TARGET_MCU_LD=7), ch32fun.c
+#   (SystemInit: HSI 24 MHz x2 PLL to 48 MHz, FLASH_ACTLR latency 2 above
+#   25 MHz).
+# - ch32-rs/ch32-data: data/chips/CH32V006x8x6.yaml, registers/afio_v00x.yaml
+#   (PCFR1 USART1_RM [9:6], USART2_RM [22:20]), registers/rcc_v00x.yaml
+#   (PB2PCENR.USART2EN bit 13), peripherals/V00X_USART2.yaml (remap 3 =
+#   PD2 TX / PD3 RX).
+#
+# The core is the engine's QingKe V2 profile: RV32E registers, INTSYSCR,
+# HPE and the PFIC trap entry. Zmmul code (mul/mulh*) runs because the
+# engine decodes the M extension on every RISC-V profile (unit test
+# `qingke_v2_executes_zmmul_multiplies`); a div/rem, which a V2C would trap
+# as illegal, would also run here. None of the three ch32fun ELFs this
+# profile is smoked with contains a multiply, so the smokes do not
+# exercise Zmmul.
+#
+# USART1 and USART2 reuse the engine's STM32F1-shaped USART (the same
+# STATR/DATAR/BRR/CTLR1..3 offsets as ch32x00xhw.h), TX polled. With
+# `pad_map: ch32v00x` USART1_TX drives PD5 while AFIO_PCFR1.USART1_RM = 0
+# and USART2_TX drives PD2 while USART2_RM = 3, each only while the pad is
+# an alternate-function output. The other remap rows (USART1_RM 1..8,
+# USART2_RM 0..2 and 4..6), RX pads, CTS/RTS, and the USART interrupts
+# (PFIC 32 and 39) are not modeled.
+#
+# Not modeled: TIM1, TIM2, TIM3, ADC1, OPA/CMP, TouchKey, I2C1, SPI1, DMA1,
+# the IWDG/WWDG, PWR and its AWU, EXTI, GPIOB (not bonded on QFN20), the
+# GPIO speed/drive registers, the HSE, option bytes, flash wait states (the
+# ACTLR latency is stored only), PFIC nesting and priorities, and
+# debug-printf input from the host.
+name: ch32v006f8u7-ch32fun-smoke
+arch: riscv
+core: qingke-v2c
+registers_count: 16
+# SYSCLK after ch32fun's SystemInit (HSI x2 PLL, FUNCONF_USE_PLL default).
+cpu_hz: 48_000_000
+
+flash:
+  base: 0x08000000
+  size: 62KB
+ram:
+  base: 0x20000000
+  size: 8KB
+
+pins:
+  PA1: { gpio: gpioa, bit: 1 }
+  PA2: { gpio: gpioa, bit: 2 }
+  PC0: { gpio: gpioc, bit: 0 }
+  PC1: { gpio: gpioc, bit: 1 }
+  PC2: { gpio: gpioc, bit: 2 }
+  PC3: { gpio: gpioc, bit: 3 }
+  PC4: { gpio: gpioc, bit: 4 }
+  PC5: { gpio: gpioc, bit: 5 }
+  PC6: { gpio: gpioc, bit: 6 }
+  PC7: { gpio: gpioc, bit: 7 }
+  PD0: { gpio: gpiod, bit: 0 }
+  PD1: { gpio: gpiod, bit: 1 }
+  PD2: { gpio: gpiod, bit: 2, functions: [{ type: uart, peripheral: usart2, role: tx }] }
+  PD3: { gpio: gpiod, bit: 3 }
+  PD4: { gpio: gpiod, bit: 4 }
+  PD5: { gpio: gpiod, bit: 5, functions: [{ type: uart, peripheral: usart1, role: tx }] }
+  PD6: { gpio: gpiod, bit: 6 }
+  PD7: { gpio: gpiod, bit: 7 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 40B
+    config:
+      profile: ch32v00x
+
+  - id: flash_ctrl
+    type: flash
+    base_address: 0x40022000
+    size: 4B
+    config:
+      profile: stm32f1
+
+  # EXTICR (0x08) is stored; PCFR1 (0x0C) USART1_RM/USART2_RM move the
+  # USART TX pads.
+  - id: afio
+    type: afio
+    base_address: 0x40010000
+    size: 16B
+    clock: { reg: apb2enr, bit: 0 }
+    config:
+      profile: ch32v00x
+
+  # WCH-LinkE attached and polling like `minichlink -T`.
+  - id: debug_printf
+    type: wch_debug_printf
+    base_address: 0xE00000F4
+    size: 12B
+
+  - id: pfic
+    type: qingke_pfic
+    base_address: 0xE000E000
+    size: 4KB
+
+  - id: stk
+    type: qingke_v2_systick
+    base_address: 0xE000F000
+    size: 20B
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x40010800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 2 }
+    config:
+      profile: ch32v003
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x40011000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 4 }
+    config:
+      profile: ch32v003
+
+  - id: gpiod
+    type: gpio
+    base_address: 0x40011400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 5 }
+    config:
+      profile: ch32v003
+
+  - id: usart1
+    type: uart
+    base_address: 0x40013800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 14 }
+    config:
+      profile: stm32f1
+      pad_map: ch32v00x
+
+  # USART2 sits on APB1 (0x40004400) but is clocked by APB2PCENR bit 13.
+  - id: usart2
+    type: uart
+    base_address: 0x40004400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 13 }
+    config:
+      profile: stm32f1
+      pad_map: ch32v00x

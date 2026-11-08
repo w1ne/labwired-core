@@ -240,8 +240,21 @@ fn ram_geometry_is_valid(chip: &ChipDescriptor) -> bool {
 
 /// Zero is an honest absence of internal flash only for this declared SoC.
 /// The base must also be zero: the placeholder must not imply a storage map.
+/// Parts whose erase sector is smaller than 4 KiB, with the flash size the
+/// datasheet gives. The CH32V006 has 62 KB of code flash erased in 1 KiB
+/// sectors (CH32V006DS0: "Built-in 62K-byte program flash memory area",
+/// `terase_sec` "Sector (1K bytes) erase time").
+const SMALL_SECTOR_FLASH_PARTS: &[(&str, u64, u64)] =
+    &[("ch32v006f8u7-ch32fun-smoke", 62 * 1024, 1024)];
+
 fn flash_geometry_is_valid(chip: &ChipDescriptor) -> bool {
     const SECTOR: u64 = 4096;
+    if let Some((_, size, sector)) = SMALL_SECTOR_FLASH_PARTS
+        .iter()
+        .find(|(name, _, _)| chip.name == *name)
+    {
+        return chip.flash.size == *size && chip.flash.size % sector == 0;
+    }
     if chip.flash.size != 0 {
         return chip.flash.size % SECTOR == 0;
     }

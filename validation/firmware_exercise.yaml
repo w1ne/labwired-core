@@ -1540,6 +1540,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: ch32v006f8u7-ch32fun-smoke
+    arch: rv32ec
+    headline: "Chip smoke profile; ch32fun blink, debugprintfdemo and dual_usart are rubric-level GPIO/console/UART checks, so no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: ch32x035c8t6-ch32fun-smoke
     arch: rv32imac
     headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."

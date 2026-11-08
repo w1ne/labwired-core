@@ -123,6 +123,32 @@ fn rv32e_traps_when_a_compressed_instruction_names_x16() {
     assert_eq!(machine.cpu.pc, 0x100);
 }
 
+/// The CH32V002..V007's QingKe V2C is RV32EC + Zmmul: ch32fun.mk builds
+/// them `-march=rv32ec_zmmul`, so the compiler may emit `mul`/`mulhu` on x8..
+/// x15. The QingKe V2 profile runs them.
+#[test]
+fn qingke_v2_executes_zmmul_multiplies() {
+    // mul x10, x11, x12; mulhu x13, x11, x12
+    const MUL: u32 = 0x02C5_8533;
+    const MULHU: u32 = 0x02C5_B6B3;
+    let mut bus = SystemBus::new();
+    bus.flash.data = [MUL, MULHU].iter().flat_map(|w| w.to_le_bytes()).collect();
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::QingkeV2);
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    cpu.x[11] = 0x1234_5678;
+    cpu.x[12] = 0x100;
+    let mut machine = Machine::new(cpu, bus);
+
+    machine.step().unwrap();
+    machine.step().unwrap();
+
+    assert_eq!(machine.cpu.mcause, 0, "no trap");
+    assert_eq!(machine.cpu.pc, 8);
+    assert_eq!(machine.cpu.x[10], 0x3456_7800);
+    assert_eq!(machine.cpu.x[13], 0x12);
+}
+
 /// WCH's `startup_ch32v00x.S` writes INTSYSCR (`csrw 0x804, t0` with t0 = 3)
 /// before `SystemInit`. The QingKe V2 profile accepts it; a generic RV32E core
 /// has no such CSR and traps.

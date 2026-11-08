@@ -2288,6 +2288,20 @@ impl GpioPort {
         self.add_pad_route_selector(cell, pin, af.map(u32::from), line, func);
     }
 
+    /// [`Self::add_pad_route`] for a fixed-map (F1-style) pad that carries
+    /// the signal only while `gate`'s remap field selects it.
+    pub(crate) fn add_gated_pad_route(
+        &mut self,
+        cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        pin: u8,
+        line: usize,
+        func: &'static str,
+        gate: Option<crate::peripherals::pad_routing::RemapGate>,
+    ) {
+        self.pad_routes
+            .bind_gated(cell, pin, None, line, func, gate);
+    }
+
     /// Install one pad route against a full-width selector.
     ///
     /// [`add_pad_route`](Self::add_pad_route) narrows to an AF NIBBLE because

@@ -18,6 +18,13 @@ pub enum AfioLayout {
     /// 0x04 and ONE `EXTICR` at 0x08 with a 2-bit port field per line for
     /// lines 0..7 (00 = PA, 10 = PC, 11 = PD). 0x00 is reserved.
     Ch32v003,
+    /// WCH CH32V002/V004/V005/V006/V007 (`AFIO_TypeDef` in ch32fun's
+    /// ch32x00xhw.h, ch32-data `afio_v00x.yaml`): 0x00/0x04 reserved, then
+    /// `EXTICR` at 0x08 with a 2-bit port field per line for lines 0..7
+    /// (00 = PA, 01 = PB, 10 = PC, 11 = PD) and `PCFR1` at **0x0C** — after
+    /// EXTICR, not before it as on the CH32V003. PCFR1 also has wider
+    /// fields: USART1_RM [9:6], TIM1_RM [13:10], USART2_RM [22:20].
+    Ch32v00x,
     /// WCH CH32X035 (`AFIO_TypeDef` in ch32fun's ch32x03xhw.h): PCFR1 at
     /// 0x04, then two EXTICRs of 2-bit port fields (00 = PA, 01 = PB,
     /// 10 = PC): `EXTICR1` at 0x08 for lines 0..15 and `EXTICR2` at 0x0C for
@@ -69,7 +76,7 @@ impl Afio {
         if line >= 16 {
             return 0;
         }
-        if self.layout == AfioLayout::Ch32v003 {
+        if matches!(self.layout, AfioLayout::Ch32v003 | AfioLayout::Ch32v00x) {
             // Lines 8..15 have no GPIO source on the CH32V003; the caller
             // only asks for lines with a pad (PA1/PA2, PC0..7, PD0..7).
             return ((self.exticr[0] >> (u32::from(line % 8) * 2)) & 0x3) as u8;
@@ -83,6 +90,16 @@ impl Afio {
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
+        if self.layout == AfioLayout::Ch32v00x {
+            return match offset {
+                0x08 => self.exticr[0],
+                0x0C => self.mapr,
+                _ => {
+                    crate::census_reg!("afio:Afio", offset, "read");
+                    0
+                }
+            };
+        }
         if self.layout == AfioLayout::Ch32v003 {
             return match offset {
                 0x04 => self.mapr,
@@ -121,6 +138,21 @@ impl Afio {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        if self.layout == AfioLayout::Ch32v00x {
+            match offset {
+                // EXTICR: eight 2-bit fields in [15:0].
+                0x08 => self.exticr[0] = value & 0x0000_FFFF,
+                // PCFR1: SPI1_RM [2:0] .. USART2_RM [22:20] and SWCFG
+                // [26:24]; [31:27] are reserved. USART1_RM and USART2_RM
+                // move the USART TX pads (`SystemBus::wire_stm32_uart_pads`);
+                // the other fields are stored only.
+                0x0C => self.set_mapr(value & 0x07FF_FFFF),
+                _ => {
+                    crate::census_reg!("afio:Afio", offset, "write");
+                }
+            }
+            return;
+        }
         if self.layout == AfioLayout::Ch32v003 {
             match offset {
                 // PCFR1, low 16 bits. TIM1_RM [7:6] moves the TIM1 pads
@@ -201,7 +233,7 @@ impl Peripheral for Afio {
     fn exti_line_source(&self, line: u8) -> Option<u8> {
         let lines = match self.layout {
             AfioLayout::Stm32F1 => 16,
-            AfioLayout::Ch32v003 => 8,
+            AfioLayout::Ch32v003 | AfioLayout::Ch32v00x => 8,
             AfioLayout::Ch32x03x => 24,
         };
         (line < lines).then(|| self.get_exti_mapping(line))
@@ -302,6 +334,29 @@ mod tests {
         a.write_u32(0x0C, 0xFFFF).unwrap();
         assert_eq!(rd32(&a, 0x0C), 0);
         assert_eq!(rd32(&a, 0x00), 0, "0x00 is reserved");
+    }
+
+    #[test]
+    fn ch32v00x_exticr_at_0x08_and_pcfr1_at_0x0c() {
+        let mut a = Afio::new_with_layout(AfioLayout::Ch32v00x);
+        // ch32fun dual_usart: USART2_RM = 3 in [22:20].
+        a.write_reg(0x0C, 3 << 20);
+        // EXTI line 2 from PD (11), line 1 from PB (01).
+        a.write_reg(0x08, (0b11 << 4) | (0b01 << 2));
+        assert_eq!(a.read_reg(0x0C), 3 << 20);
+        assert_eq!(a.read_reg(0x04), 0, "0x04 is reserved on the V00x");
+        assert_eq!(
+            a.remap_register()
+                .unwrap()
+                .load(std::sync::atomic::Ordering::Relaxed),
+            3 << 20
+        );
+        assert_eq!(a.exti_line_source(2), Some(3));
+        assert_eq!(a.exti_line_source(1), Some(1));
+        assert_eq!(a.exti_line_source(8), None);
+        // Reserved [31:27] read back 0.
+        a.write_reg(0x0C, 0xFFFF_FFFF);
+        assert_eq!(a.read_reg(0x0C), 0x07FF_FFFF);
     }
 
     #[test]
