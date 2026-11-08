@@ -63,9 +63,9 @@ fn run_l0(chip: &ChipDescriptor, max_steps: usize) -> L0Run {
         if machine.step().is_err() {
             break;
         }
-        reached_main |= pc_before == u64::from(main_pc) || machine.cpu.pc == u64::from(main_pc);
+        reached_main |= pc_before == main_pc || machine.cpu.pc == main_pc;
         // Entering the handler through vector 12 of the mode-3 table.
-        if machine.cpu.mcause == 0x8000_000C && machine.cpu.pc == u64::from(systick_pc) {
+        if machine.cpu.mcause == 0x8000_000C && machine.cpu.pc == systick_pc {
             systicks += 1;
         }
         if sink.lock().unwrap().ends_with(b"LW_L0_OK\r\n") {
