@@ -148,3 +148,16 @@ peripherals:
   renode_type: renesasra_iic
   bus: sysbus
   base_address: 1074393600
+# ADC0, the 12-bit ADC120 A/D converter (R_ADC0_Type). R_ADC0_BASE = 0x40170000 in FSP
+# v5.6.0 R7FA6M5BH.h; scan end is ELC_EVENT_ADC0_SCAN_END 0x160 (ra6m5
+# bsp_elc.h), and BSP_FEATURE_ADC_MAX_RESOLUTION_BITS selects ra_adc12. Channel
+# n is ANn (AN000 = 0); AN005..AN007 are in BSP_FEATURE_ADC_UNIT_0_CHANNELS.
+# clock_hz is the maximum ICLK and only sets the nominal 1 us per channel.
+- id: adc0
+  type: ra_adc12
+  base_address: 0x40170000
+  size: 512B
+  config:
+    elc_event: 352
+    clock_hz: 200000000
+    vref_mv: 3300

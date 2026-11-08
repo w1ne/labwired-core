@@ -59,7 +59,15 @@ const CONVERTED: &[&str] = &[
     "nucleo_h753zi",
     "nucleo_wba52cg",
     "ramn",
+    "renesas-ck_ra6m5",
     "renesas-da14592",
+    "renesas-ek_ra2e1",
+    "renesas-ek_ra8m1",
+    "renesas-r7fa2e1a9",
+    "renesas-r7fa2l1a",
+    "renesas-r7fa4m1a",
+    "renesas-r7fa6m5b",
+    "renesas-r7fa8m1a",
     "sam4s",
     "sam4s16c",
     "sam4s8b",
@@ -202,6 +210,12 @@ enum Family {
     /// `STATUS.SINGLEFIFODV` and `IF.SINGLEDONE` rise, `SINGLEFIFODATA` pops
     /// 12 bits against AVDD (simplicity_sdk efr32mg2x_iadc.h, em_iadc.c).
     Efr32Iadc,
+    /// Renesas RA ADC12/ADC14 (`ra_adc12`/`ra_adc14`): group-A channels in
+    /// `ADANSA0`, a software `ADCSR.ADST` write runs one scan that takes
+    /// time, `ADST` clears at scan end and `ADDRn` holds each result, against
+    /// VREFH0 3.3 V (FSP r_adc.c R_ADC_ScanStart/R_ADC_Read). ADC14 runs at
+    /// `ADCER.ADPRC` = 11b, 14 bits (FSP ADC_RESOLUTION_14_BIT).
+    RaAdc { adc14: bool },
 }
 
 /// `SINGLE.PORTPOS` value naming GPIO port A (`_IADC_SINGLE_PORTPOS_PORTA`).
@@ -209,6 +223,9 @@ const IADC_PORTPOS_PORTA: u32 = 0x8;
 
 /// SAM D21 PORT GROUP0 (PA). The routed AIN5..7 are pads PA05..PA07.
 const SAMD21_PORT_A: u64 = 0x4100_4400;
+
+/// RA `ADCER` offset (R_ADC0_Type).
+const RA_ADCER: u64 = 0x0E;
 
 /// XADC DRP channel of VAUXn (xadcps_hw.h `XADCPS_CH_AUX_MIN`).
 const XADC_AUX0: u8 = 0x10;
@@ -252,6 +269,10 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Xadc
         } else if kind == "efr32s2_iadc" {
             Family::Efr32Iadc
+        } else if kind == "ra_adc12" || kind == "ra_adc14" {
+            Family::RaAdc {
+                adc14: kind == "ra_adc14",
+            }
         } else {
             match p.config.get("profile").and_then(|v| v.as_str()) {
                 Some("stm32f4") => Family::Stm32F4,
@@ -311,6 +332,9 @@ impl Converter {
             Family::Samd21 => (mv * 4095 / (3300 * 100 / 148)).min(4095),
             // 12-bit against AVDD (3.3 V), 2^12 / VREF, truncated, clamped.
             Family::Efr32Iadc => (mv * 4096 / 3300).min(4095),
+            // (2^bits - 1) / VREFH0 (3.3 V), truncated, clamped.
+            Family::RaAdc { adc14: false } => (mv * 4095 / 3300).min(4095),
+            Family::RaAdc { adc14: true } => (mv * 16383 / 3300).min(16383),
         }
     }
 
@@ -343,6 +367,14 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::RaAdc { adc14 } => {
+                // R_ADC_Open: ADCER.ADPRC from the resolution, right
+                // justified, then ADCSR stored without ADST. Nothing
+                // converts until R_ADC_ScanStart.
+                let adprc = if adc14 { 3 << 1 } else { 0 };
+                bus.write_u16(self.base + RA_ADCER, adprc).expect("ADCER");
+                bus.write_u16(self.base, 0).expect("ADCSR single scan");
+            }
             Family::Efr32Iadc => {
                 // A SINGLESTART before EN.EN is accepted and dropped: no
                 // result, no flag, which is how a missing IADC_init hangs on
@@ -719,6 +751,15 @@ impl Converter {
                 bus.read_u32(self.base + 0x50 + 4 * u64::from(IDLE_CHANNEL))
                     .expect("drain the idle CDR");
                 codes
+            }
+            Family::RaAdc { .. } => {
+                let codes = self.ra_scan(bus, &[NTC_CHANNEL, DIODE_CHANNEL, IDLE_CHANNEL]);
+                assert_eq!(
+                    codes[2], 0,
+                    "{}: unrouted AN00{IDLE_CHANNEL} converts to zero",
+                    self.id
+                );
+                [codes[0], codes[1]]
             }
             Family::Eoss3 => self
                 .routed_channels()
@@ -1665,8 +1706,45 @@ impl Converter {
                 );
                 code
             }
+            Family::RaAdc { .. } => self.ra_scan(bus, &[channel])[0],
             Family::Saadc { .. } => unreachable!("SAADC converts as a scan"),
         }
+    }
+
+    /// One FSP software scan: select `channels` in `ADANSA0`, write
+    /// `ADCSR.ADST`, and poll `ADST` until the scan ends. The scan takes
+    /// one nominal microsecond per channel, so `ADST` must still be set one
+    /// cycle in, then the `ADDRn` reads.
+    fn ra_scan(&self, bus: &mut SystemBus, channels: &[u8]) -> Vec<u32> {
+        const ADST: u16 = 1 << 15;
+        let mask = channels.iter().fold(0u16, |m, &ch| m | (1 << ch));
+        let addr = |ch: u8| self.base + 0x20 + 2 * u64::from(ch);
+        bus.write_u16(self.base + 0x04, mask).expect("ADANSA0");
+        bus.write_u16(self.base, ADST).expect("ADCSR.ADST");
+        let start = bus.current_cycle;
+        bus.set_current_cycle(start + 1);
+        bus.tick_peripherals_fully();
+        assert_ne!(
+            bus.read_u16(self.base).unwrap() & ADST,
+            0,
+            "{}: ADST stays set while the scan runs",
+            self.id
+        );
+        // A 3-channel scan is 3 us; publish 10 us at the fastest ICLK
+        // declared (480 MHz).
+        bus.set_current_cycle(start + 4_800);
+        bus.tick_peripherals_fully();
+        assert_eq!(
+            bus.read_u16(self.base).unwrap() & ADST,
+            0,
+            "{}: ADST clears at scan end",
+            self.id
+        );
+        bus.write_u16(self.base + 0x04, 0).expect("clear ADANSA0");
+        channels
+            .iter()
+            .map(|&ch| u32::from(bus.read_u16(addr(ch)).expect("ADDRn")))
+            .collect()
     }
 
     /// The shared STM32 model also exposes what it holds per channel, so an
@@ -1733,6 +1811,21 @@ fn assert_stm32_series_map(board: &str, converter: &Converter) {
         format!("{:?}", converter.family),
         expected,
         "{board}:{} declares the wrong ADC register map for its series",
+        converter.id
+    );
+}
+
+/// The RA type must match the part's converter: only the RA4M1 has the
+/// 14-bit ADC140 (FSP `BSP_FEATURE_ADC_MAX_RESOLUTION_BITS` 14); RA2E1,
+/// RA2L1, RA6M5 and RA8M1 report 12.
+fn assert_ra_resolution(board: &str, converter: &Converter) {
+    let Family::RaAdc { adc14 } = converter.family else {
+        return;
+    };
+    let ra4m1 = board.contains("r7fa4m1") || board.contains("ra4m1");
+    assert_eq!(
+        adc14, ra4m1,
+        "{board}:{} declares the wrong RA ADC resolution",
         converter.id
     );
 }
@@ -1821,6 +1914,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Caes
                 | Family::Samd21
                 | Family::Efr32Iadc
+                | Family::RaAdc { .. }
         ) {
             assert_eq!(
                 converter.convert(&mut bus, IDLE_CHANNEL),
@@ -1888,6 +1982,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
             Ok(list) => {
                 for converter in &list {
                     assert_stm32_series_map(&board, converter);
+                    assert_ra_resolution(&board, converter);
                     assert_converter_routes_generic_analog(&board, &chip, &profile, converter);
                 }
                 instances += list.len();
@@ -1905,7 +2000,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 81,
+        instances, 89,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -1913,7 +2008,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 154,
+        without_adc, 146,
         "onboarding profiles that declare no modelled ADC"
     );
 }
