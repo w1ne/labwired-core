@@ -51,3 +51,19 @@ peripherals:
   type: efm32s1_gpioport
   base_address: 0x4000A0F0
   size: 48B
+# Series-1 TIMER0/TIMER1 (0x40018000/0x40018400).
+# Renode efm32xg1x/efm32jg1.repl maps `Timers.Efm32Timer` here with these IRQs
+# (Gecko SDK v4.4.0 EFM32JG1B IRQn_Type: TIMER0 10, TIMER1 18).
+# Series-1 layout (efm32pg1b_timer.h): IF/IFS/IFC/IEN at 0x0C..0x18,
+# CC0..CC3 at 0x60.
+# Counts CPU cycles / 2^PRESC; the CMU HFPERCLKEN0 gate is not modelled.
+- id: timer0
+  type: efm32s1_timer
+  base_address: 0x40018000
+  size: 1KB
+  irq: 10
+- id: timer1
+  type: efm32s1_timer
+  base_address: 0x40018400
+  size: 1KB
+  irq: 18

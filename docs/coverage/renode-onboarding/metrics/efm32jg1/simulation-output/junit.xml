@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.007546">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.010656">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="400f744a18d82100b3e7f3195b61932c5553b8548cb0a623bf130c8463223ef1"/>
+    <property name="firmware_hash" value="194a7a4fe55479bcc8471e03227cbaa2b2e08050666bb4245c95ca708de9b945"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.007546">
+  <testcase classname="labwired" name="run" time="0.010656">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: EFM32JG1 RENODE SMOKE" time="0.000000">
   </testcase>
@@ -13,7 +13,7 @@
   </testcase>
   <testcase classname="labwired" name="assertion 3: gpio_edges: gpiof:4 &gt;= 4 edges" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 4: memory_value: @0x20007c00=0xef31003f" time="0.000000">
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x20007c00=0xef3101ff" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>

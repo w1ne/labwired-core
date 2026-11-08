@@ -19,5 +19,6 @@ fn main() -> ! {
         // LED0/LED1 = PF4/PF5, as on the PG1/PG12 starter kits
         // (SLSTK3401A/SLSTK3402A).
         led: (5, 4),
+        timer0_irq: 10,
     })
 }

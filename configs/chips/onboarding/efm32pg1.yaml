@@ -8,8 +8,9 @@ name: efm32pg1
 arch: arm
 # Renode efm32xg1x/efm32pg1.repl: cpuType "cortex-m4f".
 core: cortex-m4f
-# Mapped: the memory map, USART0 and the GPIO ports, all exercised by the
-# Renode onboarding smoke. Other generated peripheral windows are omitted.
+# Mapped: the memory map, USART0, the GPIO ports and TIMER0/TIMER1, all
+# exercised by the Renode onboarding smoke. Other generated peripheral
+# windows are omitted.
 # Flash at 0x0 as in Renode's efm32xg1x/efm32pg1.repl
 # (`flash: Memory.MappedMemory @ sysbus 0x00000000`) and the EFM32 Series 1
 # memory map.
@@ -53,3 +54,19 @@ peripherals:
   type: efm32s1_gpioport
   base_address: 0x4000A0F0
   size: 48B
+# Series-1 TIMER0/TIMER1 (0x40018000/0x40018400).
+# Renode efm32xg1x/efm32pg1.repl only tags TIMER0/TIMER1; silicon has them
+# (Gecko SDK v4.4.0 EFM32PG1B IRQn_Type: TIMER0 10, TIMER1 18).
+# Series-1 layout (efm32pg1b_timer.h): IF/IFS/IFC/IEN at 0x0C..0x18,
+# CC0..CC3 at 0x60.
+# Counts CPU cycles / 2^PRESC; the CMU HFPERCLKEN0 gate is not modelled.
+- id: timer0
+  type: efm32s1_timer
+  base_address: 0x40018000
+  size: 1KB
+  irq: 10
+- id: timer1
+  type: efm32s1_timer
+  base_address: 0x40018400
+  size: 1KB
+  irq: 18

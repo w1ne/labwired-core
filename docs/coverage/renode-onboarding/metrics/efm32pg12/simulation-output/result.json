@@ -43,6 +43,9 @@
           "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok",
           "gpio pa pinlockn reset=ffff after=fffe ok",
           "gpio pa ctrl=00500050 ovtdis=ffff ok",
+          "tim0 up of=1 masked=1 pend=1 released=1 running=1 ok",
+          "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok",
+          "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok",
           "EFM32PG12 PASS"
         ]
       },
@@ -61,7 +64,7 @@
       "assertion": {
         "memory_value": {
           "address": 537132032,
-          "expected_value": 4012965951,
+          "expected_value": 4012966399,
           "mask": null,
           "size": 4
         }
@@ -79,23 +82,23 @@
     "type": "arm",
     "registers": [
       16,
-      1600,
-      50,
+      434,
       2147483648,
-      0,
+      4294867296,
+      200000,
+      2147483648,
+      1,
+      537132008,
       1,
       1073807376,
-      537132008,
+      4294867296,
       1073783036,
       4294867296,
-      1,
-      1,
-      4294867296,
-      537132000,
-      9233,
-      10198
+      537131976,
+      18367,
+      19558
     ],
-    "pc": 10198,
+    "pc": 19558,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -108,7 +111,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "3de399d8830f4c425a07261d1ad3affcaefa79951182c7aae9c1e4acd4f30aba",
+  "firmware_hash": "e236cb064d48f48fc557ba276394e53fd60b73ead877d99fc94ca6961e20ec3f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efm32pg12-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32pg12.yaml",
@@ -162,6 +165,20 @@
         "name": "gpiof",
         "kind": "native",
         "base": 1073783024,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer0",
+        "kind": "native",
+        "base": 1073840128,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer1",
+        "kind": "native",
+        "base": 1073841152,
         "registers": [],
         "artifacts": []
       },
@@ -233,63 +250,63 @@
             "value": 0
           },
           {
-            "cycle": 14999,
+            "cycle": 22289,
             "value": 1
           },
           {
-            "cycle": 27499,
+            "cycle": 34789,
             "value": 0
           },
           {
-            "cycle": 39999,
+            "cycle": 47289,
             "value": 1
           },
           {
-            "cycle": 52499,
+            "cycle": 59789,
             "value": 0
           },
           {
-            "cycle": 64999,
+            "cycle": 72289,
             "value": 1
           },
           {
-            "cycle": 77499,
+            "cycle": 84789,
             "value": 0
           },
           {
-            "cycle": 89999,
+            "cycle": 97289,
             "value": 1
           },
           {
-            "cycle": 102499,
+            "cycle": 109789,
             "value": 0
           },
           {
-            "cycle": 114999,
+            "cycle": 122289,
             "value": 1
           },
           {
-            "cycle": 127499,
+            "cycle": 134789,
             "value": 0
           },
           {
-            "cycle": 139999,
+            "cycle": 147289,
             "value": 1
           },
           {
-            "cycle": 152499,
+            "cycle": 159789,
             "value": 0
           },
           {
-            "cycle": 164999,
+            "cycle": 172289,
             "value": 1
           },
           {
-            "cycle": 177499,
+            "cycle": 184789,
             "value": 0
           },
           {
-            "cycle": 189999,
+            "cycle": 197289,
             "value": 1
           }
         ],
@@ -317,63 +334,63 @@
             "state": "0"
           },
           {
-            "cycle": 14999,
+            "cycle": 22289,
             "state": "1"
           },
           {
-            "cycle": 27499,
+            "cycle": 34789,
             "state": "0"
           },
           {
-            "cycle": 39999,
+            "cycle": 47289,
             "state": "1"
           },
           {
-            "cycle": 52499,
+            "cycle": 59789,
             "state": "0"
           },
           {
-            "cycle": 64999,
+            "cycle": 72289,
             "state": "1"
           },
           {
-            "cycle": 77499,
+            "cycle": 84789,
             "state": "0"
           },
           {
-            "cycle": 89999,
+            "cycle": 97289,
             "state": "1"
           },
           {
-            "cycle": 102499,
+            "cycle": 109789,
             "state": "0"
           },
           {
-            "cycle": 114999,
+            "cycle": 122289,
             "state": "1"
           },
           {
-            "cycle": 127499,
+            "cycle": 134789,
             "state": "0"
           },
           {
-            "cycle": 139999,
+            "cycle": 147289,
             "state": "1"
           },
           {
-            "cycle": 152499,
+            "cycle": 159789,
             "state": "0"
           },
           {
-            "cycle": 164999,
+            "cycle": 172289,
             "state": "1"
           },
           {
-            "cycle": 177499,
+            "cycle": 184789,
             "state": "0"
           },
           {
-            "cycle": 189999,
+            "cycle": 197289,
             "state": "1"
           }
         ],
@@ -440,6 +457,24 @@
         "end_cycle": 10000
       },
       {
+        "text": "tim0 up of=1 masked=1 pend=1 released=1 running=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
         "text": "EFM32PG12 PASS",
         "cycle_lo": 0,
         "cycle": 10000,
@@ -450,14 +485,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 10684,
+    "text_bytes": 20084,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 10684,
+    "flash_used_bytes": 20084,
     "ram_static_bytes": 0,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 262144,
-    "flash_used_pct": 1.02,
+    "flash_used_pct": 1.92,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -467,15 +502,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 261120,
-    "main_stack_high_water_bytes": 40,
-    "main_stack_free_min_bytes": 261080,
+    "main_stack_high_water_bytes": 64,
+    "main_stack_free_min_bytes": 261056,
     "main_stack_base": 536870912,
     "main_stack_top": 537132032,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 261120,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 261080,
+    "heap_free_min_bytes": 261056,
     "heap_base": 536870912,
     "heap_top": 537132032
   },
@@ -483,13 +518,13 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 1976,
-    "memory_writes": 23,
-    "peripheral_accesses": 698,
+    "memory_reads": 3894,
+    "memory_writes": 35,
+    "peripheral_accesses": 2455,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 10198,
+        "pc": 19558,
         "count": 781,
         "symbol": "core::ptr::write_volatile"
       }

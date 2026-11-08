@@ -28,10 +28,21 @@
 //! CC1/TIMEROUF clock sources (CLKSEL), SYNC start/stop across timers, the
 //! RISEA/FALLA input actions, input capture (CCn MODE = INPUTCAPTURE), PRS
 //! inputs, and the dead-time insertion unit (DTCTRL..DTLOCK, 0x70..0x84).
+//!
+//! Series 1 (`new_series1`; Gecko SDK v4.4.0 `efm32pg1b_timer.h`, the same
+//! TIMER_TypeDef on PG1/PG12/JG1/JG12) keeps the counter and the CTRL/CMD/
+//! STATUS words but moves the rest: IF 0x0C, IFS 0x10, IFC 0x14, IEN 0x18,
+//! LOCK 0x2C, ROUTEPEN 0x30, ROUTELOC0 0x34, ROUTELOC2 0x3C, four compare
+//! channels CC0..CC3 at 0x60 + n * 0x10, and the DTI words from 0xA0. It
+//! also raises IF.DIRCHG when UP/DOWN turns. LOCK accepts the unlock key
+//! (0xCE80) and reads 0; locking it is refused. A read of IFC returns 0
+//! (MSC_CTRL.IFCREADCLEAR, which would make it read-to-clear, is not
+//! modelled).
 use crate::{Peripheral, PeripheralTickResult, SimResult, SimulationError};
 use serde::Serialize;
 use std::any::Any;
 
+// Series 0 offsets; `Reg::decode` maps both layouts onto these registers.
 const CTRL: u64 = 0x00;
 const CMD: u64 = 0x04;
 const STATUS: u64 = 0x08;
@@ -45,15 +56,90 @@ const CNT: u64 = 0x24;
 const ROUTE: u64 = 0x28;
 /// CC0 at 0x30, CC1 at 0x40, CC2 at 0x50: CTRL, CCV, CCVP, CCVB.
 const CC_BASE: u64 = 0x30;
+/// Series 1: CC0..CC3 at 0x60..0x9F.
+const S1_CC_BASE: u64 = 0x60;
+
+/// _TIMER_LOCK_TIMERLOCKKEY_UNLOCK (efm32pg1b_timer.h).
+const S1_LOCK_UNLOCK: u32 = 0xCE80;
+
+/// A register, independent of where the layout puts it.
+#[derive(Clone, Copy)]
+enum Reg {
+    Ctrl,
+    Cmd,
+    Status,
+    Ien,
+    If,
+    Ifs,
+    Ifc,
+    Top,
+    Topb,
+    Cnt,
+    /// Series 0 ROUTE; Series 1 ROUTEPEN, ROUTELOC0, ROUTELOC2.
+    Route(usize),
+    /// Series 1 LOCK.
+    Lock,
+    /// Channel, word (0 CTRL, 1 CCV, 2 CCVP, 3 CCVB).
+    Cc(usize, u64),
+    Dti,
+    Reserved,
+}
+
+impl Reg {
+    fn decode(series1: bool, offset: u64) -> Self {
+        let common = match offset {
+            CTRL => Some(Reg::Ctrl),
+            CMD => Some(Reg::Cmd),
+            STATUS => Some(Reg::Status),
+            TOP => Some(Reg::Top),
+            TOPB => Some(Reg::Topb),
+            CNT => Some(Reg::Cnt),
+            _ => None,
+        };
+        if let Some(r) = common {
+            return r;
+        }
+        if series1 {
+            match offset {
+                0x0C => Reg::If,
+                0x10 => Reg::Ifs,
+                0x14 => Reg::Ifc,
+                0x18 => Reg::Ien,
+                0x2C => Reg::Lock,
+                0x30 => Reg::Route(0),
+                0x34 => Reg::Route(1),
+                0x3C => Reg::Route(2),
+                0x60..=0x9F => Reg::Cc(((offset - S1_CC_BASE) / 0x10) as usize, (offset & 0xF) / 4),
+                0xA0..=0xBB => Reg::Dti,
+                _ => Reg::Reserved,
+            }
+        } else {
+            match offset {
+                IEN => Reg::Ien,
+                IF => Reg::If,
+                IFS => Reg::Ifs,
+                IFC => Reg::Ifc,
+                ROUTE => Reg::Route(0),
+                0x30..=0x5F => Reg::Cc(((offset - CC_BASE) / 0x10) as usize, (offset & 0xF) / 4),
+                0x70..=0x87 => Reg::Dti,
+                _ => Reg::Reserved,
+            }
+        }
+    }
+}
 
 const CMD_START: u32 = 1;
 const CMD_STOP: u32 = 1 << 1;
 
 const IF_OF: u32 = 1;
 const IF_UF: u32 = 1 << 1;
+/// Series 1 only: UP/DOWN changed direction.
+const IF_DIRCHG: u32 = 1 << 2;
 const IF_CC0: u32 = 1 << 4;
 /// OF, UF, CC0..CC2, ICBOF0..ICBOF2 (the last never raised: no capture).
 const IF_MASK: u32 = 0x0773;
+/// Series 1 _TIMER_IF_MASK: adds DIRCHG, CC3 and ICBOF3.
+const S1_IF_MASK: u32 = 0x0FF7;
 
 const CTRL_OSMEN: u32 = 1 << 4;
 const CTRL_SYNC: u32 = 1 << 3;
@@ -85,6 +171,8 @@ impl Cc {
 #[derive(Debug, Serialize)]
 pub struct Efm32Timer {
     irq: u32,
+    /// Series-1 register layout, four compare channels and IF.DIRCHG.
+    series1: bool,
     ctrl: u32,
     running: bool,
     /// STATUS.DIR: counting down.
@@ -95,8 +183,9 @@ pub struct Efm32Timer {
     topb: u16,
     topbv: bool,
     cnt: u16,
-    route: u32,
-    cc: [Cc; 3],
+    route: [u32; 3],
+    /// Three channels on Series 0; the fourth exists on Series 1 only.
+    cc: [Cc; 4],
     /// CPU cycles not yet worth a whole counter clock. Not a register.
     #[serde(skip)]
     carry: u64,
@@ -104,9 +193,20 @@ pub struct Efm32Timer {
 }
 
 impl Efm32Timer {
+    /// A Series-0 TIMER (three compare channels).
     pub fn new(irq: u32) -> Self {
+        Self::with_layout(irq, false)
+    }
+
+    /// A Series-1 TIMER (EFM32PG1/PG12/JG1/JG12 layout, four channels).
+    pub fn new_series1(irq: u32) -> Self {
+        Self::with_layout(irq, true)
+    }
+
+    fn with_layout(irq: u32, series1: bool) -> Self {
         Self {
             irq,
+            series1,
             ctrl: 0,
             running: false,
             down: false,
@@ -117,8 +217,8 @@ impl Efm32Timer {
             topb: 0,
             topbv: false,
             cnt: 0,
-            route: 0,
-            cc: [Cc::default(); 3],
+            route: [0; 3],
+            cc: [Cc::default(); 4],
             carry: 0,
             refusal: None,
         }
@@ -138,6 +238,24 @@ impl Efm32Timer {
         self.ctrl & 3
     }
 
+    fn if_mask(&self) -> u32 {
+        if self.series1 {
+            S1_IF_MASK
+        } else {
+            IF_MASK
+        }
+    }
+
+    /// The compare channels this layout has.
+    fn channels(&self) -> &[Cc] {
+        &self.cc[..if self.series1 { 4 } else { 3 }]
+    }
+
+    fn channels_mut(&mut self) -> &mut [Cc] {
+        let n = if self.series1 { 4 } else { 3 };
+        &mut self.cc[..n]
+    }
+
     fn line(&self) -> bool {
         self.flags & self.ien != 0
     }
@@ -145,41 +263,39 @@ impl Efm32Timer {
     fn status(&self) -> u32 {
         let mut s = u32::from(self.running) | (u32::from(self.down) << 1);
         s |= u32::from(self.topbv) << 2;
-        for (n, c) in self.cc.iter().enumerate() {
+        for (n, c) in self.channels().iter().enumerate() {
             s |= u32::from(c.ccvbv) << (8 + n);
         }
         s
     }
 
     fn read_reg(&self, offset: u64) -> SimResult<u32> {
-        Ok(match offset {
-            CTRL => self.ctrl,
-            CMD | IFS | IFC => 0,
-            STATUS => self.status(),
-            IEN => self.ien,
-            IF => self.flags,
-            TOP => self.top.into(),
-            TOPB => self.topb.into(),
-            CNT => self.cnt.into(),
-            ROUTE => self.route,
-            0x30..=0x5F => {
-                let c = &self.cc[((offset - CC_BASE) / 0x10) as usize];
-                match offset & 0xF {
-                    0x0 => c.ctrl,
-                    0x4 => c.ccv.into(),
-                    0x8 => c.ccvp.into(),
-                    0xC => c.ccvb.into(),
-                    _ => 0,
+        Ok(match Reg::decode(self.series1, offset) {
+            Reg::Ctrl => self.ctrl,
+            Reg::Cmd | Reg::Ifs | Reg::Ifc | Reg::Lock | Reg::Reserved => 0,
+            Reg::Status => self.status(),
+            Reg::Ien => self.ien,
+            Reg::If => self.flags,
+            Reg::Top => self.top.into(),
+            Reg::Topb => self.topb.into(),
+            Reg::Cnt => self.cnt.into(),
+            Reg::Route(n) => self.route[n],
+            Reg::Cc(n, word) => {
+                let c = &self.cc[n];
+                match word {
+                    0 => c.ctrl,
+                    1 => c.ccv.into(),
+                    2 => c.ccvp.into(),
+                    _ => c.ccvb.into(),
                 }
             }
-            0x70..=0x87 => return Self::refuse("dead-time insertion (DTCTRL..DTLOCK)"),
-            _ => 0,
+            Reg::Dti => return Self::refuse("dead-time insertion (DTCTRL..DTLOCK)"),
         })
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        match offset {
-            CTRL => {
+        match Reg::decode(self.series1, offset) {
+            Reg::Ctrl => {
                 if value & 3 == 3 {
                     return Self::refuse("quadrature decoder mode (CTRL.MODE = QDEC)");
                 }
@@ -197,7 +313,7 @@ impl Efm32Timer {
                     self.down = self.mode() == MODE_DOWN;
                 }
             }
-            CMD => {
+            Reg::Cmd => {
                 if value & CMD_START != 0 {
                     self.running = true;
                 }
@@ -205,27 +321,32 @@ impl Efm32Timer {
                     self.running = false;
                 }
             }
-            IEN => self.ien = value & IF_MASK,
-            IFS => self.flags |= value & IF_MASK,
-            IFC => self.flags &= !value,
-            TOP => self.top = value as u16,
-            TOPB => {
+            Reg::Ien => self.ien = value & self.if_mask(),
+            Reg::Ifs => self.flags |= value & self.if_mask(),
+            Reg::Ifc => self.flags &= !value,
+            Reg::Top => self.top = value as u16,
+            Reg::Topb => {
                 self.topb = value as u16;
                 self.topbv = true;
             }
-            CNT => self.cnt = value as u16,
-            ROUTE => self.route = value,
-            0x30..=0x5F => {
-                let c = &mut self.cc[((offset - CC_BASE) / 0x10) as usize];
-                match offset & 0xF {
-                    0x0 => {
+            Reg::Cnt => self.cnt = value as u16,
+            Reg::Route(n) => self.route[n] = value,
+            Reg::Lock => {
+                if value & 0xFFFF != S1_LOCK_UNLOCK {
+                    return Self::refuse("LOCK (configuration lock)");
+                }
+            }
+            Reg::Cc(n, word) => {
+                let c = &mut self.cc[n];
+                match word {
+                    0 => {
                         if value & 3 == 1 {
                             return Self::refuse("CCn input capture");
                         }
                         c.ctrl = value;
                     }
-                    0x4 => c.ccv = value as u16,
-                    0xC => {
+                    1 => c.ccv = value as u16,
+                    3 => {
                         c.ccvb = value as u16;
                         c.ccvbv = true;
                     }
@@ -233,8 +354,8 @@ impl Efm32Timer {
                     _ => {}
                 }
             }
-            0x70..=0x87 => return Self::refuse("dead-time insertion (DTCTRL..DTLOCK)"),
-            _ => {}
+            Reg::Dti => return Self::refuse("dead-time insertion (DTCTRL..DTLOCK)"),
+            Reg::Status | Reg::If | Reg::Reserved => {}
         }
         Ok(())
     }
@@ -254,7 +375,7 @@ impl Efm32Timer {
             self.top = self.topb;
             self.topbv = false;
         }
-        for c in &mut self.cc {
+        for c in self.channels_mut() {
             c.ccvp = c.ccv;
             if c.ccvbv {
                 c.ccv = c.ccvb;
@@ -266,20 +387,30 @@ impl Efm32Timer {
         }
     }
 
+    /// UP/DOWN changes direction; Series 1 flags it as IF.DIRCHG.
+    fn turn(&mut self, down: bool) {
+        self.down = down;
+        if self.series1 {
+            self.flags |= IF_DIRCHG;
+        }
+    }
+
     /// CNT has just become its current value: raise the matching compares.
     fn compare(&mut self) {
-        for (n, c) in self.cc.iter().enumerate() {
+        let mut hit = 0;
+        for (n, c) in self.channels().iter().enumerate() {
             if c.compares() && c.ccv == self.cnt {
-                self.flags |= IF_CC0 << n;
+                hit |= IF_CC0 << n;
             }
         }
+        self.flags |= hit;
     }
 
     /// Distance from CNT to the nearest compare value strictly ahead in the
     /// counting direction, capped at `limit`.
     fn next_compare(&self, limit: u16) -> u16 {
         let mut dist = limit;
-        for c in self.cc.iter().filter(|c| c.compares()) {
+        for c in self.channels().iter().filter(|c| c.compares()) {
             let d = if self.down {
                 self.cnt.checked_sub(c.ccv)
             } else {
@@ -321,8 +452,8 @@ impl Efm32Timer {
                     // Nothing to count between 0 and a TOP of 0.
                     return;
                 }
-                (MODE_UPDOWN, false) if self.cnt >= top => self.down = true,
-                (MODE_UPDOWN, true) if self.cnt == 0 => self.down = false,
+                (MODE_UPDOWN, false) if self.cnt >= top => self.turn(true),
+                (MODE_UPDOWN, true) if self.cnt == 0 => self.turn(false),
                 _ => {}
             }
             let limit = if self.down { self.cnt } else { top - self.cnt };
@@ -335,10 +466,10 @@ impl Efm32Timer {
             ticks -= step;
             if self.mode() == MODE_UPDOWN {
                 if !self.down && self.cnt == top {
-                    self.down = true;
+                    self.turn(true);
                     self.wrap_event(IF_OF);
                 } else if self.down && self.cnt == 0 {
-                    self.down = false;
+                    self.turn(false);
                     self.wrap_event(IF_UF);
                 }
             }
@@ -349,7 +480,7 @@ impl Efm32Timer {
 
 impl Peripheral for Efm32Timer {
     fn on_system_reset(&mut self) {
-        *self = Self::new(self.irq);
+        *self = Self::with_layout(self.irq, self.series1);
     }
     fn read(&self, offset: u64) -> SimResult<u8> {
         let aligned = offset & !3;
@@ -526,5 +657,81 @@ mod tests {
         assert!(t.write_u32(CC_BASE, 1).is_err(), "input capture");
         assert!(t.write_u32(0x70, 1).is_err(), "DTI");
         assert!(t.write(0, 1).is_err(), "byte store");
+    }
+
+    // Series 1 offsets (efm32pg1b_timer.h).
+    const S1_IF: u64 = 0x0C;
+    const S1_IFS: u64 = 0x10;
+    const S1_IFC: u64 = 0x14;
+    const S1_IEN: u64 = 0x18;
+    const S1_LOCK: u64 = 0x2C;
+    const S1_ROUTEPEN: u64 = 0x30;
+    const S1_ROUTELOC0: u64 = 0x34;
+
+    #[test]
+    fn series1_moves_the_flag_words_and_ien_gates_the_line() {
+        let mut t = Efm32Timer::new_series1(10);
+        t.write_u32(TOP, 9).unwrap();
+        t.write_u32(CMD, CMD_START).unwrap();
+        t.tick_elapsed(10);
+        assert_eq!(t.read_u32(S1_IF).unwrap(), IF_OF);
+        assert_eq!(t.read_u32(S1_IEN).unwrap(), 0);
+        assert!(t.tick_elapsed(1).explicit_irqs.is_none());
+        t.write_u32(S1_IEN, IF_OF).unwrap();
+        assert_eq!(t.tick_elapsed(1).explicit_irqs, Some(vec![10]));
+        // 0x0C is IF here, not IEN: writing it moves nothing.
+        t.write_u32(S1_IF, 0).unwrap();
+        assert_eq!(t.read_u32(S1_IF).unwrap(), IF_OF);
+        t.write_u32(S1_IFC, IF_OF).unwrap();
+        assert_eq!(t.read_u32(S1_IF).unwrap(), 0);
+        t.write_u32(S1_IFS, 0xFFFF_FFFF).unwrap();
+        assert_eq!(t.read_u32(S1_IF).unwrap(), S1_IF_MASK);
+        assert_eq!(t.read_u32(S1_IFC).unwrap(), 0);
+    }
+
+    #[test]
+    fn series1_has_a_fourth_compare_channel_at_0x90() {
+        let mut t = Efm32Timer::new_series1(10);
+        t.write_u32(TOP, 1000).unwrap();
+        t.write_u32(S1_CC_BASE + 0x30, 2).unwrap(); // CC3 OUTPUTCOMPARE
+        t.write_u32(S1_CC_BASE + 0x34, 250).unwrap();
+        t.write_u32(CMD, CMD_START).unwrap();
+        t.tick_elapsed(250);
+        assert_eq!(t.read_u32(S1_IF).unwrap() & 0xF0, IF_CC0 << 3);
+        t.write_u32(S1_CC_BASE + 0x3C, 400).unwrap();
+        assert_eq!(t.read_u32(STATUS).unwrap() & (1 << 11), 1 << 11, "CCVBV3");
+        t.tick_elapsed(751);
+        assert_eq!(t.read_u32(S1_CC_BASE + 0x34).unwrap(), 400);
+        assert_eq!(t.read_u32(S1_CC_BASE + 0x38).unwrap(), 250, "CCVP");
+        // The Series-0 CC0 offset is ROUTEPEN here.
+        t.write_u32(S1_ROUTEPEN, 0xF).unwrap();
+        t.write_u32(S1_ROUTELOC0, 0x0302_0100).unwrap();
+        assert_eq!(t.read_u32(S1_ROUTEPEN).unwrap(), 0xF);
+        assert_eq!(t.read_u32(S1_ROUTELOC0).unwrap(), 0x0302_0100);
+        assert_eq!(t.read_u32(S1_CC_BASE).unwrap(), 0);
+    }
+
+    #[test]
+    fn series1_updown_raises_dirchg_and_series0_does_not() {
+        for (series1, dirchg) in [(true, IF_DIRCHG), (false, 0)] {
+            let mut t = Efm32Timer::with_layout(10, series1);
+            t.write_u32(CTRL, MODE_UPDOWN).unwrap();
+            t.write_u32(TOP, 5).unwrap();
+            t.write_u32(CMD, CMD_START).unwrap();
+            t.tick_elapsed(5);
+            let flags = t.read_u32(if series1 { S1_IF } else { IF }).unwrap();
+            assert_eq!(flags, IF_OF | dirchg);
+        }
+    }
+
+    #[test]
+    fn series1_lock_takes_only_the_unlock_key_and_dti_is_refused() {
+        let mut t = Efm32Timer::new_series1(10);
+        t.write_u32(S1_LOCK, S1_LOCK_UNLOCK).unwrap();
+        assert_eq!(t.read_u32(S1_LOCK).unwrap(), 0);
+        assert!(t.write_u32(S1_LOCK, 0).is_err(), "locking");
+        assert!(t.write_u32(0xA0, 1).is_err(), "DTCTRL");
+        // 0x70 is inside CC1 on Series 1, not DTI.
+        assert!(t.write_u32(0x70, 2).is_ok());
     }
 }

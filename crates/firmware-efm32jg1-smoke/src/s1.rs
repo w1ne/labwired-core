@@ -6,6 +6,11 @@
 //! Series 0 there are no DOUTSET/DOUTCLR words — 0x10/0x14 are reserved, so
 //! this firmware sets and clears through DOUT and toggles through DOUTTGL —
 //! and OVTDIS sits at 0x28. USART0 (0x40010000) is the console.
+//!
+//! Also checks TIMER0/TIMER1 (`efm32s1_timer`, Gecko SDK
+//! `efm32pg1b_timer.h`): the Series-1 layout puts IF/IFS/IFC/IEN at
+//! 0x0C/0x10/0x14/0x18 (Series 0: IEN 0x0C, IF 0x10, IFC 0x18) and four
+//! compare channels at 0x60, and raises IF.DIRCHG when UP/DOWN turns.
 #![allow(dead_code)]
 
 use core::ptr::{read_volatile, write_volatile};
@@ -34,6 +39,30 @@ const P_OVTDIS: u32 = 0x28;
 /// _GPIO_P_CTRL_RESETVALUE (efm32pg1b_gpio.h).
 const CTRL_RESET: u32 = 0x0050_0050;
 
+// TIMER_TypeDef (efm32pg1b_timer.h), TIMER0/1 at 0x40018000 + n * 0x400.
+const TIMER: u32 = 0x4001_8000;
+const T_CTRL: u32 = 0x00;
+const T_CMD: u32 = 0x04;
+const T_STATUS: u32 = 0x08;
+const T_IF: u32 = 0x0C;
+const T_IFC: u32 = 0x14;
+const T_IEN: u32 = 0x18;
+const T_TOP: u32 = 0x1C;
+const T_CNT: u32 = 0x24;
+const T_CC3_CTRL: u32 = 0x90;
+const T_CC3_CCV: u32 = 0x94;
+const START: u32 = 1;
+const STOP: u32 = 2;
+const IF_OF: u32 = 1;
+const IF_UF: u32 = 2;
+const IF_DIRCHG: u32 = 4;
+const IF_CC3: u32 = 1 << 7;
+const ST_RUNNING: u32 = 1;
+const ST_DIR: u32 = 2;
+
+const NVIC_ISPR0: u32 = 0xE000_E200;
+const NVIC_ICPR0: u32 = 0xE000_E280;
+
 fn rd(addr: u32) -> u32 {
     unsafe { read_volatile(addr as *const u32) }
 }
@@ -44,6 +73,20 @@ fn wr(addr: u32, value: u32) {
 
 fn port(n: u32, reg: u32) -> u32 {
     GPIO + n * 0x30 + reg
+}
+
+fn timer(n: u32, reg: u32) -> u32 {
+    TIMER + n * 0x400 + reg
+}
+
+/// Poll `cond` a bounded number of times.
+fn wait(cond: impl Fn() -> bool) -> bool {
+    for _ in 0..200_000u32 {
+        if cond() {
+            return true;
+        }
+    }
+    false
 }
 
 fn putc(byte: u8) {
@@ -211,6 +254,74 @@ fn check_ctrl_ovtdis() -> bool {
     verdict(ctrl == CTRL_RESET && ovt == 0xFFFF)
 }
 
+/// TIMER0 UP: OF latches in IF (0x0C), pends the NVIC line only once IEN
+/// (0x18) enables it, and IFC (0x14) releases it.
+fn check_timer0(board: &Board) -> bool {
+    let irq = board.timer0_irq;
+    wr(timer(0, T_TOP), 999);
+    wr(timer(0, T_CMD), START);
+    let of = wait(|| rd(timer(0, T_IF)) & IF_OF != 0);
+    let masked = !bit(NVIC_ISPR0, irq);
+    wr(timer(0, T_IEN), IF_OF);
+    let pend = bit(NVIC_ISPR0, irq);
+    wr(timer(0, T_IFC), IF_OF);
+    wr(NVIC_ICPR0, 1 << irq);
+    let released = !bit(NVIC_ISPR0, irq);
+    let running = rd(timer(0, T_STATUS)) & ST_RUNNING != 0;
+    wr(timer(0, T_IEN), 0);
+    puts("tim0 up ");
+    flag("of=", of);
+    flag("masked=", masked);
+    flag("pend=", pend);
+    flag("released=", released);
+    flag("running=", running);
+    verdict(of && masked && pend && released && running)
+}
+
+/// TIMER1 DOWN + one-shot: underflows to TOP once, raises UF, stops.
+fn check_timer1_oneshot() -> bool {
+    wr(timer(1, T_CTRL), 1 | (1 << 4));
+    wr(timer(1, T_TOP), 200);
+    wr(timer(1, T_CNT), 50);
+    let dir = rd(timer(1, T_STATUS)) & ST_DIR != 0;
+    wr(timer(1, T_CMD), START);
+    let stopped = wait(|| rd(timer(1, T_STATUS)) & ST_RUNNING == 0);
+    let flags = rd(timer(1, T_IF)) & (IF_OF | IF_UF);
+    let cnt = rd(timer(1, T_CNT));
+    puts("tim1 down oneshot ");
+    flag("dir=", dir);
+    flag("stopped=", stopped);
+    puts("if=");
+    hex(flags, 1);
+    puts(" cnt=");
+    hex(cnt, 4);
+    putc(b' ');
+    verdict(dir && stopped && flags == IF_UF && cnt == 200)
+}
+
+/// TIMER1 UP/DOWN with CC3 (0x90, Series 1 only) in output compare: CC3
+/// flags on the way up, OF at TOP turns it down and raises DIRCHG.
+fn check_timer1_updown_cc3() -> bool {
+    wr(timer(1, T_IFC), 0xFFF);
+    wr(timer(1, T_CTRL), 2);
+    wr(timer(1, T_TOP), 400);
+    wr(timer(1, T_CNT), 0);
+    wr(timer(1, T_CC3_CTRL), 2);
+    wr(timer(1, T_CC3_CCV), 100);
+    wr(timer(1, T_CMD), START);
+    let cc3 = wait(|| rd(timer(1, T_IF)) & IF_CC3 != 0);
+    let of = wait(|| rd(timer(1, T_IF)) & IF_OF != 0);
+    let dirchg = rd(timer(1, T_IF)) & IF_DIRCHG != 0;
+    let down = rd(timer(1, T_STATUS)) & ST_DIR != 0;
+    wr(timer(1, T_CMD), STOP);
+    puts("tim1 updown ");
+    flag("cc3=", cc3);
+    flag("of=", of);
+    flag("dirchg=", dirchg);
+    flag("dir_down=", down);
+    verdict(cc3 && of && dirchg && down)
+}
+
 pub struct Board {
     /// First UART line, e.g. "EFM32PG1 RENODE SMOKE".
     pub banner: &'static str,
@@ -220,10 +331,12 @@ pub struct Board {
     pub summary: u32,
     /// LED0 as (port index, pin); LED1 is the next pin on the same port.
     pub led: (u32, u32),
+    /// TIMER0's NVIC line (10 on PG1/JG1, 11 on PG12/JG12).
+    pub timer0_irq: u32,
 }
 
 /// Run every check, store the summary word (0xEF310000 | one bit per check
-/// = 0xEF31003F on a pass), then toggle LED0 forever on a busy-wait delay.
+/// = 0xEF3101FF on a pass), then toggle LED0 forever on a busy-wait delay.
 pub fn run(board: &Board) -> ! {
     wr(USART0 + U_CMD, CMD_TXEN);
     puts(board.banner);
@@ -235,6 +348,9 @@ pub fn run(board: &Board) -> ! {
         check_wired(),
         check_pinlock(),
         check_ctrl_ovtdis(),
+        check_timer0(board),
+        check_timer1_oneshot(),
+        check_timer1_updown_cc3(),
     ];
     let mut summary = 0xEF31_0000u32;
     for (i, ok) in checks.iter().enumerate() {
@@ -244,7 +360,7 @@ pub fn run(board: &Board) -> ! {
     }
     wr(board.summary, summary);
     puts(board.family);
-    if summary == 0xEF31_003F {
+    if summary == 0xEF31_01FF {
         puts(" PASS\r\n");
     } else {
         puts(" FAIL\r\n");
