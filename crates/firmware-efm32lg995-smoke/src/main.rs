@@ -19,5 +19,7 @@ fn main() -> ! {
         banner: "EFM32LG995 RENODE SMOKE",
         family: "EFM32LG",
         summary: 0x2001_FF00,
+        led: (4, 2),
+        timers: 4,
     })
 }

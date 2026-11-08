@@ -1,10 +1,10 @@
-//! EFM32 Series-0 (Giant/Leopard/Wonder Gecko) Renode-parity checks, shared
-//! by the GG995/GG942/LG942/LG995/WG995 smokes (`#[path]`-included).
+//! EFM32 Series-0 Renode-parity checks, shared by the GG995/GG942/LG942/
+//! LG995/WG995/TG840/ZG222/HG350 smokes (`#[path]`-included).
 //!
-//! Checks the blocks Renode's efm32gg942.repl maps (and the LG/WG repls pull
-//! in with `using "./efm32gg942.repl"`): the Series-0 GPIO ports
-//! (`efm32s0_gpioport`) and TIMER0..TIMER3 (`efm32s0_timer`), with a
-//! board-specific (U)SART as the console.
+//! Checks the blocks Renode's efm32xg repls map: the Series-0 GPIO ports
+//! (`efm32s0_gpioport`) and TIMER0..TIMER(n-1) (`efm32s0_timer`; four on
+//! GG/LG/WG, three on HG, two on TG/ZG), with a board-specific (U)SART as
+//! the console and the board's LED0/LED1 pins for the push-pull check.
 #![allow(dead_code)]
 
 use core::ptr::{read_volatile, write_volatile};
@@ -19,8 +19,8 @@ const STATUS_TXBL: u32 = 1 << 6;
 // GPIO_P_TypeDef (efm32gg_gpio_p.h), ports at a 0x24 stride from 0x40006000.
 const GPIO: u32 = 0x4000_6000;
 const PORT_A: u32 = 0;
-const PORT_E: u32 = 4;
 const P_MODEL: u32 = 0x04;
+const P_MODEH: u32 = 0x08;
 const P_DOUT: u32 = 0x0C;
 const P_DOUTSET: u32 = 0x10;
 const P_DOUTCLR: u32 = 0x14;
@@ -99,6 +99,16 @@ fn hex(value: u32, digits: u32) {
     }
 }
 
+/// "pe2", "pc10": lower-case port letter and decimal pin number.
+fn pin_name(p: u32, pin: u32) {
+    putc(b'p');
+    putc(b'a' + p as u8);
+    if pin >= 10 {
+        putc(b'1');
+    }
+    putc(b'0' + (pin % 10) as u8);
+}
+
 fn flag(name: &str, value: bool) {
     puts(name);
     putc(if value { b'1' } else { b'0' });
@@ -124,18 +134,34 @@ fn bit(addr: u32, n: u32) -> bool {
     (rd(addr) >> n) & 1 != 0
 }
 
-/// PE2/PE3 PUSHPULL: SET/CLR/TGL act on DOUT, DIN reads the driven pins,
-/// and the command words read 0.
-fn check_pushpull() -> bool {
-    wr(port(PORT_E, P_MODEL), 0x4400);
-    wr(port(PORT_E, P_DOUTSET), 1 << 2);
-    let set = rd(port(PORT_E, P_DIN)) & 0xC == 0x4;
-    wr(port(PORT_E, P_DOUTTGL), 0xC);
-    let tgl = rd(port(PORT_E, P_DOUT)) & 0xC == 0x8 && rd(port(PORT_E, P_DIN)) & 0xC == 0x8;
-    wr(port(PORT_E, P_DOUTCLR), 1 << 3);
-    let clr = rd(port(PORT_E, P_DIN)) & 0xC == 0;
-    let wo = rd(port(PORT_E, P_DOUTSET)) == 0 && rd(port(PORT_E, P_DOUTTGL)) == 0;
-    puts("gpio pe2/pe3 pushpull ");
+/// Set one pin's 4-bit MODE field (MODEL for pins 0..7, MODEH for 8..15).
+fn set_mode(p: u32, pin: u32, mode: u32) {
+    let reg = port(p, if pin < 8 { P_MODEL } else { P_MODEH });
+    let shift = (pin % 8) * 4;
+    wr(reg, (rd(reg) & !(0xF << shift)) | (mode << shift));
+}
+
+/// LED0/LED1 (`led`, `led + 1`) PUSHPULL: SET/CLR/TGL act on DOUT, DIN
+/// reads the driven pins, and the command words read 0.
+fn check_pushpull(board: &Board) -> bool {
+    let (p, pin) = board.led;
+    let lo = 1 << pin;
+    let hi = 1 << (pin + 1);
+    let both = lo | hi;
+    set_mode(p, pin, 4);
+    set_mode(p, pin + 1, 4);
+    wr(port(p, P_DOUTSET), lo);
+    let set = rd(port(p, P_DIN)) & both == lo;
+    wr(port(p, P_DOUTTGL), both);
+    let tgl = rd(port(p, P_DOUT)) & both == hi && rd(port(p, P_DIN)) & both == hi;
+    wr(port(p, P_DOUTCLR), hi);
+    let clr = rd(port(p, P_DIN)) & both == 0;
+    let wo = rd(port(p, P_DOUTSET)) == 0 && rd(port(p, P_DOUTTGL)) == 0;
+    puts("gpio ");
+    pin_name(p, pin);
+    putc(b'/');
+    pin_name(p, pin + 1);
+    puts(" pushpull ");
     flag("set=", set);
     flag("tgl=", tgl);
     flag("clr=", clr);
@@ -278,7 +304,7 @@ fn check_timer3() -> bool {
     verdict(of && down && uf && up)
 }
 
-/// One Series-0 Giant/Leopard/Wonder Gecko smoke target.
+/// One Series-0 smoke target.
 pub struct Board {
     /// Console (U)SART base address.
     pub console: u32,
@@ -288,25 +314,32 @@ pub struct Board {
     pub family: &'static str,
     /// Summary word address, kept above the linker's RAM.
     pub summary: u32,
+    /// LED0 as (port index, pin); LED1 is the next pin on the same port.
+    pub led: (u32, u32),
+    /// TIMER instances the part has (2..=4); TIMER2/TIMER3 checks are
+    /// skipped (and left out of the summary mask) when absent.
+    pub timers: u32,
 }
 
-/// Run every check, store the summary word (0xEF3200FF on a full pass),
-/// then toggle PE2 (STK3700 LED0) on every TIMER0 overflow forever.
+/// Run every check, store the summary word (0xEF320000 | one bit per
+/// check run: 0xEF3200FF with four TIMERs, 0x7F with three, 0x3F with two),
+/// then toggle LED0 on every TIMER0 overflow forever.
 pub fn run(board: &Board) -> ! {
     unsafe { CONSOLE = board.console };
     wr(board.console + U_CMD, CMD_TXEN);
     puts(board.banner);
     puts("\r\n");
     let checks = [
-        check_pushpull(),
+        check_pushpull(board),
         check_disabled_and_pull(),
         check_wired(),
         check_pinlock(),
         check_timer0(),
         check_timer1(),
-        check_timer2(),
-        check_timer3(),
+        board.timers > 2 && check_timer2(),
+        board.timers > 3 && check_timer3(),
     ];
+    let expected = 0xEF32_0000u32 | ((1u32 << (4 + board.timers)) - 1);
     let mut summary = 0xEF32_0000u32;
     for (i, ok) in checks.iter().enumerate() {
         if *ok {
@@ -315,7 +348,7 @@ pub fn run(board: &Board) -> ! {
     }
     wr(board.summary, summary);
     puts(board.family);
-    if summary == 0xEF32_00FF {
+    if summary == expected {
         puts(" PASS\r\n");
     } else {
         puts(" FAIL\r\n");
@@ -324,7 +357,7 @@ pub fn run(board: &Board) -> ! {
     loop {
         if rd(timer(0, T_IF)) & IF_OF != 0 {
             wr(timer(0, T_IFC), IF_OF);
-            wr(port(PORT_E, P_DOUTTGL), 1 << 2);
+            wr(port(board.led.0, P_DOUTTGL), 1 << board.led.1);
         }
     }
 }

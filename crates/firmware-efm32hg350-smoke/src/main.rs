@@ -1,35 +1,26 @@
+//! EFM32HG350 (Happy Gecko, Cortex-M0+) Renode-parity smoke.
+//!
+//! USART0 is the console; the Series-0 GPIO/TIMER checks are shared with the
+//! EFM32GG995 smoke (`firmware-efm32gg995-smoke/src/s0.rs`). Renode's
+//! efm32hg350.repl maps three TIMERs, so the TIMER2/TIMER3 checks are skipped
+//! where absent. LED0 is PF4 (STK3400). Summary word at 0x2000_1F00.
 #![no_std]
 #![no_main]
 
-use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-// EFM32 USART0: CMD@0x0C, STATUS@0x10, TXDATA@0x34.
-const USART0_CMD: *mut u32 = 0x4000_C00C as *mut u32;
-const USART0_STATUS: *const u32 = 0x4000_C010 as *const u32;
-const USART0_TXDATA: *mut u32 = 0x4000_C034 as *mut u32;
-
-const CMD_TXEN: u32 = 1 << 0;
-const STATUS_TXBL: u32 = 1 << 6;
-
-fn putc(byte: u8) {
-    unsafe {
-        let mut remaining = 100_000u32;
-        while read_volatile(USART0_STATUS) & STATUS_TXBL == 0 && remaining > 0 {
-            remaining -= 1;
-        }
-        write_volatile(USART0_TXDATA, byte as u32);
-    }
-}
+#[path = "../../firmware-efm32gg995-smoke/src/s0.rs"]
+mod s0;
 
 #[entry]
 fn main() -> ! {
-    unsafe { write_volatile(USART0_CMD, CMD_TXEN) };
-    for byte in b"EFM32HG350 USART0 smoke\r\n" {
-        putc(*byte);
-    }
-    loop {
-        core::hint::spin_loop();
-    }
+    s0::run(&s0::Board {
+        console: 0x4000_C000,
+        banner: "EFM32HG350 RENODE SMOKE",
+        family: "EFM32HG",
+        summary: 0x2000_1F00,
+        led: (5, 4),
+        timers: 3,
+    })
 }

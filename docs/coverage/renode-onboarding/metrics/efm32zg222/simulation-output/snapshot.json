@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
+      0,
+      1073807372,
+      1073766496,
+      4294867296,
+      1024,
+      1073807376,
       1073792016,
-      25,
-      134218096,
-      4294867296,
-      10,
-      4294867296,
-      2147483648,
-      536874992,
+      536873960,
       0,
       0,
       0,
       0,
       0,
-      536874992,
-      134218089,
-      134218060
+      536873800,
+      134227113,
+      134228008
     ],
-    "pc": 134218060,
-    "xpsr": 1627389952,
+    "pc": 134228008,
+    "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "73d3f74f22ba81c194c4a6f7a681d36a4fd98163aa9df13f596e9617ebcf7e61",
+  "firmware_hash": "8392d5068fc67aedcde9de371cae0390b3e02735cbcbc0646fa1bf84b69e632b",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-efm32zg222-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32zg222.yaml",

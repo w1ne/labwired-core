@@ -1,1 +1,8 @@
-EFM32TG840 USART0 smoke
+EFM32TG840 RENODE SMOKE
+gpio pd7/pd8 pushpull set=1 tgl=1 clr=1 wo=1 ok
+gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok
+gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok
+gpio pa pinlockn reset=ffff after=fffe ok
+tim0 up of=1 pend=1 released=1 running=1 ok
+tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok
+EFM32TG PASS

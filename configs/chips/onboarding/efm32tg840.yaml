@@ -4,11 +4,13 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# Narrowed imported EFM32TG840 profile: imported memory and the model-backed
-# USART0 window exercised by the onboarding smoke. Other generated peripheral
-# claims are omitted until a behavioral smoke covers them.
 name: efm32tg840
 arch: arm
+# Measured onboarding profile: Cortex-M3, imported flash/RAM, and the modeled
+# USART0 console, Series-0 GPIO ports and TIMER0..TIMER1 exercised by the smoke.
+# Other blocks Renode's efm32tg840.repl maps (I2C0, LEUART0, USART1) are not
+# claimed here because the engine has no model-backed coverage for them.
+core: cortex-m3
 flash:
   base: 134217728
   size: 32768B
@@ -20,3 +22,45 @@ peripherals:
   type: efm32_uart
   bus: sysbus
   base_address: 1073790976
+# Series-0 GPIO ports A..F (Renode: one `GPIOPort.EFMGPIOPort` at
+# 0x40006000). GPIO_P_TypeDef at a 0x24 stride (Gecko SDK efm32tg_gpio_p.h).
+# Register sets exist for all six ports; which pins are bonded out on this
+# package is not modelled. The block head from 0x40006100 (EXTI, ROUTE,
+# INSENSE, EM4 wake) is NOT mapped: no model behind it.
+- id: gpioa
+  type: efm32s0_gpioport
+  base_address: 0x40006000
+  size: 36B
+- id: gpiob
+  type: efm32s0_gpioport
+  base_address: 0x40006024
+  size: 36B
+- id: gpioc
+  type: efm32s0_gpioport
+  base_address: 0x40006048
+  size: 36B
+- id: gpiod
+  type: efm32s0_gpioport
+  base_address: 0x4000606c
+  size: 36B
+- id: gpioe
+  type: efm32s0_gpioport
+  base_address: 0x40006090
+  size: 36B
+- id: gpiof
+  type: efm32s0_gpioport
+  base_address: 0x400060b4
+  size: 36B
+# TIMER0..TIMER1 (Renode: `Timers.Efm32Timer`), IRQs from efm32tg840.repl
+# (and EFM32TG IRQn_Type: TIMER0 2, TIMER1 10).
+# Counts CPU cycles / 2^PRESC; the CMU HFPERCLKEN0 gate is not modelled.
+- id: timer0
+  type: efm32s0_timer
+  base_address: 0x40010000
+  size: 1KB
+  irq: 2
+- id: timer1
+  type: efm32s0_timer
+  base_address: 0x40010400
+  size: 1KB
+  irq: 10

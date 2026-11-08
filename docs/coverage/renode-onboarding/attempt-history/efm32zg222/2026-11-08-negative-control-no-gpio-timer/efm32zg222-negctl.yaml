@@ -1,0 +1,22 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Execution profile for the imported Renode target. Keep only its memory
+# windows and the existing UART model exercised by the onboarding smoke.
+name: efm32zg222
+arch: arm
+core: cortex-m0+
+flash:
+  base: 134217728
+  size: 32768B
+ram:
+  base: 536870912
+  size: 4096B
+peripherals:
+- id: usart1
+  type: efm32_uart
+  bus: sysbus
+  base_address: 1073792000
