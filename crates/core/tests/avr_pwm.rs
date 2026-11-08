@@ -112,10 +112,13 @@ fn analog_write_duty_reaches_the_pads_and_turns_the_motor_forward() {
     assert!((d3.0 - 200.0 / 256.0).abs() < 0.02, "D3 duty {d3:?}");
     assert!((d11.0 - 50.0 / 256.0).abs() < 0.02, "D11 duty {d11:?}");
     assert!((d5.0 - 129.0 / 256.0).abs() < 0.02, "D5 duty {d5:?}");
-    // Timer2 and Timer0 at clk/64 with an 8-bit sawtooth: ~976 Hz, ~19 periods.
-    for (name, (_, rises)) in [("D3", d3), ("D11", d11), ("D5", d5)] {
-        assert!((17..=21).contains(&rises), "{name} rising edges {rises}");
+    // Both clk/64. Arduino runs Timer2 in phase-correct mode (up to 255 and
+    // back down, 510 clocks): 490 Hz, ~10 periods. Timer0 is fast PWM (256
+    // clocks): 976 Hz, ~19 periods.
+    for (name, (_, rises)) in [("D3", d3), ("D11", d11)] {
+        assert!((9..=11).contains(&rises), "{name} rising edges {rises}");
     }
+    assert!((17..=21).contains(&d5.1), "D5 rising edges {}", d5.1);
     let rpm = m.bus.motor_speed_rpm("M1").expect("M1");
     assert!(
         rpm > 100.0,
