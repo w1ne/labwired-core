@@ -102,7 +102,8 @@ The GPIO matrix reuses the engine's C3-sized register block (pins 0–25), so
 | LEDC | ✅ / ⚠️ | The C3 timer/counter/wrap engine on the C6 field geometry (`esp32c6_ledc`), base `0x6000_7000` + source 45. Channel outputs reach the pad through matrix signals 0..5, clocked from `PCR.LEDC_SCLK_CONF`: Arduino `analogWrite(2, 128)` is 1 kHz / 50 % on GPIO2. The C6-only gamma/event/compare/capture tail is not modelled |
 | TIMG0/TIMG1 | ✅ / ⚠️ | Shared `esp32_timg` GP timer plus the real C3/C6 **MWDT** path (`esp32c6_mwdt`): WDTWPROTECT write lock, `WDTCONFIG0..5` round-trip, walk-driven **four-stage chain** (`0→1→2→3→0`, WDTCONFIG2..5 stage holds, STG0..3 interrupt-action encodings), WDTFEED reload to stage 0, `INT_RAW_TIMERS.WDT_INT_RAW` latch + W1C. The CPU/system reset actions are **not** performed (advanced through, never triggered) |
 | LP_TIMER (RTC) | ✅ / ⚠️ | C6-only `esp32c6_lp_rtc`: free-running 48-bit counter + `UPDATE` snapshot into `MAIN_BUF0`/`MAIN_BUF1`. No RTC-slow rate, alarms/overflow IRQs, or sleep retention |
-| SYSTIMER, RMT, I2S, TWAI, crypto, eFuse, PMU, LP_WDT, LP_I2C/LP_UART, LP core | ❌ | Deliberately **not declared**; their windows fault loudly instead of pretending to work |
+| TWAI0 | ✅ / ⚠️ | The S3/C3 SJA1000-style TWAI model (`esp32s3_twai`), C6 base `0x6000_B000` + source 46, gated on `PCR.TWAI0_CONF.CLK_EN` (bit 0). Offsets `0x00..0x7C` and the MODE/CMD/STATUS/INT/BUS_TIMING bits match the C6 `twai_reg.h`. Arduino matrix L8: self-RX of std ID 0x123 / data 0xA5. Not modelled: the C6 IDLE interrupt (bit 8), STATUS.MISS (bit 8), the `0x80..0x90` standby/HW_CFG/ECO words, bus timing and an external bus. TWAI1 (`0x6000_D000`) is still a stub |
+| SYSTIMER, RMT, I2S, TWAI1, crypto, eFuse, PMU, LP_WDT, LP_I2C/LP_UART, LP core | ❌ | Deliberately **not declared**; their windows fault loudly instead of pretending to work |
 
 ### Interrupts
 

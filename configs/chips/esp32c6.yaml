@@ -263,10 +263,19 @@ peripherals:
     config:
       path: "../peripherals/esp32c3/systimer.yaml"
       debug_schema: "../peripherals/esp32c3/systimer.yaml"
+  # TWAI0 — the S3/C3 SJA1000-style TWAI behavioural model. C6 twai_reg.h
+  # (DR_REG_TWAI0_BASE 0x6000B000) has the same offsets 0x00..0x7C and the same
+  # MODE/CMD/STATUS/INT/BUS_TIMING bits the model decodes. The C6 additions are
+  # not modelled: INT/INT_ENA bit 8 (IDLE), STATUS bit 8 (MISS) and the
+  # 0x80..0x90 standby/HW_CFG/ECO words (census-logged, write-ignored).
+  # irq 46 = ETS_TWAI0_INTR_SOURCE (esp-idf soc/esp32c6 interrupts.h).
+  # Gate: PCR.TWAI0_CONF CLK_EN (bit 0, reset 1). TWAI1 @0x6000D000 stays a stub.
   - id: "twai0"
-    type: "stub"
-    base_address: 0x6000b000
-    size: "1KB"
+    type: "esp32s3_twai"
+    base_address: 0x6000B000
+    size: "4KB"
+    irq: 46
+    clock: { controller: "pcr", reg: "TWAI0_CONF", bit: 0 }
   - id: "i2s0"
     type: "stub"
     base_address: 0x6000c000
