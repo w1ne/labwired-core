@@ -1,7 +1,7 @@
 schema_version: '1.0'
 inputs:
-  firmware: /home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/arduino-zero/L7_timer/firmware.elf
-  system: /home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/systems/arduino-zero.yaml
+  firmware: validation/arduino-matrix/out/arduino-zero/L7_timer/firmware.elf
+  system: validation/arduino-matrix/systems/arduino-zero.yaml
 limits:
   max_steps: 3000000
   max_uart_bytes: 65536

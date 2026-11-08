@@ -64,9 +64,9 @@
   },
   "firmware_hash": "4ea26ec1d138b252dc9937190fbd6be20f916805aa4565b98be8d61a896d42a7",
   "config": {
-    "firmware": "/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/arduino-zero/L0_serial_boot/firmware.elf",
-    "system": "/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/systems/arduino-zero.yaml",
-    "script": "/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/arduino-zero/L0_serial_boot/test.yaml"
+    "firmware": "validation/arduino-matrix/out/arduino-zero/L0_serial_boot/firmware.elf",
+    "system": "validation/arduino-matrix/systems/arduino-zero.yaml",
+    "script": "validation/arduino-matrix/out/arduino-zero/L0_serial_boot/test.yaml"
   },
   "inspect": {
     "peripherals": [
@@ -7555,9 +7555,28 @@
         "artifacts": []
       }
     ],
-    "devices": []
+    "devices": [
+      {
+        "id": "max31855",
+        "device_type": "max31855",
+        "declared": true,
+        "attachment": {
+          "transport": "spi",
+          "bus": "sercom4",
+          "cs_pin": "PB9"
+        },
+        "artifacts": []
+      }
+    ]
   },
   "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (48000000 Hz); PLL reconfiguration is not tracked"
+    },
     {
       "kind": "unpowered_rail_assumed",
       "address": "0x0",

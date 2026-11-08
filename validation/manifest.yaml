@@ -9880,7 +9880,7 @@ boards:
     doc: docs/boards/atsamd21g18a.md
     chip: configs/chips/atsamd21g18a.yaml
     tier: sim-validated
-    note: "Microchip ATSAMD21G18A (Cortex-M0+, 256K flash at 0x0 / 32K SRAM) — the first SAM part in the engine, Arduino Zero / Feather M0 class. PORT and SERCOM are BEHAVIOURAL models, not stubs: PORT implements the DIR/OUT SET-CLR-TGL aliases as one register each, WRCONFIG's bulk PINCFG/PMUX write (the path ASF and the Arduino SAMD core actually take), and IN reading back what an output pin drives; SERCOM implements USART mode with DRE derived from CTRLA.ENABLE. A bare-metal firmware performs the real bring-up in datasheet order (NVMCTRL wait states, the SYSCTRL.PCLKSR ready poll, three GCLK SYNCBUSY spins, PM.APBCMASK, WRCONFIG, CTRLB before CTRLA.ENABLE) and its console reaches the capture sink — examples/samd21-smoke/io-smoke.yaml, 7 checks, executed by BOTH the strict-onboarding gate and the coverage matrix. Three of those checks are memory_value reads of the PORT registers the firmware configured, so the banner is not the gate. Every base and IRQ is checked against Microchip's Apache-2.0 ATSAMD21G18A.svd by svd_conformance with ZERO justified deviations. NOT PROVEN: no SAM D21 silicon diff (no bench part); nothing is clock-gated (PM is a register bank, so firmware that forgets APBCMASK works here and fails on hardware); SYNCBUSY always reads 0 and transmission has no latency — modelling truths, not silicon ones; SERCOM SPI/I2C modes, EIC, USB, TCC/TC, ADC and DMAC are unmodelled and their windows deliberately unmapped."
+    note: "Microchip ATSAMD21G18A (Cortex-M0+, 256K flash at 0x0 / 32K SRAM) — the first SAM part in the engine, Arduino Zero / Feather M0 class. PORT and SERCOM are BEHAVIOURAL models, not stubs: PORT implements the DIR/OUT SET-CLR-TGL aliases as one register each, WRCONFIG's bulk PINCFG/PMUX write (the path ASF and the Arduino SAMD core actually take), and IN reading back what an output pin drives; SERCOM implements USART mode with DRE derived from CTRLA.ENABLE. A bare-metal firmware performs the real bring-up in datasheet order (NVMCTRL wait states, the SYSCTRL.PCLKSR ready poll, three GCLK SYNCBUSY spins, PM.APBCMASK, WRCONFIG, CTRLB before CTRLA.ENABLE) and its console reaches the capture sink — examples/samd21-smoke/io-smoke.yaml, 7 checks, executed by BOTH the strict-onboarding gate and the coverage matrix. Three of those checks are memory_value reads of the PORT registers the firmware configured, so the banner is not the gate. Every base and IRQ is checked against Microchip's Apache-2.0 ATSAMD21G18A.svd by svd_conformance with ZERO justified deviations. NOT PROVEN: no SAM D21 silicon diff (no bench part); nothing is clock-gated except the SERCOM3 I2C master, which reads PM.APBCMASK itself (PM is a register bank, so firmware that forgets APBCMASK for any other block works here and fails on hardware); SYNCBUSY always reads 0 and transmission has no latency — modelling truths, not silicon ones; SERCOM3 runs as the I2C master slice and SERCOM4 as the SPI master (the Arduino Zero variant roles; stock ArduinoCore-samd Wire reads an INA219 and SPI a MAX31855, arduino-matrix L3/L4), with no SCL/SCK timing and no SPI interrupt; EIC, TCC/TC and DMAC are unmodelled and their windows deliberately unmapped; ADC, DAC and USB are declarative register banks only."
     offline_tests:
       - "strict_onboarding::test_strict_board_onboarding (executes examples/samd21-smoke/io-smoke.yaml)"
       - "atsamd21_peripheral_estate::{the_estate_answers_at_its_own_addresses,the_sercom_instances_are_not_each_other,the_port_groups_are_not_each_other}"
@@ -9890,6 +9890,9 @@ boards:
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/sam/sercom_usart.rs
+      # 2026-11-08: SERCOM3 (Wire) and SERCOM4 (SPI) on the Arduino Zero roles.
+      - crates/core/src/peripherals/sam/sercom_i2cm.rs
+      - crates/core/src/peripherals/sam/sercom_spi.rs
       - configs/chips/atsamd21g18a.yaml
       # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
       # its list omitted, so they were invisible to the drift digest. This
@@ -9905,6 +9908,9 @@ boards:
       - configs/peripherals/atsamd21g18a/gclk.yaml
       - configs/peripherals/atsamd21g18a/wdt.yaml
       - configs/peripherals/atsamd21g18a/nvmctrl.yaml
+      - configs/peripherals/atsamd21g18a/adc.yaml
+      - configs/peripherals/atsamd21g18a/dac.yaml
+      - configs/peripherals/atsamd21g18a/usb.yaml
 
   - id: nrf54l15
     doc: docs/boards/nrf54l15.md

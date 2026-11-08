@@ -344,10 +344,8 @@ boards:
     led_min_edges: 2
     family: sam
     notes: "Arduino Zero (ArduinoCore-samd), Programming Port"
-    sketches_skip: [L3_i2c_sensor, L4_spi_sensor, L5_adc, L6_pwm, L8_can]
+    sketches_skip: [L5_adc, L6_pwm, L8_can]
     sketches_skip_reason:
-      L3_i2c_sensor: "SERCOM I2C master mode not modelled on SAMD21 yet"
-      L4_spi_sensor: "SERCOM SPI mode not modelled on SAMD21 yet"
       L5_adc: "SAMD21 ADC is a declarative register bank; no conversion model yet"
       L6_pwm: "SAMD21 TCC/TC not modelled yet"
       L8_can: "ATSAMD21G18A has no CAN controller"

@@ -190,6 +190,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "samd51_adc",
     "samd51_pac",
     "samd51_sercom_i2cm",
+    // The same I2C master slice on SAMD21 SERCOM instances.
+    "samd21_sercom_i2cm",
     "samd51_sercom_usart",
     "sam_dmac_byte",
     "sam_dmac_sercom4_tx_byte",
@@ -503,7 +505,7 @@ fn build_samd51_board_model(
     // master's is the board's SCL rise time.
     let admitted = |key: &String| match kind {
         "samd51_dac" => key == "vrefa_mv" || key == "vddana_mv",
-        "samd51_sercom_i2cm" => key == "scl_rise_ns",
+        "samd51_sercom_i2cm" | "samd21_sercom_i2cm" => key == "scl_rise_ns",
         _ => false,
     };
     if !p_cfg.config.keys().all(admitted) {
@@ -556,17 +558,22 @@ fn build_samd51_board_model(
                 Box::new(crate::peripherals::sam::pac::Samd51Pac::new())
             }
         }
-        "samd51_sercom_i2cm" => {
-            use crate::peripherals::sam::sercom_i2cm::{Samd51SercomI2cm, SERCOM_INSTANCES};
-            let Some(instance) = SERCOM_INSTANCES
-                .iter()
-                .find(|i| i.base == p_cfg.base_address)
-            else {
-                anyhow::bail!("SAMD51 SERCOM base must be one of SERCOM0..SERCOM5");
+        "samd51_sercom_i2cm" | "samd21_sercom_i2cm" => {
+            use crate::peripherals::sam::sercom_i2cm::{
+                Samd51SercomI2cm, SAMD21_SERCOM_INSTANCES, SERCOM_INSTANCES,
             };
-            // Four lines (first_irq..first_irq+3) are reported by the model itself.
+            let instances = if kind == "samd21_sercom_i2cm" {
+                &SAMD21_SERCOM_INSTANCES
+            } else {
+                &SERCOM_INSTANCES
+            };
+            let Some(instance) = instances.iter().find(|i| i.base == p_cfg.base_address) else {
+                anyhow::bail!("{kind} base must be one of SERCOM0..SERCOM5");
+            };
+            // The model reports its own lines: four on the SAMD51, the
+            // instance's single line on the SAMD21.
             if p_cfg.irq.is_some() {
-                anyhow::bail!("SAMD51 SERCOM I2C master takes no single IRQ");
+                anyhow::bail!("{kind} takes no single IRQ");
             }
             let rise = p_cfg.config.get("scl_rise_ns").and_then(|v| v.as_u64());
             Box::new(Samd51SercomI2cm::new(*instance).with_scl_rise_ns(rise.unwrap_or(0)))
@@ -884,9 +891,8 @@ pub fn try_build(
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
         }
         "samd51_oscctrl" | "samd51_gclk" | "samd51_tc" | "samd51_tcc" | "samd51_eic"
-        | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm" => {
-            build_samd51_board_model(canonical_type, p_cfg)?
-        }
+        | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm"
+        | "samd21_sercom_i2cm" => build_samd51_board_model(canonical_type, p_cfg)?,
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
             let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
