@@ -1,7 +1,8 @@
 # Arduino UNO R4 WiFi — stock Arduino matrix row
 
 Stock ArduinoCore-renesas (`renesas-ra@1.9.0`, board `uno_r4_wifi`), the
-matrix sketches unchanged except for the L5 oracle branch, run by
+matrix sketches unchanged except for the L5 oracle branch and the
+register-level L8 branch every board has, run by
 `validation/arduino-matrix/run_matrix.py --boards arduino-uno-r4-wifi` on
 `configs/chips/r7fa4m1ab-uno-r4-wifi-smoke.yaml`.
 
@@ -15,7 +16,7 @@ matrix sketches unchanged except for the L5 oracle branch, run by
 | L5 ADC | pass, exact | `analogRead(A0)` = 675 with A0 on 3V3 (see below) |
 | L6 PWM | pass, 28 edges | `analogWrite(13, 128)` = GTIOC2B on P102 (see below) |
 | L7 timer | pass | `micros()` advances monotonically across `delay(2)` |
-| L8 CAN | skip | RA4M1 CAN0 is not modelled |
+| L8 CAN | pass | CAN0 (`ra_can`) in internal loopback: MB0 sends std ID 0x123 / 0xA5, MB1 receives it; CAN0-as-stub control prints `LW_L8_FAIL` (`L8_can/`) |
 
 Each cell directory holds the matrix's `test.yaml`, `result.json`,
 `uart.log` and `junit.xml` as `run_matrix.py` ran them (they stop at the
@@ -62,6 +63,7 @@ does not prove PWM; `pwm_watch` does.
 ## Not shown
 
 USB (the R4 WiFi's native USB is not on `Serial` here), the ESP32-S3 module
-and Wi-Fi, the 12x8 LED matrix, SPI, CAN, the DAC, and PWM on any header pin
-other than D13 (only GTIOC2B → P102 is bound). Controls were run from
-/dev/shm copies of the chip and system yaml with absolute paths.
+and Wi-Fi, the 12x8 LED matrix, a CAN bus (CAN0 runs in loopback only, and
+`Arduino_CAN` needs the mailbox interrupts `ra_can` refuses), the DAC, and
+PWM on any header pin other than D13 (only GTIOC2B → P102 is bound).
+Controls were run from /dev/shm copies of the chip and system yaml with absolute paths.

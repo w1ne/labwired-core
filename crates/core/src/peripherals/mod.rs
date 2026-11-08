@@ -103,6 +103,7 @@ pub mod qingke_systick;
 pub mod quadspi;
 pub mod ra_adc12;
 pub mod ra_agt;
+pub mod ra_can;
 pub mod ra_clock;
 pub mod ra_dac12;
 pub mod ra_gpt;

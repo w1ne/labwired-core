@@ -1,0 +1,9 @@
+schema_version: '1.0'
+inputs:
+  firmware: validation/arduino-matrix/out/arduino-uno-r4-wifi/L8_can/firmware.elf
+  system: validation/arduino-matrix/systems/arduino-uno-r4-wifi.yaml
+limits:
+  max_steps: 5000000
+  max_uart_bytes: 65536
+assertions:
+- uart_regex: '^LW_L8_BOOT\r?\nLW_L8_OK\r?\n$'

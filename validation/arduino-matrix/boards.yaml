@@ -429,9 +429,6 @@ boards:
     pwm_min_edges: 20
     family: renesas
     notes: "Arduino UNO R4 WiFi (R7FA4M1AB, ArduinoCore-renesas 1.x via renesas-ra 1.9.0)"
-    sketches_skip: [L8_can]
-    sketches_skip_reason:
-      L8_can: "RA4M1 CAN0 (R_CAN0 0x40050000) is not modelled yet"
 
   # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────
   #

@@ -334,6 +334,61 @@ static bool lw_can_probe() {
 }
 #define LW_HAS_CAN 1
 
+#elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+// RA4M1 CAN0 @ 0x40050000 (FSP R7FA4M1AB.h R_CAN0_Type), internal loopback
+// (TCR.TSTE | TSTM = 11) in the hardware manual's start-up order: leave
+// sleep into reset mode, set BCR, halt, select the test mode, load the
+// mailboxes, operate. Module stop: MSTPCRB @ 0x40047000 bit 2 (MSTPB2).
+// MB0 sends std ID 0x123 / data 0xA5; MB1 receives it (every mask invalid,
+// so the match is exact).
+static bool lw_can_wait16(uint32_t addr, uint16_t mask, uint16_t want) {
+  for (int i = 0; i < 10000; i++) {
+    if ((*(volatile uint16_t *)(uintptr_t)addr & mask) == want) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool lw_can_probe() {
+  const uint32_t can = 0x40050000u;
+  const uint32_t ctlr = can + 0x840, str = can + 0x842;
+  volatile uint8_t *mctl = (volatile uint8_t *)(uintptr_t)(can + 0x820);
+  mmio_w(0x40047000u, mmio_r(0x40047000u) & ~(1u << 2));
+
+  // CANM = 01 (reset), SLPM = 0; wait RSTST = 1, SLPST = 0.
+  *(volatile uint16_t *)(uintptr_t)ctlr = 0x0100;
+  if (!lw_can_wait16(str, 0x0500, 0x0100)) return false;
+  // 500 kbit/s from PCLKB 24 MHz: BRP = 2, TSEG1 = 11 Tq, TSEG2 = 4 Tq.
+  mmio_w(can + 0x844, 0xA0020300u);
+  // CANM = 10 (halt); TCR is written only here.
+  *(volatile uint16_t *)(uintptr_t)ctlr = 0x0200;
+  if (!lw_can_wait16(str, 0x0300, 0x0200)) return false;
+  *(volatile uint8_t *)(uintptr_t)(can + 0x858) = 0x07;
+  mmio_w(can + 0x428, 0xFFFFFFFFu); // MKIVLR: every mask invalid
+  mmio_w(can + 0x42C, 0);           // MIER: polled
+  mmio_w(can + 0x200, 0x123u << 18);                      // MB0.ID
+  *(volatile uint16_t *)(uintptr_t)(can + 0x204) = 1;     // MB0.DL
+  *(volatile uint8_t *)(uintptr_t)(can + 0x206) = 0xA5;   // MB0.D[0]
+  mmio_w(can + 0x210, 0x123u << 18);                      // MB1.ID
+  // CANM = 00 (operation).
+  *(volatile uint16_t *)(uintptr_t)ctlr = 0x0000;
+  if (!lw_can_wait16(str, 0x0700, 0x0000)) return false;
+  mctl[1] = 0x40; // RECREQ
+  mctl[0] = 0x80; // TRMREQ
+  for (int i = 0; i < 100000; i++) {
+    if (mctl[1] & 0x01u) { // NEWDATA
+      uint32_t id = mmio_r(can + 0x210);
+      uint16_t dl = *(volatile uint16_t *)(uintptr_t)(can + 0x214);
+      uint8_t d0 = *(volatile uint8_t *)(uintptr_t)(can + 0x216);
+      bool sent = (mctl[0] & 0x01u) != 0; // SENTDATA
+      return sent && ((id >> 18) & 0x7FFu) == 0x123u && (dl & 0xFu) == 1u && d0 == 0xA5u;
+    }
+  }
+  return false;
+}
+#define LW_HAS_CAN 1
+
 #else
 static bool lw_can_probe() { return false; }
 #define LW_HAS_CAN 0
