@@ -45,6 +45,10 @@ const CONVERTED: &[&str] = &[
     "brd4186c",
     "brd4402a",
     "cc2538",
+    "efm32jg1",
+    "efm32jg12",
+    "efm32pg1",
+    "efm32pg12",
     "efr32mg1",
     "efr32mg12",
     "efr32mg13",
@@ -78,6 +82,8 @@ const CONVERTED: &[&str] = &[
     "sam4s16c",
     "sam4s8b",
     "sam4s_xplained",
+    "sltb001a",
+    "sltb004a",
     "stm32f042",
     "stm32f072",
     "stm32f072b_discovery",
@@ -417,7 +423,20 @@ impl Converter {
             Family::Eoss3 | Family::Max32650 | Family::Da14Gpadc => [0, 1],
             // VAUX5 and VAUX6: the DRP channel is 0x10 + n.
             Family::Xadc => [XADC_AUX0 + NTC_CHANNEL, XADC_AUX0 + DIODE_CHANNEL],
+            // PA3 and PA4. emlib em_gpio.h (gsdk_4.4) bonds only PA0..PA5
+            // on xG1 and xG13 (`_GPIO_PORT_A_PIN_MASK` 0x003F, SDID 80/89),
+            // so PA6/PA7 do not exist there.
+            Family::Efr32S1Adc => [3, 4],
             _ => [NTC_CHANNEL, DIODE_CHANNEL],
+        }
+    }
+
+    /// The channel left unrouted: a real pad with nothing wired to it.
+    fn idle_channel(&self) -> u8 {
+        match self.family {
+            // PA5, the last port-A pad on every Series-1 die.
+            Family::Efr32S1Adc => 5,
+            _ => IDLE_CHANNEL,
         }
     }
 
@@ -1271,10 +1290,9 @@ impl Converter {
                 );
                 single
             }
-            _ => [
-                self.convert(bus, NTC_CHANNEL),
-                self.convert(bus, DIODE_CHANNEL),
-            ],
+            _ => self
+                .routed_channels()
+                .map(|channel| self.convert(bus, channel)),
         }
     }
 
@@ -2343,7 +2361,7 @@ fn assert_converter_routes_generic_analog(
             converter.expected_code(diode_v),
             "{tag}: firmware-visible diode conversion"
         );
-        if let Some(idle) = converter.held_count(&mut bus, IDLE_CHANNEL) {
+        if let Some(idle) = converter.held_count(&mut bus, converter.idle_channel()) {
             assert_eq!(idle, 0xFFFF, "{tag}: unrouted channel stays undriven");
         }
         if matches!(
@@ -2360,7 +2378,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::RaAdc { .. }
         ) {
             assert_eq!(
-                converter.convert(&mut bus, IDLE_CHANNEL),
+                converter.convert(&mut bus, converter.idle_channel()),
                 0,
                 "{tag}: unrouted channel converts to zero"
             );
@@ -2443,7 +2461,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 99,
+        instances, 105,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -2451,7 +2469,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 138,
+        without_adc, 132,
         "onboarding profiles that declare no modelled ADC"
     );
 }
