@@ -35,8 +35,10 @@ peripherals:
   type: eoss3_simpleperiodictimer
   bus: sysbus
   base_address: 1073765376
+# EOS S3 ADC ("JTM", AON_PERIPH_BASE + 0x5A00, qorc-sdk eoss3_dev.h):
+# OUT/STATUS/CONTROL, two channels, 12 bits against 1.4 V.
 - id: adc
-  type: stub
+  type: eoss3_adc
   renode_type: eoss3_adc
   bus: sysbus
   base_address: 1073764864

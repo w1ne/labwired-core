@@ -33,6 +33,9 @@ const IDLE_CHANNEL: u8 = 7;
 const CONVERTED: &[&str] = &[
     "ambiq-apollo4",
     "cc2538",
+    "eos-s3-qomu",
+    "eos-s3-quickfeather",
+    "eos-s3",
     "imxrt1064",
     "mimxrt1064_evk",
     "nrf52840",
@@ -139,6 +142,10 @@ enum Family {
     /// `ADCCON1` clears on the `ADCH` read, and the 2's-complement result
     /// sits MSB-aligned in `ADCH:ADCL` (SWRU319C §15, Contiki-NG adc.c).
     Cc2538,
+    /// QuickLogic EOS S3 ADC: two channels only, `CONTROL.SEL` picks one,
+    /// `CONTROL.SOC` starts it, `STATUS.EOC` drops then rises, 12 bits in
+    /// `OUT` against 1.4 V (qorc-sdk eoss3_hal_adc.c, Renode EOSS3_ADC.cs).
+    Eoss3,
 }
 
 struct Converter {
@@ -166,6 +173,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Apollo4
         } else if kind == "cc2538_soc_adc" {
             Family::Cc2538
+        } else if kind == "eoss3_adc" {
+            Family::Eoss3
         } else {
             match p.config.get("profile").and_then(|v| v.as_str()) {
                 Some("stm32f4") => Family::Stm32F4,
@@ -210,6 +219,18 @@ impl Converter {
             // Decimation 512 against AVDD5 (3.3 V): 12 bits including the
             // sign, so single-ended full scale is 2047.
             Family::Cc2538 => (mv * 2047 / 3300).min(2047),
+            // 12-bit against 1.4 V, truncated, clamped (Renode ToADCRawValue).
+            Family::Eoss3 => mv.min(1400) * 4095 / 1400,
+        }
+    }
+
+    /// The channels the NTC and diode netlists route to. The EOS S3 ADC has
+    /// only channels 0 and 1, so it takes both; every other family has
+    /// AIN0..7 and uses NTC_CHANNEL/DIODE_CHANNEL, clear of channel 0.
+    fn routed_channels(&self) -> [u8; 2] {
+        match self.family {
+            Family::Eoss3 => [0, 1],
+            _ => [NTC_CHANNEL, DIODE_CHANNEL],
         }
     }
 
@@ -217,6 +238,16 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Eoss3 => {
+                // HAL_ADC_Init(): CONTROL = 0, then SEL/MEAS_EN without SOC.
+                bus.write_u32(self.base + 0x08, 0).expect("CONTROL reset");
+                assert_eq!(
+                    bus.read_u32(self.base + 0x04).unwrap(),
+                    1,
+                    "{}: idle STATUS.EOC reads 1",
+                    self.id
+                );
+            }
             Family::Cc2538 => {
                 // adc_init(): ADCCON1.STSEL = 11, manual starts only.
                 bus.write_u32(self.base, 0x30).expect("ADCCON1.STSEL");
@@ -424,6 +455,9 @@ impl Converter {
                     .expect("drain the idle CDR");
                 codes
             }
+            Family::Eoss3 => self
+                .routed_channels()
+                .map(|channel| self.convert(bus, channel)),
             Family::Cc2538 => {
                 // One extra conversion per channel; EOC rises at the ADCCON3
                 // write and the ADCH read clears it before the next.
@@ -1090,6 +1124,33 @@ impl Converter {
                 assert_eq!(raw & 0xF, 0, "{}: 12 significant bits", self.id);
                 (raw >> 4) as u32
             }
+            Family::Eoss3 => {
+                // qorc-sdk HAL_ADC_Init / HAL_ADC_StartConversion /
+                // HAL_ADC_GetData.
+                let control = self.base + 0x08;
+                let status = self.base + 0x04;
+                bus.write_u32(control, 0).expect("CONTROL = 0");
+                bus.write_u32(control, u32::from(channel) << 1)
+                    .expect("CONTROL.SEL");
+                let temp = bus.read_u32(control).unwrap();
+                bus.write_u32(control, temp | 1).expect("CONTROL.SOC");
+                assert_eq!(
+                    bus.read_u32(status).unwrap(),
+                    0,
+                    "{}: STATUS.EOC goes low after SOC",
+                    self.id
+                );
+                assert_eq!(
+                    bus.read_u32(status).unwrap(),
+                    1,
+                    "{}: STATUS.EOC rises when the conversion is done",
+                    self.id
+                );
+                let code = bus.read_u32(self.base).expect("OUT") & 0xFFF;
+                let temp = bus.read_u32(control).unwrap();
+                bus.write_u32(control, temp & !1).expect("clear SOC");
+                code
+            }
             Family::Saadc { .. } => unreachable!("SAADC converts as a scan"),
         }
     }
@@ -1119,15 +1180,15 @@ impl Converter {
     }
 }
 
-fn generic_netlists(adc_id: &str) -> SystemManifest {
+fn generic_netlists(adc_id: &str, [ntc_channel, diode_channel]: [u8; 2]) -> SystemManifest {
     let mut analog = SystemManifest::from_file(root(
         "examples/ci-fixture-unknown-arch/analog-ntc-diode-system.yaml",
     ))
     .expect("load generic NTC divider and diode netlists");
     for model in &mut analog.cosim_models {
         let (key, channel) = match model.id.as_str() {
-            "ntc_divider" => ("v_sense", NTC_CHANNEL),
-            "diode_load_line" => ("v_diode", DIODE_CHANNEL),
+            "ntc_divider" => ("v_sense", ntc_channel),
+            "diode_load_line" => ("v_diode", diode_channel),
             other => panic!("unexpected fixture model {other}"),
         };
         model
@@ -1155,7 +1216,9 @@ fn assert_converter_routes_generic_analog(
 ) {
     let tag = format!("{board}:{}", converter.id);
     let mut profile = base_profile.clone();
-    profile.cosim_models = generic_netlists(&converter.id).cosim_models;
+    let [ntc_channel, diode_channel] = converter.routed_channels();
+    profile.cosim_models =
+        generic_netlists(&converter.id, [ntc_channel, diode_channel]).cosim_models;
     let mut bus = SystemBus::from_config(chip, &profile).expect("build onboarding bus");
     converter.power_up(&mut bus);
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
@@ -1164,12 +1227,12 @@ fn assert_converter_routes_generic_analog(
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "{tag}: both netlists bind to ADC channels {NTC_CHANNEL}/{DIODE_CHANNEL}"
+        "{tag}: both netlists bind to ADC channels {ntc_channel}/{diode_channel}"
     );
 
     let expected_diode_v = diode_load_line_voltage();
-    let ntc_path = format!("adc.{}.{NTC_CHANNEL}_volts", converter.id);
-    let diode_path = format!("adc.{}.{DIODE_CHANNEL}_volts", converter.id);
+    let ntc_path = format!("adc.{}.{ntc_channel}_volts", converter.id);
+    let diode_path = format!("adc.{}.{diode_channel}_volts", converter.id);
     let mut cycles = 0;
     let mut ntc_codes = Vec::new();
     for temperature_c in [-10.0_f64, 25.0, 80.0] {
@@ -1223,9 +1286,10 @@ fn assert_converter_routes_generic_analog(
         ntc_codes.push(ntc_code);
     }
     // The NTC sits on the low side: hotter means lower resistance, lower volts.
-    if matches!(converter.family, Family::Apollo4) {
-        // Above the 1.19 V reference the -10 and 25 °C dividers (2.79 V,
-        // 1.65 V) both saturate at full scale; only 80 °C (0.37 V) is in range.
+    if matches!(converter.family, Family::Apollo4 | Family::Eoss3) {
+        // Above the 1.19 V (Apollo4) or 1.4 V (EOS S3) full scale the -10 and
+        // 25 °C dividers (2.79 V, 1.65 V) both saturate; only 80 °C (0.37 V)
+        // is in range.
         assert_eq!(
             ntc_codes[..2],
             [4095, 4095],
@@ -1256,9 +1320,14 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
             .unwrap()
             .to_string_lossy()
             .to_string();
-        let profile =
+        let mut profile =
             SystemManifest::from_file(&system_path).unwrap_or_else(|e| panic!("load {board}: {e}"));
-        let chip = ChipDescriptor::from_file(system_path.parent().unwrap().join(&profile.chip))
+        // Anchor the chip path at the system file, as the CLI does, so a
+        // declarative peripheral's `path` (EOS S3 `io_in`) resolves next to
+        // the chip when the bus is built.
+        let chip_path = system_path.parent().unwrap().join(&profile.chip);
+        profile.chip = chip_path.to_string_lossy().into_owned();
+        let chip = ChipDescriptor::from_file(&chip_path)
             .unwrap_or_else(|e| panic!("load {board} descriptor: {e}"));
         // The AVR ADC registers live on the CPU, not the bus; firmware
         // conversions for these are in `cosim_onboarding_avr_analog.rs`.
@@ -1287,7 +1356,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 39,
+        instances, 42,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -1295,7 +1364,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 184,
+        without_adc, 181,
         "onboarding profiles that declare no modelled ADC"
     );
 }
