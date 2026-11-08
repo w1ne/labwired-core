@@ -1,7 +1,9 @@
-# Direct RV32IM integer smoke against the imported CrossLink-NX system.
-# This checks SRAM access from an ELF loaded into the Renode ROM window; it
-# does not exercise the board reset flow, LiteX peripherals, or extensions
-# beyond the generic RV32IM integer subset.
+# RV32IM smoke against the imported CrossLink-NX EVN system. It runs an ELF
+# loaded into the Renode ROM window and exercises the LiteX UART (polled TX
+# banner and idle txfull; RX status is unclaimed), LiteX_Timer timer0 in the
+# csr_data_width = 8 layout (load readback, one-shot latch, zero event and
+# ev_pending W1C), and the Control-and-Status LED register. It does not claim
+# the reset flow, interrupts, the SoC controller, or extensions beyond RV32IM.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-andes-ae350-n25-smoke"
@@ -12,5 +14,22 @@ assertions:
   - memory_value:
       address: 0x40001000
       expected_value: 0x00000143
+      size: 4
+  - uart_contains: "CrossLink-NX litex ok"
+  - memory_value:
+      address: 0x40001004
+      expected_value: 0x00012345
+      size: 4
+  - memory_value:
+      address: 0x4000100C
+      expected_value: 0x00002A55
+      size: 4
+  - memory_value:
+      address: 0x40001014
+      expected_value: 0xC205007F
+      size: 4
+  - memory_value:
+      address: 0x40001018
+      expected_value: 0x00000000
       size: 4
   - expected_stop_reason: max_steps

@@ -57,6 +57,122 @@ unsafe fn uart_smoke() {
     write_volatile(RESULT.add(3), if ok { 0xAE35_0001 } else { 0xAE35_DEAD });
 }
 
+// CrossLink-NX EVN LiteX SoC (Renode `boards/crosslink-nx-evn.repl`):
+// LiteX_UART @ 0xF0002000, LiteX_Timer @ 0xF0002800 (Renode's LiteX_Timer is
+// the csr_data_width = 8 layout: one CSR byte per 4-byte slot, MSB first) and
+// LiteX_ControlAndStatus LEDs @ 0xF0003000.
+#[cfg(feature = "crosslink-litex")]
+mod litex {
+    pub const UART_RXTX: *mut u32 = 0xF000_2000 as *mut u32;
+    pub const UART_TXFULL: *const u32 = 0xF000_2004 as *const u32;
+
+    const TIMER: usize = 0xF000_2800;
+    pub const LOAD: usize = TIMER;
+    pub const RELOAD: usize = TIMER + 0x10;
+    pub const EN: *mut u32 = (TIMER + 0x20) as *mut u32;
+    pub const UPDATE_VALUE: *mut u32 = (TIMER + 0x24) as *mut u32;
+    pub const VALUE: usize = TIMER + 0x28;
+    pub const EV_STATUS: *const u32 = (TIMER + 0x38) as *const u32;
+    pub const EV_PENDING: *mut u32 = (TIMER + 0x3C) as *mut u32;
+    pub const EV_ENABLE: *mut u32 = (TIMER + 0x40) as *mut u32;
+
+    pub const LEDS: *mut u32 = 0xF000_3000 as *mut u32;
+}
+
+#[cfg(feature = "crosslink-litex")]
+unsafe fn csr8_write(addr: usize, value: u32) {
+    for i in 0..4 {
+        let byte = (value >> (24 - 8 * i)) & 0xFF;
+        core::ptr::write_volatile((addr + 4 * i) as *mut u32, byte);
+    }
+}
+
+#[cfg(feature = "crosslink-litex")]
+unsafe fn csr8_read(addr: usize) -> u32 {
+    let mut value = 0;
+    for i in 0..4 {
+        value = (value << 8) | (core::ptr::read_volatile((addr + 4 * i) as *const u32) & 0xFF);
+    }
+    value
+}
+
+/// Results: +4 timer load readback, +8 latched countdown, +0xC LED readback,
+/// +0x10 check bits, +0x14 pass word, +0x18 UART txfull idle readback.
+#[cfg(feature = "crosslink-litex")]
+unsafe fn litex_smoke() {
+    use core::ptr::{read_volatile, write_volatile};
+    use litex::*;
+
+    let mut bits = 0u32;
+    // UART: txfull=0 means ready; RX status is outside this bounded profile.
+    let txfull = read_volatile(UART_TXFULL) & 1;
+    write_volatile(RESULT.add(6), txfull);
+    if txfull == 0 {
+        bits |= 1 << 0;
+    }
+    for &b in b"CrossLink-NX litex ok\r\n" {
+        while read_volatile(UART_TXFULL) & 1 != 0 {}
+        write_volatile(UART_RXTX, b as u32);
+    }
+
+    // Timer0 disabled: stage a 32-bit load across the byte slots, read back.
+    write_volatile(EN, 0);
+    csr8_write(LOAD, 0x0001_2345);
+    let load = csr8_read(LOAD);
+    write_volatile(RESULT.add(1), load);
+    if load == 0x0001_2345 {
+        bits |= 1 << 1;
+    }
+    // One-shot of 2000 cycles; clear any edge latched while staging.
+    csr8_write(RELOAD, 0);
+    csr8_write(LOAD, 2000);
+    write_volatile(EV_PENDING, 1);
+    write_volatile(EV_ENABLE, 0);
+    if read_volatile(EV_STATUS) & 1 == 0 && read_volatile(EV_PENDING) & 1 == 0 {
+        bits |= 1 << 2;
+    }
+    write_volatile(EN, 1);
+    write_volatile(UPDATE_VALUE, 1);
+    let value = csr8_read(VALUE);
+    write_volatile(RESULT.add(2), value);
+    if value > 0 && value < 2000 {
+        bits |= 1 << 3;
+    }
+    // Poll the zero-event level; bounded so a dead timer cannot hang.
+    let mut spins = 0u32;
+    while read_volatile(EV_STATUS) & 1 == 0 && spins < 100_000 {
+        spins += 1;
+    }
+    if read_volatile(EV_STATUS) & 1 == 1 && read_volatile(EV_PENDING) & 1 == 1 {
+        bits |= 1 << 4;
+    }
+    // ev_pending is write-1-to-clear.
+    write_volatile(EV_PENDING, 0);
+    let held = read_volatile(EV_PENDING) & 1;
+    write_volatile(EV_PENDING, 1);
+    if held == 1 && read_volatile(EV_PENDING) & 1 == 0 {
+        bits |= 1 << 5;
+    }
+
+    // CAS LEDs: the 14 board LEDs (bits 0..13) are readable back.
+    write_volatile(LEDS, 0x2A55);
+    let leds = read_volatile(LEDS);
+    write_volatile(RESULT.add(3), leds);
+    if leds == 0x2A55 {
+        bits |= 1 << 6;
+    }
+
+    write_volatile(RESULT.add(4), bits);
+    write_volatile(
+        RESULT.add(5),
+        if bits == 0x7F {
+            0xC205_007F
+        } else {
+            0xBAD0_0000 | bits
+        },
+    );
+}
+
 // The UART path calls into Rust that may spill, so give it a stack at the top
 // of the 128 KiB DRAM first; the CPU-only builds keep the stackless entry.
 #[cfg(feature = "ae350-uart")]
@@ -68,9 +184,28 @@ core::arch::global_asm!(
     "    j smoke_main",
 );
 
-#[cfg_attr(not(feature = "ae350-uart"), link_section = ".text.entry")]
-#[cfg_attr(not(feature = "ae350-uart"), export_name = "_start")]
-#[cfg_attr(feature = "ae350-uart", export_name = "smoke_main")]
+// CrossLink-NX: stack at the top of the 8 MiB SRAM.
+#[cfg(feature = "crosslink-litex")]
+core::arch::global_asm!(
+    ".section .text.entry, \"ax\"",
+    ".global _start",
+    "_start:",
+    "    li sp, 0x40800000",
+    "    j smoke_main",
+);
+
+#[cfg_attr(
+    not(any(feature = "ae350-uart", feature = "crosslink-litex")),
+    link_section = ".text.entry"
+)]
+#[cfg_attr(
+    not(any(feature = "ae350-uart", feature = "crosslink-litex")),
+    export_name = "_start"
+)]
+#[cfg_attr(
+    any(feature = "ae350-uart", feature = "crosslink-litex"),
+    export_name = "smoke_main"
+)]
 pub extern "C" fn smoke_main() -> ! {
     let product: u32;
     unsafe {
@@ -84,6 +219,8 @@ pub extern "C" fn smoke_main() -> ! {
         core::ptr::write_volatile(RESULT, product);
         #[cfg(feature = "ae350-uart")]
         uart_smoke();
+        #[cfg(feature = "crosslink-litex")]
+        litex_smoke();
     }
 
     loop {

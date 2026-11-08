@@ -153,7 +153,7 @@ SMOKE_MAPPINGS = {
     "crosslink-nx-evn": {
         "crate": "firmware-andes-ae350-n25-smoke",
         "target": "riscv32im-unknown-none-elf",
-        "features": "crosslink-nx-evn",
+        "features": "crosslink-litex",
         "script": "examples/renode-onboarding/crosslink-nx-evn-smoke.yaml",
     },
     "ice40up5k-mdp-evn": {

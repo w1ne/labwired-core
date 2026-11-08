@@ -1,9 +1,16 @@
 # Bounded CrossLink-NX EVN execution profile.
 # Renode's board REPL declares a VexRiscv (`rv32im_zicsr_zifencei`), a 32 KiB
 # ROM at 0, and 8 MiB SRAM at 0x40000000. This profile claims only the engine's
-# RV32IM integer subset and those memory windows. The ROM is represented by the
-# generic flash range for direct-ELF loading; no reset flow or peripherals are
-# claimed here.
+# RV32IM integer subset, those memory windows and three LiteX CSR blocks the
+# smoke exercises. The ROM is represented by the generic flash range for
+# direct-ELF loading; no reset flow is claimed.
+#  - uart: LiteX_UART @ 0xF0002000 (rxtx/txfull polled; RX status and IRQ
+#    cpu@0 are not claimed here).
+#  - timer0: LiteX_Timer @ 0xF0002800 at 75 MHz. Renode's LiteX_Timer is the
+#    csr_data_width = 8 layout (Load0..3 at 0x00-0x0C, EventEnable 0x40); IRQ
+#    cpu@1 not wired here, the smoke polls the event CSRs.
+#  - leds: LiteX_ControlAndStatus @ 0xF0003000 (14 board LEDs on bits 0..13).
+# LiteX_SoC_Controller @ 0xF0000000 is not modelled and stays unmapped.
 # Source: https://github.com/renode/renode/blob/master/platforms/boards/crosslink-nx-evn.repl
 name: crosslink-nx-evn
 arch: riscv
@@ -12,4 +19,18 @@ cpu_hz: 75000000
 flash: { base: 0x00000000, size: "32KiB" }
 ram: { base: 0x40000000, size: "8MiB" }
 flash_boot_alias: false
-peripherals: []
+peripherals:
+  - id: "uart"
+    type: "litex_uart"
+    base_address: 0xF0002000
+    size: "256B"
+  - id: "timer0"
+    type: "litex_timer"
+    base_address: 0xF0002800
+    size: "2KB"
+    config:
+      csr_data_width: 8
+  - id: "leds"
+    type: "litex_controlandstatus"
+    base_address: 0xF0003000
+    size: "20B"

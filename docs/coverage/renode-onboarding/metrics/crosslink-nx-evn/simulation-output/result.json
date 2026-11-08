@@ -41,6 +41,56 @@
     },
     {
       "assertion": {
+        "uart_contains": "CrossLink-NX litex ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073745924,
+          "expected_value": 74565,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073745932,
+          "expected_value": 10837,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073745940,
+          "expected_value": 3255107711,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073745944,
+          "expected_value": 0,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -54,19 +104,19 @@
       1082130432,
       0,
       0,
+      69,
       0,
       0,
       0,
       0,
-      0,
-      323,
       1073745920,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
+      3255107711,
+      127,
+      10837,
+      1,
+      100000,
+      1,
+      1,
       0,
       0,
       0,
@@ -82,7 +132,7 @@
       0,
       0
     ],
-    "pc": 24,
+    "pc": 1068,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -118,14 +168,36 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "852ab2f2b9987be7ea74b1bec9948c308c42844c3d1ce71c054082f1b40cad0e",
+  "firmware_hash": "3acdecb47b3a7d9abf4c7cff381bc38bacdedcb324057fa30d9d171a8937e04b",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-andes-ae350-n25-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/crosslink-nx-evn.yaml",
     "script": "examples/renode-onboarding/crosslink-nx-evn-smoke.yaml"
   },
   "inspect": {
-    "peripherals": [],
+    "peripherals": [
+      {
+        "name": "uart",
+        "kind": "native",
+        "base": 4026540032,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer0",
+        "kind": "native",
+        "base": 4026542080,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "leds",
+        "kind": "native",
+        "base": 4026544128,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
     "devices": []
   },
   "fidelity": [
@@ -137,16 +209,27 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "CrossLink-NX litex ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 28,
+    "text_bytes": 1072,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 28,
+    "flash_used_bytes": 1072,
     "ram_static_bytes": 0,
     "flash_total_bytes": 32768,
     "ram_total_bytes": 8388608,
-    "flash_used_pct": 0.09,
+    "flash_used_pct": 3.27,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -163,14 +246,14 @@
     "instructions": 100000,
     "steps_executed": 100000,
     "memory_reads": 100000,
-    "memory_writes": 1,
-    "peripheral_accesses": 0,
+    "memory_writes": 7,
+    "peripheral_accesses": 414,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 24,
+        "pc": 1068,
         "count": 390,
-        "symbol": "_start"
+        "symbol": "smoke_main"
       }
     ]
   }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="8" failures="0" errors="0" time="0.026694">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="88fa8a861504d4eb0dcaa62218b2f73377f246f248b0ca826799ffa56b94ceb0"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.026694">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x40001000=0x143" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: CrossLink-NX litex ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x40001004=0x12345" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x4000100c=0x2a55" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x40001014=0xc205007f" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x40001018=0x2" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>
