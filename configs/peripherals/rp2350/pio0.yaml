@@ -7,31 +7,46 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
+  - name: NEXTPREV_CLKDIV_RESTART
+    bit_range:
+    - 26
+    - 26
+    description: Write 1 to restart the clock dividers of state machines in neighbouring PIO blocks, as specified by NEXT_PIO_MASK and PREV_PIO_MASK in the same write. This is equivalent to writing 1 to the corresponding CLKDIV_RESTART bits in those PIOs' CTRL registers.
+  - name: NEXTPREV_SM_DISABLE
+    bit_range:
+    - 25
+    - 25
+    description: Write 1 to disable state machines in neighbouring PIO blocks, as specified by NEXT_PIO_MASK and PREV_PIO_MASK in the same write. This is equivalent to clearing the corresponding SM_ENABLE bits in those PIOs' CTRL registers.
+  - name: NEXTPREV_SM_ENABLE
+    bit_range:
+    - 24
+    - 24
+    description: Write 1 to enable state machines in neighbouring PIO blocks, as specified by NEXT_PIO_MASK and PREV_PIO_MASK in the same write. This is equivalent to setting the corresponding SM_ENABLE bits in those PIOs' CTRL registers. If both OTHERS_SM_ENABLE and OTHERS_SM_DISABLE are set, the disable takes precedence.
+  - name: NEXT_PIO_MASK
+    bit_range:
+    - 23
+    - 20
+    description: A mask of state machines in the neighbouring higher-numbered PIO block in the system (or PIO block 0 if this is the highest-numbered PIO block) to which to apply the operations specified by NEXTPREV_CLKDIV_RESTART, NEXTPREV_SM_ENABLE, and NEXTPREV_SM_DISABLE in the same write. This allows state machines in a neighbouring PIO block to be started/stopped/clock-synced exactly simultaneously with a write to this PIO block's CTRL register. Note that in a system with two PIOs, NEXT_PIO_MASK and PREV_PIO_MASK actually indicate the same PIO block. In this case the effects are applied cumulatively (as though the masks were OR'd together). Neighbouring PIO blocks are disconnected (status signals tied to 0 and control signals ignored) if one block is accessible to NonSecure code, and one is not.
+  - name: PREV_PIO_MASK
+    bit_range:
+    - 19
+    - 16
+    description: A mask of state machines in the neighbouring lower-numbered PIO block in the system (or the highest-numbered PIO block if this is PIO block 0) to which to apply the operations specified by OP_CLKDIV_RESTART, OP_ENABLE, OP_DISABLE in the same write. This allows state machines in a neighbouring PIO block to be started/stopped/clock-synced exactly simultaneously with a write to this PIO block's CTRL register. Neighbouring PIO blocks are disconnected (status signals tied to 0 and control signals ignored) if one block is accessible to NonSecure code, and one is not.
+  - name: CLKDIV_RESTART
+    bit_range:
+    - 11
+    - 8
+    description: Restart a state machine's clock divider from an initial phase of 0. Clock dividers are free-running, so once started, their output (including fractional jitter) is completely determined by the integer/fractional divisor configured in SMx_CLKDIV. This means that, if multiple clock dividers with the same divisor are restarted simultaneously, by writing multiple 1 bits to this field, the execution clocks of those state machines will run in precise lockstep. Note that setting/clearing SM_ENABLE does not stop the clock divider from running, so once multiple state machines' clocks are synchronised, it is safe to disable/reenable a state machine, whilst keeping the clock dividers in sync. Note also that CLKDIV_RESTART can be written to whilst the state machine is running, and this is useful to resynchronise clock dividers after the divisors (SMx_CLKDIV) have been changed on-the-fly.
+  - name: SM_RESTART
+    bit_range:
+    - 7
+    - 4
+    description: 'Write 1 to instantly clear internal SM state which may be otherwise difficult to access and will affect future execution. Specifically, the following are cleared: input and output shift counters; the contents of the input shift register; the delay counter; the waiting-on-IRQ state; any stalled instruction written to SMx_INSTR or run by OUT/MOV EXEC; any pin write left asserted due to OUT_STICKY. The contents of the output shift register and the X/Y scratch registers are not affected.'
   - name: SM_ENABLE
     bit_range:
     - 3
     - 0
     description: Enable/disable each of the four state machines by writing 1/0 to each of these four bits. When disabled, a state machine will cease executing instructions, except those written directly to SMx_INSTR by the system. Multiple bits can be set/cleared at once to run/halt multiple state machines simultaneously.
-  - name: SM_RESTART
-    bit_range:
-    - 7
-    - 4
-    description: |-
-      Write 1 to instantly clear internal SM state which may be otherwise difficult to access and will affect future execution.
-
-                                  Specifically, the following are cleared: input and output shift counters; the contents of the input shift register; the delay counter; the waiting-on-IRQ state; any stalled instruction written to SMx_INSTR or run by OUT/MOV EXEC; any pin write left asserted due to OUT_STICKY.
-
-                                  The program counter, the contents of the output shift register and the X/Y scratch registers are not affected.
-  - name: CLKDIV_RESTART
-    bit_range:
-    - 11
-    - 8
-    description: |-
-      Restart a state machine's clock divider from an initial phase of 0. Clock dividers are free-running, so once started, their output (including fractional jitter) is completely determined by the integer/fractional divisor configured in SMx_CLKDIV. This means that, if multiple clock dividers with the same divisor are restarted simultaneously, by writing multiple 1 bits to this field, the execution clocks of those state machines will run in precise lockstep.
-
-                                  Note that setting/clearing SM_ENABLE does not stop the clock divider from running, so once multiple state machines' clocks are synchronised, it is safe to disable/reenable a state machine, whilst keeping the clock dividers in sync.
-
-                                  Note also that CLKDIV_RESTART can be written to whilst the state machine is running, and this is useful to resynchronise clock dividers after the divisors (SMx_CLKDIV) have been changed on-the-fly.
   side_effects: null
 - id: FSTAT
   address_offset: 4
@@ -39,26 +54,26 @@ registers:
   access: READ_WRITE
   reset_value: 251662080
   fields:
-  - name: RXFULL
-    bit_range:
-    - 3
-    - 0
-    description: State machine RX FIFO is full
-  - name: RXEMPTY
-    bit_range:
-    - 11
-    - 8
-    description: State machine RX FIFO is empty
-  - name: TXFULL
-    bit_range:
-    - 19
-    - 16
-    description: State machine TX FIFO is full
   - name: TXEMPTY
     bit_range:
     - 27
     - 24
     description: State machine TX FIFO is empty
+  - name: TXFULL
+    bit_range:
+    - 19
+    - 16
+    description: State machine TX FIFO is full
+  - name: RXEMPTY
+    bit_range:
+    - 11
+    - 8
+    description: State machine RX FIFO is empty
+  - name: RXFULL
+    bit_range:
+    - 3
+    - 0
+    description: State machine RX FIFO is full
   side_effects: null
 - id: FDEBUG
   address_offset: 8
@@ -66,26 +81,26 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: RXSTALL
-    bit_range:
-    - 3
-    - 0
-    description: State machine has stalled on full RX FIFO during a blocking PUSH, or an IN with autopush enabled. This flag is also set when a nonblocking PUSH to a full FIFO took place, in which case the state machine has dropped data. Write 1 to clear.
-  - name: RXUNDER
-    bit_range:
-    - 11
-    - 8
-    description: RX FIFO underflow (i.e. read-on-empty by the system) has occurred. Write 1 to clear. Note that read-on-empty does not perturb the state of the FIFO in any way, but the data returned by reading from an empty FIFO is undefined, so this flag generally only becomes set due to some kind of software error.
-  - name: TXOVER
-    bit_range:
-    - 19
-    - 16
-    description: TX FIFO overflow (i.e. write-on-full by the system) has occurred. Write 1 to clear. Note that write-on-full does not alter the state or contents of the FIFO in any way, but the data that the system attempted to write is dropped, so if this flag is set, your software has quite likely dropped some data on the floor.
   - name: TXSTALL
     bit_range:
     - 27
     - 24
     description: State machine has stalled on empty TX FIFO during a blocking PULL, or an OUT with autopull enabled. Write 1 to clear.
+  - name: TXOVER
+    bit_range:
+    - 19
+    - 16
+    description: TX FIFO overflow (i.e. write-on-full by the system) has occurred. Write 1 to clear. Note that write-on-full does not alter the state or contents of the FIFO in any way, but the data that the system attempted to write is dropped, so if this flag is set, your software has quite likely dropped some data on the floor.
+  - name: RXUNDER
+    bit_range:
+    - 11
+    - 8
+    description: RX FIFO underflow (i.e. read-on-empty by the system) has occurred. Write 1 to clear. Note that read-on-empty does not perturb the state of the FIFO in any way, but the data returned by reading from an empty FIFO is undefined, so this flag generally only becomes set due to some kind of software error.
+  - name: RXSTALL
+    bit_range:
+    - 3
+    - 0
+    description: State machine has stalled on full RX FIFO during a blocking PUSH, or an IN with autopush enabled. This flag is also set when a nonblocking PUSH to a full FIFO took place, in which case the state machine has dropped data. Write 1 to clear.
   side_effects: null
 - id: FLEVEL
   address_offset: 12
@@ -93,46 +108,38 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: TX0
-    bit_range:
-    - 3
-    - 0
-    description: null
-  - name: RX0
-    bit_range:
-    - 7
-    - 4
-    description: null
-  - name: TX1
-    bit_range:
-    - 11
-    - 8
-    description: null
-  - name: RX1
-    bit_range:
-    - 15
-    - 12
-    description: null
-  - name: TX2
-    bit_range:
-    - 19
-    - 16
-    description: null
-  - name: RX2
-    bit_range:
-    - 23
-    - 20
-    description: null
-  - name: TX3
-    bit_range:
-    - 27
-    - 24
-    description: null
   - name: RX3
     bit_range:
     - 31
     - 28
-    description: null
+  - name: TX3
+    bit_range:
+    - 27
+    - 24
+  - name: RX2
+    bit_range:
+    - 23
+    - 20
+  - name: TX2
+    bit_range:
+    - 19
+    - 16
+  - name: RX1
+    bit_range:
+    - 15
+    - 12
+  - name: TX1
+    bit_range:
+    - 11
+    - 8
+  - name: RX0
+    bit_range:
+    - 7
+    - 4
+  - name: TX0
+    bit_range:
+    - 3
+    - 0
   side_effects: null
 - id: TXF0
   address_offset: 16
@@ -144,7 +151,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: TXF1
   address_offset: 20
@@ -156,7 +162,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: TXF2
   address_offset: 24
@@ -168,7 +173,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: TXF3
   address_offset: 28
@@ -180,7 +184,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: RXF0
   address_offset: 32
@@ -192,7 +195,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: RXF1
   address_offset: 36
@@ -204,7 +206,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: RXF2
   address_offset: 40
@@ -216,7 +217,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: RXF3
   address_offset: 44
@@ -228,7 +228,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: IRQ
   address_offset: 48
@@ -240,7 +239,6 @@ registers:
     bit_range:
     - 7
     - 0
-    description: null
   side_effects: null
 - id: IRQ_FORCE
   address_offset: 52
@@ -252,7 +250,6 @@ registers:
     bit_range:
     - 7
     - 0
-    description: null
   side_effects: null
 - id: INPUT_SYNC_BYPASS
   address_offset: 56
@@ -264,7 +261,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: DBG_PADOUT
   address_offset: 60
@@ -276,7 +272,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: DBG_PADOE
   address_offset: 64
@@ -288,29 +283,33 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: DBG_CFGINFO
   address_offset: 68
   size: 32
   access: READ_WRITE
-  reset_value: 0
+  reset_value: 268435456
   fields:
-  - name: FIFO_DEPTH
+  - name: VERSION
     bit_range:
-    - 5
-    - 0
-    description: "The depth of the state machine TX/RX FIFOs, measured in words. \n                            Joining fifos via SHIFTCTRL_FJOIN gives one FIFO with double \n                            this depth."
-  - name: SM_COUNT
-    bit_range:
-    - 11
-    - 8
-    description: The number of state machines this PIO instance is equipped with.
+    - 31
+    - 28
+    description: Version of the core PIO hardware.
   - name: IMEM_SIZE
     bit_range:
     - 21
     - 16
     description: The size of the instruction memory, measured in units of one instruction
+  - name: SM_COUNT
+    bit_range:
+    - 11
+    - 8
+    description: The number of state machines this PIO instance is equipped with.
+  - name: FIFO_DEPTH
+    bit_range:
+    - 5
+    - 0
+    description: The depth of the state machine TX/RX FIFOs, measured in words. Joining fifos via SHIFTCTRL_FJOIN gives one FIFO with double this depth.
   side_effects: null
 - id: INSTR_MEM0
   address_offset: 72
@@ -322,7 +321,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM1
   address_offset: 76
@@ -334,7 +332,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM2
   address_offset: 80
@@ -346,7 +343,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM3
   address_offset: 84
@@ -358,7 +354,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM4
   address_offset: 88
@@ -370,7 +365,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM5
   address_offset: 92
@@ -382,7 +376,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM6
   address_offset: 96
@@ -394,7 +387,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM7
   address_offset: 100
@@ -406,7 +398,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM8
   address_offset: 104
@@ -418,7 +409,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM9
   address_offset: 108
@@ -430,7 +420,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM10
   address_offset: 112
@@ -442,7 +431,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM11
   address_offset: 116
@@ -454,7 +442,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM12
   address_offset: 120
@@ -466,7 +453,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM13
   address_offset: 124
@@ -478,7 +464,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM14
   address_offset: 128
@@ -490,7 +475,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM15
   address_offset: 132
@@ -502,7 +486,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM16
   address_offset: 136
@@ -514,7 +497,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM17
   address_offset: 140
@@ -526,7 +508,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM18
   address_offset: 144
@@ -538,7 +519,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM19
   address_offset: 148
@@ -550,7 +530,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM20
   address_offset: 152
@@ -562,7 +541,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM21
   address_offset: 156
@@ -574,7 +552,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM22
   address_offset: 160
@@ -586,7 +563,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM23
   address_offset: 164
@@ -598,7 +574,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM24
   address_offset: 168
@@ -610,7 +585,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM25
   address_offset: 172
@@ -622,7 +596,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM26
   address_offset: 176
@@ -634,7 +607,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM27
   address_offset: 180
@@ -646,7 +618,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM28
   address_offset: 184
@@ -658,7 +629,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM29
   address_offset: 188
@@ -670,7 +640,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM30
   address_offset: 192
@@ -682,7 +651,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: INSTR_MEM31
   address_offset: 196
@@ -694,7 +662,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: SM0_CLKDIV
   address_offset: 200
@@ -702,16 +669,16 @@ registers:
   access: READ_WRITE
   reset_value: 65536
   fields:
+  - name: INT
+    bit_range:
+    - 31
+    - 16
+    description: Effective frequency is sysclk/(int + frac/256). Value of 0 is interpreted as 65536. If INT is 0, FRAC must also be 0.
   - name: FRAC
     bit_range:
     - 15
     - 8
     description: Fractional part of clock divisor
-  - name: INT
-    bit_range:
-    - 31
-    - 16
-    description: "Effective frequency is sysclk/(int + frac/256). \n                            Value of 0 is interpreted as 65536. If INT is 0, FRAC must also be 0."
   side_effects: null
 - id: SM0_EXECCTRL
   address_offset: 204
@@ -719,61 +686,61 @@ registers:
   access: READ_WRITE
   reset_value: 126976
   fields:
-  - name: STATUS_N
-    bit_range:
-    - 3
-    - 0
-    description: Comparison level for the MOV x, STATUS instruction
-  - name: STATUS_SEL
-    bit_range:
-    - 4
-    - 4
-    description: Comparison used for the MOV x, STATUS instruction.
-  - name: WRAP_BOTTOM
-    bit_range:
-    - 11
-    - 7
-    description: After reaching wrap_top, execution is wrapped to this address.
-  - name: WRAP_TOP
-    bit_range:
-    - 16
-    - 12
-    description: "After reaching this address, execution is wrapped to wrap_bottom. \n                            If the instruction is a jump, and the jump condition is true, the jump takes priority."
-  - name: OUT_STICKY
-    bit_range:
-    - 17
-    - 17
-    description: Continuously assert the most recent OUT/SET to the pins
-  - name: INLINE_OUT_EN
-    bit_range:
-    - 18
-    - 18
-    description: "If 1, use a bit of OUT data as an auxiliary write enable \n                            When used in conjunction with OUT_STICKY, writes with an enable of 0 will \n                            deassert the latest pin write. This can create useful masking/override behaviour \n                            due to the priority ordering of state machine pin writes (SM0 < SM1 < ...)"
-  - name: OUT_EN_SEL
-    bit_range:
-    - 23
-    - 19
-    description: Which data bit to use for inline OUT enable
-  - name: JMP_PIN
-    bit_range:
-    - 28
-    - 24
-    description: The GPIO number to use as condition for JMP PIN. Unaffected by input mapping.
-  - name: SIDE_PINDIR
-    bit_range:
-    - 29
-    - 29
-    description: If 1, side-set data is asserted to pin directions, instead of pin values
-  - name: SIDE_EN
-    bit_range:
-    - 30
-    - 30
-    description: If 1, the MSB of the Delay/Side-set instruction field is used as side-set enable, rather than a side-set data bit. This allows instructions to perform side-set optionally, rather than on every instruction, but the maximum possible side-set width is reduced from 5 to 4. Note that the value of PINCTRL_SIDESET_COUNT is inclusive of this enable bit.
   - name: EXEC_STALLED
     bit_range:
     - 31
     - 31
     description: If 1, an instruction written to SMx_INSTR is stalled, and latched by the state machine. Will clear to 0 once this instruction completes.
+  - name: SIDE_EN
+    bit_range:
+    - 30
+    - 30
+    description: If 1, the MSB of the Delay/Side-set instruction field is used as side-set enable, rather than a side-set data bit. This allows instructions to perform side-set optionally, rather than on every instruction, but the maximum possible side-set width is reduced from 5 to 4. Note that the value of PINCTRL_SIDESET_COUNT is inclusive of this enable bit.
+  - name: SIDE_PINDIR
+    bit_range:
+    - 29
+    - 29
+    description: If 1, side-set data is asserted to pin directions, instead of pin values
+  - name: JMP_PIN
+    bit_range:
+    - 28
+    - 24
+    description: The GPIO number to use as condition for JMP PIN. Unaffected by input mapping.
+  - name: OUT_EN_SEL
+    bit_range:
+    - 23
+    - 19
+    description: Which data bit to use for inline OUT enable
+  - name: INLINE_OUT_EN
+    bit_range:
+    - 18
+    - 18
+    description: If 1, use a bit of OUT data as an auxiliary write enable When used in conjunction with OUT_STICKY, writes with an enable of 0 will deassert the latest pin write. This can create useful masking/override behaviour due to the priority ordering of state machine pin writes (SM0 < SM1 < ...)
+  - name: OUT_STICKY
+    bit_range:
+    - 17
+    - 17
+    description: Continuously assert the most recent OUT/SET to the pins
+  - name: WRAP_TOP
+    bit_range:
+    - 16
+    - 12
+    description: After reaching this address, execution is wrapped to wrap_bottom. If the instruction is a jump, and the jump condition is true, the jump takes priority.
+  - name: WRAP_BOTTOM
+    bit_range:
+    - 11
+    - 7
+    description: After reaching wrap_top, execution is wrapped to this address.
+  - name: STATUS_SEL
+    bit_range:
+    - 6
+    - 5
+    description: Comparison used for the MOV x, STATUS instruction.
+  - name: STATUS_N
+    bit_range:
+    - 4
+    - 0
+    description: Comparison level or IRQ index for the MOV x, STATUS instruction. If STATUS_SEL is TXLEVEL or RXLEVEL, then values of STATUS_N greater than the current FIFO depth are reserved, and have undefined behaviour.
   side_effects: null
 - id: SM0_SHIFTCTRL
   address_offset: 208
@@ -781,46 +748,61 @@ registers:
   access: READ_WRITE
   reset_value: 786432
   fields:
-  - name: AUTOPUSH
+  - name: FJOIN_RX
     bit_range:
-    - 16
-    - 16
-    description: Push automatically when the input shift register is filled, i.e. on an IN instruction which causes the input shift counter to reach or exceed PUSH_THRESH.
-  - name: AUTOPULL
+    - 31
+    - 31
+    description: When 1, RX FIFO steals the TX FIFO's storage, and becomes twice as deep. TX FIFO is disabled as a result (always reads as both full and empty). FIFOs are flushed when this bit is changed.
+  - name: FJOIN_TX
     bit_range:
-    - 17
-    - 17
-    description: Pull automatically when the output shift register is emptied, i.e. on or following an OUT instruction which causes the output shift counter to reach or exceed PULL_THRESH.
-  - name: IN_SHIFTDIR
+    - 30
+    - 30
+    description: When 1, TX FIFO steals the RX FIFO's storage, and becomes twice as deep. RX FIFO is disabled as a result (always reads as both full and empty). FIFOs are flushed when this bit is changed.
+  - name: PULL_THRESH
     bit_range:
-    - 18
-    - 18
-    description: 1 = shift input shift register to right (data enters from left). 0 = to left.
+    - 29
+    - 25
+    description: Number of bits shifted out of OSR before autopull, or conditional pull (PULL IFEMPTY), will take place. Write 0 for value of 32.
+  - name: PUSH_THRESH
+    bit_range:
+    - 24
+    - 20
+    description: Number of bits shifted into ISR before autopush, or conditional push (PUSH IFFULL), will take place. Write 0 for value of 32.
   - name: OUT_SHIFTDIR
     bit_range:
     - 19
     - 19
     description: 1 = shift out of output shift register to right. 0 = to left.
-  - name: PUSH_THRESH
+  - name: IN_SHIFTDIR
     bit_range:
-    - 24
-    - 20
-    description: "Number of bits shifted into ISR before autopush, or conditional push (PUSH IFFULL), will take place. \n                            Write 0 for value of 32."
-  - name: PULL_THRESH
+    - 18
+    - 18
+    description: 1 = shift input shift register to right (data enters from left). 0 = to left.
+  - name: AUTOPULL
     bit_range:
-    - 29
-    - 25
-    description: "Number of bits shifted out of OSR before autopull, or conditional pull (PULL IFEMPTY), will take place. \n                            Write 0 for value of 32."
-  - name: FJOIN_TX
+    - 17
+    - 17
+    description: Pull automatically when the output shift register is emptied, i.e. on or following an OUT instruction which causes the output shift counter to reach or exceed PULL_THRESH.
+  - name: AUTOPUSH
     bit_range:
-    - 30
-    - 30
-    description: "When 1, TX FIFO steals the RX FIFO's storage, and becomes twice as deep. \n                            RX FIFO is disabled as a result (always reads as both full and empty). \n                            FIFOs are flushed when this bit is changed."
-  - name: FJOIN_RX
+    - 16
+    - 16
+    description: Push automatically when the input shift register is filled, i.e. on an IN instruction which causes the input shift counter to reach or exceed PUSH_THRESH.
+  - name: FJOIN_RX_PUT
     bit_range:
-    - 31
-    - 31
-    description: "When 1, RX FIFO steals the TX FIFO's storage, and becomes twice as deep. \n                            TX FIFO is disabled as a result (always reads as both full and empty). \n                            FIFOs are flushed when this bit is changed."
+    - 15
+    - 15
+    description: If 1, disable this state machine's RX FIFO, make its storage available for random write access by the state machine (using the `put` instruction) and, unless FJOIN_RX_GET is also set, random read access by the processor (through the RXFx_PUTGETy registers). If FJOIN_RX_PUT and FJOIN_RX_GET are both set, then the RX FIFO's registers can be randomly read/written by the state machine, but are completely inaccessible to the processor. Setting this bit will clear the FJOIN_TX and FJOIN_RX bits.
+  - name: FJOIN_RX_GET
+    bit_range:
+    - 14
+    - 14
+    description: If 1, disable this state machine's RX FIFO, make its storage available for random read access by the state machine (using the `get` instruction) and, unless FJOIN_RX_PUT is also set, random write access by the processor (through the RXFx_PUTGETy registers). If FJOIN_RX_PUT and FJOIN_RX_GET are both set, then the RX FIFO's registers can be randomly read/written by the state machine, but are completely inaccessible to the processor. Setting this bit will clear the FJOIN_TX and FJOIN_RX bits.
+  - name: IN_COUNT
+    bit_range:
+    - 4
+    - 0
+    description: Set the number of pins which are not masked to 0 when read by an IN PINS, WAIT PIN or MOV x, PINS instruction. For example, an IN_COUNT of 5 means that the 5 LSBs of the IN pin group are visible (bits 4:0), but the remaining 27 MSBs are masked to 0. A count of 32 is encoded with a field value of 0, so the default behaviour is to not perform any masking. Note this masking is applied in addition to the masking usually performed by the IN instruction. This is mainly useful for the MOV x, PINS instruction, which otherwise has no way of masking pins.
   side_effects: null
 - id: SM0_ADDR
   address_offset: 212
@@ -832,7 +814,6 @@ registers:
     bit_range:
     - 4
     - 0
-    description: null
   side_effects: null
 - id: SM0_INSTR
   address_offset: 216
@@ -844,7 +825,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: SM0_PINCTRL
   address_offset: 220
@@ -852,41 +832,41 @@ registers:
   access: READ_WRITE
   reset_value: 335544320
   fields:
-  - name: OUT_BASE
-    bit_range:
-    - 4
-    - 0
-    description: The lowest-numbered pin that will be affected by an OUT PINS, OUT PINDIRS or MOV PINS instruction. The data written to this pin will always be the least-significant bit of the OUT or MOV data.
-  - name: SET_BASE
-    bit_range:
-    - 9
-    - 5
-    description: The lowest-numbered pin that will be affected by a SET PINS or SET PINDIRS instruction. The data written to this pin is the least-significant bit of the SET data.
-  - name: SIDESET_BASE
-    bit_range:
-    - 14
-    - 10
-    description: The lowest-numbered pin that will be affected by a side-set operation. The MSBs of an instruction's side-set/delay field (up to 5, determined by SIDESET_COUNT) are used for side-set data, with the remaining LSBs used for delay. The least-significant bit of the side-set portion is the bit written to this pin, with more-significant bits written to higher-numbered pins.
-  - name: IN_BASE
-    bit_range:
-    - 19
-    - 15
-    description: The pin which is mapped to the least-significant bit of a state machine's IN data bus. Higher-numbered pins are mapped to consecutively more-significant data bits, with a modulo of 32 applied to pin number.
-  - name: OUT_COUNT
-    bit_range:
-    - 25
-    - 20
-    description: The number of pins asserted by an OUT PINS, OUT PINDIRS or MOV PINS instruction. In the range 0 to 32 inclusive.
-  - name: SET_COUNT
-    bit_range:
-    - 28
-    - 26
-    description: The number of pins asserted by a SET. In the range 0 to 5 inclusive.
   - name: SIDESET_COUNT
     bit_range:
     - 31
     - 29
     description: The number of MSBs of the Delay/Side-set instruction field which are used for side-set. Inclusive of the enable bit, if present. Minimum of 0 (all delay bits, no side-set) and maximum of 5 (all side-set, no delay).
+  - name: SET_COUNT
+    bit_range:
+    - 28
+    - 26
+    description: The number of pins asserted by a SET. In the range 0 to 5 inclusive.
+  - name: OUT_COUNT
+    bit_range:
+    - 25
+    - 20
+    description: The number of pins asserted by an OUT PINS, OUT PINDIRS or MOV PINS instruction. In the range 0 to 32 inclusive.
+  - name: IN_BASE
+    bit_range:
+    - 19
+    - 15
+    description: The pin which is mapped to the least-significant bit of a state machine's IN data bus. Higher-numbered pins are mapped to consecutively more-significant data bits, with a modulo of 32 applied to pin number.
+  - name: SIDESET_BASE
+    bit_range:
+    - 14
+    - 10
+    description: The lowest-numbered pin that will be affected by a side-set operation. The MSBs of an instruction's side-set/delay field (up to 5, determined by SIDESET_COUNT) are used for side-set data, with the remaining LSBs used for delay. The least-significant bit of the side-set portion is the bit written to this pin, with more-significant bits written to higher-numbered pins.
+  - name: SET_BASE
+    bit_range:
+    - 9
+    - 5
+    description: The lowest-numbered pin that will be affected by a SET PINS or SET PINDIRS instruction. The data written to this pin is the least-significant bit of the SET data.
+  - name: OUT_BASE
+    bit_range:
+    - 4
+    - 0
+    description: The lowest-numbered pin that will be affected by an OUT PINS, OUT PINDIRS or MOV PINS instruction. The data written to this pin will always be the least-significant bit of the OUT or MOV data.
   side_effects: null
 - id: SM1_CLKDIV
   address_offset: 224
@@ -894,16 +874,16 @@ registers:
   access: READ_WRITE
   reset_value: 65536
   fields:
+  - name: INT
+    bit_range:
+    - 31
+    - 16
+    description: Effective frequency is sysclk/(int + frac/256). Value of 0 is interpreted as 65536. If INT is 0, FRAC must also be 0.
   - name: FRAC
     bit_range:
     - 15
     - 8
     description: Fractional part of clock divisor
-  - name: INT
-    bit_range:
-    - 31
-    - 16
-    description: "Effective frequency is sysclk/(int + frac/256). \n                            Value of 0 is interpreted as 65536. If INT is 0, FRAC must also be 0."
   side_effects: null
 - id: SM1_EXECCTRL
   address_offset: 228
@@ -911,61 +891,61 @@ registers:
   access: READ_WRITE
   reset_value: 126976
   fields:
-  - name: STATUS_N
-    bit_range:
-    - 3
-    - 0
-    description: Comparison level for the MOV x, STATUS instruction
-  - name: STATUS_SEL
-    bit_range:
-    - 4
-    - 4
-    description: Comparison used for the MOV x, STATUS instruction.
-  - name: WRAP_BOTTOM
-    bit_range:
-    - 11
-    - 7
-    description: After reaching wrap_top, execution is wrapped to this address.
-  - name: WRAP_TOP
-    bit_range:
-    - 16
-    - 12
-    description: "After reaching this address, execution is wrapped to wrap_bottom. \n                            If the instruction is a jump, and the jump condition is true, the jump takes priority."
-  - name: OUT_STICKY
-    bit_range:
-    - 17
-    - 17
-    description: Continuously assert the most recent OUT/SET to the pins
-  - name: INLINE_OUT_EN
-    bit_range:
-    - 18
-    - 18
-    description: "If 1, use a bit of OUT data as an auxiliary write enable \n                            When used in conjunction with OUT_STICKY, writes with an enable of 0 will \n                            deassert the latest pin write. This can create useful masking/override behaviour \n                            due to the priority ordering of state machine pin writes (SM0 < SM1 < ...)"
-  - name: OUT_EN_SEL
-    bit_range:
-    - 23
-    - 19
-    description: Which data bit to use for inline OUT enable
-  - name: JMP_PIN
-    bit_range:
-    - 28
-    - 24
-    description: The GPIO number to use as condition for JMP PIN. Unaffected by input mapping.
-  - name: SIDE_PINDIR
-    bit_range:
-    - 29
-    - 29
-    description: If 1, side-set data is asserted to pin directions, instead of pin values
-  - name: SIDE_EN
-    bit_range:
-    - 30
-    - 30
-    description: If 1, the MSB of the Delay/Side-set instruction field is used as side-set enable, rather than a side-set data bit. This allows instructions to perform side-set optionally, rather than on every instruction, but the maximum possible side-set width is reduced from 5 to 4. Note that the value of PINCTRL_SIDESET_COUNT is inclusive of this enable bit.
   - name: EXEC_STALLED
     bit_range:
     - 31
     - 31
     description: If 1, an instruction written to SMx_INSTR is stalled, and latched by the state machine. Will clear to 0 once this instruction completes.
+  - name: SIDE_EN
+    bit_range:
+    - 30
+    - 30
+    description: If 1, the MSB of the Delay/Side-set instruction field is used as side-set enable, rather than a side-set data bit. This allows instructions to perform side-set optionally, rather than on every instruction, but the maximum possible side-set width is reduced from 5 to 4. Note that the value of PINCTRL_SIDESET_COUNT is inclusive of this enable bit.
+  - name: SIDE_PINDIR
+    bit_range:
+    - 29
+    - 29
+    description: If 1, side-set data is asserted to pin directions, instead of pin values
+  - name: JMP_PIN
+    bit_range:
+    - 28
+    - 24
+    description: The GPIO number to use as condition for JMP PIN. Unaffected by input mapping.
+  - name: OUT_EN_SEL
+    bit_range:
+    - 23
+    - 19
+    description: Which data bit to use for inline OUT enable
+  - name: INLINE_OUT_EN
+    bit_range:
+    - 18
+    - 18
+    description: If 1, use a bit of OUT data as an auxiliary write enable When used in conjunction with OUT_STICKY, writes with an enable of 0 will deassert the latest pin write. This can create useful masking/override behaviour due to the priority ordering of state machine pin writes (SM0 < SM1 < ...)
+  - name: OUT_STICKY
+    bit_range:
+    - 17
+    - 17
+    description: Continuously assert the most recent OUT/SET to the pins
+  - name: WRAP_TOP
+    bit_range:
+    - 16
+    - 12
+    description: After reaching this address, execution is wrapped to wrap_bottom. If the instruction is a jump, and the jump condition is true, the jump takes priority.
+  - name: WRAP_BOTTOM
+    bit_range:
+    - 11
+    - 7
+    description: After reaching wrap_top, execution is wrapped to this address.
+  - name: STATUS_SEL
+    bit_range:
+    - 6
+    - 5
+    description: Comparison used for the MOV x, STATUS instruction.
+  - name: STATUS_N
+    bit_range:
+    - 4
+    - 0
+    description: Comparison level or IRQ index for the MOV x, STATUS instruction. If STATUS_SEL is TXLEVEL or RXLEVEL, then values of STATUS_N greater than the current FIFO depth are reserved, and have undefined behaviour.
   side_effects: null
 - id: SM1_SHIFTCTRL
   address_offset: 232
@@ -973,46 +953,61 @@ registers:
   access: READ_WRITE
   reset_value: 786432
   fields:
-  - name: AUTOPUSH
+  - name: FJOIN_RX
     bit_range:
-    - 16
-    - 16
-    description: Push automatically when the input shift register is filled, i.e. on an IN instruction which causes the input shift counter to reach or exceed PUSH_THRESH.
-  - name: AUTOPULL
+    - 31
+    - 31
+    description: When 1, RX FIFO steals the TX FIFO's storage, and becomes twice as deep. TX FIFO is disabled as a result (always reads as both full and empty). FIFOs are flushed when this bit is changed.
+  - name: FJOIN_TX
     bit_range:
-    - 17
-    - 17
-    description: Pull automatically when the output shift register is emptied, i.e. on or following an OUT instruction which causes the output shift counter to reach or exceed PULL_THRESH.
-  - name: IN_SHIFTDIR
+    - 30
+    - 30
+    description: When 1, TX FIFO steals the RX FIFO's storage, and becomes twice as deep. RX FIFO is disabled as a result (always reads as both full and empty). FIFOs are flushed when this bit is changed.
+  - name: PULL_THRESH
     bit_range:
-    - 18
-    - 18
-    description: 1 = shift input shift register to right (data enters from left). 0 = to left.
+    - 29
+    - 25
+    description: Number of bits shifted out of OSR before autopull, or conditional pull (PULL IFEMPTY), will take place. Write 0 for value of 32.
+  - name: PUSH_THRESH
+    bit_range:
+    - 24
+    - 20
+    description: Number of bits shifted into ISR before autopush, or conditional push (PUSH IFFULL), will take place. Write 0 for value of 32.
   - name: OUT_SHIFTDIR
     bit_range:
     - 19
     - 19
     description: 1 = shift out of output shift register to right. 0 = to left.
-  - name: PUSH_THRESH
+  - name: IN_SHIFTDIR
     bit_range:
-    - 24
-    - 20
-    description: "Number of bits shifted into ISR before autopush, or conditional push (PUSH IFFULL), will take place. \n                            Write 0 for value of 32."
-  - name: PULL_THRESH
+    - 18
+    - 18
+    description: 1 = shift input shift register to right (data enters from left). 0 = to left.
+  - name: AUTOPULL
     bit_range:
-    - 29
-    - 25
-    description: "Number of bits shifted out of OSR before autopull, or conditional pull (PULL IFEMPTY), will take place. \n                            Write 0 for value of 32."
-  - name: FJOIN_TX
+    - 17
+    - 17
+    description: Pull automatically when the output shift register is emptied, i.e. on or following an OUT instruction which causes the output shift counter to reach or exceed PULL_THRESH.
+  - name: AUTOPUSH
     bit_range:
-    - 30
-    - 30
-    description: "When 1, TX FIFO steals the RX FIFO's storage, and becomes twice as deep. \n                            RX FIFO is disabled as a result (always reads as both full and empty). \n                            FIFOs are flushed when this bit is changed."
-  - name: FJOIN_RX
+    - 16
+    - 16
+    description: Push automatically when the input shift register is filled, i.e. on an IN instruction which causes the input shift counter to reach or exceed PUSH_THRESH.
+  - name: FJOIN_RX_PUT
     bit_range:
-    - 31
-    - 31
-    description: "When 1, RX FIFO steals the TX FIFO's storage, and becomes twice as deep. \n                            TX FIFO is disabled as a result (always reads as both full and empty). \n                            FIFOs are flushed when this bit is changed."
+    - 15
+    - 15
+    description: If 1, disable this state machine's RX FIFO, make its storage available for random write access by the state machine (using the `put` instruction) and, unless FJOIN_RX_GET is also set, random read access by the processor (through the RXFx_PUTGETy registers). If FJOIN_RX_PUT and FJOIN_RX_GET are both set, then the RX FIFO's registers can be randomly read/written by the state machine, but are completely inaccessible to the processor. Setting this bit will clear the FJOIN_TX and FJOIN_RX bits.
+  - name: FJOIN_RX_GET
+    bit_range:
+    - 14
+    - 14
+    description: If 1, disable this state machine's RX FIFO, make its storage available for random read access by the state machine (using the `get` instruction) and, unless FJOIN_RX_PUT is also set, random write access by the processor (through the RXFx_PUTGETy registers). If FJOIN_RX_PUT and FJOIN_RX_GET are both set, then the RX FIFO's registers can be randomly read/written by the state machine, but are completely inaccessible to the processor. Setting this bit will clear the FJOIN_TX and FJOIN_RX bits.
+  - name: IN_COUNT
+    bit_range:
+    - 4
+    - 0
+    description: Set the number of pins which are not masked to 0 when read by an IN PINS, WAIT PIN or MOV x, PINS instruction. For example, an IN_COUNT of 5 means that the 5 LSBs of the IN pin group are visible (bits 4:0), but the remaining 27 MSBs are masked to 0. A count of 32 is encoded with a field value of 0, so the default behaviour is to not perform any masking. Note this masking is applied in addition to the masking usually performed by the IN instruction. This is mainly useful for the MOV x, PINS instruction, which otherwise has no way of masking pins.
   side_effects: null
 - id: SM1_ADDR
   address_offset: 236
@@ -1024,7 +1019,6 @@ registers:
     bit_range:
     - 4
     - 0
-    description: null
   side_effects: null
 - id: SM1_INSTR
   address_offset: 240
@@ -1036,7 +1030,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: SM1_PINCTRL
   address_offset: 244
@@ -1044,41 +1037,41 @@ registers:
   access: READ_WRITE
   reset_value: 335544320
   fields:
-  - name: OUT_BASE
-    bit_range:
-    - 4
-    - 0
-    description: The lowest-numbered pin that will be affected by an OUT PINS, OUT PINDIRS or MOV PINS instruction. The data written to this pin will always be the least-significant bit of the OUT or MOV data.
-  - name: SET_BASE
-    bit_range:
-    - 9
-    - 5
-    description: The lowest-numbered pin that will be affected by a SET PINS or SET PINDIRS instruction. The data written to this pin is the least-significant bit of the SET data.
-  - name: SIDESET_BASE
-    bit_range:
-    - 14
-    - 10
-    description: The lowest-numbered pin that will be affected by a side-set operation. The MSBs of an instruction's side-set/delay field (up to 5, determined by SIDESET_COUNT) are used for side-set data, with the remaining LSBs used for delay. The least-significant bit of the side-set portion is the bit written to this pin, with more-significant bits written to higher-numbered pins.
-  - name: IN_BASE
-    bit_range:
-    - 19
-    - 15
-    description: The pin which is mapped to the least-significant bit of a state machine's IN data bus. Higher-numbered pins are mapped to consecutively more-significant data bits, with a modulo of 32 applied to pin number.
-  - name: OUT_COUNT
-    bit_range:
-    - 25
-    - 20
-    description: The number of pins asserted by an OUT PINS, OUT PINDIRS or MOV PINS instruction. In the range 0 to 32 inclusive.
-  - name: SET_COUNT
-    bit_range:
-    - 28
-    - 26
-    description: The number of pins asserted by a SET. In the range 0 to 5 inclusive.
   - name: SIDESET_COUNT
     bit_range:
     - 31
     - 29
     description: The number of MSBs of the Delay/Side-set instruction field which are used for side-set. Inclusive of the enable bit, if present. Minimum of 0 (all delay bits, no side-set) and maximum of 5 (all side-set, no delay).
+  - name: SET_COUNT
+    bit_range:
+    - 28
+    - 26
+    description: The number of pins asserted by a SET. In the range 0 to 5 inclusive.
+  - name: OUT_COUNT
+    bit_range:
+    - 25
+    - 20
+    description: The number of pins asserted by an OUT PINS, OUT PINDIRS or MOV PINS instruction. In the range 0 to 32 inclusive.
+  - name: IN_BASE
+    bit_range:
+    - 19
+    - 15
+    description: The pin which is mapped to the least-significant bit of a state machine's IN data bus. Higher-numbered pins are mapped to consecutively more-significant data bits, with a modulo of 32 applied to pin number.
+  - name: SIDESET_BASE
+    bit_range:
+    - 14
+    - 10
+    description: The lowest-numbered pin that will be affected by a side-set operation. The MSBs of an instruction's side-set/delay field (up to 5, determined by SIDESET_COUNT) are used for side-set data, with the remaining LSBs used for delay. The least-significant bit of the side-set portion is the bit written to this pin, with more-significant bits written to higher-numbered pins.
+  - name: SET_BASE
+    bit_range:
+    - 9
+    - 5
+    description: The lowest-numbered pin that will be affected by a SET PINS or SET PINDIRS instruction. The data written to this pin is the least-significant bit of the SET data.
+  - name: OUT_BASE
+    bit_range:
+    - 4
+    - 0
+    description: The lowest-numbered pin that will be affected by an OUT PINS, OUT PINDIRS or MOV PINS instruction. The data written to this pin will always be the least-significant bit of the OUT or MOV data.
   side_effects: null
 - id: SM2_CLKDIV
   address_offset: 248
@@ -1086,16 +1079,16 @@ registers:
   access: READ_WRITE
   reset_value: 65536
   fields:
+  - name: INT
+    bit_range:
+    - 31
+    - 16
+    description: Effective frequency is sysclk/(int + frac/256). Value of 0 is interpreted as 65536. If INT is 0, FRAC must also be 0.
   - name: FRAC
     bit_range:
     - 15
     - 8
     description: Fractional part of clock divisor
-  - name: INT
-    bit_range:
-    - 31
-    - 16
-    description: "Effective frequency is sysclk/(int + frac/256). \n                            Value of 0 is interpreted as 65536. If INT is 0, FRAC must also be 0."
   side_effects: null
 - id: SM2_EXECCTRL
   address_offset: 252
@@ -1103,61 +1096,61 @@ registers:
   access: READ_WRITE
   reset_value: 126976
   fields:
-  - name: STATUS_N
-    bit_range:
-    - 3
-    - 0
-    description: Comparison level for the MOV x, STATUS instruction
-  - name: STATUS_SEL
-    bit_range:
-    - 4
-    - 4
-    description: Comparison used for the MOV x, STATUS instruction.
-  - name: WRAP_BOTTOM
-    bit_range:
-    - 11
-    - 7
-    description: After reaching wrap_top, execution is wrapped to this address.
-  - name: WRAP_TOP
-    bit_range:
-    - 16
-    - 12
-    description: "After reaching this address, execution is wrapped to wrap_bottom. \n                            If the instruction is a jump, and the jump condition is true, the jump takes priority."
-  - name: OUT_STICKY
-    bit_range:
-    - 17
-    - 17
-    description: Continuously assert the most recent OUT/SET to the pins
-  - name: INLINE_OUT_EN
-    bit_range:
-    - 18
-    - 18
-    description: "If 1, use a bit of OUT data as an auxiliary write enable \n                            When used in conjunction with OUT_STICKY, writes with an enable of 0 will \n                            deassert the latest pin write. This can create useful masking/override behaviour \n                            due to the priority ordering of state machine pin writes (SM0 < SM1 < ...)"
-  - name: OUT_EN_SEL
-    bit_range:
-    - 23
-    - 19
-    description: Which data bit to use for inline OUT enable
-  - name: JMP_PIN
-    bit_range:
-    - 28
-    - 24
-    description: The GPIO number to use as condition for JMP PIN. Unaffected by input mapping.
-  - name: SIDE_PINDIR
-    bit_range:
-    - 29
-    - 29
-    description: If 1, side-set data is asserted to pin directions, instead of pin values
-  - name: SIDE_EN
-    bit_range:
-    - 30
-    - 30
-    description: If 1, the MSB of the Delay/Side-set instruction field is used as side-set enable, rather than a side-set data bit. This allows instructions to perform side-set optionally, rather than on every instruction, but the maximum possible side-set width is reduced from 5 to 4. Note that the value of PINCTRL_SIDESET_COUNT is inclusive of this enable bit.
   - name: EXEC_STALLED
     bit_range:
     - 31
     - 31
     description: If 1, an instruction written to SMx_INSTR is stalled, and latched by the state machine. Will clear to 0 once this instruction completes.
+  - name: SIDE_EN
+    bit_range:
+    - 30
+    - 30
+    description: If 1, the MSB of the Delay/Side-set instruction field is used as side-set enable, rather than a side-set data bit. This allows instructions to perform side-set optionally, rather than on every instruction, but the maximum possible side-set width is reduced from 5 to 4. Note that the value of PINCTRL_SIDESET_COUNT is inclusive of this enable bit.
+  - name: SIDE_PINDIR
+    bit_range:
+    - 29
+    - 29
+    description: If 1, side-set data is asserted to pin directions, instead of pin values
+  - name: JMP_PIN
+    bit_range:
+    - 28
+    - 24
+    description: The GPIO number to use as condition for JMP PIN. Unaffected by input mapping.
+  - name: OUT_EN_SEL
+    bit_range:
+    - 23
+    - 19
+    description: Which data bit to use for inline OUT enable
+  - name: INLINE_OUT_EN
+    bit_range:
+    - 18
+    - 18
+    description: If 1, use a bit of OUT data as an auxiliary write enable When used in conjunction with OUT_STICKY, writes with an enable of 0 will deassert the latest pin write. This can create useful masking/override behaviour due to the priority ordering of state machine pin writes (SM0 < SM1 < ...)
+  - name: OUT_STICKY
+    bit_range:
+    - 17
+    - 17
+    description: Continuously assert the most recent OUT/SET to the pins
+  - name: WRAP_TOP
+    bit_range:
+    - 16
+    - 12
+    description: After reaching this address, execution is wrapped to wrap_bottom. If the instruction is a jump, and the jump condition is true, the jump takes priority.
+  - name: WRAP_BOTTOM
+    bit_range:
+    - 11
+    - 7
+    description: After reaching wrap_top, execution is wrapped to this address.
+  - name: STATUS_SEL
+    bit_range:
+    - 6
+    - 5
+    description: Comparison used for the MOV x, STATUS instruction.
+  - name: STATUS_N
+    bit_range:
+    - 4
+    - 0
+    description: Comparison level or IRQ index for the MOV x, STATUS instruction. If STATUS_SEL is TXLEVEL or RXLEVEL, then values of STATUS_N greater than the current FIFO depth are reserved, and have undefined behaviour.
   side_effects: null
 - id: SM2_SHIFTCTRL
   address_offset: 256
@@ -1165,46 +1158,61 @@ registers:
   access: READ_WRITE
   reset_value: 786432
   fields:
-  - name: AUTOPUSH
+  - name: FJOIN_RX
     bit_range:
-    - 16
-    - 16
-    description: Push automatically when the input shift register is filled, i.e. on an IN instruction which causes the input shift counter to reach or exceed PUSH_THRESH.
-  - name: AUTOPULL
+    - 31
+    - 31
+    description: When 1, RX FIFO steals the TX FIFO's storage, and becomes twice as deep. TX FIFO is disabled as a result (always reads as both full and empty). FIFOs are flushed when this bit is changed.
+  - name: FJOIN_TX
     bit_range:
-    - 17
-    - 17
-    description: Pull automatically when the output shift register is emptied, i.e. on or following an OUT instruction which causes the output shift counter to reach or exceed PULL_THRESH.
-  - name: IN_SHIFTDIR
+    - 30
+    - 30
+    description: When 1, TX FIFO steals the RX FIFO's storage, and becomes twice as deep. RX FIFO is disabled as a result (always reads as both full and empty). FIFOs are flushed when this bit is changed.
+  - name: PULL_THRESH
     bit_range:
-    - 18
-    - 18
-    description: 1 = shift input shift register to right (data enters from left). 0 = to left.
+    - 29
+    - 25
+    description: Number of bits shifted out of OSR before autopull, or conditional pull (PULL IFEMPTY), will take place. Write 0 for value of 32.
+  - name: PUSH_THRESH
+    bit_range:
+    - 24
+    - 20
+    description: Number of bits shifted into ISR before autopush, or conditional push (PUSH IFFULL), will take place. Write 0 for value of 32.
   - name: OUT_SHIFTDIR
     bit_range:
     - 19
     - 19
     description: 1 = shift out of output shift register to right. 0 = to left.
-  - name: PUSH_THRESH
+  - name: IN_SHIFTDIR
     bit_range:
-    - 24
-    - 20
-    description: "Number of bits shifted into ISR before autopush, or conditional push (PUSH IFFULL), will take place. \n                            Write 0 for value of 32."
-  - name: PULL_THRESH
+    - 18
+    - 18
+    description: 1 = shift input shift register to right (data enters from left). 0 = to left.
+  - name: AUTOPULL
     bit_range:
-    - 29
-    - 25
-    description: "Number of bits shifted out of OSR before autopull, or conditional pull (PULL IFEMPTY), will take place. \n                            Write 0 for value of 32."
-  - name: FJOIN_TX
+    - 17
+    - 17
+    description: Pull automatically when the output shift register is emptied, i.e. on or following an OUT instruction which causes the output shift counter to reach or exceed PULL_THRESH.
+  - name: AUTOPUSH
     bit_range:
-    - 30
-    - 30
-    description: "When 1, TX FIFO steals the RX FIFO's storage, and becomes twice as deep. \n                            RX FIFO is disabled as a result (always reads as both full and empty). \n                            FIFOs are flushed when this bit is changed."
-  - name: FJOIN_RX
+    - 16
+    - 16
+    description: Push automatically when the input shift register is filled, i.e. on an IN instruction which causes the input shift counter to reach or exceed PUSH_THRESH.
+  - name: FJOIN_RX_PUT
     bit_range:
-    - 31
-    - 31
-    description: "When 1, RX FIFO steals the TX FIFO's storage, and becomes twice as deep. \n                            TX FIFO is disabled as a result (always reads as both full and empty). \n                            FIFOs are flushed when this bit is changed."
+    - 15
+    - 15
+    description: If 1, disable this state machine's RX FIFO, make its storage available for random write access by the state machine (using the `put` instruction) and, unless FJOIN_RX_GET is also set, random read access by the processor (through the RXFx_PUTGETy registers). If FJOIN_RX_PUT and FJOIN_RX_GET are both set, then the RX FIFO's registers can be randomly read/written by the state machine, but are completely inaccessible to the processor. Setting this bit will clear the FJOIN_TX and FJOIN_RX bits.
+  - name: FJOIN_RX_GET
+    bit_range:
+    - 14
+    - 14
+    description: If 1, disable this state machine's RX FIFO, make its storage available for random read access by the state machine (using the `get` instruction) and, unless FJOIN_RX_PUT is also set, random write access by the processor (through the RXFx_PUTGETy registers). If FJOIN_RX_PUT and FJOIN_RX_GET are both set, then the RX FIFO's registers can be randomly read/written by the state machine, but are completely inaccessible to the processor. Setting this bit will clear the FJOIN_TX and FJOIN_RX bits.
+  - name: IN_COUNT
+    bit_range:
+    - 4
+    - 0
+    description: Set the number of pins which are not masked to 0 when read by an IN PINS, WAIT PIN or MOV x, PINS instruction. For example, an IN_COUNT of 5 means that the 5 LSBs of the IN pin group are visible (bits 4:0), but the remaining 27 MSBs are masked to 0. A count of 32 is encoded with a field value of 0, so the default behaviour is to not perform any masking. Note this masking is applied in addition to the masking usually performed by the IN instruction. This is mainly useful for the MOV x, PINS instruction, which otherwise has no way of masking pins.
   side_effects: null
 - id: SM2_ADDR
   address_offset: 260
@@ -1216,7 +1224,6 @@ registers:
     bit_range:
     - 4
     - 0
-    description: null
   side_effects: null
 - id: SM2_INSTR
   address_offset: 264
@@ -1228,7 +1235,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: SM2_PINCTRL
   address_offset: 268
@@ -1236,41 +1242,41 @@ registers:
   access: READ_WRITE
   reset_value: 335544320
   fields:
-  - name: OUT_BASE
-    bit_range:
-    - 4
-    - 0
-    description: The lowest-numbered pin that will be affected by an OUT PINS, OUT PINDIRS or MOV PINS instruction. The data written to this pin will always be the least-significant bit of the OUT or MOV data.
-  - name: SET_BASE
-    bit_range:
-    - 9
-    - 5
-    description: The lowest-numbered pin that will be affected by a SET PINS or SET PINDIRS instruction. The data written to this pin is the least-significant bit of the SET data.
-  - name: SIDESET_BASE
-    bit_range:
-    - 14
-    - 10
-    description: The lowest-numbered pin that will be affected by a side-set operation. The MSBs of an instruction's side-set/delay field (up to 5, determined by SIDESET_COUNT) are used for side-set data, with the remaining LSBs used for delay. The least-significant bit of the side-set portion is the bit written to this pin, with more-significant bits written to higher-numbered pins.
-  - name: IN_BASE
-    bit_range:
-    - 19
-    - 15
-    description: The pin which is mapped to the least-significant bit of a state machine's IN data bus. Higher-numbered pins are mapped to consecutively more-significant data bits, with a modulo of 32 applied to pin number.
-  - name: OUT_COUNT
-    bit_range:
-    - 25
-    - 20
-    description: The number of pins asserted by an OUT PINS, OUT PINDIRS or MOV PINS instruction. In the range 0 to 32 inclusive.
-  - name: SET_COUNT
-    bit_range:
-    - 28
-    - 26
-    description: The number of pins asserted by a SET. In the range 0 to 5 inclusive.
   - name: SIDESET_COUNT
     bit_range:
     - 31
     - 29
     description: The number of MSBs of the Delay/Side-set instruction field which are used for side-set. Inclusive of the enable bit, if present. Minimum of 0 (all delay bits, no side-set) and maximum of 5 (all side-set, no delay).
+  - name: SET_COUNT
+    bit_range:
+    - 28
+    - 26
+    description: The number of pins asserted by a SET. In the range 0 to 5 inclusive.
+  - name: OUT_COUNT
+    bit_range:
+    - 25
+    - 20
+    description: The number of pins asserted by an OUT PINS, OUT PINDIRS or MOV PINS instruction. In the range 0 to 32 inclusive.
+  - name: IN_BASE
+    bit_range:
+    - 19
+    - 15
+    description: The pin which is mapped to the least-significant bit of a state machine's IN data bus. Higher-numbered pins are mapped to consecutively more-significant data bits, with a modulo of 32 applied to pin number.
+  - name: SIDESET_BASE
+    bit_range:
+    - 14
+    - 10
+    description: The lowest-numbered pin that will be affected by a side-set operation. The MSBs of an instruction's side-set/delay field (up to 5, determined by SIDESET_COUNT) are used for side-set data, with the remaining LSBs used for delay. The least-significant bit of the side-set portion is the bit written to this pin, with more-significant bits written to higher-numbered pins.
+  - name: SET_BASE
+    bit_range:
+    - 9
+    - 5
+    description: The lowest-numbered pin that will be affected by a SET PINS or SET PINDIRS instruction. The data written to this pin is the least-significant bit of the SET data.
+  - name: OUT_BASE
+    bit_range:
+    - 4
+    - 0
+    description: The lowest-numbered pin that will be affected by an OUT PINS, OUT PINDIRS or MOV PINS instruction. The data written to this pin will always be the least-significant bit of the OUT or MOV data.
   side_effects: null
 - id: SM3_CLKDIV
   address_offset: 272
@@ -1278,16 +1284,16 @@ registers:
   access: READ_WRITE
   reset_value: 65536
   fields:
+  - name: INT
+    bit_range:
+    - 31
+    - 16
+    description: Effective frequency is sysclk/(int + frac/256). Value of 0 is interpreted as 65536. If INT is 0, FRAC must also be 0.
   - name: FRAC
     bit_range:
     - 15
     - 8
     description: Fractional part of clock divisor
-  - name: INT
-    bit_range:
-    - 31
-    - 16
-    description: "Effective frequency is sysclk/(int + frac/256). \n                            Value of 0 is interpreted as 65536. If INT is 0, FRAC must also be 0."
   side_effects: null
 - id: SM3_EXECCTRL
   address_offset: 276
@@ -1295,61 +1301,61 @@ registers:
   access: READ_WRITE
   reset_value: 126976
   fields:
-  - name: STATUS_N
-    bit_range:
-    - 3
-    - 0
-    description: Comparison level for the MOV x, STATUS instruction
-  - name: STATUS_SEL
-    bit_range:
-    - 4
-    - 4
-    description: Comparison used for the MOV x, STATUS instruction.
-  - name: WRAP_BOTTOM
-    bit_range:
-    - 11
-    - 7
-    description: After reaching wrap_top, execution is wrapped to this address.
-  - name: WRAP_TOP
-    bit_range:
-    - 16
-    - 12
-    description: "After reaching this address, execution is wrapped to wrap_bottom. \n                            If the instruction is a jump, and the jump condition is true, the jump takes priority."
-  - name: OUT_STICKY
-    bit_range:
-    - 17
-    - 17
-    description: Continuously assert the most recent OUT/SET to the pins
-  - name: INLINE_OUT_EN
-    bit_range:
-    - 18
-    - 18
-    description: "If 1, use a bit of OUT data as an auxiliary write enable \n                            When used in conjunction with OUT_STICKY, writes with an enable of 0 will \n                            deassert the latest pin write. This can create useful masking/override behaviour \n                            due to the priority ordering of state machine pin writes (SM0 < SM1 < ...)"
-  - name: OUT_EN_SEL
-    bit_range:
-    - 23
-    - 19
-    description: Which data bit to use for inline OUT enable
-  - name: JMP_PIN
-    bit_range:
-    - 28
-    - 24
-    description: The GPIO number to use as condition for JMP PIN. Unaffected by input mapping.
-  - name: SIDE_PINDIR
-    bit_range:
-    - 29
-    - 29
-    description: If 1, side-set data is asserted to pin directions, instead of pin values
-  - name: SIDE_EN
-    bit_range:
-    - 30
-    - 30
-    description: If 1, the MSB of the Delay/Side-set instruction field is used as side-set enable, rather than a side-set data bit. This allows instructions to perform side-set optionally, rather than on every instruction, but the maximum possible side-set width is reduced from 5 to 4. Note that the value of PINCTRL_SIDESET_COUNT is inclusive of this enable bit.
   - name: EXEC_STALLED
     bit_range:
     - 31
     - 31
     description: If 1, an instruction written to SMx_INSTR is stalled, and latched by the state machine. Will clear to 0 once this instruction completes.
+  - name: SIDE_EN
+    bit_range:
+    - 30
+    - 30
+    description: If 1, the MSB of the Delay/Side-set instruction field is used as side-set enable, rather than a side-set data bit. This allows instructions to perform side-set optionally, rather than on every instruction, but the maximum possible side-set width is reduced from 5 to 4. Note that the value of PINCTRL_SIDESET_COUNT is inclusive of this enable bit.
+  - name: SIDE_PINDIR
+    bit_range:
+    - 29
+    - 29
+    description: If 1, side-set data is asserted to pin directions, instead of pin values
+  - name: JMP_PIN
+    bit_range:
+    - 28
+    - 24
+    description: The GPIO number to use as condition for JMP PIN. Unaffected by input mapping.
+  - name: OUT_EN_SEL
+    bit_range:
+    - 23
+    - 19
+    description: Which data bit to use for inline OUT enable
+  - name: INLINE_OUT_EN
+    bit_range:
+    - 18
+    - 18
+    description: If 1, use a bit of OUT data as an auxiliary write enable When used in conjunction with OUT_STICKY, writes with an enable of 0 will deassert the latest pin write. This can create useful masking/override behaviour due to the priority ordering of state machine pin writes (SM0 < SM1 < ...)
+  - name: OUT_STICKY
+    bit_range:
+    - 17
+    - 17
+    description: Continuously assert the most recent OUT/SET to the pins
+  - name: WRAP_TOP
+    bit_range:
+    - 16
+    - 12
+    description: After reaching this address, execution is wrapped to wrap_bottom. If the instruction is a jump, and the jump condition is true, the jump takes priority.
+  - name: WRAP_BOTTOM
+    bit_range:
+    - 11
+    - 7
+    description: After reaching wrap_top, execution is wrapped to this address.
+  - name: STATUS_SEL
+    bit_range:
+    - 6
+    - 5
+    description: Comparison used for the MOV x, STATUS instruction.
+  - name: STATUS_N
+    bit_range:
+    - 4
+    - 0
+    description: Comparison level or IRQ index for the MOV x, STATUS instruction. If STATUS_SEL is TXLEVEL or RXLEVEL, then values of STATUS_N greater than the current FIFO depth are reserved, and have undefined behaviour.
   side_effects: null
 - id: SM3_SHIFTCTRL
   address_offset: 280
@@ -1357,46 +1363,61 @@ registers:
   access: READ_WRITE
   reset_value: 786432
   fields:
-  - name: AUTOPUSH
+  - name: FJOIN_RX
     bit_range:
-    - 16
-    - 16
-    description: Push automatically when the input shift register is filled, i.e. on an IN instruction which causes the input shift counter to reach or exceed PUSH_THRESH.
-  - name: AUTOPULL
+    - 31
+    - 31
+    description: When 1, RX FIFO steals the TX FIFO's storage, and becomes twice as deep. TX FIFO is disabled as a result (always reads as both full and empty). FIFOs are flushed when this bit is changed.
+  - name: FJOIN_TX
     bit_range:
-    - 17
-    - 17
-    description: Pull automatically when the output shift register is emptied, i.e. on or following an OUT instruction which causes the output shift counter to reach or exceed PULL_THRESH.
-  - name: IN_SHIFTDIR
+    - 30
+    - 30
+    description: When 1, TX FIFO steals the RX FIFO's storage, and becomes twice as deep. RX FIFO is disabled as a result (always reads as both full and empty). FIFOs are flushed when this bit is changed.
+  - name: PULL_THRESH
     bit_range:
-    - 18
-    - 18
-    description: 1 = shift input shift register to right (data enters from left). 0 = to left.
+    - 29
+    - 25
+    description: Number of bits shifted out of OSR before autopull, or conditional pull (PULL IFEMPTY), will take place. Write 0 for value of 32.
+  - name: PUSH_THRESH
+    bit_range:
+    - 24
+    - 20
+    description: Number of bits shifted into ISR before autopush, or conditional push (PUSH IFFULL), will take place. Write 0 for value of 32.
   - name: OUT_SHIFTDIR
     bit_range:
     - 19
     - 19
     description: 1 = shift out of output shift register to right. 0 = to left.
-  - name: PUSH_THRESH
+  - name: IN_SHIFTDIR
     bit_range:
-    - 24
-    - 20
-    description: "Number of bits shifted into ISR before autopush, or conditional push (PUSH IFFULL), will take place. \n                            Write 0 for value of 32."
-  - name: PULL_THRESH
+    - 18
+    - 18
+    description: 1 = shift input shift register to right (data enters from left). 0 = to left.
+  - name: AUTOPULL
     bit_range:
-    - 29
-    - 25
-    description: "Number of bits shifted out of OSR before autopull, or conditional pull (PULL IFEMPTY), will take place. \n                            Write 0 for value of 32."
-  - name: FJOIN_TX
+    - 17
+    - 17
+    description: Pull automatically when the output shift register is emptied, i.e. on or following an OUT instruction which causes the output shift counter to reach or exceed PULL_THRESH.
+  - name: AUTOPUSH
     bit_range:
-    - 30
-    - 30
-    description: "When 1, TX FIFO steals the RX FIFO's storage, and becomes twice as deep. \n                            RX FIFO is disabled as a result (always reads as both full and empty). \n                            FIFOs are flushed when this bit is changed."
-  - name: FJOIN_RX
+    - 16
+    - 16
+    description: Push automatically when the input shift register is filled, i.e. on an IN instruction which causes the input shift counter to reach or exceed PUSH_THRESH.
+  - name: FJOIN_RX_PUT
     bit_range:
-    - 31
-    - 31
-    description: "When 1, RX FIFO steals the TX FIFO's storage, and becomes twice as deep. \n                            TX FIFO is disabled as a result (always reads as both full and empty). \n                            FIFOs are flushed when this bit is changed."
+    - 15
+    - 15
+    description: If 1, disable this state machine's RX FIFO, make its storage available for random write access by the state machine (using the `put` instruction) and, unless FJOIN_RX_GET is also set, random read access by the processor (through the RXFx_PUTGETy registers). If FJOIN_RX_PUT and FJOIN_RX_GET are both set, then the RX FIFO's registers can be randomly read/written by the state machine, but are completely inaccessible to the processor. Setting this bit will clear the FJOIN_TX and FJOIN_RX bits.
+  - name: FJOIN_RX_GET
+    bit_range:
+    - 14
+    - 14
+    description: If 1, disable this state machine's RX FIFO, make its storage available for random read access by the state machine (using the `get` instruction) and, unless FJOIN_RX_PUT is also set, random write access by the processor (through the RXFx_PUTGETy registers). If FJOIN_RX_PUT and FJOIN_RX_GET are both set, then the RX FIFO's registers can be randomly read/written by the state machine, but are completely inaccessible to the processor. Setting this bit will clear the FJOIN_TX and FJOIN_RX bits.
+  - name: IN_COUNT
+    bit_range:
+    - 4
+    - 0
+    description: Set the number of pins which are not masked to 0 when read by an IN PINS, WAIT PIN or MOV x, PINS instruction. For example, an IN_COUNT of 5 means that the 5 LSBs of the IN pin group are visible (bits 4:0), but the remaining 27 MSBs are masked to 0. A count of 32 is encoded with a field value of 0, so the default behaviour is to not perform any masking. Note this masking is applied in addition to the masking usually performed by the IN instruction. This is mainly useful for the MOV x, PINS instruction, which otherwise has no way of masking pins.
   side_effects: null
 - id: SM3_ADDR
   address_offset: 284
@@ -1408,7 +1429,6 @@ registers:
     bit_range:
     - 4
     - 0
-    description: null
   side_effects: null
 - id: SM3_INSTR
   address_offset: 288
@@ -1420,7 +1440,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: SM3_PINCTRL
   address_offset: 292
@@ -1428,512 +1447,727 @@ registers:
   access: READ_WRITE
   reset_value: 335544320
   fields:
-  - name: OUT_BASE
-    bit_range:
-    - 4
-    - 0
-    description: The lowest-numbered pin that will be affected by an OUT PINS, OUT PINDIRS or MOV PINS instruction. The data written to this pin will always be the least-significant bit of the OUT or MOV data.
-  - name: SET_BASE
-    bit_range:
-    - 9
-    - 5
-    description: The lowest-numbered pin that will be affected by a SET PINS or SET PINDIRS instruction. The data written to this pin is the least-significant bit of the SET data.
-  - name: SIDESET_BASE
-    bit_range:
-    - 14
-    - 10
-    description: The lowest-numbered pin that will be affected by a side-set operation. The MSBs of an instruction's side-set/delay field (up to 5, determined by SIDESET_COUNT) are used for side-set data, with the remaining LSBs used for delay. The least-significant bit of the side-set portion is the bit written to this pin, with more-significant bits written to higher-numbered pins.
-  - name: IN_BASE
-    bit_range:
-    - 19
-    - 15
-    description: The pin which is mapped to the least-significant bit of a state machine's IN data bus. Higher-numbered pins are mapped to consecutively more-significant data bits, with a modulo of 32 applied to pin number.
-  - name: OUT_COUNT
-    bit_range:
-    - 25
-    - 20
-    description: The number of pins asserted by an OUT PINS, OUT PINDIRS or MOV PINS instruction. In the range 0 to 32 inclusive.
-  - name: SET_COUNT
-    bit_range:
-    - 28
-    - 26
-    description: The number of pins asserted by a SET. In the range 0 to 5 inclusive.
   - name: SIDESET_COUNT
     bit_range:
     - 31
     - 29
     description: The number of MSBs of the Delay/Side-set instruction field which are used for side-set. Inclusive of the enable bit, if present. Minimum of 0 (all delay bits, no side-set) and maximum of 5 (all side-set, no delay).
+  - name: SET_COUNT
+    bit_range:
+    - 28
+    - 26
+    description: The number of pins asserted by a SET. In the range 0 to 5 inclusive.
+  - name: OUT_COUNT
+    bit_range:
+    - 25
+    - 20
+    description: The number of pins asserted by an OUT PINS, OUT PINDIRS or MOV PINS instruction. In the range 0 to 32 inclusive.
+  - name: IN_BASE
+    bit_range:
+    - 19
+    - 15
+    description: The pin which is mapped to the least-significant bit of a state machine's IN data bus. Higher-numbered pins are mapped to consecutively more-significant data bits, with a modulo of 32 applied to pin number.
+  - name: SIDESET_BASE
+    bit_range:
+    - 14
+    - 10
+    description: The lowest-numbered pin that will be affected by a side-set operation. The MSBs of an instruction's side-set/delay field (up to 5, determined by SIDESET_COUNT) are used for side-set data, with the remaining LSBs used for delay. The least-significant bit of the side-set portion is the bit written to this pin, with more-significant bits written to higher-numbered pins.
+  - name: SET_BASE
+    bit_range:
+    - 9
+    - 5
+    description: The lowest-numbered pin that will be affected by a SET PINS or SET PINDIRS instruction. The data written to this pin is the least-significant bit of the SET data.
+  - name: OUT_BASE
+    bit_range:
+    - 4
+    - 0
+    description: The lowest-numbered pin that will be affected by an OUT PINS, OUT PINDIRS or MOV PINS instruction. The data written to this pin will always be the least-significant bit of the OUT or MOV data.
   side_effects: null
-- id: INTR
+- id: RXF0_PUTGET0
   address_offset: 296
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: SM0_RXNEMPTY
+  - name: RXF0_PUTGET0
     bit_range:
+    - 31
     - 0
-    - 0
-    description: null
-  - name: SM1_RXNEMPTY
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: SM2_RXNEMPTY
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: SM3_RXNEMPTY
-    bit_range:
-    - 3
-    - 3
-    description: null
-  - name: SM0_TXNFULL
-    bit_range:
-    - 4
-    - 4
-    description: null
-  - name: SM1_TXNFULL
-    bit_range:
-    - 5
-    - 5
-    description: null
-  - name: SM2_TXNFULL
-    bit_range:
-    - 6
-    - 6
-    description: null
-  - name: SM3_TXNFULL
-    bit_range:
-    - 7
-    - 7
-    description: null
-  - name: SM0
-    bit_range:
-    - 8
-    - 8
-    description: null
-  - name: SM1
-    bit_range:
-    - 9
-    - 9
-    description: null
-  - name: SM2
-    bit_range:
-    - 10
-    - 10
-    description: null
-  - name: SM3
-    bit_range:
-    - 11
-    - 11
-    description: null
   side_effects: null
-- id: IRQ0_INTE
+- id: RXF0_PUTGET1
   address_offset: 300
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: SM0_RXNEMPTY
+  - name: RXF0_PUTGET1
     bit_range:
+    - 31
     - 0
-    - 0
-    description: null
-  - name: SM1_RXNEMPTY
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: SM2_RXNEMPTY
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: SM3_RXNEMPTY
-    bit_range:
-    - 3
-    - 3
-    description: null
-  - name: SM0_TXNFULL
-    bit_range:
-    - 4
-    - 4
-    description: null
-  - name: SM1_TXNFULL
-    bit_range:
-    - 5
-    - 5
-    description: null
-  - name: SM2_TXNFULL
-    bit_range:
-    - 6
-    - 6
-    description: null
-  - name: SM3_TXNFULL
-    bit_range:
-    - 7
-    - 7
-    description: null
-  - name: SM0
-    bit_range:
-    - 8
-    - 8
-    description: null
-  - name: SM1
-    bit_range:
-    - 9
-    - 9
-    description: null
-  - name: SM2
-    bit_range:
-    - 10
-    - 10
-    description: null
-  - name: SM3
-    bit_range:
-    - 11
-    - 11
-    description: null
   side_effects: null
-- id: IRQ0_INTF
+- id: RXF0_PUTGET2
   address_offset: 304
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: SM0_RXNEMPTY
+  - name: RXF0_PUTGET2
     bit_range:
+    - 31
     - 0
-    - 0
-    description: null
-  - name: SM1_RXNEMPTY
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: SM2_RXNEMPTY
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: SM3_RXNEMPTY
-    bit_range:
-    - 3
-    - 3
-    description: null
-  - name: SM0_TXNFULL
-    bit_range:
-    - 4
-    - 4
-    description: null
-  - name: SM1_TXNFULL
-    bit_range:
-    - 5
-    - 5
-    description: null
-  - name: SM2_TXNFULL
-    bit_range:
-    - 6
-    - 6
-    description: null
-  - name: SM3_TXNFULL
-    bit_range:
-    - 7
-    - 7
-    description: null
-  - name: SM0
-    bit_range:
-    - 8
-    - 8
-    description: null
-  - name: SM1
-    bit_range:
-    - 9
-    - 9
-    description: null
-  - name: SM2
-    bit_range:
-    - 10
-    - 10
-    description: null
-  - name: SM3
-    bit_range:
-    - 11
-    - 11
-    description: null
   side_effects: null
-- id: IRQ0_INTS
+- id: RXF0_PUTGET3
   address_offset: 308
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: SM0_RXNEMPTY
+  - name: RXF0_PUTGET3
     bit_range:
+    - 31
     - 0
-    - 0
-    description: null
-  - name: SM1_RXNEMPTY
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: SM2_RXNEMPTY
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: SM3_RXNEMPTY
-    bit_range:
-    - 3
-    - 3
-    description: null
-  - name: SM0_TXNFULL
-    bit_range:
-    - 4
-    - 4
-    description: null
-  - name: SM1_TXNFULL
-    bit_range:
-    - 5
-    - 5
-    description: null
-  - name: SM2_TXNFULL
-    bit_range:
-    - 6
-    - 6
-    description: null
-  - name: SM3_TXNFULL
-    bit_range:
-    - 7
-    - 7
-    description: null
-  - name: SM0
-    bit_range:
-    - 8
-    - 8
-    description: null
-  - name: SM1
-    bit_range:
-    - 9
-    - 9
-    description: null
-  - name: SM2
-    bit_range:
-    - 10
-    - 10
-    description: null
-  - name: SM3
-    bit_range:
-    - 11
-    - 11
-    description: null
   side_effects: null
-- id: IRQ1_INTE
+- id: RXF1_PUTGET0
   address_offset: 312
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: SM0_RXNEMPTY
+  - name: RXF1_PUTGET0
     bit_range:
+    - 31
     - 0
-    - 0
-    description: null
-  - name: SM1_RXNEMPTY
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: SM2_RXNEMPTY
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: SM3_RXNEMPTY
-    bit_range:
-    - 3
-    - 3
-    description: null
-  - name: SM0_TXNFULL
-    bit_range:
-    - 4
-    - 4
-    description: null
-  - name: SM1_TXNFULL
-    bit_range:
-    - 5
-    - 5
-    description: null
-  - name: SM2_TXNFULL
-    bit_range:
-    - 6
-    - 6
-    description: null
-  - name: SM3_TXNFULL
-    bit_range:
-    - 7
-    - 7
-    description: null
-  - name: SM0
-    bit_range:
-    - 8
-    - 8
-    description: null
-  - name: SM1
-    bit_range:
-    - 9
-    - 9
-    description: null
-  - name: SM2
-    bit_range:
-    - 10
-    - 10
-    description: null
-  - name: SM3
-    bit_range:
-    - 11
-    - 11
-    description: null
   side_effects: null
-- id: IRQ1_INTF
+- id: RXF1_PUTGET1
   address_offset: 316
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: SM0_RXNEMPTY
+  - name: RXF1_PUTGET1
     bit_range:
+    - 31
     - 0
-    - 0
-    description: null
-  - name: SM1_RXNEMPTY
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: SM2_RXNEMPTY
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: SM3_RXNEMPTY
-    bit_range:
-    - 3
-    - 3
-    description: null
-  - name: SM0_TXNFULL
-    bit_range:
-    - 4
-    - 4
-    description: null
-  - name: SM1_TXNFULL
-    bit_range:
-    - 5
-    - 5
-    description: null
-  - name: SM2_TXNFULL
-    bit_range:
-    - 6
-    - 6
-    description: null
-  - name: SM3_TXNFULL
-    bit_range:
-    - 7
-    - 7
-    description: null
-  - name: SM0
-    bit_range:
-    - 8
-    - 8
-    description: null
-  - name: SM1
-    bit_range:
-    - 9
-    - 9
-    description: null
-  - name: SM2
-    bit_range:
-    - 10
-    - 10
-    description: null
-  - name: SM3
-    bit_range:
-    - 11
-    - 11
-    description: null
   side_effects: null
-- id: IRQ1_INTS
+- id: RXF1_PUTGET2
   address_offset: 320
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: SM0_RXNEMPTY
+  - name: RXF1_PUTGET2
     bit_range:
+    - 31
     - 0
+  side_effects: null
+- id: RXF1_PUTGET3
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXF1_PUTGET3
+    bit_range:
+    - 31
     - 0
-    description: null
-  - name: SM1_RXNEMPTY
+  side_effects: null
+- id: RXF2_PUTGET0
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXF2_PUTGET0
     bit_range:
-    - 1
-    - 1
-    description: null
-  - name: SM2_RXNEMPTY
+    - 31
+    - 0
+  side_effects: null
+- id: RXF2_PUTGET1
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXF2_PUTGET1
     bit_range:
-    - 2
-    - 2
-    description: null
-  - name: SM3_RXNEMPTY
+    - 31
+    - 0
+  side_effects: null
+- id: RXF2_PUTGET2
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXF2_PUTGET2
     bit_range:
-    - 3
-    - 3
-    description: null
-  - name: SM0_TXNFULL
+    - 31
+    - 0
+  side_effects: null
+- id: RXF2_PUTGET3
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXF2_PUTGET3
+    bit_range:
+    - 31
+    - 0
+  side_effects: null
+- id: RXF3_PUTGET0
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXF3_PUTGET0
+    bit_range:
+    - 31
+    - 0
+  side_effects: null
+- id: RXF3_PUTGET1
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXF3_PUTGET1
+    bit_range:
+    - 31
+    - 0
+  side_effects: null
+- id: RXF3_PUTGET2
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXF3_PUTGET2
+    bit_range:
+    - 31
+    - 0
+  side_effects: null
+- id: RXF3_PUTGET3
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXF3_PUTGET3
+    bit_range:
+    - 31
+    - 0
+  side_effects: null
+- id: GPIOBASE
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIOBASE
     bit_range:
     - 4
     - 4
-    description: null
-  - name: SM1_TXNFULL
+  side_effects: null
+- id: INTR
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SM7
     bit_range:
-    - 5
-    - 5
-    description: null
-  - name: SM2_TXNFULL
+    - 15
+    - 15
+  - name: SM6
     bit_range:
-    - 6
-    - 6
-    description: null
-  - name: SM3_TXNFULL
+    - 14
+    - 14
+  - name: SM5
     bit_range:
-    - 7
-    - 7
-    description: null
-  - name: SM0
+    - 13
+    - 13
+  - name: SM4
     bit_range:
-    - 8
-    - 8
-    description: null
-  - name: SM1
-    bit_range:
-    - 9
-    - 9
-    description: null
-  - name: SM2
-    bit_range:
-    - 10
-    - 10
-    description: null
+    - 12
+    - 12
   - name: SM3
     bit_range:
     - 11
     - 11
-    description: null
+  - name: SM2
+    bit_range:
+    - 10
+    - 10
+  - name: SM1
+    bit_range:
+    - 9
+    - 9
+  - name: SM0
+    bit_range:
+    - 8
+    - 8
+  - name: SM3_TXNFULL
+    bit_range:
+    - 7
+    - 7
+  - name: SM2_TXNFULL
+    bit_range:
+    - 6
+    - 6
+  - name: SM1_TXNFULL
+    bit_range:
+    - 5
+    - 5
+  - name: SM0_TXNFULL
+    bit_range:
+    - 4
+    - 4
+  - name: SM3_RXNEMPTY
+    bit_range:
+    - 3
+    - 3
+  - name: SM2_RXNEMPTY
+    bit_range:
+    - 2
+    - 2
+  - name: SM1_RXNEMPTY
+    bit_range:
+    - 1
+    - 1
+  - name: SM0_RXNEMPTY
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: IRQ0_INTE
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SM7
+    bit_range:
+    - 15
+    - 15
+  - name: SM6
+    bit_range:
+    - 14
+    - 14
+  - name: SM5
+    bit_range:
+    - 13
+    - 13
+  - name: SM4
+    bit_range:
+    - 12
+    - 12
+  - name: SM3
+    bit_range:
+    - 11
+    - 11
+  - name: SM2
+    bit_range:
+    - 10
+    - 10
+  - name: SM1
+    bit_range:
+    - 9
+    - 9
+  - name: SM0
+    bit_range:
+    - 8
+    - 8
+  - name: SM3_TXNFULL
+    bit_range:
+    - 7
+    - 7
+  - name: SM2_TXNFULL
+    bit_range:
+    - 6
+    - 6
+  - name: SM1_TXNFULL
+    bit_range:
+    - 5
+    - 5
+  - name: SM0_TXNFULL
+    bit_range:
+    - 4
+    - 4
+  - name: SM3_RXNEMPTY
+    bit_range:
+    - 3
+    - 3
+  - name: SM2_RXNEMPTY
+    bit_range:
+    - 2
+    - 2
+  - name: SM1_RXNEMPTY
+    bit_range:
+    - 1
+    - 1
+  - name: SM0_RXNEMPTY
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: IRQ0_INTF
+  address_offset: 372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SM7
+    bit_range:
+    - 15
+    - 15
+  - name: SM6
+    bit_range:
+    - 14
+    - 14
+  - name: SM5
+    bit_range:
+    - 13
+    - 13
+  - name: SM4
+    bit_range:
+    - 12
+    - 12
+  - name: SM3
+    bit_range:
+    - 11
+    - 11
+  - name: SM2
+    bit_range:
+    - 10
+    - 10
+  - name: SM1
+    bit_range:
+    - 9
+    - 9
+  - name: SM0
+    bit_range:
+    - 8
+    - 8
+  - name: SM3_TXNFULL
+    bit_range:
+    - 7
+    - 7
+  - name: SM2_TXNFULL
+    bit_range:
+    - 6
+    - 6
+  - name: SM1_TXNFULL
+    bit_range:
+    - 5
+    - 5
+  - name: SM0_TXNFULL
+    bit_range:
+    - 4
+    - 4
+  - name: SM3_RXNEMPTY
+    bit_range:
+    - 3
+    - 3
+  - name: SM2_RXNEMPTY
+    bit_range:
+    - 2
+    - 2
+  - name: SM1_RXNEMPTY
+    bit_range:
+    - 1
+    - 1
+  - name: SM0_RXNEMPTY
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: IRQ0_INTS
+  address_offset: 376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SM7
+    bit_range:
+    - 15
+    - 15
+  - name: SM6
+    bit_range:
+    - 14
+    - 14
+  - name: SM5
+    bit_range:
+    - 13
+    - 13
+  - name: SM4
+    bit_range:
+    - 12
+    - 12
+  - name: SM3
+    bit_range:
+    - 11
+    - 11
+  - name: SM2
+    bit_range:
+    - 10
+    - 10
+  - name: SM1
+    bit_range:
+    - 9
+    - 9
+  - name: SM0
+    bit_range:
+    - 8
+    - 8
+  - name: SM3_TXNFULL
+    bit_range:
+    - 7
+    - 7
+  - name: SM2_TXNFULL
+    bit_range:
+    - 6
+    - 6
+  - name: SM1_TXNFULL
+    bit_range:
+    - 5
+    - 5
+  - name: SM0_TXNFULL
+    bit_range:
+    - 4
+    - 4
+  - name: SM3_RXNEMPTY
+    bit_range:
+    - 3
+    - 3
+  - name: SM2_RXNEMPTY
+    bit_range:
+    - 2
+    - 2
+  - name: SM1_RXNEMPTY
+    bit_range:
+    - 1
+    - 1
+  - name: SM0_RXNEMPTY
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: IRQ1_INTE
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SM7
+    bit_range:
+    - 15
+    - 15
+  - name: SM6
+    bit_range:
+    - 14
+    - 14
+  - name: SM5
+    bit_range:
+    - 13
+    - 13
+  - name: SM4
+    bit_range:
+    - 12
+    - 12
+  - name: SM3
+    bit_range:
+    - 11
+    - 11
+  - name: SM2
+    bit_range:
+    - 10
+    - 10
+  - name: SM1
+    bit_range:
+    - 9
+    - 9
+  - name: SM0
+    bit_range:
+    - 8
+    - 8
+  - name: SM3_TXNFULL
+    bit_range:
+    - 7
+    - 7
+  - name: SM2_TXNFULL
+    bit_range:
+    - 6
+    - 6
+  - name: SM1_TXNFULL
+    bit_range:
+    - 5
+    - 5
+  - name: SM0_TXNFULL
+    bit_range:
+    - 4
+    - 4
+  - name: SM3_RXNEMPTY
+    bit_range:
+    - 3
+    - 3
+  - name: SM2_RXNEMPTY
+    bit_range:
+    - 2
+    - 2
+  - name: SM1_RXNEMPTY
+    bit_range:
+    - 1
+    - 1
+  - name: SM0_RXNEMPTY
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: IRQ1_INTF
+  address_offset: 384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SM7
+    bit_range:
+    - 15
+    - 15
+  - name: SM6
+    bit_range:
+    - 14
+    - 14
+  - name: SM5
+    bit_range:
+    - 13
+    - 13
+  - name: SM4
+    bit_range:
+    - 12
+    - 12
+  - name: SM3
+    bit_range:
+    - 11
+    - 11
+  - name: SM2
+    bit_range:
+    - 10
+    - 10
+  - name: SM1
+    bit_range:
+    - 9
+    - 9
+  - name: SM0
+    bit_range:
+    - 8
+    - 8
+  - name: SM3_TXNFULL
+    bit_range:
+    - 7
+    - 7
+  - name: SM2_TXNFULL
+    bit_range:
+    - 6
+    - 6
+  - name: SM1_TXNFULL
+    bit_range:
+    - 5
+    - 5
+  - name: SM0_TXNFULL
+    bit_range:
+    - 4
+    - 4
+  - name: SM3_RXNEMPTY
+    bit_range:
+    - 3
+    - 3
+  - name: SM2_RXNEMPTY
+    bit_range:
+    - 2
+    - 2
+  - name: SM1_RXNEMPTY
+    bit_range:
+    - 1
+    - 1
+  - name: SM0_RXNEMPTY
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: IRQ1_INTS
+  address_offset: 388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SM7
+    bit_range:
+    - 15
+    - 15
+  - name: SM6
+    bit_range:
+    - 14
+    - 14
+  - name: SM5
+    bit_range:
+    - 13
+    - 13
+  - name: SM4
+    bit_range:
+    - 12
+    - 12
+  - name: SM3
+    bit_range:
+    - 11
+    - 11
+  - name: SM2
+    bit_range:
+    - 10
+    - 10
+  - name: SM1
+    bit_range:
+    - 9
+    - 9
+  - name: SM0
+    bit_range:
+    - 8
+    - 8
+  - name: SM3_TXNFULL
+    bit_range:
+    - 7
+    - 7
+  - name: SM2_TXNFULL
+    bit_range:
+    - 6
+    - 6
+  - name: SM1_TXNFULL
+    bit_range:
+    - 5
+    - 5
+  - name: SM0_TXNFULL
+    bit_range:
+    - 4
+    - 4
+  - name: SM3_RXNEMPTY
+    bit_range:
+    - 3
+    - 3
+  - name: SM2_RXNEMPTY
+    bit_range:
+    - 2
+    - 2
+  - name: SM1_RXNEMPTY
+    bit_range:
+    - 1
+    - 1
+  - name: SM0_RXNEMPTY
+    bit_range:
+    - 0
+    - 0
   side_effects: null
 interrupts:
-  PIO0_IRQ_0: 7
-  PIO0_IRQ_1: 8
+  PIO0_IRQ_0: 15
+  PIO0_IRQ_1: 16
 timing: null
