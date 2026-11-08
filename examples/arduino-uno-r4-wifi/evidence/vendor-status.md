@@ -12,3 +12,9 @@ The ESP32-S3 is present on the physical board but is outside this model profile;
 - Arduino store page (fetched live, product JSON-LD): SKU **ABX00087**,
   `availability: http://schema.org/InStock`, EUR **22.88**.
 - Renesas part page for **R7FA4M1AB3CFM#AA0**: status **Active**.
+
+## Re-check 2026-11-08 (matrix L4, SPI0)
+
+- Arduino store page for ABX00087 (fetched live): JSON-LD
+  `availability: http://schema.org/InStock`, EUR **22.88**.
+- Renesas part page for **R7FA4M1AB3CFM#AA0**: status **Active**.

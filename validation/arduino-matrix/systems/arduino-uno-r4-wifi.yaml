@@ -5,6 +5,9 @@
 # bits against the 5 V AVCC0, so stock analogRead(A0) must return exactly
 # 675 (10-bit).
 # L3: INA219 at 0x40 on Wire = IIC1 (A4/A5 = P101 SDA1 / P100 SCL1).
+# L4: MAX31855 on SPI = SPI0 (D11/D12/D13 = P411 MOSIA / P410 MISOA / P102
+# RSPCKA); CS = SS = D10 = P103. SPI0 does not drive SSL, so the kit frames
+# on its soft-CS path.
 name: "arduino-matrix-arduino-uno-r4-wifi"
 chip: "../../../configs/chips/r7fa4m1ab-uno-r4-wifi-smoke.yaml"
 external_devices:
@@ -13,6 +16,11 @@ external_devices:
     connection: "iic1"
     config:
       i2c_address: 0x40
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi0"
+    config:
+      cs_pin: "P103"
 peripherals:
   - id: "adc0"
     type: "ra_adc12"

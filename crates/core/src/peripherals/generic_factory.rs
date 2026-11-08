@@ -419,6 +419,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "ra_adc12",
     "ra_dac12",
     "ra_iic",
+    "ra_spi",
     "ra_gpt",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
@@ -1847,6 +1848,16 @@ pub fn try_build(
                 get("pclkb_hz").unwrap_or(iic::DEFAULT_PCLKB_HZ),
                 get("elc_event").map_or(iic::DEFAULT_ELC_EVENT, |v| v as u32),
             ))
+        }
+        // Master mode only; interrupts are refused, so there is no `irq`.
+        "ra_spi" => {
+            if p_cfg.irq.is_some() {
+                anyhow::bail!("ra_spi '{}' models no interrupt (drop `irq`)", p_cfg.id);
+            }
+            if let Some(k) = p_cfg.config.keys().next() {
+                anyhow::bail!("ra_spi '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            Box::new(crate::peripherals::ra_spi::RaSpi::new())
         }
         // `channels`: GPT channel count; `clock_hz`: the rate the bus cycles
         // run at; `pclkd_hz`: PCLKD, the count clock before GTCR.TPCS;

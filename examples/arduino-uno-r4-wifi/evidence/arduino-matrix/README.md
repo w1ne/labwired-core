@@ -11,7 +11,7 @@ matrix sketches unchanged except for the L5 oracle branch, run by
 | L1 serial loop | pass | `loop()` + `delay()`/`millis()` on the AGT |
 | L2 blink | pass | `digitalWrite(LED_BUILTIN)` toggles P102 (2 edges, `led_watch: port1:2`) |
 | L3 I2C | pass, exact tier | `Wire` = IIC1 reads INA219 config 0x399F and bus 0x19CA; no `LW_L3_PARTIAL_NO_RX` (`L3_i2c_sensor/full-uart.log`) |
-| L4 SPI | skip | RA4M1 SPI0 is not modelled |
+| L4 SPI | pass, exact frame | `SPI` = SPI0 (`ra_spi`) reads the MAX31855 frame 0x01901600; 100 °C control reads 0x06401600 (`L4_spi_sensor/`) |
 | L5 ADC | pass, exact | `analogRead(A0)` = 675 with A0 on 3V3 (see below) |
 | L6 PWM | pass, 28 edges | `analogWrite(13, 128)` = GTIOC2B on P102 (see below) |
 | L7 timer | pass | `micros()` advances monotonically across `delay(2)` |

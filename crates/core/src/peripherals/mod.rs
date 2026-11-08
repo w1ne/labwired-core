@@ -109,6 +109,7 @@ pub mod ra_gpt;
 pub mod ra_icu;
 pub mod ra_iic;
 pub mod ra_pfs;
+pub mod ra_spi;
 pub mod radio;
 pub mod rcc;
 pub mod rf_medium;

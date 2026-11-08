@@ -5,9 +5,9 @@
 # - the bare-metal smoke (examples/arduino-uno-r4-wifi): SCI2 on D0/D1,
 #   D13 on P102, reset-clock readiness, PORT1/PFS;
 # - stock ArduinoCore-renesas (validation/arduino-matrix row
-#   `arduino-uno-r4-wifi`, 7/9): FSP SystemInit, `Serial` = SCI9 on
-#   P109/P110, the AGT time base, Wire = IIC1, analogRead on ADC140 and
-#   analogWrite on GPT2 (GTIOC2B = D13 = P102).
+#   `arduino-uno-r4-wifi`, 8/9): FSP SystemInit, `Serial` = SCI9 on
+#   P109/P110, the AGT time base, Wire = IIC1, SPI = SPI0, analogRead on
+#   ADC140 and analogWrite on GPT2 (GTIOC2B = D13 = P102).
 #
 # Board pin mapping: Arduino UNO R4 WiFi full pinout (ABX00087) and the
 # core's variants/UNOWIFIR4 (variant.cpp, pinmux.inc): D0/RX=P301,
@@ -17,14 +17,14 @@
 #
 # Modelled: SYSTEM (`ra4_sysc`: register file, OSCSF, VBTSR.VBTRVLD), ICU
 # event link (32 IELSR lines), SCI2/SCI9 (classic SCI, RXI/TXI/TEI events),
-# AGT0/1 (timer mode), IIC0/1 (master), ADC140 (`ra_adc12` with 14-bit
+# AGT0/1 (timer mode), IIC0/1 (master), SPI0 (master), ADC140 (`ra_adc12` with 14-bit
 # ADPRC), GPT0-7 (saw-wave PWM; only GTIOC2B is bound to a pad), PORT1/3 and
 # PFS. See each model's header for its limits.
 #
 # Declared stubs (reads 0, writes dropped): MSTP (module stop is not
 # enforced), FCACHE, the SP monitor (no stack-overflow NMI), and the reserved
 # 0x4005C200 window the core opens as an ADC unit 1. The USBFS, the
-# ESP32-S3 coprocessor, the LED matrix, SPI, CAN, DAC, DTC/DMAC, ELC, RTC,
+# ESP32-S3 coprocessor, the LED matrix, SPI1, CAN, DAC, DTC/DMAC, ELC, RTC,
 # WDT and every other block are NOT mapped: firmware that touches them
 # faults with a memory violation.
 
@@ -181,6 +181,14 @@ peripherals:
       elc_event: 58
       clock_hz: 48000000
       pclkb_hz: 24000000
+  # SPI0 (RSPI master, `ra_spi`; R_SPI0_BASE 0x40072000). SPI = SPI0 on
+  # D11/D12/D13 (P411 MOSIA / P410 MISOA / P102 RSPCKA), SS = D10 = P103.
+  # The core drives it by register polling with no interrupts. SPI1 is not
+  # mapped (no header pins).
+  - id: "spi0"
+    type: "ra_spi"
+    base_address: 0x40072000
+    size: "256B"
   # GPT320-323 / GPT164-167 (R_GPT0_BASE 0x40078000, 0x100 per channel;
   # channels 0-3 are 32-bit). Counts PCLKD = 48 MHz. Events: GPT0
   # CAPTURE_COMPARE_A 87, eight per channel (FSP ra4m1 bsp_elc.h). The only
