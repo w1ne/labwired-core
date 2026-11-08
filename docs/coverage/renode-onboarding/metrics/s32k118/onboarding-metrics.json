@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 100000,
+    "instructions": 2000000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/s32k118-smoke.yaml",
   "system": "configs/systems/onboarding/s32k118.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:49:38Z",
-  "finished_at_utc": "2026-11-05T14:49:39Z",
+  "started_at_utc": "2026-11-08T03:20:20Z",
+  "finished_at_utc": "2026-11-08T03:20:22Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1307,
+  "elapsed_ms": 1432,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.307,
-    "build_firmware": 0.631,
-    "run_smoke": 0.355
+    "build_cli": 0.268,
+    "build_firmware": 0.694,
+    "run_smoke": 0.456
   },
   "stages_ms": {
-    "build_cli": 307,
-    "build_firmware": 631,
-    "run_smoke": 355
+    "build_cli": 268,
+    "build_firmware": 694,
+    "run_smoke": 456
   }
 }

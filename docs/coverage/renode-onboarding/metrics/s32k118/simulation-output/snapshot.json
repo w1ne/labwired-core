@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      323,
+      323170,
+      3112697856,
       536870912,
-      292,
+      10,
+      8388608,
+      0,
+      1074786496,
+      536893424,
       0,
       0,
       0,
       0,
-      536893432,
       0,
-      0,
-      0,
-      0,
-      0,
-      536893432,
-      231,
-      282
+      536893320,
+      6297,
+      6262
     ],
-    "pc": 282,
-    "xpsr": 16777216,
+    "pc": 6262,
+    "xpsr": 2701131776,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 2000000,
+  "cycles": 2000000,
+  "instructions": 2000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 2000000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 2000000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 2000000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "83dbb5e4e0968c5638e0588e7cf91e16b54e19fde2c435afd9a7ef4e19638ecc",
+  "firmware_hash": "602c7dba34ca7cf7c96d79882b124d8bb607e121b4276d554b86196240ef9686",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-s32k118-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/s32k118.yaml",

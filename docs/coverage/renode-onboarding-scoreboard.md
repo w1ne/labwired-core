@@ -171,7 +171,7 @@
 | `ri5cy` | `pass` | `True` | `yes` | `yes` | `1953` | `1.953` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `riscv_verilated_uartlite` | `pass` | `True` | `yes` | `yes` | `1297` | `1.297` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `riscv_virt` | `pass` | `True` | `yes` | `yes` | `1408` | `1.408` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `s32k118` | `pass` | `True` | `yes` | `yes` | `1307` | `1.307` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `s32k118` | `pass` | `True` | `yes` | `yes` | `1432` | `1.432` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `sam4s` | `pass` | `True` | `yes` | `yes` | `1373` | `1.373` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `sam4s16c` | `pass` | `True` | `yes` | `yes` | `1263` | `1.263` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `sam4s8b` | `pass` | `True` | `yes` | `yes` | `1183` | `1.183` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

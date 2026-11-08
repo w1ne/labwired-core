@@ -1,5 +1,5 @@
-2026-11-05T14:49:39.538889Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/s32k118.yaml
-2026-11-05T14:49:39.539556Z  INFO labwired_loader: ELF Entry Point: 0xc1
+[2m2026-11-08T03:20:21.981874Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/s32k118.yaml
+[2m2026-11-08T03:20:21.983184Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0xc1
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-PASS  2/2 checks · s32k118-smoke · 100000 steps · 0.00s
+PASS  6/6 checks · s32k118-smoke · 2000000 steps · 0.10s

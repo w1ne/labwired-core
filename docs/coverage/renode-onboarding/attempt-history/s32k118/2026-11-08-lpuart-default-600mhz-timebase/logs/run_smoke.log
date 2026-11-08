@@ -1,0 +1,9 @@
+[2m2026-11-08T03:18:43.506777Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/s32k118.yaml
+[2m2026-11-08T03:18:43.508103Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0xc1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+[2m2026-11-08T03:18:43.711222Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00080000", "muls=00000143", "ptd pddr=00000009 set=00000001 clr=00000000 tog=00000009", "pass=0f"] }) (captured len=38)
+[2m2026-11-08T03:18:43.711270Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "ptd:0", min_edges: 3 } }) (captured len=38)
+[2m2026-11-08T03:18:43.711278Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Memory assertion failed at 0x20000004 (size 4): expected 0x5118000f, got 0xa5a5a5a5 (mask 0xffffffff)
+[2m2026-11-08T03:18:43.711283Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870916, expected_value: 1360527375, mask: None, size: Some(4), node: None } }) (captured len=38)
+FAIL  3/6 checks · s32k118-smoke · 2000000 steps · 0.20s
