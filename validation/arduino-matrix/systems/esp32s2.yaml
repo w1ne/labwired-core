@@ -1,0 +1,5 @@
+# Arduino matrix system — ESP32-S2 (single-core Xtensa LX7). L0 first.
+name: "arduino-matrix-esp32s2"
+chip: "../../../configs/chips/esp32s2-arduino.yaml"
+external_devices: []
+board_io: []

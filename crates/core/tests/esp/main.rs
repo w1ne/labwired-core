@@ -40,6 +40,7 @@ mod esp32c3_rmt_irq_delivery;
 mod esp32c3_rtc_slow_calibration;
 mod esp32c3_trigger_systimer;
 mod esp32c3_workshop_source;
+mod esp32s2_arduino_boot;
 mod esp32s3_gdma_oracle;
 mod esp32s3_gpspi_oracle;
 mod esp32s3_interrupt_map_vendor_offsets;

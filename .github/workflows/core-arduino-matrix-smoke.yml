@@ -136,6 +136,8 @@ jobs:
             # so it alone takes espressif32 8.0.0; every other ESP32 row
             # stays on the 7.0.1 build it was green on.
             esp32c6)     platform=espressif32@8.0.0 ;;
+            # The S2 row was measured on espressif32 8.0.0 (arduino-esp32 3.3).
+            esp32s2)     platform=espressif32@8.0.0 ;;
             esp32*)      platform=espressif32@7.0.1 ;;
             atmega328p)  platform=atmelavr@5.3.0 ;;
             *)
