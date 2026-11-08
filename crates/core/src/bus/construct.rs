@@ -1269,10 +1269,13 @@ impl SystemBus {
     /// `0x4C00_0000` and MVP at `0x4D00_0000` (EFR32xG26 RM rev 1.0 §4.2.4.1).
     /// A range that stopped at `0x5040_0000` still covers all of them, and the
     /// non-secure aliases at `0x5xxx_xxxx` are a separate mapping this chip
-    /// does not declare.
+    /// does not declare. The window runs to `0x5050_0000` so the RP2350's
+    /// third PIO block (`PIO2_BASE = 0x5040_0000`, rp2350 addressmap.h) gets
+    /// its aliases too: pico-sdk's `pio_sm_init` clears EXECCTRL bits through
+    /// the `+0x3000` alias, which used to BusFault on PIO2.
     #[inline]
     pub fn atomic_alias_redirect(&self, addr: u64) -> Option<(u64, AtomicAliasOp)> {
-        const PERIPHERAL_WINDOW: std::ops::Range<u64> = 0x4000_0000..0x5040_0000;
+        const PERIPHERAL_WINDOW: std::ops::Range<u64> = 0x4000_0000..0x5050_0000;
         if !PERIPHERAL_WINDOW.contains(&addr) {
             return None;
         }

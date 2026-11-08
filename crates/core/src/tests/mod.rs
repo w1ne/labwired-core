@@ -96,6 +96,7 @@ pub mod rp2040;
 #[cfg(test)]
 pub mod rp2040_i2c_waveform;
 #[cfg(test)]
+pub mod rp2040_pio_pads;
 pub mod rp2040_pwm_pads;
 #[cfg(test)]
 pub mod rp2040_spi_carries_a_byte;
