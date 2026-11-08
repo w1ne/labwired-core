@@ -26,6 +26,10 @@
 // NUCLEO-G0B1RE LD4 is PA5 = DAC1_OUT2 and the twin has no DAC1, so
 // analogWrite(LED_BUILTIN) would take the DAC path. Use TIM2_CH1 on PA0.
 #    define LW_PWM_PIN PA0
+#  elif defined(CONFIG_IDF_TARGET_ESP32C6)
+// ESP32-C6 DevKitC LED_BUILTIN is the WS2812 on GPIO8, driven by RMT, so
+// analogWrite on it never exercises the LEDC. Use plain GPIO2 on LEDC.
+#    define LW_PWM_PIN 2
 #  elif defined(LED_BUILTIN)
 #    define LW_PWM_PIN LED_BUILTIN
 #  elif defined(ARDUINO_ARCH_ESP32)

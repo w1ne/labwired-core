@@ -63,13 +63,17 @@ boards:
     min_rmt_tx: 1
     led_watch: "rmt:0"
     led_min_edges: 2
+    # L6: analogWrite(2, 128) on plain GPIO2 (the RGB LED_BUILTIN is RMT, not
+    # LEDC). LEDC ch0 reaches the pad through FUNC2_OUT_SEL = signal 0, clocked
+    # from PCR.LEDC_SCLK_SEL; the watch counts real pad edges.
+    pwm_watch: "gpio:2"
+    pwm_min_edges: 20
     family: esp32
-    notes: "Arduino-ESP32-C6 (IDF 5.5) on the in-tree C6 mask ROM; L4 SPI MISO from the MAX31855 kit"
-    sketches_skip: [L3_i2c_sensor, L5_adc, L6_pwm, L8_can]
+    notes: "Arduino-ESP32-C6 (IDF 5.5) on the in-tree C6 mask ROM; L4 SPI MISO from the MAX31855 kit; L6 LEDC on GPIO2"
+    sketches_skip: [L3_i2c_sensor, L5_adc, L8_can]
     sketches_skip_reason:
       L3_i2c_sensor: "Wire runs but the INA219 on GPIO23/22 NACKs; C6 I2C pad routing not yet proven"
       L5_adc: "analogRead powers the SAR through PMU/SAR-ctrl registers the C6 does not model (faults in sar_ctrl_ll_set_power_mode_from_pwdet)"
-      L6_pwm: "Cell passes, but LW_PWM_PIN is the RGB LED_BUILTIN; no LEDC register probe yet, so the pass is not claimed"
       L8_can: "No C6 TWAI model"
 
   - id: nrf52832

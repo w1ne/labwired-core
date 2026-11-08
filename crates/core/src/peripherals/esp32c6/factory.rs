@@ -116,6 +116,16 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
             let source = p_cfg.irq.unwrap_or(RMT_INTR_SOURCE_C6);
             Box::new(crate::peripherals::esp32c3::rmt::Esp32c3Rmt::new(source))
         }
+        // LEDC — the C3 engine on the C6 field geometry: same offsets, but
+        // TIMERx_CONF is DUTY_RES [4:0] / CLK_DIV [22:5] / PAUSE 23 / RST 24 and
+        // CNT/HPOINT/DUTY are 20/20/25 bits (`soc/esp32c6/register/soc/ledc_reg.h`).
+        // The source clock is PCR.LEDC_SCLK_CONF, attached via `clock_select`.
+        "esp32c6_ledc" => {
+            let source = p_cfg.irq.unwrap_or(LEDC_INTR_SOURCE_C6);
+            Box::new(crate::peripherals::esp32c3::ledc::Esp32c3Ledc::new_esp32c6(
+                source,
+            ))
+        }
         _ => return None,
     };
     Some(dev)
@@ -134,7 +144,11 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_i2c_ana_mst",
     "esp32c6_usb_serial_jtag",
     "esp32c6_rmt",
+    "esp32c6_ledc",
 ];
+
+/// ETS_LEDC_INTR_SOURCE on the ESP32-C6 (`soc/esp32c6/include/soc/interrupts.h`).
+pub const LEDC_INTR_SOURCE_C6: u32 = 45;
 
 /// ETS_RMT_INTR_SOURCE on the ESP32-C6 (`soc/esp32c6/include/soc/interrupts.h`).
 pub const RMT_INTR_SOURCE_C6: u32 = 49;

@@ -269,6 +269,7 @@ impl SystemBus {
         }
 
         self.resolve_clock_gates(&attached)?;
+        self.resolve_clock_selects(&attached)?;
         self.refresh_peripheral_index();
         Ok(())
     }
@@ -1421,7 +1422,7 @@ impl SystemBus {
         // are deliberately unbound — nothing drives them.
         bus.wire_esp32c3_spi_pads();
         bus.wire_esp32c3_uart_pads();
-        // …and the C3's six LEDC outputs (signals 45..50; none on the C6).
+        // …and the C3's six LEDC outputs (signals 45..50; 0..5 on the C6).
         bus.wire_esp32c3_ledc_pads();
         // Same for the S3's I²C0, whose pads reach GPIO through the S3 output
         // matrix rather than an AF nibble.
@@ -1489,6 +1490,7 @@ impl SystemBus {
         // peripheral (incl. the RCC, needed to map reg-name → offset) is on the
         // bus. Peripherals without a `clock:` field stay ungated.
         bus.resolve_clock_gates(&merged_peripherals)?;
+        bus.resolve_clock_selects(&merged_peripherals)?;
         bus.install_motor_models(manifest)?;
         // Walk-deletion decision (only consulted under the `event-scheduler`
         // feature; the legacy build always walks, so this is inert there).

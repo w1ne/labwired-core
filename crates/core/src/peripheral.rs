@@ -450,6 +450,23 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Clock-controller capability: a live mirror of register `name`, kept
+    /// current on every firmware write, for a model whose SOURCE-clock select
+    /// lives in the controller rather than in its own window (the ESP32-C6
+    /// LEDC is clocked from `PCR.LEDC_SCLK_CONF`). Resolved by name, like
+    /// [`Self::clock_gate_reg_offset`], so no concrete-type downcast is
+    /// needed. `None` for every other peripheral and unknown name.
+    fn clock_select_cell(&mut self, _name: &str) -> Option<Arc<std::sync::atomic::AtomicU32>> {
+        None
+    }
+
+    /// Accept the mirror from [`Self::clock_select_cell`] named by this
+    /// peripheral's `config.clock_select`. Returns `false` (a hard config
+    /// error in `resolve_clock_selects`) if the model has no use for one.
+    fn attach_clock_select_cell(&mut self, _cell: Arc<std::sync::atomic::AtomicU32>) -> bool {
+        false
+    }
+
     /// Cortex-M7 L1 cache capability: the I/D cache geometry this peripheral
     /// declares (`cortex_m7_cache`). `configure_cortex_m` asks every
     /// peripheral and hands the answer to the SCB's CLIDR/CTR/CCSIDR, so the

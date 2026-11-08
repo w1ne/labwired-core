@@ -199,18 +199,24 @@ peripherals:
     clock: { controller: "pcr", reg: "SARADC_CONF", bit: 0 }
     config:
       debug_schema: "../peripherals/esp32c6/apb_saradc.yaml"
-  # LEDC — the C3 live-timer LED PWM engine (`esp32c3_ledc`). The registers it
-  # drives (TIMER0_CONF@0xA0, TIMER0_VALUE@0xA4, INT_RAW@0xC0, INT_CLR@0xCC)
-  # are offset-identical; the C6 adds gamma/event/compare/capture registers at
-  # the tail that the model does not touch. C6 delta: source = 45.
+  # LEDC — the C3 live-timer LED PWM engine on the C6 field geometry
+  # (`esp32c6_ledc`). The registers it drives (CHn CONF0/HPOINT/DUTY/CONF1/
+  # DUTY_R, TIMER0_CONF@0xA0, TIMER0_VALUE@0xA4, INT_RAW@0xC0, INT_CLR@0xCC) are
+  # offset-identical, but not bit-identical: TIMERx_CONF is DUTY_RES [4:0],
+  # CLK_DIV [22:5], PAUSE 23, RST 24 (the C3: [3:0]/[21:4]/22/23). The C6 adds
+  # gamma/event/compare/capture registers at the tail that the model does not
+  # touch. Also: source = 45; the source clock is selected in
+  # PCR.LEDC_SCLK_CONF[21:20] (`ledc_ll_set_slow_clk_sel`), not LEDC_CONF@0xD0,
+  # hence `clock_select`; outputs are matrix signals 0..5 (gpio_sig_map.h).
   - id: "ledc"
-    type: "esp32c3_ledc"
+    type: "esp32c6_ledc"
     irq: 45 # ETS_LEDC_INTR_SOURCE (esp32c6.svd LEDC)
     base_address: 0x60007000
     size: "1KB"
     clock: { controller: "pcr", reg: "LEDC_CONF", bit: 0 }
     config:
       debug_schema: "../peripherals/esp32c6/ledc.yaml"
+      clock_select: { controller: "pcr", reg: "LEDC_SCLK_CONF" }
   # LP_TIMER — the C6 RTC main timer behind `rtc_time_get()`. C6-only register
   # shape (UPDATE@0x10 strobes the 48-bit counter into MAIN_BUF0 @0x14/0x18,
   # shifting the previous BUF0 into BUF1 @0x1C/0x20), so it is a dedicated
