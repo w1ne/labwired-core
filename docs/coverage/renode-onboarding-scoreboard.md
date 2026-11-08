@@ -45,7 +45,7 @@
 | `brd4162a` | `pass` | `True` | `yes` | `yes` | `1028` | `1.028` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `brd4186c` | `pass` | `True` | `yes` | `yes` | `1007` | `1.007` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `brd4402a` | `pass` | `True` | `yes` | `yes` | `985` | `0.985` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `cc2538` | `pass` | `True` | `yes` | `yes` | `4076` | `4.076` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `cc2538` | `pass` | `True` | `yes` | `yes` | `300519` | `300.519` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `colibri-vf61` | `pass` | `True` | `yes` | `yes` | `10349` | `10.349` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `core-v-mcu` | `pass` | `True` | `yes` | `yes` | `6360` | `6.36` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `cortex-a53-gicv2` | `pass` | `True` | `yes` | `yes` | `572` | `0.572` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

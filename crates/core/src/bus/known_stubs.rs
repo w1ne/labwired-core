@@ -61,13 +61,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          onboarding/msp430f2619 (+8 more).",
     ),
     (
-        "bitbanding",
-        "Cortex-M bit-band alias region. Bit-banding is modelled by the bus itself \
-         (SystemBus::bit_band_enabled), so the imported peripheral entry is inert. \
-         Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/cc2538.",
-    ),
-    (
         "button",
         "Renode board push-button. LabWired models buttons through `board_io`, not as a bus \
          peripheral (see attach_board_io_buttons), so the imported entry is inert. \
@@ -80,30 +73,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "TI CC2520 802.15.4 radio. Renode-imported onboarding descriptor; no model in this \
          engine, so the window answers reads with zeros. Used by: \
          onboarding/quark_c1000-cc2520.",
-    ),
-    (
-        "cc2538_cryptoprocessor",
-        "TI CC2538 crypto processor. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/cc2538, \
-         onboarding/zolertia-firefly.",
-    ),
-    (
-        "cc2538_ssi",
-        "TI CC2538 SSI (synchronous serial). Renode-imported onboarding descriptor; no model \
-         in this engine, so the window answers reads with zeros. Used by: onboarding/cc2538, \
-         onboarding/zolertia-firefly.",
-    ),
-    (
-        "cc2538flashcontroller",
-        "TI CC2538 flash controller. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/cc2538, \
-         onboarding/zolertia-firefly.",
-    ),
-    (
-        "cc2538rf",
-        "TI CC2538 802.15.4 radio. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/cc2538, \
-         onboarding/zolertia-firefly.",
     ),
     (
         "efuse_stub",

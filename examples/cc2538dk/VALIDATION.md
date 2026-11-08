@@ -236,5 +236,5 @@ done
 - `junit.xml` carries per-run wall-clock timings and is not part of the
   determinism claim; `uart.log` and `snapshot.json` are.
 - The staged `configs/chips/onboarding/cc2538.yaml` (flash at `0x08000000`,
-  128 KiB; 256 KiB RAM) did not match SWRU319C Table 4-1. It is kept, marked
-  superseded, because `crates/core/src/bus/known_stubs.rs` still cites it.
+  128 KiB; 256 KiB RAM) did not match SWRU319C Table 4-1. It has been
+  deleted, along with its five zero-answering stub types.

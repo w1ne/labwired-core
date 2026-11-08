@@ -416,9 +416,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "armv8m_mpu",
     // TI CC2538: the PL061-style GPIO port (address-masked GPIO_DATA),
     // SYS_CTRL, the 802.15.4 RF core, the sleep timer, the flash controller, the AES/SHA-256
-    // cryptoprocessor, the µDMA, the SSI, the GPTimers and the I2C master. Deliberately not
-    // `cc2538_gpio`/`cc2538_ssi`: those spellings belong to the staged
-    // onboarding/cc2538 descriptor, which keeps its placeholders.
+    // cryptoprocessor, the µDMA, the SSI, the GPTimers and the I2C master.
     "cc2538_pl061_gpio",
     "cc2538_sys_ctrl",
     "cc2538_rfcore",

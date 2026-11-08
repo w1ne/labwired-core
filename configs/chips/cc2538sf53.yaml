@@ -88,8 +88,10 @@
 #   master; its I2CS slave is reachable only over LPBK. Neither side has
 #   clock stretching on writes, bus timing or arbitration.
 #
-# Supersedes the staged configs/chips/onboarding/cc2538.yaml, whose memory map
-# (flash at 0x08000000/128 KiB, 256 KiB RAM) did not match Table 4-1.
+# Supersedes the staged onboarding/cc2538 chip descriptor, whose memory map
+# (flash at 0x08000000/128 KiB, 256 KiB RAM) did not match Table 4-1 and whose
+# radio, crypto, flash-controller and SSI windows answered zeros. It is deleted;
+# configs/systems/onboarding/cc2538.yaml loads this profile.
 
 name: "cc2538sf53"
 arch: "arm"
