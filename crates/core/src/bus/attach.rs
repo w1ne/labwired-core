@@ -361,6 +361,33 @@ impl SystemBus {
         );
     }
 
+    /// Feed the classic PCNT's 32 input signals (`PCNT_SIGNALS`: SIG_CH0,
+    /// SIG_CH1, CTRL_CH0, CTRL_CH1 per unit) from the GPIO input matrix to its
+    /// timer inputs `4·unit + k`, so every level change a routed pad makes
+    /// reaches the counter at the cycle it happened
+    /// ([`Self::deliver_timer_input_edges`]). No-op without both blocks.
+    pub(crate) fn wire_esp32_pcnt_inputs(&mut self) {
+        use crate::peripherals::esp32::pcnt::PCNT_SIGNALS;
+        let (Some(pcnt_idx), Some(gpio_idx)) = (
+            self.find_peripheral_index_by_name("pcnt"),
+            self.find_peripheral_index_by_name("gpio"),
+        ) else {
+            return;
+        };
+        let taps: Vec<(u32, u8)> = PCNT_SIGNALS
+            .iter()
+            .flatten()
+            .enumerate()
+            .map(|(ti, &sig)| (sig, ti as u8))
+            .collect();
+        if self.peripherals[gpio_idx]
+            .dev
+            .bind_matrix_input_taps(&taps, pcnt_idx)
+        {
+            self.timer_capture_wired = true;
+        }
+    }
+
     /// The ESP32-C3 counterpart of [`Self::wire_esp32_ledc_pads`]: bind the six
     /// LEDC channel outputs to the C3 output matrix (`LEDC_LS_SIG_OUT0..5` =
     /// 45..50), so `ledcWrite`/`analogWrite` duty is a waveform on the pad
@@ -2652,7 +2679,9 @@ impl SystemBus {
                 }
             }
         }
-        self.timer_capture_wired = wired;
+        // `|=`: an ESP32 PCNT wired by `wire_esp32_pcnt_inputs` uses the same
+        // delivery path and must not be switched off by an STM32-less re-wire.
+        self.timer_capture_wired |= wired;
     }
 
     /// Route each STM32F1 timer's channel OUTPUTS (OC1..OC4) onto the GPIO
