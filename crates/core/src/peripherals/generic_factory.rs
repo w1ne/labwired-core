@@ -436,6 +436,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "cc2538_soc_adc",
     // QuickLogic EOS S3 two-channel 12-bit ADC (qorc-sdk eoss3_hal_adc.c).
     "eoss3_adc",
+    // MAX32650/MAX32652 10-bit ADC (msdk adc_regs.h, Renode MAX32650_ADC.cs).
+    "max32650_adc",
     // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
     // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
@@ -1902,6 +1904,14 @@ pub fn try_build(
                 .get("vref_mv")
                 .and_then(|v| v.as_u64())
                 .map_or(1400, |v| v as u32),
+        )),
+        // `vref_mv`: the full scale, the 1.22 V internal bandgap.
+        "max32650_adc" => Box::new(crate::peripherals::max32650_adc::Max32650Adc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(1220, |v| v as u32),
         )),
         "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
         "apollo4_adc" => Box::new(crate::peripherals::apollo4_adc::Apollo4Adc::new()),

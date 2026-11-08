@@ -37,6 +37,8 @@ const CONVERTED: &[&str] = &[
     "eos-s3-quickfeather",
     "eos-s3",
     "imxrt1064",
+    "max32652-evkit",
+    "max32652",
     "mimxrt1064_evk",
     "nrf52840",
     "nucleo_f767zi",
@@ -146,6 +148,11 @@ enum Family {
     /// `CONTROL.SOC` starts it, `STATUS.EOC` drops then rises, 12 bits in
     /// `OUT` against 1.4 V (qorc-sdk eoss3_hal_adc.c, Renode EOSS3_ADC.cs).
     Eoss3,
+    /// MAX32650/MAX32652 10-bit ADC: `CTRL.CH_SEL` picks AIN0..AIN3 or
+    /// AIN0/AIN1 through the divide-by-5, `CTRL.START` converts against the
+    /// 1.22 V bandgap, `INTR.DONE_IF` is write 1 to clear (msdk adc_reva.c,
+    /// Renode MAX32650_ADC.cs).
+    Max32650,
 }
 
 struct Converter {
@@ -175,6 +182,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Cc2538
         } else if kind == "eoss3_adc" {
             Family::Eoss3
+        } else if kind == "max32650_adc" {
+            Family::Max32650
         } else {
             match p.config.get("profile").and_then(|v| v.as_str()) {
                 Some("stm32f4") => Family::Stm32F4,
@@ -221,6 +230,17 @@ impl Converter {
             Family::Cc2538 => (mv * 2047 / 3300).min(2047),
             // 12-bit against 1.4 V, truncated, clamped (Renode ToADCRawValue).
             Family::Eoss3 => mv.min(1400) * 4095 / 1400,
+            // 10-bit against 1.22 V, truncated, clamped (Renode ToADCRawValue).
+            Family::Max32650 => mv.min(1220) * 1023 / 1220,
+        }
+    }
+
+    /// The NTC code. The MAX32650 converts the NTC pad through
+    /// `AIN0_DIV5`, so the 3.3 V divider stays inside 5 x 1.22 V.
+    fn expected_ntc_code(&self, volts: f64) -> u32 {
+        match self.family {
+            Family::Max32650 => millivolts(volts).min(6100) * 1023 / 6100,
+            _ => self.expected_code(volts),
         }
     }
 
@@ -229,7 +249,8 @@ impl Converter {
     /// AIN0..7 and uses NTC_CHANNEL/DIODE_CHANNEL, clear of channel 0.
     fn routed_channels(&self) -> [u8; 2] {
         match self.family {
-            Family::Eoss3 => [0, 1],
+            // AIN0 and AIN1: the two pads with a divide-by-5 channel.
+            Family::Eoss3 | Family::Max32650 => [0, 1],
             _ => [NTC_CHANNEL, DIODE_CHANNEL],
         }
     }
@@ -238,6 +259,26 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Max32650 => {
+                // msdk MXC_ADC_RevA_Init: clear REF_READY_IF, CTRL.PWR, then
+                // CTRL.REFBUF_PWR, spin on REF_READY_IF, clear it.
+                const REF_READY_IF: u32 = 1 << 17;
+                let ctrl = self.base;
+                let intr = self.base + 0x0C;
+                bus.write_u32(intr, REF_READY_IF)
+                    .expect("clear REF_READY_IF");
+                bus.write_u32(ctrl, 1 << 1).expect("CTRL.PWR");
+                bus.write_u32(ctrl, (1 << 1) | (1 << 3))
+                    .expect("CTRL.REFBUF_PWR");
+                assert_ne!(
+                    bus.read_u32(intr).unwrap() & REF_READY_IF,
+                    0,
+                    "{}: REFBUF_PWR raises INTR.REF_READY_IF",
+                    self.id
+                );
+                bus.write_u32(intr, REF_READY_IF)
+                    .expect("clear REF_READY_IF");
+            }
             Family::Eoss3 => {
                 // HAL_ADC_Init(): CONTROL = 0, then SEL/MEAS_EN without SOC.
                 bus.write_u32(self.base + 0x08, 0).expect("CONTROL reset");
@@ -458,6 +499,17 @@ impl Converter {
             Family::Eoss3 => self
                 .routed_channels()
                 .map(|channel| self.convert(bus, channel)),
+            Family::Max32650 => {
+                // CH_SEL 4 is AIN0_DIV5; AIN2 is unrouted and converts to 0.
+                const AIN0_DIV5: u8 = 4;
+                assert_eq!(
+                    self.convert(bus, 2),
+                    0,
+                    "{}: unrouted AIN2 converts to zero",
+                    self.id
+                );
+                [self.convert(bus, AIN0_DIV5), self.convert(bus, 1)]
+            }
             Family::Cc2538 => {
                 // One extra conversion per channel; EOC rises at the ADCCON3
                 // write and the ADCH read clears it before the next.
@@ -1151,6 +1203,41 @@ impl Converter {
                 bus.write_u32(control, temp & !1).expect("clear SOC");
                 code
             }
+            Family::Max32650 => {
+                // msdk MXC_ADC_RevA_StartConversion + MXC_ADC_RevA_GetData.
+                const START: u32 = 1;
+                const CH_SEL: u32 = 0xF << 12;
+                const DONE_IF: u32 = 1 << 16;
+                let ctrl = self.base;
+                let intr = self.base + 0x0C;
+                let value = bus.read_u32(ctrl).unwrap() & !CH_SEL;
+                bus.write_u32(ctrl, value | (u32::from(channel) << 12))
+                    .expect("CTRL.CH_SEL");
+                let ie = bus.read_u32(intr).unwrap() & 0x1F;
+                bus.write_u32(intr, ie | DONE_IF).expect("clear DONE_IF");
+                assert_eq!(
+                    bus.read_u32(intr).unwrap() & DONE_IF,
+                    0,
+                    "{}: DONE_IF W1C",
+                    self.id
+                );
+                let value = bus.read_u32(ctrl).unwrap();
+                bus.write_u32(ctrl, value | START).expect("CTRL.START");
+                assert_eq!(
+                    bus.read_u32(self.base + 0x04).unwrap() & 1,
+                    0,
+                    "{}: STATUS.ACTIVE clear when done",
+                    self.id
+                );
+                assert_ne!(
+                    bus.read_u32(intr).unwrap() & DONE_IF,
+                    0,
+                    "{}: the conversion raises INTR.DONE_IF",
+                    self.id
+                );
+                // CTRL.DATA_ALIGN = 0: LSB justified.
+                bus.read_u32(self.base + 0x08).expect("DATA") & 0xFFFF
+            }
             Family::Saadc { .. } => unreachable!("SAADC converts as a scan"),
         }
     }
@@ -1262,7 +1349,7 @@ fn assert_converter_routes_generic_analog(
         let [ntc_code, diode_code] = converter.convert_routed(&mut bus);
         assert_eq!(
             ntc_code,
-            converter.expected_code(ntc_v),
+            converter.expected_ntc_code(ntc_v),
             "{tag}: firmware-visible NTC conversion at {temperature_c} °C"
         );
         assert_eq!(
@@ -1356,7 +1443,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 42,
+        instances, 44,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -1364,7 +1451,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 181,
+        without_adc, 179,
         "onboarding profiles that declare no modelled ADC"
     );
 }
