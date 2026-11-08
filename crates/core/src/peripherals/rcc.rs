@@ -2686,9 +2686,10 @@ impl RccModel for C0Rcc {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
-        match offset {
-            0x34 => self.iopenr = value,
-            _ => crate::census_reg!("rcc:C0Rcc", offset, "write"),
+        if offset == 0x34 {
+            self.iopenr = value;
+        } else {
+            crate::census_reg!("rcc:C0Rcc", offset, "write");
         }
     }
 
@@ -2718,11 +2719,12 @@ impl RccModel for C5Rcc {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
-        match offset {
+        if offset == 0x8C {
             // Only GPIOA is exposed by this smoke profile. Keep other enable
             // bits clear so an unsupported C5 peripheral cannot appear active.
-            0x8C => self.ahb2enr = value & 1,
-            _ => crate::census_reg!("rcc:C5Rcc", offset, "write"),
+            self.ahb2enr = value & 1;
+        } else {
+            crate::census_reg!("rcc:C5Rcc", offset, "write");
         }
     }
 
@@ -2753,11 +2755,12 @@ impl RccModel for U0Rcc {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
-        match offset {
+        if offset == 0x4C {
             // This board smoke exposes GPIOA only; other U0 I/O clock gates are
             // outside the profile and stay disabled.
-            0x4C => self.iopenr = value & 1,
-            _ => crate::census_reg!("rcc:U0Rcc", offset, "write"),
+            self.iopenr = value & 1;
+        } else {
+            crate::census_reg!("rcc:U0Rcc", offset, "write");
         }
     }
 
@@ -2796,11 +2799,12 @@ impl RccModel for U3Rcc {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
-        match offset {
+        if offset == 0x8C {
             // Preserve the documented SRAM2EN reset state and expose GPIOAEN;
             // all other gates are outside the NUCLEO-U3C5ZI-Q smoke profile.
-            0x8C => self.ahb2enr1 = (1 << 30) | (value & 1),
-            _ => crate::census_reg!("rcc:U3Rcc", offset, "write"),
+            self.ahb2enr1 = (1 << 30) | (value & 1);
+        } else {
+            crate::census_reg!("rcc:U3Rcc", offset, "write");
         }
     }
 

@@ -977,6 +977,154 @@
     "stm32wba55cg-nucleo-smoke": {
       "how": "needs-build",
       "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "atmega4809": {
+      "how": "needs-build",
+      "why": "ATmega4809 and the Nano Every GPIO/UART smoke are validated from this Core source tree; installed LabWired CLI v0.25.0 does not include this model, so clean-install runnable coverage waits for a matching release."
+    },
+    "ch32l103c8t6": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v003f4p6-ch32fun-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v003f4p6-pfic-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v003f4p6-sht31-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v003f4p6-systick-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v006f8u7-ch32fun-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v203c8t6-ch32fun-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v203c8t6-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32v307vct6-ch32fun-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32x035c8t6-ch32fun-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32x035f8u6-ch32fun-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "ch32x035g8u6": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32-feather-v2-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c3-devkit-rust-2-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c3-lcdkit-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c3-waveshare-c3-zero-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c3-xiao-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c6-devkitm1-n4-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c6-xiao-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32c61": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32h2-devkitm-1-n4s-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32p4": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s2-arduino": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s3-arduino-nano-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s3-atoms3-lite-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s3-cardputer-adv-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s3-devkitc-1-n16r8-v10-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s3-feather-8mb": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp32s3-heltec-wifi-lora-32-v4-s3r2-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "esp8684-devkitm-1-h4x-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "rp2040-pico-w-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "rp2350-pico2-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "rp2350-pico2-w-bme280-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "rp2350-zero-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "stm32f103r6t6a-gpio-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
+    },
+    "stm32f103r8-gpio-smoke": {
+      "how": "needs-build",
+      "why": "This chip descriptor is present in the Core source tree but is not included in installed LabWired CLI v0.25.0. A clean-install runnable smoke is not claimed until a matching release is available."
     }
   }
 }

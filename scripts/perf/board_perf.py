@@ -491,6 +491,101 @@ WAIVED: dict[str, str] = {
         "RV1103 platform throughput claim. Vendor BSP/SD/ROM boot remains "
         "unimplemented and no representative perf fixture qualifies this board."
     ),
+    "atmega4809": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32l103c8t6": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32v003f4p6-ch32fun-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32v003f4p6-gpio-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32v003f4p6-pfic-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32v003f4p6-sht31-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32v003f4p6-systick-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32v003f4p6-usart-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32v006f8u7-ch32fun-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32v203c8t6-ch32fun-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32v203c8t6-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32v307vct6-ch32fun-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32x035c8t6-ch32fun-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32x035f8u6-ch32fun-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "ch32x035g8u6": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "esp32p4": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "esp32s2": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "esp32s2-arduino": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
+    "esp8684-devkitm-1-h4x-smoke": (
+        "No representative perf-spin fixture is linked for this chip profile. "
+        "Functional onboarding evidence is tracked separately; this gate makes "
+        "no throughput claim for the profile yet."
+    ),
 }
 
 # Descriptors that are CI plumbing rather than a modelled part.
