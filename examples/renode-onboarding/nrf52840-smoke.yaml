@@ -1,13 +1,38 @@
 # Cortex-M4 smoke against the imported Renode nRF52840 system descriptor.
+# Bare-register firmware (crates/firmware-nrf52840-demo/src/renode_smoke.rs)
+# reports one line per block over UARTE0 (EasyDMA): FICR INFO.PART, NVMC READY,
+# CLOCK HFXO/LFXO start events + HFCLKSTAT/LFCLKSTAT, GPIO P0.13 OUT->IN readback,
+# GPIOTE task-mode toggles on P0.14 seen at the pad (IN) with OUT untouched,
+# TIMER0 compare/capture/clear, RTC0 counter + compare (EVTEN on), two RNG
+# samples, and PPI CH0 routing EGU0 TRIGGERED[0] -> EGU1 TRIGGER[0] only while
+# the channel is enabled. A summary word lands at 0x2003FF00.
+# Not exercised: TEMP/ECB (unmodelled residuals in the chip's silicon block),
+# radio, USBD, QSPI, SAADC, PWM, TWI/SPI, UART1, WDT. GPIOTE on a pin whose
+# PIN_CNF.DIR = output is a known engine gap (IN shows OUT, not the GPIOTE
+# drive) — see attempt-history/nrf52840/2026-11-08-direct-probe-failures.
 schema_version: "1.0"
 inputs:
-  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nrf52840-demo"
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nrf52840-renode-smoke"
   system: "../../configs/systems/onboarding/nrf52840.yaml"
 limits:
   max_steps: 4000000
 assertions:
-  - uart_contains: "NRF52840_SMOKE_OK"
+  - uart_ordered:
+      - "NRF52840 RENODE SMOKE"
+      - "ficr part=52840 nvmc ready=1 ok"
+      - "clock hfstat=00010001 lfstat=00010001 ok"
+      - "gpio p0.13 in=00002000/00000000 ok"
+      - "gpiote out0 p0.14 in=10 out=0 ok"
+      - "timer0 cmp=1 cap>=50 1 clear=00000000 ok"
+      - "rtc0 cmp=1 counter>=4 1 ok"
+      - "rng valrdy=11 bytes<=ff ok"
+      - "ppi egu0->egu1 off=0 on=1 ok"
+      - "NRF52840 PASS"
   - gpio_edges:
       pin: "gpio0:13"
-      min_edges: 1
+      min_edges: 4
+  - memory_value:
+      address: 0x2003FF00
+      expected_value: 0x528400FF
+      size: 4
   - expected_stop_reason: max_steps

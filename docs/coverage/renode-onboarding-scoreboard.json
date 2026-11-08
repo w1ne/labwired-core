@@ -5258,31 +5258,32 @@
       "script": "examples/renode-onboarding/nrf52840-smoke.yaml",
       "system": "configs/systems/onboarding/nrf52840.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:49:01Z",
-      "finished_at_utc": "2026-11-05T14:49:04Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2733,
+      "started_at_utc": "2026-11-08T11:43:34Z",
+      "finished_at_utc": "2026-11-08T11:43:38Z",
+      "elapsed_seconds": 4,
+      "elapsed_ms": 3733,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.289,
-        "build_firmware": 0.563,
-        "run_smoke": 1.871
+        "build_cli": 0.437,
+        "build_firmware": 0.61,
+        "run_smoke": 2.671
       },
       "stages_ms": {
-        "build_cli": 289,
-        "build_firmware": 563,
-        "run_smoke": 1871
+        "build_cli": 437,
+        "build_firmware": 610,
+        "run_smoke": 2671
       },
       "_artifact_path": "nrf52840",
       "zero_answering_windows": [],
       "claimed_peripherals": 49,
       "smoke_assertion_kinds": [
-        "uart_contains",
+        "uart_ordered",
         "gpio_edges",
+        "memory_value",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"

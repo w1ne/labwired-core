@@ -1,4 +1,5 @@
-2026-11-05T14:49:02.904860Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nrf52840.yaml
-2026-11-05T14:49:02.909132Z  INFO labwired_loader: ELF Entry Point: 0x401
+sccache: warning: The server looks like it shut down unexpectedly, compiling locally instead
+[2m2026-11-08T11:43:35.883029Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/nrf52840.yaml
+[2m2026-11-08T11:43:35.891570Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
-PASS  3/3 checks · nrf52840-smoke · 4000000 steps · 1.51s
+PASS  4/4 checks · nrf52840-smoke · 4000000 steps · 1.99s
