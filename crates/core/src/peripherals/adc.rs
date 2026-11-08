@@ -784,14 +784,17 @@ impl Adc {
     }
 
     /// L4 single-conversion engine. ADSTART (CR bit 2) with ADEN (bit 0) and a
-    /// ready converter (ISR.ADRDY) converts the fixed internal source: loads DR
-    /// with the code for CFGR.RES, raises ISR.EOC + EOS, and auto-clears
-    /// ADSTART. Deterministic and immediate (no analog settling to model).
+    /// ready converter (ISR.ADRDY) converts the first regular channel,
+    /// `SQR1.SQ1` (bits 10:6), the way the U5 and V2 engines do: a routed input
+    /// converts against the reference at CFGR.RES, and a channel nothing drives
+    /// converts the fixed internal source. Loads DR, raises ISR.EOC + EOS, and
+    /// auto-clears ADSTART. Deterministic and immediate (no analog settling to
+    /// model).
     fn maybe_start_l4_conversion(&mut self, cr: u32) {
         let aden = cr & 0x1 != 0;
         let adstart = cr & (1 << 2) != 0;
-        let (adrdy, cfgr) = match &self.regs {
-            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr),
+        let (adrdy, cfgr, sqr1) = match &self.regs {
+            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr, r.sqr1),
             // H7, U5 and V2 have their own engines (`maybe_start_h7_conversion`,
             // `maybe_start_u5_conversion`, `maybe_start_v2_conversion`).
             AdcRegs::Stm32F1(_)
@@ -803,7 +806,15 @@ impl Adc {
         if !(aden && adstart && adrdy) {
             return;
         }
-        self.dr = l4_adc_code(l4_resolution_bits(cfgr));
+        let bits = l4_resolution_bits(cfgr);
+        let ch = ((sqr1 >> 6) & 0x1F) as usize;
+        self.dr = match self.channel_inputs_mv.get(ch).copied().flatten() {
+            Some(mv) => scaled_input_code(
+                Self::code_for_mv(f64::from(mv), self.reference_millivolts),
+                bits,
+            ),
+            None => l4_adc_code(bits),
+        };
         if let AdcRegs::Stm32L4(r) = &mut self.regs {
             r.cr &= !(1 << 2); // ADSTART auto-clears after a single conversion
             r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
@@ -2048,6 +2059,34 @@ mod tests {
             dr10 < dr12 && dr8 < dr10,
             "code scales down with resolution"
         );
+    }
+
+    #[test]
+    fn l4_layout_converts_the_routed_sq1_channel_and_falls_back_when_undriven() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.write_u32(0x08, 0).unwrap(); // DEEPPWD = 0
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADEN -> ADRDY
+        adc.set_channel_input(5, 1650);
+        adc.set_channel_input(6, 700);
+        let (count5, count6) = (
+            adc.channel_input_count(5) as u32,
+            adc.channel_input_count(6) as u32,
+        );
+        assert_ne!(count5, count6);
+        let mut convert = |sq1: u32, res: u32| -> u32 {
+            adc.write_u32(0x30, sq1 << 6).unwrap(); // SQR1.SQ1, L = 0
+            adc.write_u32(0x0C, res << 3).unwrap(); // CFGR.RES
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap(); // ADSTART
+            adc.read_u32(0x40).unwrap()
+        };
+        assert_eq!(convert(5, 0), count5, "IN5, 12-bit");
+        assert_eq!(convert(6, 0), count6, "IN6, 12-bit");
+        assert_eq!(convert(5, 2), count5 >> 4, "IN5, 8-bit");
+        // SQ1 bits sit at 10:6: a channel on IN5's neighbour is undriven and
+        // keeps the fixed source, as an unrouted L476 conversion always did.
+        assert_eq!(convert(7, 0), l4_adc_code(12), "undriven IN7");
+        assert_eq!(convert(0, 1), l4_adc_code(10), "undriven IN0, 10-bit");
     }
 
     #[test]
