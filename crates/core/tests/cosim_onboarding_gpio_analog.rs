@@ -10,7 +10,9 @@
 //! inventory accepts, a voltage-thresholded digital input, and it is just as
 //! board-agnostic: the port is the first peripheral each built bus reports as
 //! a GPIO input, the same Beta NTC divider and Shockley diode load line are
-//! routed to `board.gpio_in.<port>.0` / `.1`, the solved voltages are checked
+//! routed to the port's first two input pads (`board.gpio_in.<port>.0` / `.1`
+//! on most ports; the LiteX CAS block's inputs start at pad 32), the solved
+//! voltages are checked
 //! against independent references, and the levels are read back twice. Once
 //! through `Peripheral::read_gpio_input`, and once with a firmware load from
 //! the port's input register.
@@ -31,8 +33,14 @@ use labwired_core::cosim::{CosimSession, CosimSignalValue, RoutingError};
 use labwired_core::Bus;
 use std::path::{Path, PathBuf};
 
-const NTC_PIN: u8 = 0;
-const DIODE_PIN: u8 = 1;
+/// The port's first two input pads, in pad order: the NTC divider drives the
+/// first and the diode the second. Most ports start at pin 0; the LiteX CAS
+/// block puts LEDs on 0..31 and its first input, switch 0, on pad 32.
+#[derive(Clone, Copy)]
+struct Pins {
+    ntc: u8,
+    diode: u8,
+}
 
 /// GPIO types whose LabWired model serves the silicon register map, with the
 /// input register's offset in that map and its source. The vendor-neutral
@@ -113,6 +121,12 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         "SAM4S DS §31.7 PIO_PDSR; AT91RM9200 DS 1768 PIO_PDSR",
     ),
     ("miv_coregpio", 0x90, "CoreGPIO handbook InputRegister"),
+    // Switch pads 32..63 read at Switches; see [`input_bit`].
+    (
+        "litex_controlandstatus",
+        0x04,
+        "Renode LiteX_ControlAndStatus Switches (arty_litex_vexriscv.repl)",
+    ),
     (
         "efr32s2_gpioport",
         0x14,
@@ -129,10 +143,15 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
 /// Bit of the input-register word that carries `pin`. Every map here puts
 /// pin k at bit k, except SIUL2: `PGPDI0` is the halfword at 0x1742 and holds
 /// pin k at bit `15 - k` (Zephyr `gpio_nxp_siul2.c` reverses it with
-/// `__RBIT`), so in the word at 0x1740 pin k is bit `31 - k`.
+/// `__RBIT`), so in the word at 0x1740 pin k is bit `31 - k`. The CAS
+/// Switches CSR holds switch pad 32 + k at bit k.
 fn input_bit(kind: &str, pin: u8) -> u32 {
     match kind {
         "s32k3_siul2" => 1 << (31 - u32::from(pin)),
+        "litex_controlandstatus" => {
+            assert!((32..64).contains(&pin), "CAS switch pad, got {pin}");
+            1 << (pin - 32)
+        }
         _ => 1 << pin,
     }
 }
@@ -226,6 +245,18 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
     ("stm32w108", "gpioa", 0x4000_B008, "em357 regs.h GPIO_PAIN"),
     ("lpc2294", "gpio0", 0xE002_8000, "UM10114 IO0PIN"),
     (
+        "arty_litex_vexriscv",
+        "cas",
+        0x6000_6804,
+        "Renode arty_litex_vexriscv.repl cas @ sysbus 0x60006800 + Switches",
+    ),
+    (
+        "litex_tock",
+        "cas",
+        0x6000_6804,
+        "Renode litex_tock.repl cas @ sysbus 0x60006800 + Switches",
+    ),
+    (
         "ri5cy",
         "gpioa",
         0x4802_0010,
@@ -293,13 +324,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 195;
+const COVERED: usize = 197;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 90;
+const SILICON_REGISTER: usize = 92;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 50;
+const NO_ANALOG_ENDPOINT: usize = 48;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -349,15 +380,15 @@ fn onboarding_profiles() -> Vec<PathBuf> {
     paths
 }
 
-fn generic_netlists(port: &str) -> SystemManifest {
+fn generic_netlists(port: &str, pins: Pins) -> SystemManifest {
     let mut analog = SystemManifest::from_file(root(
         "examples/ci-fixture-unknown-arch/analog-ntc-diode-system.yaml",
     ))
     .expect("load generic NTC divider and diode netlists");
     for model in &mut analog.cosim_models {
         let (key, pin) = match model.id.as_str() {
-            "ntc_divider" => ("v_sense", NTC_PIN),
-            "diode_load_line" => ("v_diode", DIODE_PIN),
+            "ntc_divider" => ("v_sense", pins.ntc),
+            "diode_load_line" => ("v_diode", pins.diode),
             other => panic!("unexpected fixture model {other}"),
         };
         model
@@ -367,12 +398,22 @@ fn generic_netlists(port: &str) -> SystemManifest {
     analog
 }
 
-/// The first peripheral, in bus order, that reports a GPIO input on both pins.
-fn first_input_port(bus: &SystemBus) -> Option<usize> {
-    bus.peripherals.iter().position(|p| {
-        p.dev.read_gpio_input(NTC_PIN).is_some() && p.dev.read_gpio_input(DIODE_PIN).is_some()
+/// The first peripheral, in bus order, that reports a GPIO input on two pads,
+/// and its first two input pads.
+fn first_input_port(bus: &SystemBus) -> Option<(usize, Pins)> {
+    bus.peripherals.iter().enumerate().find_map(|(index, p)| {
+        let mut inputs = (0..=u8::MAX).filter(|&pin| p.dev.read_gpio_input(pin).is_some());
+        let (ntc, diode) = (inputs.next()?, inputs.next()?);
+        Some((index, Pins { ntc, diode }))
     })
 }
+
+/// Profiles whose port reports input pads the imported board does not wire.
+/// They are counted with [`NO_ANALOG_ENDPOINT`], not covered.
+const UNWIRED_INPUT_PADS: &[(&str, &str)] = &[(
+    "crosslink-nx-evn",
+    "Renode crosslink-nx-evn.repl: only LEDs are supported on this LiteX platform's CAS",
+)];
 
 /// Absolute address of the port's input register, from its declared type,
 /// whether it is the silicon register, and the type key for [`input_bit`].
@@ -438,7 +479,7 @@ fn assert_no_peripheral_behind_bit_band(board: &str, chip: &ChipDescriptor, bus:
 }
 
 /// What firmware writes before the pins read as inputs.
-fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base: u64) {
+fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base: u64, pins: Pins) {
     let kind = chip
         .peripherals
         .iter()
@@ -446,7 +487,7 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
         .map(|p| p.r#type.to_ascii_lowercase());
     if kind.as_deref() == Some("miv_coregpio") {
         // CoreGPIO masks InputRegister bits whose CONFIG_X.INREG is clear.
-        for pin in [NTC_PIN, DIODE_PIN] {
+        for pin in [pins.ntc, pins.diode] {
             bus.write_u32(base + 4 * u64::from(pin), 1 << 1)
                 .expect("CoreGPIO CONFIG_X.INREG");
         }
@@ -454,14 +495,14 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
     if kind.as_deref() == Some("efr32s2_gpioport") {
         // Series 2 resets every pin DISABLED; emlib's GPIO_PinModeSet writes
         // the pin's MODEL nibble to INPUT (_GPIO_P_MODEL_MODE0_INPUT = 1).
-        let model = (1 << (4 * NTC_PIN)) | (1 << (4 * DIODE_PIN));
+        let model = (1 << (4 * pins.ntc)) | (1 << (4 * pins.diode));
         bus.write_u32(base + 0x04, model)
             .expect("Series-2 GPIO_P_MODEL INPUT");
     }
     if kind.as_deref() == Some("s32k3_siul2") {
         // RTD Siul2_Port_Init writes MSCR[n] with SSS = 0 (GPIO) and IBE
         // (bit 19); GPDI/PGPDI read 0 for a pad whose input buffer is off.
-        for pin in [NTC_PIN, DIODE_PIN] {
+        for pin in [pins.ntc, pins.diode] {
             bus.write_u32(base + 0x240 + 4 * u64::from(pin), 1 << 19)
                 .expect("SIUL2 MSCR.IBE");
         }
@@ -469,13 +510,13 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
     if declarative_path_of(chip, port).is_some_and(|p| p.ends_with("rzg2l/port.yaml")) {
         // Linux rzg2l_gpio_direction_input writes PM_INPUT (01) into the
         // pin's two PM bits; the window's PM_m halfword is at +0x110.
-        let pm = (1 << (2 * NTC_PIN)) | (1 << (2 * DIODE_PIN));
+        let pm = (1 << (2 * pins.ntc)) | (1 << (2 * pins.diode));
         bus.write_u16(base + 0x110, pm).expect("RZ/G2L PM_m input");
     }
     if kind.as_deref() == Some("gpio") && profile_of(chip, port) == Some("sam_port") {
         // ASF/Arduino pinMode(INPUT) sets PINCFGn.INEN (bit 1); PINCFG is
         // one byte per pin from +0x40, so pins 0 and 1 share the first word.
-        let pincfg = (0x02 << (8 * NTC_PIN)) | (0x02 << (8 * DIODE_PIN));
+        let pincfg = (0x02 << (8 * pins.ntc)) | (0x02 << (8 * pins.diode));
         bus.write_u32(base + 0x40, pincfg)
             .expect("SAM PORT PINCFG.INEN");
     }
@@ -506,22 +547,25 @@ fn assert_port_routes_generic_analog(
     chip: &ChipDescriptor,
     base_profile: &SystemManifest,
     port_index: usize,
+    pins: Pins,
     probe: &SystemBus,
 ) -> Outcome {
     let port = probe.peripherals[port_index].name.clone();
     let base = probe.peripherals[port_index].base;
     let tag = format!("{board}:{port}");
     let mut profile = base_profile.clone();
-    profile.cosim_models = generic_netlists(&port).cosim_models;
+    profile.cosim_models = generic_netlists(&port, pins).cosim_models;
     let mut bus = SystemBus::from_config(chip, &profile).expect("build onboarding bus");
-    bring_up_inputs(&mut bus, chip, &port, base);
+    bring_up_inputs(&mut bus, chip, &port, base, pins);
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
         .expect("build analog co-simulation")
         .expect("profile carries both generic devices");
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "{tag}: both netlists bind to pins {NTC_PIN}/{DIODE_PIN}"
+        "{tag}: both netlists bind to pins {}/{}",
+        pins.ntc,
+        pins.diode
     );
 
     let (register, silicon_register, kind) = input_register(chip, &port, base);
@@ -533,7 +577,7 @@ fn assert_port_routes_generic_analog(
             "{tag}: input register is not at the silicon address ({source})"
         );
     }
-    let (ntc_bit, diode_bit) = (input_bit(&kind, NTC_PIN), input_bit(&kind, DIODE_PIN));
+    let (ntc_bit, diode_bit) = (input_bit(&kind, pins.ntc), input_bit(&kind, pins.diode));
     let unreached = INPUT_REGISTER_UNREACHED.iter().any(|(b, _)| *b == board);
     let io_v = chip.io_voltage_v.expect("io voltage set before the bus");
     let expected_diode_v = diode_load_line_voltage();
@@ -541,8 +585,8 @@ fn assert_port_routes_generic_analog(
         expected_diode_v < 0.3 * io_v,
         "{tag}: the diode load line sits below VIL"
     );
-    let ntc_path = format!("board.gpio_in.{port}.{NTC_PIN}");
-    let diode_path = format!("board.gpio_in.{port}.{DIODE_PIN}");
+    let ntc_path = format!("board.gpio_in.{port}.{}", pins.ntc);
+    let diode_path = format!("board.gpio_in.{port}.{}", pins.diode);
     let mut register_tracked = true;
     let mut cycles = 0;
     for (temperature_c, expected_ntc_level) in [
@@ -577,12 +621,12 @@ fn assert_port_routes_generic_analog(
 
         let dev = &bus.peripherals[port_index].dev;
         assert_eq!(
-            dev.read_gpio_input(NTC_PIN),
+            dev.read_gpio_input(pins.ntc),
             Some(expected_ntc_level),
             "{tag}: NTC pin follows the solved voltage with Schmitt hysteresis at {temperature_c} °C"
         );
         assert_eq!(
-            dev.read_gpio_input(DIODE_PIN),
+            dev.read_gpio_input(pins.diode),
             Some(false),
             "{tag}: diode pin reads low below VIL"
         );
@@ -633,12 +677,16 @@ fn every_onboarding_profile_with_a_gpio_input_takes_routed_ntc_and_diode_levels(
         let probe = SystemBus::from_config(&chip, &profile)
             .unwrap_or_else(|e| panic!("build {board} bus: {e}"));
         assert_no_peripheral_behind_bit_band(&board, &chip, &probe);
-        let Some(port_index) = first_input_port(&probe) else {
+        let Some((port_index, pins)) = first_input_port(&probe) else {
             no_endpoint += 1;
             continue;
         };
+        if UNWIRED_INPUT_PADS.iter().any(|(b, _)| *b == board) {
+            no_endpoint += 1;
+            continue;
+        }
         let outcome =
-            assert_port_routes_generic_analog(&board, &chip, &profile, port_index, &probe);
+            assert_port_routes_generic_analog(&board, &chip, &profile, port_index, pins, &probe);
         silicon += usize::from(outcome.silicon_register);
         covered.push(board);
     }
