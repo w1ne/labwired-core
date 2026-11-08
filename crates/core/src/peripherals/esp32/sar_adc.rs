@@ -78,8 +78,8 @@
 //! sit in RTC_IO `PAD_DAC1/2` (`peripherals::esp_rtc_io`), whose pad-stage
 //! level the bus hands this block as ADC input probes 8 / 9
 //! (`SystemBus::wire_esp32_dac_adc`). Which source feeds the DAC is muxed
-//! here: `SAR_DAC_CTRL2` (0x9C) `DAC_CW_EN1` [24] / `DAC_CW_EN2` [25] (reset
-//! 1) pick the cosine generator instead of the `PDACn_DAC` code. IDF
+//! here: `SAR_DAC_CTRL2` (0x9C) `DAC_CW_EN1` [24] / `DAC_CW_EN2` [25], both
+//! reset to 1, pick the cosine generator instead of the `PDACn_DAC` code. IDF
 //! `dac_ll_update_output_value` (Arduino `dacWrite()`) clears the bit. The
 //! cosine generator is not modelled, so with `CW_ENn` set the DAC reads as
 //! not driven.
