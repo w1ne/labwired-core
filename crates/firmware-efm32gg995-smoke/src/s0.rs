@@ -1,10 +1,12 @@
 //! EFM32 Series-0 Renode-parity checks, shared by the GG995/GG942/LG942/
-//! LG995/WG995/TG840/ZG222/HG350 smokes (`#[path]`-included).
+//! LG995/WG995/TG840/ZG222/HG350 and G210/G222/G232/G842/G890 smokes
+//! (`#[path]`-included).
 //!
 //! Checks the blocks Renode's efm32xg repls map: the Series-0 GPIO ports
 //! (`efm32s0_gpioport`) and TIMER0..TIMER(n-1) (`efm32s0_timer`; four on
-//! GG/LG/WG, three on HG, two on TG/ZG), with a board-specific (U)SART as
-//! the console and the board's LED0/LED1 pins for the push-pull check.
+//! GG/LG/WG, three on HG and G222+, two on TG/ZG/G210), with a
+//! board-specific (U)SART as the console and the board's LED0/LED1 pins for
+//! the push-pull check.
 #![allow(dead_code)]
 
 use core::ptr::{read_volatile, write_volatile};

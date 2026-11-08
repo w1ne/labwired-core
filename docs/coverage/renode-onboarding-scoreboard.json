@@ -11,10 +11,10 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 685,
+    "pass_claimed_peripherals_total": 729,
     "pass_claimed_peripherals_median": 2,
-    "median_elapsed_ms": 1251,
-    "median_elapsed_seconds": 1.251,
+    "median_elapsed_ms": 1308,
+    "median_elapsed_seconds": 1.308,
     "threshold_seconds": 3600,
     "threshold_met": 226,
     "descriptors_present": 245,
@@ -1723,7 +1723,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 400000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -1732,30 +1732,33 @@
       "script": "examples/renode-onboarding/efm32g210-smoke.yaml",
       "system": "configs/systems/onboarding/efm32g210.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:47:52Z",
-      "finished_at_utc": "2026-11-05T14:47:53Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1035,
+      "started_at_utc": "2026-11-08T16:05:26Z",
+      "finished_at_utc": "2026-11-08T16:08:37Z",
+      "elapsed_seconds": 192,
+      "elapsed_ms": 191279,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.296,
-        "build_firmware": 0.448,
-        "run_smoke": 0.281
+        "build_cli": 190.713,
+        "build_firmware": 0.235,
+        "run_smoke": 0.32
       },
       "stages_ms": {
-        "build_cli": 296,
-        "build_firmware": 448,
-        "run_smoke": 281
+        "build_cli": 190713,
+        "build_firmware": 235,
+        "run_smoke": 320
       },
       "_artifact_path": "efm32g210",
       "zero_answering_windows": [],
-      "claimed_peripherals": 1,
+      "claimed_peripherals": 9,
       "smoke_assertion_kinds": [
         "uart_contains",
+        "uart_ordered",
+        "gpio_edges",
+        "memory_value",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"
@@ -1768,7 +1771,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 400000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -1777,30 +1780,33 @@
       "script": "examples/renode-onboarding/efm32g222-smoke.yaml",
       "system": "configs/systems/onboarding/efm32g222.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:47:53Z",
-      "finished_at_utc": "2026-11-05T14:47:54Z",
+      "started_at_utc": "2026-11-08T16:08:42Z",
+      "finished_at_utc": "2026-11-08T16:08:44Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1031,
+      "elapsed_ms": 1939,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.293,
-        "build_firmware": 0.457,
-        "run_smoke": 0.271
+        "build_cli": 0.948,
+        "build_firmware": 0.318,
+        "run_smoke": 0.651
       },
       "stages_ms": {
-        "build_cli": 293,
-        "build_firmware": 457,
-        "run_smoke": 271
+        "build_cli": 948,
+        "build_firmware": 318,
+        "run_smoke": 651
       },
       "_artifact_path": "efm32g222",
       "zero_answering_windows": [],
-      "claimed_peripherals": 1,
+      "claimed_peripherals": 10,
       "smoke_assertion_kinds": [
         "uart_contains",
+        "uart_ordered",
+        "gpio_edges",
+        "memory_value",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"
@@ -1813,7 +1819,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 400000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -1822,30 +1828,33 @@
       "script": "examples/renode-onboarding/efm32g232-smoke.yaml",
       "system": "configs/systems/onboarding/efm32g232.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:47:54Z",
-      "finished_at_utc": "2026-11-05T14:47:55Z",
+      "started_at_utc": "2026-11-08T16:08:47Z",
+      "finished_at_utc": "2026-11-08T16:08:49Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1019,
+      "elapsed_ms": 1634,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.299,
-        "build_firmware": 0.433,
-        "run_smoke": 0.278
+        "build_cli": 0.558,
+        "build_firmware": 0.434,
+        "run_smoke": 0.618
       },
       "stages_ms": {
-        "build_cli": 299,
-        "build_firmware": 433,
-        "run_smoke": 278
+        "build_cli": 558,
+        "build_firmware": 434,
+        "run_smoke": 618
       },
       "_artifact_path": "efm32g232",
       "zero_answering_windows": [],
-      "claimed_peripherals": 1,
+      "claimed_peripherals": 10,
       "smoke_assertion_kinds": [
         "uart_contains",
+        "uart_ordered",
+        "gpio_edges",
+        "memory_value",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"
@@ -1858,7 +1867,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 400000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -1867,30 +1876,33 @@
       "script": "examples/renode-onboarding/efm32g842-smoke.yaml",
       "system": "configs/systems/onboarding/efm32g842.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:47:55Z",
-      "finished_at_utc": "2026-11-05T14:47:56Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1033,
+      "started_at_utc": "2026-11-08T16:08:51Z",
+      "finished_at_utc": "2026-11-08T16:08:51Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 723,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.301,
-        "build_firmware": 0.451,
-        "run_smoke": 0.269
+        "build_cli": 0.253,
+        "build_firmware": 0.153,
+        "run_smoke": 0.305
       },
       "stages_ms": {
-        "build_cli": 301,
-        "build_firmware": 451,
-        "run_smoke": 269
+        "build_cli": 253,
+        "build_firmware": 153,
+        "run_smoke": 305
       },
       "_artifact_path": "efm32g842",
       "zero_answering_windows": [],
-      "claimed_peripherals": 1,
+      "claimed_peripherals": 10,
       "smoke_assertion_kinds": [
         "uart_contains",
+        "uart_ordered",
+        "gpio_edges",
+        "memory_value",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"
@@ -1903,39 +1915,42 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 400000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
-      "crate": "firmware-efm32g842-smoke",
+      "crate": "firmware-efm32g890-smoke",
       "target_triple": "thumbv7m-none-eabi",
       "script": "examples/renode-onboarding/efm32g890-smoke.yaml",
       "system": "configs/systems/onboarding/efm32g890.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:47:56Z",
-      "finished_at_utc": "2026-11-05T14:47:57Z",
+      "started_at_utc": "2026-11-08T16:08:53Z",
+      "finished_at_utc": "2026-11-08T16:08:53Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 761,
+      "elapsed_ms": 750,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.309,
-        "build_firmware": 0.17,
-        "run_smoke": 0.27
+        "build_cli": 0.272,
+        "build_firmware": 0.148,
+        "run_smoke": 0.318
       },
       "stages_ms": {
-        "build_cli": 309,
-        "build_firmware": 170,
-        "run_smoke": 270
+        "build_cli": 272,
+        "build_firmware": 148,
+        "run_smoke": 318
       },
       "_artifact_path": "efm32g890",
       "zero_answering_windows": [],
-      "claimed_peripherals": 1,
+      "claimed_peripherals": 10,
       "smoke_assertion_kinds": [
         "uart_contains",
+        "uart_ordered",
+        "gpio_edges",
+        "memory_value",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"

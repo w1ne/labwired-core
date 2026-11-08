@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1073790992,
-      24,
-      4294867296,
+      1,
+      0,
+      4013031551,
       2147483648,
+      1073790992,
       0,
-      0,
-      0,
-      536887280,
-      0,
-      0,
-      0,
-      0,
-      134218936,
-      536887280,
-      10,
-      134218914
+      1,
+      536886248,
+      4294867296,
+      1073766496,
+      1073807376,
+      200000,
+      536870912,
+      536886208,
+      1073790976,
+      13714
     ],
-    "pc": 134218914,
-    "xpsr": 1627389952,
+    "pc": 13714,
+    "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "40383a161d7769f41fff84eb14d15cd7dd77e599952a6ac45e62331795b2debb",
+  "firmware_hash": "5b8efa90825b4c9d1b5da98be09172a83e8e9deb3485abee593f52bf49a6e425",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32g232-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32g232.yaml",

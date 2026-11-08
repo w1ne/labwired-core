@@ -1,0 +1,20 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: efm32g842
+arch: arm
+flash:
+  base: 134217728
+  size: 131072B
+ram:
+  base: 536870912
+  size: 16384B
+# Only USART0 currently has a model-backed smoke; omit the other imported windows.
+peripherals:
+- id: usart0
+  type: efm32_uart
+  bus: sysbus
+  base_address: 1073790976

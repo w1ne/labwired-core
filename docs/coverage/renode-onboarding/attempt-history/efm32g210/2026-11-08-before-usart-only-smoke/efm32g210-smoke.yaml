@@ -1,0 +1,10 @@
+# Cortex-M3 smoke against the imported EFM32G210 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-efm32g210-smoke"
+  system: "../../configs/systems/onboarding/efm32g210.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "EFM32G210 USART0 smoke"
+  - expected_stop_reason: max_steps

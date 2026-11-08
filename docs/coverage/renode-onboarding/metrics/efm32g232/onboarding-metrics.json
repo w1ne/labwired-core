@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 100000,
+    "instructions": 400000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/efm32g232-smoke.yaml",
   "system": "configs/systems/onboarding/efm32g232.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:47:54Z",
-  "finished_at_utc": "2026-11-05T14:47:55Z",
+  "started_at_utc": "2026-11-08T16:08:47Z",
+  "finished_at_utc": "2026-11-08T16:08:49Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1019,
+  "elapsed_ms": 1634,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.299,
-    "build_firmware": 0.433,
-    "run_smoke": 0.278
+    "build_cli": 0.558,
+    "build_firmware": 0.434,
+    "run_smoke": 0.618
   },
   "stages_ms": {
-    "build_cli": 299,
-    "build_firmware": 433,
-    "run_smoke": 278
+    "build_cli": 558,
+    "build_firmware": 434,
+    "run_smoke": 618
   }
 }
