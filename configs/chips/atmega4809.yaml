@@ -99,8 +99,9 @@ peripherals:
     size: "15"
     config:
       irqs: [37, 38, 39]
-  # TCA0 (normal / single-slope count, no pad output, no interrupts) and
-  # TCB0..3 (INT and PWM8 count modes, CAPT interrupt, no pad output).
+  # TCA0 (normal / single-slope count, no interrupts; single-slope WO0..2
+  # drive their pads through PORTMUX.TCAROUTEA) and TCB0..3 (INT and PWM8
+  # count modes, CAPT interrupt, no pad output).
   - id: "timers"
     type: "megaavr_tc"
     base_address: 0x00010A00
@@ -163,12 +164,13 @@ peripherals:
     size: "2"
     config:
       path: "../peripherals/atmega4809/vref.yaml"
+  # PORTMUX (`megaavr_portmux`): every route is stored; only TCAROUTEA
+  # moves pads (the TCA0 waveform outputs). USART / TWI / SPI pads are not
+  # routed, so their route fields change nothing.
   - id: "portmux"
-    type: "declarative"
+    type: "megaavr_portmux"
     base_address: 0x000105E0
     size: "6"
-    config:
-      path: "../peripherals/atmega4809/portmux.yaml"
   # ADC0 converts (`megaavr_adc`): single-ended AIN0..15 against VDD or the
   # VREF internal reference, 10/8-bit, SAMPNUM accumulation. VDD defaults to
   # 5000 mV; a board sets `vdd_mv` and drives inputs with `input_mv`.

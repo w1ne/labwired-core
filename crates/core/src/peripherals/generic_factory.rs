@@ -406,6 +406,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "megaavr_adc",
     "megaavr_twi",
     "megaavr_spi",
+    "megaavr_portmux",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -1720,6 +1721,13 @@ pub fn try_build(
                 anyhow::bail!("megaavr_spi '{}' admits no config key '{k}'", p_cfg.id);
             }
             Box::new(crate::peripherals::megaavr::spi::MegaAvrSpi::new())
+        }
+        // TCAROUTEA moves the TCA0 waveform-output pads; the rest is stored.
+        "megaavr_portmux" => {
+            if let Some(k) = p_cfg.config.keys().next() {
+                anyhow::bail!("megaavr_portmux '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            Box::new(crate::peripherals::megaavr::portmux::MegaAvrPortmux::new())
         }
         // `vdd_mv`: the board's VDD (the VDDREF reference, default 5000);
         // `input_mv: { <ain>: <mV> }`: static levels on AIN0..AIN15.

@@ -14,10 +14,22 @@
 //! TCA0, normal (non-split) mode: CTRLA.ENABLE and CLKSEL (DIV1..DIV1024),
 //! WGMODE NORMAL and SINGLESLOPE (both count 0..PER and wrap, setting
 //! INTFLAGS.OVF), CNT / PER / CMPn and their buffers. PERBUF / CMPnBUF set
-//! the CTRLFSET valid bits and are copied at the next wrap (UPDATE). Not
-//! modelled, and refused when firmware asks for them: split mode, FRQ and the
-//! dual-slope modes, compare outputs onto pads (CTRLB.CMPnEN), TCA interrupts
-//! and the event input. CTRLESET commands are refused too.
+//! the CTRLFSET valid bits and are copied at the next wrap (UPDATE).
+//!
+//! TCA0 waveform outputs WO0..WO2 in single-slope PWM (DS40002173 §20.3.3.4.3,
+//! what `analogWrite` on a TCA0 pin runs): WOn is set at BOTTOM and cleared on
+//! the CMPn match, so it is high for CNT < CMPn (CMPn > PER: high all period,
+//! CMPn = 0: low). A CMPnBUF write takes over on the pad at the next wrap, as
+//! the compare register does. With CTRLB.CMPnEN set the waveform drives the
+//! line (and the pad, while it is an output and PORTMUX.TCAROUTEA routes TCA0
+//! to its port; see `SystemBus::wire_megaavr_tca_output_pads`); with TCA0
+//! stopped the line holds CTRLC.CMPnOV. Edges are published at their exact
+//! cycle on the timer's own wake. A buffered PER reaches the pads at the first
+//! register access or wake after the wrap rather than at the wrap itself.
+//!
+//! Not modelled, and refused when firmware asks for them: split mode, FRQ and
+//! the dual-slope modes, compare outputs in NORMAL mode, TCA interrupts and
+//! the event input. CTRLESET commands are refused too.
 //!
 //! TCB, periodic interrupt (CNTMODE INT) and 8-bit PWM (CNTMODE PWM8): the
 //! counter runs 0..TOP and wraps, setting INTFLAGS.CAPT, where TOP is CCMP in
@@ -30,8 +42,13 @@
 //! byte write lands in TEMP and the high byte write commits both; a low byte
 //! read latches the high byte into TEMP for the following high byte read.
 
+use crate::peripherals::esp_ledc_wave::{LedcDrive, LedcPads, LedcTimebase};
+use crate::peripherals::pad_lines::LineDrive;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult, SimulationError};
 use std::sync::Mutex;
+
+/// TCA0 waveform output lines, in WOn order.
+const TCA_OUTPUT_LINES: &[&str] = &["TCA0_WO0", "TCA0_WO1", "TCA0_WO2"];
 
 /// Window offset of TCB n.
 const TCB_BASE: [u64; 4] = [0x80, 0x90, 0xA0, 0xB0];
@@ -58,6 +75,7 @@ const TCA_PERBUF: u64 = 0x36;
 const TCA_CMP0BUF: u64 = 0x38;
 const TCA_ENABLE: u8 = 1 << 0;
 const TCA_WGMODE: u8 = 0x07;
+const TCA_SINGLESLOPE: u8 = 3;
 const TCA_CMPEN: u8 = 0x70;
 const TCA_OVF: u8 = 1 << 0;
 /// CTRLFSET: PERBV bit 0, CMP0BV..CMP2BV bits 1..3.
@@ -138,6 +156,9 @@ pub struct MegaAvrTimers {
     /// TCB0..3 vector numbers (12, 13, 25, 36 on the ATmega4809).
     tcb_irqs: [u32; 4],
     clock: Option<CycleClock>,
+    /// TCA0 WO0..WO2; generated only once the bus routed a pad to them.
+    outputs: LedcPads,
+    wired: bool,
 }
 
 /// CLK_PER cycles per TCA0 prescaled tick.
@@ -208,6 +229,78 @@ impl MegaAvrTimers {
             state: Mutex::new(State::default()),
             tcb_irqs,
             clock: None,
+            outputs: LedcPads::new(TCA_OUTPUT_LINES),
+            wired: false,
+        }
+    }
+
+    /// What WOc drives with the registers settled at their anchor, and
+    /// whether it drives the line at all (CTRLB.CMPnEN), plus the buffered
+    /// compare value's drive that takes over at the next wrap.
+    fn output_drive(tca: &Tca, c: usize) -> (LedcDrive, Option<LedcDrive>, bool) {
+        let enabled = tca.ctrlb & (0x10 << c) != 0;
+        let ov = LedcDrive::Level(tca.ctrlc & (1 << c) != 0);
+        if !tca.running() || tca.ctrlb & TCA_WGMODE != TCA_SINGLESLOPE {
+            return (ov, None, enabled);
+        }
+        let period = u64::from(tca.per) + 1;
+        let count = u64::from(tca.anchor_count);
+        if count >= period {
+            // Counting on past PER towards the 16-bit wrap: no BOTTOM yet.
+            return (
+                LedcDrive::Level(count < u64::from(tca.cmp[c])),
+                None,
+                enabled,
+            );
+        }
+        let div = tca_div(tca.ctrla);
+        // BOTTOM, as a tick index reduced modulo the period, so the time base
+        // is the same value however many wraps the anchor has moved over.
+        let origin = (tca.anchor_tick % period + period - count) % period;
+        let timer = LedcTimebase {
+            period,
+            num: u128::from(div),
+            den: 1,
+            origin: origin * div,
+        };
+        let pwm = |cmp: u16| LedcDrive::Pwm {
+            timer,
+            hpoint: 0,
+            duty: u64::from(cmp).min(period),
+        };
+        let buffered = (tca.ctrlf & (TCA_PERBV << (c + 1)) != 0).then(|| pwm(tca.cmpbuf[c]));
+        (pwm(tca.cmp[c]), buffered, enabled)
+    }
+
+    /// Re-derive the output lines from the settled registers at `now`.
+    fn refresh_outputs(outputs: &mut LedcPads, wired: bool, tca: &Tca, now: u64) {
+        if !wired {
+            return;
+        }
+        let lines = outputs.lines_arc();
+        for c in 0..TCA_OUTPUT_LINES.len() {
+            let (drive, buffered, enabled) = Self::output_drive(tca, c);
+            outputs.set_drive(c, drive, now);
+            if let Some(next) = buffered {
+                outputs.set_drive(c, next, now);
+            }
+            lines.set_mode(
+                c,
+                if enabled {
+                    LineDrive::PushPull
+                } else {
+                    LineDrive::Input
+                },
+            );
+        }
+    }
+
+    /// Cycle of the next output edge (or staged compare taking over).
+    fn next_output_cycle(&self) -> Option<u64> {
+        if self.wired {
+            self.outputs.next_change()
+        } else {
+            None
         }
     }
 
@@ -306,11 +399,15 @@ impl MegaAvrTimers {
             .min()
     }
 
-    fn rearm(&self, s: &mut State) {
+    fn rearm(&self, s: &mut State, output_edge: Option<u64>) {
         if !self.scheduler_mode() {
             return;
         }
-        let Some(fire) = Self::next_irq_cycle(s) else {
+        let Some(fire) = [Self::next_irq_cycle(s), output_edge]
+            .into_iter()
+            .flatten()
+            .min()
+        else {
             return;
         };
         let now = self.now();
@@ -446,7 +543,9 @@ impl MegaAvrTimers {
         }
         // A configuration change re-anchors every counter at `now`.
         Self::settle(s, now);
-        self.rearm(s);
+        Self::refresh_outputs(&mut self.outputs, self.wired, &s.tca, now);
+        let edge = self.next_output_cycle();
+        self.rearm(s, edge);
         Ok(irqs)
     }
 
@@ -528,8 +627,8 @@ impl MegaAvrTimers {
         if !matches!(tca.ctrlb & TCA_WGMODE, 0 | 3) {
             return Self::refuse(format!("TCA0 WGMODE {}", tca.ctrlb & TCA_WGMODE));
         }
-        if tca.ctrlb & TCA_CMPEN != 0 {
-            return Self::refuse("TCA0 compare outputs on pads (CTRLB.CMPnEN)".into());
+        if tca.ctrlb & TCA_CMPEN != 0 && tca.ctrlb & TCA_WGMODE != TCA_SINGLESLOPE {
+            return Self::refuse("TCA0 compare outputs in NORMAL mode (CTRLB.CMPnEN)".into());
         }
         Ok(())
     }
@@ -637,7 +736,10 @@ impl Peripheral for MegaAvrTimers {
 
     fn legacy_tick_active(&self) -> bool {
         let s = self.state.lock().unwrap();
-        !self.scheduler_mode() && (!s.raised.is_empty() || Self::next_irq_cycle(&s).is_some())
+        !self.scheduler_mode()
+            && (!s.raised.is_empty()
+                || Self::next_irq_cycle(&s).is_some()
+                || self.next_output_cycle().is_some())
     }
 
     fn legacy_tick_dynamic(&self) -> bool {
@@ -653,6 +755,12 @@ impl Peripheral for MegaAvrTimers {
             return PeripheralTickResult::default();
         }
         let irqs = self.service();
+        if self.wired {
+            // Buffered compare values the wrap applies are staged on the
+            // lines already: only the edges need publishing.
+            let now = self.now();
+            self.outputs.advance_to(now);
+        }
         PeripheralTickResult {
             explicit_irqs: (!irqs.is_empty()).then_some(irqs),
             ..Default::default()
@@ -679,7 +787,12 @@ impl Peripheral for MegaAvrTimers {
         let rose = Self::settle(s, now);
         let mut irqs = std::mem::take(&mut s.raised);
         irqs.extend(self.irqs_for(s, &rose));
-        self.rearm(s);
+        if self.wired {
+            self.outputs.advance_to(now);
+            Self::refresh_outputs(&mut self.outputs, self.wired, &s.tca, now);
+        }
+        let edge = self.next_output_cycle();
+        self.rearm(s, edge);
         let reschedule_delay = s.pending_events.pop().map(|(delay, _)| {
             s.generation = event_token;
             delay
@@ -698,6 +811,30 @@ impl Peripheral for MegaAvrTimers {
 
     fn on_node_reset(&mut self) {
         *self.state.lock().unwrap() = State::default();
+        let now = self.now();
+        Self::refresh_outputs(&mut self.outputs, self.wired, &Tca::default(), now);
+    }
+
+    fn timer_output_family(&self) -> Option<&'static str> {
+        Some("megaavr_tca")
+    }
+
+    fn timer_output_lines(
+        &mut self,
+        arm: bool,
+    ) -> Option<std::sync::Arc<crate::peripherals::pad_lines::PadLines>> {
+        let lines = self.outputs.lines_arc();
+        if arm && !self.wired {
+            self.wired = true;
+            let now = self.now();
+            let tca = self.state.lock().unwrap().tca;
+            Self::refresh_outputs(&mut self.outputs, true, &tca, now);
+        }
+        Some(lines)
+    }
+
+    fn wire_lines(&self) -> Option<&crate::peripherals::pad_lines::PadLines> {
+        self.outputs.wire_lines()
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -801,11 +938,70 @@ mod tests {
         assert_eq!(t.read(0xBD).unwrap(), 0x12, "high byte comes from TEMP");
     }
 
+    /// ArduinoCore-megaavr `setup_timers()` then `analogWrite(9, 128)`:
+    /// single-slope, PER = 0xFF, CMP0BUF = 128, DIV64, then CTRLB.CMP0EN.
+    #[test]
+    fn analog_write_is_a_976_hz_half_duty_waveform_on_wo0() {
+        let (mut t, clock) = at(0);
+        let lines = t.timer_output_lines(true).unwrap();
+        t.write(TCA_CTRLB, 0x03).unwrap();
+        w16(&mut t, TCA_PER, 0x00FF);
+        w16(&mut t, TCA_CMP0BUF, 0x0080);
+        t.write(TCA_CTRLA, 0x0B).unwrap(); // DIV64 | ENABLE
+        assert_eq!(lines.mode(0), LineDrive::Input, "CMP0EN clear: no drive");
+        // The buffer took over at the first wrap (256 ticks of 64 cycles).
+        clock.publish(16384 + 64);
+        t.tick();
+        t.write(TCA_CTRLB, 0x13).unwrap(); // | CMP0EN
+        assert_eq!(lines.mode(0), LineDrive::PushPull);
+        let mut high = 0;
+        let mut edges = 0;
+        let mut last = lines.level(0);
+        for cycle in (2 * 16384..4 * 16384).step_by(64) {
+            clock.publish(cycle);
+            t.tick();
+            let l = lines.level(0);
+            high += u32::from(l);
+            edges += u32::from(l != last);
+            last = l;
+        }
+        assert_eq!(high, 2 * 128, "high for CNT < CMP0 = 128 of 256 counts");
+        // High at the window start (BOTTOM), low at its end (CNT 255).
+        assert_eq!(edges, 3, "fall, rise, fall over two periods");
+        assert_eq!(lines.mode(1), LineDrive::Input, "WO1 not enabled");
+    }
+
+    #[test]
+    fn a_new_compare_value_waits_for_the_wrap_and_a_stopped_timer_holds_cmpnov() {
+        let (mut t, clock) = at(0);
+        let lines = t.timer_output_lines(true).unwrap();
+        t.write(TCA_CTRLB, 0x13).unwrap();
+        w16(&mut t, TCA_PER, 99);
+        w16(&mut t, TCA_CMP0, 50);
+        t.write(TCA_CTRLA, 0x01).unwrap(); // DIV1
+        clock.publish(10);
+        t.tick();
+        assert!(lines.level(0), "CNT 10 < 50");
+        w16(&mut t, TCA_CMP0BUF, 5);
+        clock.publish(20);
+        t.tick();
+        assert!(lines.level(0), "CMP0BUF waits for UPDATE");
+        clock.publish(100 + 7);
+        t.tick();
+        assert!(!lines.level(0), "after the wrap CMP0 = 5: CNT 7 is past it");
+        t.write(TCA_CTRLC, 0x01).unwrap(); // CMP0OV
+        t.write(TCA_CTRLA, 0x00).unwrap(); // stop
+        assert!(lines.level(0), "stopped: WO0 = CMP0OV");
+    }
+
     #[test]
     fn unmodelled_modes_are_refused() {
         let (mut t, _clock) = at(0);
-        t.write(TCA_CTRLB, 0x13).unwrap();
-        assert!(t.write(TCA_CTRLA, 0x01).is_err(), "CMP0EN onto a pad");
+        t.write(TCA_CTRLB, 0x10).unwrap();
+        assert!(t.write(TCA_CTRLA, 0x01).is_err(), "CMP0EN in NORMAL mode");
+        let (mut t, _clock) = at(0);
+        t.write(TCA_CTRLD, 0x01).unwrap();
+        assert!(t.write(TCA_CTRLA, 0x01).is_err(), "split mode");
         let (mut t, _clock) = at(0);
         assert!(t.write(TCA_INTCTRL, 0x01).is_err(), "TCA0 OVF interrupt");
         let (mut t, _clock) = at(0);

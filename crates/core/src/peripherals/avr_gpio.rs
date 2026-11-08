@@ -14,6 +14,12 @@
 //! not modelled: a PINnCTRL write that asks for them is refused. The CPU
 //! aliases VPORTn onto DIR / OUT / IN / INTFLAGS of this block.
 //!
+//! A megaAVR pad can also carry a timer waveform output: with the pad an
+//! output (DIR set) and the timer driving its line (TCA0 CTRLB.CMPnEN), the
+//! waveform overrides OUT (DS40002173 §20.3.3.4), and IN, the logic analyzer
+//! and push capture read the waveform. The bus binds the routes
+//! (`SystemBus::wire_megaavr_tca_output_pads`), gated on PORTMUX.TCAROUTEA.
+//!
 //! Parking model so `--watch-gpio portb:5` can observe Arduino Nano
 //! `LED_BUILTIN` (PB5). The AVR interpreter owns the same registers in its
 //! data-space IO map and mirrors writes through `bus.write_u8`, which lands
@@ -71,6 +77,8 @@ pub struct AvrGpioPort {
     /// megaAVR `PINnCTRL` and `PORTCTRL` (unused by the other layouts).
     pinctrl: [u8; 8],
     portctrl: u8,
+    /// Timer waveform outputs bound to these pads (megaAVR layout only).
+    pad_routes: crate::peripherals::pad_routing::PadRoutes,
 }
 
 impl Default for AvrGpioPort {
@@ -114,7 +122,47 @@ impl AvrGpioPort {
             cells: Vec::new(),
             pinctrl: [0; 8],
             portctrl: 0,
+            pad_routes: crate::peripherals::pad_routing::PadRoutes::new(),
         }
+    }
+
+    /// The route selector of every pad: a pad can carry a peripheral line
+    /// only while it is an output.
+    #[inline]
+    fn route_selector(ddr: u8) -> impl Fn(u8) -> Option<u32> {
+        move |pin| (pin < 8 && ddr & (1u8 << pin) != 0).then_some(0)
+    }
+
+    /// The output pads a timer line drives now, and the levels it puts there.
+    #[inline]
+    fn routed(&self) -> (u8, u8) {
+        if self.pad_routes.is_empty() {
+            return (0, 0);
+        }
+        let (mut mask, mut level) = (0u8, 0u8);
+        let select = Self::route_selector(self.ddr);
+        for pin in 0..self.pin_count {
+            if let Some(l) = self.pad_routes.level(pin, &select) {
+                mask |= 1 << pin;
+                if l {
+                    level |= 1 << pin;
+                }
+            }
+        }
+        (mask, level)
+    }
+
+    /// Re-register watched pads with the lines that drive them now.
+    fn sync_pad_line_taps(&mut self) {
+        if self.pad_routes.is_empty() {
+            return;
+        }
+        let Some(watch) = self.watch.take() else {
+            return;
+        };
+        self.pad_routes
+            .sync_taps(watch.tap(), watch.pairs(), Self::route_selector(self.ddr));
+        self.watch = Some(watch);
     }
 
     /// Bits of the bonded pads.
@@ -232,7 +280,9 @@ impl AvrGpioPort {
     #[inline]
     fn pad_bits(&self) -> u8 {
         let from_pull = self.pull_ups() & !self.ext_mask;
-        (self.port & self.ddr) | (self.pin & !self.ddr & !from_pull) | from_pull
+        let bits = (self.port & self.ddr) | (self.pin & !self.ddr & !from_pull) | from_pull;
+        let (mask, level) = self.routed();
+        (bits & !mask) | (level & mask)
     }
 
     /// Publish the pad level into every watching cell.
@@ -274,7 +324,10 @@ impl PinPort for AvrGpioPort {
             return None;
         }
         let bit = 1u8 << pin;
-        Some(if self.ddr & bit != 0 {
+        let (mask, level) = self.routed();
+        Some(if mask & bit != 0 {
+            PadDriver::drive(level & bit != 0)
+        } else if self.ddr & bit != 0 {
             PadDriver::drive(self.port & bit != 0)
         } else if self.pull_ups() & bit != 0 {
             PadDriver::released(Pull::Up)
@@ -340,8 +393,23 @@ impl PinPort for AvrGpioPort {
     }
 
     fn install_watch(&mut self, watch: Option<crate::pins::PadWatch>) -> bool {
-        self.watch = watch;
+        match watch {
+            None => {
+                self.watch = None;
+                self.pad_routes.clear_taps();
+            }
+            Some(watch) => {
+                self.watch = Some(watch);
+                // Seeded stale so the sync installs the current routing.
+                self.pad_routes.invalidate_registrations();
+                self.sync_pad_line_taps();
+            }
+        }
         true
+    }
+
+    fn routes_changed(&mut self) {
+        self.sync_pad_line_taps();
     }
 
     fn take_watch(&mut self) -> Option<crate::pins::PadWatch> {
@@ -441,8 +509,30 @@ impl Peripheral for AvrGpioPort {
             } else {
                 GpioMode::Input
             },
-            func: None,
+            func: self
+                .pad_routes
+                .func(pin, Self::route_selector(self.ddr))
+                .map(String::from),
         })
+    }
+
+    /// Bind pad `pin` to TCA0 waveform output `line`: live while the pad is
+    /// an output, the timer drives the line, and `gate` (PORTMUX.TCAROUTEA)
+    /// routes TCA0 to this port. megaAVR PORT layout only.
+    fn bind_remapped_timer_output_pad(
+        &mut self,
+        cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        pin: u8,
+        line: usize,
+        func: &'static str,
+        gate: crate::peripherals::pad_routing::RemapGate,
+    ) -> bool {
+        if self.layout != AvrGpioRegisterLayout::MegaAvrPort || pin >= self.pin_count {
+            return false;
+        }
+        self.pad_routes
+            .bind_when_driving_gated(cell, pin, None, line, func, Some(gate));
+        true
     }
 
     fn pins(&self) -> Option<&dyn PinPort> {

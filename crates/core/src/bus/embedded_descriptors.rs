@@ -42,10 +42,6 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
         packed!("atmega4809/clkctrl.yaml"),
     ),
     (
-        "atmega4809/portmux.yaml",
-        packed!("atmega4809/portmux.yaml"),
-    ),
-    (
         "atmega4809/rstctrl.yaml",
         packed!("atmega4809/rstctrl.yaml"),
     ),

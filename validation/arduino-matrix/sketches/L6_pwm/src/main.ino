@@ -40,6 +40,12 @@
 // ATmega328P, so analogWrite(13, 128) is digitalWrite(HIGH). Use D9 = PB1 =
 // OC1A (Timer1, phase-correct 8-bit, 16 MHz / 64 / 510 = 490 Hz).
 #    define LW_PWM_PIN 9
+#  elif defined(ARDUINO_AVR_NANO_EVERY)
+// Nano Every LED_BUILTIN is D13 = PE2, which has no timer output on the
+// ATmega4809, so analogWrite(13, 128) is digitalWrite(HIGH). Use D9 = PB0 =
+// TCA0 WO0 (PORTMUX.TCAROUTEA = PORTB, single-slope, 16 MHz / 64 / 256 =
+// 976.6 Hz).
+#    define LW_PWM_PIN 9
 #  elif defined(LED_BUILTIN)
 #    define LW_PWM_PIN LED_BUILTIN
 #  elif defined(ARDUINO_ARCH_ESP32)

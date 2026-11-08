@@ -32,11 +32,13 @@ this example uses. Stock ArduinoCore-megaavr sketches run on it in the Arduino
 matrix (`validation/arduino-matrix`, row `arduino-nano-every`): L0/L1 serial
 through USART3, L2 blink and L7 `millis()`/`micros()` through TCB3 pass. L3
 `Wire` reads an INA219's registers over TWI0 (host mode), L4 `SPI` reads a
-MAX31855 frame over SPI0 (host mode), and L5 `analogRead(A0)` converts on
-ADC0; their evidence and negative controls are under
-`evidence/arduino-matrix/`. The timer pad outputs are not modelled yet, so L6
-is skipped with that reason (L8: the part has no CAN). An I/O access to anything the descriptor does not declare faults
-instead of reading zero.
+MAX31855 frame over SPI0 (host mode), L5 `analogRead(A0)` converts on
+ADC0, and L6 `analogWrite(9, 128)` is a 976.6 Hz, 50 % waveform on D9 = PB0
+(TCA0 WO0 through PORTMUX.TCAROUTEA). Their evidence and negative controls
+are under `evidence/arduino-matrix/`. L8 is skipped because the part has no
+CAN. The TCB waveform outputs (D3, D6) are not modelled yet, so
+`analogWrite` on those pins faults. An I/O access to anything the
+descriptor does not declare faults instead of reading zero.
 
 ## Lifecycle and hardware sources
 

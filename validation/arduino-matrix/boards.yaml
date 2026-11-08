@@ -381,11 +381,14 @@ boards:
     budget_reason: "AVR 16 MHz, same budget as the Nano and Mega rows"
     led_watch: "porte:2"
     led_min_edges: 2
+    # L6 drives D9 = PB0 = TCA0 WO0 (TCAROUTEA = PORTB, 976.6 Hz). D13 = PE2
+    # has no timer output, so analogWrite(LED_BUILTIN, 128) was digitalWrite.
+    pwm_watch: "portb:0"
+    pwm_min_edges: 20
     family: avr
     notes: "Arduino Nano Every (ATmega4809, megaAVR 0-series)"
-    sketches_skip: [L6_pwm, L8_can]
+    sketches_skip: [L8_can]
     sketches_skip_reason:
-      L6_pwm: "TCA0/TCB waveform outputs are not modelled on the ATmega4809 yet"
       L8_can: "ATmega4809 has no CAN controller"
 
   - id: arduino-zero

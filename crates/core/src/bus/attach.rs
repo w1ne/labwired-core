@@ -3319,6 +3319,58 @@ impl SystemBus {
         }
     }
 
+    /// Route TCA0's waveform outputs WO0..WO2 onto pins 0..2 of the port
+    /// PORTMUX.TCAROUTEA selects (0 = PORTA .. 5 = PORTF; DS40002173 §15.3.5
+    /// and the I/O multiplexing table, non-split mode), so `analogWrite` on a
+    /// TCA0 pin is a waveform on the pad rather than the OUT latch. Each
+    /// route is live while TCAROUTEA selects its port, the pad is an output
+    /// and CTRLB.CMPnEN has the timer drive the line. Only a `megaavr_tc`
+    /// block (`timers`) with a `megaavr_portmux` (`portmux`) is wired; the
+    /// split-mode outputs WO3..WO5 are refused by the timer.
+    pub(crate) fn wire_megaavr_tca_output_pads(&mut self) {
+        let Some(t_idx) = self.find_peripheral_index_by_name("timers") else {
+            return;
+        };
+        if self.peripherals[t_idx].dev.timer_output_family() != Some("megaavr_tca") {
+            return;
+        }
+        let Some(mux_idx) = self.find_peripheral_index_by_name("portmux") else {
+            return;
+        };
+        let Some(register) = self.peripherals[mux_idx].dev.remap_register() else {
+            return;
+        };
+        let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
+            return;
+        };
+        const FUNCS: [&str; 3] = ["TCA0_WO0", "TCA0_WO1", "TCA0_WO2"];
+        let mut wired = false;
+        for (route, port) in ["porta", "portb", "portc", "portd", "porte", "portf"]
+            .into_iter()
+            .enumerate()
+        {
+            let Some(gpio_idx) = self.find_peripheral_index_by_name(port) else {
+                continue;
+            };
+            for (wo, func) in FUNCS.into_iter().enumerate() {
+                let gate = crate::peripherals::pad_routing::RemapGate {
+                    register: register.clone(),
+                    shift: 0,
+                    mask: 0x7,
+                    value: route as u32,
+                };
+                wired |= self.peripherals[gpio_idx]
+                    .dev
+                    .bind_remapped_timer_output_pad(&lines, wo as u8, wo, func, gate);
+            }
+        }
+        if wired {
+            // A TCAROUTEA store re-syncs the watched pads.
+            self.remap_block = Some(mux_idx);
+            self.peripherals[t_idx].dev.timer_output_lines(true);
+        }
+    }
+
     /// Route each Renesas RA GPT's GTIOCnA/B wires onto the pads its chip
     /// YAML names (`gtioc_pads`), so a pad whose `PmnPFS` hands it to the GPT
     /// (PMR = 1, PSEL = 00011) reads, and the logic analyzer records, the PWM
