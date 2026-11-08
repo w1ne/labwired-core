@@ -141,7 +141,7 @@ mod rp2040_pio_pads_tests {
         watch(&mut m, PIN);
         ws2812_init(&mut m, GPIO_FUNC_PIO0);
         // put_pixel(): pixel_grb << 8, MSB first.
-        let pixels = [0x00ff_00u32, 0x8001_7e, 0x0f_f0_a5];
+        let pixels = [0x0000_ff00_u32, 0x0080_017e, 0x000f_f0a5];
         for p in pixels {
             m.bus.write_u32(PIO0_BASE + TXF0, p << 8).unwrap();
         }
