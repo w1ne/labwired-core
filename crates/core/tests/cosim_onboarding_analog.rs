@@ -33,6 +33,7 @@ const IDLE_CHANNEL: u8 = 7;
 const CONVERTED: &[&str] = &[
     "ambiq-apollo4",
     "arduino_nano_33_ble",
+    "atsamd21j17d-aft",
     "cc2538",
     "eos-s3-qomu",
     "eos-s3-quickfeather",
@@ -181,7 +182,15 @@ enum Family {
     /// MSB-justified against 1 V on VP/VN and VAUXn (Renode Xilinx_XADC.cs,
     /// embeddedsw xadcps.c), so the 3.3 V NTC divider saturates above 1 V.
     Xadc,
+    /// SAM D21 ADC: `INPUTCTRL.MUXPOS` against GND, `SWTRIG.START`,
+    /// `INTFLAG.RESRDY` cleared by the `RESULT` read, and a pad converts
+    /// only once PORT hands it to the ADC (PINCFG.PMUXEN, PMUX function B)
+    /// (DS40001882 §33, ASF adc_start_conversion/adc_read).
+    Samd21,
 }
+
+/// SAM D21 PORT GROUP0 (PA). The routed AIN5..7 are pads PA05..PA07.
+const SAMD21_PORT_A: u64 = 0x4100_4400;
 
 /// XADC DRP channel of VAUXn (xadcps_hw.h `XADCPS_CH_AUX_MIN`).
 const XADC_AUX0: u8 = 0x10;
@@ -219,6 +228,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Da14Gpadc
         } else if kind == "caes_adc" {
             Family::Caes
+        } else if kind == "samd21_adc" {
+            Family::Samd21
         } else if kind == "xilinx_xadc" {
             Family::Xadc
         } else {
@@ -275,6 +286,9 @@ impl Converter {
             Family::Caes => mv.min(1500) * 4095 / 1500,
             // Unipolar, 1 LSB = 1 V / 4096, clamped at 0xFFF.
             Family::Xadc => (mv * 4096 / 1000).min(4095),
+            // 12-bit against REFCTRL.REFSEL INTVCC0 = VDDANA / 1.48
+            // (2229 mV at 3.3 V), truncated, clamped.
+            Family::Samd21 => (mv * 4095 / (3300 * 100 / 148)).min(4095),
         }
     }
 
@@ -336,6 +350,23 @@ impl Converter {
                 bus.write_u32(cfg, value | CFG_ENABLE_FIFOTH)
                     .expect("CFG.ENABLE");
                 bus.write_u32(mctl, 0).expect("release MCTL.RESET");
+            }
+            Family::Samd21 => {
+                // ASF port_pin_set_config + adc_init: hand PA05..PA07 to
+                // function B (PMUX[2] odd nibble, PMUX[3] both nibbles,
+                // PINCFG.PMUXEN), then 12-bit right-adjusted, INTVCC0, and
+                // CTRLA.ENABLE.
+                bus.write_u8(SAMD21_PORT_A + 0x32, 0x10)
+                    .expect("PMUX[2] PA05 = B");
+                bus.write_u8(SAMD21_PORT_A + 0x33, 0x11)
+                    .expect("PMUX[3] PA06/PA07 = B");
+                for pad in [NTC_CHANNEL, DIODE_CHANNEL, IDLE_CHANNEL] {
+                    bus.write_u8(SAMD21_PORT_A + 0x40 + u64::from(pad), 1)
+                        .expect("PINCFG.PMUXEN");
+                }
+                bus.write_u16(self.base + 0x04, 0).expect("CTRLB 12-bit");
+                bus.write_u8(self.base + 0x01, 1).expect("REFCTRL INTVCC0");
+                bus.write_u8(self.base, 1 << 1).expect("CTRLA.ENABLE");
             }
             Family::Caes => {
                 // Users Guide Example 1: ADC_REGDEF, then single sweep with
@@ -701,6 +732,26 @@ impl Converter {
                 for channel in [NTC_CHANNEL, DIODE_CHANNEL, IDLE_CHANNEL] {
                     bus.write_u32(chan_cfg(channel), 0x10).expect("disable");
                 }
+                codes
+            }
+            Family::Samd21 => {
+                let codes = [
+                    self.convert(bus, NTC_CHANNEL),
+                    self.convert(bus, DIODE_CHANNEL),
+                ];
+                // The ADC reads the pad only while PORT hands it over:
+                // with PINCFG.PMUXEN cleared the driven NTC pad converts to
+                // zero, and handing it back restores the code.
+                let pincfg = SAMD21_PORT_A + 0x40 + u64::from(NTC_CHANNEL);
+                bus.write_u8(pincfg, 0).expect("PA05 back to GPIO");
+                assert_eq!(
+                    self.convert(bus, NTC_CHANNEL),
+                    0,
+                    "{}: a pad PORT has not handed to the ADC carries no signal",
+                    self.id
+                );
+                bus.write_u8(pincfg, 1).expect("PA05 to the ADC");
+                assert_eq!(self.convert(bus, NTC_CHANNEL), codes[0], "{}", self.id);
                 codes
             }
             Family::Da14Gpadc => {
@@ -1498,6 +1549,36 @@ impl Converter {
                 bus.write_u32(chan_cfg, 0x10).expect("disable");
                 (raw & 0xFFF) ^ 0x800
             }
+            Family::Samd21 => {
+                // ASF adc_start_conversion + adc_read: MUXNEG = GND (0x18),
+                // SWTRIG.START, RESRDY on the next tick, RESULT clears it.
+                const RESRDY: u8 = 1;
+                bus.write_u32(self.base + 0x10, 0x1800 | u32::from(channel))
+                    .expect("INPUTCTRL");
+                bus.write_u8(self.base + 0x0C, 1 << 1)
+                    .expect("SWTRIG.START");
+                assert_eq!(
+                    bus.read_u8(self.base + 0x18).unwrap() & RESRDY,
+                    0,
+                    "{}: START clears RESRDY until the conversion ends",
+                    self.id
+                );
+                bus.tick_peripherals_fully();
+                assert_ne!(
+                    bus.read_u8(self.base + 0x18).unwrap() & RESRDY,
+                    0,
+                    "{}: the conversion raises INTFLAG.RESRDY",
+                    self.id
+                );
+                let code = u32::from(bus.read_u16(self.base + 0x1A).expect("RESULT"));
+                assert_eq!(
+                    bus.read_u8(self.base + 0x18).unwrap() & RESRDY,
+                    0,
+                    "{}: the RESULT read clears RESRDY",
+                    self.id
+                );
+                code
+            }
             Family::Saadc { .. } => unreachable!("SAADC converts as a scan"),
         }
     }
@@ -1647,7 +1728,12 @@ fn assert_converter_routes_generic_analog(
         }
         if matches!(
             converter.family,
-            Family::Imxrt | Family::Sam4s | Family::Apollo4 | Family::Cc2538 | Family::Caes
+            Family::Imxrt
+                | Family::Sam4s
+                | Family::Apollo4
+                | Family::Cc2538
+                | Family::Caes
+                | Family::Samd21
         ) {
             assert_eq!(
                 converter.convert(&mut bus, IDLE_CHANNEL),
@@ -1732,7 +1818,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 70,
+        instances, 71,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -1740,7 +1826,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 165,
+        without_adc, 164,
         "onboarding profiles that declare no modelled ADC"
     );
 }

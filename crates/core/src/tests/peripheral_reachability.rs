@@ -516,10 +516,10 @@ fn atsamd21_sercom_usarts_are_separately_addressable() {
 /// descriptor spells the same thing out as gpio_a @ 0x4100_4400,
 /// gpio_b @ 0x4100_4480. Both were imported as 0x4100.
 ///
-/// `samd21_gpio` has no model in this engine (it builds a stub), so the two
-/// ports cannot be told apart by a read/write — a stub answers 0 either way.
-/// What CAN be checked, and is the whole content of the defect, is that the
-/// router dispatches each port's own address to that port.
+/// Both groups now run on the shared SAM PORT model (`profile: sam_port`);
+/// the Renode `samd21_gpio` type had none and fell back to the STM32F1
+/// placeholder. The content of the defect is that the router dispatches each
+/// port's own address to that port, which is what is checked here.
 #[test]
 fn atsamd21_port_groups_route_to_their_own_instances() {
     let bus = bus_for_chip("configs/chips/onboarding/atsamd21j17d-aft.yaml");

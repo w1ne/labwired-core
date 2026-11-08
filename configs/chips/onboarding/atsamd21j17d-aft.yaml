@@ -77,16 +77,28 @@ peripherals:
   size: 1KB
 # APB-B: PORT 0x41004400, addressBlock 0x200, two GROUPs at 0x80 increments —
 # GROUP[0] = PA @ 0x41004400, GROUP[1] = PB @ 0x41004480.
+# Renode types these `samd21_gpio`, which has no LabWired model (it built a
+# stub that answered 0). They run on the shared SAM PORT model instead, the
+# one `configs/chips/atsamd21g18a.yaml` uses: the D21 GROUP register map
+# (DIR @0x00, OUT @0x10, IN @0x20, PMUX @0x30, PINCFG @0x40) is the same IP.
+# The ADC below needs it, because it reads PMUX/PINCFG to tell whether a pad
+# is handed to the ADC.
 - id: gpio_a
-  type: samd21_gpio
+  type: gpio
   bus: sysbus
   base_address: 0x41004400
   size: 128B
+  config:
+    profile: sam_port
+    num_pins: 32
 - id: gpio_b
-  type: samd21_gpio
+  type: gpio
   bus: sysbus
   base_address: 0x41004480
   size: 128B
+  config:
+    profile: sam_port
+    num_pins: 32
 # APB-C, 0x400 per slot. usart0/1/2 = SERCOM0 / SERCOM1 / SERCOM3.
 - id: usart0
   type: samd5_uart
@@ -113,3 +125,18 @@ peripherals:
   bus: sysbus
   base_address: 0x42003800
   size: 1KB
+# ADC. The Renode .repl declares none, but the part has one:
+# `ATSAMD21J17D.svd` (cmsis-svd-data data/Atmel) puts ADC @ 0x42004000 with a
+# 0x80 addressBlock and interrupt 23, and its INPUTCTRL.MUXPOS lists PIN0..PIN19.
+# The AIN -> pad function-B map (PA02/PA03 = AIN0/1, PB08/PB09 = AIN2/3,
+# PA04..PA07 = AIN4..7, PB00..PB07 = AIN8..15, PA08..PA11 = AIN16..19) is the
+# one Zephyr hal_atmel @8f95c79f2a gives the J17A and J18A
+# (asf/sam0/include/samd21/pio/samd21j1{7,8}a.h, PIN_PxxB_ADC_AINn). The two
+# headers agree and match the `samd21_adc` model's table.
+# No `bus: sysbus` here: unknown keys flatten into `config`, and the
+# `samd21_adc` builder admits no config.
+- id: adc
+  type: samd21_adc
+  base_address: 0x42004000
+  size: 128B
+  irq: 23

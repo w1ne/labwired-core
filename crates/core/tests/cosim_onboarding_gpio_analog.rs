@@ -61,6 +61,7 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x10,
         "S32K1xx RM rev 14 §12.3 GPIOx_PDIR; RT700 PERI_GPIO.h PDIR @0x50; RV32M1_ri5cy.h PDIR",
     ),
+    // SAM D21 PORT keeps IN at the same offset (ATSAMD21J17D.svd PORT IN).
     ("gpio/sam_port", 0x20, "SAM D5x/E5x DS60001507 §32.7 IN"),
     ("imxrt_gpio", 0x08, "IMXRT1060RM §12.5 GPIO_PSR"),
     (
@@ -279,7 +280,6 @@ const PLACEHOLDER_TYPES: &[&str] = &[
     "quark_gpiocontroller",
     "renesasda14_gpio",
     "renesasra_gpiomisc",
-    "samd21_gpio",
     "sifive_gpio",
     "stm32_gpioport",
     "xilinxgpiops",
@@ -551,7 +551,7 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 /// Profiles covered here: a port takes the routed level.
 const COVERED: usize = 221;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 116;
+const SILICON_REGISTER: usize = 117;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
