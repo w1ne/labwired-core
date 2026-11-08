@@ -205,6 +205,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "efm32s0_timer",
     // EFM32 Series-1 TIMER0/1 (same builder, Series-1 register layout).
     "efm32s1_timer",
+    // EFM32/EFR32 Series-1 WTIMER0/1 (same builder, 32-bit counter).
+    "efm32s1_wtimer",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
     "sam_dmac",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
@@ -676,30 +678,23 @@ fn build_sam4s_tc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral
     Ok(Box::new(Sam4sTc::new(*block)))
 }
 
-// EFM32 Series-0/1 TIMER: base from the chip yaml, IRQ required (it differs
-// per part: TIMER1 is IRQ 10 on EFM32G210, 12 on EFM32GG), no config keys.
+// EFM32 Series-0/1 TIMER and Series-1 WTIMER: base from the chip yaml, IRQ
+// required (it differs per part: TIMER1 is IRQ 10 on EFM32G210, 12 on
+// EFM32GG), no config keys.
 #[cold]
 #[inline(never)]
-fn build_efm32_timer(
-    p_cfg: &PeripheralConfig,
-    series1: bool,
-) -> anyhow::Result<Box<dyn Peripheral>> {
+fn build_efm32_timer(ty: &str, p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
     use crate::peripherals::efm32::timer::Efm32Timer;
-    let ty = if series1 {
-        "efm32s1_timer"
-    } else {
-        "efm32s0_timer"
-    };
     if !p_cfg.config.is_empty() {
         anyhow::bail!("{ty} admits no config overrides");
     }
     let Some(irq) = p_cfg.irq else {
         anyhow::bail!("{ty} '{}' needs an `irq`", p_cfg.id);
     };
-    Ok(Box::new(if series1 {
-        Efm32Timer::new_series1(irq)
-    } else {
-        Efm32Timer::new(irq)
+    Ok(Box::new(match ty {
+        "efm32s1_wtimer" => Efm32Timer::new_wtimer(irq),
+        "efm32s1_timer" => Efm32Timer::new_series1(irq),
+        _ => Efm32Timer::new(irq),
     }))
 }
 
@@ -1012,8 +1007,9 @@ pub fn try_build(
         "samd21_tc" => build_samd21_tc(p_cfg)?,
         "samd21_rtc" => build_samd21_rtc(p_cfg)?,
         "sam4s_tc" => build_sam4s_tc(p_cfg)?,
-        "efm32s0_timer" => build_efm32_timer(p_cfg, false)?,
-        "efm32s1_timer" => build_efm32_timer(p_cfg, true)?,
+        "efm32s0_timer" | "efm32s1_timer" | "efm32s1_wtimer" => {
+            build_efm32_timer(canonical_type, p_cfg)?
+        }
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
             let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());

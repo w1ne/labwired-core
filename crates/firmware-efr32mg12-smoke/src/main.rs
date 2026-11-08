@@ -21,5 +21,7 @@ fn main() -> ! {
         // LED0/LED1 = PF4/PF5 on the WSTK radio boards.
         led: (5, 4),
         timer0_irq: 11,
+        // WTIMER0_IRQn 36, WTIMER1_IRQn 37 (Gecko SDK v4.4.0).
+        wtimer_irqs: &[36, 37],
     })
 }

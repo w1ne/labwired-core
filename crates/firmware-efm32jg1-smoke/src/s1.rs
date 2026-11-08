@@ -11,6 +11,11 @@
 //! `efm32pg1b_timer.h`): the Series-1 layout puts IF/IFS/IFC/IEN at
 //! 0x0C/0x10/0x14/0x18 (Series 0: IEN 0x0C, IF 0x10, IFC 0x18) and four
 //! compare channels at 0x60, and raises IF.DIRCHG when UP/DOWN turns.
+//!
+//! On parts with WTIMERs (`efm32s1_wtimer`, PG12/JG12/MG12: WTIMER0/1 at
+//! 0x4001A000/0x4001A400; MG13: WTIMER0 only) it checks the 32-bit counter:
+//! counting up from 0xFFF0, CC0 at 0x10000 fires before any overflow (a
+//! 16-bit counter would wrap first) and OF comes at a TOP above 0xFFFF.
 #![allow(dead_code)]
 
 use core::ptr::{read_volatile, write_volatile};
@@ -60,6 +65,14 @@ const IF_CC3: u32 = 1 << 7;
 const ST_RUNNING: u32 = 1;
 const ST_DIR: u32 = 2;
 
+// WTIMER_TypeDef = TIMER_TypeDef, WTIMER0/1 at 0x4001A000 + n * 0x400.
+const WTIMER: u32 = 0x4001_A000;
+const T_IFS: u32 = 0x10;
+const T_CC0_CTRL: u32 = 0x60;
+const T_CC0_CCV: u32 = 0x64;
+const IF_CC0: u32 = 1 << 4;
+const W_TOP: u32 = 0x0001_1000;
+
 const NVIC_ISPR0: u32 = 0xE000_E200;
 const NVIC_ICPR0: u32 = 0xE000_E280;
 
@@ -77,6 +90,15 @@ fn port(n: u32, reg: u32) -> u32 {
 
 fn timer(n: u32, reg: u32) -> u32 {
     TIMER + n * 0x400 + reg
+}
+
+fn wtimer(n: u32, reg: u32) -> u32 {
+    WTIMER + n * 0x400 + reg
+}
+
+/// NVIC set/clear-pending word and bit for `irq` (WTIMERs sit above 31).
+fn nvic(base: u32, irq: u32) -> (u32, u32) {
+    (base + 4 * (irq / 32), irq % 32)
 }
 
 /// Poll `cond` a bounded number of times.
@@ -322,6 +344,50 @@ fn check_timer1_updown_cc3() -> bool {
     verdict(cc3 && of && dirchg && down)
 }
 
+/// WTIMERn UP across the 16-bit boundary: TOP/CNT hold 32 bits, CC0 at
+/// 0x10000 flags with no OF yet, OF comes at TOP 0x11000, and IEN pends the
+/// NVIC line (36/37: ISPR1).
+fn check_wtimer(n: u32, irq: u32) -> bool {
+    wr(wtimer(n, T_IFC), 0xFFF);
+    wr(wtimer(n, T_TOP), W_TOP);
+    let top = rd(wtimer(n, T_TOP)) == W_TOP;
+    wr(wtimer(n, T_CNT), 0xFFF0);
+    wr(wtimer(n, T_CC0_CTRL), 2);
+    wr(wtimer(n, T_CC0_CCV), 0x0001_0000);
+    wr(wtimer(n, T_CMD), START);
+    let cc0 = wait(|| rd(wtimer(n, T_IF)) & IF_CC0 != 0);
+    let no_early_of = rd(wtimer(n, T_IF)) & IF_OF == 0;
+    let cnt_hi = rd(wtimer(n, T_CNT)) >= 0x0001_0000;
+    let of = wait(|| rd(wtimer(n, T_IF)) & IF_OF != 0);
+    wr(wtimer(n, T_CMD), STOP);
+    let (ispr, b) = nvic(NVIC_ISPR0, irq);
+    let (icpr, _) = nvic(NVIC_ICPR0, irq);
+    let masked = !bit(ispr, b);
+    wr(wtimer(n, T_IEN), IF_OF);
+    let pend = bit(ispr, b);
+    wr(wtimer(n, T_IFC), 0xFFF);
+    wr(icpr, 1 << b);
+    let released = !bit(ispr, b);
+    wr(wtimer(n, T_IEN), 0);
+    // IFS sets flags by software; the line stays down with IEN clear.
+    wr(wtimer(n, T_IFS), IF_OF);
+    let ifs = rd(wtimer(n, T_IF)) & IF_OF != 0 && !bit(ispr, b);
+    wr(wtimer(n, T_IFC), 0xFFF);
+    puts("wtim");
+    putc(b'0' + n as u8);
+    puts(" 32bit ");
+    flag("top=", top);
+    flag("cc0=", cc0);
+    flag("no_early_of=", no_early_of);
+    flag("cnt_hi=", cnt_hi);
+    flag("of=", of);
+    flag("masked=", masked);
+    flag("pend=", pend);
+    flag("released=", released);
+    flag("ifs=", ifs);
+    verdict(top && cc0 && no_early_of && cnt_hi && of && masked && pend && released && ifs)
+}
+
 pub struct Board {
     /// First UART line, e.g. "EFM32PG1 RENODE SMOKE".
     pub banner: &'static str,
@@ -333,10 +399,13 @@ pub struct Board {
     pub led: (u32, u32),
     /// TIMER0's NVIC line (10 on PG1/JG1, 11 on PG12/JG12).
     pub timer0_irq: u32,
+    /// NVIC lines of WTIMER0, WTIMER1, ... (empty where there is none).
+    pub wtimer_irqs: &'static [u32],
 }
 
 /// Run every check, store the summary word (0xEF310000 | one bit per check
-/// = 0xEF3101FF on a pass), then toggle LED0 forever on a busy-wait delay.
+/// = 0xEF3101FF on a pass, plus bits 9.. for the WTIMERs: 0xEF3103FF with
+/// one, 0xEF3107FF with two), then toggle LED0 forever on a busy-wait delay.
 pub fn run(board: &Board) -> ! {
     wr(USART0 + U_CMD, CMD_TXEN);
     puts(board.banner);
@@ -358,9 +427,17 @@ pub fn run(board: &Board) -> ! {
             summary |= 1 << i;
         }
     }
+    let mut expected = 0xEF31_01FFu32;
+    for (n, &irq) in board.wtimer_irqs.iter().enumerate() {
+        let bitn = checks.len() + n;
+        expected |= 1 << bitn;
+        if check_wtimer(n as u32, irq) {
+            summary |= 1 << bitn;
+        }
+    }
     wr(board.summary, summary);
     puts(board.family);
-    if summary == 0xEF31_01FF {
+    if summary == expected {
         puts(" PASS\r\n");
     } else {
         puts(" FAIL\r\n");

@@ -5,7 +5,10 @@
 # the reserved 0x10/0x14 words (no DOUTSET/DOUTCLR on Series 1),
 # DISABLED/INPUTPULL/WIREDAND/WIREDOR, PINLOCKN, CTRL reset + OVTDIS, then
 # TIMER0/TIMER1 in the Series-1 layout (IF 0x0C, IEN 0x18): UP + NVIC pend,
-# DOWN one-shot, UP/DOWN with CC3 and DIRCHG. LED0 toggles in the idle loop. Summary word at 0x2003FC00.
+# DOWN one-shot, UP/DOWN with CC3 and DIRCHG. LED0 toggles in the idle loop.
+# WTIMER0/WTIMER1 32-bit (efm32s1_wtimer): from 0xFFF0, CC0 at 0x10000
+# fires before OF, OF at TOP 0x11000, IEN pends IRQ 36/37.
+# Summary word at 0x2003FC00.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-efm32jg12-smoke"
@@ -24,12 +27,14 @@ assertions:
       - "tim0 up of=1 masked=1 pend=1 released=1 running=1 ok"
       - "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok"
       - "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok"
+      - "wtim0 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok"
+      - "wtim1 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok"
       - "EFM32JG12 PASS"
   - gpio_edges:
       pin: "gpiof:4"
       min_edges: 4
   - memory_value:
       address: 0x2003FC00
-      expected_value: 0xEF3101FF
+      expected_value: 0xEF3107FF
       size: 4
   - expected_stop_reason: max_steps

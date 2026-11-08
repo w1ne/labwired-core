@@ -21,5 +21,7 @@ fn main() -> ! {
         // LED0/LED1 = PF4/PF5 on the WSTK radio boards.
         led: (5, 4),
         timer0_irq: 11,
+        // WTIMER0 only (WTIMER_COUNT 1), WTIMER0_IRQn 37.
+        wtimer_irqs: &[37],
     })
 }

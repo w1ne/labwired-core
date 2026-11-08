@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/sltb001a-smoke.yaml",
   "system": "configs/systems/onboarding/sltb001a.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-08T19:28:51Z",
-  "finished_at_utc": "2026-11-08T19:28:52Z",
-  "elapsed_seconds": 1,
-  "elapsed_ms": 987,
+  "started_at_utc": "2026-11-08T20:04:29Z",
+  "finished_at_utc": "2026-11-08T20:04:30Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1024,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.365,
-    "build_firmware": 0.233,
-    "run_smoke": 0.376
+    "build_cli": 0.366,
+    "build_firmware": 0.28,
+    "run_smoke": 0.365
   },
   "stages_ms": {
-    "build_cli": 365,
-    "build_firmware": 233,
-    "run_smoke": 376
+    "build_cli": 366,
+    "build_firmware": 280,
+    "run_smoke": 365
   }
 }

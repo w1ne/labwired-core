@@ -20,5 +20,6 @@ fn main() -> ! {
         // (SLSTK3401A/SLSTK3402A).
         led: (5, 4),
         timer0_irq: 10,
+        wtimer_irqs: &[],
     })
 }

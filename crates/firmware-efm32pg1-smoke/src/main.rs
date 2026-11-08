@@ -20,5 +20,6 @@ fn main() -> ! {
         // LED0/LED1 = PF4/PF5 on the SLSTK3401A starter kit.
         led: (5, 4),
         timer0_irq: 10,
+        wtimer_irqs: &[],
     })
 }

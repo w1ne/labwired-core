@@ -38,6 +38,11 @@
 //! (0xCE80) and reads 0; locking it is refused. A read of IFC returns 0
 //! (MSC_CTRL.IFCREADCLEAR, which would make it read-to-clear, is not
 //! modelled).
+//!
+//! WTIMER (`new_wtimer`; Series 1 WTIMER0/WTIMER1 on PG12/JG12/MG12, WTIMER0
+//! only on MG13) is the same TIMER_TypeDef with TOP, TOPB, CNT and the CCV
+//! words 32 bits wide (`_WTIMER_CNT_MASK` 0xFFFFFFFF; TOP still resets to
+//! 0xFFFF). Everything else is the Series-1 TIMER above.
 use crate::{Peripheral, PeripheralTickResult, SimResult, SimulationError};
 use serde::Serialize;
 use std::any::Any;
@@ -154,9 +159,9 @@ const MODE_UPDOWN: u32 = 2;
 #[derive(Debug, Default, Clone, Copy, Serialize)]
 struct Cc {
     ctrl: u32,
-    ccv: u16,
-    ccvp: u16,
-    ccvb: u16,
+    ccv: u32,
+    ccvp: u32,
+    ccvb: u32,
     /// STATUS.CCVBVn: CCVB written and not yet loaded.
     ccvbv: bool,
 }
@@ -173,16 +178,18 @@ pub struct Efm32Timer {
     irq: u32,
     /// Series-1 register layout, four compare channels and IF.DIRCHG.
     series1: bool,
+    /// WTIMER: 32-bit TOP/CNT/CCV instead of 16-bit.
+    wide: bool,
     ctrl: u32,
     running: bool,
     /// STATUS.DIR: counting down.
     down: bool,
     ien: u32,
     flags: u32,
-    top: u16,
-    topb: u16,
+    top: u32,
+    topb: u32,
     topbv: bool,
-    cnt: u16,
+    cnt: u32,
     route: [u32; 3],
     /// Three channels on Series 0; the fourth exists on Series 1 only.
     cc: [Cc; 4],
@@ -195,24 +202,30 @@ pub struct Efm32Timer {
 impl Efm32Timer {
     /// A Series-0 TIMER (three compare channels).
     pub fn new(irq: u32) -> Self {
-        Self::with_layout(irq, false)
+        Self::with_layout(irq, false, false)
     }
 
     /// A Series-1 TIMER (EFM32PG1/PG12/JG1/JG12 layout, four channels).
     pub fn new_series1(irq: u32) -> Self {
-        Self::with_layout(irq, true)
+        Self::with_layout(irq, true, false)
     }
 
-    fn with_layout(irq: u32, series1: bool) -> Self {
+    /// A Series-1 WTIMER: the Series-1 TIMER with a 32-bit counter.
+    pub fn new_wtimer(irq: u32) -> Self {
+        Self::with_layout(irq, true, true)
+    }
+
+    fn with_layout(irq: u32, series1: bool, wide: bool) -> Self {
         Self {
             irq,
             series1,
+            wide,
             ctrl: 0,
             running: false,
             down: false,
             ien: 0,
             flags: 0,
-            // _TIMER_TOP_RESETVALUE / _TIMER_TOPB_RESETVALUE
+            // _TIMER_TOP_RESETVALUE / _TIMER_TOPB_RESETVALUE (also WTIMER)
             top: 0xFFFF,
             topb: 0,
             topbv: false,
@@ -230,8 +243,17 @@ impl Efm32Timer {
         )))
     }
 
-    pub fn counter(&self) -> u16 {
+    pub fn counter(&self) -> u32 {
         self.cnt
+    }
+
+    /// The largest CNT/TOP/CCV value: 0xFFFF, or 0xFFFFFFFF on a WTIMER.
+    fn max(&self) -> u32 {
+        if self.wide {
+            u32::MAX
+        } else {
+            0xFFFF
+        }
     }
 
     fn mode(&self) -> u32 {
@@ -276,17 +298,17 @@ impl Efm32Timer {
             Reg::Status => self.status(),
             Reg::Ien => self.ien,
             Reg::If => self.flags,
-            Reg::Top => self.top.into(),
-            Reg::Topb => self.topb.into(),
-            Reg::Cnt => self.cnt.into(),
+            Reg::Top => self.top,
+            Reg::Topb => self.topb,
+            Reg::Cnt => self.cnt,
             Reg::Route(n) => self.route[n],
             Reg::Cc(n, word) => {
                 let c = &self.cc[n];
                 match word {
                     0 => c.ctrl,
-                    1 => c.ccv.into(),
-                    2 => c.ccvp.into(),
-                    _ => c.ccvb.into(),
+                    1 => c.ccv,
+                    2 => c.ccvp,
+                    _ => c.ccvb,
                 }
             }
             Reg::Dti => return Self::refuse("dead-time insertion (DTCTRL..DTLOCK)"),
@@ -324,12 +346,12 @@ impl Efm32Timer {
             Reg::Ien => self.ien = value & self.if_mask(),
             Reg::Ifs => self.flags |= value & self.if_mask(),
             Reg::Ifc => self.flags &= !value,
-            Reg::Top => self.top = value as u16,
+            Reg::Top => self.top = value & self.max(),
             Reg::Topb => {
-                self.topb = value as u16;
+                self.topb = value & self.max();
                 self.topbv = true;
             }
-            Reg::Cnt => self.cnt = value as u16,
+            Reg::Cnt => self.cnt = value & self.max(),
             Reg::Route(n) => self.route[n] = value,
             Reg::Lock => {
                 if value & 0xFFFF != S1_LOCK_UNLOCK {
@@ -337,6 +359,7 @@ impl Efm32Timer {
                 }
             }
             Reg::Cc(n, word) => {
+                let max = self.max();
                 let c = &mut self.cc[n];
                 match word {
                     0 => {
@@ -345,9 +368,9 @@ impl Efm32Timer {
                         }
                         c.ctrl = value;
                     }
-                    1 => c.ccv = value as u16,
+                    1 => c.ccv = value & max,
                     3 => {
-                        c.ccvb = value as u16;
+                        c.ccvb = value & max;
                         c.ccvbv = true;
                     }
                     // CCVP is read-only.
@@ -408,7 +431,7 @@ impl Efm32Timer {
 
     /// Distance from CNT to the nearest compare value strictly ahead in the
     /// counting direction, capped at `limit`.
-    fn next_compare(&self, limit: u16) -> u16 {
+    fn next_compare(&self, limit: u32) -> u32 {
         let mut dist = limit;
         for c in self.channels().iter().filter(|c| c.compares()) {
             let d = if self.down {
@@ -427,9 +450,10 @@ impl Efm32Timer {
     /// next wrap or compare instead of stepping one clock at a time.
     fn advance(&mut self, mut ticks: u64) {
         while ticks > 0 && self.running {
-            // A CNT above TOP counts on to 0xFFFF before it wraps (up).
+            // A CNT above TOP counts on to the counter's maximum before it
+            // wraps (up).
             let top = if !self.down && self.cnt > self.top {
-                0xFFFF
+                self.max()
             } else {
                 self.top
             };
@@ -459,9 +483,9 @@ impl Efm32Timer {
             let limit = if self.down { self.cnt } else { top - self.cnt };
             let step = ticks.min(u64::from(self.next_compare(limit)));
             if self.down {
-                self.cnt -= step as u16;
+                self.cnt -= step as u32;
             } else {
-                self.cnt += step as u16;
+                self.cnt += step as u32;
             }
             ticks -= step;
             if self.mode() == MODE_UPDOWN {
@@ -480,7 +504,7 @@ impl Efm32Timer {
 
 impl Peripheral for Efm32Timer {
     fn on_system_reset(&mut self) {
-        *self = Self::with_layout(self.irq, self.series1);
+        *self = Self::with_layout(self.irq, self.series1, self.wide);
     }
     fn read(&self, offset: u64) -> SimResult<u8> {
         let aligned = offset & !3;
@@ -714,7 +738,7 @@ mod tests {
     #[test]
     fn series1_updown_raises_dirchg_and_series0_does_not() {
         for (series1, dirchg) in [(true, IF_DIRCHG), (false, 0)] {
-            let mut t = Efm32Timer::with_layout(10, series1);
+            let mut t = Efm32Timer::with_layout(10, series1, false);
             t.write_u32(CTRL, MODE_UPDOWN).unwrap();
             t.write_u32(TOP, 5).unwrap();
             t.write_u32(CMD, CMD_START).unwrap();
@@ -733,5 +757,54 @@ mod tests {
         assert!(t.write_u32(0xA0, 1).is_err(), "DTCTRL");
         // 0x70 is inside CC1 on Series 1, not DTI.
         assert!(t.write_u32(0x70, 2).is_ok());
+    }
+
+    #[test]
+    fn wtimer_counts_past_0xffff_and_a_timer_masks_to_16_bits() {
+        let mut w = Efm32Timer::new_wtimer(36);
+        assert_eq!(w.read_u32(TOP).unwrap(), 0xFFFF, "_WTIMER_TOP_RESETVALUE");
+        w.write_u32(TOP, 0x0003_0000).unwrap();
+        w.write_u32(S1_CC_BASE, 2).unwrap(); // CC0 OUTPUTCOMPARE
+        w.write_u32(S1_CC_BASE + 4, 0x0002_0000).unwrap();
+        w.write_u32(S1_IEN, IF_CC0 | IF_OF).unwrap();
+        w.write_u32(CMD, CMD_START).unwrap();
+        w.tick_elapsed(0x1_FFFF);
+        assert_eq!(w.counter(), 0x1_FFFF);
+        assert_eq!(w.read_u32(S1_IF).unwrap(), 0);
+        assert_eq!(w.tick_elapsed(1).explicit_irqs, Some(vec![36]));
+        assert_eq!(w.read_u32(S1_IF).unwrap(), IF_CC0);
+        w.tick_elapsed(0x1_0001);
+        assert_eq!(w.counter(), 0);
+        assert_eq!(w.read_u32(S1_IF).unwrap(), IF_CC0 | IF_OF);
+        w.write_u32(CNT, 0xDEAD_BEEF).unwrap();
+        assert_eq!(w.read_u32(CNT).unwrap(), 0xDEAD_BEEF);
+
+        let mut t = Efm32Timer::new_series1(10);
+        t.write_u32(TOP, 0x0003_0000).unwrap();
+        t.write_u32(CNT, 0xDEAD_BEEF).unwrap();
+        t.write_u32(S1_CC_BASE + 4, 0x0002_0001).unwrap();
+        assert_eq!(t.read_u32(TOP).unwrap(), 0);
+        assert_eq!(t.read_u32(CNT).unwrap(), 0xBEEF);
+        assert_eq!(t.read_u32(S1_CC_BASE + 4).unwrap(), 1);
+    }
+
+    #[test]
+    fn wtimer_down_mode_underflows_to_a_32_bit_top() {
+        let mut w = Efm32Timer::new_wtimer(37);
+        w.write_u32(CTRL, MODE_DOWN).unwrap();
+        w.write_u32(TOP, 0x0001_0000).unwrap();
+        w.write_u32(CNT, 2).unwrap();
+        w.write_u32(CMD, CMD_START).unwrap();
+        w.tick_elapsed(3);
+        assert_eq!(w.counter(), 0x0001_0000);
+        assert_eq!(w.read_u32(S1_IF).unwrap(), IF_UF);
+        w.write_u32(S1_IFC, S1_IF_MASK).unwrap();
+        w.tick_elapsed(0x1_0000);
+        assert_eq!(w.counter(), 0);
+        let mut again = Efm32Timer::new_wtimer(37);
+        again.write_u32(TOP, 5).unwrap();
+        again.on_system_reset();
+        assert_eq!(again.read_u32(TOP).unwrap(), 0xFFFF);
+        assert!(again.wide, "reset keeps the width");
     }
 }

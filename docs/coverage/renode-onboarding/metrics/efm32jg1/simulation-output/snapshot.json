@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "194a7a4fe55479bcc8471e03227cbaa2b2e08050666bb4245c95ca708de9b945",
+  "firmware_hash": "2d90319e81380f3674e7cf07d04de3f924f79af7a4fad81974917f9c79ca628d",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32jg1-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32jg1.yaml",

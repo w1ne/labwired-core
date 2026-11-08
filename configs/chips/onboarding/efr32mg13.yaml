@@ -78,3 +78,12 @@ peripherals:
   base_address: 0x40018400
   size: 1KB
   irq: 19
+# Series-1 WTIMER0 (0x4001A000): the TIMER layout above
+# with 32-bit TOP/CNT/CCV (_WTIMER_CNT_MASK 0xFFFFFFFF; TOP resets to 0xFFFF).
+# Renode efr32/efr32mg13.repl: wtimer0 -> nvic@37, wtimer1 @ none; Gecko SDK
+# v4.4.0 EFR32MG13P: WTIMER_COUNT 1, WTIMER0_IRQn 37.
+- id: wtimer0
+  type: efm32s1_wtimer
+  base_address: 0x4001A000
+  size: 1KB
+  irq: 37
