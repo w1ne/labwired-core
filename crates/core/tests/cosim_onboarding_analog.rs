@@ -31,6 +31,7 @@ const IDLE_CHANNEL: u8 = 7;
 
 /// Onboarding profiles whose ADC is converted end to end here.
 const CONVERTED: &[&str] = &[
+    "ambiq-apollo4",
     "imxrt1064",
     "mimxrt1064_evk",
     "nrf52840",
@@ -128,6 +129,10 @@ enum Family {
     /// SAM4S 12-bit ADC: `CHER` channel set, `CR.START`, `CDRx`/`LCDR`
     /// (SAM4S datasheet DS11100 §42).
     Sam4s,
+    /// Ambiq Apollo4 ADC: SLOTnCFG slots, software trigger `SWT` = 0x37,
+    /// slot-tagged results in the FIFO with six fractional bits, against the
+    /// 1.19 V internal reference, so the 3.3 V netlists saturate above it.
+    Apollo4,
 }
 
 struct Converter {
@@ -151,6 +156,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Saadc { ram: chip.ram.base }
         } else if kind == "sam4s_adc" {
             Family::Sam4s
+        } else if kind == "apollo4_adc" {
+            Family::Apollo4
         } else {
             match p.config.get("profile").and_then(|v| v.as_str()) {
                 Some("stm32f4") => Family::Stm32F4,
@@ -190,6 +197,8 @@ impl Converter {
             Family::Imxrt => (mv.min(3300) * 4095 + 1650) / 3300,
             // Gain 1/4 against VDD/4: full scale is VDD, 12-bit, 2^12 / VDD.
             Family::Saadc { .. } => (mv * 4096 / 3300).min(4095),
+            // 12-bit against VREF 1.19 V, truncated, clamped to full scale.
+            Family::Apollo4 => (mv * 4095 / 1190).min(4095),
         }
     }
 
@@ -197,6 +206,11 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Apollo4 => {
+                // CFG.ADCEN with destructive FIFO reads (DFIFORDEN).
+                bus.write_u32(self.base, 1 | (1 << 12))
+                    .expect("enable Apollo4 ADC");
+            }
             Family::Stm32H7 => {
                 let cr = self.base + 0x08;
                 bus.write_u32(cr, 0).expect("leave H7 ADC deep power-down");
@@ -394,6 +408,50 @@ impl Converter {
                 bus.read_u32(self.base + 0x50 + 4 * u64::from(IDLE_CHANNEL))
                     .expect("drain the idle CDR");
                 codes
+            }
+            Family::Apollo4 => {
+                // Three slots, one SWT: each slot pushes one FIFO entry
+                // tagged with its slot number, in slot order.
+                for (slot, channel) in [(0u64, NTC_CHANNEL), (1, DIODE_CHANNEL), (2, IDLE_CHANNEL)]
+                {
+                    bus.write_u32(self.base + 0x0C + 4 * slot, 1 | (u32::from(channel) << 8))
+                        .expect("enable 12-bit slot");
+                }
+                bus.write_u32(self.base + 0x08, 0x37).expect("SWT");
+                assert_eq!(
+                    bus.read_u32(self.base + 0x204).unwrap() & 3,
+                    3,
+                    "{}: the scan raises CNVCMP and SCNCMP",
+                    self.id
+                );
+                bus.write_u32(self.base + 0x208, 3).expect("INTCLR");
+                let mut codes = [0; 3];
+                for (slot, code) in codes.iter_mut().enumerate() {
+                    let word = bus.read_u32(self.base + 0x3C).expect("pop FIFOPR");
+                    assert_eq!(
+                        (word >> 28) & 7,
+                        slot as u32,
+                        "{}: FIFO entry {slot} carries its slot number",
+                        self.id
+                    );
+                    assert_eq!(
+                        (word >> 20) & 0xFF,
+                        3 - slot as u32,
+                        "{}: FIFO count before pop {slot}",
+                        self.id
+                    );
+                    *code = (word & 0xF_FFFF) >> 6;
+                }
+                assert_eq!(
+                    codes[2], 0,
+                    "{}: unrouted SE{IDLE_CHANNEL} converts to zero",
+                    self.id
+                );
+                for slot in 0..3u64 {
+                    bus.write_u32(self.base + 0x0C + 4 * slot, 0)
+                        .expect("disable slot");
+                }
+                [codes[0], codes[1]]
             }
             Family::Stm32V2 | Family::Stm32Adc4 => {
                 let single = [
@@ -978,6 +1036,14 @@ impl Converter {
                 bus.write_u32(self.base + 0x14, 1 << channel).expect("CHDR");
                 code
             }
+            Family::Apollo4 => {
+                bus.write_u32(self.base + 0x0C, 1 | (u32::from(channel) << 8))
+                    .expect("enable slot 0");
+                bus.write_u32(self.base + 0x08, 0x37).expect("SWT");
+                let word = bus.read_u32(self.base + 0x3C).expect("pop FIFOPR");
+                bus.write_u32(self.base + 0x0C, 0).expect("disable slot 0");
+                (word & 0xF_FFFF) >> 6
+            }
             Family::Saadc { .. } => unreachable!("SAADC converts as a scan"),
         }
     }
@@ -1098,7 +1164,10 @@ fn assert_converter_routes_generic_analog(
         if let Some(idle) = converter.held_count(&mut bus, IDLE_CHANNEL) {
             assert_eq!(idle, 0xFFFF, "{tag}: unrouted channel stays undriven");
         }
-        if matches!(converter.family, Family::Imxrt | Family::Sam4s) {
+        if matches!(
+            converter.family,
+            Family::Imxrt | Family::Sam4s | Family::Apollo4
+        ) {
             assert_eq!(
                 converter.convert(&mut bus, IDLE_CHANNEL),
                 0,
@@ -1108,10 +1177,24 @@ fn assert_converter_routes_generic_analog(
         ntc_codes.push(ntc_code);
     }
     // The NTC sits on the low side: hotter means lower resistance, lower volts.
-    assert!(
-        ntc_codes[0] > ntc_codes[1] && ntc_codes[1] > ntc_codes[2],
-        "{tag}: codes track the NTC temperature: {ntc_codes:?}"
-    );
+    if matches!(converter.family, Family::Apollo4) {
+        // Above the 1.19 V reference the -10 and 25 °C dividers (2.79 V,
+        // 1.65 V) both saturate at full scale; only 80 °C (0.37 V) is in range.
+        assert_eq!(
+            ntc_codes[..2],
+            [4095, 4095],
+            "{tag}: dividers above VREF saturate"
+        );
+        assert!(
+            ntc_codes[2] < 4095,
+            "{tag}: in-range divider resolves: {ntc_codes:?}"
+        );
+    } else {
+        assert!(
+            ntc_codes[0] > ntc_codes[1] && ntc_codes[1] > ntc_codes[2],
+            "{tag}: codes track the NTC temperature: {ntc_codes:?}"
+        );
+    }
 }
 
 #[test]
@@ -1158,7 +1241,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 36,
+        instances, 37,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -1166,7 +1249,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 187,
+        without_adc, 186,
         "onboarding profiles that declare no modelled ADC"
     );
 }

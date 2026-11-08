@@ -22,8 +22,12 @@ peripherals:
   type: ambiqapollo4_bootromlogger
   bus: sysbus
   base_address: 134217724
+# The ADC at 0x40038000 is the same block the promoted Apollo4 Plus part
+# maps (configs/chips/amap42kp.yaml), so it uses the same `apollo4_adc`
+# model: software-triggered slot scans of SE0..SE7 against the 1.19 V
+# internal reference, into the result FIFO.
 - id: adc
-  type: stub
+  type: apollo4_adc
   renode_type: ambiqapollo4_adc
   bus: sysbus
   base_address: 1073971200
