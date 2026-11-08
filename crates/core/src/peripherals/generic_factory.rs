@@ -291,6 +291,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32s2_crosscore_ipi",
     "esp32s2_gpio",
     "esp32s2_intmatrix",
+    "esp32s2_ledc",
     "esp32s2_rng",
     "esp32s2_systimer",
     "esp32s2_uart",

@@ -6,12 +6,13 @@
 # memory map, external flash behind the MMU-translated cache windows and SPI1
 # (crates/core/src/system/xtensa/esp32s2.rs), UART0, SYSTIMER, TIMG0/1, the
 # interrupt matrix + FROM_CPU doorbells, the WDEV RNG, the EXTMEM cache
-# controller and RMT transmit (symbols played out through the GPIO matrix).
+# controller, RMT transmit (symbols played out through the GPIO matrix) and
+# LEDC PWM (channel waveforms on the pads the matrix routes them to).
 # Blocks marked "register file" below store what is written and read it
 # back; they carry no behaviour, and nothing that depends on them (clock tree,
 # RF, eFuse values, IO_MUX pad function) is claimed.
 #
-# Not modelled: Wi-Fi, USB OTG, PSRAM, I2C, GP-SPI, RMT RX, LEDC, ADC, TWAI, touch.
+# Not modelled: Wi-Fi, USB OTG, PSRAM, I2C, GP-SPI, RMT RX, ADC, TWAI, touch.
 # The narrow freestanding DevKitM-1 smoke profile is configs/chips/esp32s2.yaml.
 #
 # Addresses: ESP-IDF components/soc/esp32s2/include/soc/reg_base.h and
@@ -105,6 +106,13 @@ peripherals:
     base_address: 0x3F416000
     size: "4KB"
     irq: 50 # ETS_RMT_INTR_SOURCE
+  # LEDC: the S3 block (same ledc_reg.h map), 8 low-speed channels whose
+  # outputs reach pads through the GPIO matrix (signals 79..86).
+  - id: "ledc"
+    type: "esp32s2_ledc"
+    base_address: 0x3F419000
+    size: "4KB"
+    irq: 45 # ETS_LEDC_INTR_SOURCE
   - id: "rng"
     type: "esp32s2_rng"
     base_address: 0x3F435000

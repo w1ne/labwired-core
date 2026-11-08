@@ -366,7 +366,7 @@ impl SystemBus {
     }
 
     /// Bind every peripheral's GPIO-matrix output wire
-    /// ([`crate::Peripheral::matrix_output_lines`], the ESP32-S2 RMT) to the
+    /// ([`crate::Peripheral::matrix_output_lines`], the ESP32-S2 RMT and LEDC) to the
     /// `gpio` port, through capabilities rather than concrete types. A port
     /// that does not route peripheral wires declines, and the peripheral
     /// keeps whatever fallback it has.
@@ -397,7 +397,7 @@ impl SystemBus {
         use crate::peripherals::esp32::ledc::Ledc;
         self.wire_esp_ledc_pads(
             |_: &Esp32Gpio| true,
-            Ledc::pad_lines_arc,
+            |l: &mut Ledc| Some(l.pad_lines_arc()),
             Esp32Gpio::bind_ledc_lines,
         );
     }
@@ -415,7 +415,7 @@ impl SystemBus {
         use crate::peripherals::esp32c3::ledc::Esp32c3Ledc;
         self.wire_esp_ledc_pads(
             Esp32c3Gpio::has_ledc_signals,
-            Esp32c3Ledc::pad_lines_arc,
+            |l: &mut Esp32c3Ledc| Some(l.pad_lines_arc()),
             Esp32c3Gpio::bind_ledc_lines,
         );
     }
@@ -428,7 +428,7 @@ impl SystemBus {
         use crate::peripherals::esp32s3::ledc::Esp32s3Ledc;
         self.wire_esp_ledc_pads(
             |_: &Esp32s3Gpio| true,
-            Esp32s3Ledc::pad_lines_arc,
+            Esp32s3Ledc::s3_pad_lines,
             Esp32s3Gpio::bind_ledc_lines,
         );
     }
@@ -441,7 +441,7 @@ impl SystemBus {
     fn wire_esp_ledc_pads<G: 'static, L: 'static>(
         &mut self,
         gpio_accepts: fn(&G) -> bool,
-        lines_of: fn(&mut L) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        lines_of: fn(&mut L) -> Option<std::sync::Arc<crate::peripherals::pad_lines::PadLines>>,
         bind: fn(&mut G, &std::sync::Arc<crate::peripherals::pad_lines::PadLines>),
     ) {
         let (Some(ledc_idx), Some(gpio_idx)) = (
@@ -465,7 +465,7 @@ impl SystemBus {
             .dev
             .as_any_mut()
             .and_then(|a| a.downcast_mut::<L>())
-            .map(lines_of)
+            .and_then(lines_of)
         else {
             return;
         };

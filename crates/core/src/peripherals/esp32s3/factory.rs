@@ -95,6 +95,10 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32s3_rng" => Box::new(rng::Esp32s3Rng::new()),
         "esp32s2_rng" => Box::new(rng::Esp32s3Rng::new_esp32s2()),
         "esp32s3_ledc" => Box::new(ledc::Esp32s3Ledc::new()),
+        // Same LEDC block; S2 source 45 and matrix signals 79..86.
+        "esp32s2_ledc" => Box::new(ledc::Esp32s3Ledc::new_esp32s2(src(
+            ledc::ESP32S2_LEDC_INTR_SOURCE_ID,
+        ))),
         "esp32s3_sens" => Box::new(sens::Esp32s3Sens::new()),
         "esp32s3_extmem" => Box::new(extmem::Esp32s3Extmem::new()),
         "esp32s3_system" => Box::new(system::Esp32s3System::new()),
@@ -165,6 +169,7 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32s2_rng",
     "esp32s2_crosscore_ipi",
     "esp32s2_intmatrix",
+    "esp32s2_ledc",
     "esp32s3_uart",
     "esp32s3_timer_group",
     "esp32s3_gdma",
