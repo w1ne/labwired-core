@@ -31,6 +31,15 @@
 // The C6/C3/S3 DevKit LED_BUILTIN is a WS2812 (GPIO8/GPIO8/GPIO48) driven by
 // RMT, so analogWrite on it never exercises the LEDC. Use plain GPIO2.
 #    define LW_PWM_PIN 2
+#  elif defined(ARDUINO_BLUEPILL_F103C8)
+// Blue Pill LED is PC13, which has no timer channel on F103, so analogWrite
+// would fall back to digitalWrite. Use TIM2_CH1 on PA0 (no remap).
+#    define LW_PWM_PIN PA0
+#  elif defined(ARDUINO_ARCH_AVR) && defined(__AVR_ATmega328P__)
+// Uno/Nano LED_BUILTIN is D13 = PB5, which has no timer output on the
+// ATmega328P, so analogWrite(13, 128) is digitalWrite(HIGH). Use D9 = PB1 =
+// OC1A (Timer1, phase-correct 8-bit, 16 MHz / 64 / 510 = 490 Hz).
+#    define LW_PWM_PIN 9
 #  elif defined(LED_BUILTIN)
 #    define LW_PWM_PIN LED_BUILTIN
 #  elif defined(ARDUINO_ARCH_ESP32)
