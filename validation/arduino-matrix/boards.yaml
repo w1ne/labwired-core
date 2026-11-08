@@ -17,6 +17,9 @@ boards:
     # L2 LED_BUILTIN often GPIO2 digitalWrite — watch classic gpio peripheral
     led_watch: "gpio:2"
     led_min_edges: 2
+    # L6: analogWrite(2, 128) on LED_BUILTIN = GPIO2 (LEDC); count real pad edges.
+    pwm_watch: "gpio:2"
+    pwm_min_edges: 20
     family: esp32
     notes: "Arduino-ESP32 FreeRTOS — real models only (no thunks); L8 TWAI self-RX"
     # L8_can: classic TWAI @ 0x3FF6B000 self-reception (esp32_twai model)
@@ -31,6 +34,10 @@ boards:
     min_rmt_tx: 1
     led_watch: "rmt:0"
     led_min_edges: 2
+    # L6: analogWrite(2, 128) on plain GPIO2 (the RGB LED_BUILTIN is RMT, not
+    # LEDC); the watch counts real LEDC pad edges.
+    pwm_watch: "gpio:2"
+    pwm_min_edges: 20
     family: esp32
     notes: "Arduino-ESP32-C3 RISC-V"
     sketches_skip: [L8_can]
@@ -46,6 +53,10 @@ boards:
     # RGB LED_BUILTIN → RMT TX (min_rmt_tx). Programmatic bank id is rmt_s3,
     # not rmt — use the TX_START count oracle, not --watch-gpio.
     min_rmt_tx: 1
+    # L6: analogWrite(2, 128) on plain GPIO2 (the RGB LED_BUILTIN is RMT, not
+    # LEDC); the watch counts real LEDC pad edges.
+    pwm_watch: "gpio:2"
+    pwm_min_edges: 20
     family: esp32
     notes: "Arduino-ESP32-S3 — SPI L4, SAR ADC L5, TWAI L8 via programmatic bank"
     # L5: sar_adc_s3 @ 0x60040000 (esp32s3_sar_adc); L8: twai @ 0x6002B000
