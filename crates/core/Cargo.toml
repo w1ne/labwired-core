@@ -531,3 +531,9 @@ required-features = ["qemu-arm-system"]
 [[test]]
 name = "rv1103_linux_boot"
 required-features = ["qemu-arm-system", "event-scheduler"]
+
+# #![cfg(feature = "ch32v003-arduino-l0-smoke")] — needs the CI-built WCH
+# Arduino L0 ELF (not committed; see the fixture provenance).
+[[test]]
+name = "ch32v003_arduino"
+required-features = ["ch32v003-arduino-l0-smoke"]
