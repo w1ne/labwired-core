@@ -13,6 +13,7 @@ build = "build.rs"
 [features]
 default = []
 crosslink-nx-evn = []
+ae350-uart = []
 
 [[bin]]
 name = "firmware-andes-ae350-n25-smoke"

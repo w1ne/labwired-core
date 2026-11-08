@@ -6,3 +6,4 @@
 
 name: andes_ae350_n25
 chip: ../../chips/onboarding/andes_ae350_n25.yaml
+debug_uart: uart1

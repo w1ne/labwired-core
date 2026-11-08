@@ -12,8 +12,8 @@
 - pass_observable_assertions: `225/225`
 - pass_stop_reason_only: `0/225`
 - pass_depth_unknown: `0/225`
-- median_elapsed_ms: `1154`
-- median_elapsed_seconds: `1.154`
+- median_elapsed_ms: `1175`
+- median_elapsed_seconds: `1.175`
 - threshold_seconds: `3600`
 - threshold_met: `225/225`
 
@@ -26,7 +26,7 @@
 | `acrn_x86_64` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 1: `hpet:hpet` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no x86-64 CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `alif_ae822fa0e5597bs0` | `pass` | `True` | `yes` | `yes` | `9943` | `9.943` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `ambiq-apollo4` | `pass` | `True` | `yes` | `yes` | `1154` | `1.154` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `andes_ae350_n25` | `pass` | `True` | `yes` | `yes` | `1074` | `1.074` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `andes_ae350_n25` | `pass` | `True` | `yes` | `yes` | `9648` | `9.648` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `arduino_101-shield` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 7: `led:led`, `button:button`, `lm74:ti_lm74`, `spi0:stub`, `spi1:stub`, `pwm:stub`, `scss:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no IA-32 (Intel Quark) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `arduino_nano_33_ble` | `pass` | `True` | `yes` | `yes` | `2450` | `2.45` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `arduino_uno_r4_minima` | `pass` | `True` | `yes` | `yes` | `119052` | `119.052` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

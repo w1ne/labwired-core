@@ -41,6 +41,45 @@
     },
     {
       "assertion": {
+        "memory_value": {
+          "address": 4100,
+          "expected_value": 96,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 4104,
+          "expected_value": 196929,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 4108,
+          "expected_value": 2922708993,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "AE350 N25 uart1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -59,12 +98,12 @@
       0,
       0,
       0,
-      323,
       4096,
+      2922708993,
       0,
-      0,
-      0,
-      0,
+      96,
+      96,
+      64,
       0,
       0,
       0,
@@ -82,7 +121,7 @@
       0,
       0
     ],
-    "pc": 24,
+    "pc": 592,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -118,14 +157,22 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "9d70f1879e68bf0b3d2c48107cb5a8c1c48246c37d65a65a667457db32045b87",
+  "firmware_hash": "968de116a8f7c7e1f5d81fc7646a6864fc81241e34a803aebe05a17b49e00558",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-andes-ae350-n25-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/andes_ae350_n25.yaml",
     "script": "examples/renode-onboarding/andes_ae350_n25-smoke.yaml"
   },
   "inspect": {
-    "peripherals": [],
+    "peripherals": [
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 4029677600,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
     "devices": []
   },
   "fidelity": [
@@ -137,12 +184,23 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "AE350 N25 uart1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 28,
+    "text_bytes": 596,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 28,
+    "flash_used_bytes": 596,
     "ram_static_bytes": 0,
     "flash_total_bytes": 0,
     "ram_total_bytes": 131072,
@@ -163,14 +221,14 @@
     "instructions": 100000,
     "steps_executed": 100000,
     "memory_reads": 100000,
-    "memory_writes": 1,
-    "peripheral_accesses": 0,
+    "memory_writes": 4,
+    "peripheral_accesses": 49,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 24,
+        "pc": 592,
         "count": 390,
-        "symbol": "_start"
+        "symbol": "smoke_main"
       }
     ]
   }
