@@ -19,6 +19,8 @@ const UART_TXFULL: *const u32 = 0x8200_2004 as *const u32;
 const TIMER_LOAD: *mut u32 = 0x8200_2800 as *mut u32;
 const TIMER_RELOAD: *mut u32 = 0x8200_2804 as *mut u32;
 const TIMER_EN: *mut u32 = 0x8200_2808 as *mut u32;
+const TIMER_UPDATE_VALUE: *mut u32 = 0x8200_280C as *mut u32;
+const TIMER_VALUE: *const u32 = 0x8200_2810 as *const u32;
 const TIMER_EV_STATUS: *const u32 = 0x8200_2814 as *const u32;
 const TIMER_EV_PENDING: *mut u32 = 0x8200_2818 as *mut u32;
 
@@ -62,10 +64,31 @@ fn multiply(left: u32, right: u32) -> u32 {
 
 fn timer_one_shot(cycles: u32) {
     unsafe {
+        // ev_pending is W1C: a stale or freshly written 1 must not read back.
+        // A plain R/W register at this offset (e.g. an STM32 CCMR1) keeps it.
         core::ptr::write_volatile(TIMER_EV_PENDING, 1);
+        if core::ptr::read_volatile(TIMER_EV_PENDING) & 1 == 0 {
+            puts("timer=cleared\n");
+        } else {
+            puts("timer=pending_kept\n");
+        }
         core::ptr::write_volatile(TIMER_LOAD, cycles);
         core::ptr::write_volatile(TIMER_RELOAD, 0);
+        puts("load=");
+        put_hex32(core::ptr::read_volatile(TIMER_LOAD));
+        putc(b'\n');
         core::ptr::write_volatile(TIMER_EN, 1);
+
+        // update_value latches the live countdown into value.
+        core::ptr::write_volatile(TIMER_UPDATE_VALUE, 1);
+        let value = core::ptr::read_volatile(TIMER_VALUE);
+        if value != 0 && value < cycles {
+            puts("timer=counting\n");
+        } else {
+            puts("value=");
+            put_hex32(value);
+            putc(b'\n');
+        }
 
         if core::ptr::read_volatile(TIMER_EV_STATUS) & 1 == 0 {
             puts("timer=running\n");

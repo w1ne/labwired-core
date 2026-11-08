@@ -18,7 +18,7 @@ peripherals:
     size: "2KB"
     irq: 2
   - id: "timer0"
-    type: "litex_timer_csr32"
+    type: "litex_timer"
     base_address: 0x82002800
     size: "2KB"
     irq: 1

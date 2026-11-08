@@ -4,7 +4,7 @@
     "type": "risc_v",
     "registers": [
       0,
-      536872194,
+      536873052,
       16785376,
       16779264,
       0,
@@ -12,12 +12,12 @@
       16785408,
       0,
       2181046276,
-      0,
+      2181050368,
       2181046272,
       10,
-      10,
+      19998,
+      2181046272,
       5,
-      0,
       0,
       0,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 536873014,
+    "pc": 536873920,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 200504,
+  "cycles": 213962,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "ea4bc0d3b258aeef4b1aac1a81c5aa4732cc47ec6f6c0777b43503576135f23a",
+  "firmware_hash": "98817f0092bbc5e4d57e04443e6d30dfc982f23f78e26493f340b0ec0455b078",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-litex-ibex-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/verilated_ibex.yaml",

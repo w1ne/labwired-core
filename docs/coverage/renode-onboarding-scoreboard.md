@@ -100,7 +100,7 @@
 | `kendryte_k210` | `pass` | `True` | `yes` | `yes` | `1497` | `1.497` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `leon3` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 6: `ahbInfo:gaislerahbplugandplayinfo`, `apbController:gaislerapbcontroller`, `esaMemController:esamemorycontroller`, `eth:gaislereth`, `phy:ethernetphysicallayer`, `led:led` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no SPARC V8 (LEON3) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `litex_common` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 1: `phy:ethernetphysicallayer` | `not_configured` | Measure the concrete LiteX platforms that include it instead. | Shared LiteX include with no CPU of its own; it is not a runnable platform. |
-| `litex_ibex` | `pass` | `True` | `yes` | `yes` | `1518` | `1.518` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `litex_ibex` | `pass` | `True` | `yes` | `yes` | `91266` | `91.266` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `litex_linux_vexriscv_sdcard` | `pass` | `True` | `yes` | `yes` | `1760` | `1.76` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `litex_microwatt` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 0 | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no OpenPOWER (Microwatt) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `litex_minerva` | `pass` | `True` | `yes` | `yes` | `1546` | `1.546` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
@@ -252,7 +252,7 @@
 | `up_squared_x86_64` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 2: `hpet:hpet`, `pci:pythonperipheral` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no x86-64 CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `ut32m0r500` | `pass` | `True` | `yes` | `yes` | `1004` | `1.004` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `vegaboard_ri5cy` | `pass` | `True` | `yes` | `yes` | `1404` | `1.404` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `verilated_ibex` | `pass` | `True` | `yes` | `yes` | `757` | `0.757` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `verilated_ibex` | `pass` | `True` | `yes` | `yes` | `655` | `0.655` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `versatile` | `pass` | `True` | `yes` | `yes` | `154313` | `154.313` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `vexpress` | `pass` | `True` | `yes` | `yes` | `1062` | `1.062` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `vybrid` | `pass` | `True` | `yes` | `yes` | `1044` | `1.044` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

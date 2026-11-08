@@ -1,6 +1,7 @@
 # Narrowed LiteX Ibex profile for the imported Renode system. The generated
 # descriptor called this ARM and omitted the architectural CPU profile. This
-# profile keeps the RV32IMC core, memory, LiteX UART, and CSR32 timer used by
+# profile keeps the RV32IMC core, memory, LiteX UART, and CSR32 timer
+# (`litex_timer`, 32-bit CSR layout) used by
 # the exact-system smoke; the unexercised SoC controller is not claimed.
 
 name: "litex_ibex"
@@ -17,7 +18,7 @@ peripherals:
     size: "2KB"
     irq: 2
   - id: "timer0"
-    type: "litex_timer_csr32"
+    type: "litex_timer"
     base_address: 0x82002800
     size: "2KB"
     irq: 1
