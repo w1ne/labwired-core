@@ -2570,6 +2570,21 @@ impl GpioPort {
         port: u8,
     ) {
         self.pad_claims = Some((claims, port));
+        self.publish_open_drain();
+    }
+
+    /// Copy this port's open-drain (WIREDAND*) pads into the shared claim
+    /// table, where a routed EFR32 I2C checks its two wires before it lets a
+    /// transfer reach a device. Series 2 only; every other port returns at
+    /// the first branch.
+    fn publish_open_drain(&self) {
+        let (Some((claims, port)), GpioFamily::Efr32s2(g)) = (&self.pad_claims, &self.family)
+        else {
+            return;
+        };
+        for pin in 0..16u8 {
+            claims.set_open_drain(*port, pin, (g.cached_wired_and >> pin) & 1 != 0);
+        }
     }
 
     pub(crate) fn register_layout(&self) -> GpioRegisterLayout {
@@ -3116,6 +3131,7 @@ impl crate::Peripheral for GpioPort {
         self.mutate_pads(|s| s.write_reg(reg_offset, reg_val));
         self.sync_wire_inputs();
         self.refresh_console_af();
+        self.publish_open_drain();
         if reg_offset == self.idr_offset() {
             self.record_timer_input_edges(before);
         }
@@ -3144,6 +3160,7 @@ impl crate::Peripheral for GpioPort {
         self.mutate_pads(|s| s.write_reg(offset & !3, value));
         self.sync_wire_inputs();
         self.refresh_console_af();
+        self.publish_open_drain();
         if input_reg {
             self.record_timer_input_edges(before);
         }

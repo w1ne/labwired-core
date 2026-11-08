@@ -37,6 +37,10 @@ pub struct PadClaims {
     /// pad its pin select names, to know whether its wire is shared with
     /// other chips.
     on_net: Vec<std::sync::atomic::AtomicBool>,
+    /// Per pad: the port's own mode register has the pad in an open-drain
+    /// (wired-AND) mode. Published by the GPIO port on every register write;
+    /// read by a peripheral whose wire only works open-drain (an EFR32 I2C).
+    open_drain: Vec<std::sync::atomic::AtomicBool>,
 }
 
 impl PadClaims {
@@ -53,6 +57,9 @@ impl PadClaims {
                 .collect(),
             pins_per_port,
             on_net: (0..ports * pins_per_port)
+                .map(|_| std::sync::atomic::AtomicBool::new(false))
+                .collect(),
+            open_drain: (0..ports * pins_per_port)
                 .map(|_| std::sync::atomic::AtomicBool::new(false))
                 .collect(),
         }
@@ -75,6 +82,28 @@ impl PadClaims {
         let idx = self.pad_index(port, pin);
         let token = self.slots.get(idx)?.load(Ordering::Relaxed);
         (token != UNCLAIMED).then_some(token)
+    }
+
+    /// The flat index of the pad `token` currently holds, if any. A linear
+    /// scan: callers ask once per bus transaction, never per instruction.
+    pub fn pad_of(&self, token: u32) -> Option<usize> {
+        self.slots
+            .iter()
+            .position(|slot| slot.load(Ordering::Relaxed) == token)
+    }
+
+    /// Record whether pad `pin` of `port` is configured open-drain.
+    pub(crate) fn set_open_drain(&self, port: u8, pin: u8, open_drain: bool) {
+        if let Some(flag) = self.open_drain.get(self.pad_index(port, pin)) {
+            flag.store(open_drain, Ordering::Relaxed);
+        }
+    }
+
+    /// `true` when the pad at flat index `pad` is configured open-drain.
+    pub(crate) fn pad_open_drain(&self, pad: usize) -> bool {
+        self.open_drain
+            .get(pad)
+            .is_some_and(|flag| flag.load(Ordering::Relaxed))
     }
 
     /// Take `pad` for `token`, displacing whatever held it.

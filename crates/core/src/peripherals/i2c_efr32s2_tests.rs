@@ -354,3 +354,74 @@ fn a_word_write_of_cmd_is_one_command_not_four_bytes() {
     assert_eq!(flags(&i2c) & EFR_IF_MSTOP, EFR_IF_MSTOP);
     assert_eq!(i2c.read_u32(EFR_I2C_STATE).unwrap() & EFR_STATE_BUSY, 0);
 }
+
+/// A routed I2C reaches its device only when both pads are open-drain.
+///
+/// GPIO port C, I2C0 route and controller wired the way `bus::attach` wires
+/// them on efr32mg26, with SCL on PC05 and SDA on PC07 (BRD2709A Qwiic).
+/// Mode 0xA (WIREDANDPULLUP) is what emlib uses; 0x6 (WIREDOR) cannot pull a
+/// line low, 0x4 (PUSHPULL) fights the target's ACK, 0x0 drives nothing.
+/// Before the pad check every one of these reached the device.
+#[test]
+fn a_routed_bus_needs_open_drain_pads() {
+    use crate::peripherals::efr32::usart_route::{i2c_token, Efr32s2I2cRoute};
+    use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
+    use crate::peripherals::pad_claims::PadClaims;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    const MODEL: u64 = 0x04;
+    const PORT_C: u8 = 2;
+    let claims = Arc::new(PadClaims::new(4, 16));
+    let mut port = GpioPort::new_with_layout(GpioRegisterLayout::Efr32s2);
+    port.set_pad_claims(claims.clone(), PORT_C);
+
+    let mut route = Efr32s2I2cRoute::new();
+    route.install_claims(claims.clone());
+    let gate = Arc::new(AtomicBool::new(false));
+    route.install_gate(0, gate.clone());
+
+    let mut i2c = enabled();
+    i2c.set_route_gate(gate);
+    i2c.set_pad_check(claims.clone(), [i2c_token(0, 0), i2c_token(0, 1)]);
+    i2c.push_slave(Box::new(FakeSensor::new(0x48)));
+
+    // SCLROUTE = PC05, SDAROUTE = PC07, ROUTEEN = SCLPEN | SDAPEN.
+    route.write_u32(0x04, 2 | (5 << 16)).unwrap();
+    route.write_u32(0x08, 2 | (7 << 16)).unwrap();
+    route.write_u32(0x00, 0b11).unwrap();
+
+    let acked = |i2c: &mut I2c| {
+        clear_flags(i2c);
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        i2c.write_u32(EFR_I2C_TXDATA, addr_byte(0x48, false))
+            .unwrap();
+        let ack = flags(i2c) & EFR_IF_ACK != 0;
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_STOP).unwrap();
+        ack
+    };
+    let set_modes = |port: &mut GpioPort, scl: u32, sda: u32| {
+        port.write_u32(MODEL, (scl << 20) | (sda << 28)).unwrap();
+    };
+
+    for (mode, name) in [(0x0, "DISABLED"), (0x4, "PUSHPULL"), (0x6, "WIREDOR")] {
+        set_modes(&mut port, mode, mode);
+        assert!(!acked(&mut i2c), "both pads {name}: no transfer");
+    }
+    set_modes(&mut port, 0xA, 0x6);
+    assert!(!acked(&mut i2c), "SDA still WIREDOR: no transfer");
+    set_modes(&mut port, 0xA, 0xA);
+    assert!(
+        acked(&mut i2c),
+        "both pads WIREDANDPULLUP: the device answers"
+    );
+    set_modes(&mut port, 0x8, 0xB);
+    assert!(
+        acked(&mut i2c),
+        "WIREDAND / WIREDANDPULLUPFILTER also carry it"
+    );
+
+    // Unrouting SDA closes the bus again, whatever the pad mode.
+    route.write_u32(0x00, 0b01).unwrap();
+    assert!(!acked(&mut i2c), "SDA unrouted: no transfer");
+}

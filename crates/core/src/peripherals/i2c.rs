@@ -1830,6 +1830,14 @@ pub struct Efr32s2I2c {
     /// See [`Self::resolve`] — the route gate this controller obeys.
     #[serde(skip)]
     route_gate: Option<crate::peripherals::efr32::usart_route::RouteGate>,
+    /// The shared pad-claim table and this controller's SCL/SDA claim tokens.
+    /// See [`Self::resolve`]: a routed wire whose pad is not open-drain does
+    /// not carry a transfer.
+    #[serde(skip)]
+    pad_check: Option<(
+        std::sync::Arc<crate::peripherals::pad_claims::PadClaims>,
+        [u32; 2],
+    )>,
     en: u32,
     ctrl: u32,
     clkdiv: u32,
@@ -1886,6 +1894,7 @@ impl Default for Efr32s2I2c {
     fn default() -> Self {
         Self {
             route_gate: None,
+            pad_check: None,
             en: 0,
             ctrl: 0,
             clkdiv: 0,
@@ -2088,6 +2097,25 @@ impl Efr32s2I2c {
         {
             return None;
         }
+        // ⚠️ ROUTED IS NOT ENOUGH. The route hands the pad to the I2C, but the
+        // pad's output stage is still whatever GPIO_Px_MODEL/MODEH says. I2C
+        // signals by pulling low and letting the pull-up raise the line, so
+        // only a WIREDAND* mode (8..15) carries a transfer: DISABLED or an
+        // input drives nothing, WIREDOR can never pull low, and PUSHPULL
+        // fights the target on every ACK. emlib's examples all use
+        // gpioModeWiredAndPullUp(Filter). Before this check a mode-6 line
+        // reached its device, so firmware with the wrong mode passed here and
+        // stalled on the bench.
+        if let Some((claims, tokens)) = &self.pad_check {
+            let open_drain = |token: u32| {
+                claims
+                    .pad_of(token)
+                    .is_some_and(|pad| claims.pad_open_drain(pad))
+            };
+            if !tokens.iter().all(|&t| open_drain(t)) {
+                return None;
+            }
+        }
         self.attached_devices
             .iter()
             .position(|d| d.borrow().claims_address(addr))
@@ -2096,6 +2124,17 @@ impl Efr32s2I2c {
     /// Install the `GPIO_I2Cn_ROUTEEN` gate for this instance.
     pub fn set_route_gate(&mut self, gate: crate::peripherals::efr32::usart_route::RouteGate) {
         self.route_gate = Some(gate);
+    }
+
+    /// Make this controller check that its routed pads are open-drain.
+    /// `tokens` are its SCL and SDA claim tokens
+    /// ([`i2c_token`](crate::peripherals::efr32::usart_route::i2c_token)).
+    pub fn set_pad_check(
+        &mut self,
+        claims: std::sync::Arc<crate::peripherals::pad_claims::PadClaims>,
+        tokens: [u32; 2],
+    ) {
+        self.pad_check = Some((claims, tokens));
     }
 
     /// A `TXDATA` write: the address byte after a START, or a data byte.
@@ -2374,6 +2413,18 @@ impl I2c {
     ) {
         if let Self::Efr32s2(i2c) = self {
             i2c.set_route_gate(gate);
+        }
+    }
+
+    /// Install the EFR32 open-drain pad check ([`Efr32s2I2c::set_pad_check`]),
+    /// when this is that family. A no-op on every other layout.
+    pub(crate) fn set_pad_check(
+        &mut self,
+        claims: std::sync::Arc<crate::peripherals::pad_claims::PadClaims>,
+        tokens: [u32; 2],
+    ) {
+        if let Self::Efr32s2(i2c) = self {
+            i2c.set_pad_check(claims, tokens);
         }
     }
 
