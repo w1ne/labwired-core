@@ -9,8 +9,11 @@ arch: arm
 flash:
   base: 2281701376
   size: 67108864B
+# Renode platforms/cpus/cortex-r52.repl dram0 @0x0, 2 GiB (U-Boot
+# vexpress_aemv8.h BASER_FVP V2M_DRAM_BASE 0x0). The import's 0x2000_0000
+# base ran the RAM to 0x9FFF_FFFF, over the 0x9C00_0000 peripheral window.
 ram:
-  base: 536870912
+  base: 0
   size: 2147483648B
 peripherals:
 - id: timer
@@ -21,3 +24,15 @@ peripherals:
   type: pl011
   bus: sysbus
   base_address: 2617835520
+# V2M motherboard sysreg in the BaseR (Armv8-R AEM FVP) map: CS3 at
+# 0x9C00_0000 + 0x1_0000 (U-Boot vexpress_aemv8.h, BASER_FVP: V2M_PA_BASE
+# 0x8000_0000, V2M_SYSREGS = V2M_PA_CS3 + V2M_PERIPH_OFFSET(1)); UART0 at
+# +0x9_0000 is the PL011 above. SYS_MCI @0x048 is the two-line MMC
+# card-detect / write-protect input port.
+- id: sysreg
+  type: declarative
+  bus: sysbus
+  base_address: 2617311232
+  size: 4096B
+  config:
+    path: ../../peripherals/vexpress/sysreg_mci.yaml

@@ -5,7 +5,9 @@
 # ARM Versatile Express V2M motherboard system registers, SYS_MCI. The sysreg
 # block is the 4 KiB `arm,vexpress-sysreg` window at CS7 offset 0, 0x1000_0000
 # in the legacy (CA9) memory map (Linux vexpress-v2m.dtsi sysreg@0; QEMU
-# vexpress.c VE_SYSREGS). SYS_MCI @0x048 reports the MMC socket: bit 0 card
+# vexpress.c VE_SYSREGS). The Armv8-R AEM FVP (BaseR) map puts the same
+# block at 0x9C01_0000 (U-Boot vexpress_aemv8.h BASER_FVP: CS3 0x9C00_0000 +
+# V2M_PERIPH_OFFSET(1)). SYS_MCI @0x048 reports the MMC socket: bit 0 card
 # detect, bit 1 write protect. Linux registers it as a two-GPIO
 # basic-mmio-gpio with only a "dat" resource (vexpress-sysreg.c SYS_MCI,
 # "arm,vexpress-sysreg,sys_mci"), so it is an input-only port, and the V2M
