@@ -1716,6 +1716,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: esp32s2-arduino
+    arch: xtensa-lx7
+    headline: "Arduino matrix profile of the ESP32-S2 (genuine mask ROM); no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: esp32s2
     arch: xtensa-lx7
     headline: "No beyond-rubric firmware exercise is recorded in this ledger yet."

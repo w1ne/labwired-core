@@ -1066,6 +1066,10 @@ _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in th
 
 _No beyond-rubric firmware exercise is recorded in this ledger yet._
 
+### `esp32s2-arduino`
+
+_Arduino matrix profile of the ESP32-S2 (genuine mask ROM); no beyond-rubric firmware exercise is recorded in this ledger._
+
 ### `esp32s2`
 
 _No beyond-rubric firmware exercise is recorded in this ledger yet._
