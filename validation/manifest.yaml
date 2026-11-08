@@ -2683,7 +2683,13 @@ boards:
     # Re-stamped 2026-11-08 for the C6 LEDC split (shared esp32c3/ledc.rs +
     # gpio.rs): the C3 decodes with C3_LAYOUT, which is the previous constants,
     # and its LEDC unit/waveform tests are unchanged. Ack, not a recapture.
-    drift_ack_digest: 2c45c24cfd4588025031c756820f895312e59d9618f26f1671cf4decbf856aae
+    # 2026-11-08 (round 342): twai0 moved from `declarative` to the S3 TWAI
+    # behavioural model (esp32s3/twai.rs, irq 25), so the Arduino L8 self-RX
+    # cell runs. esp32c3_reset_values_match_silicon asserts no TWAI register;
+    # the live capture reads the clock-gated window as bus junk (0x0008fe10).
+    # This acknowledges model drift, NOT a recapture.
+    # Re-stamped 2026-11-08 (round 347) over both changes above after merging main.
+    drift_ack_digest: ed30d3aceb28d77159219fbdba22d2cb1e926aafbd16261cacbb4e46c254777b
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2699,6 +2705,9 @@ boards:
       # this entry a change to the C3's real UART layout could not trip drift.
       - crates/core/src/peripherals/esp_uart.rs
       - crates/core/src/peripherals/esp_systimer.rs
+      # TWAI0 is `type: "esp32s3_twai"` since round 342: the S3 model reused
+      # (twai_struct.h identical on C3/S3). The drift gate must see it.
+      - crates/core/src/peripherals/esp32s3/twai.rs
       # RISC-V core: listed at the top of this models list (cpu/riscv.rs +
       # decoder/riscv.rs) so the digest sees the core, not only peripherals.
       - configs/chips/esp32c3.yaml
@@ -9232,6 +9241,7 @@ boards:
       - crates/core/src/peripherals/rp2040/adc.rs
       - crates/core/src/peripherals/rp2040/dma.rs
       - crates/core/src/peripherals/rp2040/i2c.rs
+      - crates/core/src/peripherals/rp2040/io_bank0.rs
       - crates/core/src/peripherals/rp2040/pwm.rs
       - crates/core/src/peripherals/rp2040/sio.rs
       - crates/core/src/peripherals/rp2040/spi.rs
