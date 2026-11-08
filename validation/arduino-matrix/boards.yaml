@@ -116,6 +116,11 @@ boards:
     # coprocessor, p0).
     led_watch: "sio:25"
     led_min_edges: 2
+    # L6: arduino-pico analogWrite(LED_BUILTIN, 128) = PWM slice 4 B on GP25
+    # (FUNCSEL 4) via the RP2350 IO_BANK0 model: 150,004 cycles @150 MHz =
+    # 1.000 kHz, 50.2 % high; ~60 edges in the 3M-step window.
+    pwm_watch: "sio:25"
+    pwm_min_edges: 20
     family: rp2040
     notes: "arduino-pico core; Serial = USB CDC; L6 analogWrite = PWM slice 4B on GP25"
     sketches_skip: [L8_can]

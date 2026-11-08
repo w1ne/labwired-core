@@ -746,9 +746,10 @@ impl SystemBus {
             .and_then(|a| a.downcast_mut::<crate::peripherals::rp2040::sio::Rp2040Sio>())
     }
 
-    /// Bind the RP2040 PWM slices' A/B outputs to every pad IO_BANK0 can hand
-    /// them to, so `analogWrite` on GP25 is a waveform on the pad, not the SIO
-    /// latch. No-op unless IO_BANK0, SIO and a `pwm` block are all on the bus.
+    /// Bind the RP2040/RP2350 PWM slices' A/B outputs to every pad IO_BANK0
+    /// can hand them to, so `analogWrite` on GP25 is a waveform on the pad, not
+    /// the SIO latch. No-op unless IO_BANK0, SIO and a `pwm` block are all on
+    /// the bus.
     ///
     /// The map is the fixed RP2040 one (datasheet Table 2-19, `FUNCSEL = 4`):
     /// GPn carries slice `(n >> 1) & 7`, channel A on even pads and B on odd,
@@ -768,14 +769,25 @@ impl SystemBus {
         let Some(lines) = self.peripherals[pwm_idx].dev.timer_output_lines(false) else {
             return;
         };
-        if lines.names() != LINE_NAMES.as_slice() {
+        // RP2040: 16 lines (8 slices); RP2350: 24 (12 slices).
+        let names = lines.names();
+        if names.len() < 16 || !LINE_NAMES.starts_with(names) {
             return;
         }
         let Some(sio) = self.rp2040_sio_mut(sio_idx) else {
             return;
         };
         for pin in 0..PAD_COUNT {
-            let line = usize::from(pin & 15);
+            // GP0..31 -> slice (n >> 1) & 7; RP2350B GP32..47 -> slices 8..11
+            // (pico-sdk PWM_GPIO_SLICE_NUM).
+            let line = if pin < 32 {
+                usize::from(pin & 15)
+            } else {
+                16 + usize::from(pin & 7)
+            };
+            if line >= names.len() {
+                continue;
+            }
             sio.bind_pad_route(
                 functions.clone(),
                 &lines,

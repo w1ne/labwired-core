@@ -376,6 +376,16 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
          storage.",
     ),
     (
+        "rp2350.yaml",
+        "clk_rst",
+        "io_bank0",
+        "Same shape as rp2040.yaml: `clk_rst` covers CLOCKS/RESETS/IO_QSPI/\
+         PADS/XOSC/PLL_SYS/PLL_USB as one 320 KB block (0x4001_0000..\
+         0x4006_0000) and IO_BANK0 sits inside it at 0x4002_8000, below XOSC \
+         and both PLLs. Greatest-start-wins routing gives io_bank0 its 4 KB \
+         deterministically, so GPIOn_CTRL.FUNCSEL reaches the pad mux model.",
+    ),
+    (
         "esp32.yaml",
         "rtcio",
         "sens_sar_adc",

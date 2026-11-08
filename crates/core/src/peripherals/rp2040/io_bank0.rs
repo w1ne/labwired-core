@@ -27,6 +27,12 @@
 //! them, but they do not invert or force anything yet — an honest gap rather
 //! than a guess, and one that only bites a firmware deliberately overriding a
 //! pad.
+//!
+//! The RP2350 (Pico 2) reuses the block with [`IoBankLayout::Rp2350`]: same
+//! GPIO array and FUNCSEL numbering for SPI/UART/I2C/PWM/SIO, the interrupt
+//! block moved to 0x230 with six words per group, and `IRQSUMMARY_*` at 0x200.
+//! The pad count stays 30 — the RP2350A that the Pico 2 carries
+//! (`NUM_BANK0_GPIOS`); GPIO30..47 CTRL words of the RP2350B are inert.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
@@ -98,14 +104,58 @@ impl PadFunctions {
 /// `GPIO_FUNC_SIO`: the pad is driven by the SIO output latch.
 pub const GPIO_FUNC_SIO: u32 = 5;
 
-/// `INTR0` (§2.19.6.1): four words of raw interrupt status, then the PROC0,
-/// PROC1 and DORMANT_WAKE enable / force / status words, four of each.
-const INTR0: u64 = 0x0F0;
-const PROC0_INTE0: u64 = 0x100;
-const PROC0_INTF0: u64 = 0x110;
-const PROC0_INTS0: u64 = 0x120;
-const PROC1_INTE0: u64 = 0x130;
-const DORMANT_WAKE_INTS3: u64 = 0x18C;
+/// Where the GPIO interrupt registers sit, and how wide each group is.
+///
+/// RP2040 (§2.19.6.1): `INTR0` at 0xF0, then the PROC0, PROC1 and
+/// DORMANT_WAKE enable / force / status groups, four words each. RP2350
+/// (pico-sdk rp2350 `io_bank0.h`): the GPIO array grows to 48 pads, so the
+/// `IRQSUMMARY_*` words sit at 0x200 and `INTR0` moves to 0x230, with six
+/// words per group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum IoBankLayout {
+    #[default]
+    Rp2040,
+    Rp2350,
+}
+
+impl IoBankLayout {
+    /// Words per interrupt group (`INTRn`, `PROC0_INTEn`, ...).
+    const fn words(self) -> usize {
+        match self {
+            IoBankLayout::Rp2040 => 4,
+            IoBankLayout::Rp2350 => 6,
+        }
+    }
+
+    const fn intr0(self) -> u64 {
+        match self {
+            IoBankLayout::Rp2040 => 0x0F0,
+            IoBankLayout::Rp2350 => 0x230,
+        }
+    }
+
+    /// Byte offset of interrupt group `g`: 0 `INTR`, 1 `PROC0_INTE`,
+    /// 2 `PROC0_INTF`, 3 `PROC0_INTS`, 4..=9 the PROC1 and DORMANT_WAKE
+    /// `INTE`/`INTF`/`INTS`.
+    const fn group(self, g: u64) -> u64 {
+        self.intr0() + g * 4 * self.words() as u64
+    }
+
+    /// `GPIOn_CTRL` writable bits: FUNCSEL plus the four OVER fields
+    /// (RP2040 SVD: OUTOVER [9:8], OEOVER [13:12]; RP2350: [13:12], [15:14]).
+    const fn ctrl_mask(self) -> u32 {
+        match self {
+            IoBankLayout::Rp2040 => 0x3003_331F,
+            IoBankLayout::Rp2350 => 0x3003_F01F,
+        }
+    }
+}
+
+/// RP2350 `IRQSUMMARY_PROC0_SECURE0/1` (0x200/0x204): one bit per GPIO whose
+/// `PROC0_INTS` nibble is non-zero. The other summary words (PROC1, NONSECURE,
+/// DORMANT_WAKE) read zero: core 1 is not modelled, nothing sleeps, and with
+/// the ACCESSCTRL reset `GPIO_NSMASK` of 0 no GPIO is visible to Non-secure.
+const IRQSUMMARY_PROC0_SECURE0: u64 = 0x200;
 
 /// The pad levels and raw edge latches the GPIO interrupts read, shared
 /// between the SIO (which owns `GPIO_IN` and sees every change of it) and
@@ -188,12 +238,14 @@ impl BankIrq {
 pub struct Rp2040IoBank0 {
     pads: Arc<PadFunctions>,
     irq: Arc<BankIrq>,
-    /// `PROC0_INTE0..3`, `PROC0_INTF0..3`, then `PROC1_*` and
-    /// `DORMANT_WAKE_*` enable / force words (stored, PROC0 acted on).
-    proc0_inte: [u32; 4],
-    proc0_intf: [u32; 4],
-    /// `PROC1_INTE/INTF/INTS`, `DORMANT_WAKE_INTE/INTF/INTS`: 0x130..0x18C.
-    other: [u32; 24],
+    layout: IoBankLayout,
+    /// `PROC0_INTE0..`, `PROC0_INTF0..`, one word per eight pads (stored and
+    /// acted on).
+    proc0_inte: [u32; 6],
+    proc0_intf: [u32; 6],
+    /// `PROC1_INTE/INTF/INTS`, `DORMANT_WAKE_INTE/INTF/INTS`: six groups,
+    /// stored and read back.
+    other: [u32; 36],
     /// Whether an `IO_IRQ_BANK0` event chain is live (see `on_event`).
     scheduled: bool,
     arm_seq: u32,
@@ -210,12 +262,20 @@ impl Rp2040IoBank0 {
         Self {
             pads: Arc::new(PadFunctions::new()),
             irq: Arc::new(BankIrq::default()),
-            proc0_inte: [0; 4],
-            proc0_intf: [0; 4],
-            other: [0; 24],
+            layout: IoBankLayout::Rp2040,
+            proc0_inte: [0; 6],
+            proc0_intf: [0; 6],
+            other: [0; 36],
             scheduled: false,
             arm_seq: 0,
         }
+    }
+
+    /// Serve the given silicon's register map (the GPIO array is the same
+    /// `8n` / `8n + 4` shape on both; the interrupt block moves).
+    pub fn with_layout(mut self, layout: IoBankLayout) -> Self {
+        self.layout = layout;
+        self
     }
 
     /// Share the live pad-function state, for the SIO GPIO model to resolve
@@ -236,7 +296,33 @@ impl Rp2040IoBank0 {
 
     /// `IO_IRQ_BANK0` as PROC0 sees it.
     fn irq_pending(&self) -> bool {
-        (0..4).any(|w| self.proc0_ints(w) != 0)
+        (0..self.layout.words()).any(|w| self.proc0_ints(w) != 0)
+    }
+
+    /// RP2350 `IRQSUMMARY_PROC0_SECUREn`: pads `32n..` with a live
+    /// `PROC0_INTS` nibble.
+    fn proc0_summary(&self, n: usize) -> u32 {
+        let mut bits = 0u64;
+        for w in 0..self.layout.words() {
+            let ints = self.proc0_ints(w);
+            for k in 0..8 {
+                if (ints >> (4 * k)) & 0xF != 0 {
+                    bits |= 1 << (8 * w + k);
+                }
+            }
+        }
+        (bits >> (32 * n)) as u32
+    }
+
+    /// `(group, word)` for an offset inside the interrupt block.
+    fn irq_reg(&self, offset: u64) -> Option<(u64, usize)> {
+        let l = self.layout;
+        if offset < l.intr0() || offset >= l.group(10) || offset % 4 != 0 {
+            return None;
+        }
+        let rel = (offset - l.intr0()) / 4;
+        let words = l.words() as u64;
+        Some((rel / words, (rel % words) as usize))
     }
 
     /// `(pin, is_ctrl)` for a register offset inside the GPIO array.
@@ -249,38 +335,46 @@ impl Rp2040IoBank0 {
     }
 
     fn read_u32(&self, offset: u64) -> u32 {
-        let word = |base: u64| ((offset - base) / 4) as usize;
-        match offset {
-            INTR0..PROC0_INTE0 => self.irq.intr_word(word(INTR0)),
-            PROC0_INTE0..PROC0_INTF0 => self.proc0_inte[word(PROC0_INTE0)],
-            PROC0_INTF0..PROC0_INTS0 => self.proc0_intf[word(PROC0_INTF0)],
-            PROC0_INTS0..PROC1_INTE0 => self.proc0_ints(word(PROC0_INTS0)),
-            PROC1_INTE0..=DORMANT_WAKE_INTS3 => self.other[word(PROC1_INTE0)],
-            _ => match Self::decode(offset) {
-                Some((pin, true)) => self.pads.ctrl(pin),
-                // GPIOn_STATUS: not modelled, reads zero.
-                Some((_, false)) => 0,
-                None => 0,
-            },
+        if let Some((group, w)) = self.irq_reg(offset) {
+            let words = self.layout.words();
+            return match group {
+                0 => self.irq.intr_word(w),
+                1 => self.proc0_inte[w],
+                2 => self.proc0_intf[w],
+                3 => self.proc0_ints(w),
+                g => self.other[(g as usize - 4) * words + w],
+            };
+        }
+        if self.layout == IoBankLayout::Rp2350
+            && (IRQSUMMARY_PROC0_SECURE0..IRQSUMMARY_PROC0_SECURE0 + 8).contains(&offset)
+        {
+            return self.proc0_summary(((offset - IRQSUMMARY_PROC0_SECURE0) / 4) as usize);
+        }
+        match Self::decode(offset) {
+            Some((pin, true)) => self.pads.ctrl(pin),
+            // GPIOn_STATUS: not modelled, reads zero.
+            Some((_, false)) => 0,
+            None => 0,
         }
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) {
-        let word = |base: u64| ((offset - base) / 4) as usize;
-        match offset {
-            // Edge bits are write-1-to-clear; level bits are read-only.
-            INTR0..PROC0_INTE0 => self.irq.clear_edges(word(INTR0), value),
-            PROC0_INTE0..PROC0_INTF0 => self.proc0_inte[word(PROC0_INTE0)] = value,
-            PROC0_INTF0..PROC0_INTS0 => self.proc0_intf[word(PROC0_INTF0)] = value,
-            PROC0_INTS0..PROC1_INTE0 => {}
-            PROC1_INTE0..=DORMANT_WAKE_INTS3 => self.other[word(PROC1_INTE0)] = value,
-            _ => {
-                if let Some((pin, true)) = Self::decode(offset) {
-                    // Writable bits per the SVD: FUNCSEL [4:0] and the four
-                    // OVER fields. Everything else reads back zero.
-                    self.pads.set_ctrl(pin, value & 0x3003_331F);
-                }
+        if let Some((group, w)) = self.irq_reg(offset) {
+            let words = self.layout.words();
+            match group {
+                // Edge bits are write-1-to-clear; level bits are read-only.
+                0 => self.irq.clear_edges(w, value),
+                1 => self.proc0_inte[w] = value,
+                2 => self.proc0_intf[w] = value,
+                3 => {}
+                g => self.other[(g as usize - 4) * words + w] = value,
             }
+            return;
+        }
+        if let Some((pin, true)) = Self::decode(offset) {
+            // Writable bits per the SVD: FUNCSEL [4:0] and the four OVER
+            // fields. Everything else reads back zero.
+            self.pads.set_ctrl(pin, value & self.layout.ctrl_mask());
         }
     }
 }
@@ -460,6 +554,39 @@ mod tests {
         // Past DORMANT_WAKE_INTS3 (0x18C) nothing is mapped.
         Rp2040IoBank0::write_u32(&mut bank, 0x190, GPIO_FUNC_I2C);
         assert_eq!(bank.read_u32(0x190), 0);
+    }
+
+    /// RP2350 map: `PROC0_INTE0` at 0x248, `PROC0_INTS0` at 0x278,
+    /// `IRQSUMMARY_PROC0_SECURE0` at 0x200, and the RP2350 CTRL OVER bits.
+    #[test]
+    fn rp2350_layout_moves_the_interrupt_block() {
+        use crate::peripherals::rp2040::sio::{Rp2040Sio, SioLayout};
+        let mut bank = Rp2040IoBank0::new().with_layout(IoBankLayout::Rp2350);
+        let mut sio = Rp2040Sio::new().with_layout(SioLayout::Rp2350);
+        sio.attach_io_bank0(bank.pad_functions(), bank.bank_irq(), 0);
+        // CTRL: same array, PWM is still FUNCSEL 4; OEOVER is [15:14] here.
+        Rp2040IoBank0::write_u32(&mut bank, ctrl_offset(25), 0xFFFF_FFE4);
+        assert_eq!(bank.read_u32(ctrl_offset(25)), 0x3003_F004);
+        assert_eq!(bank.pad_functions().function(25), Some(GPIO_FUNC_PWM));
+        // The RP2040 INTR0 offset is plain GPIO-array space here (GPIO30).
+        Rp2040IoBank0::write_u32(&mut bank, 0x100, 0xFFFF_FFFF);
+        assert_eq!(bank.read_u32(0x100), 0);
+        // GP9 rising edge -> INTR1 nibble 1, gated by PROC0_INTE1 (0x24C).
+        let edge_high_gp9 = 1u32 << (4 + 3);
+        Rp2040IoBank0::write_u32(&mut bank, 0x24C, edge_high_gp9);
+        sio.set_gpio_input(9, true);
+        assert_ne!(bank.read_u32(0x234) & edge_high_gp9, 0, "INTR1");
+        assert_eq!(bank.read_u32(0x27C), edge_high_gp9, "PROC0_INTS1");
+        assert_eq!(bank.read_u32(0x200), 1 << 9, "IRQSUMMARY_PROC0_SECURE0");
+        assert_eq!(bank.read_u32(0x208), 0, "nothing is Non-secure");
+        assert_eq!(bank.irq_line_level(), Some(true));
+        // W1C at the RP2350 INTR1, and DORMANT_WAKE_INTS5 (0x31C) is the last word.
+        Rp2040IoBank0::write_u32(&mut bank, 0x234, edge_high_gp9);
+        assert_eq!(bank.irq_line_level(), Some(false));
+        Rp2040IoBank0::write_u32(&mut bank, 0x31C, 7);
+        assert_eq!(bank.read_u32(0x31C), 7);
+        Rp2040IoBank0::write_u32(&mut bank, 0x320, 7);
+        assert_eq!(bank.read_u32(0x320), 0);
     }
 
     /// The GPIO interrupt (§2.19.3): SIO reports `GPIO_IN`, edges latch in
