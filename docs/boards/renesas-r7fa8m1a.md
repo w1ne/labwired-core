@@ -1,47 +1,70 @@
-# Validation Report: renesas-r7fa8m1a
+# Renesas R7FA8M1A (RA8M1) imported profile
 
-**Architecture:** ARM Cortex-M85.
+## Measured profile
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+LabWired's onboarding profile for the imported Renode `renesas-r7fa8m1a`
+target is narrowed to what the engine executes and the smoke exercises. It
+follows Renode's
+[`renesas-r7fa8m1a.repl`](https://github.com/renode/renode/blob/master/platforms/cpus/renesas-r7fa8m1a.repl)
+and the model-backed RA8M1 part in `configs/chips/r7fa8m1ah.yaml`:
 
-```text
-[2m2026-10-18T14:40:21.070277Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:40:21.072568Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/renesas-r7fa8m1a.yaml
-[2m2026-10-18T14:40:21.075756Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'renesasra_gpiomisc' (peripheral 'portMisc') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:40:21.075907Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:40:21.076034Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:40:21.076050Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:40:21.076054Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:40:21.076934Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:40:21.076946Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:40:21.076952Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:40:21.077034Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:40:21.077058Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:40:21.077063Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:40:21.077067Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:40:21.077071Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:40:21.077075Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 1967.60
-```
+- **CPU:** Cortex-M85, scalar Armv8-M Mainline only. Helium/MVE and
+  TrustZone are not claimed.
+- **Memory:** 2 MiB code flash at `0x02000000`, 896 KiB SRAM at
+  `0x22000000`, ITCM/DTCM 64 KiB at `0x00000000`/`0x20000000`, 12 KiB data
+  flash at `0x27000000`. The non-secure aliases, factory flash, standby SRAM
+  and option-setting memory are omitted.
+- **SYSTEM** at `0x4001E000` (`ra8_sysc`): SCICKDIVCR/SCICKCR with the
+  CKSREQ/CKSRDY switch handshake. This is what Renode's `SYSC_SCICKCR`
+  Python peripheral provides.
+- **MSTP** at `0x40203000`: the MSTPCRA-E register file from the SVD (reset
+  values, readback). No module is gated by it.
+- **SCI0** at `0x40358000` (Renode `RenesasRA8M1_SCI`, 8 MHz) on the
+  `sci_b` UART model: CCR0-3, CESR TE/RE mirror, CSR TDRE/TEND, TDR. Polled
+  TX only: no ICU event is declared, so no RXI/TXI/TEI is raised.
+- **PORT6** at `0x404000C0` with PFS at `0x40400800`: PCNTR1 (PDR/PODR) and
+  PCNTR3 (POSR/PORR) on the RA port model. P600 is LED1 (blue) on the
+  EK-RA8M1.
 
+Not modelled and omitted from the descriptor: the ICU, GPT/GPT_NS, AGT0/1,
+SCI1-4 and SCI9, IIC0/1, ports 0-5 and 7-B, and `RenesasRA_GPIOMisc`
+beyond the PWPR/PWPRS bytes inside the PFS window. The EK-RA8M1 board
+(SCI9 console, three LEDs, two switches) is the separate
+`renesas-ek_ra8m1` target.
 
-## Hardware Coverage Report
+The earlier report on this page described a 2026-10-18 run of a Thumb-2
+Cortex-M3 fixture (`uart-ok-thumbv7m.elf`) against the unnarrowed import. That
+run hit a memory violation at step 2 and listed zero-answering stubs as
+hardware coverage. It never exercised an RA8M1 peripheral and is withdrawn.
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `gpt` | `0x40322000` | `renesasra_gpt` |
-| `gpt_ns` | `0x50322000` | `renesasra_gpt` |
-| `agt0` | `0x40221000` | `renesasra_agt` |
-| `agt1` | `0x40221100` | `renesasra_agt` |
-| `sci0` | `0x40358000` | `renesasra8m1_sci` |
-| `sci1` | `0x40358100` | `renesasra8m1_sci` |
-| `sci2` | `0x40358200` | `renesasra8m1_sci` |
-| `sci3` | `0x40358300` | `renesasra8m1_sci` |
-| `sci4` | `0x40358400` | `renesasra8m1_sci` |
-| `sci9` | `0x40358900` | `renesasra8m1_sci` |
-| `portMisc` | `0x40400d00` | `renesasra_gpiomisc` |
-| `SYSC_SCICKCR` | `0x4001e055` | `pythonperipheral` |
-| `iic0` | `0x4025e000` | `stub` |
-| `iic1` | `0x4025e100` | `stub` |
+## Smoke evidence
 
-**Total Peripherals:** 14
+The firmware crate `crates/firmware-renesas-r7fa8m1a-smoke`
+(`thumbv8m.main-none-eabi`) stores a MUL result, switches SCICLK to MOCO
+with the FSP CKSREQ/CKSRDY handshake under PRCR.PRC0, and stores the SCICKCR
+readback. It clears MSTPCRB.MSTPB31 (SCI0) and opens SCI0 in the
+`r_sci_b_uart.c` order (CCR0 off, wait CESR clear, CFCLR, CCR1-3, TE|RE,
+wait CESR.TIST/RIST). It stores the CCR3 readback, polls CSR.TDRE before
+each byte of `RA8M1 SCI0 SMOKE` and waits for CSR.TEND. It then makes P600
+an output, sets it through POSR, stores the PODR readback, and toggles P600
+through POSR/PORR. The firmware does not route the SCI0 pads through PmnPFS.
+Firmware for real silicon must.
+
+It ran **400,000 instructions** and passed 9/9 checks: the MUL word `0x143`,
+SCICKCR `0x01`, CCR3 `0x1200`, PODR6 `0x0001` (at `0x22000000..0x2200000C`),
+MSTPCRB `0x7FFFFFFF`, the UART banner, at least 4 edges on `port6:0`, and
+`max_steps`.
+
+With SCI0 removed from the descriptor, the same firmware takes a precise
+BusFault (BFAR `0x40358008`) on its first SCI0 access and passes 4/8
+(`docs/coverage/renode-onboarding/attempt-history/renesas-r7fa8m1a/2026-11-08-sci0-negative-control/`).
+
+The exact system manifest is `configs/systems/onboarding/renesas-r7fa8m1a.yaml`
+and the smoke script is `examples/renode-onboarding/renesas-r7fa8m1a-smoke.yaml`.
+Per-target metrics, JUnit, UART output, simulator result, snapshot and logs are
+under `docs/coverage/renode-onboarding/metrics/renesas-r7fa8m1a/`.
+
+This is local CLI simulation evidence for the smoke assertions. It does not
+show whole-SoC coverage, Renode equivalence or hardware behaviour. See the
+[generated scoreboard](../coverage/renode-onboarding-scoreboard.md) for the
+current global totals.

@@ -3,24 +3,24 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      570425344,
-      19,
-      323,
+      993,
+      1,
+      3221225472,
+      0,
+      1077936320,
+      1,
+      65536,
+      571342824,
       0,
       0,
       0,
       0,
-      571342840,
       0,
-      0,
-      0,
-      0,
-      0,
-      571342840,
-      33556519,
-      33556570
+      571342824,
+      33557475,
+      33557494
     ],
-    "pc": 33556570,
+    "pc": 33557494,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "c39012c61069fa4d4dba9d4c43ea480cc8956ec6d76412dd76f5dbc981655078",
+  "firmware_hash": "4f1bf1897c472cc68a8ee0811b4f6875587702d22ebf8d2ea85be0bd9823a172",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-renesas-r7fa8m1a-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-r7fa8m1a.yaml",
