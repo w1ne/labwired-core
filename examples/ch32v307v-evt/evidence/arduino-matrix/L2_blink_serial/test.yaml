@@ -1,0 +1,12 @@
+schema_version: '1.0'
+inputs:
+  firmware: <out>/ch32v307/L2_blink_serial/firmware.elf
+  system: validation/arduino-matrix/systems/ch32v307.yaml
+limits:
+  max_steps: 20000000
+  max_uart_bytes: 65536
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000
+  stop_when_assertions_pass_min_steps: 0
+assertions:
+- uart_contains: LW_L2_OK

@@ -317,6 +317,42 @@ boards:
         starts the V4 STK with CTLR=0xF, MODE (bit 4) clear = count up, so
         micros() runs backwards inside each millisecond (same bug as ch32v003)
 
+  - id: ch32v307
+    chip: ch32v307vct6-ch32fun-smoke
+    system: systems/ch32v307.yaml
+    # WCH's official core (openwch/arduino_core_ch32) via the community ch32v
+    # platform, pinned to the same revisions as the ch32v203 row.
+    pio:
+      platform: https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7
+      board: genericCH32V307VCT6
+      framework: arduino
+      platform_packages:
+        - "framework-arduino-openwch-ch32 @ https://github.com/Community-PIO-CH32V/arduino_core_ch32.git#3820604346d0a9f0ee9a72cab8b7583e488e6674"
+      # The CH32V307VCT6 variant leaves LED_BUILTIN as PNUM_NOT_DEFINED, and
+      # the CH32V307V-EVT wires its LEDs to nothing (jumpered by the user).
+      # PA3 is the pad the ch32v307v-evt ch32fun smoke drives; it is TIM2_CH4
+      # (variant PeripheralPins.c PinMap_TIM, reset mapping), so it also
+      # carries L6's analogWrite.
+      build_flags: ["-DLED_BUILTIN=PA3", "-DLW_PWM_PIN=PA3"]
+    max_steps: 20000000
+    budget_reason: "144 MHz QingKe V4F; same budget as the ch32v203 row"
+    led_watch: "gpioa:3"
+    led_min_edges: 2
+    pwm_watch: "gpioa:3"
+    pwm_min_edges: 4
+    family: wch
+    notes: "QingKe V4F on CH32V307V-EVT; Wire is I2C2 (PB10/PB11) in WCH's variant; L8 bxCAN1 loopback"
+    sketches_skip: [L7_timer]
+    sketches_skip_reason:
+      # Measured 2026-11-08 with a Serial.print probe (the core's libprintf
+      # drops %lu): t0=1996 t1=3999 t2=3929 t3=4999, STK CTLR=0xF.
+      L7_timer: >-
+        Upstream core bug, not a model gap: getCurrentMicros() (ch32/clock.c)
+        computes (CMP+1-CNT), which assumes a down-counter, but hw_config.c
+        starts the V4 STK with CTLR=0xF, MODE (bit 4) clear = count up, so
+        micros() runs backwards inside each millisecond (same bug as the
+        ch32v003 and ch32v203 rows)
+
 sketches:
   - id: L0_serial_boot
     dir: sketches/L0_serial_boot

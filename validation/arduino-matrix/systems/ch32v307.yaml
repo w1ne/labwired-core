@@ -1,0 +1,19 @@
+# Arduino matrix system — WCH CH32V307V-EVT (CH32V307VCT6).
+# INA219 on Wire for L3 — WCH's CH32V307VCT6 variant routes Wire to I2C2
+# (PB10 SCL / PB11 SDA, variant_CH32V307VCT6.h PIN_WIRE_*, PeripheralPins.c
+# PinMap_I2C_*) — and MAX31855 on SPI (SPI1, PA5/6/7, CS PA4) for L4;
+# L0–L2 ignore both.
+name: "arduino-matrix-ch32v307"
+chip: "../../../configs/chips/ch32v307vct6-ch32fun-smoke.yaml"
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c2"
+    config:
+      i2c_address: 0x40
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+board_io: []

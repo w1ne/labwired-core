@@ -1,0 +1,26 @@
+# CH32V30x factory configuration word at 0x1FFFF70C, in the vendor-programmed
+# system area (boot code, chip ID at 0x1FFFF704, flash size and unique ID).
+# Not in the reference manual; WCH's own SPL reads bit 14 to tell the
+# CH32V307/V305 (CH32V30x_D8C) PLL apart from the other V30x parts:
+# ch32v30x_rcc.c RCC_PLLConfig() (line 267) picks CFGR0_PLL_Mask_1 when it is
+# set, and RCC_GetClocksFreq() (line 603) decodes PLLMUL with the D8C table
+# (0b0000 = x18, 0b1101 = x6.5, 0b1111 = x15) when it is set and the F1-like
+# table (0b1111 = x18) when it is clear. WCH's Arduino core reaches it through
+# HardwareSerial -> uart_init -> RCC_GetClocksFreq.
+#
+# The model is a CH32V307, so bit 14 reads 1. No source gives the rest of the
+# word; 0x0000_4000 is the minimal value that selects the D8C paths and
+# claims nothing else. Read-only.
+peripheral: PLL_CFG_WORD
+version: 0.1.0
+registers:
+- id: CFG
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x00004000
+  fields:
+  - name: D8C
+    bit_range: [14, 14]
+    description: "1 = CH32V307/V305 (D8C) PLL multiplier table in WCH's SPL"
+  side_effects: null

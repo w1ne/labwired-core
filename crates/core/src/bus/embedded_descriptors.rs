@@ -53,6 +53,10 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
         "ch32v20x/flash_chip_rev.yaml",
         packed!("ch32v20x/flash_chip_rev.yaml"),
     ),
+    (
+        "ch32v30x/pll_cfg_word.yaml",
+        packed!("ch32v30x/pll_cfg_word.yaml"),
+    ),
     ("esp32/apb_ctrl.yaml", packed!("esp32/apb_ctrl.yaml")),
     ("esp32/dport.yaml", packed!("esp32/dport.yaml")),
     ("esp32/efuse.yaml", packed!("esp32/efuse.yaml")),
