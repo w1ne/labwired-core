@@ -115,6 +115,12 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x00,
         "Renode EOSS3_IntrCtrl.cs MiscRegisters.IOInput (misc region)",
     ),
+    // JH7100 GPIODIN for GPIO 0..31, inside the pinctrl "gpio" region.
+    (
+        "declarative/jh7100/gpio_din.yaml",
+        0x48,
+        "Linux pinctrl-starfive-jh7100.c GPIODIN",
+    ),
     // Window based at the port's P_m byte, so PIN_m is +0x800.
     (
         "declarative/rzg2l/port.yaml",
@@ -341,6 +347,24 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
         "Renode platforms/cpus/eos-s3.repl intrCtrl misc region @0x40005100",
     ),
     (
+        "arvsom",
+        "gpio",
+        0x1191_0048,
+        "Linux jh7100.dtsi pinctrl@11910000 + pinctrl-starfive-jh7100.c GPIODIN",
+    ),
+    (
+        "beaglev_starlight",
+        "gpio",
+        0x1191_0048,
+        "Linux jh7100.dtsi pinctrl@11910000 + pinctrl-starfive-jh7100.c GPIODIN",
+    ),
+    (
+        "starfive-jh7100",
+        "gpio",
+        0x1191_0048,
+        "Linux jh7100.dtsi pinctrl@11910000 + pinctrl-starfive-jh7100.c GPIODIN",
+    ),
+    (
         "litex_vexriscv",
         "gpio_in",
         0xE000_6000,
@@ -367,13 +391,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 202;
+const COVERED: usize = 205;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 97;
+const SILICON_REGISTER: usize = 100;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 43;
+const NO_ANALOG_ENDPOINT: usize = 40;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
