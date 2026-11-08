@@ -78,6 +78,19 @@ peripherals:
     config:
       debug_schema: "../peripherals/rp2350/clocks.yaml"
       profile: "rp2350"
+  # IO_BANK0: the pad function mux, inside the clk_rst window (greatest start
+  # wins, as on rp2040.yaml). The RP2040 model on the RP2350 map: same
+  # GPIOn_STATUS/CTRL array and FUNCSEL numbers for SPI/UART/I2C/PWM/SIO,
+  # the interrupt block at 0x230 (pico-sdk rp2350 io_bank0.h), IO_IRQ_BANK0
+  # = NVIC 21 (intctrl.h). Without it GPIOn_CTRL was clk_rst storage and no
+  # peripheral output (PWM, UART, SPI, I2C) reached a pad.
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40028000
+    size: "4KB"
+    irq: 21
+    config:
+      profile: "rp2350"
   - id: "rosc"
     type: "rp2040_clkrst"
     base_address: 0x400E8000
@@ -130,6 +143,9 @@ peripherals:
     irq: 35
     config:
       debug_schema: "../peripherals/rp2350/adc.yaml"
+  # PWM: 12 slices, so EN/INTR/IRQ0_*/IRQ1_* start at 0xF0 (pico-sdk rp2350
+  # pwm.h); PWM_IRQ_WRAP_0/_1 = NVIC 8/9. The debug schema below is still the
+  # RP2040-shaped one (EN at 0xA0): names only, the model uses the profile.
   - id: "pwm"
     type: "rp2040_pwm"
     base_address: 0x400A8000
@@ -137,6 +153,7 @@ peripherals:
     irq: 8
     config:
       debug_schema: "../peripherals/rp2350/pwm.yaml"
+      profile: "rp2350"
   # TIMER0. The RP2040 timer model with the RP2350 map: LOCKED/SOURCE at
   # 0x34/0x38 push INTR/INTE/INTF/INTS to 0x3c..0x48 (pico-sdk rp2350
   # hardware_regs/timer.h). TIMER0_IRQ_0..3 are NVIC 0..3, as on the RP2040.
