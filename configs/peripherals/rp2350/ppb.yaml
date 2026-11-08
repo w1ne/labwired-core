@@ -1,32 +1,1688 @@
 peripheral: PPB
 version: 0.1.0
 registers:
+- id: ITM_STIM0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM2
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM3
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM4
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM5
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM6
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM7
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM8
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM9
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM10
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM11
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM12
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM13
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM14
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM15
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM16
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM17
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM18
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM19
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM20
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM21
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM22
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM23
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM24
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM25
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM26
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM27
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM28
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM29
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM30
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_STIM31
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMULUS
+    bit_range:
+    - 31
+    - 0
+    description: Data to write to the Stimulus Port FIFO, for forwarding as an Instrumentation packet. The size of write access determines the type of Instrumentation packet generated.
+  side_effects: null
+- id: ITM_TER0
+  address_offset: 3584
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STIMENA
+    bit_range:
+    - 31
+    - 0
+    description: For STIMENA[m] in ITM_TER*n, controls whether ITM_STIM(32*n + m) is enabled
+  side_effects: null
+- id: ITM_TPR
+  address_offset: 3648
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRIVMASK
+    bit_range:
+    - 3
+    - 0
+    description: Bit mask to enable tracing on ITM stimulus ports
+  side_effects: null
+- id: ITM_TCR
+  address_offset: 3712
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUSY
+    bit_range:
+    - 23
+    - 23
+    description: Indicates whether the ITM is currently processing events
+  - name: TRACEBUSID
+    bit_range:
+    - 22
+    - 16
+    description: Identifier for multi-source trace stream formatting. If multi-source trace is in use, the debugger must write a unique non-zero trace ID value to this field
+  - name: GTSFREQ
+    bit_range:
+    - 11
+    - 10
+    description: Defines how often the ITM generates a global timestamp, based on the global timestamp clock frequency, or disables generation of global timestamps
+  - name: TSPRESCALE
+    bit_range:
+    - 9
+    - 8
+    description: Local timestamp prescaler, used with the trace packet reference clock
+  - name: STALLENA
+    bit_range:
+    - 5
+    - 5
+    description: Stall the PE to guarantee delivery of Data Trace packets.
+  - name: SWOENA
+    bit_range:
+    - 4
+    - 4
+    description: Enables asynchronous clocking of the timestamp counter
+  - name: TXENA
+    bit_range:
+    - 3
+    - 3
+    description: Enables forwarding of hardware event packet from the DWT unit to the ITM for output to the TPIU
+  - name: SYNCENA
+    bit_range:
+    - 2
+    - 2
+    description: Enables Synchronization packet transmission for a synchronous TPIU
+  - name: TSENA
+    bit_range:
+    - 1
+    - 1
+    description: Enables Local timestamp generation
+  - name: ITMENA
+    bit_range:
+    - 0
+    - 0
+    description: Enables the ITM
+  side_effects: null
+- id: INT_ATREADY
+  address_offset: 3824
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AFVALID
+    bit_range:
+    - 1
+    - 1
+    description: A read of this bit returns the value of AFVALID
+  - name: ATREADY
+    bit_range:
+    - 0
+    - 0
+    description: A read of this bit returns the value of ATREADY
+  side_effects: null
+- id: INT_ATVALID
+  address_offset: 3832
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AFREADY
+    bit_range:
+    - 1
+    - 1
+    description: A write to this bit gives the value of AFREADY
+  - name: ATREADY
+    bit_range:
+    - 0
+    - 0
+    description: A write to this bit gives the value of ATVALID
+  side_effects: null
+- id: ITM_ITCTRL
+  address_offset: 3840
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IME
+    bit_range:
+    - 0
+    - 0
+    description: 'Integration mode enable bit - The possible values are:  0 - The trace unit is not in integration mode. 1 - The trace unit is in integration mode. This mode enables: A debug agent to perform topology detection. SoC test software to perform integration testing.'
+  side_effects: null
+- id: ITM_DEVARCH
+  address_offset: 4028
+  size: 32
+  access: READ_WRITE
+  reset_value: 1198529025
+  fields:
+  - name: ARCHITECT
+    bit_range:
+    - 31
+    - 21
+    description: Defines the architect of the component. Bits [31:28] are the JEP106 continuation code (JEP106 bank ID, minus 1) and bits [27:21] are the JEP106 ID code.
+  - name: PRESENT
+    bit_range:
+    - 20
+    - 20
+    description: Defines that the DEVARCH register is present
+  - name: REVISION
+    bit_range:
+    - 19
+    - 16
+    description: Defines the architecture revision of the component
+  - name: ARCHVER
+    bit_range:
+    - 15
+    - 12
+    description: Defines the architecture version of the component
+  - name: ARCHPART
+    bit_range:
+    - 11
+    - 0
+    description: Defines the architecture of the component
+  side_effects: null
+- id: ITM_DEVTYPE
+  address_offset: 4044
+  size: 32
+  access: READ_WRITE
+  reset_value: 67
+  fields:
+  - name: SUB
+    bit_range:
+    - 7
+    - 4
+    description: Component sub-type
+  - name: MAJOR
+    bit_range:
+    - 3
+    - 0
+    description: Component major type
+  side_effects: null
+- id: ITM_PIDR4
+  address_offset: 4048
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: SIZE
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: DES_2
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: ITM_PIDR5
+  address_offset: 4052
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: ITM_PIDR6
+  address_offset: 4056
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: ITM_PIDR7
+  address_offset: 4060
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: ITM_PIDR0
+  address_offset: 4064
+  size: 32
+  access: READ_WRITE
+  reset_value: 33
+  fields:
+  - name: PART_0
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: ITM_PIDR1
+  address_offset: 4068
+  size: 32
+  access: READ_WRITE
+  reset_value: 189
+  fields:
+  - name: DES_0
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: PART_1
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: ITM_PIDR2
+  address_offset: 4072
+  size: 32
+  access: READ_WRITE
+  reset_value: 11
+  fields:
+  - name: REVISION
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: JEDEC
+    bit_range:
+    - 3
+    - 3
+    description: See CoreSight Architecture Specification
+  - name: DES_1
+    bit_range:
+    - 2
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: ITM_PIDR3
+  address_offset: 4076
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REVAND
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: CMOD
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: ITM_CIDR0
+  address_offset: 4080
+  size: 32
+  access: READ_WRITE
+  reset_value: 13
+  fields:
+  - name: PRMBL_0
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: ITM_CIDR1
+  address_offset: 4084
+  size: 32
+  access: READ_WRITE
+  reset_value: 144
+  fields:
+  - name: CLASS
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: PRMBL_1
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: ITM_CIDR2
+  address_offset: 4088
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PRMBL_2
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: ITM_CIDR3
+  address_offset: 4092
+  size: 32
+  access: READ_WRITE
+  reset_value: 177
+  fields:
+  - name: PRMBL_3
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DWT_CTRL
+  address_offset: 4096
+  size: 32
+  access: READ_WRITE
+  reset_value: 1936988196
+  fields:
+  - name: NUMCOMP
+    bit_range:
+    - 31
+    - 28
+    description: Number of DWT comparators implemented
+  - name: NOTRCPKT
+    bit_range:
+    - 27
+    - 27
+    description: Indicates whether the implementation does not support trace
+  - name: NOEXTTRIG
+    bit_range:
+    - 26
+    - 26
+    description: Reserved, RAZ
+  - name: NOCYCCNT
+    bit_range:
+    - 25
+    - 25
+    description: Indicates whether the implementation does not include a cycle counter
+  - name: NOPRFCNT
+    bit_range:
+    - 24
+    - 24
+    description: Indicates whether the implementation does not include the profiling counters
+  - name: CYCDISS
+    bit_range:
+    - 23
+    - 23
+    description: Controls whether the cycle counter is disabled in Secure state
+  - name: CYCEVTENA
+    bit_range:
+    - 22
+    - 22
+    description: Enables Event Counter packet generation on POSTCNT underflow
+  - name: FOLDEVTENA
+    bit_range:
+    - 21
+    - 21
+    description: Enables DWT_FOLDCNT counter
+  - name: LSUEVTENA
+    bit_range:
+    - 20
+    - 20
+    description: Enables DWT_LSUCNT counter
+  - name: SLEEPEVTENA
+    bit_range:
+    - 19
+    - 19
+    description: Enable DWT_SLEEPCNT counter
+  - name: EXCEVTENA
+    bit_range:
+    - 18
+    - 18
+    description: Enables DWT_EXCCNT counter
+  - name: CPIEVTENA
+    bit_range:
+    - 17
+    - 17
+    description: Enables DWT_CPICNT counter
+  - name: EXTTRCENA
+    bit_range:
+    - 16
+    - 16
+    description: Enables generation of Exception Trace packets
+  - name: PCSAMPLENA
+    bit_range:
+    - 12
+    - 12
+    description: Enables use of POSTCNT counter as a timer for Periodic PC Sample packet generation
+  - name: SYNCTAP
+    bit_range:
+    - 11
+    - 10
+    description: Selects the position of the synchronization packet counter tap on the CYCCNT counter. This determines the Synchronization packet rate
+  - name: CYCTAP
+    bit_range:
+    - 9
+    - 9
+    description: Selects the position of the POSTCNT tap on the CYCCNT counter
+  - name: POSTINIT
+    bit_range:
+    - 8
+    - 5
+    description: Initial value for the POSTCNT counter
+  - name: POSTPRESET
+    bit_range:
+    - 4
+    - 1
+    description: Reload value for the POSTCNT counter
+  - name: CYCCNTENA
+    bit_range:
+    - 0
+    - 0
+    description: Enables CYCCNT
+  side_effects: null
+- id: DWT_CYCCNT
+  address_offset: 4100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CYCCNT
+    bit_range:
+    - 31
+    - 0
+    description: Increments one on each processor clock cycle when DWT_CTRL.CYCCNTENA == 1 and DEMCR.TRCENA == 1. On overflow, CYCCNT wraps to zero
+  side_effects: null
+- id: DWT_EXCCNT
+  address_offset: 4108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EXCCNT
+    bit_range:
+    - 7
+    - 0
+    description: 'Counts one on each cycle when all of the following are true: - DWT_CTRL.EXCEVTENA == 1 and DEMCR.TRCENA == 1. - No instruction is executed, see DWT_CPICNT. - An exception-entry or exception-exit related operation is in progress. - Either SecureNoninvasiveDebugAllowed() == TRUE, or NS-Req for the operation is set to Non-secure and NoninvasiveDebugAllowed() == TRUE.'
+  side_effects: null
+- id: DWT_LSUCNT
+  address_offset: 4116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LSUCNT
+    bit_range:
+    - 7
+    - 0
+    description: 'Counts one on each cycle when all of the following are true: - DWT_CTRL.LSUEVTENA == 1 and DEMCR.TRCENA == 1. - No instruction is executed, see DWT_CPICNT. - No exception-entry or exception-exit operation is in progress, see DWT_EXCCNT. - A load-store operation is in progress. - Either SecureNoninvasiveDebugAllowed() == TRUE, or NS-Req for the operation is set to Non-secure and NoninvasiveDebugAllowed() == TRUE.'
+  side_effects: null
+- id: DWT_FOLDCNT
+  address_offset: 4120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FOLDCNT
+    bit_range:
+    - 7
+    - 0
+    description: 'Counts on each cycle when all of the following are true: - DWT_CTRL.FOLDEVTENA == 1 and DEMCR.TRCENA == 1. - At least two instructions are executed, see DWT_CPICNT. - Either SecureNoninvasiveDebugAllowed() == TRUE, or the PE is in Non-secure state and NoninvasiveDebugAllowed() == TRUE. The counter is incremented by the number of instructions executed, minus one'
+  side_effects: null
+- id: DWT_COMP0
+  address_offset: 4128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DWT_COMP0
+    bit_range:
+    - 31
+    - 0
+  side_effects: null
+- id: DWT_FUNCTION0
+  address_offset: 4136
+  size: 32
+  access: READ_WRITE
+  reset_value: 1476395008
+  fields:
+  - name: ID
+    bit_range:
+    - 31
+    - 27
+    description: Identifies the capabilities for MATCH for comparator *n
+  - name: MATCHED
+    bit_range:
+    - 24
+    - 24
+    description: Set to 1 when the comparator matches
+  - name: DATAVSIZE
+    bit_range:
+    - 11
+    - 10
+    description: Defines the size of the object being watched for by Data Value and Data Address comparators
+  - name: ACTION
+    bit_range:
+    - 5
+    - 4
+    description: Defines the action on a match. This field is ignored and the comparator generates no actions if it is disabled by MATCH
+  - name: MATCH
+    bit_range:
+    - 3
+    - 0
+    description: Controls the type of match generated by this comparator
+  side_effects: null
+- id: DWT_COMP1
+  address_offset: 4144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DWT_COMP1
+    bit_range:
+    - 31
+    - 0
+  side_effects: null
+- id: DWT_FUNCTION1
+  address_offset: 4152
+  size: 32
+  access: READ_WRITE
+  reset_value: 2298480680
+  fields:
+  - name: ID
+    bit_range:
+    - 31
+    - 27
+    description: Identifies the capabilities for MATCH for comparator *n
+  - name: MATCHED
+    bit_range:
+    - 24
+    - 24
+    description: Set to 1 when the comparator matches
+  - name: DATAVSIZE
+    bit_range:
+    - 11
+    - 10
+    description: Defines the size of the object being watched for by Data Value and Data Address comparators
+  - name: ACTION
+    bit_range:
+    - 5
+    - 4
+    description: Defines the action on a match. This field is ignored and the comparator generates no actions if it is disabled by MATCH
+  - name: MATCH
+    bit_range:
+    - 3
+    - 0
+    description: Controls the type of match generated by this comparator
+  side_effects: null
+- id: DWT_COMP2
+  address_offset: 4160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DWT_COMP2
+    bit_range:
+    - 31
+    - 0
+  side_effects: null
+- id: DWT_FUNCTION2
+  address_offset: 4168
+  size: 32
+  access: READ_WRITE
+  reset_value: 1342177280
+  fields:
+  - name: ID
+    bit_range:
+    - 31
+    - 27
+    description: Identifies the capabilities for MATCH for comparator *n
+  - name: MATCHED
+    bit_range:
+    - 24
+    - 24
+    description: Set to 1 when the comparator matches
+  - name: DATAVSIZE
+    bit_range:
+    - 11
+    - 10
+    description: Defines the size of the object being watched for by Data Value and Data Address comparators
+  - name: ACTION
+    bit_range:
+    - 5
+    - 4
+    description: Defines the action on a match. This field is ignored and the comparator generates no actions if it is disabled by MATCH
+  - name: MATCH
+    bit_range:
+    - 3
+    - 0
+    description: Controls the type of match generated by this comparator
+  side_effects: null
+- id: DWT_COMP3
+  address_offset: 4176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DWT_COMP3
+    bit_range:
+    - 31
+    - 0
+  side_effects: null
+- id: DWT_FUNCTION3
+  address_offset: 4184
+  size: 32
+  access: READ_WRITE
+  reset_value: 536872960
+  fields:
+  - name: ID
+    bit_range:
+    - 31
+    - 27
+    description: Identifies the capabilities for MATCH for comparator *n
+  - name: MATCHED
+    bit_range:
+    - 24
+    - 24
+    description: Set to 1 when the comparator matches
+  - name: DATAVSIZE
+    bit_range:
+    - 11
+    - 10
+    description: Defines the size of the object being watched for by Data Value and Data Address comparators
+  - name: ACTION
+    bit_range:
+    - 5
+    - 4
+    description: Defines the action on a match. This field is ignored and the comparator generates no actions if it is disabled by MATCH
+  - name: MATCH
+    bit_range:
+    - 3
+    - 0
+    description: Controls the type of match generated by this comparator
+  side_effects: null
+- id: DWT_DEVARCH
+  address_offset: 8124
+  size: 32
+  access: READ_WRITE
+  reset_value: 1198529026
+  fields:
+  - name: ARCHITECT
+    bit_range:
+    - 31
+    - 21
+    description: Defines the architect of the component. Bits [31:28] are the JEP106 continuation code (JEP106 bank ID, minus 1) and bits [27:21] are the JEP106 ID code.
+  - name: PRESENT
+    bit_range:
+    - 20
+    - 20
+    description: Defines that the DEVARCH register is present
+  - name: REVISION
+    bit_range:
+    - 19
+    - 16
+    description: Defines the architecture revision of the component
+  - name: ARCHVER
+    bit_range:
+    - 15
+    - 12
+    description: Defines the architecture version of the component
+  - name: ARCHPART
+    bit_range:
+    - 11
+    - 0
+    description: Defines the architecture of the component
+  side_effects: null
+- id: DWT_DEVTYPE
+  address_offset: 8140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SUB
+    bit_range:
+    - 7
+    - 4
+    description: Component sub-type
+  - name: MAJOR
+    bit_range:
+    - 3
+    - 0
+    description: Component major type
+  side_effects: null
+- id: DWT_PIDR4
+  address_offset: 8144
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: SIZE
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: DES_2
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DWT_PIDR5
+  address_offset: 8148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: DWT_PIDR6
+  address_offset: 8152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: DWT_PIDR7
+  address_offset: 8156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: DWT_PIDR0
+  address_offset: 8160
+  size: 32
+  access: READ_WRITE
+  reset_value: 33
+  fields:
+  - name: PART_0
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DWT_PIDR1
+  address_offset: 8164
+  size: 32
+  access: READ_WRITE
+  reset_value: 189
+  fields:
+  - name: DES_0
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: PART_1
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DWT_PIDR2
+  address_offset: 8168
+  size: 32
+  access: READ_WRITE
+  reset_value: 11
+  fields:
+  - name: REVISION
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: JEDEC
+    bit_range:
+    - 3
+    - 3
+    description: See CoreSight Architecture Specification
+  - name: DES_1
+    bit_range:
+    - 2
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DWT_PIDR3
+  address_offset: 8172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REVAND
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: CMOD
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DWT_CIDR0
+  address_offset: 8176
+  size: 32
+  access: READ_WRITE
+  reset_value: 13
+  fields:
+  - name: PRMBL_0
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DWT_CIDR1
+  address_offset: 8180
+  size: 32
+  access: READ_WRITE
+  reset_value: 144
+  fields:
+  - name: CLASS
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: PRMBL_1
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DWT_CIDR2
+  address_offset: 8184
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PRMBL_2
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DWT_CIDR3
+  address_offset: 8188
+  size: 32
+  access: READ_WRITE
+  reset_value: 177
+  fields:
+  - name: PRMBL_3
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: FP_CTRL
+  address_offset: 8192
+  size: 32
+  access: READ_WRITE
+  reset_value: 1610634624
+  fields:
+  - name: REV
+    bit_range:
+    - 31
+    - 28
+    description: Flash Patch and Breakpoint Unit architecture revision
+  - name: NUM_CODE_14_12_
+    bit_range:
+    - 14
+    - 12
+    description: Indicates the number of implemented instruction address comparators. Zero indicates no Instruction Address comparators are implemented. The Instruction Address comparators are numbered from 0 to NUM_CODE - 1
+  - name: NUM_LIT
+    bit_range:
+    - 11
+    - 8
+    description: Indicates the number of implemented literal address comparators. The Literal Address comparators are numbered from NUM_CODE to NUM_CODE + NUM_LIT - 1
+  - name: NUM_CODE_7_4_
+    bit_range:
+    - 7
+    - 4
+    description: Indicates the number of implemented instruction address comparators. Zero indicates no Instruction Address comparators are implemented. The Instruction Address comparators are numbered from 0 to NUM_CODE - 1
+  - name: KEY
+    bit_range:
+    - 1
+    - 1
+    description: Writes to the FP_CTRL are ignored unless KEY is concurrently written to one
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enables the FPB
+  side_effects: null
+- id: FP_REMAP
+  address_offset: 8196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RMPSPT
+    bit_range:
+    - 29
+    - 29
+    description: Indicates whether the FPB unit supports the Flash Patch remap function
+  - name: REMAP
+    bit_range:
+    - 28
+    - 5
+    description: Holds the bits[28:5] of the Flash Patch remap address
+  side_effects: null
+- id: FP_COMP0
+  address_offset: 8200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BE
+    bit_range:
+    - 0
+    - 0
+    description: Selects between flashpatch and breakpoint functionality
+  side_effects: null
+- id: FP_COMP1
+  address_offset: 8204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BE
+    bit_range:
+    - 0
+    - 0
+    description: Selects between flashpatch and breakpoint functionality
+  side_effects: null
+- id: FP_COMP2
+  address_offset: 8208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BE
+    bit_range:
+    - 0
+    - 0
+    description: Selects between flashpatch and breakpoint functionality
+  side_effects: null
+- id: FP_COMP3
+  address_offset: 8212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BE
+    bit_range:
+    - 0
+    - 0
+    description: Selects between flashpatch and breakpoint functionality
+  side_effects: null
+- id: FP_COMP4
+  address_offset: 8216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BE
+    bit_range:
+    - 0
+    - 0
+    description: Selects between flashpatch and breakpoint functionality
+  side_effects: null
+- id: FP_COMP5
+  address_offset: 8220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BE
+    bit_range:
+    - 0
+    - 0
+    description: Selects between flashpatch and breakpoint functionality
+  side_effects: null
+- id: FP_COMP6
+  address_offset: 8224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BE
+    bit_range:
+    - 0
+    - 0
+    description: Selects between flashpatch and breakpoint functionality
+  side_effects: null
+- id: FP_COMP7
+  address_offset: 8228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BE
+    bit_range:
+    - 0
+    - 0
+    description: Selects between flashpatch and breakpoint functionality
+  side_effects: null
+- id: FP_DEVARCH
+  address_offset: 12220
+  size: 32
+  access: READ_WRITE
+  reset_value: 1198529027
+  fields:
+  - name: ARCHITECT
+    bit_range:
+    - 31
+    - 21
+    description: Defines the architect of the component. Bits [31:28] are the JEP106 continuation code (JEP106 bank ID, minus 1) and bits [27:21] are the JEP106 ID code.
+  - name: PRESENT
+    bit_range:
+    - 20
+    - 20
+    description: Defines that the DEVARCH register is present
+  - name: REVISION
+    bit_range:
+    - 19
+    - 16
+    description: Defines the architecture revision of the component
+  - name: ARCHVER
+    bit_range:
+    - 15
+    - 12
+    description: Defines the architecture version of the component
+  - name: ARCHPART
+    bit_range:
+    - 11
+    - 0
+    description: Defines the architecture of the component
+  side_effects: null
+- id: FP_DEVTYPE
+  address_offset: 12236
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SUB
+    bit_range:
+    - 7
+    - 4
+    description: Component sub-type
+  - name: MAJOR
+    bit_range:
+    - 3
+    - 0
+    description: Component major type
+  side_effects: null
+- id: FP_PIDR4
+  address_offset: 12240
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: SIZE
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: DES_2
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: FP_PIDR5
+  address_offset: 12244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: FP_PIDR6
+  address_offset: 12248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: FP_PIDR7
+  address_offset: 12252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: FP_PIDR0
+  address_offset: 12256
+  size: 32
+  access: READ_WRITE
+  reset_value: 33
+  fields:
+  - name: PART_0
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: FP_PIDR1
+  address_offset: 12260
+  size: 32
+  access: READ_WRITE
+  reset_value: 189
+  fields:
+  - name: DES_0
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: PART_1
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: FP_PIDR2
+  address_offset: 12264
+  size: 32
+  access: READ_WRITE
+  reset_value: 11
+  fields:
+  - name: REVISION
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: JEDEC
+    bit_range:
+    - 3
+    - 3
+    description: See CoreSight Architecture Specification
+  - name: DES_1
+    bit_range:
+    - 2
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: FP_PIDR3
+  address_offset: 12268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REVAND
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: CMOD
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: FP_CIDR0
+  address_offset: 12272
+  size: 32
+  access: READ_WRITE
+  reset_value: 13
+  fields:
+  - name: PRMBL_0
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: FP_CIDR1
+  address_offset: 12276
+  size: 32
+  access: READ_WRITE
+  reset_value: 144
+  fields:
+  - name: CLASS
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: PRMBL_1
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: FP_CIDR2
+  address_offset: 12280
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PRMBL_2
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: FP_CIDR3
+  address_offset: 12284
+  size: 32
+  access: READ_WRITE
+  reset_value: 177
+  fields:
+  - name: PRMBL_3
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: ICTR
+  address_offset: 57348
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: INTLINESNUM
+    bit_range:
+    - 3
+    - 0
+    description: Indicates the number of the highest implemented register in each of the NVIC control register sets, or in the case of NVIC_IPR*n, 4×INTLINESNUM
+  side_effects: null
+- id: ACTLR
+  address_offset: 57352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EXTEXCLALL
+    bit_range:
+    - 29
+    - 29
+    description: External Exclusives Allowed with no MPU
+  - name: DISITMATBFLUSH
+    bit_range:
+    - 12
+    - 12
+    description: Disable ATB Flush
+  - name: FPEXCODIS
+    bit_range:
+    - 10
+    - 10
+    description: Disable FPU exception outputs
+  - name: DISOOFP
+    bit_range:
+    - 9
+    - 9
+    description: Disable out-of-order FP instruction completion
+  - name: DISFOLD
+    bit_range:
+    - 2
+    - 2
+    description: Disable dual-issue.
+  - name: DISMCYCINT
+    bit_range:
+    - 0
+    - 0
+    description: Disable dual-issue.
+  side_effects: null
 - id: SYST_CSR
   address_offset: 57360
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: ENABLE
-    bit_range:
-    - 0
-    - 0
-    description: "Enable SysTick counter: \n                            0 = Counter disabled. \n                            1 = Counter enabled."
-  - name: TICKINT
-    bit_range:
-    - 1
-    - 1
-    description: "Enables SysTick exception request: \n                            0 = Counting down to zero does not assert the SysTick exception request. \n                            1 = Counting down to zero to asserts the SysTick exception request."
-  - name: CLKSOURCE
-    bit_range:
-    - 2
-    - 2
-    description: "SysTick clock source. Always reads as one if SYST_CALIB reports NOREF. \n                            Selects the SysTick timer clock source: \n                            0 = External reference clock. \n                            1 = Processor clock."
   - name: COUNTFLAG
     bit_range:
     - 16
     - 16
     description: Returns 1 if timer counted to 0 since last time this was read. Clears on read by application or debugger.
+  - name: CLKSOURCE
+    bit_range:
+    - 2
+    - 2
+    description: 'SysTick clock source. Always reads as one if SYST_CALIB reports NOREF. Selects the SysTick timer clock source: 0 = External reference clock. 1 = Processor clock.'
+  - name: TICKINT
+    bit_range:
+    - 1
+    - 1
+    description: 'Enables SysTick exception request: 0 = Counting down to zero does not assert the SysTick exception request. 1 = Counting down to zero to asserts the SysTick exception request.'
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: 'Enable SysTick counter: 0 = Counter disabled. 1 = Counter enabled.'
   side_effects: null
 - id: SYST_RVR
   address_offset: 57364
@@ -58,23 +1714,23 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: TENMS
-    bit_range:
-    - 23
-    - 0
-    description: An optional Reload value to be used for 10ms (100Hz) timing, subject to system clock skew errors. If the value reads as 0, the calibration value is not known.
-  - name: SKEW
-    bit_range:
-    - 30
-    - 30
-    description: If reads as 1, the calibration value for 10ms is inexact (due to clock frequency).
   - name: NOREF
     bit_range:
     - 31
     - 31
     description: If reads as 1, the Reference clock is not provided - the CLKSOURCE bit of the SysTick Control and Status register will be forced to 1 and cannot be cleared to 0.
+  - name: SKEW
+    bit_range:
+    - 30
+    - 30
+    description: If reads as 1, the calibration value for 10ms is inexact (due to clock frequency).
+  - name: TENMS
+    bit_range:
+    - 23
+    - 0
+    description: An optional Reload value to be used for 10ms (100Hz) timing, subject to system clock skew errors. If the value reads as 0, the calibration value is not known.
   side_effects: null
-- id: NVIC_ISER
+- id: NVIC_ISER0
   address_offset: 57600
   size: 32
   access: READ_WRITE
@@ -84,9 +1740,21 @@ registers:
     bit_range:
     - 31
     - 0
-    description: "Interrupt set-enable bits. \n                            Write: \n                            0 = No effect. \n                            1 = Enable interrupt. \n                            Read: \n                            0 = Interrupt disabled. \n                            1 = Interrupt enabled."
+    description: For SETENA[m] in NVIC_ISER*n, indicates whether interrupt 32*n + m is enabled
   side_effects: null
-- id: NVIC_ICER
+- id: NVIC_ISER1
+  address_offset: 57604
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SETENA
+    bit_range:
+    - 31
+    - 0
+    description: For SETENA[m] in NVIC_ISER*n, indicates whether interrupt 32*n + m is enabled
+  side_effects: null
+- id: NVIC_ICER0
   address_offset: 57728
   size: 32
   access: READ_WRITE
@@ -96,9 +1764,21 @@ registers:
     bit_range:
     - 31
     - 0
-    description: "Interrupt clear-enable bits. \n                            Write: \n                            0 = No effect. \n                            1 = Disable interrupt. \n                            Read: \n                            0 = Interrupt disabled. \n                            1 = Interrupt enabled."
+    description: For CLRENA[m] in NVIC_ICER*n, indicates whether interrupt 32*n + m is enabled
   side_effects: null
-- id: NVIC_ISPR
+- id: NVIC_ICER1
+  address_offset: 57732
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLRENA
+    bit_range:
+    - 31
+    - 0
+    description: For CLRENA[m] in NVIC_ICER*n, indicates whether interrupt 32*n + m is enabled
+  side_effects: null
+- id: NVIC_ISPR0
   address_offset: 57856
   size: 32
   access: READ_WRITE
@@ -108,9 +1788,21 @@ registers:
     bit_range:
     - 31
     - 0
-    description: "Interrupt set-pending bits. \n                            Write: \n                            0 = No effect. \n                            1 = Changes interrupt state to pending. \n                            Read: \n                            0 = Interrupt is not pending. \n                            1 = Interrupt is pending. \n                            Note: Writing 1 to the NVIC_ISPR bit corresponding to: \n                            An interrupt that is pending has no effect. \n                            A disabled interrupt sets the state of that interrupt to pending."
+    description: For SETPEND[m] in NVIC_ISPR*n, indicates whether interrupt 32*n + m is pending
   side_effects: null
-- id: NVIC_ICPR
+- id: NVIC_ISPR1
+  address_offset: 57860
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SETPEND
+    bit_range:
+    - 31
+    - 0
+    description: For SETPEND[m] in NVIC_ISPR*n, indicates whether interrupt 32*n + m is pending
+  side_effects: null
+- id: NVIC_ICPR0
   address_offset: 57984
   size: 32
   access: READ_WRITE
@@ -120,7 +1812,67 @@ registers:
     bit_range:
     - 31
     - 0
-    description: "Interrupt clear-pending bits. \n                            Write: \n                            0 = No effect. \n                            1 = Removes pending state and interrupt. \n                            Read: \n                            0 = Interrupt is not pending. \n                            1 = Interrupt is pending."
+    description: For CLRPEND[m] in NVIC_ICPR*n, indicates whether interrupt 32*n + m is pending
+  side_effects: null
+- id: NVIC_ICPR1
+  address_offset: 57988
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLRPEND
+    bit_range:
+    - 31
+    - 0
+    description: For CLRPEND[m] in NVIC_ICPR*n, indicates whether interrupt 32*n + m is pending
+  side_effects: null
+- id: NVIC_IABR0
+  address_offset: 58112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ACTIVE
+    bit_range:
+    - 31
+    - 0
+    description: For ACTIVE[m] in NVIC_IABR*n, indicates the active state for interrupt 32*n+m
+  side_effects: null
+- id: NVIC_IABR1
+  address_offset: 58116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ACTIVE
+    bit_range:
+    - 31
+    - 0
+    description: For ACTIVE[m] in NVIC_IABR*n, indicates the active state for interrupt 32*n+m
+  side_effects: null
+- id: NVIC_ITNS0
+  address_offset: 58240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ITNS
+    bit_range:
+    - 31
+    - 0
+    description: For ITNS[m] in NVIC_ITNS*n, `IAAMO the target Security state for interrupt 32*n+m
+  side_effects: null
+- id: NVIC_ITNS1
+  address_offset: 58244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ITNS
+    bit_range:
+    - 31
+    - 0
+    description: For ITNS[m] in NVIC_ITNS*n, `IAAMO the target Security state for interrupt 32*n+m
   side_effects: null
 - id: NVIC_IPR0
   address_offset: 58368
@@ -128,26 +1880,26 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: IP_0
-    bit_range:
-    - 7
-    - 6
-    description: Priority of interrupt 0
-  - name: IP_1
-    bit_range:
-    - 15
-    - 14
-    description: Priority of interrupt 1
-  - name: IP_2
-    bit_range:
-    - 23
-    - 22
-    description: Priority of interrupt 2
-  - name: IP_3
+  - name: PRI_N3
     bit_range:
     - 31
-    - 30
-    description: Priority of interrupt 3
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
   side_effects: null
 - id: NVIC_IPR1
   address_offset: 58372
@@ -155,26 +1907,26 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: IP_4
-    bit_range:
-    - 7
-    - 6
-    description: Priority of interrupt 4
-  - name: IP_5
-    bit_range:
-    - 15
-    - 14
-    description: Priority of interrupt 5
-  - name: IP_6
-    bit_range:
-    - 23
-    - 22
-    description: Priority of interrupt 6
-  - name: IP_7
+  - name: PRI_N3
     bit_range:
     - 31
-    - 30
-    description: Priority of interrupt 7
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
   side_effects: null
 - id: NVIC_IPR2
   address_offset: 58376
@@ -182,26 +1934,26 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: IP_8
-    bit_range:
-    - 7
-    - 6
-    description: Priority of interrupt 8
-  - name: IP_9
-    bit_range:
-    - 15
-    - 14
-    description: Priority of interrupt 9
-  - name: IP_10
-    bit_range:
-    - 23
-    - 22
-    description: Priority of interrupt 10
-  - name: IP_11
+  - name: PRI_N3
     bit_range:
     - 31
-    - 30
-    description: Priority of interrupt 11
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
   side_effects: null
 - id: NVIC_IPR3
   address_offset: 58380
@@ -209,26 +1961,26 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: IP_12
-    bit_range:
-    - 7
-    - 6
-    description: Priority of interrupt 12
-  - name: IP_13
-    bit_range:
-    - 15
-    - 14
-    description: Priority of interrupt 13
-  - name: IP_14
-    bit_range:
-    - 23
-    - 22
-    description: Priority of interrupt 14
-  - name: IP_15
+  - name: PRI_N3
     bit_range:
     - 31
-    - 30
-    description: Priority of interrupt 15
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
   side_effects: null
 - id: NVIC_IPR4
   address_offset: 58384
@@ -236,26 +1988,26 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: IP_16
-    bit_range:
-    - 7
-    - 6
-    description: Priority of interrupt 16
-  - name: IP_17
-    bit_range:
-    - 15
-    - 14
-    description: Priority of interrupt 17
-  - name: IP_18
-    bit_range:
-    - 23
-    - 22
-    description: Priority of interrupt 18
-  - name: IP_19
+  - name: PRI_N3
     bit_range:
     - 31
-    - 30
-    description: Priority of interrupt 19
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
   side_effects: null
 - id: NVIC_IPR5
   address_offset: 58388
@@ -263,26 +2015,26 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: IP_20
-    bit_range:
-    - 7
-    - 6
-    description: Priority of interrupt 20
-  - name: IP_21
-    bit_range:
-    - 15
-    - 14
-    description: Priority of interrupt 21
-  - name: IP_22
-    bit_range:
-    - 23
-    - 22
-    description: Priority of interrupt 22
-  - name: IP_23
+  - name: PRI_N3
     bit_range:
     - 31
-    - 30
-    description: Priority of interrupt 23
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
   side_effects: null
 - id: NVIC_IPR6
   address_offset: 58392
@@ -290,26 +2042,26 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: IP_24
-    bit_range:
-    - 7
-    - 6
-    description: Priority of interrupt 24
-  - name: IP_25
-    bit_range:
-    - 15
-    - 14
-    description: Priority of interrupt 25
-  - name: IP_26
-    bit_range:
-    - 23
-    - 22
-    description: Priority of interrupt 26
-  - name: IP_27
+  - name: PRI_N3
     bit_range:
     - 31
-    - 30
-    description: Priority of interrupt 27
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
   side_effects: null
 - id: NVIC_IPR7
   address_offset: 58396
@@ -317,58 +2069,274 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: IP_28
-    bit_range:
-    - 7
-    - 6
-    description: Priority of interrupt 28
-  - name: IP_29
-    bit_range:
-    - 15
-    - 14
-    description: Priority of interrupt 29
-  - name: IP_30
-    bit_range:
-    - 23
-    - 22
-    description: Priority of interrupt 30
-  - name: IP_31
+  - name: PRI_N3
     bit_range:
     - 31
-    - 30
-    description: Priority of interrupt 31
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
+  side_effects: null
+- id: NVIC_IPR8
+  address_offset: 58400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRI_N3
+    bit_range:
+    - 31
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
+  side_effects: null
+- id: NVIC_IPR9
+  address_offset: 58404
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRI_N3
+    bit_range:
+    - 31
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
+  side_effects: null
+- id: NVIC_IPR10
+  address_offset: 58408
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRI_N3
+    bit_range:
+    - 31
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
+  side_effects: null
+- id: NVIC_IPR11
+  address_offset: 58412
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRI_N3
+    bit_range:
+    - 31
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
+  side_effects: null
+- id: NVIC_IPR12
+  address_offset: 58416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRI_N3
+    bit_range:
+    - 31
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
+  side_effects: null
+- id: NVIC_IPR13
+  address_offset: 58420
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRI_N3
+    bit_range:
+    - 31
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
+  side_effects: null
+- id: NVIC_IPR14
+  address_offset: 58424
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRI_N3
+    bit_range:
+    - 31
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
+  side_effects: null
+- id: NVIC_IPR15
+  address_offset: 58428
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRI_N3
+    bit_range:
+    - 31
+    - 28
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+3, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N2
+    bit_range:
+    - 23
+    - 20
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+2, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N1
+    bit_range:
+    - 15
+    - 12
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+1, or RES0 if the PE does not implement this interrupt
+  - name: PRI_N0
+    bit_range:
+    - 7
+    - 4
+    description: For register NVIC_IPRn, the priority of interrupt number 4*n+0, or RES0 if the PE does not implement this interrupt
   side_effects: null
 - id: CPUID
   address_offset: 60672
   size: 32
   access: READ_WRITE
-  reset_value: 1091356161
+  reset_value: 1092604432
   fields:
-  - name: REVISION
-    bit_range:
-    - 3
-    - 0
-    description: "Minor revision number m in the rnpm revision status: \n                            0x1 = Patch 1."
-  - name: PARTNO
-    bit_range:
-    - 15
-    - 4
-    description: 'Number of processor within family: 0xC60 = Cortex-M0+'
-  - name: ARCHITECTURE
-    bit_range:
-    - 19
-    - 16
-    description: "Constant that defines the architecture of the processor: \n                            0xC = ARMv6-M architecture."
-  - name: VARIANT
-    bit_range:
-    - 23
-    - 20
-    description: "Major revision number n in the rnpm revision status: \n                            0x0 = Revision 0."
   - name: IMPLEMENTER
     bit_range:
     - 31
     - 24
-    description: 'Implementor code: 0x41 = ARM'
+    description: This field must hold an implementer code that has been assigned by ARM
+  - name: VARIANT
+    bit_range:
+    - 23
+    - 20
+    description: IMPLEMENTATION DEFINED variant number. Typically, this field is used to distinguish between different product variants, or major revisions of a product
+  - name: ARCHITECTURE
+    bit_range:
+    - 19
+    - 16
+    description: Defines the Architecture implemented by the PE
+  - name: PARTNO
+    bit_range:
+    - 15
+    - 4
+    description: IMPLEMENTATION DEFINED primary part number for the device
+  - name: REVISION
+    bit_range:
+    - 3
+    - 0
+    description: IMPLEMENTATION DEFINED revision number for the device
   side_effects: null
 - id: ICSR
   address_offset: 60676
@@ -376,51 +2344,66 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: VECTACTIVE
+  - name: PENDNMISET
     bit_range:
-    - 8
-    - 0
-    description: Active exception number field. Reset clears the VECTACTIVE field.
-  - name: VECTPENDING
+    - 31
+    - 31
+    description: Indicates whether the NMI exception is pending
+  - name: PENDNMICLR
     bit_range:
-    - 20
-    - 12
-    description: 'Indicates the exception number for the highest priority pending exception: 0 = no pending exceptions. Non zero = The pending state includes the effect of memory-mapped enable and mask registers. It does not include the PRIMASK special-purpose register qualifier.'
-  - name: ISRPENDING
-    bit_range:
-    - 22
-    - 22
-    description: External interrupt pending flag
-  - name: ISRPREEMPT
-    bit_range:
-    - 23
-    - 23
-    description: The system can only access this bit when the core is halted. It indicates that a pending interrupt is to be taken in the next running cycle. If C_MASKINTS is clear in the Debug Halting Control and Status Register, the interrupt is serviced.
-  - name: PENDSTCLR
-    bit_range:
-    - 25
-    - 25
-    description: "SysTick exception clear-pending bit. \n                            Write: \n                            0 = No effect. \n                            1 = Removes the pending state from the SysTick exception. \n                            This bit is WO. On a register read its value is Unknown."
-  - name: PENDSTSET
-    bit_range:
-    - 26
-    - 26
-    description: "SysTick exception set-pending bit. \n                            Write: \n                            0 = No effect. \n                            1 = Changes SysTick exception state to pending. \n                            Read: \n                            0 = SysTick exception is not pending. \n                            1 = SysTick exception is pending."
-  - name: PENDSVCLR
-    bit_range:
-    - 27
-    - 27
-    description: "PendSV clear-pending bit. \n                            Write: \n                            0 = No effect. \n                            1 = Removes the pending state from the PendSV exception."
+    - 30
+    - 30
+    description: Allows the NMI exception pend state to be cleared
   - name: PENDSVSET
     bit_range:
     - 28
     - 28
-    description: "PendSV set-pending bit. \n                            Write: \n                            0 = No effect. \n                            1 = Changes PendSV exception state to pending. \n                            Read: \n                            0 = PendSV exception is not pending. \n                            1 = PendSV exception is pending. \n                            Writing 1 to this bit is the only way to set the PendSV exception state to pending."
-  - name: NMIPENDSET
+    description: Indicates whether the PendSV `FTSSS exception is pending
+  - name: PENDSVCLR
     bit_range:
-    - 31
-    - 31
-    description: "Setting this bit will activate an NMI. Since NMI is the highest priority exception, it will activate as soon as it is registered. \n                            NMI set-pending bit. \n                            Write: \n                            0 = No effect. \n                            1 = Changes NMI exception state to pending. \n                            Read: \n                            0 = NMI exception is not pending. \n                            1 = NMI exception is pending. \n                            Because NMI is the highest-priority exception, normally the processor enters the NMI \n                            exception handler as soon as it detects a write of 1 to this bit. Entering the handler then clears \n                            this bit to 0. This means a read of this bit by the NMI exception handler returns 1 only if the \n                            NMI signal is reasserted while the processor is executing that handler."
+    - 27
+    - 27
+    description: Allows the PendSV exception pend state to be cleared `FTSSS
+  - name: PENDSTSET
+    bit_range:
+    - 26
+    - 26
+    description: Indicates whether the SysTick `FTSSS exception is pending
+  - name: PENDSTCLR
+    bit_range:
+    - 25
+    - 25
+    description: Allows the SysTick exception pend state to be cleared `FTSSS
+  - name: STTNS
+    bit_range:
+    - 24
+    - 24
+    description: Controls whether in a single SysTick implementation, the SysTick is Secure or Non-secure
+  - name: ISRPREEMPT
+    bit_range:
+    - 23
+    - 23
+    description: Indicates whether a pending exception will be serviced on exit from debug halt state
+  - name: ISRPENDING
+    bit_range:
+    - 22
+    - 22
+    description: Indicates whether an external interrupt, generated by the NVIC, is pending
+  - name: VECTPENDING
+    bit_range:
+    - 20
+    - 12
+    description: The exception number of the highest priority pending and enabled interrupt
+  - name: RETTOBASE
+    bit_range:
+    - 11
+    - 11
+    description: In Handler mode, indicates whether there is more than one active exception
+  - name: VECTACTIVE
+    bit_range:
+    - 8
+    - 0
+    description: The exception number of the current executing exception
   side_effects: null
 - id: VTOR
   address_offset: 60680
@@ -431,8 +2414,8 @@ registers:
   - name: TBLOFF
     bit_range:
     - 31
-    - 8
-    description: Bits [31:8] of the indicate the vector table offset address.
+    - 7
+    description: Vector table base offset field. It contains bits[31:7] of the offset of the table base from the bottom of the memory map.
   side_effects: null
 - id: AIRCR
   address_offset: 60684
@@ -440,26 +2423,46 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
+  - name: VECTKEY
+    bit_range:
+    - 31
+    - 16
+    description: 'Register key: Reads as Unknown On writes, write 0x05FA to VECTKEY, otherwise the write is ignored.'
+  - name: ENDIANESS
+    bit_range:
+    - 15
+    - 15
+    description: 'Data endianness implemented: 0 = Little-endian.'
+  - name: PRIS
+    bit_range:
+    - 14
+    - 14
+    description: "Prioritize Secure exceptions. The value of this bit defines whether Secure exception priority boosting is enabled. 0\tPriority ranges of Secure and Non-secure exceptions are identical. 1\tNon-secure exceptions are de-prioritized."
+  - name: BFHFNMINS
+    bit_range:
+    - 13
+    - 13
+    description: "BusFault, HardFault, and NMI Non-secure enable. 0\tBusFault, HardFault, and NMI are Secure. 1\tBusFault and NMI are Non-secure and exceptions can target Non-secure HardFault."
+  - name: PRIGROUP
+    bit_range:
+    - 10
+    - 8
+    description: Interrupt priority grouping field. This field determines the split of group priority from subpriority. See https://developer.arm.com/documentation/100235/0004/the-cortex-m33-peripherals/system-control-block/application-interrupt-and-reset-control-register?lang=en
+  - name: SYSRESETREQS
+    bit_range:
+    - 3
+    - 3
+    description: "System reset request, Secure state only. 0\tSYSRESETREQ functionality is available to both Security states. 1 SYSRESETREQ functionality is only available to Secure state."
+  - name: SYSRESETREQ
+    bit_range:
+    - 2
+    - 2
+    description: This resets only the core on which SYSRESETREQ is asserted, and not the wider system.
   - name: VECTCLRACTIVE
     bit_range:
     - 1
     - 1
     description: 'Clears all active state information for fixed and configurable exceptions. This bit: is self-clearing, can only be set by the DAP when the core is halted.  When set: clears all active exception status of the processor, forces a return to Thread mode, forces an IPSR of 0. A debugger must re-initialize the stack.'
-  - name: SYSRESETREQ
-    bit_range:
-    - 2
-    - 2
-    description: Writing 1 to this bit causes the SYSRESETREQ signal to the outer system to be asserted to request a reset. The intention is to force a large system reset of all major components except for debug. The C_HALT bit in the DHCSR is cleared as a result of the system reset requested. The debugger does not lose contact with the device.
-  - name: ENDIANESS
-    bit_range:
-    - 15
-    - 15
-    description: "Data endianness implemented: \n                            0 = Little-endian."
-  - name: VECTKEY
-    bit_range:
-    - 31
-    - 16
-    description: "Register key: \n                            Reads as Unknown \n                            On writes, write 0x05FA to VECTKEY, otherwise the write is ignored."
   side_effects: null
 - id: SCR
   address_offset: 60688
@@ -467,38 +2470,110 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: SLEEPONEXIT
-    bit_range:
-    - 1
-    - 1
-    description: "Indicates sleep-on-exit when returning from Handler mode to Thread mode: \n                            0 = Do not sleep when returning to Thread mode. \n                            1 = Enter sleep, or deep sleep, on return from an ISR to Thread mode. \n                            Setting this bit to 1 enables an interrupt driven application to avoid returning to an empty main application."
-  - name: SLEEPDEEP
-    bit_range:
-    - 2
-    - 2
-    description: "Controls whether the processor uses sleep or deep sleep as its low power mode: \n                            0 = Sleep. \n                            1 = Deep sleep."
   - name: SEVONPEND
     bit_range:
     - 4
     - 4
-    description: "Send Event on Pending bit: \n                            0 = Only enabled interrupts or events can wakeup the processor, disabled interrupts are excluded. \n                            1 = Enabled events and all interrupts, including disabled interrupts, can wakeup the processor. \n                            When an event or interrupt becomes pending, the event signal wakes up the processor from WFE. If the \n                            processor is not waiting for an event, the event is registered and affects the next WFE. \n                            The processor also wakes up on execution of an SEV instruction or an external event."
+    description: 'Send Event on Pending bit: 0 = Only enabled interrupts or events can wakeup the processor, disabled interrupts are excluded. 1 = Enabled events and all interrupts, including disabled interrupts, can wakeup the processor. When an event or interrupt becomes pending, the event signal wakes up the processor from WFE. If the processor is not waiting for an event, the event is registered and affects the next WFE. The processor also wakes up on execution of an SEV instruction or an external event.'
+  - name: SLEEPDEEPS
+    bit_range:
+    - 3
+    - 3
+    description: 0 SLEEPDEEP is available to both security states 1 SLEEPDEEP is only available to Secure state
+  - name: SLEEPDEEP
+    bit_range:
+    - 2
+    - 2
+    description: 'Controls whether the processor uses sleep or deep sleep as its low power mode: 0 = Sleep. 1 = Deep sleep.'
+  - name: SLEEPONEXIT
+    bit_range:
+    - 1
+    - 1
+    description: 'Indicates sleep-on-exit when returning from Handler mode to Thread mode: 0 = Do not sleep when returning to Thread mode. 1 = Enter sleep, or deep sleep, on return from an ISR to Thread mode. Setting this bit to 1 enables an interrupt driven application to avoid returning to an empty main application.'
   side_effects: null
 - id: CCR
   address_offset: 60692
   size: 32
   access: READ_WRITE
-  reset_value: 0
+  reset_value: 513
   fields:
+  - name: BP
+    bit_range:
+    - 18
+    - 18
+    description: Enables program flow prediction `FTSSS
+  - name: IC
+    bit_range:
+    - 17
+    - 17
+    description: This is a global enable bit for instruction caches in the selected Security state
+  - name: DC
+    bit_range:
+    - 16
+    - 16
+    description: Enables data caching of all data accesses to Normal memory `FTSSS
+  - name: STKOFHFNMIGN
+    bit_range:
+    - 10
+    - 10
+    description: Controls the effect of a stack limit violation while executing at a requested priority less than 0
+  - name: RES1
+    bit_range:
+    - 9
+    - 9
+    description: Reserved, RES1
+  - name: BFHFNMIGN
+    bit_range:
+    - 8
+    - 8
+    description: Determines the effect of precise BusFaults on handlers running at a requested priority less than 0
+  - name: DIV_0_TRP
+    bit_range:
+    - 4
+    - 4
+    description: Controls the generation of a DIVBYZERO UsageFault when attempting to perform integer division by zero
   - name: UNALIGN_TRP
     bit_range:
     - 3
     - 3
-    description: Always reads as one, indicates that all unaligned accesses generate a HardFault.
-  - name: STKALIGN
+    description: Controls the trapping of unaligned word or halfword accesses
+  - name: USERSETMPEND
     bit_range:
-    - 9
-    - 9
-    description: Always reads as one, indicates 8-byte stack alignment on exception entry. On exception entry, the processor uses bit[9] of the stacked PSR to indicate the stack alignment. On return from the exception it uses this stacked bit to restore the correct stack alignment.
+    - 1
+    - 1
+    description: Determines whether unprivileged accesses are permitted to pend interrupts via the STIR
+  - name: RES1_1
+    bit_range:
+    - 0
+    - 0
+    description: Reserved, RES1
+  side_effects: null
+- id: SHPR1
+  address_offset: 60696
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRI_7_3
+    bit_range:
+    - 31
+    - 29
+    description: Priority of system handler 7, SecureFault
+  - name: PRI_6_3
+    bit_range:
+    - 23
+    - 21
+    description: Priority of system handler 6, SecureFault
+  - name: PRI_5_3
+    bit_range:
+    - 15
+    - 13
+    description: Priority of system handler 5, SecureFault
+  - name: PRI_4_3
+    bit_range:
+    - 7
+    - 5
+    description: Priority of system handler 4, SecureFault
   side_effects: null
 - id: SHPR2
   address_offset: 60700
@@ -506,11 +2581,26 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: PRI_11
+  - name: PRI_11_3
     bit_range:
     - 31
-    - 30
-    description: Priority of system handler 11, SVCall
+    - 29
+    description: Priority of system handler 11, SecureFault
+  - name: PRI_10
+    bit_range:
+    - 23
+    - 16
+    description: Reserved, RES0
+  - name: PRI_9
+    bit_range:
+    - 15
+    - 8
+    description: Reserved, RES0
+  - name: PRI_8
+    bit_range:
+    - 7
+    - 0
+    description: Reserved, RES0
   side_effects: null
 - id: SHPR3
   address_offset: 60704
@@ -518,16 +2608,26 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: PRI_14
-    bit_range:
-    - 23
-    - 22
-    description: Priority of system handler 14, PendSV
-  - name: PRI_15
+  - name: PRI_15_3
     bit_range:
     - 31
-    - 30
-    description: Priority of system handler 15, SysTick
+    - 29
+    description: Priority of system handler 15, SecureFault
+  - name: PRI_14_3
+    bit_range:
+    - 23
+    - 21
+    description: Priority of system handler 14, SecureFault
+  - name: PRI_13
+    bit_range:
+    - 15
+    - 8
+    description: Reserved, RES0
+  - name: PRI_12_3
+    bit_range:
+    - 7
+    - 5
+    description: Priority of system handler 12, SecureFault
   side_effects: null
 - id: SHCSR
   address_offset: 60708
@@ -535,11 +2635,755 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
+  - name: HARDFAULTPENDED
+    bit_range:
+    - 21
+    - 21
+    description: '`IAAMO the pending state of the HardFault exception `CTTSSS'
+  - name: SECUREFAULTPENDED
+    bit_range:
+    - 20
+    - 20
+    description: '`IAAMO the pending state of the SecureFault exception'
+  - name: SECUREFAULTENA
+    bit_range:
+    - 19
+    - 19
+    description: '`DW the SecureFault exception is enabled'
+  - name: USGFAULTENA
+    bit_range:
+    - 18
+    - 18
+    description: '`DW the UsageFault exception is enabled `FTSSS'
+  - name: BUSFAULTENA
+    bit_range:
+    - 17
+    - 17
+    description: '`DW the BusFault exception is enabled'
+  - name: MEMFAULTENA
+    bit_range:
+    - 16
+    - 16
+    description: '`DW the MemManage exception is enabled `FTSSS'
   - name: SVCALLPENDED
     bit_range:
     - 15
     - 15
-    description: Reads as 1 if SVCall is Pending.  Write 1 to set pending SVCall, write 0 to clear pending SVCall.
+    description: '`IAAMO the pending state of the SVCall exception `FTSSS'
+  - name: BUSFAULTPENDED
+    bit_range:
+    - 14
+    - 14
+    description: '`IAAMO the pending state of the BusFault exception'
+  - name: MEMFAULTPENDED
+    bit_range:
+    - 13
+    - 13
+    description: '`IAAMO the pending state of the MemManage exception `FTSSS'
+  - name: USGFAULTPENDED
+    bit_range:
+    - 12
+    - 12
+    description: The UsageFault exception is banked between Security states, `IAAMO the pending state of the UsageFault exception `FTSSS
+  - name: SYSTICKACT
+    bit_range:
+    - 11
+    - 11
+    description: '`IAAMO the active state of the SysTick exception `FTSSS'
+  - name: PENDSVACT
+    bit_range:
+    - 10
+    - 10
+    description: '`IAAMO the active state of the PendSV exception `FTSSS'
+  - name: MONITORACT
+    bit_range:
+    - 8
+    - 8
+    description: '`IAAMO the active state of the DebugMonitor exception'
+  - name: SVCALLACT
+    bit_range:
+    - 7
+    - 7
+    description: '`IAAMO the active state of the SVCall exception `FTSSS'
+  - name: NMIACT
+    bit_range:
+    - 5
+    - 5
+    description: '`IAAMO the active state of the NMI exception'
+  - name: SECUREFAULTACT
+    bit_range:
+    - 4
+    - 4
+    description: '`IAAMO the active state of the SecureFault exception'
+  - name: USGFAULTACT
+    bit_range:
+    - 3
+    - 3
+    description: '`IAAMO the active state of the UsageFault exception `FTSSS'
+  - name: HARDFAULTACT
+    bit_range:
+    - 2
+    - 2
+    description: Indicates and allows limited modification of the active state of the HardFault exception `FTSSS
+  - name: BUSFAULTACT
+    bit_range:
+    - 1
+    - 1
+    description: '`IAAMO the active state of the BusFault exception'
+  - name: MEMFAULTACT
+    bit_range:
+    - 0
+    - 0
+    description: '`IAAMO the active state of the MemManage exception `FTSSS'
+  side_effects: null
+- id: CFSR
+  address_offset: 60712
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UFSR_DIVBYZERO
+    bit_range:
+    - 25
+    - 25
+    description: Sticky flag indicating whether an integer division by zero error has occurred
+  - name: UFSR_UNALIGNED
+    bit_range:
+    - 24
+    - 24
+    description: Sticky flag indicating whether an unaligned access error has occurred
+  - name: UFSR_STKOF
+    bit_range:
+    - 20
+    - 20
+    description: Sticky flag indicating whether a stack overflow error has occurred
+  - name: UFSR_NOCP
+    bit_range:
+    - 19
+    - 19
+    description: Sticky flag indicating whether a coprocessor disabled or not present error has occurred
+  - name: UFSR_INVPC
+    bit_range:
+    - 18
+    - 18
+    description: Sticky flag indicating whether an integrity check error has occurred
+  - name: UFSR_INVSTATE
+    bit_range:
+    - 17
+    - 17
+    description: Sticky flag indicating whether an EPSR.T or EPSR.IT validity error has occurred
+  - name: UFSR_UNDEFINSTR
+    bit_range:
+    - 16
+    - 16
+    description: Sticky flag indicating whether an undefined instruction error has occurred
+  - name: BFSR_BFARVALID
+    bit_range:
+    - 15
+    - 15
+    description: Indicates validity of the contents of the BFAR register
+  - name: BFSR_LSPERR
+    bit_range:
+    - 13
+    - 13
+    description: Records whether a BusFault occurred during FP lazy state preservation
+  - name: BFSR_STKERR
+    bit_range:
+    - 12
+    - 12
+    description: Records whether a derived BusFault occurred during exception entry stacking
+  - name: BFSR_UNSTKERR
+    bit_range:
+    - 11
+    - 11
+    description: Records whether a derived BusFault occurred during exception return unstacking
+  - name: BFSR_IMPRECISERR
+    bit_range:
+    - 10
+    - 10
+    description: Records whether an imprecise data access error has occurred
+  - name: BFSR_PRECISERR
+    bit_range:
+    - 9
+    - 9
+    description: Records whether a precise data access error has occurred
+  - name: BFSR_IBUSERR
+    bit_range:
+    - 8
+    - 8
+    description: Records whether a BusFault on an instruction prefetch has occurred
+  - name: MMFSR
+    bit_range:
+    - 7
+    - 0
+    description: Provides information on MemManage exceptions
+  side_effects: null
+- id: HFSR
+  address_offset: 60716
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DEBUGEVT
+    bit_range:
+    - 31
+    - 31
+    description: Indicates when a Debug event has occurred
+  - name: FORCED
+    bit_range:
+    - 30
+    - 30
+    description: Indicates that a fault with configurable priority has been escalated to a HardFault exception, because it could not be made active, because of priority, or because it was disabled
+  - name: VECTTBL
+    bit_range:
+    - 1
+    - 1
+    description: Indicates when a fault has occurred because of a vector table read error on exception processing
+  side_effects: null
+- id: DFSR
+  address_offset: 60720
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EXTERNAL
+    bit_range:
+    - 4
+    - 4
+    description: Sticky flag indicating whether an External debug request debug event has occurred
+  - name: VCATCH
+    bit_range:
+    - 3
+    - 3
+    description: Sticky flag indicating whether a Vector catch debug event has occurred
+  - name: DWTTRAP
+    bit_range:
+    - 2
+    - 2
+    description: Sticky flag indicating whether a Watchpoint debug event has occurred
+  - name: BKPT
+    bit_range:
+    - 1
+    - 1
+    description: Sticky flag indicating whether a Breakpoint debug event has occurred
+  - name: HALTED
+    bit_range:
+    - 0
+    - 0
+    description: Sticky flag indicating that a Halt request debug event or Step debug event has occurred
+  side_effects: null
+- id: MMFAR
+  address_offset: 60724
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDRESS
+    bit_range:
+    - 31
+    - 0
+    description: This register is updated with the address of a location that produced a MemManage fault. The MMFSR shows the cause of the fault, and whether this field is valid. This field is valid only when MMFSR.MMARVALID is set, otherwise it is UNKNOWN
+  side_effects: null
+- id: BFAR
+  address_offset: 60728
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDRESS
+    bit_range:
+    - 31
+    - 0
+    description: This register is updated with the address of a location that produced a BusFault. The BFSR shows the reason for the fault. This field is valid only when BFSR.BFARVALID is set, otherwise it is UNKNOWN
+  side_effects: null
+- id: ID_PFR0
+  address_offset: 60736
+  size: 32
+  access: READ_WRITE
+  reset_value: 48
+  fields:
+  - name: STATE1
+    bit_range:
+    - 7
+    - 4
+    description: T32 instruction set support
+  - name: STATE0
+    bit_range:
+    - 3
+    - 0
+    description: A32 instruction set support
+  side_effects: null
+- id: ID_PFR1
+  address_offset: 60740
+  size: 32
+  access: READ_WRITE
+  reset_value: 1312
+  fields:
+  - name: MPROGMOD
+    bit_range:
+    - 11
+    - 8
+    description: Identifies support for the M-Profile programmers' model support
+  - name: SECURITY
+    bit_range:
+    - 7
+    - 4
+    description: Identifies whether the Security Extension is implemented
+  side_effects: null
+- id: ID_DFR0
+  address_offset: 60744
+  size: 32
+  access: READ_WRITE
+  reset_value: 2097152
+  fields:
+  - name: MPROFDBG
+    bit_range:
+    - 23
+    - 20
+    description: Indicates the supported M-profile debug architecture
+  side_effects: null
+- id: ID_AFR0
+  address_offset: 60748
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IMPDEF3
+    bit_range:
+    - 15
+    - 12
+    description: IMPLEMENTATION DEFINED meaning
+  - name: IMPDEF2
+    bit_range:
+    - 11
+    - 8
+    description: IMPLEMENTATION DEFINED meaning
+  - name: IMPDEF1
+    bit_range:
+    - 7
+    - 4
+    description: IMPLEMENTATION DEFINED meaning
+  - name: IMPDEF0
+    bit_range:
+    - 3
+    - 0
+    description: IMPLEMENTATION DEFINED meaning
+  side_effects: null
+- id: ID_MMFR0
+  address_offset: 60752
+  size: 32
+  access: READ_WRITE
+  reset_value: 1056576
+  fields:
+  - name: AUXREG
+    bit_range:
+    - 23
+    - 20
+    description: Indicates support for Auxiliary Control Registers
+  - name: TCM
+    bit_range:
+    - 19
+    - 16
+    description: Indicates support for tightly coupled memories (TCMs)
+  - name: SHARELVL
+    bit_range:
+    - 15
+    - 12
+    description: Indicates the number of shareability levels implemented
+  - name: OUTERSHR
+    bit_range:
+    - 11
+    - 8
+    description: Indicates the outermost shareability domain implemented
+  - name: PMSA
+    bit_range:
+    - 7
+    - 4
+    description: Indicates support for the protected memory system architecture (PMSA)
+  side_effects: null
+- id: ID_MMFR1
+  address_offset: 60756
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: ID_MMFR2
+  address_offset: 60760
+  size: 32
+  access: READ_WRITE
+  reset_value: 16777216
+  fields:
+  - name: WFISTALL
+    bit_range:
+    - 27
+    - 24
+    description: Indicates the support for Wait For Interrupt (WFI) stalling
+  side_effects: null
+- id: ID_MMFR3
+  address_offset: 60764
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BPMAINT
+    bit_range:
+    - 11
+    - 8
+    description: Indicates the supported branch predictor maintenance
+  - name: CMAINTSW
+    bit_range:
+    - 7
+    - 4
+    description: Indicates the supported cache maintenance operations by set/way
+  - name: CMAINTVA
+    bit_range:
+    - 3
+    - 0
+    description: Indicates the supported cache maintenance operations by address
+  side_effects: null
+- id: ID_ISAR0
+  address_offset: 60768
+  size: 32
+  access: READ_WRITE
+  reset_value: 134816512
+  fields:
+  - name: DIVIDE
+    bit_range:
+    - 27
+    - 24
+    description: Indicates the supported Divide instructions
+  - name: DEBUG
+    bit_range:
+    - 23
+    - 20
+    description: Indicates the implemented Debug instructions
+  - name: COPROC
+    bit_range:
+    - 19
+    - 16
+    description: Indicates the supported Coprocessor instructions
+  - name: CMPBRANCH
+    bit_range:
+    - 15
+    - 12
+    description: Indicates the supported combined Compare and Branch instructions
+  - name: BITFIELD
+    bit_range:
+    - 11
+    - 8
+    description: Indicates the supported bit field instructions
+  - name: BITCOUNT
+    bit_range:
+    - 7
+    - 4
+    description: Indicates the supported bit count instructions
+  side_effects: null
+- id: ID_ISAR1
+  address_offset: 60772
+  size: 32
+  access: READ_WRITE
+  reset_value: 91377664
+  fields:
+  - name: INTERWORK
+    bit_range:
+    - 27
+    - 24
+    description: Indicates the implemented Interworking instructions
+  - name: IMMEDIATE
+    bit_range:
+    - 23
+    - 20
+    description: Indicates the implemented for data-processing instructions with long immediates
+  - name: IFTHEN
+    bit_range:
+    - 19
+    - 16
+    description: Indicates the implemented If-Then instructions
+  - name: EXTEND
+    bit_range:
+    - 15
+    - 12
+    description: Indicates the implemented Extend instructions
+  side_effects: null
+- id: ID_ISAR2
+  address_offset: 60776
+  size: 32
+  access: READ_WRITE
+  reset_value: 806827046
+  fields:
+  - name: REVERSAL
+    bit_range:
+    - 31
+    - 28
+    description: Indicates the implemented Reversal instructions
+  - name: MULTU
+    bit_range:
+    - 23
+    - 20
+    description: Indicates the implemented advanced unsigned Multiply instructions
+  - name: MULTS
+    bit_range:
+    - 19
+    - 16
+    description: Indicates the implemented advanced signed Multiply instructions
+  - name: MULT
+    bit_range:
+    - 15
+    - 12
+    description: Indicates the implemented additional Multiply instructions
+  - name: MULTIACCESSINT
+    bit_range:
+    - 11
+    - 8
+    description: Indicates the support for interruptible multi-access instructions
+  - name: MEMHINT
+    bit_range:
+    - 7
+    - 4
+    description: Indicates the implemented Memory Hint instructions
+  - name: LOADSTORE
+    bit_range:
+    - 3
+    - 0
+    description: Indicates the implemented additional load/store instructions
+  side_effects: null
+- id: ID_ISAR3
+  address_offset: 60780
+  size: 32
+  access: READ_WRITE
+  reset_value: 126441257
+  fields:
+  - name: TRUENOP
+    bit_range:
+    - 27
+    - 24
+    description: Indicates the implemented true NOP instructions
+  - name: T32COPY
+    bit_range:
+    - 23
+    - 20
+    description: Indicates the support for T32 non flag-setting MOV instructions
+  - name: TABBRANCH
+    bit_range:
+    - 19
+    - 16
+    description: Indicates the implemented Table Branch instructions
+  - name: SYNCHPRIM
+    bit_range:
+    - 15
+    - 12
+    description: Used in conjunction with ID_ISAR4.SynchPrim_frac to indicate the implemented Synchronization Primitive instructions
+  - name: SVC
+    bit_range:
+    - 11
+    - 8
+    description: Indicates the implemented SVC instructions
+  - name: SIMD
+    bit_range:
+    - 7
+    - 4
+    description: Indicates the implemented SIMD instructions
+  - name: SATURATE
+    bit_range:
+    - 3
+    - 0
+    description: Indicates the implemented saturating instructions
+  side_effects: null
+- id: ID_ISAR4
+  address_offset: 60784
+  size: 32
+  access: READ_WRITE
+  reset_value: 19988786
+  fields:
+  - name: PSR_M
+    bit_range:
+    - 27
+    - 24
+    description: Indicates the implemented M profile instructions to modify the PSRs
+  - name: SYNCPRIM_FRAC
+    bit_range:
+    - 23
+    - 20
+    description: Used in conjunction with ID_ISAR3.SynchPrim to indicate the implemented Synchronization Primitive instructions
+  - name: BARRIER
+    bit_range:
+    - 19
+    - 16
+    description: Indicates the implemented Barrier instructions
+  - name: WRITEBACK
+    bit_range:
+    - 11
+    - 8
+    description: Indicates the support for writeback addressing modes
+  - name: WITHSHIFTS
+    bit_range:
+    - 7
+    - 4
+    description: Indicates the support for writeback addressing modes
+  - name: UNPRIV
+    bit_range:
+    - 3
+    - 0
+    description: Indicates the implemented unprivileged instructions
+  side_effects: null
+- id: ID_ISAR5
+  address_offset: 60788
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: CTR
+  address_offset: 60796
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147532800
+  fields:
+  - name: RES1
+    bit_range:
+    - 31
+    - 31
+    description: Reserved, RES1
+  - name: CWG
+    bit_range:
+    - 27
+    - 24
+    description: Log2 of the number of words of the maximum size of memory that can be overwritten as a result of the eviction of a cache entry that has had a memory location in it modified
+  - name: ERG
+    bit_range:
+    - 23
+    - 20
+    description: Log2 of the number of words of the maximum size of the reservation granule that has been implemented for the Load-Exclusive and Store-Exclusive instructions
+  - name: DMINLINE
+    bit_range:
+    - 19
+    - 16
+    description: Log2 of the number of words in the smallest cache line of all the data caches and unified caches that are controlled by the PE
+  - name: RES1_1
+    bit_range:
+    - 15
+    - 14
+    description: Reserved, RES1
+  - name: IMINLINE
+    bit_range:
+    - 3
+    - 0
+    description: Log2 of the number of words in the smallest cache line of all the instruction caches that are controlled by the PE
+  side_effects: null
+- id: CPACR
+  address_offset: 60808
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CP11
+    bit_range:
+    - 23
+    - 22
+    description: The value in this field is ignored. If the implementation does not include the FP Extension, this field is RAZ/WI. If the value of this bit is not programmed to the same value as the CP10 field, then the value is UNKNOWN
+  - name: CP10
+    bit_range:
+    - 21
+    - 20
+    description: Defines the access rights for the floating-point functionality
+  - name: CP7
+    bit_range:
+    - 15
+    - 14
+    description: Controls access privileges for coprocessor 7
+  - name: CP6
+    bit_range:
+    - 13
+    - 12
+    description: Controls access privileges for coprocessor 6
+  - name: CP5
+    bit_range:
+    - 11
+    - 10
+    description: Controls access privileges for coprocessor 5
+  - name: CP4
+    bit_range:
+    - 9
+    - 8
+    description: Controls access privileges for coprocessor 4
+  - name: CP3
+    bit_range:
+    - 7
+    - 6
+    description: Controls access privileges for coprocessor 3
+  - name: CP2
+    bit_range:
+    - 5
+    - 4
+    description: Controls access privileges for coprocessor 2
+  - name: CP1
+    bit_range:
+    - 3
+    - 2
+    description: Controls access privileges for coprocessor 1
+  - name: CP0
+    bit_range:
+    - 1
+    - 0
+    description: Controls access privileges for coprocessor 0
+  side_effects: null
+- id: NSACR
+  address_offset: 60812
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CP11
+    bit_range:
+    - 11
+    - 11
+    description: Enables Non-secure access to the Floating-point Extension
+  - name: CP10
+    bit_range:
+    - 10
+    - 10
+    description: Enables Non-secure access to the Floating-point Extension
+  - name: CP7
+    bit_range:
+    - 7
+    - 7
+    description: Enables Non-secure access to coprocessor CP7
+  - name: CP6
+    bit_range:
+    - 6
+    - 6
+    description: Enables Non-secure access to coprocessor CP6
+  - name: CP5
+    bit_range:
+    - 5
+    - 5
+    description: Enables Non-secure access to coprocessor CP5
+  - name: CP4
+    bit_range:
+    - 4
+    - 4
+    description: Enables Non-secure access to coprocessor CP4
+  - name: CP3
+    bit_range:
+    - 3
+    - 3
+    description: Enables Non-secure access to coprocessor CP3
+  - name: CP2
+    bit_range:
+    - 2
+    - 2
+    description: Enables Non-secure access to coprocessor CP2
+  - name: CP1
+    bit_range:
+    - 1
+    - 1
+    description: Enables Non-secure access to coprocessor CP1
+  - name: CP0
+    bit_range:
+    - 0
+    - 0
+    description: Enables Non-secure access to coprocessor CP0
   side_effects: null
 - id: MPU_TYPE
   address_offset: 60816
@@ -547,21 +3391,16 @@ registers:
   access: READ_WRITE
   reset_value: 2048
   fields:
-  - name: SEPARATE
-    bit_range:
-    - 0
-    - 0
-    description: Indicates support for separate instruction and data address maps. Reads as 0 as ARMv6-M only supports a unified MPU.
   - name: DREGION
     bit_range:
     - 15
     - 8
-    description: Number of regions supported by the MPU.
-  - name: IREGION
+    description: Number of regions supported by the MPU
+  - name: SEPARATE
     bit_range:
-    - 23
-    - 16
-    description: Instruction region. Reads as zero as ARMv6-M only supports a unified MPU.
+    - 0
+    - 0
+    description: Indicates support for separate instructions and data address regions
   side_effects: null
 - id: MPU_CTRL
   address_offset: 60820
@@ -569,21 +3408,21 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: ENABLE
-    bit_range:
-    - 0
-    - 0
-    description: "Enables the MPU. If the MPU is disabled, privileged and unprivileged accesses use the default memory map. \n                            0 = MPU disabled. \n                            1 = MPU enabled."
-  - name: HFNMIENA
-    bit_range:
-    - 1
-    - 1
-    description: "Controls the use of the MPU for HardFaults and NMIs. Setting this bit when ENABLE is clear results in UNPREDICTABLE behaviour. \n                            When the MPU is enabled: \n                            0 = MPU is disabled during HardFault and NMI handlers, regardless of the value of the ENABLE bit. \n                            1 = the MPU is enabled during HardFault and NMI handlers."
   - name: PRIVDEFENA
     bit_range:
     - 2
     - 2
-    description: "Controls whether the default memory map is enabled as a background region for privileged accesses. This bit is ignored when ENABLE is clear. \n                            0 = If the MPU is enabled, disables use of the default memory map. Any memory access to a location not \n                            covered by any enabled region causes a fault. \n                            1 = If the MPU is enabled, enables use of the default memory map as a background region for privileged software accesses. \n                            When enabled, the background region acts as if it is region number -1. Any region that is defined and enabled has priority over this default map."
+    description: Controls whether the default memory map is enabled for privileged software
+  - name: HFNMIENA
+    bit_range:
+    - 1
+    - 1
+    description: Controls whether handlers executing with priority less than 0 access memory with the MPU enabled or disabled. This applies to HardFaults, NMIs, and exception handlers when FAULTMASK is set to 1
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enables the MPU
   side_effects: null
 - id: MPU_RNR
   address_offset: 60824
@@ -593,9 +3432,9 @@ registers:
   fields:
   - name: REGION
     bit_range:
-    - 3
+    - 2
     - 0
-    description: "Indicates the MPU region referenced by the MPU_RBAR and MPU_RASR registers. \n                            The MPU supports 8 memory regions, so the permitted values of this field are 0-7."
+    description: Indicates the memory region accessed by MPU_RBAR and MPU_RLAR
   side_effects: null
 - id: MPU_RBAR
   address_offset: 60828
@@ -603,48 +3442,2706 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: REGION
-    bit_range:
-    - 3
-    - 0
-    description: On writes, specifies the number of the region whose base address to update provided VALID is set written as 1. On reads, returns bits [3:0] of MPU_RNR.
-  - name: VALID
-    bit_range:
-    - 4
-    - 4
-    description: "On writes, indicates whether the write must update the base address of the region identified by the REGION field, updating the MPU_RNR to indicate this new region. \n                            Write: \n                            0 = MPU_RNR not changed, and the processor: \n                            Updates the base address for the region specified in the MPU_RNR. \n                            Ignores the value of the REGION field. \n                            1 = The processor: \n                            Updates the value of the MPU_RNR to the value of the REGION field. \n                            Updates the base address for the region specified in the REGION field. \n                            Always reads as zero."
-  - name: ADDR
+  - name: BASE
     bit_range:
     - 31
-    - 8
-    description: Base address of the region.
+    - 5
+    description: Contains bits [31:5] of the lower inclusive limit of the selected MPU memory region. This value is zero extended to provide the base address to be checked against
+  - name: SH
+    bit_range:
+    - 4
+    - 3
+    description: Defines the Shareability domain of this region for Normal memory
+  - name: AP
+    bit_range:
+    - 2
+    - 1
+    description: Defines the access permissions for this region
+  - name: XN
+    bit_range:
+    - 0
+    - 0
+    description: Defines whether code can be executed from this region
   side_effects: null
-- id: MPU_RASR
+- id: MPU_RLAR
   address_offset: 60832
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
+  - name: LIMIT
+    bit_range:
+    - 31
+    - 5
+    description: Contains bits [31:5] of the upper inclusive limit of the selected MPU memory region. This value is postfixed with 0x1F to provide the limit address to be checked against
+  - name: ATTRINDX
+    bit_range:
+    - 3
+    - 1
+    description: Associates a set of attributes in the MPU_MAIR0 and MPU_MAIR1 fields
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Region enable
+  side_effects: null
+- id: MPU_RBAR_A1
+  address_offset: 60836
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BASE
+    bit_range:
+    - 31
+    - 5
+    description: Contains bits [31:5] of the lower inclusive limit of the selected MPU memory region. This value is zero extended to provide the base address to be checked against
+  - name: SH
+    bit_range:
+    - 4
+    - 3
+    description: Defines the Shareability domain of this region for Normal memory
+  - name: AP
+    bit_range:
+    - 2
+    - 1
+    description: Defines the access permissions for this region
+  - name: XN
+    bit_range:
+    - 0
+    - 0
+    description: Defines whether code can be executed from this region
+  side_effects: null
+- id: MPU_RLAR_A1
+  address_offset: 60840
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LIMIT
+    bit_range:
+    - 31
+    - 5
+    description: Contains bits [31:5] of the upper inclusive limit of the selected MPU memory region. This value is postfixed with 0x1F to provide the limit address to be checked against
+  - name: ATTRINDX
+    bit_range:
+    - 3
+    - 1
+    description: Associates a set of attributes in the MPU_MAIR0 and MPU_MAIR1 fields
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Region enable
+  side_effects: null
+- id: MPU_RBAR_A2
+  address_offset: 60844
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BASE
+    bit_range:
+    - 31
+    - 5
+    description: Contains bits [31:5] of the lower inclusive limit of the selected MPU memory region. This value is zero extended to provide the base address to be checked against
+  - name: SH
+    bit_range:
+    - 4
+    - 3
+    description: Defines the Shareability domain of this region for Normal memory
+  - name: AP
+    bit_range:
+    - 2
+    - 1
+    description: Defines the access permissions for this region
+  - name: XN
+    bit_range:
+    - 0
+    - 0
+    description: Defines whether code can be executed from this region
+  side_effects: null
+- id: MPU_RLAR_A2
+  address_offset: 60848
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LIMIT
+    bit_range:
+    - 31
+    - 5
+    description: Contains bits [31:5] of the upper inclusive limit of the selected MPU memory region. This value is postfixed with 0x1F to provide the limit address to be checked against
+  - name: ATTRINDX
+    bit_range:
+    - 3
+    - 1
+    description: Associates a set of attributes in the MPU_MAIR0 and MPU_MAIR1 fields
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Region enable
+  side_effects: null
+- id: MPU_RBAR_A3
+  address_offset: 60852
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BASE
+    bit_range:
+    - 31
+    - 5
+    description: Contains bits [31:5] of the lower inclusive limit of the selected MPU memory region. This value is zero extended to provide the base address to be checked against
+  - name: SH
+    bit_range:
+    - 4
+    - 3
+    description: Defines the Shareability domain of this region for Normal memory
+  - name: AP
+    bit_range:
+    - 2
+    - 1
+    description: Defines the access permissions for this region
+  - name: XN
+    bit_range:
+    - 0
+    - 0
+    description: Defines whether code can be executed from this region
+  side_effects: null
+- id: MPU_RLAR_A3
+  address_offset: 60856
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LIMIT
+    bit_range:
+    - 31
+    - 5
+    description: Contains bits [31:5] of the upper inclusive limit of the selected MPU memory region. This value is postfixed with 0x1F to provide the limit address to be checked against
+  - name: ATTRINDX
+    bit_range:
+    - 3
+    - 1
+    description: Associates a set of attributes in the MPU_MAIR0 and MPU_MAIR1 fields
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Region enable
+  side_effects: null
+- id: MPU_MAIR0
+  address_offset: 60864
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ATTR3
+    bit_range:
+    - 31
+    - 24
+    description: Memory attribute encoding for MPU regions with an AttrIndex of 3
+  - name: ATTR2
+    bit_range:
+    - 23
+    - 16
+    description: Memory attribute encoding for MPU regions with an AttrIndex of 2
+  - name: ATTR1
+    bit_range:
+    - 15
+    - 8
+    description: Memory attribute encoding for MPU regions with an AttrIndex of 1
+  - name: ATTR0
+    bit_range:
+    - 7
+    - 0
+    description: Memory attribute encoding for MPU regions with an AttrIndex of 0
+  side_effects: null
+- id: MPU_MAIR1
+  address_offset: 60868
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ATTR7
+    bit_range:
+    - 31
+    - 24
+    description: Memory attribute encoding for MPU regions with an AttrIndex of 7
+  - name: ATTR6
+    bit_range:
+    - 23
+    - 16
+    description: Memory attribute encoding for MPU regions with an AttrIndex of 6
+  - name: ATTR5
+    bit_range:
+    - 15
+    - 8
+    description: Memory attribute encoding for MPU regions with an AttrIndex of 5
+  - name: ATTR4
+    bit_range:
+    - 7
+    - 0
+    description: Memory attribute encoding for MPU regions with an AttrIndex of 4
+  side_effects: null
+- id: SAU_CTRL
+  address_offset: 60880
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALLNS
+    bit_range:
+    - 1
+    - 1
+    description: When SAU_CTRL.ENABLE is 0 this bit controls if the memory is marked as Non-secure or Secure
   - name: ENABLE
     bit_range:
     - 0
     - 0
-    description: Enables the region.
-  - name: SIZE
+    description: Enables the SAU
+  side_effects: null
+- id: SAU_TYPE
+  address_offset: 60884
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: SREGION
+    bit_range:
+    - 7
+    - 0
+    description: The number of implemented SAU regions
+  side_effects: null
+- id: SAU_RNR
+  address_offset: 60888
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION
+    bit_range:
+    - 7
+    - 0
+    description: Indicates the SAU region accessed by SAU_RBAR and SAU_RLAR
+  side_effects: null
+- id: SAU_RBAR
+  address_offset: 60892
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BADDR
+    bit_range:
+    - 31
+    - 5
+    description: Holds bits [31:5] of the base address for the selected SAU region
+  side_effects: null
+- id: SAU_RLAR
+  address_offset: 60896
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LADDR
+    bit_range:
+    - 31
+    - 5
+    description: Holds bits [31:5] of the limit address for the selected SAU region
+  - name: NSC
+    bit_range:
+    - 1
+    - 1
+    description: Controls whether Non-secure state is permitted to execute an SG instruction from this region
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: SAU region enable
+  side_effects: null
+- id: SFSR
+  address_offset: 60900
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LSERR
+    bit_range:
+    - 7
+    - 7
+    description: Sticky flag indicating that an error occurred during lazy state activation or deactivation
+  - name: SFARVALID
+    bit_range:
+    - 6
+    - 6
+    description: This bit is set when the SFAR register contains a valid value. As with similar fields, such as BFSR.BFARVALID and MMFSR.MMARVALID, this bit can be cleared by other exceptions, such as BusFault
+  - name: LSPERR
     bit_range:
     - 5
+    - 5
+    description: Stick flag indicating that an SAU or IDAU violation occurred during the lazy preservation of floating-point state
+  - name: INVTRAN
+    bit_range:
+    - 4
+    - 4
+    description: Sticky flag indicating that an exception was raised due to a branch that was not flagged as being domain crossing causing a transition from Secure to Non-secure memory
+  - name: AUVIOL
+    bit_range:
+    - 3
+    - 3
+    description: Sticky flag indicating that an attempt was made to access parts of the address space that are marked as Secure with NS-Req for the transaction set to Non-secure. This bit is not set if the violation occurred during lazy state preservation. See LSPERR
+  - name: INVER
+    bit_range:
+    - 2
+    - 2
+    description: This can be caused by EXC_RETURN.DCRS being set to 0 when returning from an exception in the Non-secure state, or by EXC_RETURN.ES being set to 1 when returning from an exception in the Non-secure state
+  - name: INVIS
+    bit_range:
     - 1
-    description: Indicates the region size. Region size in bytes = 2^(SIZE+1). The minimum permitted value is 7 (b00111) = 256Bytes
-  - name: SRD
+    - 1
+    description: This bit is set if the integrity signature in an exception stack frame is found to be invalid during the unstacking operation
+  - name: INVEP
+    bit_range:
+    - 0
+    - 0
+    description: This bit is set if a function call from the Non-secure state or exception targets a non-SG instruction in the Secure state. This bit is also set if the target address is a SG instruction, but there is no matching SAU/IDAU region with the NSC flag set
+  side_effects: null
+- id: SFAR
+  address_offset: 60904
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDRESS
+    bit_range:
+    - 31
+    - 0
+    description: The address of an access that caused a attribution unit violation. This field is only valid when SFSR.SFARVALID is set. This allows the actual flip flops associated with this register to be shared with other fault address registers. If an implementation chooses to share the storage in this way, care must be taken to not leak Secure address information to the Non-secure state. One way of achieving this is to share the SFAR register with the MMFAR_S register, which is not accessible to the Non-secure state
+  side_effects: null
+- id: DHCSR
+  address_offset: 60912
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: S_RESTART_ST
+    bit_range:
+    - 26
+    - 26
+    description: Indicates the PE has processed a request to clear DHCSR.C_HALT to 0. That is, either a write to DHCSR that clears DHCSR.C_HALT from 1 to 0, or an External Restart Request
+  - name: S_RESET_ST
+    bit_range:
+    - 25
+    - 25
+    description: Indicates whether the PE has been reset since the last read of the DHCSR
+  - name: S_RETIRE_ST
+    bit_range:
+    - 24
+    - 24
+    description: Set to 1 every time the PE retires one of more instructions
+  - name: S_SDE
+    bit_range:
+    - 20
+    - 20
+    description: Indicates whether Secure invasive debug is allowed
+  - name: S_LOCKUP
+    bit_range:
+    - 19
+    - 19
+    description: Indicates whether the PE is in Lockup state
+  - name: S_SLEEP
+    bit_range:
+    - 18
+    - 18
+    description: Indicates whether the PE is sleeping
+  - name: S_HALT
+    bit_range:
+    - 17
+    - 17
+    description: Indicates whether the PE is in Debug state
+  - name: S_REGRDY
+    bit_range:
+    - 16
+    - 16
+    description: Handshake flag to transfers through the DCRDR
+  - name: C_SNAPSTALL
+    bit_range:
+    - 5
+    - 5
+    description: Allow imprecise entry to Debug state
+  - name: C_MASKINTS
+    bit_range:
+    - 3
+    - 3
+    description: When debug is enabled, the debugger can write to this bit to mask PendSV, SysTick and external configurable interrupts
+  - name: C_STEP
+    bit_range:
+    - 2
+    - 2
+    description: Enable single instruction step
+  - name: C_HALT
+    bit_range:
+    - 1
+    - 1
+    description: PE enter Debug state halt request
+  - name: C_DEBUGEN
+    bit_range:
+    - 0
+    - 0
+    description: Enable Halting debug
+  side_effects: null
+- id: DCRSR
+  address_offset: 60916
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGWNR
+    bit_range:
+    - 16
+    - 16
+    description: Specifies the access type for the transfer
+  - name: REGSEL
+    bit_range:
+    - 6
+    - 0
+    description: Specifies the general-purpose register, special-purpose register, or FP register to transfer
+  side_effects: null
+- id: DCRDR
+  address_offset: 60920
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBGTMP
+    bit_range:
+    - 31
+    - 0
+    description: Provides debug access for reading and writing the general-purpose registers, special-purpose registers, and Floating-point Extension registers
+  side_effects: null
+- id: DEMCR
+  address_offset: 60924
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRCENA
+    bit_range:
+    - 24
+    - 24
+    description: Global enable for all DWT and ITM features
+  - name: SDME
+    bit_range:
+    - 20
+    - 20
+    description: Indicates whether the DebugMonitor targets the Secure or the Non-secure state and whether debug events are allowed in Secure state
+  - name: MON_REQ
+    bit_range:
+    - 19
+    - 19
+    description: DebugMonitor semaphore bit
+  - name: MON_STEP
+    bit_range:
+    - 18
+    - 18
+    description: Enable DebugMonitor stepping
+  - name: MON_PEND
+    bit_range:
+    - 17
+    - 17
+    description: Sets or clears the pending state of the DebugMonitor exception
+  - name: MON_EN
+    bit_range:
+    - 16
+    - 16
+    description: Enable the DebugMonitor exception
+  - name: VC_SFERR
+    bit_range:
+    - 11
+    - 11
+    description: SecureFault exception halting debug vector catch enable
+  - name: VC_HARDERR
+    bit_range:
+    - 10
+    - 10
+    description: HardFault exception halting debug vector catch enable
+  - name: VC_INTERR
+    bit_range:
+    - 9
+    - 9
+    description: Enable halting debug vector catch for faults during exception entry and return
+  - name: VC_BUSERR
+    bit_range:
+    - 8
+    - 8
+    description: BusFault exception halting debug vector catch enable
+  - name: VC_STATERR
+    bit_range:
+    - 7
+    - 7
+    description: Enable halting debug trap on a UsageFault exception caused by a state information error, for example an Undefined Instruction exception
+  - name: VC_CHKERR
+    bit_range:
+    - 6
+    - 6
+    description: Enable halting debug trap on a UsageFault exception caused by a checking error, for example an alignment check error
+  - name: VC_NOCPERR
+    bit_range:
+    - 5
+    - 5
+    description: Enable halting debug trap on a UsageFault caused by an access to a coprocessor
+  - name: VC_MMERR
+    bit_range:
+    - 4
+    - 4
+    description: Enable halting debug trap on a MemManage exception
+  - name: VC_CORERESET
+    bit_range:
+    - 0
+    - 0
+    description: Enable Reset Vector Catch. This causes a warm reset to halt a running system
+  side_effects: null
+- id: DSCSR
+  address_offset: 60936
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CDSKEY
+    bit_range:
+    - 17
+    - 17
+    description: Writes to the CDS bit are ignored unless CDSKEY is concurrently written to zero
+  - name: CDS
+    bit_range:
+    - 16
+    - 16
+    description: This field indicates the current Security state of the processor
+  - name: SBRSEL
+    bit_range:
+    - 1
+    - 1
+    description: If SBRSELEN is 1 this bit selects whether the Non-secure or the Secure version of the memory-mapped Banked registers are accessible to the debugger
+  - name: SBRSELEN
+    bit_range:
+    - 0
+    - 0
+    description: Controls whether the SBRSEL field or the current Security state of the processor selects which version of the memory-mapped Banked registers are accessed to the debugger
+  side_effects: null
+- id: STIR
+  address_offset: 61184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTID
+    bit_range:
+    - 8
+    - 0
+    description: Indicates the interrupt to be pended. The value written is (ExceptionNumber - 16)
+  side_effects: null
+- id: FPCCR
+  address_offset: 61236
+  size: 32
+  access: READ_WRITE
+  reset_value: 536872050
+  fields:
+  - name: ASPEN
+    bit_range:
+    - 31
+    - 31
+    description: When this bit is set to 1, execution of a floating-point instruction sets the CONTROL.FPCA bit to 1
+  - name: LSPEN
+    bit_range:
+    - 30
+    - 30
+    description: Enables lazy context save of floating-point state
+  - name: LSPENS
+    bit_range:
+    - 29
+    - 29
+    description: This bit controls whether the LSPEN bit is writeable from the Non-secure state
+  - name: CLRONRET
+    bit_range:
+    - 28
+    - 28
+    description: Clear floating-point caller saved registers on exception return
+  - name: CLRONRETS
+    bit_range:
+    - 27
+    - 27
+    description: This bit controls whether the CLRONRET bit is writeable from the Non-secure state
+  - name: TS
+    bit_range:
+    - 26
+    - 26
+    description: Treat floating-point registers as Secure enable
+  - name: UFRDY
+    bit_range:
+    - 10
+    - 10
+    description: Indicates whether the software executing when the PE allocated the floating-point stack frame was able to set the UsageFault exception to pending
+  - name: SPLIMVIOL
+    bit_range:
+    - 9
+    - 9
+    description: This bit is banked between the Security states and indicates whether the floating-point context violates the stack pointer limit that was active when lazy state preservation was activated. SPLIMVIOL modifies the lazy floating-point state preservation behavior
+  - name: MONRDY
+    bit_range:
+    - 8
+    - 8
+    description: Indicates whether the software executing when the PE allocated the floating-point stack frame was able to set the DebugMonitor exception to pending
+  - name: SFRDY
+    bit_range:
+    - 7
+    - 7
+    description: Indicates whether the software executing when the PE allocated the floating-point stack frame was able to set the SecureFault exception to pending. This bit is only present in the Secure version of the register, and behaves as RAZ/WI when accessed from the Non-secure state
+  - name: BFRDY
+    bit_range:
+    - 6
+    - 6
+    description: Indicates whether the software executing when the PE allocated the floating-point stack frame was able to set the BusFault exception to pending
+  - name: MMRDY
+    bit_range:
+    - 5
+    - 5
+    description: Indicates whether the software executing when the PE allocated the floating-point stack frame was able to set the MemManage exception to pending
+  - name: HFRDY
+    bit_range:
+    - 4
+    - 4
+    description: Indicates whether the software executing when the PE allocated the floating-point stack frame was able to set the HardFault exception to pending
+  - name: THREAD
+    bit_range:
+    - 3
+    - 3
+    description: Indicates the PE mode when it allocated the floating-point stack frame
+  - name: S
+    bit_range:
+    - 2
+    - 2
+    description: Security status of the floating-point context. This bit is only present in the Secure version of the register, and behaves as RAZ/WI when accessed from the Non-secure state. This bit is updated whenever lazy state preservation is activated, or when a floating-point instruction is executed
+  - name: USER
+    bit_range:
+    - 1
+    - 1
+    description: Indicates the privilege level of the software executing when the PE allocated the floating-point stack frame
+  - name: LSPACT
+    bit_range:
+    - 0
+    - 0
+    description: Indicates whether lazy preservation of the floating-point state is active
+  side_effects: null
+- id: FPCAR
+  address_offset: 61240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDRESS
+    bit_range:
+    - 31
+    - 3
+    description: The location of the unpopulated floating-point register space allocated on an exception stack frame
+  side_effects: null
+- id: FPDSCR
+  address_offset: 61244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AHP
+    bit_range:
+    - 26
+    - 26
+    description: Default value for FPSCR.AHP
+  - name: DN
+    bit_range:
+    - 25
+    - 25
+    description: Default value for FPSCR.DN
+  - name: FZ
+    bit_range:
+    - 24
+    - 24
+    description: Default value for FPSCR.FZ
+  - name: RMODE
+    bit_range:
+    - 23
+    - 22
+    description: Default value for FPSCR.RMode
+  side_effects: null
+- id: MVFR0
+  address_offset: 61248
+  size: 32
+  access: READ_WRITE
+  reset_value: 1616119297
+  fields:
+  - name: FPROUND
+    bit_range:
+    - 31
+    - 28
+    description: Indicates the rounding modes supported by the FP Extension
+  - name: FPSQRT
+    bit_range:
+    - 23
+    - 20
+    description: Indicates the support for FP square root operations
+  - name: FPDIVIDE
+    bit_range:
+    - 19
+    - 16
+    description: Indicates the support for FP divide operations
+  - name: FPDP
+    bit_range:
+    - 11
+    - 8
+    description: Indicates support for FP double-precision operations
+  - name: FPSP
+    bit_range:
+    - 7
+    - 4
+    description: Indicates support for FP single-precision operations
+  - name: SIMDREG
+    bit_range:
+    - 3
+    - 0
+    description: Indicates size of FP register file
+  side_effects: null
+- id: MVFR1
+  address_offset: 61252
+  size: 32
+  access: READ_WRITE
+  reset_value: 2231369865
+  fields:
+  - name: FMAC
+    bit_range:
+    - 31
+    - 28
+    description: Indicates whether the FP Extension implements the fused multiply accumulate instructions
+  - name: FPHP
+    bit_range:
+    - 27
+    - 24
+    description: Indicates whether the FP Extension implements half-precision FP conversion instructions
+  - name: FPDNAN
+    bit_range:
+    - 7
+    - 4
+    description: Indicates whether the FP hardware implementation supports NaN propagation
+  - name: FPFTZ
+    bit_range:
+    - 3
+    - 0
+    description: Indicates whether subnormals are always flushed-to-zero
+  side_effects: null
+- id: MVFR2
+  address_offset: 61256
+  size: 32
+  access: READ_WRITE
+  reset_value: 96
+  fields:
+  - name: FPMISC
+    bit_range:
+    - 7
+    - 4
+    description: Indicates support for miscellaneous FP features
+  side_effects: null
+- id: DDEVARCH
+  address_offset: 61372
+  size: 32
+  access: READ_WRITE
+  reset_value: 1198533124
+  fields:
+  - name: ARCHITECT
+    bit_range:
+    - 31
+    - 21
+    description: Defines the architect of the component. Bits [31:28] are the JEP106 continuation code (JEP106 bank ID, minus 1) and bits [27:21] are the JEP106 ID code.
+  - name: PRESENT
+    bit_range:
+    - 20
+    - 20
+    description: Defines that the DEVARCH register is present
+  - name: REVISION
+    bit_range:
+    - 19
+    - 16
+    description: Defines the architecture revision of the component
+  - name: ARCHVER
+    bit_range:
+    - 15
+    - 12
+    description: Defines the architecture version of the component
+  - name: ARCHPART
+    bit_range:
+    - 11
+    - 0
+    description: Defines the architecture of the component
+  side_effects: null
+- id: DDEVTYPE
+  address_offset: 61388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SUB
+    bit_range:
+    - 7
+    - 4
+    description: Component sub-type
+  - name: MAJOR
+    bit_range:
+    - 3
+    - 0
+    description: CoreSight major type
+  side_effects: null
+- id: DPIDR4
+  address_offset: 61392
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: SIZE
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: DES_2
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DPIDR5
+  address_offset: 61396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: DPIDR6
+  address_offset: 61400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: DPIDR7
+  address_offset: 61404
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: DPIDR0
+  address_offset: 61408
+  size: 32
+  access: READ_WRITE
+  reset_value: 33
+  fields:
+  - name: PART_0
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DPIDR1
+  address_offset: 61412
+  size: 32
+  access: READ_WRITE
+  reset_value: 189
+  fields:
+  - name: DES_0
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: PART_1
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DPIDR2
+  address_offset: 61416
+  size: 32
+  access: READ_WRITE
+  reset_value: 11
+  fields:
+  - name: REVISION
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: JEDEC
+    bit_range:
+    - 3
+    - 3
+    description: See CoreSight Architecture Specification
+  - name: DES_1
+    bit_range:
+    - 2
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DPIDR3
+  address_offset: 61420
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REVAND
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: CMOD
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DCIDR0
+  address_offset: 61424
+  size: 32
+  access: READ_WRITE
+  reset_value: 13
+  fields:
+  - name: PRMBL_0
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DCIDR1
+  address_offset: 61428
+  size: 32
+  access: READ_WRITE
+  reset_value: 144
+  fields:
+  - name: CLASS
+    bit_range:
+    - 7
+    - 4
+    description: See CoreSight Architecture Specification
+  - name: PRMBL_1
+    bit_range:
+    - 3
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DCIDR2
+  address_offset: 61432
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PRMBL_2
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: DCIDR3
+  address_offset: 61436
+  size: 32
+  access: READ_WRITE
+  reset_value: 177
+  fields:
+  - name: PRMBL_3
+    bit_range:
+    - 7
+    - 0
+    description: See CoreSight Architecture Specification
+  side_effects: null
+- id: TRCPRGCTLR
+  address_offset: 266244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Trace Unit Enable
+  side_effects: null
+- id: TRCSTATR
+  address_offset: 266252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PMSTABLE
+    bit_range:
+    - 1
+    - 1
+    description: Indicates whether the ETM-Teal registers are stable and can be read
+  - name: IDLE
+    bit_range:
+    - 0
+    - 0
+    description: Indicates that the trace unit is inactive
+  side_effects: null
+- id: TRCCONFIGR
+  address_offset: 266256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RS
+    bit_range:
+    - 12
+    - 12
+    description: Return stack enable
+  - name: TS
+    bit_range:
+    - 11
+    - 11
+    description: Global timestamp tracing
+  - name: COND
+    bit_range:
+    - 10
+    - 5
+    description: Conditional instruction tracing
+  - name: CCI
+    bit_range:
+    - 4
+    - 4
+    description: Cycle counting in instruction trace
+  - name: BB
+    bit_range:
+    - 3
+    - 3
+    description: Branch broadcast mode
+  side_effects: null
+- id: TRCEVENTCTL0R
+  address_offset: 266272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TYPE1
+    bit_range:
+    - 15
+    - 15
+    description: Selects the resource type for event 1
+  - name: SEL1
+    bit_range:
+    - 10
+    - 8
+    description: 'Selects the resource number, based on the value of TYPE1: When TYPE1 is 0, selects a single selected resource from 0-15 defined by SEL1[2:0].  When TYPE1 is 1, selects a Boolean combined resource pair from 0-7 defined by SEL1[2:0]'
+  - name: TYPE0
+    bit_range:
+    - 7
+    - 7
+    description: Selects the resource type for event 0
+  - name: SEL0
+    bit_range:
+    - 2
+    - 0
+    description: 'Selects the resource number, based on the value of TYPE0: When TYPE1 is 0, selects a single selected resource from 0-15 defined by SEL0[2:0].  When TYPE1 is 1, selects a Boolean combined resource pair from 0-7 defined by SEL0[2:0]'
+  side_effects: null
+- id: TRCEVENTCTL1R
+  address_offset: 266276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LPOVERRIDE
+    bit_range:
+    - 12
+    - 12
+    description: Low power state behavior override
+  - name: ATB
+    bit_range:
+    - 11
+    - 11
+    description: ATB enabled
+  - name: INSTEN1
+    bit_range:
+    - 1
+    - 1
+    description: One bit per event, to enable generation of an event element in the instruction trace stream when the selected event occurs
+  - name: INSTEN0
+    bit_range:
+    - 0
+    - 0
+    description: One bit per event, to enable generation of an event element in the instruction trace stream when the selected event occurs
+  side_effects: null
+- id: TRCSTALLCTLR
+  address_offset: 266284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INSTPRIORITY
+    bit_range:
+    - 10
+    - 10
+    description: Reserved, RES0
+  - name: ISTALL
+    bit_range:
+    - 8
+    - 8
+    description: Stall processor based on instruction trace buffer space
+  - name: LEVEL
+    bit_range:
+    - 3
+    - 2
+    description: Threshold at which stalling becomes active. This provides four levels. This level can be varied to optimize the level of invasion caused by stalling, balanced against the risk of a FIFO overflow
+  side_effects: null
+- id: TRCTSCTLR
+  address_offset: 266288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TYPE0
+    bit_range:
+    - 7
+    - 7
+    description: Selects the resource type for event 0
+  - name: SEL0
+    bit_range:
+    - 1
+    - 0
+    description: 'Selects the resource number, based on the value of TYPE0: When TYPE1 is 0, selects a single selected resource from 0-15 defined by SEL0[2:0].  When TYPE1 is 1, selects a Boolean combined resource pair from 0-7 defined by SEL0[2:0]'
+  side_effects: null
+- id: TRCSYNCPR
+  address_offset: 266292
+  size: 32
+  access: READ_WRITE
+  reset_value: 10
+  fields:
+  - name: PERIOD
+    bit_range:
+    - 4
+    - 0
+    description: 'Defines the number of bytes of trace between trace synchronization requests as a total of the number of bytes generated by the instruction stream. The number of bytes is 2N where N is the value of this field: - A value of zero disables these periodic trace synchronization requests, but does not disable other trace synchronization requests.  - The minimum value that can be programmed, other than zero, is 8, providing a minimum trace synchronization period of 256 bytes.  - The maximum value is 20, providing a maximum trace synchronization period of 2^20 bytes'
+  side_effects: null
+- id: TRCCCCTLR
+  address_offset: 266296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: THRESHOLD
+    bit_range:
+    - 11
+    - 0
+    description: Instruction trace cycle count threshold
+  side_effects: null
+- id: TRCVICTLR
+  address_offset: 266368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EXLEVEL_S3
+    bit_range:
+    - 19
+    - 19
+    description: In Secure state, each bit controls whether instruction tracing is enabled for the corresponding exception level
+  - name: EXLEVEL_S0
+    bit_range:
+    - 16
+    - 16
+    description: In Secure state, each bit controls whether instruction tracing is enabled for the corresponding exception level
+  - name: TRCERR
+    bit_range:
+    - 11
+    - 11
+    description: Selects whether a system error exception must always be traced
+  - name: TRCRESET
+    bit_range:
+    - 10
+    - 10
+    description: Selects whether a reset exception must always be traced
+  - name: SSSTATUS
+    bit_range:
+    - 9
+    - 9
+    description: Indicates the current status of the start/stop logic
+  - name: TYPE0
+    bit_range:
+    - 7
+    - 7
+    description: Selects the resource type for event 0
+  - name: SEL0
+    bit_range:
+    - 1
+    - 0
+    description: 'Selects the resource number, based on the value of TYPE0: When TYPE1 is 0, selects a single selected resource from 0-15 defined by SEL0[2:0].  When TYPE1 is 1, selects a Boolean combined resource pair from 0-7 defined by SEL0[2:0]'
+  side_effects: null
+- id: TRCCNTRLDVR0
+  address_offset: 266560
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VALUE
+    bit_range:
+    - 15
+    - 0
+    description: Defines the reload value for the counter. This value is loaded into the counter each time the reload event occurs
+  side_effects: null
+- id: TRCIDR8
+  address_offset: 266624
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXSPEC
+    bit_range:
+    - 31
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCIDR9
+  address_offset: 266628
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: NUMP0KEY
+    bit_range:
+    - 31
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCIDR10
+  address_offset: 266632
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: NUMP1KEY
+    bit_range:
+    - 31
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCIDR11
+  address_offset: 266636
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: NUMP1SPC
+    bit_range:
+    - 31
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCIDR12
+  address_offset: 266640
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: NUMCONDKEY
+    bit_range:
+    - 31
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCIDR13
+  address_offset: 266644
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: NUMCONDSPC
+    bit_range:
+    - 31
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCIMSPEC
+  address_offset: 266688
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SUPPORT
+    bit_range:
+    - 3
+    - 0
+    description: Reserved, RES0
+  side_effects: null
+- id: TRCIDR0
+  address_offset: 266720
+  size: 32
+  access: READ_WRITE
+  reset_value: 671090401
+  fields:
+  - name: COMMOPT
+    bit_range:
+    - 29
+    - 29
+    description: reads as `ImpDef
+  - name: TSSIZE
+    bit_range:
+    - 28
+    - 24
+    description: reads as `ImpDef
+  - name: TRCEXDATA
+    bit_range:
+    - 17
+    - 17
+    description: reads as `ImpDef
+  - name: QSUPP
+    bit_range:
+    - 16
+    - 15
+    description: reads as `ImpDef
+  - name: QFILT
+    bit_range:
+    - 14
+    - 14
+    description: reads as `ImpDef
+  - name: CONDTYPE
+    bit_range:
+    - 13
+    - 12
+    description: reads as `ImpDef
+  - name: NUMEVENT
+    bit_range:
+    - 11
+    - 10
+    description: reads as `ImpDef
+  - name: RETSTACK
+    bit_range:
+    - 9
+    - 9
+    description: reads as `ImpDef
+  - name: TRCCCI
+    bit_range:
+    - 7
+    - 7
+    description: reads as `ImpDef
+  - name: TRCCOND
+    bit_range:
+    - 6
+    - 6
+    description: reads as `ImpDef
+  - name: TRCBB
+    bit_range:
+    - 5
+    - 5
+    description: reads as `ImpDef
+  - name: TRCDATA
+    bit_range:
+    - 4
+    - 3
+    description: reads as `ImpDef
+  - name: INSTP0
+    bit_range:
+    - 2
+    - 1
+    description: reads as `ImpDef
+  - name: RES1
+    bit_range:
+    - 0
+    - 0
+    description: Reserved, RES1
+  side_effects: null
+- id: TRCIDR1
+  address_offset: 266724
+  size: 32
+  access: READ_WRITE
+  reset_value: 1090581537
+  fields:
+  - name: DESIGNER
+    bit_range:
+    - 31
+    - 24
+    description: reads as `ImpDef
+  - name: RES1
+    bit_range:
+    - 15
+    - 12
+    description: Reserved, RES1
+  - name: TRCARCHMAJ
+    bit_range:
+    - 11
+    - 8
+    description: reads as 0b0100
+  - name: TRCARCHMIN
+    bit_range:
+    - 7
+    - 4
+    description: reads as 0b0000
+  - name: REVISION
+    bit_range:
+    - 3
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCIDR2
+  address_offset: 266728
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: CCSIZE
+    bit_range:
+    - 28
+    - 25
+    description: reads as `ImpDef
+  - name: DVSIZE
+    bit_range:
+    - 24
+    - 20
+    description: reads as `ImpDef
+  - name: DASIZE
+    bit_range:
+    - 19
+    - 15
+    description: reads as `ImpDef
+  - name: VMIDSIZE
+    bit_range:
+    - 14
+    - 10
+    description: reads as `ImpDef
+  - name: CIDSIZE
+    bit_range:
+    - 9
+    - 5
+    description: reads as `ImpDef
+  - name: IASIZE
+    bit_range:
+    - 4
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCIDR3
+  address_offset: 266732
+  size: 32
+  access: READ_WRITE
+  reset_value: 252248068
+  fields:
+  - name: NOOVERFLOW
+    bit_range:
+    - 31
+    - 31
+    description: reads as `ImpDef
+  - name: NUMPROC
+    bit_range:
+    - 30
+    - 28
+    description: reads as `ImpDef
+  - name: SYSSTALL
+    bit_range:
+    - 27
+    - 27
+    description: reads as `ImpDef
+  - name: STALLCTL
+    bit_range:
+    - 26
+    - 26
+    description: reads as `ImpDef
+  - name: SYNCPR
+    bit_range:
+    - 25
+    - 25
+    description: reads as `ImpDef
+  - name: TRCERR
+    bit_range:
+    - 24
+    - 24
+    description: reads as `ImpDef
+  - name: EXLEVEL_NS
+    bit_range:
+    - 23
+    - 20
+    description: reads as `ImpDef
+  - name: EXLEVEL_S
+    bit_range:
+    - 19
+    - 16
+    description: reads as `ImpDef
+  - name: CCITMIN
+    bit_range:
+    - 11
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCIDR4
+  address_offset: 266736
+  size: 32
+  access: READ_WRITE
+  reset_value: 1130496
+  fields:
+  - name: NUMVMIDC
+    bit_range:
+    - 31
+    - 28
+    description: reads as `ImpDef
+  - name: NUMCIDC
+    bit_range:
+    - 27
+    - 24
+    description: reads as `ImpDef
+  - name: NUMSSCC
+    bit_range:
+    - 23
+    - 20
+    description: reads as `ImpDef
+  - name: NUMRSPAIR
+    bit_range:
+    - 19
+    - 16
+    description: reads as `ImpDef
+  - name: NUMPC
+    bit_range:
+    - 15
+    - 12
+    description: reads as `ImpDef
+  - name: SUPPDAC
+    bit_range:
+    - 8
+    - 8
+    description: reads as `ImpDef
+  - name: NUMDVC
+    bit_range:
+    - 7
+    - 4
+    description: reads as `ImpDef
+  - name: NUMACPAIRS
+    bit_range:
+    - 3
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCIDR5
+  address_offset: 266740
+  size: 32
+  access: READ_WRITE
+  reset_value: 2428960772
+  fields:
+  - name: REDFUNCNTR
+    bit_range:
+    - 31
+    - 31
+    description: reads as `ImpDef
+  - name: NUMCNTR
+    bit_range:
+    - 30
+    - 28
+    description: reads as `ImpDef
+  - name: NUMSEQSTATE
+    bit_range:
+    - 27
+    - 25
+    description: reads as `ImpDef
+  - name: LPOVERRIDE
+    bit_range:
+    - 23
+    - 23
+    description: reads as `ImpDef
+  - name: ATBTRIG
+    bit_range:
+    - 22
+    - 22
+    description: reads as `ImpDef
+  - name: TRACEIDSIZE
+    bit_range:
+    - 21
+    - 16
+    description: reads as 0x07
+  - name: NUMEXTINSEL
+    bit_range:
+    - 11
+    - 9
+    description: reads as `ImpDef
+  - name: NUMEXTIN
+    bit_range:
+    - 8
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCIDR6
+  address_offset: 266744
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TRCIDR7
+  address_offset: 266748
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TRCRSCTLR2
+  address_offset: 266760
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PAIRINV
+    bit_range:
+    - 21
+    - 21
+    description: Inverts the result of a combined pair of resources.  This bit is only implemented on the lower register for a pair of resource selectors
+  - name: INV
+    bit_range:
+    - 20
+    - 20
+    description: Inverts the selected resources
+  - name: GROUP
+    bit_range:
+    - 18
+    - 16
+    description: Selects a group of resource
+  - name: SELECT
+    bit_range:
+    - 7
+    - 0
+    description: Selects one or more resources from the wanted group. One bit is provided per resource from the group
+  side_effects: null
+- id: TRCRSCTLR3
+  address_offset: 266764
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PAIRINV
+    bit_range:
+    - 21
+    - 21
+    description: Inverts the result of a combined pair of resources.  This bit is only implemented on the lower register for a pair of resource selectors
+  - name: INV
+    bit_range:
+    - 20
+    - 20
+    description: Inverts the selected resources
+  - name: GROUP
+    bit_range:
+    - 18
+    - 16
+    description: Selects a group of resource
+  - name: SELECT
+    bit_range:
+    - 7
+    - 0
+    description: Selects one or more resources from the wanted group. One bit is provided per resource from the group
+  side_effects: null
+- id: TRCSSCSR
+  address_offset: 266912
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATUS
+    bit_range:
+    - 31
+    - 31
+    description: Single-shot status bit. Indicates if any of the comparators, that TRCSSCCRn.SAC or TRCSSCCRn.ARC selects, have matched
+  - name: PC
+    bit_range:
+    - 3
+    - 3
+    description: Reserved, RES1
+  - name: DV
+    bit_range:
+    - 2
+    - 2
+    description: Reserved, RES0
+  - name: DA
+    bit_range:
+    - 1
+    - 1
+    description: Reserved, RES0
+  - name: INST
+    bit_range:
+    - 0
+    - 0
+    description: Reserved, RES0
+  side_effects: null
+- id: TRCSSPCICR
+  address_offset: 266944
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PC
+    bit_range:
+    - 3
+    - 0
+    description: Selects one or more PE comparator inputs for Single-shot control.  TRCIDR4.NUMPC defines the size of the PC field.  1 bit is provided for each implemented PE comparator input.  For example, if bit[1] == 1 this selects PE comparator input 1 for Single-shot control
+  side_effects: null
+- id: TRCPDCR
+  address_offset: 267024
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PU
+    bit_range:
+    - 3
+    - 3
+    description: 'Powerup request bit:'
+  side_effects: null
+- id: TRCPDSR
+  address_offset: 267028
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: OSLK
+    bit_range:
+    - 5
+    - 5
+    description: 'OS Lock status bit:'
+  - name: STICKYPD
+    bit_range:
+    - 1
+    - 1
+    description: 'Sticky powerdown status bit. Indicates whether the trace register state is valid:'
+  - name: POWER
+    bit_range:
+    - 0
+    - 0
+    description: 'Power status bit:'
+  side_effects: null
+- id: TRCITATBIDR
+  address_offset: 270052
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ID
+    bit_range:
+    - 6
+    - 0
+    description: Trace ID
+  side_effects: null
+- id: TRCITIATBINR
+  address_offset: 270068
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AFVALIDM
+    bit_range:
+    - 1
+    - 1
+    description: Integration Mode instruction AFVALIDM in
+  - name: ATREADYM
+    bit_range:
+    - 0
+    - 0
+    description: Integration Mode instruction ATREADYM in
+  side_effects: null
+- id: TRCITIATBOUTR
+  address_offset: 270076
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AFREADY
+    bit_range:
+    - 1
+    - 1
+    description: Integration Mode instruction AFREADY out
+  - name: ATVALID
+    bit_range:
+    - 0
+    - 0
+    description: Integration Mode instruction ATVALID out
+  side_effects: null
+- id: TRCCLAIMSET
+  address_offset: 270240
+  size: 32
+  access: READ_WRITE
+  reset_value: 15
+  fields:
+  - name: SET3
+    bit_range:
+    - 3
+    - 3
+    description: 'When a write to one of these bits occurs, with the value:'
+  - name: SET2
+    bit_range:
+    - 2
+    - 2
+    description: 'When a write to one of these bits occurs, with the value:'
+  - name: SET1
+    bit_range:
+    - 1
+    - 1
+    description: 'When a write to one of these bits occurs, with the value:'
+  - name: SET0
+    bit_range:
+    - 0
+    - 0
+    description: 'When a write to one of these bits occurs, with the value:'
+  side_effects: null
+- id: TRCCLAIMCLR
+  address_offset: 270244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLR3
+    bit_range:
+    - 3
+    - 3
+    description: 'When a write to one of these bits occurs, with the value:'
+  - name: CLR2
+    bit_range:
+    - 2
+    - 2
+    description: 'When a write to one of these bits occurs, with the value:'
+  - name: CLR1
+    bit_range:
+    - 1
+    - 1
+    description: 'When a write to one of these bits occurs, with the value:'
+  - name: CLR0
+    bit_range:
+    - 0
+    - 0
+    description: 'When a write to one of these bits occurs, with the value:'
+  side_effects: null
+- id: TRCAUTHSTATUS
+  address_offset: 270264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SNID
+    bit_range:
+    - 7
+    - 6
+    description: 'Indicates whether the system enables the trace unit to support Secure non-invasive debug:'
+  - name: SID
+    bit_range:
+    - 5
+    - 4
+    description: 'Indicates whether the trace unit supports Secure invasive debug:'
+  - name: NSNID
+    bit_range:
+    - 3
+    - 2
+    description: 'Indicates whether the system enables the trace unit to support Non-secure non-invasive debug:'
+  - name: NSID
+    bit_range:
+    - 1
+    - 0
+    description: 'Indicates whether the trace unit supports Non-secure invasive debug:'
+  side_effects: null
+- id: TRCDEVARCH
+  address_offset: 270268
+  size: 32
+  access: READ_WRITE
+  reset_value: 1198672403
+  fields:
+  - name: ARCHITECT
+    bit_range:
+    - 31
+    - 21
+    description: reads as 0b01000111011
+  - name: PRESENT
+    bit_range:
+    - 20
+    - 20
+    description: reads as 0b1
+  - name: REVISION
+    bit_range:
+    - 19
+    - 16
+    description: reads as 0b0000
+  - name: ARCHID
+    bit_range:
+    - 15
+    - 0
+    description: reads as 0b0100101000010011
+  side_effects: null
+- id: TRCDEVID
+  address_offset: 270280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TRCDEVTYPE
+  address_offset: 270284
+  size: 32
+  access: READ_WRITE
+  reset_value: 19
+  fields:
+  - name: SUB
+    bit_range:
+    - 7
+    - 4
+    description: reads as 0b0001
+  - name: MAJOR
+    bit_range:
+    - 3
+    - 0
+    description: reads as 0b0011
+  side_effects: null
+- id: TRCPIDR4
+  address_offset: 270288
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: SIZE
+    bit_range:
+    - 7
+    - 4
+    description: reads as `ImpDef
+  - name: DES_2
+    bit_range:
+    - 3
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCPIDR5
+  address_offset: 270292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TRCPIDR6
+  address_offset: 270296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TRCPIDR7
+  address_offset: 270300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TRCPIDR0
+  address_offset: 270304
+  size: 32
+  access: READ_WRITE
+  reset_value: 33
+  fields:
+  - name: PART_0
+    bit_range:
+    - 7
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCPIDR1
+  address_offset: 270308
+  size: 32
+  access: READ_WRITE
+  reset_value: 189
+  fields:
+  - name: DES_0
+    bit_range:
+    - 7
+    - 4
+    description: reads as `ImpDef
+  - name: PART_0
+    bit_range:
+    - 3
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCPIDR2
+  address_offset: 270312
+  size: 32
+  access: READ_WRITE
+  reset_value: 43
+  fields:
+  - name: REVISION
+    bit_range:
+    - 7
+    - 4
+    description: reads as `ImpDef
+  - name: JEDEC
+    bit_range:
+    - 3
+    - 3
+    description: reads as 0b1
+  - name: DES_0
+    bit_range:
+    - 2
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCPIDR3
+  address_offset: 270316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REVAND
+    bit_range:
+    - 7
+    - 4
+    description: reads as `ImpDef
+  - name: CMOD
+    bit_range:
+    - 3
+    - 0
+    description: reads as `ImpDef
+  side_effects: null
+- id: TRCCIDR0
+  address_offset: 270320
+  size: 32
+  access: READ_WRITE
+  reset_value: 13
+  fields:
+  - name: PRMBL_0
+    bit_range:
+    - 7
+    - 0
+    description: reads as 0b00001101
+  side_effects: null
+- id: TRCCIDR1
+  address_offset: 270324
+  size: 32
+  access: READ_WRITE
+  reset_value: 144
+  fields:
+  - name: CLASS
+    bit_range:
+    - 7
+    - 4
+    description: reads as 0b1001
+  - name: PRMBL_1
+    bit_range:
+    - 3
+    - 0
+    description: reads as 0b0000
+  side_effects: null
+- id: TRCCIDR2
+  address_offset: 270328
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PRMBL_2
+    bit_range:
+    - 7
+    - 0
+    description: reads as 0b00000101
+  side_effects: null
+- id: TRCCIDR3
+  address_offset: 270332
+  size: 32
+  access: READ_WRITE
+  reset_value: 177
+  fields:
+  - name: PRMBL_3
+    bit_range:
+    - 7
+    - 0
+    description: reads as 0b10110001
+  side_effects: null
+- id: CTICONTROL
+  address_offset: 270336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GLBEN
+    bit_range:
+    - 0
+    - 0
+    description: Enables or disables the CTI
+  side_effects: null
+- id: CTIINTACK
+  address_offset: 270352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTACK
+    bit_range:
+    - 7
+    - 0
+    description: Acknowledges the corresponding ctitrigout output. There is one bit of the register for each ctitrigout output. When a 1 is written to a bit in this register, the corresponding ctitrigout is acknowledged, causing it to be cleared.
+  side_effects: null
+- id: CTIAPPSET
+  address_offset: 270356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APPSET
+    bit_range:
+    - 3
+    - 0
+    description: Setting a bit HIGH generates a channel event for the selected channel. There is one bit of the register for each channel
+  side_effects: null
+- id: CTIAPPCLEAR
+  address_offset: 270360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APPCLEAR
+    bit_range:
+    - 3
+    - 0
+    description: Sets the corresponding bits in the CTIAPPSET to 0. There is one bit of the register for each channel.
+  side_effects: null
+- id: CTIAPPPULSE
+  address_offset: 270364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APPULSE
+    bit_range:
+    - 3
+    - 0
+    description: Setting a bit HIGH generates a channel event pulse for the selected channel. There is one bit of the register for each channel.
+  side_effects: null
+- id: CTIINEN0
+  address_offset: 270368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGINEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to the corresponding channel when a ctitrigin input is activated. There is one bit of the field for each of the four channels
+  side_effects: null
+- id: CTIINEN1
+  address_offset: 270372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGINEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to the corresponding channel when a ctitrigin input is activated. There is one bit of the field for each of the four channels
+  side_effects: null
+- id: CTIINEN2
+  address_offset: 270376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGINEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to the corresponding channel when a ctitrigin input is activated. There is one bit of the field for each of the four channels
+  side_effects: null
+- id: CTIINEN3
+  address_offset: 270380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGINEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to the corresponding channel when a ctitrigin input is activated. There is one bit of the field for each of the four channels
+  side_effects: null
+- id: CTIINEN4
+  address_offset: 270384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGINEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to the corresponding channel when a ctitrigin input is activated. There is one bit of the field for each of the four channels
+  side_effects: null
+- id: CTIINEN5
+  address_offset: 270388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGINEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to the corresponding channel when a ctitrigin input is activated. There is one bit of the field for each of the four channels
+  side_effects: null
+- id: CTIINEN6
+  address_offset: 270392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGINEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to the corresponding channel when a ctitrigin input is activated. There is one bit of the field for each of the four channels
+  side_effects: null
+- id: CTIINEN7
+  address_offset: 270396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGINEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to the corresponding channel when a ctitrigin input is activated. There is one bit of the field for each of the four channels
+  side_effects: null
+- id: CTIOUTEN0
+  address_offset: 270496
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGOUTEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to ctitrigout when the corresponding channel is activated. There is one bit of the field for each of the four channels.
+  side_effects: null
+- id: CTIOUTEN1
+  address_offset: 270500
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGOUTEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to ctitrigout when the corresponding channel is activated. There is one bit of the field for each of the four channels.
+  side_effects: null
+- id: CTIOUTEN2
+  address_offset: 270504
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGOUTEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to ctitrigout when the corresponding channel is activated. There is one bit of the field for each of the four channels.
+  side_effects: null
+- id: CTIOUTEN3
+  address_offset: 270508
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGOUTEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to ctitrigout when the corresponding channel is activated. There is one bit of the field for each of the four channels.
+  side_effects: null
+- id: CTIOUTEN4
+  address_offset: 270512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGOUTEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to ctitrigout when the corresponding channel is activated. There is one bit of the field for each of the four channels.
+  side_effects: null
+- id: CTIOUTEN5
+  address_offset: 270516
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGOUTEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to ctitrigout when the corresponding channel is activated. There is one bit of the field for each of the four channels.
+  side_effects: null
+- id: CTIOUTEN6
+  address_offset: 270520
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGOUTEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to ctitrigout when the corresponding channel is activated. There is one bit of the field for each of the four channels.
+  side_effects: null
+- id: CTIOUTEN7
+  address_offset: 270524
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGOUTEN
+    bit_range:
+    - 3
+    - 0
+    description: Enables a cross trigger event to ctitrigout when the corresponding channel is activated. There is one bit of the field for each of the four channels.
+  side_effects: null
+- id: CTITRIGINSTATUS
+  address_offset: 270640
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGINSTATUS
+    bit_range:
+    - 7
+    - 0
+    description: Shows the status of the ctitrigin inputs. There is one bit of the field for each trigger input.Because the register provides a view of the raw ctitrigin inputs, the reset value is UNKNOWN.
+  side_effects: null
+- id: CTITRIGOUTSTATUS
+  address_offset: 270644
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGOUTSTATUS
+    bit_range:
+    - 7
+    - 0
+    description: Shows the status of the ctitrigout outputs. There is one bit of the field for each trigger output.
+  side_effects: null
+- id: CTICHINSTATUS
+  address_offset: 270648
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTICHOUTSTATUS
+    bit_range:
+    - 3
+    - 0
+    description: Shows the status of the ctichout outputs. There is one bit of the field for each channel output
+  side_effects: null
+- id: CTIGATE
+  address_offset: 270656
+  size: 32
+  access: READ_WRITE
+  reset_value: 15
+  fields:
+  - name: CTIGATEEN3
+    bit_range:
+    - 3
+    - 3
+    description: Enable ctichout3. Set to 0 to disable channel propagation.
+  - name: CTIGATEEN2
+    bit_range:
+    - 2
+    - 2
+    description: Enable ctichout2. Set to 0 to disable channel propagation.
+  - name: CTIGATEEN1
+    bit_range:
+    - 1
+    - 1
+    description: Enable ctichout1. Set to 0 to disable channel propagation.
+  - name: CTIGATEEN0
+    bit_range:
+    - 0
+    - 0
+    description: Enable ctichout0. Set to 0 to disable channel propagation.
+  side_effects: null
+- id: ASICCTL
+  address_offset: 270660
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: ITCHOUT
+  address_offset: 274148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTCHOUT
+    bit_range:
+    - 3
+    - 0
+    description: Sets the value of the ctichout outputs
+  side_effects: null
+- id: ITTRIGOUT
+  address_offset: 274152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTTRIGOUT
+    bit_range:
+    - 7
+    - 0
+    description: Sets the value of the ctitrigout outputs
+  side_effects: null
+- id: ITCHIN
+  address_offset: 274164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTCHIN
+    bit_range:
+    - 3
+    - 0
+    description: Reads the value of the ctichin inputs.
+  side_effects: null
+- id: ITCTRL
+  address_offset: 274176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IME
+    bit_range:
+    - 0
+    - 0
+    description: Integration Mode Enable
+  side_effects: null
+- id: DEVARCH
+  address_offset: 274364
+  size: 32
+  access: READ_WRITE
+  reset_value: 1198529044
+  fields:
+  - name: ARCHITECT
+    bit_range:
+    - 31
+    - 21
+    description: Indicates the component architect
+  - name: PRESENT
+    bit_range:
+    - 20
+    - 20
+    description: Indicates whether the DEVARCH register is present
+  - name: REVISION
+    bit_range:
+    - 19
+    - 16
+    description: Indicates the architecture revision
+  - name: ARCHID
+    bit_range:
+    - 15
+    - 0
+    description: Indicates the component
+  side_effects: null
+- id: DEVID
+  address_offset: 274376
+  size: 32
+  access: READ_WRITE
+  reset_value: 264192
+  fields:
+  - name: NUMCH
+    bit_range:
+    - 19
+    - 16
+    description: Number of ECT channels available
+  - name: NUMTRIG
     bit_range:
     - 15
     - 8
-    description: Subregion Disable. For regions of 256 bytes or larger, each bit of this field controls whether one of the eight equal subregions is enabled.
-  - name: ATTRS
+    description: Number of ECT triggers available.
+  - name: EXTMUXNUM
     bit_range:
-    - 31
-    - 16
-    description: "The MPU Region Attribute field. Use to define the region attribute control. \n                            28 = XN: Instruction access disable bit: \n                            0 = Instruction fetches enabled. \n                            1 = Instruction fetches disabled. \n                            26:24 = AP: Access permission field \n                            18 = S: Shareable bit \n                            17 = C: Cacheable bit \n                            16 = B: Bufferable bit"
+    - 4
+    - 0
+    description: Indicates the number of multiplexers available on Trigger Inputs and Trigger Outputs that are using asicctl. The default value of 0b00000 indicates that no multiplexing is present. This value of this bit depends on the Verilog define EXTMUXNUM that you must change accordingly.
+  side_effects: null
+- id: DEVTYPE
+  address_offset: 274380
+  size: 32
+  access: READ_WRITE
+  reset_value: 20
+  fields:
+  - name: SUB
+    bit_range:
+    - 7
+    - 4
+    description: Sub-classification of the type of the debug component as specified in the ARM Architecture Specification within the major classification as specified in the MAJOR field.
+  - name: MAJOR
+    bit_range:
+    - 3
+    - 0
+    description: Major classification of the type of the debug component as specified in the ARM Architecture Specification for this debug and trace component.
+  side_effects: null
+- id: PIDR4
+  address_offset: 274384
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: SIZE
+    bit_range:
+    - 7
+    - 4
+    description: Always 0b0000. Indicates that the device only occupies 4KB of memory
+  - name: DES_2
+    bit_range:
+    - 3
+    - 0
+    description: Together, PIDR1.DES_0, PIDR2.DES_1, and PIDR4.DES_2 identify the designer of the component.
+  side_effects: null
+- id: PIDR5
+  address_offset: 274388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: PIDR6
+  address_offset: 274392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: PIDR7
+  address_offset: 274396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: PIDR0
+  address_offset: 274400
+  size: 32
+  access: READ_WRITE
+  reset_value: 33
+  fields:
+  - name: PART_0
+    bit_range:
+    - 7
+    - 0
+    description: Bits[7:0] of the 12-bit part number of the component. The designer of the component assigns this part number.
+  side_effects: null
+- id: PIDR1
+  address_offset: 274404
+  size: 32
+  access: READ_WRITE
+  reset_value: 189
+  fields:
+  - name: DES_0
+    bit_range:
+    - 7
+    - 4
+    description: Together, PIDR1.DES_0, PIDR2.DES_1, and PIDR4.DES_2 identify the designer of the component.
+  - name: PART_1
+    bit_range:
+    - 3
+    - 0
+    description: Bits[11:8] of the 12-bit part number of the component. The designer of the component assigns this part number.
+  side_effects: null
+- id: PIDR2
+  address_offset: 274408
+  size: 32
+  access: READ_WRITE
+  reset_value: 11
+  fields:
+  - name: REVISION
+    bit_range:
+    - 7
+    - 4
+    description: This device is at r1p0
+  - name: JEDEC
+    bit_range:
+    - 3
+    - 3
+    description: Always 1. Indicates that the JEDEC-assigned designer ID is used.
+  - name: DES_1
+    bit_range:
+    - 2
+    - 0
+    description: Together, PIDR1.DES_0, PIDR2.DES_1, and PIDR4.DES_2 identify the designer of the component.
+  side_effects: null
+- id: PIDR3
+  address_offset: 274412
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REVAND
+    bit_range:
+    - 7
+    - 4
+    description: Indicates minor errata fixes specific to the revision of the component being used, for example metal fixes after implementation. In most cases, this field is 0b0000. ARM recommends that the component designers ensure that a metal fix can change this field if required, for example, by driving it from registers that reset to 0b0000.
+  - name: CMOD
+    bit_range:
+    - 3
+    - 0
+    description: Customer Modified. Indicates whether the customer has modified the behavior of the component. In most cases, this field is 0b0000. Customers change this value when they make authorized modifications to this component.
+  side_effects: null
+- id: CIDR0
+  address_offset: 274416
+  size: 32
+  access: READ_WRITE
+  reset_value: 13
+  fields:
+  - name: PRMBL_0
+    bit_range:
+    - 7
+    - 0
+    description: Preamble[0]. Contains bits[7:0] of the component identification code
+  side_effects: null
+- id: CIDR1
+  address_offset: 274420
+  size: 32
+  access: READ_WRITE
+  reset_value: 144
+  fields:
+  - name: CLASS
+    bit_range:
+    - 7
+    - 4
+    description: Class of the component, for example, whether the component is a ROM table or a generic CoreSight component. Contains bits[15:12] of the component identification code.
+  - name: PRMBL_1
+    bit_range:
+    - 3
+    - 0
+    description: Preamble[1]. Contains bits[11:8] of the component identification code.
+  side_effects: null
+- id: CIDR2
+  address_offset: 274424
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PRMBL_2
+    bit_range:
+    - 7
+    - 0
+    description: Preamble[2]. Contains bits[23:16] of the component identification code.
+  side_effects: null
+- id: CIDR3
+  address_offset: 274428
+  size: 32
+  access: READ_WRITE
+  reset_value: 177
+  fields:
+  - name: PRMBL_3
+    bit_range:
+    - 7
+    - 0
+    description: Preamble[3]. Contains bits[31:24] of the component identification code.
   side_effects: null
 interrupts: null
 timing: null
