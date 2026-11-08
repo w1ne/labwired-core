@@ -21,6 +21,11 @@
 // the S2: analogRead returns 0 without converting). A0 = GPIO1 = ADC1_CH0.
 #    define LW_ADC_PIN A0
 #    define LW_ADC_RES_BITS 12
+#  elif defined(ARDUINO_ESP32S3_DEV)
+// Same `defined(A0)` trap on the S3: GPIO0 is not an ADC pin there either,
+// so analogRead(0) returned 0 unconverted and the 0 == 0 pair passed with no
+// conversion. A0 = GPIO1 = ADC1_CH0, read through the RTC SAR (SENS).
+#    define LW_ADC_PIN A0
 #  elif defined(A0)
 #    define LW_ADC_PIN A0
 #  else
@@ -63,6 +68,11 @@ static bool samples_ok(int v0, int v1) {
 #elif defined(ARDUINO_ESP32S2_DEV)
   // esp32s2_sens mid-scale 0x1000 (13-bit) -> 2048 at 12 bits. Exact; a 0
   // here means analogRead never converted.
+  return v0 == 2048 && v1 == 2048;
+
+#elif defined(ARDUINO_ESP32S3_DEV)
+  // esp32s3_sens mid-scale 0x800 (12-bit). Exact; a 0 here means analogRead
+  // never converted.
   return v0 == 2048 && v1 == 2048;
 
 #elif defined(ARDUINO_ARCH_RP2040)

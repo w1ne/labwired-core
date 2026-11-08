@@ -1,0 +1,31 @@
+# ESP32-S3 Arduino matrix L5_adc, before/after the A0 fix (2026-11-08)
+# board esp32s3 (PlatformIO esp32-s3-devkitc-1, espressif32 8.0.0 / arduino-esp32 3.3.12 locally;
+#   CI pins espressif32@7.0.1). labwired: target/debug/labwired at 848cca640 + this change.
+# Run to the 50M-step limit with stop_when_assertions_pass: false so the LW_L5_VAL line is captured.
+
+## BEFORE (sketch read analogRead(0): defined(A0) is false on arduino-esp32, GPIO0 is not an ADC pin on the S3)
+LW_L5_BOOT
+LW_L5_OK
+LW_L5_VAL 0 0
+# -> passed because the generic oracle accepts any equal pair; nothing converted.
+
+## AFTER (A0 = GPIO1 = ADC1_CH0 via the RTC SAR / esp32s3_sens; oracle requires exact 2048)
+LW_L5_BOOT
+LW_L5_OK
+LW_L5_VAL 2048 2048
+status: pass
+
+## matrix runner (run_matrix.py --boards esp32s3 --sketches L5_adc)
+==> esp32s3 × L5_adc
+    compile: ok (firmware.elf)
+    run: pass
+
+## classic ESP32 row, same sketch, unchanged (GPIO0 = ADC2_CH1 there, really converts)
+LW_L5_BOOT
+LW_L5_OK
+LW_L5_VAL 529 529
+
+## Not fixed here: ESP32-C3 x L5 under espressif32 8.0.0 (local, unpinned)
+# run: boot_fail, UART0 empty after 50M steps. The scoreboard's C3 L5 pass is on
+# CI's pinned espressif32@7.0.1, so this is the newer arduino-esp32 3.3 only.
+# Not diagnosed; likely the same boot-time ADC calibration poll the S2 hit.
