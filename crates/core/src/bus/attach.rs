@@ -800,6 +800,48 @@ impl SystemBus {
         self.peripherals[pwm_idx].dev.timer_output_lines(true);
     }
 
+    /// Bind each PIO block's 32 pin outputs to the pads IO_BANK0 can hand it
+    /// (`FUNCSEL` 6/7/8 = PIO0/PIO1/PIO2, RP2040 datasheet Table 2-19, RP2350
+    /// Table 9.1.1), so a `ws2812` program's side-set is a waveform on its pad
+    /// and not the SIO latch. PIO output `n` reaches GPIOn (GPIOBASE 0, so an
+    /// RP2350B's GPIO32..47 stay unbound). No-op unless IO_BANK0, SIO and a
+    /// `pioN` block are all on the bus.
+    pub(crate) fn wire_rp2040_pio_pads(&mut self) {
+        use crate::peripherals::pio::LINE_NAMES;
+        use crate::peripherals::rp2040::io_bank0::{GPIO_FUNC_PIO0, PAD_COUNT};
+
+        let Some((functions, sio_idx)) = self.rp2040_pad_route_target() else {
+            return;
+        };
+        for (n, name) in ["pio0", "pio1", "pio2"].into_iter().enumerate() {
+            let Some(pio_idx) = self.find_peripheral_index_by_name(name) else {
+                continue;
+            };
+            let Some(lines) = self.peripherals[pio_idx].dev.timer_output_lines(false) else {
+                continue;
+            };
+            if lines.names() != LINE_NAMES {
+                continue;
+            }
+            let function = GPIO_FUNC_PIO0 + n as u32;
+            let Some(sio) = self.rp2040_sio_mut(sio_idx) else {
+                return;
+            };
+            for pin in 0..PAD_COUNT.min(32) {
+                let line = usize::from(pin);
+                sio.bind_pad_route(
+                    functions.clone(),
+                    &lines,
+                    pin,
+                    function,
+                    line,
+                    LINE_NAMES[line],
+                );
+            }
+            self.peripherals[pio_idx].dev.timer_output_lines(true);
+        }
+    }
+
     /// Share the ESP32-S3 I²C0 controller's live SCL/SDA levels with S3 GPIO,
     /// so pads whose output matrix routes `I2CEXT0_SCL`/`SDA` read the real
     /// waveform through `read_gpio_pad` (which is what the in-engine logic
