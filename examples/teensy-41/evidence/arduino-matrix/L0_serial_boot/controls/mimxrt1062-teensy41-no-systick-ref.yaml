@@ -1,0 +1,181 @@
+# PJRC Teensy 4.1 (SparkFun DEV-16771), MIMXRT1062DVJ6B board profile.
+#
+# Stock Teensyduino (PlatformIO `teensy`, board `teensy41`) boots the way it
+# does on silicon: the image is linked into the 8 MB FlexSPI NOR at
+# 0x6000_0000 with a FlexSPI configuration block at +0 and an Image Vector
+# Table at +0x1000; the boot ROM is not run, the simulator enters the IVT's
+# entry address directly (see `reset_vector_offset`). ResetHandler then
+# programs FlexRAM, copies .text.itcm/.data out of flash, sets VTOR, brings
+# up the PLLs/DCDC (set_arm_clock), SysTick on the 100 kHz reference, the
+# USB PLL and the USB1 device controller; `Serial` is USB CDC.
+#
+# Memory map: IMXRT1060RM Table 3-1 / Teensy imxrt1062_t41.ld. FlexRAM is
+# modelled as fixed 512 KB ITCM + 512 KB DTCM (silicon splits one 512 KB
+# array by IOMUXC_GPR17; the linker's split always fits inside this).
+# Register bases: MIMXRT1062 SVD / Teensy imxrt.h. IRQ numbers: RM Table 4-2.
+#
+# Modelled: CCM, CCM_ANALOG/PMU/TEMPMON (`imxrt_anadig`), DCDC, ADC1/2,
+# GPT1/2, LPUART1-8, LPI2C1, FlexSPI (NOR at 0x6000_0000), USB1 + USBPHY1,
+# the Cortex-M7 L1 cache maintenance window
+# (device mode with a scripted host), GPIO1-9.
+#
+# Declared stubs (reads 0, writes dropped): IOMUXC_GPR, IOMUXC_SNVS(_GPR),
+# FlexRAM, SNVS, PIT, OCOTP, SRC, GPC, QuadTimer1-4 and eFlexPWM1-4. Every other
+# block is NOT mapped: firmware that touches it faults.
+
+name: "mimxrt1062-teensy41"
+arch: "arm"
+core: "cortex-m7"
+cpu_hz: 600_000_000
+flash:
+  base: 0x60000000
+  size: "8MB"
+ram:
+  base: 0x20000000
+  size: "512KB"
+# FlexSPI NOR boot: FCB at +0, IVT at +0x1000 (IMXRT1060RM §9.7.1).
+reset_vector_offset: 0x1000
+# ITCM lives at 0x0; there is no flash alias there.
+flash_boot_alias: false
+memory_regions:
+  - name: itcm
+    base: 0x00000000
+    size: 512KB
+  - name: ocram2
+    base: 0x20200000
+    size: 512KB
+
+pins:
+  D13: { gpio: "gpio7", bit: 3, functions: [{ type: gpio, peripheral: gpio7 }] }
+
+peripherals:
+  - id: "ccm"
+    type: "imxrt_ccm"
+    base_address: 0x400FC000
+    size: "16KB"
+  - id: "anadig"
+    type: "imxrt_anadig"
+    base_address: 0x400D8000
+    size: "4KB"
+  - id: "usbphy1"
+    type: "imxrt_usbphy"
+    base_address: 0x400D9000
+    size: "4KB"
+  - id: "dcdc"
+    type: "imxrt_dcdc"
+    base_address: 0x40080000
+    size: "16KB"
+  - id: "usb1"
+    type: "imxrt_usb"
+    base_address: 0x402E0000
+    size: "512B"
+    irq: 113
+    config:
+      # What a terminal does when it opens the CDC port (interface 0 in
+      # Teensyduino's USB_SERIAL descriptor): SET_LINE_CODING 115200 8N1,
+      # then SET_CONTROL_LINE_STATE DTR|RTS.
+      host_steps:
+        - control: "21 20 0000 0000 0007"
+          data: "00c2010000 0008"
+        - control: "21 22 0003 0000 0000"
+  - id: "flexspi"
+    type: "imxrt_flexspi"
+    base_address: 0x402A8000
+    size: "16KB"
+    config:
+      jedec_id: 0xEF4017
+      xip_base: 0x60000000
+      xip_size: 0x800000
+  # FlexSPI2 serves the two optional PSRAM pads under the board (EMC_22..29).
+  # The stock Teensy 4.1 ships with none fitted: the controller runs, but no
+  # device answers, so every data line reads high (RDID = FF FF FF) and
+  # Teensyduino's probe sizes external RAM at 0 MB. There is no array behind
+  # 0x7000_0000 (EXTMEM is unmapped, as on a bare board).
+  - id: "flexspi2"
+    type: "imxrt_flexspi"
+    base_address: 0x402A4000
+    size: "16KB"
+    config:
+      jedec_id: 0xFFFFFF
+      xip_base: 0x70000000
+      xip_size: 0x1000
+  - id: "adc1"
+    type: "imxrt_adc"
+    base_address: 0x400C4000
+    size: "16KB"
+    irq: 67
+  - id: "adc2"
+    type: "imxrt_adc"
+    base_address: 0x400C8000
+    size: "16KB"
+    irq: 68
+  - id: "gpt1"
+    type: "imxrt_gpt"
+    base_address: 0x401EC000
+    size: "16KB"
+    irq: 100
+  - id: "gpt2"
+    type: "imxrt_gpt"
+    base_address: 0x401F0000
+    size: "16KB"
+    irq: 101
+  - { id: "lpuart1", type: "imxrt_lpuart", base_address: 0x40184000, size: "16KB", irq: 20 }
+  - { id: "lpuart2", type: "imxrt_lpuart", base_address: 0x40188000, size: "16KB", irq: 21 }
+  - { id: "lpuart3", type: "imxrt_lpuart", base_address: 0x4018C000, size: "16KB", irq: 22 }
+  - { id: "lpuart4", type: "imxrt_lpuart", base_address: 0x40190000, size: "16KB", irq: 23 }
+  - { id: "lpuart5", type: "imxrt_lpuart", base_address: 0x40194000, size: "16KB", irq: 24 }
+  - { id: "lpuart6", type: "imxrt_lpuart", base_address: 0x40198000, size: "16KB", irq: 25 }
+  - { id: "lpuart7", type: "imxrt_lpuart", base_address: 0x4019C000, size: "16KB", irq: 26 }
+  - { id: "lpuart8", type: "imxrt_lpuart", base_address: 0x401A0000, size: "16KB", irq: 27 }
+  - id: "lpi2c1"
+    type: "imxrt_lpi2c"
+    base_address: 0x403F0000
+    size: "16KB"
+    irq: 28
+  - { id: "gpio1", type: "gpio", base_address: 0x401B8000, size: "16KB", config: { profile: "imxrt" } }
+  - { id: "gpio2", type: "gpio", base_address: 0x401BC000, size: "16KB", config: { profile: "imxrt" } }
+  - { id: "gpio3", type: "gpio", base_address: 0x401C0000, size: "16KB", config: { profile: "imxrt" } }
+  - { id: "gpio4", type: "gpio", base_address: 0x401C4000, size: "16KB", config: { profile: "imxrt" } }
+  - { id: "gpio5", type: "gpio", base_address: 0x400C0000, size: "16KB", config: { profile: "imxrt" } }
+  - { id: "gpio6", type: "gpio", base_address: 0x42000000, size: "16KB", config: { profile: "imxrt" } }
+  - { id: "gpio7", type: "gpio", base_address: 0x42004000, size: "16KB", config: { profile: "imxrt" } }
+  - { id: "gpio8", type: "gpio", base_address: 0x42008000, size: "16KB", config: { profile: "imxrt" } }
+  - { id: "gpio9", type: "gpio", base_address: 0x4200C000, size: "16KB", config: { profile: "imxrt" } }
+  - id: "iomuxc"
+    type: "imx_iomuxc"
+    base_address: 0x401F8000
+    size: "16KB"
+  - { id: "iomuxc_snvs_gpr", type: "stub", base_address: 0x400A4000, size: "16KB" }
+  - { id: "iomuxc_snvs", type: "stub", base_address: 0x400A8000, size: "16KB" }
+  - { id: "iomuxc_gpr", type: "stub", base_address: 0x400AC000, size: "16KB" }
+  - { id: "flexram", type: "stub", base_address: 0x400B0000, size: "16KB" }
+  - { id: "snvs", type: "stub", base_address: 0x400D4000, size: "16KB" }
+  - { id: "pit", type: "stub", base_address: 0x40084000, size: "16KB" }
+  - { id: "ocotp", type: "stub", base_address: 0x401F4000, size: "16KB" }
+  - { id: "src", type: "stub", base_address: 0x400F8000, size: "16KB" }
+  - { id: "gpc", type: "stub", base_address: 0x400F4000, size: "16KB" }
+  - { id: "tmr1", type: "stub", base_address: 0x401DC000, size: "16KB" }
+  - { id: "tmr2", type: "stub", base_address: 0x401E0000, size: "16KB" }
+  - { id: "tmr3", type: "stub", base_address: 0x401E4000, size: "16KB" }
+  - { id: "tmr4", type: "stub", base_address: 0x401E8000, size: "16KB" }
+  - { id: "pwm1", type: "stub", base_address: 0x403DC000, size: "16KB" }
+  - { id: "pwm2", type: "stub", base_address: 0x403E0000, size: "16KB" }
+  - { id: "pwm3", type: "stub", base_address: 0x403E4000, size: "16KB" }
+  - { id: "pwm4", type: "stub", base_address: 0x403E8000, size: "16KB" }
+  # Cortex-M7 L1 cache geometry + maintenance window (32 KB I + 32 KB D,
+  # IMXRT1060 datasheet §1). No cache contents: simulated memory is coherent,
+  # so ICIALLU / DCCIMVAC & co. are accepted as no-ops.
+  - id: "l1_cache"
+    type: "cortex_m7_cache"
+    base_address: 0xE000EF50
+    size: 48
+    config:
+      icache_kb: 32
+      dcache_kb: 32
+  # SysTick's CLKSOURCE = 0 reference is the 100 kHz clock (IMXRT1060RM
+  # clock tree; Teensyduino startup.c SYSTICK_EXT_FREQ). Its 1 ms
+  # millis() tick runs on it (RVR = 99).
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: 16

@@ -2055,6 +2055,30 @@ impl<C: Cpu> Machine<C> {
                 false
             };
 
+            // i.MX RT serial-NOR boot: at `flash_base + reset_vector_offset`
+            // sits an Image Vector Table, not a Cortex-M vector table
+            // (IMXRT1060RM §9.7.1: header tag 0xD1, version 0x40..0x43, then
+            // the entry address). The boot ROM jumps to `entry` with its own
+            // stack in OCRAM; the image sets SP and VTOR itself (Teensyduino's
+            // ResetHandler does both). Offset 0x1000 on FlexSPI NOR.
+            let relocated = relocated || {
+                let table = flash_base + offset;
+                let hdr = if offset != 0 {
+                    self.bus.read_u32(table).unwrap_or(0)
+                } else {
+                    0
+                };
+                if hdr & 0xFF == 0xD1 && (0x40..=0x43).contains(&(hdr >> 24)) {
+                    let entry = self.bus.read_u32(table + 4)? & !1;
+                    let ram_top = self.bus.ram.base_addr + self.bus.ram.data.len() as u64;
+                    self.cpu.set_sp(ram_top as u32);
+                    self.cpu.set_pc(entry);
+                    true
+                } else {
+                    false
+                }
+            };
+
             // Last-resort fallback if the vector table is missing/zero.
             if !relocated && self.cpu.get_pc() == 0 {
                 self.cpu.set_pc(image.entry_point as u32);

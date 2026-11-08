@@ -46,6 +46,19 @@ const ENDPTFLUSH: u32 = 0x1B4;
 const ENDPTSTAT: u32 = 0x1B8;
 const ENDPTCOMPLETE: u32 = 0x1BC;
 const ENDPTCTRL0: u32 = 0x1C0;
+const GPTIMER0LD: u32 = 0x080;
+const GPTIMER0CTRL: u32 = 0x084;
+const GPTIMER1LD: u32 = 0x088;
+const GPTIMER1CTRL: u32 = 0x08C;
+
+/// GPTIMERnCTRL (RM §42.6.1.5): GPTRUN, GPTRST (self-clearing reload),
+/// GPTMODE (1 = repeat), GPTCNT[23:0] (read-only count in µs).
+const GPT_RUN: u32 = 1 << 31;
+const GPT_RST: u32 = 1 << 30;
+const GPT_MODE_REPEAT: u32 = 1 << 24;
+const GPT_CNT: u32 = 0x00FF_FFFF;
+/// USBSTS.TI0 (bit 24) / TI1 (bit 25): general-purpose timer expired.
+const STS_TI0: u32 = 1 << 24;
 
 const CMD_RS: u32 = 1 << 0;
 const CMD_RST: u32 = 1 << 1;
@@ -125,6 +138,11 @@ pub struct ImxrtUsb {
     vbus: bool,
     /// Pending host script and state.
     script: VecDeque<HostStep>,
+    /// Work queued for after enumeration (class requests, transfers). It
+    /// starts only once the enumeration script — which grows as descriptors
+    /// arrive (strings, SET_CONFIGURATION) — has run dry, so a class request
+    /// never reaches an unconfigured device.
+    after_enum: VecDeque<HostStep>,
     phase: Phase,
     /// Data gathered in the current control data stage.
     ctl_buf: Vec<u8>,
@@ -134,6 +152,12 @@ pub struct ImxrtUsb {
     last_uframe: u64,
     run_since: u64,
     host_enabled: bool,
+    /// GPTIMER0/1: absolute expiry cycle while running.
+    gpt_deadline: [Option<u64>; 2],
+    /// CDC console tap: once enumeration is done, every bulk IN endpoint the
+    /// device primes is drained (the host reads its serial port) and the
+    /// bytes go here. `None` = no host-side reader.
+    sink: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>,
 }
 
 impl Default for ImxrtUsb {
@@ -178,6 +202,7 @@ impl ImxrtUsb {
             usbsts: 0,
             vbus: true,
             script: VecDeque::new(),
+            after_enum: VecDeque::new(),
             phase: Phase::Detached,
             ctl_buf: Vec::new(),
             current: None,
@@ -185,6 +210,8 @@ impl ImxrtUsb {
             last_uframe: 0,
             run_since: 0,
             host_enabled: true,
+            gpt_deadline: [None; 2],
+            sink: None,
         };
         s.reset_regs();
         s.script = crate::peripherals::usb_host::enumeration_script();
@@ -201,11 +228,88 @@ impl ImxrtUsb {
         self.setupstat = 0;
         self.prime = 0;
         self.usbsts = 0;
+        self.gpt_deadline = [None; 2];
+    }
+
+    /// Route bytes the device sends on its bulk IN endpoints (CDC data) to a
+    /// console capture sink.
+    pub fn set_sink(&mut self, sink: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>) {
+        self.sink = sink;
+    }
+
+    /// Microseconds left on GPTIMERn (the GPTCNT field).
+    fn gpt_count(&self, n: usize) -> u32 {
+        match self.gpt_deadline[n] {
+            Some(t) => {
+                let left = t.saturating_sub(self.time.now());
+                (left / self.time.us(1).max(1)) as u32 & GPT_CNT
+            }
+            None => self.reg(GPTIMER0CTRL + 8 * n as u32) & GPT_CNT,
+        }
+    }
+
+    /// Fire expired GP timers: TIn in USBSTS, reload in repeat mode.
+    fn service_gpt(&mut self) {
+        let now = self.time.now();
+        for n in 0..2 {
+            let Some(t) = self.gpt_deadline[n] else {
+                continue;
+            };
+            if now < t {
+                continue;
+            }
+            self.usbsts |= STS_TI0 << n;
+            let ctrl_off = GPTIMER0CTRL + 8 * n as u32;
+            let ctrl = self.reg(ctrl_off);
+            if ctrl & GPT_MODE_REPEAT != 0 {
+                let period = self.time.us((self.reg(GPTIMER0LD + 8 * n as u32) & GPT_CNT) as u64 + 1);
+                // Catch up without drifting: next expiry on the period grid.
+                let missed = (now - t) / period.max(1);
+                self.gpt_deadline[n] = Some(t + (missed + 1) * period);
+            } else {
+                self.gpt_deadline[n] = None;
+                self.regs[(ctrl_off / 4) as usize] = ctrl & !GPT_RUN & !GPT_CNT;
+            }
+        }
+    }
+
+    fn gpt_next(&self) -> Option<u64> {
+        self.gpt_deadline.iter().flatten().copied().min()
+    }
+
+    /// A bulk IN endpoint is primed and a console reader is attached.
+    fn console_pending(&self) -> bool {
+        self.sink.is_some()
+            && matches!(self.phase, Phase::Done)
+            && (1..8u8).any(|ep| {
+                self.stat & Self::bit(ep, true) != 0
+                    && (self.reg(ENDPTCTRL0 + 4 * ep as u32) >> 18) & 3 == 2
+            })
+    }
+
+    /// The host side of the serial port: read every primed bulk IN dTD.
+    fn service_console(&mut self, bus: &mut dyn Bus) {
+        if !self.console_pending() {
+            return;
+        }
+        for ep in 1..8u8 {
+            let bulk_in = (self.reg(ENDPTCTRL0 + 4 * ep as u32) >> 18) & 3 == 2;
+            while bulk_in && self.stat & Self::bit(ep, true) != 0 {
+                let Some(data) = self.take_in(bus, ep, 0x7FFF) else {
+                    break;
+                };
+                if let Some(sink) = &self.sink {
+                    if let Ok(mut s) = sink.lock() {
+                        s.extend_from_slice(&data);
+                    }
+                }
+            }
+        }
     }
 
     /// Queue extra host work (class requests, HID reports) after enumeration.
     pub fn queue_host_steps(&mut self, steps: impl IntoIterator<Item = HostStep>) {
-        self.script.extend(steps);
+        self.after_enum.extend(steps);
         if self.phase == Phase::Done {
             self.phase = Phase::Idle {
                 until: self.time.now(),
@@ -291,6 +395,8 @@ impl ImxrtUsb {
             ENDPTFLUSH => 0,
             ENDPTSTAT => self.stat,
             ENDPTCOMPLETE => self.complete,
+            GPTIMER0CTRL => (self.reg(GPTIMER0CTRL) & !GPT_CNT) | self.gpt_count(0),
+            GPTIMER1CTRL => (self.reg(GPTIMER1CTRL) & !GPT_CNT) | self.gpt_count(1),
             ID | CAPLENGTH => self.reg(off & !3),
             o => self.reg(o),
         }
@@ -334,6 +440,21 @@ impl ImxrtUsb {
                 self.prime &= !(v & 0x00FF_00FF);
             }
             ENDPTSTAT | CAPLENGTH => {}
+            GPTIMER0LD | GPTIMER1LD => {
+                self.regs[(off / 4) as usize] = merged & GPT_CNT;
+            }
+            GPTIMER0CTRL | GPTIMER1CTRL => {
+                let n = ((off & !3) - GPTIMER0CTRL) as usize / 8;
+                let ld = self.reg(GPTIMER0LD + 8 * n as u32) & GPT_CNT;
+                if merged & GPT_RUN == 0 {
+                    self.gpt_deadline[n] = None;
+                } else if merged & GPT_RST != 0 || self.gpt_deadline[n].is_none() {
+                    // GPTRST reloads GPTLD; the counter reaches 0 after
+                    // GPTLD + 1 microseconds.
+                    self.gpt_deadline[n] = Some(now + self.time.us(ld as u64 + 1));
+                }
+                self.regs[((off & !3) / 4) as usize] = merged & (GPT_RUN | GPT_MODE_REPEAT);
+            }
             o if o < 0x080 || (0x100..0x140).contains(&o) => {}
             OTGSC => {
                 // Interrupt status bits 16..22 are w1c; the rest writable.
@@ -500,7 +621,11 @@ impl ImxrtUsb {
             }
             Phase::Idle { until } if now >= until => {
                 // SETUP stays owned by the host until the device consumed it.
-                let Some(step) = self.script.pop_front() else {
+                let Some(step) = self
+                    .script
+                    .pop_front()
+                    .or_else(|| self.after_enum.pop_front())
+                else {
                     self.phase = Phase::Done;
                     return;
                 };
@@ -694,10 +819,16 @@ impl ImxrtUsb {
 
     fn tick_inner(&mut self, cycles: u64) -> PeripheralTickResult {
         self.time.advance(cycles);
+        self.service_gpt();
         let now = self.time.now();
         // While the host is active the controller's flags move from the bus
         // tick; re-check the interrupt line every microsecond.
-        let until = (self.running() && self.host_enabled).then(|| now + self.time.us(1));
+        let host = (self.running() && self.host_enabled && !matches!(self.phase, Phase::Done))
+            .then(|| now + self.time.us(1));
+        let until = match (host, self.gpt_next()) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
         super::wake_hint(now, until)
     }
 }
@@ -707,6 +838,7 @@ impl Peripheral for ImxrtUsb {
     /// asserted (so its deassert is reconciled); MMIO re-arms it.
     fn legacy_tick_active(&self) -> bool {
         (self.host_enabled && self.running() && !matches!(self.phase, Phase::Done))
+            || self.gpt_next().is_some()
             || self.time.level()
     }
     fn legacy_tick_dynamic(&self) -> bool {
@@ -747,11 +879,13 @@ impl Peripheral for ImxrtUsb {
     fn needs_bus_tick(&self) -> bool {
         self.prime != 0
             || (self.host_enabled && self.running() && !matches!(self.phase, Phase::Done))
+            || self.console_pending()
     }
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
         self.service_primes(bus);
         if self.host_enabled {
             self.host_step(bus);
+            self.service_console(bus);
         }
     }
     fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
@@ -874,6 +1008,72 @@ impl Peripheral for ImxrtUsbPhy {
 mod tests {
     use super::*;
     use crate::CycleClock;
+
+    /// GPTIMER0 one-shot (Teensyduino's USB serial flush timer): GPTRST
+    /// loads GPTLD, TI0 rises GPTLD + 1 µs later, GPTRUN drops; GPTCNT reads
+    /// the remaining microseconds on the way.
+    #[test]
+    fn gp_timer_one_shot_sets_ti0_after_load_plus_one_us() {
+        let mut u = ImxrtUsb::new();
+        let c = CycleClock::default();
+        u.attach_cycle_clock(c.clone());
+        u.write_reg(GPTIMER0LD, 74, u32::MAX);
+        u.write_reg(GPTIMER0CTRL, GPT_RUN | GPT_RST, u32::MAX);
+        c.publish(u.time.us(30));
+        u.tick_elapsed(0);
+        assert_eq!(u.read_reg(GPTIMER0CTRL) & GPT_CNT, 45);
+        assert_eq!(u.read_reg(USBSTS) & STS_TI0, 0);
+        c.publish(u.time.us(75));
+        u.tick_elapsed(0);
+        assert_ne!(u.read_reg(USBSTS) & STS_TI0, 0);
+        assert_eq!(u.read_reg(GPTIMER0CTRL) & GPT_RUN, 0, "one-shot stops");
+        // TI0 interrupts only when USBINTR.TIE0 is set; it is write-1-to-clear.
+        assert!(!u.irq());
+        u.write_reg(USBINTR, STS_TI0, u32::MAX);
+        assert!(u.irq());
+        u.write_reg(USBSTS, STS_TI0, u32::MAX);
+        assert_eq!(u.read_reg(USBSTS) & STS_TI0, 0);
+    }
+
+    #[test]
+    fn gp_timer_repeat_mode_reloads_on_the_period_grid() {
+        let mut u = ImxrtUsb::new();
+        let c = CycleClock::default();
+        u.attach_cycle_clock(c.clone());
+        u.write_reg(GPTIMER1LD, 9, u32::MAX);
+        u.write_reg(GPTIMER1CTRL, GPT_RUN | GPT_RST | GPT_MODE_REPEAT, u32::MAX);
+        c.publish(u.time.us(25));
+        u.tick_elapsed(0);
+        assert_ne!(u.read_reg(USBSTS) & (STS_TI0 << 1), 0);
+        assert_eq!(u.gpt_deadline[1], Some(u.time.us(30)));
+        assert_ne!(u.read_reg(GPTIMER1CTRL) & GPT_RUN, 0);
+    }
+
+    /// Class requests queued from the chip YAML run after the enumeration
+    /// script, including the requests it appends as descriptors arrive.
+    #[test]
+    fn host_steps_wait_for_enumeration_to_finish() {
+        let mut u = ImxrtUsb::new();
+        let open = HostStep::Control(Setup {
+            bm_request_type: 0x21,
+            b_request: 0x22,
+            w_value: 3,
+            w_index: 0,
+            w_length: 0,
+            data: Vec::new(),
+        });
+        u.queue_host_steps([open]);
+        let is_open = |st: &HostStep| matches!(st, HostStep::Control(x) if x.b_request == 0x22);
+        assert!(!u.script.iter().any(is_open));
+        // SET_CONFIGURATION is appended to `script` later; it still runs first.
+        u.script.push_back(HostStep::Wait { us: 1 });
+        let order: Vec<HostStep> = std::iter::from_fn(|| {
+            u.script.pop_front().or_else(|| u.after_enum.pop_front())
+        })
+        .collect();
+        assert!(order.last().is_some_and(is_open));
+        assert!(matches!(order[order.len() - 2], HostStep::Wait { us: 1 }));
+    }
 
     #[test]
     fn controller_reset_self_clears() {

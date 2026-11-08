@@ -453,6 +453,7 @@ def main() -> int:
                 system,
                 sketch["marker"],
                 int(board.get("max_steps", 5_000_000)),
+                board.get("wall_time_ms"),
             )
             status, detail = run_labwired(
                 labwired,
