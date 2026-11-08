@@ -52,6 +52,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "ARV-SOM JH7100 UART0 ok; mul=0000000500000003"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -61,20 +67,20 @@
     "type": "risc_v64",
     "x": [
       0,
-      2147484312,
-      2155872224,
-      2147486632,
+      2147484338,
+      2155872208,
+      2147487776,
       0,
       0,
       2155872256,
       0,
-      2155872256,
+      294060032,
       0,
+      294060032,
+      10,
+      294060032,
+      294060032,
       5,
-      2154823680,
-      0,
-      0,
-      0,
       0,
       0,
       0,
@@ -93,10 +99,10 @@
       0,
       0
     ],
-    "pc": 2147484324,
+    "pc": 2147485464,
     "mstatus": 6144,
     "mie": 0,
-    "mtvec": 2147483976,
+    "mtvec": 2147483996,
     "mscratch": 0,
     "mepc": 0,
     "mcause": 0,
@@ -150,14 +156,22 @@
     "plic": null,
     "reservation": null
   },
-  "firmware_hash": "7c5a14dfd50989fa3cd36eb0e0d15bc89a4b8e0ac55a99fe21868c86758a3223",
+  "firmware_hash": "baa7bc8768701bd0761ff2d2a0cbb6f74029e427dd07a8c1fc96cfe9bf9305b0",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-arvsom-rv64-cpu-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/arvsom.yaml",
     "script": "examples/renode-onboarding/arvsom-rv64-cpu-smoke.yaml"
   },
   "inspect": {
-    "peripherals": [],
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 294060032,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
     "devices": []
   },
   "fidelity": [
@@ -183,17 +197,28 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "ARV-SOM JH7100 UART0 ok; mul=0000000500000003",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 936,
+    "text_bytes": 2074,
     "data_bytes": 0,
-    "bss_bytes": 8387672,
-    "flash_used_bytes": 936,
-    "ram_static_bytes": 8387672,
+    "bss_bytes": 8386528,
+    "flash_used_bytes": 2074,
+    "ram_static_bytes": 8386528,
     "flash_total_bytes": 0,
     "ram_total_bytes": 8388608,
     "flash_used_pct": 0.0,
-    "ram_static_pct": 99.99,
+    "ram_static_pct": 99.98,
     "notes": [
       "section_sum_not_bin_image",
       "totals_from_chip_catalog"
@@ -208,13 +233,13 @@
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 100078,
-    "memory_writes": 4,
-    "peripheral_accesses": 0,
+    "memory_reads": 100250,
+    "memory_writes": 8,
+    "peripheral_accesses": 92,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 2147484324,
+        "pc": 2147485464,
         "count": 390,
         "symbol": "main"
       }

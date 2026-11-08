@@ -12,8 +12,8 @@
 - pass_observable_assertions: `225/225`
 - pass_stop_reason_only: `0/225`
 - pass_depth_unknown: `0/225`
-- median_elapsed_ms: `1175`
-- median_elapsed_seconds: `1.175`
+- median_elapsed_ms: `1183`
+- median_elapsed_seconds: `1.183`
 - threshold_seconds: `3600`
 - threshold_met: `225/225`
 
@@ -31,7 +31,7 @@
 | `arduino_nano_33_ble` | `pass` | `True` | `yes` | `yes` | `2450` | `2.45` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `arduino_uno_r4_minima` | `pass` | `True` | `yes` | `yes` | `119052` | `119.052` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `arty_litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `3557` | `3.557` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `arvsom` | `pass` | `True` | `yes` | `yes` | `897` | `0.897` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `arvsom` | `pass` | `True` | `yes` | `yes` | `8775` | `8.775` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `at91rm9200` | `pass` | `True` | `yes` | `yes` | `368699` | `368.699` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `atsamd21j17d-aft` | `pass` | `True` | `yes` | `yes` | `1530` | `1.53` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `atsamd51g19a` | `pass` | `True` | `yes` | `yes` | `1028` | `1.028` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

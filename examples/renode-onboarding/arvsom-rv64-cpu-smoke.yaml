@@ -1,4 +1,5 @@
-# CPU-only direct-ELF smoke against the narrowed imported ARV-SOM profile.
+# Direct-ELF smoke against the narrowed imported ARV-SOM profile: RV64IMAC
+# multiply into DDR plus JH7100 UART0 polling TX (Renode arvsom.repl).
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv64imac-unknown-none-elf/release/firmware-arvsom-rv64-cpu-smoke"
@@ -8,4 +9,5 @@ limits:
 assertions:
   - memory_value: {address: 0x80700000, expected_value: 0x00000003}
   - memory_value: {address: 0x80700004, expected_value: 0x00000005}
+  - uart_contains: "ARV-SOM JH7100 UART0 ok; mul=0000000500000003"
   - expected_stop_reason: max_steps

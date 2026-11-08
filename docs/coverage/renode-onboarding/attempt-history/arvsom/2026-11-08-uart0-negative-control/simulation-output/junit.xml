@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="2" errors="0" time="0.000538">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MemoryViolation"/>
+    <property name="firmware_hash" value="baa7bc8768701bd0761ff2d2a0cbb6f74029e427dd07a8c1fc96cfe9bf9305b0"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000538">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x80700000=0x3" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x80700004=0x5" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: ARV-SOM JH7100 UART0 ok; mul=0000000500000003" time="0.000000">
+    <failure message="assertion failed">assertion 3: uart_contains: ARV-SOM JH7100 UART0 ok; mul=0000000500000003
+
+result_schema_version=1.0
+stop_reason=MemoryViolation
+stop_reason_details.triggered_stop_condition=MemoryViolation
+steps_executed=0
+cycles=0
+instructions=0
+limits:
+  - max_steps=100000
+firmware_hash=baa7bc8768701bd0761ff2d2a0cbb6f74029e427dd07a8c1fc96cfe9bf9305b0
+firmware=examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-arvsom-rv64-cpu-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/arvsom.yaml
+script=examples/renode-onboarding/arvsom-rv64-cpu-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 2154823680, expected_value: 3, mask: None, size: None, node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 2154823684, expected_value: 5, mask: None, size: None, node: None } }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;ARV-SOM JH7100 UART0 ok; mul=0000000500000003&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+    <failure message="assertion failed">assertion 4: expected_stop_reason: MaxSteps
+
+result_schema_version=1.0
+stop_reason=MemoryViolation
+stop_reason_details.triggered_stop_condition=MemoryViolation
+steps_executed=0
+cycles=0
+instructions=0
+limits:
+  - max_steps=100000
+firmware_hash=baa7bc8768701bd0761ff2d2a0cbb6f74029e427dd07a8c1fc96cfe9bf9305b0
+firmware=examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-arvsom-rv64-cpu-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/arvsom.yaml
+script=examples/renode-onboarding/arvsom-rv64-cpu-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 2154823680, expected_value: 3, mask: None, size: None, node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 2154823684, expected_value: 5, mask: None, size: None, node: None } }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;ARV-SOM JH7100 UART0 ok; mul=0000000500000003&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+</testsuite>

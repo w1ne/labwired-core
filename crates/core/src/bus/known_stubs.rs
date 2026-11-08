@@ -267,8 +267,7 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          Python snippet the .repl carried. There is nothing to port — the imported descriptor \
          has no register semantics at all. Renode-imported onboarding descriptor; no model in \
          this engine, so the window answers reads with zeros. Used by: \
-         onboarding/arduino_uno_r4_minima, onboarding/arvsom, onboarding/atsamd51g19a, \
-         onboarding/beaglev_starlight and other imported descriptors.",
+         onboarding/mpc5567, onboarding/up_squared_x86_64, stm32l552.",
     ),
     (
         "ram",

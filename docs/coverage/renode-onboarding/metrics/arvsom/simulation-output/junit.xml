@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.002448">
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.002408">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="7c5a14dfd50989fa3cd36eb0e0d15bc89a4b8e0ac55a99fe21868c86758a3223"/>
+    <property name="firmware_hash" value="baa7bc8768701bd0761ff2d2a0cbb6f74029e427dd07a8c1fc96cfe9bf9305b0"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.002448">
+  <testcase classname="labwired" name="run" time="0.002408">
   </testcase>
   <testcase classname="labwired" name="assertion 1: memory_value: @0x80700000=0x3" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 2: memory_value: @0x80700004=0x5" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 3: uart_contains: ARV-SOM JH7100 UART0 ok; mul=0000000500000003" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

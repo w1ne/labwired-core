@@ -1,17 +1,29 @@
-# Bounded CPU-only profile for the imported ARV-SOM descriptor.
-# The imported board record identifies a PolarFire SoC with RV64GC. This
-# engine profile claims only its implemented RV64IMAC execution subset and a
-# small window inside the imported DDR range. It does not claim Linux boot,
-# floating point, supervisor mode, FPGA fabric, or board peripherals.
+# Bounded profile for the imported ARV-SOM descriptor.
+# The imported board record describes a PolarFire SoC module, but Renode's
+# boards/arvsom.repl is `using "platforms/cpus/starfive-jh7100.repl"` plus a
+# MappedMemory `ddr` at 0x80000000 (size 0x200000000). This engine profile
+# therefore follows the Renode platform: one U74 hart in the implemented
+# RV64IMAC subset, a small window of that DDR, and the JH7100 UART0 polling TX
+# path. It does not claim PolarFire silicon, Linux boot, floating point,
+# supervisor mode, the second hart, interrupts, or other SoC peripherals.
+# Source: https://github.com/renode/renode/blob/master/platforms/boards/arvsom.repl
 
 name: "arvsom"
 arch: "riscv"
 core: "rv64imac"
 flash: { base: 0, size: 0 }
 
-# The generated import supplied an 8 GiB RAM window at 0x80000000. Expose only
-# the first 8 MiB for this direct-ELF smoke; this does not assert installed DDR
-# capacity on the physical module.
+# Renode maps 8 GiB of DDR at 0x80000000. Expose only the first 8 MiB for this
+# direct-ELF smoke; this does not assert installed DDR capacity.
 ram: { base: 0x80000000, size: "8MiB" }
 flash_boot_alias: false
-peripherals: []
+peripherals:
+  - id: uart0
+    type: uart
+    bus: sysbus
+    base_address: 0x11870000
+    size: "4KiB"
+    config:
+      # starfive-jh7100.repl: UART.NS16550 with wideRegisters=true (32-bit,
+      # 4-byte-spaced registers), which the DesignWare 16550 profile matches.
+      profile: dw_apb_uart
