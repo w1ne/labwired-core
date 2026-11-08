@@ -782,6 +782,20 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// An STM32 general-purpose or advanced timer, whose counter runs on the
+    /// APB timer kernel clock (TIMxCLK) rather than on HCLK. The bus feeds it
+    /// through [`Self::set_timer_kernel_clock_div`]. `false` by default.
+    fn has_timer_kernel_clock(&self) -> bool {
+        false
+    }
+
+    /// Set the timer kernel clock to HCLK / `div` (0 is taken as 1). The
+    /// timer is already synced to now. Returns whether the divider changed,
+    /// so the bus re-arms the timer's scheduled events. No-op by default.
+    fn set_timer_kernel_clock_div(&mut self, _div: u32) -> bool {
+        false
+    }
+
     /// Timer capability: the pads its output wires are tabled to, for a timer
     /// whose pad table is chip data rather than a bus-side datasheet table
     /// (Renesas RA GPT `gtioc_pads`): `(line, GPIO port name, pin)`. Empty by
@@ -792,12 +806,15 @@ pub trait Peripheral: std::fmt::Debug + Send {
 
     /// GPIO capability: bind pad `pin` CONDITIONALLY to `line` of a timer's
     /// channel-output wire `cell` — live while the pad is an alternate-function
-    /// output and the timer drives that line (STM32 F1 fixed mapping). A port
-    /// whose register layout is not F1 refuses it and returns `false`.
+    /// output and the timer drives that line. `af` is the STM32 V2 AFR nibble
+    /// that selects the channel; `None` is the STM32 F1 fixed mapping (and
+    /// the families whose port knows its own timer selector). A port whose
+    /// register layout is not the row's shape refuses it and returns `false`.
     fn bind_timer_output_pad(
         &mut self,
         _cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
         _pin: u8,
+        _af: Option<u8>,
         _line: usize,
         _func: &'static str,
     ) -> bool {

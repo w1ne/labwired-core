@@ -2513,8 +2513,13 @@ boards:
     # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
     # not ARMv6-M, so its SCB and fault escalation are unchanged.
     # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
+    # 2026-11-08 (lane/renode-coverage, round 396): merge of origin/main
+    # (#1734 timer kernel clock + V2-port timer pad routing, #1738 RP2350
+    # debug schemas) into the lane. Both sides' changes were each acked
+    # separately; the digest now covers their union. No new model change.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: eddb2ef0b73c57200bbcb146c430321ca8a2030f83c85a26b584a8071e589b62
+    drift_ack_digest: ad615c8a90e1a6c82dfdade20f4f5f754f6525fc695ee6376f0d732f7a2e9ecf
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -4776,8 +4781,13 @@ boards:
     # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
     # not ARMv6-M, so its SCB and fault escalation are unchanged.
     # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
+    # 2026-11-08 (lane/renode-coverage, round 396): merge of origin/main
+    # (#1734 timer kernel clock + V2-port timer pad routing, #1738 RP2350
+    # debug schemas) into the lane. Both sides' changes were each acked
+    # separately; the digest now covers their union. No new model change.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: 5a4a902e1913202b18232ae9421dbd628af874729313b5931de717b83d3becc5
+    drift_ack_digest: 2e095666df6fa9b0ada3def13a49fc0df22e7484ff20752fca6841ce9dfe0771
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -5876,8 +5886,13 @@ boards:
     # matches the silicon; the model previously served the ARMv7-M file.
     # No validated peripheral path reads those offsets. ACK, NOT A SILICON
     # CAPTURE, re-capture pending.
+    # 2026-11-08 (lane/renode-coverage, round 396): merge of origin/main
+    # (#1734 timer kernel clock + V2-port timer pad routing, #1738 RP2350
+    # debug schemas) into the lane. Both sides' changes were each acked
+    # separately; the digest now covers their union. No new model change.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: eb67a0292f8051a0ad97d1c6bc1909acca6579dfc93d563f3b353721532d0635
+    drift_ack_digest: 7fe8c0b868a7dbe7cbea5a0294eca51daa4db8f5d05a35185fda2850d014d997
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -7129,8 +7144,13 @@ boards:
     # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
     # not ARMv6-M, so its SCB and fault escalation are unchanged.
     # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
+    # 2026-11-08 (lane/renode-coverage, round 396): merge of origin/main
+    # (#1734 timer kernel clock + V2-port timer pad routing, #1738 RP2350
+    # debug schemas) into the lane. Both sides' changes were each acked
+    # separately; the digest now covers their union. No new model change.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: 5f9b96e39aa038d780a9c3aaace2fa0b45d4532feb223914de5ddb7c949bc744
+    drift_ack_digest: 57fa0dd434a74d2b01a02d8047054d07f9f6b070f8bdb78172f6c08d91d215a2
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -8251,8 +8271,13 @@ boards:
     # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
     # not ARMv6-M, so its SCB and fault escalation are unchanged.
     # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
+    # 2026-11-08 (lane/renode-coverage, round 396): merge of origin/main
+    # (#1734 timer kernel clock + V2-port timer pad routing, #1738 RP2350
+    # debug schemas) into the lane. Both sides' changes were each acked
+    # separately; the digest now covers their union. No new model change.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: 4c2702620feacfddf703975722736e8a81030c76393bf2133dab1f02cf6f1fa4
+    drift_ack_digest: 7c7055c10adcc3aafbf4afd3e8b625be479b7ff9c11716dbc00ef000227b1cfd
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other

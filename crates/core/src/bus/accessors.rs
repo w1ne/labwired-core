@@ -120,6 +120,7 @@ impl SystemBus {
         self.refresh_legacy_tick_index(idx);
         self.refresh_legacy_tick_peer_write_observers(idx);
         self.refresh_bus_tick_index(idx);
+        self.sync_timer_kernel_clocks(idx);
         self.reconcile_irq_levels_after_write(idx);
     }
 
@@ -1347,6 +1348,7 @@ impl crate::Bus for SystemBus {
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
+                self.sync_timer_kernel_clocks(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
                 self.reconcile_irq_levels_after_write(idx);
@@ -1547,6 +1549,7 @@ impl crate::Bus for SystemBus {
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
+                self.sync_timer_kernel_clocks(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
                 self.reconcile_irq_levels_after_write(idx);
