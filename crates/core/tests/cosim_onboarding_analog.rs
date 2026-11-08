@@ -372,6 +372,25 @@ impl Converter {
                 }
                 single
             }
+            Family::Stm32F4 => {
+                let single = [
+                    self.convert(bus, NTC_CHANNEL),
+                    self.convert(bus, DIODE_CHANNEL),
+                ];
+                let [ntc, diode] = single;
+                for (order, expected) in [
+                    ([NTC_CHANNEL, DIODE_CHANNEL], [ntc, diode]),
+                    ([DIODE_CHANNEL, NTC_CHANNEL], [diode, ntc]),
+                ] {
+                    assert_eq!(
+                        self.scan_f4(bus, &order),
+                        expected,
+                        "{}: one SWSTART scans CR1.SCAN group {order:?} into DR in turn",
+                        self.id
+                    );
+                }
+                single
+            }
             Family::Stm32H7 | Family::Stm32L4 => {
                 let single = [
                     self.convert(bus, NTC_CHANNEL),
@@ -478,6 +497,40 @@ impl Converter {
             bus.write_u32(self.base + 0x30 + 4 * k, 0)
                 .expect("restore SQRx");
         }
+        codes
+    }
+
+    /// One software-started F2/F4/F7 `CR1.SCAN` group with `CR2.EOCS`, read
+    /// by polling: wait for EOC, clear it, read DR. Leaves CR1/SQR1 at 0.
+    fn scan_f4(&self, bus: &mut SystemBus, channels: &[u8]) -> Vec<u32> {
+        const ADON: u32 = 1;
+        const EOCS: u32 = 1 << 10;
+        let sqr3 = channels
+            .iter()
+            .enumerate()
+            .fold(0, |w, (k, &ch)| w | (u32::from(ch) << (5 * k)));
+        bus.write_u32(self.base + 0x34, sqr3).expect("SQR3 SQ1..");
+        bus.write_u32(self.base + 0x2c, (channels.len() as u32 - 1) << 20)
+            .expect("SQR1.L");
+        bus.write_u32(self.base + 0x04, 1 << 8).expect("CR1.SCAN");
+        bus.write_u32(self.base, 0).expect("clear SR");
+        bus.write_u32(self.base + 0x08, ADON | EOCS).expect("ADON");
+        bus.write_u32(self.base + 0x08, ADON | EOCS | (1 << 30))
+            .expect("SWSTART");
+        let codes = (0..channels.len())
+            .map(|slot| {
+                let mut ticks = 0;
+                while bus.read_u32(self.base).unwrap() & (1 << 1) == 0 {
+                    assert!(ticks < 64, "{}: EOC for conversion {slot}", self.id);
+                    bus.tick_peripherals_fully();
+                    ticks += 1;
+                }
+                bus.write_u32(self.base, 0).expect("clear EOC");
+                bus.read_u32(self.base + 0x4c).expect("read DR")
+            })
+            .collect();
+        bus.write_u32(self.base + 0x04, 0).expect("restore CR1");
+        bus.write_u32(self.base + 0x2c, 0).expect("restore SQR1");
         codes
     }
 

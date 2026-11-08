@@ -146,6 +146,14 @@ pub const DEFAULT_AMBIENT_TEMPERATURE_C: f64 = 25.0;
 /// STM32F2/F4 ADC_CR2.SWSTART (RM0090) — same legacy register *block* as F1,
 /// different bit. Kept so F4 board bindings are not silently retargeted to F1.
 const F4_CR2_SWSTART: u32 = 1 << 30;
+/// ADC_CR1.SCAN (bit 8, RM0008 §11.12.2 / RM0090 §13.13.2): one trigger
+/// converts the whole regular group `SQ1..SQ(L+1)`, not just `SQ1`.
+const F1_CR1_SCAN: u32 = 1 << 8;
+/// STM32F2/F4 ADC_CR2.EOCS (bit 10, RM0090 §13.13.3): set, `EOC` rises after
+/// every regular conversion; clear (reset), only at the end of the group. The
+/// F1 has no such bit and always raises `EOC` at the end of the group
+/// (RM0008 §11.3.8).
+const F4_CR2_EOCS: u32 = 1 << 10;
 
 /// Approximate F1 RSTCAL completion latency in model cycles (not host time).
 /// Silicon clears RSTCAL after a short internal reset; a fixed 2-cycle delay is
@@ -260,11 +268,46 @@ impl FromStr for AdcRegisterLayout {
 pub struct F1AdcRegs {
     cr1: u32, // 0x04
     cr2: u32, // 0x08
-    /// ADC_SQR3 @ 0x34 (RM0008 §11.12.14). Only SQ1[4:0] — the first (and, on
-    /// this single-shot model, only) regular-sequence channel — is consumed,
-    /// by `advance_conversion`. Reset value 0 selects channel 0, which is what
+    /// ADC_SQR1 @ 0x2C (RM0008 §11.12.12): `L[23:20]` (group length minus
+    /// one) and `SQ13..SQ16`. Consumed only with `CR1.SCAN`. Left out of
+    /// snapshots while zero, so a firmware that never programs a group keeps
+    /// the same snapshot shape.
+    #[serde(skip_serializing_if = "is_zero")]
+    sqr1: u32,
+    /// ADC_SQR2 @ 0x30: `SQ7..SQ12`. Consumed only with `CR1.SCAN`.
+    #[serde(skip_serializing_if = "is_zero")]
+    sqr2: u32,
+    /// ADC_SQR3 @ 0x34 (RM0008 §11.12.14): `SQ1..SQ6`. Without `CR1.SCAN` only
+    /// SQ1[4:0] is converted. Reset value 0 selects channel 0, which is what
     /// firmware that never programs the sequence converts on silicon.
     sqr3: u32,
+}
+
+fn is_zero(v: &u32) -> bool {
+    *v == 0
+}
+
+impl F1AdcRegs {
+    /// Channels one trigger converts: `SQR1.L` + 1 with `CR1.SCAN`, else 1.
+    fn group_len(&self) -> usize {
+        if self.cr1 & F1_CR1_SCAN != 0 {
+            ((self.sqr1 >> 20) & 0xF) as usize + 1
+        } else {
+            1
+        }
+    }
+
+    /// Channel in group position `k`: `SQ1..SQ6` in SQR3, `SQ7..SQ12` in
+    /// SQR2, `SQ13..SQ16` in SQR1, five bits each from bit 0. Same on the F1
+    /// (RM0008 §11.12.12-14) and the F2/F4 (RM0090 §13.13.9-11).
+    fn group_channel(&self, k: usize) -> usize {
+        let (word, field) = match k {
+            0..=5 => (self.sqr3, k),
+            6..=11 => (self.sqr2, k - 6),
+            _ => (self.sqr1, k - 12),
+        };
+        ((word >> (5 * field)) & 0x1F) as usize
+    }
 }
 
 /// STM32L4 ADC register file (data `dr` is shared on `Adc`).
@@ -662,6 +705,10 @@ pub struct Adc {
     /// V2 `DISCEN` pointer: the sequence position the next trigger converts.
     #[serde(skip)]
     v2_discontinuous_next: usize,
+    /// F1/F4 `CR1.SCAN` group position being converted. Conversion state,
+    /// not a register: not serialized.
+    #[serde(skip)]
+    f1_group_pos: usize,
 }
 
 impl Adc {
@@ -746,6 +793,7 @@ impl Adc {
             ambient_temp_c: DEFAULT_AMBIENT_TEMPERATURE_C,
             regular_sequence: None,
             v2_discontinuous_next: 0,
+            f1_group_pos: 0,
         }
     }
 
@@ -856,14 +904,30 @@ impl Adc {
                     self.dr = (self.dr + 1) & 0xFFF;
                 }
 
-                self.sr |= 1 << 1; // EOC
+                // CR1.SCAN: the next group channel is acquired as soon as this
+                // one lands. Without SCAN (or with L = 0) the group is SQ1
+                // alone, so every landing ends it, exactly as before.
+                let group_done = self.f1_group_pos + 1 >= self.f1_group_len();
+                let per_conversion_eoc =
+                    matches!(self.regs, AdcRegs::Stm32F4(_)) && (cr2 & F4_CR2_EOCS) != 0;
+                if group_done || per_conversion_eoc {
+                    self.sr |= 1 << 1; // EOC
 
-                if (cr1 & (1 << 5)) != 0 {
-                    irq = true; // EOCIE
+                    if (cr1 & (1 << 5)) != 0 {
+                        irq = true; // EOCIE
+                    }
                 }
-                // Continuous mode (CONT + ADON).
-                if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
-                    self.start_conversion();
+                if !group_done {
+                    self.f1_group_pos += 1;
+                    // Unlike a new trigger, the next group conversion does
+                    // not clear the EOC a per-conversion landing just raised.
+                    self.acquire_f1_input();
+                } else {
+                    self.f1_group_pos = 0;
+                    // Continuous mode (CONT + ADON).
+                    if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
+                        self.start_conversion();
+                    }
                 }
             }
         }
@@ -921,10 +985,23 @@ impl Adc {
     }
 
     fn start_conversion(&mut self) {
+        self.acquire_f1_input();
+        self.sr &= !0x2; // clear EOC on start
+    }
+
+    /// Sample the current group channel and start its conversion countdown.
+    fn acquire_f1_input(&mut self) {
         self.converting = true;
         self.cycles_remaining = self.conversion_time;
         self.sampled_input = self.sample_f1_input();
-        self.sr &= !0x2; // clear EOC on start
+    }
+
+    /// Channels one F1/F4 trigger converts (1 on the other layouts).
+    fn f1_group_len(&self) -> usize {
+        match &self.regs {
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => r.group_len(),
+            _ => 1,
+        }
     }
 
     /// (cr1, cr2) for the F1 control registers; (0, 0) on L4 (no conversion
@@ -941,11 +1018,12 @@ impl Adc {
         }
     }
 
-    /// Regular channel being converted: SQR3 SQ1[4:0] on the F1 layout; 0 on
-    /// the other families (their engines select from their own SQR1/PCSEL).
+    /// Regular channel being converted: the current group position's `SQx`
+    /// on the F1 layout (SQR3 SQ1[4:0] without `CR1.SCAN`); 0 on the other
+    /// families (their engines select from their own SQR1/PCSEL).
     fn f1_regular_channel(&self) -> usize {
         match &self.regs {
-            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => (r.sqr3 & 0x1F) as usize,
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => r.group_channel(self.f1_group_pos),
             AdcRegs::Stm32L4(_)
             | AdcRegs::Stm32H7(_)
             | AdcRegs::Stm32U5(_)
@@ -1747,6 +1825,7 @@ impl Adc {
     /// once the remaining counters are cleared.
     fn cancel_f1_pending(&mut self) {
         self.converting = false;
+        self.f1_group_pos = 0;
         self.cycles_remaining = 0;
         self.chain_live = false;
         self.f1_rstcal_remaining = None;
@@ -1916,6 +1995,8 @@ impl Peripheral for Adc {
                 0x00..=0x03 => self.sr,
                 0x04..=0x07 => r.cr1,
                 0x08..=0x0B => r.cr2,
+                0x2C..=0x2F => r.sqr1,
+                0x30..=0x33 => r.sqr2,
                 0x34..=0x37 => r.sqr3,
                 0x4C..=0x4F => self.dr,
                 _ => {
@@ -1962,12 +2043,19 @@ impl Peripheral for Adc {
                         self.apply_f4_cr2(old_cr2, merged)
                     };
                     if trigger {
+                        // A trigger restarts the group at SQ1.
+                        self.f1_group_pos = 0;
                         self.start_conversion();
                     }
                 }
-                0x34..=0x37 => match &mut self.regs {
+                0x2C..=0x37 => match &mut self.regs {
                     AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
-                        r.sqr3 = (r.sqr3 & !mask) | val_shifted;
+                        let sqr = match offset & !3 {
+                            0x2C => &mut r.sqr1,
+                            0x30 => &mut r.sqr2,
+                            _ => &mut r.sqr3,
+                        };
+                        *sqr = (*sqr & !mask) | val_shifted;
                     }
                     _ => {}
                 },
@@ -2243,6 +2331,194 @@ mod tests {
         adc.write_u32(0x34, 0).unwrap();
         let ch0 = adc.channel_input_count(0) as u32;
         assert_eq!(convert(&mut adc), ch0, "SQR3 SQ1 = 0 converts channel 0");
+    }
+
+    /// `SQ1..SQ16` read from SQR3, SQR2, SQR1 in that order, `L` from
+    /// `SQR1[23:20]`, and the three registers round-trip on both layouts.
+    #[test]
+    fn f1_group_reads_sq1_to_sq16_across_sqr3_sqr2_sqr1() {
+        for layout in [AdcRegisterLayout::Stm32F1, AdcRegisterLayout::Stm32F4] {
+            let mut adc = Adc::new_with_layout(layout);
+            // SQk = k + 1 (channels 1..=16), five bits per field.
+            let field = |first: u32, n: u32| (0..n).fold(0, |w, i| w | ((first + i) << (5 * i)));
+            let sqr3 = field(1, 6);
+            let sqr2 = field(7, 6);
+            let sqr1 = field(13, 4) | (15 << 20);
+            adc.write_u32(0x34, sqr3).unwrap();
+            adc.write_u32(0x30, sqr2).unwrap();
+            adc.write_u32(0x2C, sqr1).unwrap();
+            assert_eq!(adc.read_u32(0x34).unwrap(), sqr3, "{layout:?} SQR3");
+            assert_eq!(adc.read_u32(0x30).unwrap(), sqr2, "{layout:?} SQR2");
+            assert_eq!(adc.read_u32(0x2C).unwrap(), sqr1, "{layout:?} SQR1");
+            let (AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r)) = &adc.regs else {
+                unreachable!()
+            };
+            assert_eq!(r.group_len(), 1, "{layout:?}: no SCAN converts SQ1 alone");
+            adc.write_u32(0x04, F1_CR1_SCAN).unwrap();
+            let (AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r)) = &adc.regs else {
+                unreachable!()
+            };
+            assert_eq!(r.group_len(), 16, "{layout:?}: SCAN with L = 15");
+            let order: Vec<usize> = (0..16).map(|k| r.group_channel(k)).collect();
+            assert_eq!(order, (1..=16).collect::<Vec<_>>(), "{layout:?} SQ order");
+        }
+    }
+
+    /// Tick until the current conversion lands; returns the ticks it took.
+    fn tick_until_landed(adc: &mut Adc) -> usize {
+        let pos = adc.f1_group_pos;
+        for n in 1..=64 {
+            adc.tick();
+            if !adc.converting || adc.f1_group_pos != pos {
+                return n;
+            }
+        }
+        panic!("conversion never landed");
+    }
+
+    /// RM0008 §11.3.8: with `CR1.SCAN` one SWSTART converts `SQ1..SQ(L+1)`
+    /// back to back, each sampled when its own acquisition begins, and the F1
+    /// raises `EOC` (and its interrupt) once, at the end of the group, with
+    /// the LAST channel in `DR`.
+    #[test]
+    fn f1_scan_converts_the_whole_group_and_raises_eoc_at_its_end() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(3, 1000);
+        adc.set_channel_input(7, 2000);
+        adc.set_channel_input(12, 3000);
+        let code = |mv: f64| Adc::code_for_mv(mv, ADC_VREF_MV);
+        // SQ1 = 7, SQ2 = 3, ..., SQ7 = 12 (in SQR2): L = 6.
+        adc.write_u32(
+            0x34,
+            7 | (3 << 5) | (3 << 10) | (3 << 15) | (3 << 20) | (3 << 25),
+        )
+        .unwrap();
+        adc.write_u32(0x30, 12).unwrap();
+        adc.write_u32(0x2C, 6 << 20).unwrap();
+        adc.write_u32(0x04, F1_CR1_SCAN | (1 << 5)).unwrap(); // SCAN | EOCIE
+        f1_software_start(&mut adc);
+
+        let mut landed = Vec::new();
+        let mut irqs = 0;
+        for k in 0..7 {
+            assert_eq!(tick_until_landed(&mut adc), 15, "conversion {k} timing");
+            landed.push(adc.dr);
+            let eoc = adc.sr & (1 << 1) != 0;
+            assert_eq!(eoc, k == 6, "F1 EOC only at the end of the group ({k})");
+            // The interrupt rides the EOC landing (`tick` reported it).
+            irqs += usize::from(eoc);
+            if k == 2 {
+                // Moved mid-group: the not-yet-acquired SQ4..SQ6 see it.
+                adc.set_channel_input(3, 500);
+            }
+        }
+        assert!(!adc.converting, "a non-CONT group stops after SQ7");
+        assert_eq!(irqs, 1);
+        assert_eq!(
+            landed,
+            vec![
+                code(2000.0),
+                code(1000.0),
+                code(1000.0),
+                // SQ4 was acquired when SQ3 landed, before the move.
+                code(1000.0),
+                code(500.0),
+                code(500.0),
+                code(3000.0)
+            ],
+            "SQ1..SQ7 in order"
+        );
+
+        // A fresh trigger restarts the group at SQ1.
+        f1_software_start(&mut adc);
+        tick_until_landed(&mut adc);
+        assert_eq!(adc.dr, code(2000.0), "SWSTART restarts at SQ1");
+    }
+
+    /// RM0090 §13.8.1: an F4 with `CR2.EOCS` raises `EOC` after every
+    /// conversion of the group, so polling firmware reads each channel; with
+    /// `EOCS` clear it behaves like the F1. `CONT` wraps round to SQ1.
+    #[test]
+    fn f4_scan_eocs_raises_eoc_per_conversion_and_cont_wraps() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(0, 600);
+        adc.set_channel_input(9, 2400);
+        let code = |mv: f64| Adc::code_for_mv(mv, ADC_VREF_MV);
+        adc.write_u32(0x34, 9).unwrap(); // SQ1 = 9, SQ2 = 0
+        adc.write_u32(0x2C, 1 << 20).unwrap(); // L = 1
+        adc.write_u32(0x04, F1_CR1_SCAN).unwrap();
+
+        let start = |adc: &mut Adc, cr2: u32| {
+            adc.write_u32(0x08, F1_CR2_ADON | cr2).unwrap();
+            adc.write_u32(0x08, F1_CR2_ADON | cr2 | F4_CR2_SWSTART)
+                .unwrap();
+        };
+
+        start(&mut adc, F4_CR2_EOCS);
+        let mut polled = Vec::new();
+        for k in 0..2 {
+            tick_until_landed(&mut adc);
+            assert_ne!(adc.sr & (1 << 1), 0, "EOCS: EOC after conversion {k}");
+            adc.write_u32(0x00, 0).unwrap(); // firmware clears EOC
+            polled.push(adc.read_u32(0x4C).unwrap());
+        }
+        assert_eq!(polled, vec![code(2400.0), code(600.0)]);
+        assert!(!adc.converting);
+
+        start(&mut adc, 0);
+        tick_until_landed(&mut adc);
+        assert_eq!(adc.sr & (1 << 1), 0, "EOCS clear: no EOC mid-group");
+        assert_eq!(adc.dr, code(2400.0));
+        tick_until_landed(&mut adc);
+        assert_ne!(adc.sr & (1 << 1), 0, "EOCS clear: EOC at the group end");
+        assert_eq!(adc.dr, code(600.0));
+
+        start(&mut adc, F4_CR2_EOCS | F1_CR2_CONT);
+        let wrapped: Vec<u32> = (0..5)
+            .map(|_| {
+                tick_until_landed(&mut adc);
+                adc.dr
+            })
+            .collect();
+        assert_eq!(
+            wrapped,
+            vec![
+                code(2400.0),
+                code(600.0),
+                code(2400.0),
+                code(600.0),
+                code(2400.0)
+            ],
+            "CONT wraps the group round to SQ1"
+        );
+        assert!(adc.converting, "CONT keeps converting");
+        adc.write_u32(0x08, 0).unwrap();
+        assert!(
+            !adc.converting && adc.f1_group_pos == 0,
+            "ADON off stops the group"
+        );
+    }
+
+    /// `CR1.SCAN` with `L = 0`, or `L > 0` without `SCAN`, is the old
+    /// single-conversion engine tick for tick: one SQ1 landing, `EOC` and
+    /// done.
+    #[test]
+    fn f1_one_channel_groups_match_the_single_conversion_path() {
+        for (cr1, sqr1) in [(0, 0), (F1_CR1_SCAN, 0), (0, 5 << 20)] {
+            let mut adc = Adc::new();
+            adc.set_channel_input(4, 1234);
+            adc.write_u32(0x34, 4 | (6 << 5)).unwrap();
+            adc.write_u32(0x2C, sqr1).unwrap();
+            adc.write_u32(0x04, cr1).unwrap();
+            f1_software_start(&mut adc);
+            assert_eq!(tick_until_landed(&mut adc), 15);
+            assert!(
+                !adc.converting,
+                "cr1 {cr1:#x} sqr1 {sqr1:#x}: one conversion"
+            );
+            assert_ne!(adc.sr & (1 << 1), 0);
+            assert_eq!(adc.dr, Adc::code_for_mv(1234.0, ADC_VREF_MV));
+        }
     }
 
     /// The F1 ADC samples the selected input and VREF+ when SWSTART begins

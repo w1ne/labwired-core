@@ -152,6 +152,54 @@ impl Adc1 {
         assert_ne!(status & EOC, 0, "ADC1 conversion completes with EOC set");
         bus.read_u32(self.base + 0x4c).expect("read ADC1 DR")
     }
+
+    /// One software-started `CR1.SCAN` group over `channels` (SQ1.. in
+    /// SQR3, `L` in SQR1[23:20]), read the way polling firmware without DMA
+    /// can: on the F4 with `CR2.EOCS` set, wait for `EOC`, clear it and read
+    /// `DR` once per channel; on the F1, which raises `EOC` only at the end
+    /// of the group (RM0008 §11.3.8), read the group's last result. Returns
+    /// the codes read and the ticks until the first `EOC`. Leaves CR1/SQR1
+    /// at the single-conversion reset state.
+    fn scan(&self, bus: &mut SystemBus, channels: &[u8]) -> (Vec<u32>, usize) {
+        const ADON: u32 = 1;
+        const EOC: u32 = 1 << 1;
+        const SCAN: u32 = 1 << 8;
+        const EOCS: u32 = 1 << 10;
+        let sqr3 = channels
+            .iter()
+            .enumerate()
+            .fold(0, |w, (k, &ch)| w | (u32::from(ch) << (5 * k)));
+        bus.write_u32(self.base + 0x34, sqr3).expect("SQR3 SQ1..");
+        bus.write_u32(self.base + 0x2c, (channels.len() as u32 - 1) << 20)
+            .expect("SQR1.L");
+        bus.write_u32(self.base + 0x04, SCAN).expect("CR1.SCAN");
+        bus.write_u32(self.base, 0).expect("clear SR");
+        let armed = if self.f1_profile {
+            ADON | (0b111 << 17) | (1 << 20)
+        } else {
+            ADON | EOCS
+        };
+        let start = armed | if self.f1_profile { 1 << 22 } else { 1 << 30 };
+        bus.write_u32(self.base + 0x08, armed).expect("arm ADC1");
+        bus.write_u32(self.base + 0x08, start).expect("SWSTART");
+        let mut first_eoc = None;
+        let mut codes = Vec::new();
+        let reads = if self.f1_profile { 1 } else { channels.len() };
+        let mut ticks = 0;
+        while codes.len() < reads {
+            assert!(ticks < 64 * channels.len(), "ADC1 scan stalls");
+            bus.tick_peripherals_fully();
+            ticks += 1;
+            if bus.read_u32(self.base).unwrap() & EOC != 0 {
+                first_eoc.get_or_insert(ticks);
+                bus.write_u32(self.base, 0).expect("clear EOC");
+                codes.push(bus.read_u32(self.base + 0x4c).expect("read DR"));
+            }
+        }
+        bus.write_u32(self.base + 0x04, 0).expect("restore CR1");
+        bus.write_u32(self.base + 0x2c, 0).expect("restore SQR1");
+        (codes, first_eoc.unwrap())
+    }
 }
 
 /// The highest-channel ADC1 pad this package bonds out — PB1 on 36/48-pin
@@ -281,6 +329,37 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
             "{part}: unrouted ADC1 channel {idle_channel} stays undriven"
         );
         ntc_counts.push(adc1.channel_count(&mut bus, 0));
+
+        // One trigger scans both routed sensors through CR1.SCAN, in either
+        // SQx order, and lands the same codes as the single conversions.
+        let ntc = u32::from(expected_adc_count(ntc_v));
+        let diode = u32::from(expected_adc_count(diode_v));
+        let (_, single_ticks) = adc1.scan(&mut bus, &[0]);
+        for (order, codes) in [
+            (vec![0, top_channel], vec![ntc, diode]),
+            (vec![top_channel, 0, top_channel], vec![diode, ntc, diode]),
+        ] {
+            let (read, first_eoc) = adc1.scan(&mut bus, &order);
+            if adc1.f1_profile {
+                assert_eq!(
+                    first_eoc,
+                    order.len() * single_ticks,
+                    "{part}: F1 raises EOC once, after all {} conversions",
+                    order.len()
+                );
+                assert_eq!(
+                    read,
+                    vec![*codes.last().unwrap()],
+                    "{part}: F1 DR holds the group's last channel {order:?}"
+                );
+            } else {
+                assert_eq!(
+                    first_eoc, single_ticks,
+                    "{part}: EOCS raises EOC per conversion"
+                );
+                assert_eq!(read, codes, "{part}: F4 scan {order:?} polled per EOC");
+            }
+        }
     }
     assert!(
         ntc_counts[0] < ntc_counts[1] && ntc_counts[1] < ntc_counts[2],
