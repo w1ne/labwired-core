@@ -9952,6 +9952,7 @@ boards:
       - crates/core/src/peripherals/dbgmcu.rs
       - crates/core/src/peripherals/dma.rs
       - crates/core/src/peripherals/flash.rs
+      - crates/core/src/peripherals/fdcan.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/i2c.rs
       - crates/core/src/peripherals/iwdg.rs

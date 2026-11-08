@@ -183,9 +183,8 @@ boards:
     # L6 uses PA0 (TIM2) — not PA5 LED (DAC1_OUT2) — see L6 sketch.
     # pwm_watch deferred: TIM OC→pad edge routing not yet reliable for L6 oracle.
     family: stm32
-    sketches_skip: [L8_can]
-    sketches_skip_reason:
-      L8_can: "No FDCAN in chip yaml for matrix L8"
+    # L8_can: FDCAN1 internal loopback; SRAMCAN @ 0x4000A400 is a chip-yaml
+    # mirror onto the shared fdcan model's message RAM.
 
   - id: stm32g071rb
     chip: stm32g071
