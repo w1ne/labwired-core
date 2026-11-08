@@ -347,11 +347,92 @@ impl Converter {
                     u32::from(bus.read_u16(ram + 2).unwrap()),
                 ]
             }
+            Family::Stm32V2 | Family::Stm32Adc4 => {
+                let single = [
+                    self.convert(bus, NTC_CHANNEL),
+                    self.convert(bus, DIODE_CHANNEL),
+                ];
+                let idle = self.convert(bus, IDLE_CHANNEL);
+                let [ntc, diode] = single;
+                for (cfgr1, chselr, order) in self.v2_scans() {
+                    let expected: Vec<u32> = order
+                        .iter()
+                        .map(|&ch| match ch {
+                            NTC_CHANNEL => ntc,
+                            DIODE_CHANNEL => diode,
+                            _ => idle,
+                        })
+                        .collect();
+                    assert_eq!(
+                        self.scan_v2(bus, cfgr1, chselr, order.len()),
+                        expected,
+                        "{}: one ADSTART scans channels {order:?} into DR in turn",
+                        self.id
+                    );
+                }
+                single
+            }
             _ => [
                 self.convert(bus, NTC_CHANNEL),
                 self.convert(bus, DIODE_CHANNEL),
             ],
         }
+    }
+
+    /// `(CFGR1, CHSELR, channel order)` for the multi-channel scans each v2
+    /// map runs. The bitmap scans upward, or downward with SCANDIR; ADC4's
+    /// CHSELRMOD sequence runs in SQx order whatever the channel numbers.
+    fn v2_scans(&self) -> Vec<(u32, u32, Vec<u8>)> {
+        let bitmap = (1 << NTC_CHANNEL) | (1 << DIODE_CHANNEL) | (1 << IDLE_CHANNEL);
+        let upward = vec![NTC_CHANNEL, DIODE_CHANNEL, IDLE_CHANNEL];
+        let downward = vec![IDLE_CHANNEL, DIODE_CHANNEL, NTC_CHANNEL];
+        match self.family {
+            Family::Stm32V2 => vec![(0, bitmap, upward), (1 << 2, bitmap, downward)],
+            Family::Stm32Adc4 => {
+                // SQ1 = diode, SQ2 = NTC, SQ3 = 0xF ends the sequence.
+                let sq = 0xFFFF_FF00 | (u32::from(NTC_CHANNEL) << 4) | u32::from(DIODE_CHANNEL);
+                vec![
+                    (0, bitmap, upward),
+                    (1 << 4, bitmap, downward),
+                    (1 << 21, sq, vec![DIODE_CHANNEL, NTC_CHANNEL]),
+                ]
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// One software-started v2 scan read by polling: wait for EOC, read DR.
+    /// EOS must stay low until the last conversion lands. Leaves CFGR1 at 0.
+    fn scan_v2(&self, bus: &mut SystemBus, cfgr1: u32, chselr: u32, len: usize) -> Vec<u32> {
+        const EOC: u32 = 1 << 2;
+        const EOS: u32 = 1 << 3;
+        let ldo = if matches!(self.family, Family::Stm32Adc4) {
+            1 << 28
+        } else {
+            0
+        };
+        bus.write_u32(self.base + 0x0C, cfgr1).expect("write CFGR1");
+        bus.write_u32(self.base + 0x28, chselr)
+            .expect("write CHSELR");
+        bus.write_u32(self.base, EOC | EOS).expect("clear EOC/EOS");
+        bus.write_u32(self.base + 0x08, ldo | 1 | (1 << 2))
+            .expect("ADSTART");
+        let codes = (0..len)
+            .map(|slot| {
+                let isr = bus.read_u32(self.base).unwrap();
+                assert_ne!(isr & EOC, 0, "{}: EOC for conversion {slot}", self.id);
+                assert_eq!(
+                    isr & EOS != 0,
+                    slot == len - 1,
+                    "{}: EOS only when the last of {len} conversions lands (at {slot})",
+                    self.id
+                );
+                bus.write_u32(self.base, EOC).expect("clear EOC");
+                bus.read_u32(self.base + 0x40).expect("read DR")
+            })
+            .collect();
+        bus.write_u32(self.base + 0x0C, 0).expect("restore CFGR1");
+        codes
     }
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {

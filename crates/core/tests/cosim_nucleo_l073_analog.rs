@@ -232,6 +232,33 @@ fn adc_convert(bus: &mut SystemBus, chselr: u32, cfgr1: u32) -> u32 {
     bus.read_u32(ADC_DR).expect("read DR")
 }
 
+/// One software-started scan of a `len`-channel CHSELR sequence, read the way
+/// a polling firmware reads it: wait for EOC, read DR, repeat. EOS must stay
+/// low until the last channel has landed.
+fn adc_scan(bus: &mut SystemBus, chselr: u32, cfgr1: u32, len: usize) -> Vec<u32> {
+    bus.write_u32(ADC_CFGR1, cfgr1).expect("write CFGR1");
+    bus.write_u32(ADC_CHSELR, chselr).expect("select channels");
+    bus.write_u32(ADC_ISR, ISR_EOC | ISR_EOS)
+        .expect("clear EOC/EOS");
+    bus.write_u32(ADC_CR, CR_ADEN | CR_ADSTART)
+        .expect("start scan");
+    (0..len)
+        .map(|slot| {
+            let isr = bus.read_u32(ADC_ISR).expect("read ISR");
+            assert_ne!(isr & ISR_EOC, 0, "EOC for conversion {slot}");
+            assert_eq!(
+                isr & ISR_EOS != 0,
+                slot == len - 1,
+                "EOS only once conversion {} of {len} lands",
+                len - 1
+            );
+            // HAL_ADC_PollForConversion clears EOC before HAL_ADC_GetValue.
+            bus.write_u32(ADC_ISR, ISR_EOC).expect("clear EOC");
+            bus.read_u32(ADC_DR).expect("read DR")
+        })
+        .collect()
+}
+
 #[test]
 fn nucleo_l073rz_ntc_and_diode_netlists_convert_through_chselr_adc() {
     let system_path = root("configs/systems/nucleo-l073rz.yaml");
@@ -341,17 +368,18 @@ fn nucleo_l073rz_ntc_and_diode_netlists_convert_through_chselr_adc() {
             diode_code << 4,
             "left-aligned 12-bit diode code"
         );
-        // Both selected: the scan starts at IN0 upward, at IN15 downward.
+        // Both selected: one ADSTART scans IN0 then IN15 upward, IN15 then
+        // IN0 downward, each result landing in DR in turn.
         let both = (1 << 0) | (1 << 15);
         assert_eq!(
-            adc_convert(&mut bus, both, 0),
-            ntc_code,
-            "upward scan starts at IN0"
+            adc_scan(&mut bus, both, 0, 2),
+            [ntc_code, diode_code],
+            "upward scan IN0, IN15"
         );
         assert_eq!(
-            adc_convert(&mut bus, both, CFGR1_SCANDIR),
-            diode_code,
-            "SCANDIR scan starts at IN15"
+            adc_scan(&mut bus, both, CFGR1_SCANDIR, 2),
+            [diode_code, ntc_code],
+            "SCANDIR scan IN15, IN0"
         );
         // A pad nothing drives keeps the fixed internal source.
         assert_eq!(
@@ -375,4 +403,135 @@ fn nucleo_l073rz_ntc_and_diode_netlists_convert_through_chselr_adc() {
         0,
         "no conversion after ADDIS"
     );
+}
+
+/// Solve both netlists at `temperature_c` and route them onto IN0/IN15.
+fn settle(session: &mut CosimSession, bus: &mut SystemBus, cycles: &mut u64, temperature_c: f64) {
+    session
+        .set_signal_number("ui.ntc.temperature_c", temperature_c)
+        .expect("set NTC temperature");
+    *cycles += session.cycles_until_boundary(*cycles);
+    let (_, errors) = session
+        .advance_to(*cycles, bus)
+        .expect("solve and route both analog netlists");
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+}
+
+fn expected_ntc_code(temperature_c: f64) -> u32 {
+    let resistance = ntc_resistance_ohms(temperature_c);
+    code12(3.3 * resistance / (10_000.0 + resistance))
+}
+
+#[test]
+fn nucleo_l073rz_chselr_sequence_modes_track_the_solved_ntc_and_diode() {
+    const CFGR1_CONT: u32 = 1 << 13;
+    const CFGR1_DISCEN: u32 = 1 << 16;
+    const CR_ADSTP: u32 = 1 << 4;
+    let system_path = root("configs/systems/nucleo-l073rz.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-L073RZ profile");
+    let analog = SystemManifest::from_file(root("examples/nucleo-l073rz/analog-adc-system.yaml"))
+        .expect("load generic NTC divider and Shockley diode netlists");
+    profile.cosim_models = analog.cosim_models;
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32L073 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-L073RZ bus");
+    adc_power_up(&mut bus);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries both analog models");
+    let mut cycles = 0;
+    let diode_code = code12(diode_load_line_voltage());
+    let both = (1 << 0) | (1 << 15);
+
+    // CONT: the sequence keeps wrapping, and each result is sampled when it
+    // lands, so a temperature step between reads shows up in the next IN0.
+    settle(&mut session, &mut bus, &mut cycles, -10.0);
+    bus.write_u32(ADC_CFGR1, CFGR1_CONT).unwrap();
+    bus.write_u32(ADC_CHSELR, both).unwrap();
+    bus.write_u32(ADC_ISR, ISR_EOC | ISR_EOS).unwrap();
+    bus.write_u32(ADC_CR, CR_ADEN | CR_ADSTART).unwrap();
+    assert_ne!(
+        bus.read_u32(ADC_CR).unwrap() & CR_ADSTART,
+        0,
+        "ADSTART stays set in CONT"
+    );
+    let cold = expected_ntc_code(-10.0);
+    assert_eq!(
+        bus.read_u32(ADC_DR).unwrap(),
+        cold,
+        "CONT 1st: IN0 at -10 °C"
+    );
+    assert_ne!(
+        bus.read_u32(ADC_ISR).unwrap() & ISR_EOS,
+        0,
+        "EOS once IN15, the last channel, lands"
+    );
+    bus.write_u32(ADC_ISR, ISR_EOS).unwrap();
+    assert_eq!(bus.read_u32(ADC_DR).unwrap(), diode_code, "CONT 2nd: IN15");
+    assert_eq!(
+        bus.read_u32(ADC_ISR).unwrap() & ISR_EOS,
+        0,
+        "EOS stays clear while IN0 starts the next pass"
+    );
+    settle(&mut session, &mut bus, &mut cycles, 80.0);
+    // The IN0 that landed before the step still holds the cold sample; the
+    // one after it is the first to see 80 °C.
+    assert_eq!(
+        bus.read_u32(ADC_DR).unwrap(),
+        cold,
+        "CONT 3rd: landed before the step"
+    );
+    assert_eq!(bus.read_u32(ADC_DR).unwrap(), diode_code, "CONT 4th: IN15");
+    let hot = expected_ntc_code(80.0);
+    assert!(hot < cold, "NTC code falls with temperature");
+    // A half-word read consumes DR once, not once per byte.
+    assert_eq!(
+        u32::from(bus.read_u16(ADC_DR).unwrap()),
+        hot,
+        "CONT 5th: IN0 at 80 °C"
+    );
+    assert_eq!(
+        u32::from(bus.read_u16(ADC_DR).unwrap()),
+        diode_code,
+        "CONT 6th: IN15"
+    );
+
+    // ADSTP stops the sequence: DR keeps its last result, nothing more lands.
+    bus.write_u32(ADC_CR, CR_ADEN | CR_ADSTP).unwrap();
+    assert_eq!(
+        bus.read_u32(ADC_CR).unwrap() & CR_ADSTART,
+        0,
+        "ADSTP clears ADSTART"
+    );
+    let held = bus.read_u32(ADC_DR).unwrap();
+    assert_eq!(held, hot, "DR keeps the IN0 that had landed");
+    assert_eq!(
+        bus.read_u32(ADC_DR).unwrap(),
+        held,
+        "no conversion after ADSTP"
+    );
+
+    // DISCEN: each ADSTART converts only the next channel; EOS marks the end.
+    settle(&mut session, &mut bus, &mut cycles, 25.0);
+    let room = expected_ntc_code(25.0);
+    bus.write_u32(ADC_CFGR1, CFGR1_DISCEN).unwrap();
+    bus.write_u32(ADC_CHSELR, both).unwrap();
+    for (expected, last) in [(room, false), (diode_code, true), (room, false)] {
+        bus.write_u32(ADC_ISR, ISR_EOC | ISR_EOS).unwrap();
+        bus.write_u32(ADC_CR, CR_ADEN | CR_ADSTART).unwrap();
+        let isr = bus.read_u32(ADC_ISR).unwrap();
+        assert_ne!(isr & ISR_EOC, 0, "DISCEN: EOC per trigger");
+        assert_eq!(isr & ISR_EOS != 0, last, "DISCEN: EOS only on IN15");
+        assert_eq!(bus.read_u32(ADC_DR).unwrap(), expected, "DISCEN result");
+        assert_eq!(
+            bus.read_u32(ADC_ISR).unwrap() & ISR_EOS != 0,
+            last,
+            "DISCEN: reading DR lands nothing more"
+        );
+        assert_eq!(
+            bus.read_u32(ADC_DR).unwrap(),
+            expected,
+            "DISCEN: one per trigger"
+        );
+    }
 }

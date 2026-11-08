@@ -13,6 +13,7 @@
 
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
+use std::cell::Cell;
 use std::str::FromStr;
 
 // ── Modeled internal source (L4/V2 path) ────────────────────────────────────
@@ -439,12 +440,22 @@ impl V2AdcRegs {
         l4_resolution_bits(shifted)
     }
 
-    /// The first channel of the programmed sequence, or `None` if it is empty.
-    fn first_channel(&self) -> Option<usize> {
+    /// The programmed regular sequence, in conversion order; empty if
+    /// nothing is selected.
+    ///
+    /// * Bitmap `CHSELR`: every selected channel, upward, or downward with
+    ///   `CFGR1.SCANDIR` (RM0091 §13.4.8, RM0367 §14.3.8).
+    /// * ADC4 with `CHSELRMOD`: `SQ1..SQ8` in that order, ending at the first
+    ///   `0xF` nibble (RM0493 §21.4.10). A nibble naming a channel ADC4 does
+    ///   not have also ends it.
+    fn sequence(&self) -> Vec<usize> {
         let adc4 = self.adc4.is_some();
         if adc4 && self.cfgr1 & ADC4_CFGR1_CHSELRMOD != 0 {
-            let sq1 = self.chselr & 0xF;
-            return (sq1 != ADC4_SQ_END && sq1 < ADC4_CHANNELS).then_some(sq1 as usize);
+            return (0..8)
+                .map(|slot| (self.chselr >> (4 * slot)) & 0xF)
+                .take_while(|&sq| sq != ADC4_SQ_END && sq < ADC4_CHANNELS)
+                .map(|sq| sq as usize)
+                .collect();
         }
         let (mask, scandir) = if adc4 {
             ((1 << ADC4_CHANNELS) - 1, ADC4_CFGR1_SCANDIR)
@@ -452,14 +463,65 @@ impl V2AdcRegs {
             (V2_CHSELR_MASK, V2_CFGR1_SCANDIR)
         };
         let selected = self.chselr & mask;
-        if selected == 0 {
-            return None;
+        let mut channels: Vec<usize> = (0..32).filter(|bit| selected & (1 << bit) != 0).collect();
+        if self.cfgr1 & scandir != 0 {
+            channels.reverse();
         }
-        Some(if self.cfgr1 & scandir != 0 {
-            31 - selected.leading_zeros()
-        } else {
-            selected.trailing_zeros()
-        } as usize)
+        channels
+    }
+}
+
+/// A V2 regular sequence that `ADSTART` set running.
+///
+/// The engine converts at once, so a multi-channel sequence cannot land all
+/// its results in the one `DR` at `ADSTART`. It lands them the way polling
+/// firmware sees them on silicon: the first at `ADSTART`, each next one as the
+/// previous result is read out of `DR` (the `CFGR1.WAIT` auto-delay timing,
+/// which a firmware that keeps up with `EOC` also sees). Every landing raises
+/// `EOC`; the landing of the sequence's last channel raises `EOS`. Each
+/// result is sampled when it lands, so a routed input that moved since
+/// `ADSTART` converts at its new level. Overrun (`OVR`) is not modelled.
+#[derive(Debug)]
+struct V2Sequence {
+    /// The whole sequence, in conversion order.
+    channels: Vec<usize>,
+    /// Position in `channels` of this trigger's first conversion: 0, or the
+    /// `DISCEN` pointer.
+    offset: usize,
+    /// Conversions this trigger runs: the sequence length, 1 with `DISCEN`,
+    /// unbounded with `CONT`.
+    limit: usize,
+    /// Conversions landed since `ADSTART`. `DR` reads run through `&self`,
+    /// so the read side effect lives in a `Cell`.
+    landed: Cell<usize>,
+    /// The result in `DR`.
+    dr: Cell<u32>,
+    /// `landed` when firmware last cleared `EOC` / `EOS` (rc_w1). The first
+    /// landing's flags go straight into `ISR`, so both start at 1.
+    eoc_cleared_at: usize,
+    eos_cleared_at: usize,
+}
+
+impl V2Sequence {
+    /// Position in `channels` of the `k`-th conversion of this trigger.
+    fn position(&self, k: usize) -> usize {
+        (self.offset + k) % self.channels.len()
+    }
+
+    /// `EOC`/`EOS` raised by landings after the first, not yet cleared.
+    fn pending_flags(&self) -> u32 {
+        let landed = self.landed.get();
+        let mut flags = 0;
+        if landed > self.eoc_cleared_at {
+            flags |= V2_ISR_EOC;
+        }
+        // The most recent landing of the sequence's last channel.
+        let last = landed - 1;
+        let since_end = (self.position(last) + 1) % self.channels.len();
+        if since_end <= last && last - since_end + 1 > self.eos_cleared_at {
+            flags |= V2_ISR_EOS;
+        }
+        flags
     }
 }
 
@@ -478,6 +540,9 @@ const V2_CR_ADCAL: u32 = 1 << 31;
 const V2_CFGR1_SCANDIR: u32 = 1 << 2;
 const V2_CFGR1_ALIGN: u32 = 1 << 5;
 const V2_CFGR1_CONT: u32 = 1 << 13;
+/// `CFGR1.DISCEN`: each trigger converts only the next channel of the
+/// sequence. Bit 16 on the F0/L0 and on ADC4.
+const V2_CFGR1_DISCEN: u32 = 1 << 16;
 /// `CHSELR` bits that name a channel: IN0..IN18.
 const V2_CHSELR_MASK: u32 = (1 << 19) - 1;
 /// V_REFINT is ADC_IN17 on both the F0 and the L0, connected by `CCR.VREFEN`
@@ -561,6 +626,13 @@ pub struct Adc {
     /// not serialized (keeps snapshot shapes identical).
     #[serde(skip)]
     ambient_temp_c: f64,
+    /// The V2 sequence in progress, if `ADSTART` started one. Conversion
+    /// state, not a register: not serialized.
+    #[serde(skip)]
+    v2_sequence: Option<V2Sequence>,
+    /// V2 `DISCEN` pointer: the sequence position the next trigger converts.
+    #[serde(skip)]
+    v2_discontinuous_next: usize,
 }
 
 impl Adc {
@@ -643,6 +715,8 @@ impl Adc {
             f1_rstcal_live: false,
             f1_cal_live: false,
             ambient_temp_c: DEFAULT_AMBIENT_TEMPERATURE_C,
+            v2_sequence: None,
+            v2_discontinuous_next: 0,
         }
     }
 
@@ -1284,25 +1358,14 @@ impl Adc {
         }
     }
 
-    /// V2 conversion. `ADSTART` with the converter ready converts the FIRST
-    /// channel of the `CHSELR` scan — the lowest set bit, or the highest with
-    /// `CFGR1.SCANDIR` — into `DR` at `CFGR1.RES`, right- or left-aligned per
-    /// `CFGR1.ALIGN`, and raises `EOSMP | EOC | EOS`. A routed input converts
+    /// The `DR` value one V2 conversion of `ch` produces now: at `CFGR1.RES`,
+    /// right- or left-aligned per `CFGR1.ALIGN`. A routed input converts
     /// against the reference. IN17 is V_REFINT while `CCR.VREFEN` is set and
     /// 0 V while it is clear; any other channel nothing drives converts the
-    /// fixed internal source, as the L4 map does. A multi-channel scan is not
-    /// stepped: `DR` reads have no side effects here, so there is no read to
-    /// advance it. An empty `CHSELR` converts nothing.
-    fn maybe_start_v2_conversion(&mut self) {
+    /// fixed internal source, as the L4 map does.
+    fn v2_dr_for_channel(&self, ch: usize) -> u32 {
         let AdcRegs::Stm32V2(r) = &self.regs else {
-            return;
-        };
-        let ready = r.cr & V2_CR_ADEN != 0 && r.isr & V2_ISR_ADRDY != 0;
-        if !ready || r.cr & V2_CR_ADSTART == 0 {
-            return;
-        }
-        let Some(ch) = r.first_channel() else {
-            return;
+            return 0;
         };
         let (cfgr1, ccr) = (r.cfgr1, r.ccr);
         let bits = r.resolution_bits();
@@ -1321,24 +1384,117 @@ impl Adc {
         };
         // Left alignment is half-word aligned, except at 6 bits, where it is
         // byte aligned (RM0091 §13.6.1, RM0367 §14.6.1).
-        self.dr = match (cfgr1 & V2_CFGR1_ALIGN != 0, bits) {
+        match (cfgr1 & V2_CFGR1_ALIGN != 0, bits) {
             (false, _) => code,
             (true, 6) => code << 2,
             (true, bits) => code << (16 - bits),
+        }
+    }
+
+    /// V2 conversion. `ADSTART` with the converter ready runs the `CHSELR`
+    /// sequence (see [`V2AdcRegs::sequence`]): its first channel lands in `DR`
+    /// at once and raises `EOSMP | EOC`, plus `EOS` if it is also the last.
+    /// The rest land one per `DR` read (see [`V2Sequence`]). `CONT` wraps
+    /// round the sequence for as long as `DR` is read; `DISCEN` converts only
+    /// the next channel per trigger. `ADSTART` self-clears unless `CONT` is
+    /// set. An empty `CHSELR` converts nothing.
+    fn maybe_start_v2_conversion(&mut self) {
+        let AdcRegs::Stm32V2(r) = &self.regs else {
+            return;
         };
+        let ready = r.cr & V2_CR_ADEN != 0 && r.isr & V2_ISR_ADRDY != 0;
+        if !ready || r.cr & V2_CR_ADSTART == 0 {
+            return;
+        }
+        let channels = r.sequence();
+        if channels.is_empty() {
+            return;
+        }
+        let cfgr1 = r.cfgr1;
+        let len = channels.len();
+        let (offset, limit) = if cfgr1 & V2_CFGR1_DISCEN != 0 {
+            let offset = self.v2_discontinuous_next % len;
+            self.v2_discontinuous_next = (offset + 1) % len;
+            (offset, 1)
+        } else if cfgr1 & V2_CFGR1_CONT != 0 {
+            (0, usize::MAX)
+        } else {
+            (0, len)
+        };
+        let code = self.v2_dr_for_channel(channels[offset]);
+        self.dr = code;
+        let ends_sequence = offset == len - 1;
+        self.v2_sequence = Some(V2Sequence {
+            channels,
+            offset,
+            limit,
+            landed: Cell::new(1),
+            dr: Cell::new(code),
+            eoc_cleared_at: 1,
+            eos_cleared_at: 1,
+        });
         if let AdcRegs::Stm32V2(r) = &mut self.regs {
-            r.isr |= V2_ISR_EOSMP | V2_ISR_EOC | V2_ISR_EOS;
+            r.isr |= V2_ISR_EOSMP | V2_ISR_EOC;
+            if ends_sequence {
+                r.isr |= V2_ISR_EOS;
+            }
             if cfgr1 & V2_CFGR1_CONT == 0 {
                 r.cr &= !V2_CR_ADSTART;
             }
         }
     }
 
+    /// Stop the V2 sequence: the result in `DR` stays, nothing more lands.
+    fn v2_stop_sequence(&mut self) {
+        if let Some(sequence) = self.v2_sequence.take() {
+            self.dr = sequence.dr.get();
+        }
+    }
+
+    /// V2 `DR` read: the result in `DR`, landing the sequence's next
+    /// conversion if this trigger has one.
+    fn v2_read_dr(&self) -> u32 {
+        let Some(sequence) = &self.v2_sequence else {
+            return self.dr;
+        };
+        let value = sequence.dr.get();
+        let landed = sequence.landed.get();
+        if landed < sequence.limit {
+            let ch = sequence.channels[sequence.position(landed)];
+            sequence.dr.set(self.v2_dr_for_channel(ch));
+            sequence.landed.set(landed + 1);
+        }
+        value
+    }
+
+    /// V2 register word as firmware reads it: `ISR` carries the flags later
+    /// landings raised, `DR` the result of the sequence in progress. With
+    /// `consume`, a `DR` read lands the next conversion.
+    fn v2_read_word(&self, reg: u64, consume: bool) -> u32 {
+        let AdcRegs::Stm32V2(r) = &self.regs else {
+            return 0;
+        };
+        match (reg, &self.v2_sequence) {
+            (0x00, Some(sequence)) => r.isr | sequence.pending_flags(),
+            (0x40, _) if consume => self.v2_read_dr(),
+            (0x40, Some(sequence)) => sequence.dr.get(),
+            _ => Self::read_reg_v2(r, self.dr, reg),
+        }
+    }
+
     fn write_reg_v2(&mut self, reg: u64, value: u32) {
         if reg == 0x08 {
             self.v2_apply_cr(value);
+            if value & (V2_CR_ADSTP | V2_CR_ADDIS) != 0 {
+                self.v2_stop_sequence();
+                self.v2_discontinuous_next = 0;
+            }
             self.maybe_start_v2_conversion();
             return;
+        }
+        // A new sequence or mode restarts the DISCEN pointer.
+        if matches!(reg, 0x0C | 0x28) {
+            self.v2_discontinuous_next = 0;
         }
         if let AdcRegs::Stm32V2(r) = &mut self.regs {
             let sequence_mode = r.cfgr1 & ADC4_CFGR1_CHSELRMOD != 0;
@@ -1367,7 +1523,18 @@ impl Adc {
     fn write_reg_v2_common(&mut self, reg: u64, value: u32) {
         if let AdcRegs::Stm32V2(r) = &mut self.regs {
             match reg {
-                0x00 => r.isr &= !value, // rc_w1
+                0x00 => {
+                    r.isr &= !value; // rc_w1
+                    if let Some(sequence) = &mut self.v2_sequence {
+                        let landed = sequence.landed.get();
+                        if value & V2_ISR_EOC != 0 {
+                            sequence.eoc_cleared_at = landed;
+                        }
+                        if value & V2_ISR_EOS != 0 {
+                            sequence.eos_cleared_at = landed;
+                        }
+                    }
+                }
                 0x04 => r.ier = value,
                 0x0C => r.cfgr1 = value,
                 0x10 => r.cfgr2 = value,
@@ -1626,7 +1793,8 @@ impl Peripheral for Adc {
             AdcRegs::Stm32L4(r) => Self::read_reg_l4(r, self.dr, offset & !3),
             AdcRegs::Stm32H7(r) => Self::read_reg_h7(r, self.dr, offset & !3),
             AdcRegs::Stm32U5(r) => Self::read_reg_u5(r, self.dr, offset & !3),
-            AdcRegs::Stm32V2(r) => Self::read_reg_v2(r, self.dr, offset & !3),
+            // A byte read of DR's low byte is the read that consumes it.
+            AdcRegs::Stm32V2(_) => self.v2_read_word(offset & !3, offset & 3 == 0),
         };
         let shift = (offset % 4) * 8;
         Ok(((val >> shift) & 0xFF) as u8)
@@ -1727,6 +1895,29 @@ impl Peripheral for Adc {
             }
         }
         Ok(())
+    }
+
+    // A V2 `DR` read lands the next conversion of a sequence, so a half-word
+    // or word read must consume it once, not once per byte.
+    fn read_u16(&self, offset: u64) -> SimResult<u16> {
+        if matches!(self.regs, AdcRegs::Stm32V2(_)) && offset & 3 != 3 {
+            let word = self.v2_read_word(offset & !3, offset & 3 == 0);
+            return Ok((word >> ((offset & 3) * 8)) as u16);
+        }
+        let b0 = self.read(offset)? as u16;
+        let b1 = self.read(offset + 1)? as u16;
+        Ok(b0 | (b1 << 8))
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        if matches!(self.regs, AdcRegs::Stm32V2(_)) && offset & 3 == 0 {
+            return Ok(self.v2_read_word(offset, true));
+        }
+        let b0 = self.read(offset)? as u32;
+        let b1 = self.read(offset + 1)? as u32;
+        let b2 = self.read(offset + 2)? as u32;
+        let b3 = self.read(offset + 3)? as u32;
+        Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
