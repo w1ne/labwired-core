@@ -356,9 +356,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "pic32_uart",
     // Microchip PIC32MZ 16-bit timer (TxCON/TMRx/PRx, Type A or B).
     "pic32_timer",
-    // Microchip megaAVR 0-series USART and the TCA0 + TCB0..3 timer block.
+    // Microchip megaAVR 0-series USART, the TCA0 + TCB0..3 timer block and ADC0.
     "megaavr_usart",
     "megaavr_tc",
+    "megaavr_adc",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -1561,6 +1562,46 @@ pub fn try_build(
             Box::new(crate::peripherals::megaavr::tc::MegaAvrTimers::new([
                 irqs[0], irqs[1], irqs[2], irqs[3],
             ]))
+        }
+        // `vdd_mv`: the board's VDD (the VDDREF reference, default 5000);
+        // `input_mv: { <ain>: <mV> }`: static levels on AIN0..AIN15.
+        "megaavr_adc" => {
+            use crate::peripherals::megaavr::adc::MegaAvrAdc;
+            if let Some(k) = p_cfg
+                .config
+                .keys()
+                .find(|k| !matches!(k.as_str(), "vdd_mv" | "input_mv"))
+            {
+                anyhow::bail!("megaavr_adc '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            if p_cfg.irq.is_some() {
+                anyhow::bail!(
+                    "megaavr_adc '{}': ADC0 interrupts are not modelled",
+                    p_cfg.id
+                );
+            }
+            let vdd_mv = p_cfg
+                .config
+                .get("vdd_mv")
+                .map_or(Some(5000), |v| v.as_u64());
+            let Some(vdd_mv @ 1..) = vdd_mv else {
+                anyhow::bail!(
+                    "megaavr_adc '{}': vdd_mv wants a positive millivolt count",
+                    p_cfg.id
+                );
+            };
+            let mut adc = MegaAvrAdc::new(vdd_mv as u32);
+            if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                for (k, v) in map {
+                    match (k.as_u64(), v.as_u64()) {
+                        (Some(ain), Some(mv)) if ain < 16 => {
+                            adc.set_input_millivolts(ain as usize, mv as u32)
+                        }
+                        _ => anyhow::bail!("megaavr_adc input_mv wants {{ <ain 0..15>: <mV> }}"),
+                    }
+                }
+            }
+            Box::new(adc)
         }
         "rx_flash" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::new()),
         "rx_rtc" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::rtc()),

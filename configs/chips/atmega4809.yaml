@@ -109,8 +109,8 @@ peripherals:
       tcb_irqs: [12, 13, 25, 36]
   # Register banks generated from the ATDF by scripts/atdf_to_declarative.py.
   # They store what firmware writes and nothing more: no clock switching or
-  # prescaling, no sleep, no reference voltage, no brown-out, no reset cause
-  # beyond the reset value, and no ADC conversion.
+  # prescaling, no sleep, no brown-out and no reset cause beyond the reset
+  # value. VREF.CTRLA is read by ADC0 for its internal reference.
   - id: "rstctrl"
     type: "declarative"
     base_address: 0x00010040
@@ -147,12 +147,14 @@ peripherals:
     size: "6"
     config:
       path: "../peripherals/atmega4809/portmux.yaml"
+  # ADC0 converts (`megaavr_adc`): single-ended AIN0..15 against VDD or the
+  # VREF internal reference, 10/8-bit, SAMPNUM accumulation. VDD defaults to
+  # 5000 mV; a board sets `vdd_mv` and drives inputs with `input_mv`.
+  # Free-run, window compare, events and interrupts are refused.
   - id: "adc0"
-    type: "declarative"
+    type: "megaavr_adc"
     base_address: 0x00010600
     size: "24"
-    config:
-      path: "../peripherals/atmega4809/adc0.yaml"
   # Signature row: DEVICEID 1E 96 51 (data sheet); serial number, oscillator
   # calibration and error bytes read 0 (an ideal oscillator).
   - id: "sigrow"

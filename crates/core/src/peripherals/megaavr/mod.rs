@@ -6,5 +6,6 @@
 //! (CCP, CPUINT, the VPORT alias) live in `cpu/avr/avrxt.rs`; the PORT block
 //! is the `megaavr_port` layout of `avr_gpio`.
 
+pub mod adc;
 pub mod tc;
 pub mod usart;
