@@ -32,6 +32,28 @@ ram:
   base: 0x20000000
   size: "32KB"
 
+# Every Arduino SAMD board ships with an 8 KB bootloader (SAM-BA / UF2) at the
+# flash base, and the core's linker script (`flash_with_bootloader.ld`) puts
+# the sketch's vector table at 0x2000. The simulator does not run the
+# bootloader; when the flash-base vectors are not a valid image it enters the
+# application at this offset, which is what the bootloader's jump does on
+# silicon. A bare-metal image linked at 0x0 is unaffected.
+reset_vector_offset: 0x2000
+
+memory_regions:
+  # NVM calibration and auxiliary space, 0x0080_0000..0x0080_A0FF (datasheet
+  # §10.3.1, "NVM Calibration and Auxiliary Space"), mapped to the next whole
+  # KiB (0x0080_A3FF) because region sizes are KiB-granular: user row at 0x804000,
+  # the software calibration row (OTP4) at 0x806020, the 128-bit serial number
+  # at 0x80A00C..0x80A048. The Arduino core's SystemInit reads the DFLL48M
+  # coarse value and the ADC LINEARITY/BIASCAL from OTP4 before main().
+  #
+  # Factory calibration is per unit and not published, so the window reads
+  # ERASED (0xFF) rather than an invented row. On those values the core takes
+  # its own documented fallback (coarse 0x3F -> 0x1F); the ADC gets
+  # LINEARITY 0xFF / BIASCAL 7 written to CALIB, which this model does not use.
+  - { name: "nvm_aux", base: 0x00800000, size: "41KB", erased: true }
+
 # ── Pin map ─────────────────────────────────────────────────────────────────
 # WHY THIS IS DECLARED RATHER THAN LEFT TO THE LABEL PARSE.
 #
@@ -244,6 +266,43 @@ peripherals:
     size: "64B"
     irq: 14
 
+  # ── Analog and USB — register banks the Arduino core touches at boot ───────
+  # ArduinoCore-samd's init() calibrates and configures the ADC and DAC, and
+  # its main() calls USBDevice.init()/attach() on EVERY board, including a
+  # Zero whose `Serial` is the EDBG UART. Without these windows the first
+  # access bus-faults before setup() runs.
+  #
+  # ⚠️ Declarative register banks from the SVD, not behavioural models: the
+  # DAC drives no pad and the USB block enumerates nothing (`SerialUSB` prints
+  # nothing here). The ADC is a separate entry below.
+  - id: "dac"
+    type: "declarative"
+    base_address: 0x42004800
+    size: "16B"
+    irq: 25
+    config:
+      path: "../peripherals/atsamd21g18a/dac.yaml"
+      profile: "sam"
+      num_pins: 32
+  - id: "usb"
+    type: "declarative"
+    base_address: 0x41005000
+    size: "4KB"
+    irq: 7
+    config:
+      path: "../peripherals/atsamd21g18a/usb.yaml"
+      profile: "sam"
+      num_pins: 32
+  - id: "adc"
+    type: "declarative"
+    base_address: 0x42004000
+    size: "64B"
+    irq: 23
+    config:
+      path: "../peripherals/atsamd21g18a/adc.yaml"
+      profile: "sam"
+      num_pins: 32
+
   # ── Cortex-M0+ core peripherals ────────────────────────────────────────────
   # No `debug_schema` on either: they are Arm core blocks in the PPB, which the
   # Microchip SVD does not describe, so there is no base to attach one to.
@@ -262,8 +321,7 @@ peripherals:
 # plausible zero:
 #   EIC 0x40001800 (external interrupts / attachInterrupt), RTC 0x40001400,
 #   DSU 0x41002000 (device identity, CoreSight), DMAC 0x41004800,
-#   USB 0x41005000 (the native-USB `Serial` on a Zero/Feather M0 — a board
-#   whose console is USB CDC cannot print here yet), EVSYS 0x42000400,
+#   EVSYS 0x42000400,
 #   TCC0-2 0x42002000..0x42002800, TC3-5 0x42002C00..0x42003400,
-#   ADC 0x42004000, AC 0x42004400, DAC 0x42004800, I2S 0x42005000,
+#   AC 0x42004400, I2S 0x42005000,
 #   PAC0/1/2, HMATRIX, MTB, and the PORT_IOBUS alias at 0x60000000.

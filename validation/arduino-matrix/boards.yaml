@@ -363,6 +363,27 @@ boards:
     sketches_skip_reason:
       L8_can: "ATmega2560 has no CAN controller"
 
+  - id: arduino-zero
+    chip: atsamd21g18a
+    system: systems/arduino-zero.yaml
+    # `zero` = "Arduino Zero (Programming/Debug Port)": Serial is the EDBG
+    # UART (SERCOM5), not native USB CDC. The sketch is linked at 0x2000
+    # behind the bootloader; the chip's reset_vector_offset enters it there.
+    pio: { platform: atmelsam@9.0.0, board: zero, framework: arduino }
+    max_steps: 3000000
+    budget_reason: "Cortex-M0+ 48 MHz; L0 reaches loop() in well under 1M steps"
+    led_watch: "gpio_a:17"
+    led_min_edges: 2
+    family: sam
+    notes: "Arduino Zero (ArduinoCore-samd), Programming Port"
+    sketches_skip: [L3_i2c_sensor, L4_spi_sensor, L5_adc, L6_pwm, L8_can]
+    sketches_skip_reason:
+      L3_i2c_sensor: "SERCOM I2C master mode not modelled on SAMD21 yet"
+      L4_spi_sensor: "SERCOM SPI mode not modelled on SAMD21 yet"
+      L5_adc: "SAMD21 ADC is a declarative register bank; no conversion model yet"
+      L6_pwm: "SAMD21 TCC/TC not modelled yet"
+      L8_can: "ATSAMD21G18A has no CAN controller"
+
   # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────
   #
   # ⚠️ The ONLY board here that does not compile through PlatformIO. Silicon

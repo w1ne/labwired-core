@@ -1,0 +1,8 @@
+# Arduino matrix system — Arduino Zero (ATSAMD21G18A), Programming Port.
+# `Serial` on the Zero's Programming Port is the EDBG virtual COM port, which is
+# SERCOM5 in UART mode on PB22/PB23 (variants/arduino_zero/variant.cpp); the
+# EDBG chip only bridges it to USB. LED_BUILTIN = D13 = PA17.
+name: "arduino-matrix-arduino-zero"
+chip: "../../../configs/chips/atsamd21g18a.yaml"
+external_devices: []
+board_io: []
