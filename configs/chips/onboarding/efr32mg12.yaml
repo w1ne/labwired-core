@@ -6,17 +6,73 @@
 
 name: efr32mg12
 arch: arm
-# Narrowed from Renode's efr32mg12.repl: flash plus its sequence SRAM window
-# and the inherited USART0 model used by this smoke. Other platform devices
-# are omitted until their behavior is modeled by this engine.
+# Renode silabs/efr32/efr32mg12.repl: cpuType "cortex-m4f".
+core: cortex-m4f
+# Mapped: the memory map, USART0, the Series-1 GPIO ports and TIMER0/TIMER1,
+# all exercised by the exact-system smoke. Everything else in the repl
+# (LDMA, CMU, I2C, LEUART, RTCC, GPCRC, ...) is omitted: no model behind it.
+# Main SRAM 256 KiB at 0x20000000 (Renode efr32mg12.repl `sram` size
+# 0x40000; Gecko SDK efr32mg12p433f1024im48.h SRAM_SIZE 0x40000). The
+# radio sequencer RAM at 0x21000000 is a separate region.
 flash:
   base: 0
   size: 1048576B
 ram:
-  base: 553648128
-  size: 8192B
+  base: 0x20000000
+  size: 262144B
+memory_regions:
+# Radio sequencer SRAM (Renode `seq_sram: Memory.MappedMemory @ sysbus
+# 0x21000000`, size 0x2000).
+- name: seq_sram
+  base: 0x21000000
+  size: 8KB
 peripherals:
 - id: usart0
   type: efr32_usart
   bus: sysbus
-  base_address: 1073807360
+  base_address: 0x40010000
+# Series-1 GPIO ports A..F. Renode maps EFR32_GPIOPort @ 0x4000A000; the
+# per-port GPIO_P_TypeDef sits at a 0x30 stride (Gecko SDK v4.4.0
+# efr32mg12p_gpio_p.h: no DOUTSET/DOUTCLR, OVTDIS @0x28; efr32mg12p_gpio.h
+# _GPIO_P_CTRL_RESETVALUE 0x00500050) — identical to EFM32PG1B, so the
+# `efm32s1_gpioport` model is reused. The block head from 0x4000A400 (EXTI,
+# ROUTE, INSENSE, EM4 wake) is NOT mapped: no model behind it.
+- id: gpioa
+  type: efm32s1_gpioport
+  base_address: 0x4000A000
+  size: 48B
+- id: gpiob
+  type: efm32s1_gpioport
+  base_address: 0x4000A030
+  size: 48B
+- id: gpioc
+  type: efm32s1_gpioport
+  base_address: 0x4000A060
+  size: 48B
+- id: gpiod
+  type: efm32s1_gpioport
+  base_address: 0x4000A090
+  size: 48B
+- id: gpioe
+  type: efm32s1_gpioport
+  base_address: 0x4000A0C0
+  size: 48B
+- id: gpiof
+  type: efm32s1_gpioport
+  base_address: 0x4000A0F0
+  size: 48B
+# TIMER0/TIMER1 at 0x40018000/0x40018400 (Renode EFR32_Timer, 16-bit).
+# Series-1 layout (efr32mg12p_timer.h: IF/IFS/IFC/IEN at 0x0C..0x18), same as
+# EFM32PG1B, so `efm32s1_timer` is reused. IRQs: Gecko SDK TIMER0_IRQn 11,
+# TIMER1_IRQn 19, as in the repl. Counts CPU cycles / 2^PRESC; the CMU
+# HFPERCLKEN0 gate is not modelled.
+- id: timer0
+  type: efm32s1_timer
+  base_address: 0x40018000
+  size: 1KB
+  irq: 11
+- id: timer1
+  type: efm32s1_timer
+  base_address: 0x40018400
+  size: 1KB
+  irq: 19

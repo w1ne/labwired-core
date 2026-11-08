@@ -1,36 +1,25 @@
+//! EFR32MG12 (Cortex-M4F) Renode-parity smoke.
+//!
+//! USART0 is the console; the Series-1 GPIO and TIMER checks live in
+//! firmware-efm32jg1-smoke/src/s1.rs (the EFR32 Series-1 GPIO_P and TIMER
+//! register maps are the EFM32PG1B ones).
 #![no_std]
 #![no_main]
 
-use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-// EFR32 Series-1 USART0: CMD@0x0C, STATUS@0x10, TXDATA@0x34.
-const USART0_BASE: usize = 0x4001_0000;
-const USART0_CMD: *mut u32 = (USART0_BASE + 0x0C) as *mut u32;
-const USART0_STATUS: *const u32 = (USART0_BASE + 0x10) as *const u32;
-const USART0_TXDATA: *mut u32 = (USART0_BASE + 0x34) as *mut u32;
-
-const CMD_TXEN: u32 = 1 << 0;
-const STATUS_TXBL: u32 = 1 << 6;
-
-fn putc(byte: u8) {
-    unsafe {
-        let mut remaining = 100_000u32;
-        while read_volatile(USART0_STATUS) & STATUS_TXBL == 0 && remaining > 0 {
-            remaining -= 1;
-        }
-        write_volatile(USART0_TXDATA, byte as u32);
-    }
-}
+#[path = "../../firmware-efm32jg1-smoke/src/s1.rs"]
+mod s1;
 
 #[entry]
 fn main() -> ! {
-    unsafe { write_volatile(USART0_CMD, CMD_TXEN) };
-    for byte in b"EFR32MG12 USART0 smoke\r\n" {
-        putc(*byte);
-    }
-    loop {
-        core::hint::spin_loop();
-    }
+    s1::run(&s1::Board {
+        banner: "EFR32MG12 RENODE SMOKE",
+        family: "EFR32MG12",
+        summary: 0x2003_FC00,
+        // LED0/LED1 = PF4/PF5 on the WSTK radio boards.
+        led: (5, 4),
+        timer0_irq: 11,
+    })
 }

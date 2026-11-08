@@ -81,6 +81,7 @@ on:
       - "crates/firmware-efr32xg22-smoke/**"
       - "crates/firmware-efr32mg12-smoke/**"
       - "crates/firmware-efr32mg1-smoke/**"
+      - "crates/firmware-efm32jg1-smoke/**"
       - "crates/firmware-sifive-fu540-smoke/**"
       - "crates/firmware-sifive-fu740-smoke/**"
       - "crates/firmware-starfive-jh7100-smoke/**"
@@ -724,15 +725,15 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/brd4121a-smoke.yaml
             system: configs/systems/onboarding/brd4121a.yaml
-          # MG1 follows the imported M4F flash/SRAM map and model-backed USART0;
-          # other generated peripherals are omitted until they are exercised.
+          # MG1: M4F flash/SRAM map, USART0, Series-1 GPIO ports and TIMER0/1
+          # (shared s1.rs checks); other repl devices are omitted.
           - id: efr32mg1
             crate: firmware-efr32mg1-smoke
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/efr32mg1-smoke.yaml
             system: configs/systems/onboarding/efr32mg1.yaml
-          # SLTB001A inherits Renode's EFR32MG1 profile; the imported board is
-          # narrowed to the M4F memory map and model-backed USART0 smoke path.
+          # SLTB001A inherits Renode's EFR32MG1 profile: memory map, USART0,
+          # Series-1 GPIO ports and TIMER0/1, as on the EFR32MG1 chip.
           - id: sltb001a
             crate: firmware-efr32mg1-smoke
             target: thumbv7em-none-eabi
@@ -752,8 +753,8 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/brd4186c-smoke.yaml
             system: configs/systems/onboarding/brd4186c.yaml
-          # BRD4162A uses the EFR32MG12. Its imported profile is narrowed to
-          # the M4F, code/sequence memory, and USART0 used by this smoke.
+          # BRD4162A uses the EFR32MG12: main + sequencer SRAM, USART0,
+          # Series-1 GPIO ports and TIMER0/1.
           - id: brd4162a
             crate: firmware-efr32mg12-smoke
             target: thumbv7em-none-eabi
@@ -846,15 +847,15 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/efm32pg12-smoke.yaml
             system: configs/systems/onboarding/efm32pg12.yaml
-          # The MG12 smoke is restricted to Renode's flash, sequence SRAM, and
-          # the modeled Series-1 USART0 register surface.
+          # MG12: flash, main + sequencer SRAM, USART0, Series-1 GPIO ports
+          # and TIMER0/1 (shared s1.rs checks).
           - id: efr32mg12
             crate: firmware-efr32mg12-smoke
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/efr32mg12-smoke.yaml
             system: configs/systems/onboarding/efr32mg12.yaml
-          # SLTB004A uses the EFR32MG12 M4F map and its model-backed USART0;
-          # the board's other imported devices are omitted from this smoke.
+          # SLTB004A uses the EFR32MG12 profile: memory map, USART0, Series-1
+          # GPIO ports and TIMER0/1; other imported devices are omitted.
           - id: sltb004a
             crate: firmware-efr32mg12-smoke
             target: thumbv7em-none-eabi

@@ -1,0 +1,7 @@
+EFR32MG13 RENODE SMOKE
+gpio pf4/pf5 pushpull set=0 tgl=0 clr=1 wo=0 FAIL
+gpio reserved 0x10/0x14 no_set=0 no_clr=0 read0=1 FAIL
+gpio pa0 disabled_din0=1 pullup=0 pulldown=1 FAIL
+gpio pa1 wiredand pa2 wiredor hi=0 lo=0 FAIL
+gpio pa pinlockn reset=0000 after=0000 FAIL
+gpio pa ctrl=44444444 ovtdis=0000 FAIL

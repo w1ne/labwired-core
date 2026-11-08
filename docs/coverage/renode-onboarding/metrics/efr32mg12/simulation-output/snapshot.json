@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1073807376,
-      24,
-      4294867296,
+      16,
+      434,
       2147483648,
-      0,
-      0,
-      0,
-      553656304,
-      0,
-      0,
-      0,
-      0,
-      1204,
-      553656304,
-      10,
-      1184
+      4294867296,
+      200000,
+      2147483648,
+      1,
+      537132008,
+      1,
+      1073807376,
+      4294867296,
+      1073783036,
+      4294867296,
+      537131976,
+      18367,
+      19558
     ],
-    "pc": 1184,
-    "xpsr": 1627389952,
+    "pc": 19558,
+    "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 200000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 200000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 200000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "34eb20db1b5f85287d0b3028855decc0a09308f446075e0aa4e96d8c7259609d",
+  "firmware_hash": "0a289a81f3261053f2536f981c75e3722e2b000a9abb20dec4d853fd6934a9fb",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efr32mg12-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efr32mg12.yaml",
