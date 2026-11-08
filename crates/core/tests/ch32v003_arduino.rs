@@ -72,8 +72,12 @@ fn run_l0(chip: &ChipDescriptor, max_steps: usize) -> L0Run {
             break;
         }
     }
+    let serial = {
+        let bytes = sink.lock().unwrap();
+        String::from_utf8_lossy(&bytes).into_owned()
+    };
     L0Run {
-        serial: String::from_utf8_lossy(&sink.lock().unwrap()).into_owned(),
+        serial,
         systicks,
         reached_main,
         last_mcause: machine.cpu.mcause,
