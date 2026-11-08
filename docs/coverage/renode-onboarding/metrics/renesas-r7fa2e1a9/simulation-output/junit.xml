@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.000636">
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.003678">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="772d79a9d06169b8d270c16d6bade6f2dc86e57c8b578151593251e342518c3a"/>
+    <property name="firmware_hash" value="c4ea97c243c1a782434f3a64c2315a76e66497ac3e0a99950b3193536f0bed9d"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.000636">
+  <testcase classname="labwired" name="run" time="0.003678">
   </testcase>
   <testcase classname="labwired" name="assertion 1: memory_value: @0x20004000=0x143" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x20004004=0x20" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x20004008=0x8000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: RA2E1 SCI9 SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: gpio_edges: port9:15 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

@@ -6149,7 +6149,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 200000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -6158,29 +6158,31 @@
       "script": "examples/renode-onboarding/renesas-r7fa2e1a9-smoke.yaml",
       "system": "configs/systems/onboarding/renesas-r7fa2e1a9.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:49:27Z",
-      "finished_at_utc": "2026-11-05T14:49:28Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1332,
+      "started_at_utc": "2026-11-08T03:38:46Z",
+      "finished_at_utc": "2026-11-08T03:38:56Z",
+      "elapsed_seconds": 10,
+      "elapsed_ms": 9510,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.308,
-        "build_firmware": 0.701,
-        "run_smoke": 0.309
+        "build_cli": 8.516,
+        "build_firmware": 0.714,
+        "run_smoke": 0.271
       },
       "stages_ms": {
-        "build_cli": 308,
-        "build_firmware": 701,
-        "run_smoke": 309
+        "build_cli": 8516,
+        "build_firmware": 714,
+        "run_smoke": 271
       },
       "_artifact_path": "renesas-r7fa2e1a9",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
         "memory_value",
+        "uart_contains",
+        "gpio_edges",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"
