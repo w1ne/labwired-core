@@ -1,5 +1,7 @@
-# Direct RV32IM integer smoke on the imported ET171 SRAM profile.
-# This does not exercise the D25F's Xandes extensions, reset flow, or peripherals.
+# CPU, SRAM and uart0 smoke against the narrowed imported Egis ET171 profile:
+# RV32IM MUL result, 16550 LCR/DLAB divisor readback, idle LSR, and a polled
+# banner on Renode's wide-register uart0 @ 0xF0200020. This does not exercise
+# the D25F's Xandes extensions, the reset/ROM flow, or other peripherals.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-andes-ae350-n25-smoke"
@@ -11,4 +13,17 @@ assertions:
       address: 0x1000
       expected_value: 0x00000143
       size: 4
+  - memory_value:
+      address: 0x1004
+      expected_value: 0x00000060
+      size: 4
+  - memory_value:
+      address: 0x1008
+      expected_value: 0x00030141
+      size: 4
+  - memory_value:
+      address: 0x100C
+      expected_value: 0xAE350001
+      size: 4
+  - uart_contains: "ET171 uart0 ok"
   - expected_stop_reason: max_steps

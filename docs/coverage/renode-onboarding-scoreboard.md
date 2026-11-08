@@ -81,7 +81,7 @@
 | `efr32mg24` | `pass` | `True` | `yes` | `yes` | `741` | `0.741` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `efr32mg26` | `pass` | `True` | `yes` | `yes` | `1013` | `1.013` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `efr32xg22` | `pass` | `True` | `yes` | `yes` | `727` | `0.727` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `egis_et171` | `pass` | `True` | `yes` | `yes` | `8152` | `8.152` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `egis_et171` | `pass` | `True` | `yes` | `yes` | `7562` | `7.562` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `eos-s3` | `pass` | `True` | `yes` | `yes` | `736` | `0.736` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `eos-s3-qomu` | `pass` | `True` | `yes` | `yes` | `1009` | `1.009` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `eos-s3-quickfeather` | `pass` | `True` | `yes` | `yes` | `754` | `0.754` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

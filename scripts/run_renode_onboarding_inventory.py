@@ -147,6 +147,7 @@ SMOKE_MAPPINGS = {
     "egis_et171": {
         "crate": "firmware-andes-ae350-n25-smoke",
         "target": "riscv32im-unknown-none-elf",
+        "features": "et171-uart",
         "script": "examples/renode-onboarding/egis_et171-smoke.yaml",
     },
     "crosslink-nx-evn": {

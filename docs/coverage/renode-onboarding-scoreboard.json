@@ -2698,29 +2698,30 @@
       "script": "examples/renode-onboarding/egis_et171-smoke.yaml",
       "system": "configs/systems/onboarding/egis_et171.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T03:27:33Z",
-      "finished_at_utc": "2026-11-06T03:27:41Z",
-      "elapsed_seconds": 9,
-      "elapsed_ms": 8152,
+      "started_at_utc": "2026-11-08T05:54:07Z",
+      "finished_at_utc": "2026-11-08T05:54:14Z",
+      "elapsed_seconds": 8,
+      "elapsed_ms": 7562,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 7.367,
-        "build_firmware": 0.485,
-        "run_smoke": 0.288
+        "build_cli": 6.92,
+        "build_firmware": 0.368,
+        "run_smoke": 0.264
       },
       "stages_ms": {
-        "build_cli": 7367,
-        "build_firmware": 485,
-        "run_smoke": 288
+        "build_cli": 6920,
+        "build_firmware": 368,
+        "run_smoke": 264
       },
       "_artifact_path": "egis_et171",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
         "memory_value",
+        "uart_contains",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"

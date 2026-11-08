@@ -5,7 +5,7 @@
     "registers": [
       0,
       0,
-      393216,
+      131072,
       0,
       0,
       0,
@@ -13,12 +13,12 @@
       0,
       0,
       0,
-      323,
       4096,
+      2922708993,
       0,
-      0,
-      0,
-      0,
+      96,
+      96,
+      64,
       0,
       0,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 24,
+    "pc": 512,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "9d70f1879e68bf0b3d2c48107cb5a8c1c48246c37d65a65a667457db32045b87",
+  "firmware_hash": "e96ff35736b3204e0155d3612416bf00a8e256f840cd542c3013fc5b15846c6e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-andes-ae350-n25-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/egis_et171.yaml",

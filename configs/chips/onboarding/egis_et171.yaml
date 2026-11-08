@@ -1,7 +1,11 @@
 # Bounded profile for Renode's Egis ET171 fragment. The execution smoke uses
-# the generic RV32IM subset and on-chip SRAM only; the upstream Andes D25F's
-# rv32gc_xandes extensions, reset flow, and all peripherals remain unclaimed.
-# Memory windows follow Renode's platforms/cpus/egis_et171.repl.
+# the generic RV32IM subset, on-chip SRAM, and uart0; the upstream Andes D25F's
+# rv32gc_xandes extensions, reset flow, and all other peripherals remain
+# unclaimed. Memory windows follow Renode's platforms/cpus/egis_et171.repl.
+# uart0 follows Renode's NS16550 @ 0xF0200020 with `wideRegisters: true`:
+# `dw_apb_uart` selects this engine's 4-byte-stride 16550 register map (polled
+# TX, LCR/DLAB divisor latches, LSR). It does not claim interrupts (the PLIC is
+# not mapped), FIFOs, or baud timing.
 name: egis_et171
 arch: riscv
 core: rv32im
@@ -12,4 +16,10 @@ flash:
 ram:
   base: 0x00000000
   size: 384KB
-peripherals: []
+peripherals:
+  - id: uart0
+    type: ns16550
+    base_address: 0xF0200020
+    size: 32B
+    config:
+      profile: dw_apb_uart

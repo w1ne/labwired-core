@@ -10,10 +10,14 @@ const RESULT: *mut u32 = 0x1000 as *mut u32;
 const RESULT: *mut u32 = 0x4000_1000 as *mut u32;
 
 // AE350 uart1 (Renode `andes_ae350_n25.repl`: NS16550 @ 0xF0300020 with
-// `wideRegisters: true`), so 16550 registers on a 4-byte stride.
+// `wideRegisters: true`), so 16550 registers on a 4-byte stride. ET171 uart0
+// (Renode `egis_et171.repl`) is the same NS16550 at 0xF0200020.
 #[cfg(feature = "ae350-uart")]
 mod uart1 {
+    #[cfg(not(feature = "et171-uart"))]
     const BASE: usize = 0xF030_0020;
+    #[cfg(feature = "et171-uart")]
+    const BASE: usize = 0xF020_0020;
     pub const THR: *mut u32 = BASE as *mut u32; // DLL while LCR.DLAB
     pub const DLM: *mut u32 = (BASE + 0x04) as *mut u32; // IER while !DLAB
     pub const LCR: *mut u32 = (BASE + 0x0C) as *mut u32;
@@ -39,7 +43,11 @@ unsafe fn uart_smoke() {
     let idle_lsr = read_volatile(LSR) & 0xFF;
     write_volatile(RESULT.add(1), idle_lsr);
 
-    for &b in b"AE350 N25 uart1 ok\r\n" {
+    #[cfg(not(feature = "et171-uart"))]
+    let banner = b"AE350 N25 uart1 ok\r\n";
+    #[cfg(feature = "et171-uart")]
+    let banner = b"ET171 uart0 ok\r\n";
+    for &b in banner {
         while read_volatile(LSR) & LSR_THRE == 0 {}
         write_volatile(THR, b as u32);
     }

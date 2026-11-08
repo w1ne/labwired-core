@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.015150">
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.013475">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="9d70f1879e68bf0b3d2c48107cb5a8c1c48246c37d65a65a667457db32045b87"/>
+    <property name="firmware_hash" value="e96ff35736b3204e0155d3612416bf00a8e256f840cd542c3013fc5b15846c6e"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.015150">
+  <testcase classname="labwired" name="run" time="0.013475">
   </testcase>
   <testcase classname="labwired" name="assertion 1: memory_value: @0x1000=0x143" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x1004=0x60" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x1008=0x30141" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x100c=0xae350001" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: ET171 uart0 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>
