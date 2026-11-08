@@ -719,7 +719,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/efm32g890-smoke.yaml",
     },
     "efm32gg942": {
-        "crate": "firmware-efm32g842-smoke",
+        "crate": "firmware-efm32gg942-smoke",
         "target": "thumbv7m-none-eabi",
         "script": "examples/renode-onboarding/efm32gg942-smoke.yaml",
     },

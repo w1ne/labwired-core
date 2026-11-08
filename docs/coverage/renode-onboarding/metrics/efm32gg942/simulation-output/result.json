@@ -1,23 +1,23 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -30,7 +30,43 @@
   "assertions": [
     {
       "assertion": {
-        "uart_contains": "EFM32G USART0 smoke"
+        "uart_contains": "EFM32GG942 RENODE SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "gpio pe2/pe3 pushpull set=1 tgl=1 clr=1 wo=1 ok",
+          "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok",
+          "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok",
+          "gpio pa pinlockn reset=ffff after=fffe ok",
+          "tim0 up of=1 pend=1 released=1 running=1 ok",
+          "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok",
+          "tim2 cc0 hit=1 topbv=1 of=1 top=03e8->01f4 ok",
+          "tim3 updown of=1 dir_down=1 uf=1 up_again=1 ok",
+          "EFM32GG PASS"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioe:2",
+          "min_edges": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 537001728,
+          "expected_value": 4013031679,
+          "mask": null,
+          "size": 4
+        }
       },
       "passed": true
     },
@@ -44,25 +80,25 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
+      1,
+      4,
+      0,
+      2147483648,
+      35,
+      200000,
+      1,
+      536997864,
       1073790992,
-      10,
-      2147483648,
-      2147483648,
-      0,
-      0,
-      0,
-      536887280,
-      0,
-      0,
-      0,
-      0,
-      0,
-      536887280,
-      134219623,
-      134219612
+      4294867296,
+      1073766568,
+      1073807376,
+      536870912,
+      536997824,
+      1073790976,
+      134236016
     ],
-    "pc": 134219612,
-    "xpsr": 16777216,
+    "pc": 134236016,
+    "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -74,9 +110,9 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "bce41cf1e3a3860c3047148a2539867de3c523877fa4c54ac8cd945eb93eae1a",
+  "firmware_hash": "ccd0016d6fa3ebad0cf94afa56b7c98c61a722972cc3cc898cd8bdddccfd70fc",
   "config": {
-    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32g842-smoke",
+    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32gg942-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32gg942.yaml",
     "script": "examples/renode-onboarding/efm32gg942-smoke.yaml"
   },
@@ -86,6 +122,76 @@
         "name": "usart0",
         "kind": "native",
         "base": 1073790976,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073766400,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1073766436,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073766472,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073766508,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioe",
+        "kind": "native",
+        "base": 1073766544,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiof",
+        "kind": "native",
+        "base": 1073766580,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer0",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer1",
+        "kind": "native",
+        "base": 1073808384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer2",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer3",
+        "kind": "native",
+        "base": 1073810432,
         "registers": [],
         "artifacts": []
       },
@@ -129,27 +235,735 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 400000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioe",
+        "pin": 2,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 266,
+            "value": 1
+          },
+          {
+            "cycle": 269,
+            "value": 0
+          },
+          {
+            "cycle": 13762,
+            "value": 1
+          },
+          {
+            "cycle": 15961,
+            "value": 0
+          },
+          {
+            "cycle": 21164,
+            "value": 1
+          },
+          {
+            "cycle": 26372,
+            "value": 0
+          },
+          {
+            "cycle": 31585,
+            "value": 1
+          },
+          {
+            "cycle": 36809,
+            "value": 0
+          },
+          {
+            "cycle": 42012,
+            "value": 1
+          },
+          {
+            "cycle": 47225,
+            "value": 0
+          },
+          {
+            "cycle": 52438,
+            "value": 1
+          },
+          {
+            "cycle": 57662,
+            "value": 0
+          },
+          {
+            "cycle": 62875,
+            "value": 1
+          },
+          {
+            "cycle": 68089,
+            "value": 0
+          },
+          {
+            "cycle": 73297,
+            "value": 1
+          },
+          {
+            "cycle": 78531,
+            "value": 0
+          },
+          {
+            "cycle": 83739,
+            "value": 1
+          },
+          {
+            "cycle": 88952,
+            "value": 0
+          },
+          {
+            "cycle": 94160,
+            "value": 1
+          },
+          {
+            "cycle": 99389,
+            "value": 0
+          },
+          {
+            "cycle": 104592,
+            "value": 1
+          },
+          {
+            "cycle": 109805,
+            "value": 0
+          },
+          {
+            "cycle": 115013,
+            "value": 1
+          },
+          {
+            "cycle": 120242,
+            "value": 0
+          },
+          {
+            "cycle": 125455,
+            "value": 1
+          },
+          {
+            "cycle": 130663,
+            "value": 0
+          },
+          {
+            "cycle": 135877,
+            "value": 1
+          },
+          {
+            "cycle": 141100,
+            "value": 0
+          },
+          {
+            "cycle": 146319,
+            "value": 1
+          },
+          {
+            "cycle": 151532,
+            "value": 0
+          },
+          {
+            "cycle": 156740,
+            "value": 1
+          },
+          {
+            "cycle": 161964,
+            "value": 0
+          },
+          {
+            "cycle": 167182,
+            "value": 1
+          },
+          {
+            "cycle": 172390,
+            "value": 0
+          },
+          {
+            "cycle": 177604,
+            "value": 1
+          },
+          {
+            "cycle": 182822,
+            "value": 0
+          },
+          {
+            "cycle": 188041,
+            "value": 1
+          },
+          {
+            "cycle": 193254,
+            "value": 0
+          },
+          {
+            "cycle": 198467,
+            "value": 1
+          },
+          {
+            "cycle": 203680,
+            "value": 0
+          },
+          {
+            "cycle": 208904,
+            "value": 1
+          },
+          {
+            "cycle": 214112,
+            "value": 0
+          },
+          {
+            "cycle": 219325,
+            "value": 1
+          },
+          {
+            "cycle": 224539,
+            "value": 0
+          },
+          {
+            "cycle": 229768,
+            "value": 1
+          },
+          {
+            "cycle": 234981,
+            "value": 0
+          },
+          {
+            "cycle": 240189,
+            "value": 1
+          },
+          {
+            "cycle": 245402,
+            "value": 0
+          },
+          {
+            "cycle": 250631,
+            "value": 1
+          },
+          {
+            "cycle": 255844,
+            "value": 0
+          },
+          {
+            "cycle": 261052,
+            "value": 1
+          },
+          {
+            "cycle": 266260,
+            "value": 0
+          },
+          {
+            "cycle": 271495,
+            "value": 1
+          },
+          {
+            "cycle": 276708,
+            "value": 0
+          },
+          {
+            "cycle": 281916,
+            "value": 1
+          },
+          {
+            "cycle": 287129,
+            "value": 0
+          },
+          {
+            "cycle": 292358,
+            "value": 1
+          },
+          {
+            "cycle": 297571,
+            "value": 0
+          },
+          {
+            "cycle": 302779,
+            "value": 1
+          },
+          {
+            "cycle": 307993,
+            "value": 0
+          },
+          {
+            "cycle": 313216,
+            "value": 1
+          },
+          {
+            "cycle": 318435,
+            "value": 0
+          },
+          {
+            "cycle": 323638,
+            "value": 1
+          },
+          {
+            "cycle": 328851,
+            "value": 0
+          },
+          {
+            "cycle": 334075,
+            "value": 1
+          },
+          {
+            "cycle": 339293,
+            "value": 0
+          },
+          {
+            "cycle": 344501,
+            "value": 1
+          },
+          {
+            "cycle": 349714,
+            "value": 0
+          },
+          {
+            "cycle": 354933,
+            "value": 1
+          },
+          {
+            "cycle": 360151,
+            "value": 0
+          },
+          {
+            "cycle": 365365,
+            "value": 1
+          },
+          {
+            "cycle": 370573,
+            "value": 0
+          },
+          {
+            "cycle": 375791,
+            "value": 1
+          },
+          {
+            "cycle": 381010,
+            "value": 0
+          },
+          {
+            "cycle": 386223,
+            "value": 1
+          },
+          {
+            "cycle": 391431,
+            "value": 0
+          },
+          {
+            "cycle": 396649,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 264,
+            "state": "0"
+          },
+          {
+            "cycle": 266,
+            "state": "1"
+          },
+          {
+            "cycle": 269,
+            "state": "0"
+          },
+          {
+            "cycle": 13762,
+            "state": "1"
+          },
+          {
+            "cycle": 15961,
+            "state": "0"
+          },
+          {
+            "cycle": 21164,
+            "state": "1"
+          },
+          {
+            "cycle": 26372,
+            "state": "0"
+          },
+          {
+            "cycle": 31585,
+            "state": "1"
+          },
+          {
+            "cycle": 36809,
+            "state": "0"
+          },
+          {
+            "cycle": 42012,
+            "state": "1"
+          },
+          {
+            "cycle": 47225,
+            "state": "0"
+          },
+          {
+            "cycle": 52438,
+            "state": "1"
+          },
+          {
+            "cycle": 57662,
+            "state": "0"
+          },
+          {
+            "cycle": 62875,
+            "state": "1"
+          },
+          {
+            "cycle": 68089,
+            "state": "0"
+          },
+          {
+            "cycle": 73297,
+            "state": "1"
+          },
+          {
+            "cycle": 78531,
+            "state": "0"
+          },
+          {
+            "cycle": 83739,
+            "state": "1"
+          },
+          {
+            "cycle": 88952,
+            "state": "0"
+          },
+          {
+            "cycle": 94160,
+            "state": "1"
+          },
+          {
+            "cycle": 99389,
+            "state": "0"
+          },
+          {
+            "cycle": 104592,
+            "state": "1"
+          },
+          {
+            "cycle": 109805,
+            "state": "0"
+          },
+          {
+            "cycle": 115013,
+            "state": "1"
+          },
+          {
+            "cycle": 120242,
+            "state": "0"
+          },
+          {
+            "cycle": 125455,
+            "state": "1"
+          },
+          {
+            "cycle": 130663,
+            "state": "0"
+          },
+          {
+            "cycle": 135877,
+            "state": "1"
+          },
+          {
+            "cycle": 141100,
+            "state": "0"
+          },
+          {
+            "cycle": 146319,
+            "state": "1"
+          },
+          {
+            "cycle": 151532,
+            "state": "0"
+          },
+          {
+            "cycle": 156740,
+            "state": "1"
+          },
+          {
+            "cycle": 161964,
+            "state": "0"
+          },
+          {
+            "cycle": 167182,
+            "state": "1"
+          },
+          {
+            "cycle": 172390,
+            "state": "0"
+          },
+          {
+            "cycle": 177604,
+            "state": "1"
+          },
+          {
+            "cycle": 182822,
+            "state": "0"
+          },
+          {
+            "cycle": 188041,
+            "state": "1"
+          },
+          {
+            "cycle": 193254,
+            "state": "0"
+          },
+          {
+            "cycle": 198467,
+            "state": "1"
+          },
+          {
+            "cycle": 203680,
+            "state": "0"
+          },
+          {
+            "cycle": 208904,
+            "state": "1"
+          },
+          {
+            "cycle": 214112,
+            "state": "0"
+          },
+          {
+            "cycle": 219325,
+            "state": "1"
+          },
+          {
+            "cycle": 224539,
+            "state": "0"
+          },
+          {
+            "cycle": 229768,
+            "state": "1"
+          },
+          {
+            "cycle": 234981,
+            "state": "0"
+          },
+          {
+            "cycle": 240189,
+            "state": "1"
+          },
+          {
+            "cycle": 245402,
+            "state": "0"
+          },
+          {
+            "cycle": 250631,
+            "state": "1"
+          },
+          {
+            "cycle": 255844,
+            "state": "0"
+          },
+          {
+            "cycle": 261052,
+            "state": "1"
+          },
+          {
+            "cycle": 266260,
+            "state": "0"
+          },
+          {
+            "cycle": 271495,
+            "state": "1"
+          },
+          {
+            "cycle": 276708,
+            "state": "0"
+          },
+          {
+            "cycle": 281916,
+            "state": "1"
+          },
+          {
+            "cycle": 287129,
+            "state": "0"
+          },
+          {
+            "cycle": 292358,
+            "state": "1"
+          },
+          {
+            "cycle": 297571,
+            "state": "0"
+          },
+          {
+            "cycle": 302779,
+            "state": "1"
+          },
+          {
+            "cycle": 307993,
+            "state": "0"
+          },
+          {
+            "cycle": 313216,
+            "state": "1"
+          },
+          {
+            "cycle": 318435,
+            "state": "0"
+          },
+          {
+            "cycle": 323638,
+            "state": "1"
+          },
+          {
+            "cycle": 328851,
+            "state": "0"
+          },
+          {
+            "cycle": 334075,
+            "state": "1"
+          },
+          {
+            "cycle": 339293,
+            "state": "0"
+          },
+          {
+            "cycle": 344501,
+            "state": "1"
+          },
+          {
+            "cycle": 349714,
+            "state": "0"
+          },
+          {
+            "cycle": 354933,
+            "state": "1"
+          },
+          {
+            "cycle": 360151,
+            "state": "0"
+          },
+          {
+            "cycle": 365365,
+            "state": "1"
+          },
+          {
+            "cycle": 370573,
+            "state": "0"
+          },
+          {
+            "cycle": 375791,
+            "state": "1"
+          },
+          {
+            "cycle": 381010,
+            "state": "0"
+          },
+          {
+            "cycle": 386223,
+            "state": "1"
+          },
+          {
+            "cycle": 391431,
+            "state": "0"
+          },
+          {
+            "cycle": 396649,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 77
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioe",
+      "number": 2,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
   "uart_lines": {
     "lines": [
       {
-        "text": "EFM32G USART0 smoke",
+        "text": "EFM32GG942 RENODE SMOKE",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
+      },
+      {
+        "text": "gpio pe2/pe3 pushpull set=1 tgl=1 clr=1 wo=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "gpio pa pinlockn reset=ffff after=fffe ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "tim0 up of=1 pend=1 released=1 running=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "tim2 cc0 hit=1 topbv=1 of=1 top=03e8->01f4 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "tim3 updown of=1 dir_down=1 uf=1 up_again=1 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "EFM32GG PASS",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 1900,
+    "text_bytes": 18940,
     "data_bytes": 0,
-    "bss_bytes": 0,
-    "flash_used_bytes": 1900,
-    "ram_static_bytes": 0,
+    "bss_bytes": 4,
+    "flash_used_bytes": 18940,
+    "ram_static_bytes": 4,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 131072,
-    "flash_used_pct": 0.18,
+    "flash_used_pct": 1.81,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -158,32 +972,107 @@
   },
   "memory": {
     "main_stack_method": "paint",
-    "main_stack_limit_bytes": 16384,
-    "main_stack_high_water_bytes": 16,
-    "main_stack_free_min_bytes": 16368,
-    "main_stack_base": 536870912,
-    "main_stack_top": 536887296,
+    "main_stack_limit_bytes": 126972,
+    "main_stack_high_water_bytes": 60,
+    "main_stack_free_min_bytes": 126896,
+    "main_stack_base": 536870916,
+    "main_stack_top": 536997888,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
-    "heap_limit_bytes": 16384,
+    "heap_limit_bytes": 126972,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 16368,
-    "heap_base": 536870912,
-    "heap_top": 536887296
+    "heap_free_min_bytes": 126896,
+    "heap_base": 536870916,
+    "heap_top": 536997888
   },
   "metrics": {
-    "cycles": 100000,
-    "instructions": 100000,
-    "steps_executed": 100000,
-    "memory_reads": 171,
-    "memory_writes": 6,
-    "peripheral_accesses": 43,
+    "cycles": 400000,
+    "instructions": 400000,
+    "steps_executed": 400000,
+    "memory_reads": 3602,
+    "memory_writes": 53,
+    "peripheral_accesses": 76702,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134219612,
-        "count": 390,
-        "symbol": "core::core_arch::arm_shared::hints::__yield"
+        "pc": 134235980,
+        "count": 79,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134236044,
+        "count": 79,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 134235984,
+        "count": 78,
+        "symbol": "firmware_efm32gg942_smoke::s0::run"
+      },
+      {
+        "pc": 134235988,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 134235992,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 134235996,
+        "count": 78,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134236000,
+        "count": 78,
+        "symbol": "firmware_efm32gg942_smoke::s0::run"
+      },
+      {
+        "pc": 134236002,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 134236004,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 134236008,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 134236012,
+        "count": 78,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134236016,
+        "count": 78,
+        "symbol": "firmware_efm32gg942_smoke::s0::run"
+      },
+      {
+        "pc": 134236018,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 134236020,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 134236024,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 134236032,
+        "count": 78,
+        "symbol": "firmware_efm32gg942_smoke::s0::run"
       }
     ]
   }
