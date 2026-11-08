@@ -36,10 +36,22 @@
 //! gated / edge-counted from the slice's B input pin (1..3). Only free-running
 //! advances here — there is no B-pin routing into this model, so a gated slice
 //! genuinely has no clock and standing still is the honest behaviour, not a
-//! shortcut. `A_INV` / `B_INV` and the compare outputs affect pin levels, which
-//! this block does not drive; `CC` is stored and read back faithfully so
-//! firmware computing duty cycles sees its own values.
+//! shortcut.
+//!
+//! ## Channel outputs
+//!
+//! Each slice drives two outputs, A and B (datasheet §4.5.2): a channel is high
+//! while `CTR < CC` (its half of `CC`), then `CSR.A_INV` / `B_INV` (bits 2/3)
+//! invert it. So `CC = 0` is low all period and `CC > TOP` high all period, in
+//! both counting modes. Once the bus routes a pad to the block
+//! ([`Peripheral::timer_output_lines`]), every level change is published on the
+//! 16-line wire [`LINE_NAMES`] at the cycle the counter step made it, so a pad
+//! IO_BANK0 hands to `FUNCSEL = 4` (PWM) reads the waveform rather than the SIO
+//! latch. The wire is inert until then.
 
+use std::sync::Arc;
+
+use crate::peripherals::pad_lines::PadLines;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 /// Number of PWM slices on the RP2040.
@@ -58,11 +70,21 @@ const INTS: u64 = 0xB0;
 // CSR bits.
 const CSR_EN: u32 = 1 << 0;
 const CSR_PH_CORRECT: u32 = 1 << 1;
+/// `A_INV`; `B_INV` is the next bit up.
+const CSR_A_INV: u32 = 1 << 2;
 const CSR_PH_RET: u32 = 1 << 6;
 const CSR_PH_ADV: u32 = 1 << 7;
 const CSR_DIVMODE: u32 = 0b11 << 4;
 /// Writable CSR bits; PH_ADV/PH_RET are self-clearing and never read back set.
-const CSR_MASK: u32 = CSR_EN | CSR_PH_CORRECT | CSR_DIVMODE | (1 << 2) | (1 << 3);
+const CSR_MASK: u32 = CSR_EN | CSR_PH_CORRECT | CSR_DIVMODE | CSR_A_INV | (CSR_A_INV << 1);
+
+/// The output wire, slice-major: line `2 * slice + channel` (A = 0, B = 1).
+/// That is the order IO_BANK0 FUNCSEL 4 maps the pads onto: GPn carries
+/// slice `(n >> 1) & 7`, channel `n & 1`, so GPn is line `n & 15`.
+pub static LINE_NAMES: [&str; 2 * SLICES] = [
+    "PWM0_A", "PWM0_B", "PWM1_A", "PWM1_B", "PWM2_A", "PWM2_B", "PWM3_A", "PWM3_B", "PWM4_A",
+    "PWM4_B", "PWM5_A", "PWM5_B", "PWM6_A", "PWM6_B", "PWM7_A", "PWM7_B",
+];
 
 /// NVIC vector for `PWM_IRQ_WRAP` (RP2040 datasheet §2.3.2).
 const PWM_IRQ_WRAP: u32 = 4;
@@ -146,6 +168,13 @@ impl Slice {
             false
         }
     }
+
+    /// Level of output `ch` (0 = A, 1 = B): high while `CTR < CC`, then the
+    /// channel's `_INV` bit.
+    fn output(&self, ch: usize) -> bool {
+        let cc = (self.cc >> (16 * ch)) as u16;
+        (self.ctr < cc) ^ (self.csr & (CSR_A_INV << ch) != 0)
+    }
 }
 
 #[derive(Debug)]
@@ -160,6 +189,11 @@ pub struct Rp2040Pwm {
     clock: Option<CycleClock>,
     /// Bumped each arm so stale slice events die on arrival.
     arm_seq: u32,
+    /// The A/B output wire ([`LINE_NAMES`]), created when the bus routes a pad
+    /// to it.
+    lines: Option<Arc<PadLines>>,
+    /// A pad can carry the wire: publish every output change on it.
+    wired: bool,
 }
 
 impl Default for Rp2040Pwm {
@@ -177,6 +211,29 @@ impl Rp2040Pwm {
             intf: 0,
             clock: None,
             arm_seq: 0,
+            lines: None,
+            wired: false,
+        }
+    }
+
+    /// Put every slice's A/B level on the wire. `at` is the cycle the change
+    /// happened (scheduler mode); without one the tap stamps it.
+    fn publish(&self, at: Option<u64>) {
+        for i in 0..SLICES {
+            self.publish_slice(i, at);
+        }
+    }
+
+    fn publish_slice(&self, i: usize, at: Option<u64>) {
+        let Some(lines) = self.lines.as_deref().filter(|_| self.wired) else {
+            return;
+        };
+        for ch in 0..2 {
+            let level = self.slices[i].output(ch);
+            match at {
+                Some(at) => lines.set_line_at(2 * i + ch, level, at),
+                None => lines.set_line(2 * i + ch, level),
+            }
         }
     }
 
@@ -199,15 +256,19 @@ impl Rp2040Pwm {
         self.free_running_active() || self.ints() != 0
     }
 
-    /// One peripheral-tick of free-running counter work + level IRQ vector.
-    fn step_one(&mut self) -> PeripheralTickResult {
+    /// One peripheral-tick of free-running counter work + level IRQ vector,
+    /// at cycle `at` when the scheduler knows it.
+    fn step_one(&mut self, at: Option<u64>) -> PeripheralTickResult {
         for i in 0..SLICES {
             let s = &mut self.slices[i];
             if !s.enabled() || !s.free_running() {
                 continue;
             }
-            if s.divider_fires() && s.step() {
-                self.intr |= 1 << i;
+            if s.divider_fires() {
+                if s.step() {
+                    self.intr |= 1 << i;
+                }
+                self.publish_slice(i, at);
             }
         }
         let explicit_irqs = (self.ints() != 0).then(|| vec![PWM_IRQ_WRAP]);
@@ -265,6 +326,7 @@ impl Peripheral for Rp2040Pwm {
                 0x10 => s.top = value as u16,
                 _ => {}
             }
+            self.publish(self.clock.as_ref().map(CycleClock::now));
             return Ok(());
         }
         match offset {
@@ -277,6 +339,7 @@ impl Peripheral for Rp2040Pwm {
                         s.csr &= !CSR_EN;
                     }
                 }
+                self.publish(self.clock.as_ref().map(CycleClock::now));
             }
             INTR => self.intr &= !(value as u8),
             INTE => self.inte = value as u8,
@@ -306,7 +369,7 @@ impl Peripheral for Rp2040Pwm {
         if self.scheduler_mode() {
             return PeripheralTickResult::default();
         }
-        self.step_one()
+        self.step_one(None)
     }
 
     fn uses_scheduler(&self) -> bool {
@@ -321,6 +384,24 @@ impl Peripheral for Rp2040Pwm {
         self.clock = Some(clock);
     }
 
+    /// The A/B output wire ([`LINE_NAMES`]); `arm` starts publishing on it,
+    /// once the bus has bound a pad that can carry it.
+    fn timer_output_lines(&mut self, arm: bool) -> Option<Arc<PadLines>> {
+        let lines = self
+            .lines
+            .get_or_insert_with(|| Arc::new(PadLines::new(&LINE_NAMES, &[false; 2 * SLICES])))
+            .clone();
+        if arm && !self.wired {
+            self.wired = true;
+            self.publish(self.clock.as_ref().map(CycleClock::now));
+        }
+        Some(lines)
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_deref()
+    }
+
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if !self.scheduler_mode() || !self.needs_scheduler_wake() {
             return Vec::new();
@@ -332,13 +413,13 @@ impl Peripheral for Rp2040Pwm {
     fn on_event(
         &mut self,
         event_token: u32,
-        _sched: &mut crate::sched::EventScheduler,
+        sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
         if !self.scheduler_mode() || event_token != self.arm_seq {
             return crate::sched::EventResult::default();
         }
-        let res = self.step_one();
+        let res = self.step_one(Some(sched.now()));
         crate::sched::EventResult {
             explicit_irqs: res.explicit_irqs.unwrap_or_default(),
             reschedule_delay: self.needs_scheduler_wake().then_some(1),

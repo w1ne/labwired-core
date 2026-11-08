@@ -261,8 +261,8 @@ const MAX_DOWNCAST_REF: usize = 198;
 // downcasts. This is an explicit chip-family clock contract; a general clock
 // snapshot capability should replace the reach if another clock family needs
 // it, rather than adding an unused general trait for one binding today.
-const MAX_AS_ANY_MUT: usize = 276;
-const MAX_DOWNCAST_MUT: usize = 342;
+const MAX_AS_ANY_MUT: usize = 275;
+const MAX_DOWNCAST_MUT: usize = 341;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
