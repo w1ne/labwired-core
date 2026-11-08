@@ -32,6 +32,7 @@ const IDLE_CHANNEL: u8 = 7;
 /// Onboarding profiles whose ADC is converted end to end here.
 const CONVERTED: &[&str] = &[
     "ambiq-apollo4",
+    "arduino_nano_33_ble",
     "cc2538",
     "eos-s3-qomu",
     "eos-s3-quickfeather",
@@ -42,6 +43,7 @@ const CONVERTED: &[&str] = &[
     "max32652",
     "mimxrt1064_evk",
     "nrf52840",
+    "nrf52840dk_nrf52840",
     "nucleo_f767zi",
     "nucleo_h753zi",
     "nucleo_wba52cg",
@@ -54,8 +56,15 @@ const CONVERTED: &[&str] = &[
     "stm32f042",
     "stm32f072",
     "stm32f072b_discovery",
+    "stm32f4",
     "stm32f401cdu6-blackpill",
+    "stm32f412",
+    "stm32f429",
+    "stm32f4_discovery-kit",
+    "stm32f4_discovery",
+    "stm32f746",
     "stm32f777",
+    "stm32f7_discovery-bb",
     "stm32h7",
     "stm32h743",
     "stm32h747-disco",
@@ -1536,6 +1545,31 @@ fn generic_netlists(adc_id: &str, [ntc_channel, diode_channel]: [u8; 2]) -> Syst
     analog
 }
 
+/// The sweep drives whatever map a descriptor names, so a wrong but
+/// self-consistent `config.profile` would still convert. For profiles named
+/// `stm32<series>...`, pin the map to the one that series' reference manual
+/// gives its ADC: F0/L0 `CHSELR` (RM0091, RM0367), F2/F4/F7 (RM0033, RM0090,
+/// RM0410), H7 (RM0433), L4/L5 (RM0351, RM0438), WBA ADC4 (RM0493).
+fn assert_stm32_series_map(board: &str, converter: &Converter) {
+    let Some(series) = board.strip_prefix("stm32") else {
+        return;
+    };
+    let expected = match series.get(..2) {
+        Some("f0" | "l0") => "Stm32V2",
+        Some("f2" | "f4" | "f7") => "Stm32F4",
+        Some("h7") => "Stm32H7",
+        Some("l4" | "l5") => "Stm32L4",
+        Some("wb") if series.starts_with("wba") => "Stm32Adc4",
+        _ => panic!("{board}: no reference-manual ADC map recorded for this STM32 series"),
+    };
+    assert_eq!(
+        format!("{:?}", converter.family),
+        expected,
+        "{board}:{} declares the wrong ADC register map for its series",
+        converter.id
+    );
+}
+
 fn onboarding_profiles() -> Vec<PathBuf> {
     let mut paths: Vec<_> = std::fs::read_dir(root("configs/systems/onboarding"))
         .expect("read onboarding systems")
@@ -1680,6 +1714,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
             Ok(list) if list.is_empty() => without_adc += 1,
             Ok(list) => {
                 for converter in &list {
+                    assert_stm32_series_map(&board, converter);
                     assert_converter_routes_generic_analog(&board, &chip, &profile, converter);
                 }
                 instances += list.len();
@@ -1697,7 +1732,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 49,
+        instances, 70,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -1705,7 +1740,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 174,
+        without_adc, 165,
         "onboarding profiles that declare no modelled ADC"
     );
 }
