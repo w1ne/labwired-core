@@ -12,8 +12,8 @@
 - pass_observable_assertions: `225/225`
 - pass_stop_reason_only: `0/225`
 - pass_depth_unknown: `0/225`
-- median_elapsed_ms: `1149`
-- median_elapsed_seconds: `1.149`
+- median_elapsed_ms: `1154`
+- median_elapsed_seconds: `1.154`
 - threshold_seconds: `3600`
 - threshold_met: `225/225`
 
@@ -122,7 +122,7 @@
 | `max32652-evkit` | `pass` | `True` | `yes` | `yes` | `1040` | `1.04` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `microwatt` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 1: `uart:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no OpenPOWER (Microwatt) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `mimxrt1064_evk` | `pass` | `True` | `yes` | `yes` | `788` | `0.788` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `mimxrt700_evk` | `pass` | `True` | `yes` | `yes` | `1149` | `1.149` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `mimxrt700_evk` | `pass` | `True` | `yes` | `yes` | `1596` | `1.596` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `mimxrt798s` | `pass` | `True` | `yes` | `yes` | `1094` | `1.094` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `miv` | `pass` | `True` | `yes` | `yes` | `804` | `0.804` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `miv-board` | `pass` | `True` | `yes` | `yes` | `1083` | `1.083` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

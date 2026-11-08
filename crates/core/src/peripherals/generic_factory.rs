@@ -1789,7 +1789,26 @@ pub fn try_build(
                 .get("clock_hz")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(crate::peripherals::imxrt::lpuart::DEFAULT_UART_CLK_HZ);
-            Box::new(crate::peripherals::imxrt::lpuart::ImxrtLpuart::new(clk))
+            let uart = crate::peripherals::imxrt::lpuart::ImxrtLpuart::new(clk);
+            // i.MX RT700 LP_FLEXCOMM: `lp_flexcomm: true` adds PSELID/ISTAT;
+            // `lp_flexcomm_present` overrides the present bits [6:4].
+            let lp_flexcomm = p_cfg
+                .config
+                .get("lp_flexcomm")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if lp_flexcomm {
+                let present = p_cfg
+                    .config
+                    .get("lp_flexcomm_present")
+                    .and_then(|v| v.as_u64())
+                    .map_or(crate::peripherals::imxrt::lpuart::LPFC_PRESENT_ALL, |v| {
+                        v as u32
+                    });
+                Box::new(uart.with_lp_flexcomm(present))
+            } else {
+                Box::new(uart)
+            }
         }
         // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
         // load/reload/en/update_value/value plus the zero-event manager.

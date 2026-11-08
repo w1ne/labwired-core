@@ -1,23 +1,23 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 4000000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 4000000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 4000000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -30,9 +30,36 @@
   "assertions": [
     {
       "assertion": {
+        "uart_contains": "MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "flexcomm0 pselid=00103070->00103071->00103079",
+          "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001",
+          "pass=0000000f"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "memory_value": {
           "address": 536870912,
           "expected_value": 323,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870916,
+          "expected_value": 1879048207,
           "mask": null,
           "size": 4
         }
@@ -49,24 +76,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      323,
-      536870912,
-      939526244,
+      1879048207,
+      536870916,
+      102,
       0,
+      15,
+      1060976,
+      67174403,
+      542638064,
+      8912896,
+      1074855956,
+      514,
+      1060985,
       0,
-      0,
-      0,
-      542638072,
-      0,
-      0,
-      0,
-      0,
-      0,
-      542638072,
-      939526183,
-      939526232
+      542638040,
+      939529335,
+      939529460
     ],
-    "pc": 939526232,
+    "pc": 939529460,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -79,7 +106,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "79d8a17f79d1b4f628c0701ecb8cf9c776ceb809f0b36a1dd387737745c71bd5",
+  "firmware_hash": "f606a529f80313a9de59f3ec8e6ecc8e530808fc822f8376ae647e75b38db65c",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml",
@@ -87,6 +114,13 @@
   },
   "inspect": {
     "peripherals": [
+      {
+        "name": "flexcomm0",
+        "kind": "native",
+        "base": 1074855936,
+        "registers": [],
+        "artifacts": []
+      },
       {
         "name": "scb",
         "kind": "native",
@@ -127,12 +161,40 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 460000
+      },
+      {
+        "text": "flexcomm0 pselid=00103070->00103071->00103079",
+        "cycle_lo": 460000,
+        "cycle": 470000,
+        "end_cycle": 1040000
+      },
+      {
+        "text": "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001",
+        "cycle_lo": 1040000,
+        "cycle": 1050000,
+        "end_cycle": 2060000
+      },
+      {
+        "text": "pass=0000000f",
+        "cycle_lo": 2060000,
+        "cycle": 2070000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 2148,
+    "text_bytes": 5792,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 2148,
+    "flash_used_bytes": 5792,
     "ram_static_bytes": 0,
     "flash_total_bytes": 134217728,
     "ram_total_bytes": 5767168,
@@ -146,31 +208,106 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 5767168,
-    "main_stack_high_water_bytes": 8,
-    "main_stack_free_min_bytes": 5767156,
+    "main_stack_high_water_bytes": 36,
+    "main_stack_free_min_bytes": 5767116,
     "main_stack_base": 536870912,
     "main_stack_top": 542638080,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 5767168,
-    "heap_high_water_bytes": 4,
-    "heap_free_min_bytes": 5767156,
+    "heap_high_water_bytes": 8,
+    "heap_free_min_bytes": 5767116,
     "heap_base": 536870912,
     "heap_top": 542638080
   },
   "metrics": {
-    "cycles": 100000,
-    "instructions": 100000,
-    "steps_executed": 100000,
-    "memory_reads": 34,
-    "memory_writes": 5,
-    "peripheral_accesses": 0,
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 1896,
+    "memory_writes": 31,
+    "peripheral_accesses": 744930,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 939526232,
-        "count": 390,
+        "pc": 939529460,
+        "count": 6915,
         "symbol": "firmware_mimxrt700_evk_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 939526322,
+        "count": 351,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939526350,
+        "count": 313,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939526326,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939526332,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939526344,
+        "count": 235,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939526338,
+        "count": 156,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939529696,
+        "count": 118,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939529542,
+        "count": 117,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939529742,
+        "count": 117,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939529528,
+        "count": 79,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939529620,
+        "count": 79,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939529786,
+        "count": 79,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939529496,
+        "count": 78,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939529524,
+        "count": 78,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939529574,
+        "count": 78,
+        "symbol": "core::ptr::read_volatile"
       }
     ]
   }

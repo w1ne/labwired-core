@@ -1,7 +1,8 @@
-# Narrow MIMXRT700-EVK profile for Cortex-M33 CPU0 instruction and memory
-# execution. Renode's board file maps XIP0 at 0x38000000 (128 MiB); its SoC
-# file maps CPU0 non-secure SRAM at 0x20000000 (0x580000 bytes). CPU1, DSPs,
-# controllers, and generated peripheral entries are intentionally omitted.
+# Narrow MIMXRT700-EVK profile for Cortex-M33 CPU0, memory, and polled UART
+# smoke. Renode's board file maps XIP0 at 0x38000000 (128 MiB); its SoC file
+# maps CPU0 non-secure SRAM at 0x20000000 (0x580000 bytes). CPU1, DSPs, other
+# Flexcomm functions, controllers, and generated peripheral entries are
+# intentionally omitted.
 # Sources: https://github.com/renode/renode/blob/master/platforms/boards/mimxrt700_evk.repl
 #          https://github.com/renode/renode/blob/master/platforms/cpus/mimxrt798s.repl
 # LabWired - Firmware Simulation Platform
@@ -13,6 +14,7 @@
 name: mimxrt700_evk
 arch: arm
 core: cortex-m33
+cpu_hz: 237500000
 flash:
   # Renode's XIP0 memory mapping; this is not a model of the XSPI controller.
   base: 939524096
@@ -21,4 +23,16 @@ ram:
   # CPU0 non-secure SRAM view from Renode's mimxrt798s.repl.
   base: 536870912
   size: 5767168B
-peripherals: []
+peripherals:
+  # Renode mimxrt798s.repl flexcomm0 has aliased mappings at 0x40110000 and
+  # 0x50110000. The imported CPU0 non-secure profile uses the former. This
+  # bounded model implements LP_FLEXCOMM selection/status and its LPUART
+  # function; LPI2C and LPSPI transactions are not modelled.
+  - id: flexcomm0
+    type: imxrt_lpuart
+    base_address: 0x40110000
+    size: 4KB
+    config:
+      clock_hz: 80000000
+      lp_flexcomm: true
+      lp_flexcomm_present: 112

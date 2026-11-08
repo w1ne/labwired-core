@@ -1,14 +1,24 @@
-# Cortex-M33 CPU0 and bounded memory execution on the imported MIMXRT700-EVK
-# system. This does not exercise CPU1, the DSPs, or any peripheral.
+# Cortex-M33 CPU0, LP_FLEXCOMM0 selection/status, LPUART register readback and
+# TX smoke on the exact imported MIMXRT700-EVK system. LPI2C/LPSPI are not
+# modelled or claimed.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke"
   system: "../../configs/systems/onboarding/mimxrt700_evk.yaml"
 limits:
-  max_steps: 100000
+  max_steps: 4000000
 assertions:
+  - uart_contains: "MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE"
+  - uart_ordered:
+      - "flexcomm0 pselid=00103070->00103071->00103079"
+      - "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001"
+      - "pass=0000000f"
   - memory_value:
       address: 0x20000000
       expected_value: 0x00000143
+      size: 4
+  - memory_value:
+      address: 0x20000004
+      expected_value: 0x7000000f
       size: 4
   - expected_stop_reason: max_steps
