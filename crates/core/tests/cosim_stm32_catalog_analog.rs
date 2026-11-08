@@ -200,6 +200,77 @@ impl Adc1 {
         bus.write_u32(self.base + 0x2c, 0).expect("restore SQR1");
         (codes, first_eoc.unwrap())
     }
+
+    /// `CR1.DISCEN` over `channels` with `DISCNUM` = `per_trigger` - 1: each
+    /// SWSTART converts the next `per_trigger` channels (RM0008 §11.3.10,
+    /// RM0090 §13.3.10). Ticks each trigger for exactly its subgroup's
+    /// conversion time, then twice as long again to prove the subgroup
+    /// stopped. Returns `(DR, EOC)` per trigger. `EOC` (with `EOCS` clear)
+    /// must stay low until the subgroup reaching SQ(L+1) lands. Leaves
+    /// CR1/SQR1 at the single-conversion reset state.
+    fn discontinuous(
+        &self,
+        bus: &mut SystemBus,
+        channels: &[u8],
+        per_trigger: usize,
+        triggers: usize,
+        single_ticks: usize,
+    ) -> Vec<(u32, bool)> {
+        const ADON: u32 = 1;
+        const EOC: u32 = 1 << 1;
+        const SCAN: u32 = 1 << 8;
+        const DISCEN: u32 = 1 << 11;
+        let sqr3 = channels
+            .iter()
+            .enumerate()
+            .fold(0, |w, (k, &ch)| w | (u32::from(ch) << (5 * k)));
+        bus.write_u32(self.base + 0x34, sqr3).expect("SQR3 SQ1..");
+        bus.write_u32(self.base + 0x2c, (channels.len() as u32 - 1) << 20)
+            .expect("SQR1.L");
+        let discnum = (per_trigger as u32 - 1) << 13;
+        bus.write_u32(self.base + 0x04, SCAN | DISCEN | discnum)
+            .expect("CR1.DISCEN");
+        let armed = if self.f1_profile {
+            ADON | (0b111 << 17) | (1 << 20)
+        } else {
+            ADON
+        };
+        let start = armed | if self.f1_profile { 1 << 22 } else { 1 << 30 };
+        bus.write_u32(self.base + 0x08, armed).expect("arm ADC1");
+        let mut next = 0;
+        let out = (0..triggers)
+            .map(|t| {
+                bus.write_u32(self.base, 0).expect("clear SR");
+                bus.write_u32(self.base + 0x08, start).expect("SWSTART");
+                let n = per_trigger.min(channels.len() - next);
+                next = (next + n) % channels.len();
+                for tick in 1..=n * single_ticks {
+                    bus.tick_peripherals_fully();
+                    if tick < n * single_ticks {
+                        assert_eq!(
+                            bus.read_u32(self.base).unwrap() & EOC,
+                            0,
+                            "ADC1 trigger {t}: EOC before its subgroup lands"
+                        );
+                    }
+                }
+                let dr = bus.read_u32(self.base + 0x4c).expect("read DR");
+                let eoc = bus.read_u32(self.base).unwrap() & EOC != 0;
+                for _ in 0..2 * single_ticks {
+                    bus.tick_peripherals_fully();
+                }
+                assert_eq!(
+                    bus.read_u32(self.base + 0x4c).unwrap(),
+                    dr,
+                    "ADC1 trigger {t}: the subgroup stops after {n} conversions"
+                );
+                (dr, eoc)
+            })
+            .collect();
+        bus.write_u32(self.base + 0x04, 0).expect("restore CR1");
+        bus.write_u32(self.base + 0x2c, 0).expect("restore SQR1");
+        out
+    }
 }
 
 /// The highest-channel ADC1 pad this package bonds out — PB1 on 36/48-pin
@@ -360,6 +431,20 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
                 assert_eq!(read, codes, "{part}: F4 scan {order:?} polled per EOC");
             }
         }
+
+        // CR1.DISCEN, two channels per trigger over [NTC, diode, NTC]:
+        // [NTC, diode], then [NTC] reaching SQ3 with EOC, then SQ1 again.
+        assert_eq!(
+            adc1.discontinuous(&mut bus, &[0, top_channel, 0], 2, 3, single_ticks),
+            vec![(diode, false), (ntc, true), (diode, false)],
+            "{part}: DISCEN steps the routed sensors in DISCNUM+1 subgroups"
+        );
+        // DISCNUM = 0: one sensor per trigger, the polling-firmware pattern.
+        assert_eq!(
+            adc1.discontinuous(&mut bus, &[top_channel, 0], 1, 3, single_ticks),
+            vec![(diode, false), (ntc, true), (diode, false)],
+            "{part}: DISCEN converts one routed sensor per trigger"
+        );
     }
     assert!(
         ntc_counts[0] < ntc_counts[1] && ntc_counts[1] < ntc_counts[2],

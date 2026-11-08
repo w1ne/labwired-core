@@ -389,6 +389,21 @@ impl Converter {
                         self.id
                     );
                 }
+                // CR1.DISCEN over [NTC, diode, NTC]: one sensor per trigger,
+                // then two, each subgroup stopping short at SQ3.
+                let group = [NTC_CHANNEL, DIODE_CHANNEL, NTC_CHANNEL];
+                assert_eq!(
+                    self.discen_f4(bus, &group, 1, 4),
+                    vec![vec![ntc], vec![diode], vec![ntc], vec![ntc]],
+                    "{}: DISCNUM=0 converts one routed sensor per SWSTART",
+                    self.id
+                );
+                assert_eq!(
+                    self.discen_f4(bus, &group, 2, 3),
+                    vec![vec![ntc, diode], vec![ntc], vec![ntc, diode]],
+                    "{}: DISCNUM=1 converts the next two routed sensors per SWSTART",
+                    self.id
+                );
                 single
             }
             Family::Stm32H7 | Family::Stm32L4 => {
@@ -612,6 +627,66 @@ impl Converter {
         bus.write_u32(self.base + 0x04, 0).expect("restore CR1");
         bus.write_u32(self.base + 0x2c, 0).expect("restore SQR1");
         codes
+    }
+
+    /// F2/F4/F7 `CR1.DISCEN` with `DISCNUM` = `per_trigger` - 1 and
+    /// `CR2.EOCS`, read by polling: each SWSTART lands the next
+    /// `per_trigger` channels (fewer at the group end), one `EOC` each, and
+    /// then the ADC stays idle. Leaves CR1/SQR1 at 0.
+    fn discen_f4(
+        &self,
+        bus: &mut SystemBus,
+        channels: &[u8],
+        per_trigger: usize,
+        triggers: usize,
+    ) -> Vec<Vec<u32>> {
+        const ADON: u32 = 1;
+        const EOCS: u32 = 1 << 10;
+        let sqr3 = channels
+            .iter()
+            .enumerate()
+            .fold(0, |w, (k, &ch)| w | (u32::from(ch) << (5 * k)));
+        bus.write_u32(self.base + 0x34, sqr3).expect("SQR3 SQ1..");
+        bus.write_u32(self.base + 0x2c, (channels.len() as u32 - 1) << 20)
+            .expect("SQR1.L");
+        let cr1 = (1 << 8) | (1 << 11) | ((per_trigger as u32 - 1) << 13);
+        bus.write_u32(self.base + 0x04, cr1).expect("CR1.DISCEN");
+        bus.write_u32(self.base, 0).expect("clear SR");
+        bus.write_u32(self.base + 0x08, ADON | EOCS).expect("ADON");
+        let mut next = 0;
+        let out = (0..triggers)
+            .map(|t| {
+                bus.write_u32(self.base + 0x08, ADON | EOCS | (1 << 30))
+                    .expect("SWSTART");
+                let n = per_trigger.min(channels.len() - next);
+                next = (next + n) % channels.len();
+                let codes = (0..n)
+                    .map(|slot| {
+                        let mut ticks = 0;
+                        while bus.read_u32(self.base).unwrap() & (1 << 1) == 0 {
+                            assert!(ticks < 64, "{}: trigger {t} EOC {slot}", self.id);
+                            bus.tick_peripherals_fully();
+                            ticks += 1;
+                        }
+                        bus.write_u32(self.base, 0).expect("clear EOC");
+                        bus.read_u32(self.base + 0x4c).expect("read DR")
+                    })
+                    .collect();
+                for _ in 0..64 {
+                    bus.tick_peripherals_fully();
+                }
+                assert_eq!(
+                    bus.read_u32(self.base).unwrap() & (1 << 1),
+                    0,
+                    "{}: trigger {t} stops after its {n}-channel subgroup",
+                    self.id
+                );
+                codes
+            })
+            .collect();
+        bus.write_u32(self.base + 0x04, 0).expect("restore CR1");
+        bus.write_u32(self.base + 0x2c, 0).expect("restore SQR1");
+        out
     }
 
     /// One software-started v2 scan read by polling: wait for EOC, read DR.

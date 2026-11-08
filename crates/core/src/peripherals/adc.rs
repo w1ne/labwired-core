@@ -149,6 +149,11 @@ const F4_CR2_SWSTART: u32 = 1 << 30;
 /// ADC_CR1.SCAN (bit 8, RM0008 §11.12.2 / RM0090 §13.13.2): one trigger
 /// converts the whole regular group `SQ1..SQ(L+1)`, not just `SQ1`.
 const F1_CR1_SCAN: u32 = 1 << 8;
+/// ADC_CR1.DISCEN / DISCNUM[2:0] (bit 11 and bits 15:13, RM0008 §11.12.2 /
+/// RM0090 §13.13.2): each trigger converts only the next DISCNUM + 1
+/// channels of the regular group (RM0008 §11.3.10 / RM0090 §13.3.10).
+const F1_CR1_DISCEN: u32 = 1 << 11;
+const F1_CR1_DISCNUM_SHIFT: u32 = 13;
 /// STM32F2/F4 ADC_CR2.EOCS (bit 10, RM0090 §13.13.3): set, `EOC` rises after
 /// every regular conversion; clear (reset), only at the end of the group. The
 /// F1 has no such bit and always raises `EOC` at the end of the group
@@ -708,7 +713,7 @@ pub struct Adc {
     /// state, not a register: not serialized.
     #[serde(skip)]
     regular_sequence: Option<RegularSequence>,
-    /// `DISCEN` pointer (V2, L4, H7, U5): the sequence position the next
+    /// `DISCEN` pointer (every layout): the sequence position the next
     /// trigger converts.
     #[serde(skip)]
     discontinuous_next: usize,
@@ -716,6 +721,10 @@ pub struct Adc {
     /// not a register: not serialized.
     #[serde(skip)]
     f1_group_pos: usize,
+    /// F1/F4 group position this trigger stops after (exclusive): the group
+    /// length, or the end of a `CR1.DISCEN` subgroup.
+    #[serde(skip)]
+    f1_run_end: usize,
 }
 
 impl Adc {
@@ -801,6 +810,7 @@ impl Adc {
             regular_sequence: None,
             discontinuous_next: 0,
             f1_group_pos: 0,
+            f1_run_end: 0,
         }
     }
 
@@ -914,7 +924,15 @@ impl Adc {
                 // CR1.SCAN: the next group channel is acquired as soon as this
                 // one lands. Without SCAN (or with L = 0) the group is SQ1
                 // alone, so every landing ends it, exactly as before.
+                //
+                // CR1.DISCEN: the run stops at the end of its subgroup, but
+                // EOC still marks only the end of the whole group (RM0008
+                // §11.3.10 example: "3rd trigger: sequence converted 9, 10
+                // and an EOC event generated"). Without DISCEN the run is the
+                // group, so run_done == group_done.
                 let group_done = self.f1_group_pos + 1 >= self.f1_group_len();
+                let run_done = group_done || self.f1_group_pos + 1 >= self.f1_run_end;
+                let discontinuous = cr1 & F1_CR1_DISCEN != 0;
                 let per_conversion_eoc =
                     matches!(self.regs, AdcRegs::Stm32F4(_)) && (cr2 & F4_CR2_EOCS) != 0;
                 if group_done || per_conversion_eoc {
@@ -924,15 +942,18 @@ impl Adc {
                         irq = true; // EOCIE
                     }
                 }
-                if !group_done {
+                if !run_done {
                     self.f1_group_pos += 1;
                     // Unlike a new trigger, the next group conversion does
                     // not clear the EOC a per-conversion landing just raised.
                     self.acquire_f1_input();
                 } else {
                     self.f1_group_pos = 0;
-                    // Continuous mode (CONT + ADON).
-                    if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
+                    // Continuous mode (CONT + ADON). DISCEN wins over CONT,
+                    // a combination the RMs forbid: each trigger runs one
+                    // subgroup.
+                    if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 && !discontinuous {
+                        self.f1_run_end = self.f1_group_len();
                         self.start_conversion();
                     }
                 }
@@ -989,6 +1010,28 @@ impl Adc {
         if (channel as usize) < self.channel_inputs_mv.len() {
             self.channel_inputs_mv[channel as usize] = None;
         }
+    }
+
+    /// An F1/F4 trigger (SWSTART). Without `CR1.DISCEN` it converts the
+    /// whole group from SQ1. With it, it converts the next DISCNUM + 1
+    /// channels from the DISCEN pointer, stopping short at SQ(L+1) (no
+    /// rollover); the trigger after that one restarts at SQ1 (RM0008
+    /// §11.3.10, RM0090 §13.3.10).
+    fn start_f1_trigger(&mut self) {
+        let len = self.f1_group_len();
+        let (cr1, _) = self.f1_ctrl();
+        if cr1 & F1_CR1_DISCEN != 0 {
+            let offset = self.discontinuous_next % len;
+            let n = ((cr1 >> F1_CR1_DISCNUM_SHIFT) & 0x7) as usize + 1;
+            let end = (offset + n).min(len);
+            self.discontinuous_next = end % len;
+            self.f1_group_pos = offset;
+            self.f1_run_end = end;
+        } else {
+            self.f1_group_pos = 0;
+            self.f1_run_end = len;
+        }
+        self.start_conversion();
     }
 
     fn start_conversion(&mut self) {
@@ -1860,6 +1903,7 @@ impl Adc {
     fn cancel_f1_pending(&mut self) {
         self.converting = false;
         self.f1_group_pos = 0;
+        self.f1_run_end = 0;
         self.cycles_remaining = 0;
         self.chain_live = false;
         self.f1_rstcal_remaining = None;
@@ -2058,7 +2102,13 @@ impl Peripheral for Adc {
                 0x00..=0x03 => self.sr = (self.sr & !mask) | val_shifted,
                 0x04..=0x07 => match &mut self.regs {
                     AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
+                        let old = r.cr1;
                         r.cr1 = (r.cr1 & !mask) | val_shifted;
+                        // A new mode restarts the DISCEN pointer at SQ1.
+                        let mode = F1_CR1_SCAN | F1_CR1_DISCEN | (0x7 << F1_CR1_DISCNUM_SHIFT);
+                        if (old ^ r.cr1) & mode != 0 {
+                            self.discontinuous_next = 0;
+                        }
                     }
                     _ => {}
                 },
@@ -2077,9 +2127,7 @@ impl Peripheral for Adc {
                         self.apply_f4_cr2(old_cr2, merged)
                     };
                     if trigger {
-                        // A trigger restarts the group at SQ1.
-                        self.f1_group_pos = 0;
-                        self.start_conversion();
+                        self.start_f1_trigger();
                     }
                 }
                 0x2C..=0x37 => match &mut self.regs {
@@ -2090,6 +2138,8 @@ impl Peripheral for Adc {
                             _ => &mut r.sqr3,
                         };
                         *sqr = (*sqr & !mask) | val_shifted;
+                        // A new group restarts the DISCEN pointer at SQ1.
+                        self.discontinuous_next = 0;
                     }
                     _ => {}
                 },
@@ -2531,6 +2581,97 @@ mod tests {
             !adc.converting && adc.f1_group_pos == 0,
             "ADON off stops the group"
         );
+    }
+
+    /// RM0008 §11.3.10 / RM0090 §13.3.10: with `CR1.DISCEN` each trigger
+    /// converts the next DISCNUM + 1 group channels, stopping short at
+    /// SQ(L+1) (no rollover), and the next trigger restarts at SQ1. `EOC`
+    /// rises only on the subgroup that reaches the end of the group (F1, and
+    /// F4 with `EOCS` clear). `CONT` does not chain subgroups. A new `SQRx`
+    /// or `CR1` mode restarts the pointer at SQ1.
+    #[test]
+    fn f1_f4_discen_converts_discnum_plus_one_channels_per_trigger() {
+        let code = |mv: f64| Adc::code_for_mv(mv, ADC_VREF_MV);
+        for layout in [AdcRegisterLayout::Stm32F1, AdcRegisterLayout::Stm32F4] {
+            let mut adc = Adc::new_with_layout(layout);
+            let f4 = matches!(layout, AdcRegisterLayout::Stm32F4);
+            adc.set_channel_input(2, 400);
+            adc.set_channel_input(5, 1500);
+            adc.set_channel_input(11, 2700);
+            // SQ1..SQ5 = 5, 11, 2, 5, 11; L = 4.
+            adc.write_u32(0x34, 5 | (11 << 5) | (2 << 10) | (5 << 15) | (11 << 20))
+                .unwrap();
+            adc.write_u32(0x2C, 4 << 20).unwrap();
+            // SCAN | DISCEN | DISCNUM = 1 (two channels per trigger) | EOCIE.
+            let cr1 = F1_CR1_SCAN | F1_CR1_DISCEN | (1 << F1_CR1_DISCNUM_SHIFT) | (1 << 5);
+            adc.write_u32(0x04, cr1).unwrap();
+            let trigger = |adc: &mut Adc| {
+                if f4 {
+                    // CONT is set too: DISCEN must still stop each subgroup.
+                    adc.write_u32(0x08, F1_CR2_ADON | F1_CR2_CONT).unwrap();
+                    adc.write_u32(0x08, F1_CR2_ADON | F1_CR2_CONT | F4_CR2_SWSTART)
+                        .unwrap();
+                } else {
+                    f1_software_start_with(adc, F1_CR2_CONT);
+                }
+            };
+            let run = |adc: &mut Adc| {
+                let mut out = Vec::new();
+                let mut eoc = false;
+                let mut irqs = 0;
+                while adc.converting {
+                    let pos = adc.f1_group_pos;
+                    for _ in 0..64 {
+                        irqs += usize::from(adc.tick().irq);
+                        if !adc.converting || adc.f1_group_pos != pos {
+                            break;
+                        }
+                    }
+                    out.push(adc.dr);
+                    eoc |= adc.sr & (1 << 1) != 0;
+                }
+                (out, eoc, irqs)
+            };
+            let expect = [
+                (vec![code(1500.0), code(2700.0)], false),
+                (vec![code(400.0), code(1500.0)], false),
+                (vec![code(2700.0)], true),
+                (vec![code(1500.0), code(2700.0)], false),
+            ];
+            for (k, (codes, eoc)) in expect.iter().enumerate() {
+                trigger(&mut adc);
+                let (got, got_eoc, irqs) = run(&mut adc);
+                assert_eq!(&got, codes, "{layout:?} trigger {k} subgroup");
+                assert_eq!(
+                    got_eoc, *eoc,
+                    "{layout:?} trigger {k}: EOC only at the group end"
+                );
+                assert_eq!(irqs, usize::from(*eoc), "{layout:?} trigger {k}: EOCIE");
+                assert!(
+                    !adc.converting,
+                    "{layout:?} trigger {k}: CONT does not chain"
+                );
+                adc.write_u32(0x00, 0).unwrap();
+            }
+            // The pointer now sits at SQ3. Rewriting SQR3 restarts at SQ1.
+            adc.write_u32(0x34, 2 | (11 << 5) | (2 << 10) | (5 << 15) | (11 << 20))
+                .unwrap();
+            trigger(&mut adc);
+            assert_eq!(
+                run(&mut adc).0,
+                vec![code(400.0), code(2700.0)],
+                "{layout:?} SQR restart"
+            );
+            // ...and so does a CR1 mode change (DISCNUM = 2: three channels).
+            adc.write_u32(0x04, cr1 + (1 << F1_CR1_DISCNUM_SHIFT))
+                .unwrap();
+            trigger(&mut adc);
+            assert_eq!(
+                run(&mut adc).0,
+                vec![code(400.0), code(2700.0), code(400.0)],
+                "{layout:?} CR1 restart"
+            );
+        }
     }
 
     /// `CR1.SCAN` with `L = 0`, or `L > 0` without `SCAN`, is the old
