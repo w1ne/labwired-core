@@ -2680,7 +2680,12 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 1b66043f16a4f5b4aa270889ae766e40e74e7fa94dfdf2995d27ed0ce91342e0
+    # 2026-11-08 (round 342): twai0 moved from `declarative` to the S3 TWAI
+    # behavioural model (esp32s3/twai.rs, irq 25), so the Arduino L8 self-RX
+    # cell runs. esp32c3_reset_values_match_silicon asserts no TWAI register;
+    # the live capture reads the clock-gated window as bus junk (0x0008fe10).
+    # This acknowledges model drift, NOT a recapture.
+    drift_ack_digest: a73359c16e2293056b103c1ea775a20f0b5a4ce2fb3bc2e99127f3a92669e3db
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2696,6 +2701,9 @@ boards:
       # this entry a change to the C3's real UART layout could not trip drift.
       - crates/core/src/peripherals/esp_uart.rs
       - crates/core/src/peripherals/esp_systimer.rs
+      # TWAI0 is `type: "esp32s3_twai"` since round 342: the S3 model reused
+      # (twai_struct.h identical on C3/S3). The drift gate must see it.
+      - crates/core/src/peripherals/esp32s3/twai.rs
       # RISC-V core: listed at the top of this models list (cpu/riscv.rs +
       # decoder/riscv.rs) so the digest sees the core, not only peripherals.
       - configs/chips/esp32c3.yaml
@@ -9229,6 +9237,7 @@ boards:
       - crates/core/src/peripherals/rp2040/adc.rs
       - crates/core/src/peripherals/rp2040/dma.rs
       - crates/core/src/peripherals/rp2040/i2c.rs
+      - crates/core/src/peripherals/rp2040/io_bank0.rs
       - crates/core/src/peripherals/rp2040/pwm.rs
       - crates/core/src/peripherals/rp2040/sio.rs
       - crates/core/src/peripherals/rp2040/spi.rs
@@ -9683,6 +9692,9 @@ boards:
       - crates/core/src/peripherals/esp32/i2c.rs
       - crates/core/src/peripherals/esp32/ledc.rs
       - crates/core/src/peripherals/esp32/mcpwm.rs
+      # 2026-11-08: the PCNT pulse counter (was a round-trip stub), inputs from
+      # the GPIO input matrix. No silicon capture on this board.
+      - crates/core/src/peripherals/esp32/pcnt.rs
       - crates/core/src/peripherals/esp32/sar_adc.rs
       - crates/core/src/peripherals/esp32/sdio_stub.rs
       - crates/core/src/peripherals/esp32/sha.rs

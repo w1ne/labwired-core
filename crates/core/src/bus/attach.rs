@@ -361,6 +361,33 @@ impl SystemBus {
         );
     }
 
+    /// Feed the classic PCNT's 32 input signals (`PCNT_SIGNALS`: SIG_CH0,
+    /// SIG_CH1, CTRL_CH0, CTRL_CH1 per unit) from the GPIO input matrix to its
+    /// timer inputs `4·unit + k`, so every level change a routed pad makes
+    /// reaches the counter at the cycle it happened
+    /// ([`Self::deliver_timer_input_edges`]). No-op without both blocks.
+    pub(crate) fn wire_esp32_pcnt_inputs(&mut self) {
+        use crate::peripherals::esp32::pcnt::PCNT_SIGNALS;
+        let (Some(pcnt_idx), Some(gpio_idx)) = (
+            self.find_peripheral_index_by_name("pcnt"),
+            self.find_peripheral_index_by_name("gpio"),
+        ) else {
+            return;
+        };
+        let taps: Vec<(u32, u8)> = PCNT_SIGNALS
+            .iter()
+            .flatten()
+            .enumerate()
+            .map(|(ti, &sig)| (sig, ti as u8))
+            .collect();
+        if self.peripherals[gpio_idx]
+            .dev
+            .bind_matrix_input_taps(&taps, pcnt_idx)
+        {
+            self.timer_capture_wired = true;
+        }
+    }
+
     /// The ESP32-C3 counterpart of [`Self::wire_esp32_ledc_pads`]: bind the six
     /// LEDC channel outputs to the C3 output matrix (`LEDC_LS_SIG_OUT0..5` =
     /// 45..50), so `ledcWrite`/`analogWrite` duty is a waveform on the pad
@@ -637,8 +664,7 @@ impl SystemBus {
     /// on SIO (the default) simply never makes the route live, and the pad keeps
     /// reading the GPIO latch, which is correct.
     pub(crate) fn wire_rp2040_spi_pads(&mut self) {
-        use crate::peripherals::rp2040::io_bank0::{Rp2040IoBank0, GPIO_FUNC_SPI};
-        use crate::peripherals::rp2040::sio::Rp2040Sio;
+        use crate::peripherals::rp2040::io_bank0::GPIO_FUNC_SPI;
         use crate::peripherals::rp2040::spi::{Rp2040Spi, LINE_CSN, LINE_MOSI, LINE_RX, LINE_SCK};
 
         /// `(pad, spi instance, line, function name)` — straight from the SVD.
@@ -678,34 +704,14 @@ impl SystemBus {
             (29, 1, LINE_CSN, "SPI1_CSn"),
         ];
 
-        let Some(functions) = self
-            .peripherals
-            .iter()
-            .find_map(|p| {
-                p.dev
-                    .as_any()
-                    .and_then(|a| a.downcast_ref::<Rp2040IoBank0>())
-            })
-            .map(Rp2040IoBank0::pad_functions)
-        else {
-            return;
-        };
         // ⚠️ Resolve SIO BEFORE touching an SPI: `pad_lines_arc` CREATES the pad
         // cell, and a controller that owns a cell no route reaches still buffers
         // every shifted word, arms a scheduler wakeup per burst, and narrates
         // into a wire nothing reads. Same ordering hazard as
         // `wire_rp2040_uart_pads`.
-        let Some(sio_idx) = self.find_peripheral_index_by_name("sio") else {
+        let Some((functions, sio_idx)) = self.rp2040_pad_route_target() else {
             return;
         };
-        if self.peripherals[sio_idx]
-            .dev
-            .as_any_mut()
-            .and_then(|a| a.downcast_mut::<Rp2040Sio>())
-            .is_none()
-        {
-            return;
-        }
 
         for (instance, name) in ["spi0", "spi1"].iter().enumerate() {
             let Some(idx) = self.find_peripheral_index_by_name(name) else {
@@ -722,11 +728,7 @@ impl SystemBus {
             else {
                 continue;
             };
-            let Some(sio) = self.peripherals[sio_idx]
-                .dev
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<Rp2040Sio>())
-            else {
+            let Some(sio) = self.rp2040_sio_mut(sio_idx) else {
                 return;
             };
             for &(pin, pad_instance, line, func) in PADS {
@@ -735,6 +737,135 @@ impl SystemBus {
                 }
                 sio.bind_pad_route(functions.clone(), &lines, pin, GPIO_FUNC_SPI, line, func);
             }
+        }
+    }
+
+    /// IO_BANK0's live pad-function table and the index of the RP2040 SIO that
+    /// resolves pad reads through it — both or nothing.
+    fn rp2040_pad_route_target(
+        &mut self,
+    ) -> Option<(
+        Arc<crate::peripherals::rp2040::io_bank0::PadFunctions>,
+        usize,
+    )> {
+        use crate::peripherals::rp2040::io_bank0::Rp2040IoBank0;
+        let functions = self
+            .peripherals
+            .iter()
+            .find_map(|p| {
+                p.dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<Rp2040IoBank0>())
+            })
+            .map(Rp2040IoBank0::pad_functions)?;
+        let sio_idx = self.find_peripheral_index_by_name("sio")?;
+        self.rp2040_sio_mut(sio_idx)?;
+        Some((functions, sio_idx))
+    }
+
+    fn rp2040_sio_mut(
+        &mut self,
+        sio_idx: usize,
+    ) -> Option<&mut crate::peripherals::rp2040::sio::Rp2040Sio> {
+        self.peripherals[sio_idx]
+            .dev
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<crate::peripherals::rp2040::sio::Rp2040Sio>())
+    }
+
+    /// Bind the RP2040/RP2350 PWM slices' A/B outputs to every pad IO_BANK0
+    /// can hand them to, so `analogWrite` on GP25 is a waveform on the pad, not
+    /// the SIO latch. No-op unless IO_BANK0, SIO and a `pwm` block are all on
+    /// the bus.
+    ///
+    /// The map is the fixed RP2040 one (datasheet Table 2-19, `FUNCSEL = 4`):
+    /// GPn carries slice `(n >> 1) & 7`, channel A on even pads and B on odd,
+    /// so GP16..GP29 repeat GP0..GP13. Which one is live at any moment is
+    /// FUNCSEL's.
+    pub(crate) fn wire_rp2040_pwm_pads(&mut self) {
+        use crate::peripherals::rp2040::io_bank0::{GPIO_FUNC_PWM, PAD_COUNT};
+        use crate::peripherals::rp2040::pwm::LINE_NAMES;
+
+        // SIO first: arming the wire makes the PWM publish every edge.
+        let Some((functions, sio_idx)) = self.rp2040_pad_route_target() else {
+            return;
+        };
+        let Some(pwm_idx) = self.find_peripheral_index_by_name("pwm") else {
+            return;
+        };
+        let Some(lines) = self.peripherals[pwm_idx].dev.timer_output_lines(false) else {
+            return;
+        };
+        // RP2040: 16 lines (8 slices); RP2350: 24 (12 slices).
+        let names = lines.names();
+        if names.len() < 16 || !LINE_NAMES.starts_with(names) {
+            return;
+        }
+        let Some(sio) = self.rp2040_sio_mut(sio_idx) else {
+            return;
+        };
+        for pin in 0..PAD_COUNT {
+            // GP0..31 -> slice (n >> 1) & 7; RP2350B GP32..47 -> slices 8..11
+            // (pico-sdk PWM_GPIO_SLICE_NUM).
+            let line = if pin < 32 {
+                usize::from(pin & 15)
+            } else {
+                16 + usize::from(pin & 7)
+            };
+            if line >= names.len() {
+                continue;
+            }
+            sio.bind_pad_route(
+                functions.clone(),
+                &lines,
+                pin,
+                GPIO_FUNC_PWM,
+                line,
+                LINE_NAMES[line],
+            );
+        }
+        self.peripherals[pwm_idx].dev.timer_output_lines(true);
+    }
+
+    /// Bind each PIO block's 32 pin outputs to the pads IO_BANK0 can hand it
+    /// (`FUNCSEL` 6/7/8 = PIO0/PIO1/PIO2, RP2040 datasheet Table 2-19, RP2350
+    /// Table 9.1.1), so a `ws2812` program's side-set is a waveform on its pad
+    /// and not the SIO latch. PIO output `n` reaches GPIOn (GPIOBASE 0, so an
+    /// RP2350B's GPIO32..47 stay unbound). No-op unless IO_BANK0, SIO and a
+    /// `pioN` block are all on the bus.
+    pub(crate) fn wire_rp2040_pio_pads(&mut self) {
+        use crate::peripherals::pio::LINE_NAMES;
+        use crate::peripherals::rp2040::io_bank0::{GPIO_FUNC_PIO0, PAD_COUNT};
+
+        let Some((functions, sio_idx)) = self.rp2040_pad_route_target() else {
+            return;
+        };
+        for (n, name) in ["pio0", "pio1", "pio2"].into_iter().enumerate() {
+            let Some(pio_idx) = self.find_peripheral_index_by_name(name) else {
+                continue;
+            };
+            let Some(lines) = self.peripherals[pio_idx].dev.timer_output_lines(false) else {
+                continue;
+            };
+            if lines.names() != LINE_NAMES {
+                continue;
+            }
+            let function = GPIO_FUNC_PIO0 + n as u32;
+            let Some(sio) = self.rp2040_sio_mut(sio_idx) else {
+                return;
+            };
+            for pin in 0..PAD_COUNT.min(32) {
+                let line = usize::from(pin);
+                sio.bind_pad_route(
+                    functions.clone(),
+                    &lines,
+                    pin,
+                    function,
+                    line,
+                    LINE_NAMES[line],
+                );
+            }
+            self.peripherals[pio_idx].dev.timer_output_lines(true);
         }
     }
 
@@ -2590,7 +2721,9 @@ impl SystemBus {
                 }
             }
         }
-        self.timer_capture_wired = wired;
+        // `|=`: an ESP32 PCNT wired by `wire_esp32_pcnt_inputs` uses the same
+        // delivery path and must not be switched off by an STM32-less re-wire.
+        self.timer_capture_wired |= wired;
     }
 
     /// Route each STM32F1 timer's channel OUTPUTS (OC1..OC4) onto the GPIO
