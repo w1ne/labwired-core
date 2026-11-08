@@ -378,6 +378,35 @@ boards:
     sketches_skip_reason:
       L8_can: "ATmega328P has no CAN controller"
 
+  - id: teensy41
+    chip: mimxrt1062-teensy41
+    system: systems/teensy41.yaml
+    # Stock Teensyduino (PJRC core) via PlatformIO `teensy`: the image boots
+    # from the FlexSPI NOR IVT, and `Serial` is USB CDC — the chip's scripted
+    # host enumerates USB1 and opens the port. Measured on teensy 6.0.0
+    # (framework-arduinoteensy 1.162.0, Teensyduino 1.62).
+    pio: { platform: teensy@6.0.0, board: teensy41, framework: arduino }
+    max_steps: 250000000
+    budget_reason: "Cortex-M7 600 MHz; stock startup busy-waits 300 ms on millis() (20 ms before usb_init, 280 ms after) = 180M cycles before setup()"
+    # max_steps above the CLI's 50M guard needs a wall-clock bound.
+    wall_time_ms: 240000
+    # LED_BUILTIN = 13 = GPIO_B0_03, driven through fast GPIO7 (GPR27).
+    led_watch: "gpio7:3"
+    led_min_edges: 2
+    # L6: analogWrite(13) is QuadTimer2 TIMER0 on GPIO_B0_03 (ALT1); the pad
+    # must carry the waveform.
+    pwm_watch: "gpio7:3"
+    family: imxrt
+    notes: "PJRC Teensy 4.1 (MIMXRT1062DVJ6B), Teensyduino; Serial = USB1 CDC"
+    sketches_skip: [L4_spi_sensor, L6_pwm, L8_can]
+    sketches_skip_reason:
+      L4_spi_sensor: "No LPSPI model yet: SPI = LPSPI4 (0x403A0000) is unmapped, so SPI.begin() faults"
+      L6_pwm: >-
+        No QuadTimer model yet: analogWrite(13) runs QTIMER2 TIMER0 on
+        GPIO_B0_03, a declared stub, so the pad stays idle (measured: 0
+        edges with pwm_watch gpio7:3)
+      L8_can: "No FlexCAN model yet (CAN1-3 unmapped)"
+
   # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────
   #
   # ⚠️ The ONLY board here that does not compile through PlatformIO. Silicon

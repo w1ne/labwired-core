@@ -1704,6 +1704,24 @@
         "lane": "none"
       }
     },
+    "mimxrt1062-teensy41": {
+      "in_boards": false,
+      "uart": {
+        "state": "none",
+        "gap": "Teensyduino `Serial` is USB1 CDC (imxrt_usb + scripted host, console on the bulk IN endpoint), not an LPUART; the Arduino matrix row teensy41 prints through it (stock Teensyduino L0/L1/L2/L5/L7), but that row needs PlatformIO and runs nightly. LPUART1-8 are imxrt_lpuart models with no firmware lane on this chip. No PR-gated lane yet.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No LPSPI model: LPSPI1-4 are unmapped on mimxrt1062-teensy41, so the matrix L4 cell is skipped.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "LPI2C1 is an imxrt_lpi2c model and the Arduino matrix row teensy41 reads an INA219 (config 0x399F, bus 0x19CA) through stock Teensyduino Wire (L3), but that row needs PlatformIO and runs nightly; no PR-gated firmware lane yet.",
+        "lane": "none"
+      }
+    },
     "same70q21b": {
       "in_boards": false,
       "uart": {

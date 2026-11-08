@@ -25,6 +25,7 @@
 //! learned is kept in [`UsbHostLog`]; nothing about the device is assumed.
 
 use super::{byte_of, Timebase};
+pub use crate::peripherals::usb_host::{HostStep, Setup, UsbHostLog};
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
 use std::collections::VecDeque;
@@ -45,6 +46,19 @@ const ENDPTFLUSH: u32 = 0x1B4;
 const ENDPTSTAT: u32 = 0x1B8;
 const ENDPTCOMPLETE: u32 = 0x1BC;
 const ENDPTCTRL0: u32 = 0x1C0;
+const GPTIMER0LD: u32 = 0x080;
+const GPTIMER0CTRL: u32 = 0x084;
+const GPTIMER1LD: u32 = 0x088;
+const GPTIMER1CTRL: u32 = 0x08C;
+
+/// GPTIMERnCTRL (RM §42.6.1.5): GPTRUN, GPTRST (self-clearing reload),
+/// GPTMODE (1 = repeat), GPTCNT[23:0] (read-only count in µs).
+const GPT_RUN: u32 = 1 << 31;
+const GPT_RST: u32 = 1 << 30;
+const GPT_MODE_REPEAT: u32 = 1 << 24;
+const GPT_CNT: u32 = 0x00FF_FFFF;
+/// USBSTS.TI0 (bit 24) / TI1 (bit 25): general-purpose timer expired.
+const STS_TI0: u32 = 1 << 24;
 
 const CMD_RS: u32 = 1 << 0;
 const CMD_RST: u32 = 1 << 1;
@@ -75,182 +89,6 @@ const MICROFRAME_US: u64 = 125;
 fn trace_usb() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("LABWIRED_TRACE_USB").is_some())
-}
-
-/// One standard/class control request.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Setup {
-    pub bm_request_type: u8,
-    pub b_request: u8,
-    pub w_value: u16,
-    pub w_index: u16,
-    pub w_length: u16,
-    /// Host -> device data stage (OUT); empty for IN or no-data requests.
-    pub data: Vec<u8>,
-}
-
-impl Setup {
-    pub fn get_descriptor(kind: u8, index: u8, lang: u16, len: u16) -> Self {
-        Self {
-            bm_request_type: 0x80,
-            b_request: 6,
-            w_value: ((kind as u16) << 8) | index as u16,
-            w_index: lang,
-            w_length: len,
-            data: Vec::new(),
-        }
-    }
-    fn bytes(&self) -> [u8; 8] {
-        let v = self.w_value.to_le_bytes();
-        let i = self.w_index.to_le_bytes();
-        let l = self.w_length.to_le_bytes();
-        [
-            self.bm_request_type,
-            self.b_request,
-            v[0],
-            v[1],
-            i[0],
-            i[1],
-            l[0],
-            l[1],
-        ]
-    }
-    fn dir_in(&self) -> bool {
-        self.bm_request_type & 0x80 != 0
-    }
-}
-
-/// A step of the host script.
-#[derive(Debug, Clone)]
-pub enum HostStep {
-    Control(Setup),
-    /// Interrupt/bulk OUT data to endpoint `ep` (1..7).
-    Out {
-        ep: u8,
-        data: Vec<u8>,
-    },
-    /// Read up to `max` bytes from IN endpoint `ep` (one transfer).
-    In {
-        ep: u8,
-        max: usize,
-    },
-}
-
-/// What the host observed.
-#[derive(Debug, Default, Clone)]
-pub struct UsbHostLog {
-    /// Bus resets the host issued.
-    pub resets: u32,
-    /// (setup, data returned / sent, completed)
-    pub control: Vec<(Setup, Vec<u8>, bool)>,
-    /// (endpoint, data) of completed IN transfers on non-control endpoints.
-    pub ins: Vec<(u8, Vec<u8>)>,
-    /// (endpoint, bytes accepted) of completed OUT transfers.
-    pub outs: Vec<(u8, usize)>,
-    /// Address assigned with SET_ADDRESS.
-    pub address: Option<u8>,
-    pub device_descriptor: Vec<u8>,
-    pub config_descriptor: Vec<u8>,
-    /// String descriptors decoded to text, by index.
-    pub strings: Vec<(u8, String)>,
-    /// Human-readable progress / failure notes.
-    pub notes: Vec<String>,
-}
-
-fn hex_bytes(bytes: &[u8]) -> String {
-    bytes
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-impl UsbHostLog {
-    /// The log as text lines, for the `host` peripheral log. Facts first
-    /// (device IDs, address, interfaces, strings), then every transfer in
-    /// order, then the notes:
-    ///
-    /// ```text
-    /// device 1fc9:0135 class 00/00/00 usb 0200 ep0 64
-    /// address 5
-    /// interface 0 alt 0 class 03/00/00 endpoints 2
-    /// endpoint 0x81 attr 0x03 max 64
-    /// string 2 "Product"
-    /// control 80 06 0100 0000 0012 ok 12 01 00 02 ...
-    /// in 1 01 02
-    /// out 2 64
-    /// note ...
-    /// ```
-    pub fn lines(&self) -> Vec<String> {
-        let mut lines = Vec::new();
-        if self.resets > 0 {
-            lines.push(format!("resets {}", self.resets));
-        }
-        let dd = &self.device_descriptor;
-        if dd.len() >= 18 {
-            lines.push(format!(
-                "device {:04x}:{:04x} class {:02x}/{:02x}/{:02x} usb {:04x} ep0 {}",
-                u16::from_le_bytes([dd[8], dd[9]]),
-                u16::from_le_bytes([dd[10], dd[11]]),
-                dd[4],
-                dd[5],
-                dd[6],
-                u16::from_le_bytes([dd[2], dd[3]]),
-                dd[7]
-            ));
-        }
-        if let Some(address) = self.address {
-            lines.push(format!("address {address}"));
-        }
-        let cfg = &self.config_descriptor;
-        let mut i = 0;
-        while i + 1 < cfg.len() && cfg[i] >= 2 {
-            let d = &cfg[i..(i + cfg[i] as usize).min(cfg.len())];
-            match d[1] {
-                4 if d.len() >= 9 => lines.push(format!(
-                    "interface {} alt {} class {:02x}/{:02x}/{:02x} endpoints {}",
-                    d[2], d[3], d[5], d[6], d[7], d[4]
-                )),
-                5 if d.len() >= 7 => lines.push(format!(
-                    "endpoint {:#04x} attr {:#04x} max {}",
-                    d[2],
-                    d[3],
-                    u16::from_le_bytes([d[4], d[5]])
-                )),
-                _ => {}
-            }
-            i += cfg[i] as usize;
-        }
-        for (index, text) in &self.strings {
-            lines.push(format!("string {index} {text:?}"));
-        }
-        for (setup, data, completed) in &self.control {
-            let status = if *completed { "ok" } else { "incomplete" };
-            let mut line = format!(
-                "control {:02x} {:02x} {:04x} {:04x} {:04x} {status}",
-                setup.bm_request_type,
-                setup.b_request,
-                setup.w_value,
-                setup.w_index,
-                setup.w_length
-            );
-            if !data.is_empty() {
-                line.push(' ');
-                line.push_str(&hex_bytes(data));
-            }
-            lines.push(line);
-        }
-        for (ep, data) in &self.ins {
-            lines.push(format!("in {ep} {}", hex_bytes(data)));
-        }
-        for (ep, n) in &self.outs {
-            lines.push(format!("out {ep} {n}"));
-        }
-        for note in &self.notes {
-            lines.push(format!("note {note}"));
-        }
-        lines
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -300,6 +138,11 @@ pub struct ImxrtUsb {
     vbus: bool,
     /// Pending host script and state.
     script: VecDeque<HostStep>,
+    /// Work queued for after enumeration (class requests, transfers). It
+    /// starts only once the enumeration script — which grows as descriptors
+    /// arrive (strings, SET_CONFIGURATION) — has run dry, so a class request
+    /// never reaches an unconfigured device.
+    after_enum: VecDeque<HostStep>,
     phase: Phase,
     /// Data gathered in the current control data stage.
     ctl_buf: Vec<u8>,
@@ -309,6 +152,12 @@ pub struct ImxrtUsb {
     last_uframe: u64,
     run_since: u64,
     host_enabled: bool,
+    /// GPTIMER0/1: absolute expiry cycle while running.
+    gpt_deadline: [Option<u64>; 2],
+    /// CDC console tap: once enumeration is done, every bulk IN endpoint the
+    /// device primes is drained (the host reads its serial port) and the
+    /// bytes go here. `None` = no host-side reader.
+    sink: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>,
 }
 
 impl Default for ImxrtUsb {
@@ -353,6 +202,7 @@ impl ImxrtUsb {
             usbsts: 0,
             vbus: true,
             script: VecDeque::new(),
+            after_enum: VecDeque::new(),
             phase: Phase::Detached,
             ctl_buf: Vec::new(),
             current: None,
@@ -360,9 +210,11 @@ impl ImxrtUsb {
             last_uframe: 0,
             run_since: 0,
             host_enabled: true,
+            gpt_deadline: [None; 2],
+            sink: None,
         };
         s.reset_regs();
-        s.script = Self::enumeration_script();
+        s.script = crate::peripherals::usb_host::enumeration_script();
         s
     }
 
@@ -376,29 +228,90 @@ impl ImxrtUsb {
         self.setupstat = 0;
         self.prime = 0;
         self.usbsts = 0;
+        self.gpt_deadline = [None; 2];
     }
 
-    /// The enumeration an OS performs. Configuration-dependent requests
-    /// (full config length, strings) are appended as answers arrive.
-    fn enumeration_script() -> VecDeque<HostStep> {
-        VecDeque::from(vec![
-            HostStep::Control(Setup::get_descriptor(1, 0, 0, 64)),
-            HostStep::Control(Setup {
-                bm_request_type: 0x00,
-                b_request: 5, // SET_ADDRESS
-                w_value: 5,
-                w_index: 0,
-                w_length: 0,
-                data: Vec::new(),
-            }),
-            HostStep::Control(Setup::get_descriptor(1, 0, 0, 18)),
-            HostStep::Control(Setup::get_descriptor(2, 0, 0, 9)),
-        ])
+    /// Route bytes the device sends on its bulk IN endpoints (CDC data) to a
+    /// console capture sink.
+    pub fn set_sink(&mut self, sink: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>) {
+        self.sink = sink;
+    }
+
+    /// Microseconds left on GPTIMERn (the GPTCNT field).
+    fn gpt_count(&self, n: usize) -> u32 {
+        match self.gpt_deadline[n] {
+            Some(t) => {
+                let left = t.saturating_sub(self.time.now());
+                (left / self.time.us(1).max(1)) as u32 & GPT_CNT
+            }
+            None => self.reg(GPTIMER0CTRL + 8 * n as u32) & GPT_CNT,
+        }
+    }
+
+    /// Fire expired GP timers: TIn in USBSTS, reload in repeat mode.
+    fn service_gpt(&mut self) {
+        let now = self.time.now();
+        for n in 0..2 {
+            let Some(t) = self.gpt_deadline[n] else {
+                continue;
+            };
+            if now < t {
+                continue;
+            }
+            self.usbsts |= STS_TI0 << n;
+            let ctrl_off = GPTIMER0CTRL + 8 * n as u32;
+            let ctrl = self.reg(ctrl_off);
+            if ctrl & GPT_MODE_REPEAT != 0 {
+                let period = self
+                    .time
+                    .us((self.reg(GPTIMER0LD + 8 * n as u32) & GPT_CNT) as u64 + 1);
+                // Catch up without drifting: next expiry on the period grid.
+                let missed = (now - t) / period.max(1);
+                self.gpt_deadline[n] = Some(t + (missed + 1) * period);
+            } else {
+                self.gpt_deadline[n] = None;
+                self.regs[(ctrl_off / 4) as usize] = ctrl & !GPT_RUN & !GPT_CNT;
+            }
+        }
+    }
+
+    fn gpt_next(&self) -> Option<u64> {
+        self.gpt_deadline.iter().flatten().copied().min()
+    }
+
+    /// A bulk IN endpoint is primed and a console reader is attached.
+    fn console_pending(&self) -> bool {
+        self.sink.is_some()
+            && matches!(self.phase, Phase::Done)
+            && (1..8u8).any(|ep| {
+                self.stat & Self::bit(ep, true) != 0
+                    && (self.reg(ENDPTCTRL0 + 4 * ep as u32) >> 18) & 3 == 2
+            })
+    }
+
+    /// The host side of the serial port: read every primed bulk IN dTD.
+    fn service_console(&mut self, bus: &mut dyn Bus) {
+        if !self.console_pending() {
+            return;
+        }
+        for ep in 1..8u8 {
+            let bulk_in = (self.reg(ENDPTCTRL0 + 4 * ep as u32) >> 18) & 3 == 2;
+            while bulk_in && self.stat & Self::bit(ep, true) != 0 {
+                let Some(data) = self.take_in(bus, ep, 0x7FFF) else {
+                    break;
+                };
+                if let Some(sink) = &self.sink {
+                    if let Ok(mut s) = sink.lock() {
+                        s.extend_from_slice(&data);
+                    }
+                }
+            }
+        }
     }
 
     /// Queue extra host work (class requests, HID reports) after enumeration.
     pub fn queue_host_steps(&mut self, steps: impl IntoIterator<Item = HostStep>) {
-        self.script.extend(steps);
+        self.after_enum.extend(steps);
         if self.phase == Phase::Done {
             self.phase = Phase::Idle {
                 until: self.time.now(),
@@ -484,6 +397,8 @@ impl ImxrtUsb {
             ENDPTFLUSH => 0,
             ENDPTSTAT => self.stat,
             ENDPTCOMPLETE => self.complete,
+            GPTIMER0CTRL => (self.reg(GPTIMER0CTRL) & !GPT_CNT) | self.gpt_count(0),
+            GPTIMER1CTRL => (self.reg(GPTIMER1CTRL) & !GPT_CNT) | self.gpt_count(1),
             ID | CAPLENGTH => self.reg(off & !3),
             o => self.reg(o),
         }
@@ -527,6 +442,21 @@ impl ImxrtUsb {
                 self.prime &= !(v & 0x00FF_00FF);
             }
             ENDPTSTAT | CAPLENGTH => {}
+            GPTIMER0LD | GPTIMER1LD => {
+                self.regs[(off / 4) as usize] = merged & GPT_CNT;
+            }
+            GPTIMER0CTRL | GPTIMER1CTRL => {
+                let n = ((off & !3) - GPTIMER0CTRL) as usize / 8;
+                let ld = self.reg(GPTIMER0LD + 8 * n as u32) & GPT_CNT;
+                if merged & GPT_RUN == 0 {
+                    self.gpt_deadline[n] = None;
+                } else if merged & GPT_RST != 0 || self.gpt_deadline[n].is_none() {
+                    // GPTRST reloads GPTLD; the counter reaches 0 after
+                    // GPTLD + 1 microseconds.
+                    self.gpt_deadline[n] = Some(now + self.time.us(ld as u64 + 1));
+                }
+                self.regs[((off & !3) / 4) as usize] = merged & (GPT_RUN | GPT_MODE_REPEAT);
+            }
             o if o < 0x080 || (0x100..0x140).contains(&o) => {}
             OTGSC => {
                 // Interrupt status bits 16..22 are w1c; the rest writable.
@@ -693,7 +623,11 @@ impl ImxrtUsb {
             }
             Phase::Idle { until } if now >= until => {
                 // SETUP stays owned by the host until the device consumed it.
-                let Some(step) = self.script.pop_front() else {
+                let Some(step) = self
+                    .script
+                    .pop_front()
+                    .or_else(|| self.after_enum.pop_front())
+                else {
                     self.phase = Phase::Done;
                     return;
                 };
@@ -705,6 +639,11 @@ impl ImxrtUsb {
                         self.phase = Phase::Ctl {
                             stage: CtlStage::Data,
                             started: now,
+                        };
+                    }
+                    HostStep::Wait { us } => {
+                        self.phase = Phase::Idle {
+                            until: now + self.time.us(*us),
                         };
                     }
                     _ => {
@@ -832,66 +771,7 @@ impl ImxrtUsb {
     /// Record a completed control transfer and schedule what it implies.
     fn finish_control(&mut self, setup: Setup) {
         let data = self.ctl_buf.clone();
-        if setup.b_request == 5 && setup.bm_request_type == 0 {
-            self.log.address = Some(setup.w_value as u8);
-        }
-        if setup.b_request == 6 && setup.bm_request_type == 0x80 {
-            let kind = (setup.w_value >> 8) as u8;
-            let index = setup.w_value as u8;
-            match kind {
-                1 => {
-                    self.log.device_descriptor = data.clone();
-                    if setup.w_length == 18 && data.len() >= 18 {
-                        // Strings the device announced, then nothing else yet.
-                        let mut strings: Vec<u8> = [data[14], data[15], data[16]]
-                            .into_iter()
-                            .filter(|&i| i != 0)
-                            .collect();
-                        strings.dedup();
-                        if !strings.is_empty() {
-                            self.script
-                                .push_back(HostStep::Control(Setup::get_descriptor(3, 0, 0, 255)));
-                            for i in strings {
-                                self.script
-                                    .push_back(HostStep::Control(Setup::get_descriptor(
-                                        3, i, 0x0409, 255,
-                                    )));
-                            }
-                        }
-                    }
-                }
-                2 => {
-                    if setup.w_length == 9 && data.len() >= 4 {
-                        let total = u16::from_le_bytes([data[2], data[3]]);
-                        self.script
-                            .push_front(HostStep::Control(Setup::get_descriptor(2, 0, 0, total)));
-                    } else {
-                        self.log.config_descriptor = data.clone();
-                        let cfg = data.get(5).copied().unwrap_or(1);
-                        self.script.push_back(HostStep::Control(Setup {
-                            bm_request_type: 0,
-                            b_request: 9, // SET_CONFIGURATION
-                            w_value: cfg as u16,
-                            w_index: 0,
-                            w_length: 0,
-                            data: Vec::new(),
-                        }));
-                    }
-                }
-                3 if index != 0 && data.len() >= 2 => {
-                    let units: Vec<u16> = data[2..]
-                        .chunks(2)
-                        .filter(|c| c.len() == 2)
-                        .map(|c| u16::from_le_bytes([c[0], c[1]]))
-                        .collect();
-                    self.log
-                        .strings
-                        .push((index, String::from_utf16_lossy(&units)));
-                }
-                _ => {}
-            }
-        }
-        self.log.control.push((setup, data, true));
+        crate::peripherals::usb_host::after_control(&mut self.log, &mut self.script, setup, data);
     }
 }
 
@@ -941,10 +821,16 @@ impl ImxrtUsb {
 
     fn tick_inner(&mut self, cycles: u64) -> PeripheralTickResult {
         self.time.advance(cycles);
+        self.service_gpt();
         let now = self.time.now();
         // While the host is active the controller's flags move from the bus
         // tick; re-check the interrupt line every microsecond.
-        let until = (self.running() && self.host_enabled).then(|| now + self.time.us(1));
+        let host = (self.running() && self.host_enabled && !matches!(self.phase, Phase::Done))
+            .then(|| now + self.time.us(1));
+        let until = match (host, self.gpt_next()) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
         super::wake_hint(now, until)
     }
 }
@@ -954,6 +840,7 @@ impl Peripheral for ImxrtUsb {
     /// asserted (so its deassert is reconciled); MMIO re-arms it.
     fn legacy_tick_active(&self) -> bool {
         (self.host_enabled && self.running() && !matches!(self.phase, Phase::Done))
+            || self.gpt_next().is_some()
             || self.time.level()
     }
     fn legacy_tick_dynamic(&self) -> bool {
@@ -994,11 +881,13 @@ impl Peripheral for ImxrtUsb {
     fn needs_bus_tick(&self) -> bool {
         self.prime != 0
             || (self.host_enabled && self.running() && !matches!(self.phase, Phase::Done))
+            || self.console_pending()
     }
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
         self.service_primes(bus);
         if self.host_enabled {
             self.host_step(bus);
+            self.service_console(bus);
         }
     }
     fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
@@ -1121,6 +1010,71 @@ impl Peripheral for ImxrtUsbPhy {
 mod tests {
     use super::*;
     use crate::CycleClock;
+
+    /// GPTIMER0 one-shot (Teensyduino's USB serial flush timer): GPTRST
+    /// loads GPTLD, TI0 rises GPTLD + 1 µs later, GPTRUN drops; GPTCNT reads
+    /// the remaining microseconds on the way.
+    #[test]
+    fn gp_timer_one_shot_sets_ti0_after_load_plus_one_us() {
+        let mut u = ImxrtUsb::new();
+        let c = CycleClock::default();
+        u.attach_cycle_clock(c.clone());
+        u.write_reg(GPTIMER0LD, 74, u32::MAX);
+        u.write_reg(GPTIMER0CTRL, GPT_RUN | GPT_RST, u32::MAX);
+        c.publish(u.time.us(30));
+        u.tick_elapsed(0);
+        assert_eq!(u.read_reg(GPTIMER0CTRL) & GPT_CNT, 45);
+        assert_eq!(u.read_reg(USBSTS) & STS_TI0, 0);
+        c.publish(u.time.us(75));
+        u.tick_elapsed(0);
+        assert_ne!(u.read_reg(USBSTS) & STS_TI0, 0);
+        assert_eq!(u.read_reg(GPTIMER0CTRL) & GPT_RUN, 0, "one-shot stops");
+        // TI0 interrupts only when USBINTR.TIE0 is set; it is write-1-to-clear.
+        assert!(!u.irq());
+        u.write_reg(USBINTR, STS_TI0, u32::MAX);
+        assert!(u.irq());
+        u.write_reg(USBSTS, STS_TI0, u32::MAX);
+        assert_eq!(u.read_reg(USBSTS) & STS_TI0, 0);
+    }
+
+    #[test]
+    fn gp_timer_repeat_mode_reloads_on_the_period_grid() {
+        let mut u = ImxrtUsb::new();
+        let c = CycleClock::default();
+        u.attach_cycle_clock(c.clone());
+        u.write_reg(GPTIMER1LD, 9, u32::MAX);
+        u.write_reg(GPTIMER1CTRL, GPT_RUN | GPT_RST | GPT_MODE_REPEAT, u32::MAX);
+        c.publish(u.time.us(25));
+        u.tick_elapsed(0);
+        assert_ne!(u.read_reg(USBSTS) & (STS_TI0 << 1), 0);
+        assert_eq!(u.gpt_deadline[1], Some(u.time.us(30)));
+        assert_ne!(u.read_reg(GPTIMER1CTRL) & GPT_RUN, 0);
+    }
+
+    /// Class requests queued from the chip YAML run after the enumeration
+    /// script, including the requests it appends as descriptors arrive.
+    #[test]
+    fn host_steps_wait_for_enumeration_to_finish() {
+        let mut u = ImxrtUsb::new();
+        let open = HostStep::Control(Setup {
+            bm_request_type: 0x21,
+            b_request: 0x22,
+            w_value: 3,
+            w_index: 0,
+            w_length: 0,
+            data: Vec::new(),
+        });
+        u.queue_host_steps([open]);
+        let is_open = |st: &HostStep| matches!(st, HostStep::Control(x) if x.b_request == 0x22);
+        assert!(!u.script.iter().any(is_open));
+        // SET_CONFIGURATION is appended to `script` later; it still runs first.
+        u.script.push_back(HostStep::Wait { us: 1 });
+        let order: Vec<HostStep> =
+            std::iter::from_fn(|| u.script.pop_front().or_else(|| u.after_enum.pop_front()))
+                .collect();
+        assert!(order.last().is_some_and(is_open));
+        assert!(matches!(order[order.len() - 2], HostStep::Wait { us: 1 }));
+    }
 
     #[test]
     fn controller_reset_self_clears() {

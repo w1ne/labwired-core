@@ -54,6 +54,12 @@ static bool samples_ok(int v0, int v1) {
   // avr.rs ADC mid-scale 512 (10-bit). Exact.
   return v0 == 512 && v1 == 512;
 
+#elif defined(ARDUINO_TEENSY41)
+  // imxrt_adc: the matrix system holds A0 (AD_B1_02 = ADC1_IN7) at 1650 mV.
+  // Teensyduino's analog_init runs ADC1 at 10 bits against 3.3 V, so the code
+  // is 512. Exact; a 0 here means no conversion or the wrong channel.
+  return v0 == 512 && v1 == 512;
+
 #elif defined(ARDUINO_ARCH_RP2040)
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).
   return v0 == 0 && v1 == 0;

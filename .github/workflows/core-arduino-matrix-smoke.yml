@@ -63,6 +63,7 @@ jobs:
           - stm32wb55
           - stm32wba52
           - atmega328p
+          - teensy41
 
     steps:
       - uses: actions/checkout@v4
@@ -129,6 +130,8 @@ jobs:
             rp2350)      platform=https://github.com/maxgerhardt/platform-raspberrypi.git#5d4561a05e3b212660ac6fdd3fbfb328d1988aa1 ;;
             esp32*)      platform=espressif32@7.0.1 ;;
             atmega328p)  platform=atmelavr@5.3.0 ;;
+            # The Teensy 4.1 row was measured on teensy 6.0.0 (Teensyduino 1.62).
+            teensy41)    platform=teensy@6.0.0 ;;
             *)
               echo "::error::no PlatformIO platform mapped for board '${{ matrix.board }}'"
               exit 1

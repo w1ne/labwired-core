@@ -618,6 +618,12 @@ impl SystemBus {
                 usb.set_sink(Some(sink.clone()));
                 continue;
             }
+            // i.MX RT USB1 device CDC (Teensy 4.x `Serial`): the console is
+            // the bulk IN endpoint once the scripted host has enumerated.
+            if let Some(usb) = any.downcast_mut::<crate::peripherals::imxrt::usb::ImxrtUsb>() {
+                usb.set_sink(Some(sink.clone()));
+                continue;
+            }
             // ESP32-C3/S3 USB-Serial-JTAG: native-USB boards compile Arduino
             // `Serial` to this block, not UART0. Same generic tap as RP2040 USB
             // CDC — the twin finds the console, firmware does not special-case

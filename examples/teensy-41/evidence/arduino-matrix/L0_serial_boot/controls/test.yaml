@@ -1,0 +1,13 @@
+schema_version: '1.0'
+inputs:
+  firmware: validation/arduino-matrix/out/teensy41/L0_serial_boot/firmware.elf
+  system: <control-tree>/validation/arduino-matrix/systems/teensy41.yaml
+limits:
+  max_steps: 250000000
+  max_uart_bytes: 65536
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000
+  stop_when_assertions_pass_min_steps: 0
+  wall_time_ms: 240000
+assertions:
+- uart_contains: LW_L0_OK
