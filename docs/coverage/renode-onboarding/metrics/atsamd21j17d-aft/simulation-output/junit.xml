@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.016511">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.214583">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="7d1a0fc19aaf4be111c4ee293a159342620b249c5ede01c8a2df4ad9cfc24286"/>
+    <property name="firmware_hash" value="ba4e3f386c3d53bade150d8ec1c454c896bed7035c23abdf5ed4f1b45ad31923"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.016511">
+  <testcase classname="labwired" name="run" time="0.214583">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: samd21 sercom0 up" time="0.000000">
   </testcase>
@@ -13,7 +13,7 @@
   </testcase>
   <testcase classname="labwired" name="assertion 3: gpio_edges: gpio_a:17 &gt;= 4 edges" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 4: memory_value: @0x20002000=0x5d21001f" time="0.000000">
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x20002000=0x5d21003f" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>

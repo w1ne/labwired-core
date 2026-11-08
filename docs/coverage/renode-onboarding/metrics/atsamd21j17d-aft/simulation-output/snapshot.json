@@ -3,12 +3,12 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1090536456,
-      2147483648,
-      2147483648,
-      9999,
       131072,
-      722,
+      2147483648,
+      2147483648,
+      2147483648,
+      603,
+      1090536456,
       1024,
       536887280,
       0,
@@ -16,11 +16,11 @@
       0,
       0,
       0,
-      536887136,
-      10549,
-      10548
+      536887120,
+      16947,
+      17410
     ],
-    "pc": 10548,
+    "pc": 17410,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 400000,
-  "cycles": 400000,
-  "instructions": 400000,
+  "steps_executed": 800000,
+  "cycles": 800000,
+  "instructions": 800000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 400000
+      "value": 800000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 400000
+      "value": 800000
     }
   },
   "limits": {
-    "max_steps": 400000,
+    "max_steps": 800000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "7d1a0fc19aaf4be111c4ee293a159342620b249c5ede01c8a2df4ad9cfc24286",
+  "firmware_hash": "ba4e3f386c3d53bade150d8ec1c454c896bed7035c23abdf5ed4f1b45ad31923",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-samd21-j17d-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/atsamd21j17d-aft.yaml",

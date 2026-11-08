@@ -1,0 +1,107 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# Measured execution profile for the Renode-imported ATSAMD21J17D-AFT target.
+# The importer truncated underscore-grouped addresses and substituted geometry
+# from a larger SAM D21 variant. This profile keeps the J17D memory geometry
+# and the register windows Renode's `atsamd21j17d-aft.repl` models that this
+# engine also models: PORT groups A/B, SERCOM0/1/3 as USARTs (Renode calls the
+# 0x42001400 instance `usart2`; on silicon it is SERCOM3) and TC4/TC6.
+# Renode's SAMD21_RTC (0x40001400) maps to `samd21_rtc` (MODE0/1/2). The EIC,
+# DMAC, USB, ADC/DAC/AC and the other TCs/TCCs stay unmapped. The TC counters
+# run from the CPU clock / prescaler and the RTC from a fixed 1.024 kHz
+# GCLK_RTC (GCLK routing is not modelled, see crates/core/src/peripherals/sam/
+# tc21.rs and rtc21.rs).
+name: atsamd21j17d-aft
+arch: arm
+core: cortex-m0+
+cpu_hz: 8000000
+flash:
+  base: 0
+  size: 128KB
+ram:
+  base: 0x20000000
+  size: 16KB
+peripherals:
+- id: pm
+  type: declarative
+  bus: sysbus
+  base_address: 0x40000400
+  size: 128B
+  config:
+    path: ../../peripherals/atsamd21g18a/pm.yaml
+- id: sysctrl
+  type: declarative
+  bus: sysbus
+  base_address: 0x40000800
+  size: 128B
+  config:
+    path: ../../peripherals/atsamd21g18a/sysctrl.yaml
+- id: gclk
+  type: declarative
+  bus: sysbus
+  base_address: 0x40000C00
+  size: 16B
+  config:
+    path: ../../peripherals/atsamd21g18a/gclk.yaml
+- id: nvmctrl
+  type: declarative
+  bus: sysbus
+  base_address: 0x41004000
+  size: 128B
+  config:
+    path: ../../peripherals/atsamd21g18a/nvmctrl.yaml
+- id: gpio_a
+  type: gpio
+  bus: sysbus
+  base_address: 0x41004400
+  size: 128B
+  config:
+    profile: sam
+    num_pins: 32
+- id: gpio_b
+  type: gpio
+  bus: sysbus
+  base_address: 0x41004480
+  size: 128B
+  config:
+    profile: sam
+    num_pins: 32
+- id: usart0
+  type: sam_sercom_usart
+  bus: sysbus
+  base_address: 0x42000800
+  size: 64B
+  irq: 9
+- id: sercom1
+  type: sam_sercom_usart
+  bus: sysbus
+  base_address: 0x42000C00
+  size: 64B
+  irq: 10
+- id: sercom3
+  type: sam_sercom_usart
+  bus: sysbus
+  base_address: 0x42001400
+  size: 64B
+  irq: 12
+- id: tc4
+  type: samd21_tc
+  base_address: 0x42003000
+  size: 32B
+  irq: 19
+- id: tc6
+  type: samd21_tc
+  base_address: 0x42003800
+  size: 32B
+  irq: 21
+- id: nvic
+  type: nvic
+  bus: sysbus
+  base_address: 0xE000E100
+  size: 1KB
+- id: systick
+  type: systick
+  bus: sysbus
+  base_address: 0xE000E010
+  size: 16B

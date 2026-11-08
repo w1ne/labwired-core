@@ -18,8 +18,10 @@
 //!   7. Print, then toggle the LED so a GPIO assertion has something to watch.
 //!   8. Exercise the rest of what Renode's `atsamd21j17d-aft.repl` models and
 //!      this chip profile claims: PORT group B, TC4 (16-bit MFRQ with the
-//!      IRQ 19 pend), TC6 (8-bit one-shot down-counter) and the SERCOM1 and
-//!      SERCOM3 USARTs. A summary word lands at 0x2000_2000.
+//!      IRQ 19 pend), TC6 (8-bit one-shot down-counter), the SERCOM1 and
+//!      SERCOM3 USARTs and the RTC (MODE2 calendar alarm with the IRQ 3
+//!      pend, MODE0 clear-on-match, MODE1 period). A summary word lands at
+//!      0x2000_2000.
 //!
 //! The register map is shared with the SAM D21 family and cross-checked against
 //! `ATSAMD21G18A.svd` (Microchip, Apache-2.0), vendored at
@@ -214,8 +216,9 @@ fn main() -> ! {
     pass |= u32::from(check_tc6()) << 2;
     pass |= u32::from(check_usart("sercom1", SERCOM1_BASE, PM_APBCMASK_SERCOM1)) << 3;
     pass |= u32::from(check_usart("sercom3", SERCOM3_BASE, PM_APBCMASK_SERCOM3)) << 4;
+    pass |= u32::from(check_rtc()) << 5;
     unsafe { write_volatile(SUMMARY, SUMMARY_TAG | pass) };
-    if pass == 0x1f {
+    if pass == 0x3f {
         puts("SAMD21 PASS\n");
     } else {
         puts("SAMD21 FAIL ");
@@ -233,7 +236,7 @@ fn main() -> ! {
 
 // ── Extended checks ─────────────────────────────────────────────────────────
 
-/// Summary word: `0x5D21_0000 | pass bits`, all five checks = `0x5D21_001F`.
+/// Summary word: `0x5D21_0000 | pass bits`, all six checks = `0x5D21_003F`.
 const SUMMARY: *mut u32 = 0x2000_2000 as *mut u32;
 const SUMMARY_TAG: u32 = 0x5D21_0000;
 
@@ -472,5 +475,172 @@ fn check_usart(name: &str, base: u32, apb_bit: u32) -> bool {
         put_bit(txc_cleared);
         puts("\n");
         readback == mode | CTRLA_ENABLE && dre && txc && txc_cleared
+    }
+}
+
+// ── RTC ─────────────────────────────────────────────────────────────────────
+
+const RTC_BASE: u32 = 0x4000_1400;
+const RTC_CTRL: *mut u16 = RTC_BASE as *mut u16;
+const RTC_READREQ: *mut u16 = (RTC_BASE + 0x02) as *mut u16;
+const RTC_INTENSET: *mut u8 = (RTC_BASE + 0x07) as *mut u8;
+const RTC_INTENCLR: *mut u8 = (RTC_BASE + 0x06) as *mut u8;
+const RTC_INTFLAG: *mut u8 = (RTC_BASE + 0x08) as *mut u8;
+const RTC_STATUS: *const u8 = (RTC_BASE + 0x0A) as *const u8;
+const RTC_COUNT32: *mut u32 = (RTC_BASE + 0x10) as *mut u32;
+const RTC_COUNT16: *mut u16 = (RTC_BASE + 0x10) as *mut u16;
+const RTC_PER: *mut u16 = (RTC_BASE + 0x14) as *mut u16;
+const RTC_COMP32: *mut u32 = (RTC_BASE + 0x18) as *mut u32;
+const RTC_COMP0_16: *mut u16 = (RTC_BASE + 0x18) as *mut u16;
+const RTC_COMP1_16: *mut u16 = (RTC_BASE + 0x1A) as *mut u16;
+const RTC_MASK: *mut u8 = (RTC_BASE + 0x1C) as *mut u8;
+const RTC_CTRL_SWRST: u16 = 1;
+const RTC_CTRL_ENABLE: u16 = 1 << 1;
+const RTC_MODE1: u16 = 1 << 2;
+const RTC_MODE2: u16 = 2 << 2;
+const RTC_CTRL_MATCHCLR: u16 = 1 << 7;
+/// `READREQ.RREQ` with `ADDR` = 0x10 (COUNT/CLOCK).
+const RTC_READREQ_RREQ: u16 = 1 << 15 | 0x10;
+const RTC_INT_CMP0: u8 = 1 << 0;
+const RTC_INT_CMP1: u8 = 1 << 1;
+const RTC_INT_OVF: u8 = 1 << 7;
+/// `MASK.SEL` 6 = YYMMDDHHMMSS.
+const RTC_MASK_YYMMDDHHMMSS: u8 = 6;
+/// `APBAMASK.RTC_` is bit 5; it resets to 1.
+const PM_APBAMASK: *mut u32 = (PM_BASE + 0x18) as *mut u32;
+const PM_APBAMASK_RTC: u32 = 1 << 5;
+/// `CLKCTRL.ID` 0x04 = RTC; `GENCTRL.SRC` 0x03 = OSCULP32K.
+const GCLK_ID_RTC: u16 = 0x04;
+const GCLK_SRC_OSCULP32K: u32 = 0x03;
+const GCLK_GENCTRL_DIVSEL: u32 = 1 << 20;
+const RTC_IRQ: u32 = 3;
+
+fn rtc_sync() {
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(RTC_STATUS) } & 0x80 == 0 {
+            return;
+        }
+    }
+}
+
+/// CTRL.SWRST: legal while enabled, and returns the RTC to MODE0, disabled.
+fn rtc_reset() {
+    unsafe { write_volatile(RTC_CTRL, RTC_CTRL_SWRST) };
+    rtc_sync();
+}
+
+/// Poll INTFLAG until any of `want` sets (bounded).
+fn rtc_wait(want: u8) -> u8 {
+    let mut flags = 0;
+    for _ in 0..200_000 {
+        flags = unsafe { read_volatile(RTC_INTFLAG) };
+        if flags & want != 0 {
+            break;
+        }
+    }
+    flags
+}
+
+/// `CLOCK`/`ALARM0` field packing (MODE2).
+const fn rtc_time(y: u32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> u32 {
+    s | mi << 6 | h << 12 | d << 17 | mo << 22 | y << 26
+}
+
+/// The RTCZero clock path — GCLK2 = OSCULP32K / 32 (1.024 kHz) routed to the
+/// RTC — then three modes. The prescaler is DIV1 rather than RTCZero's
+/// DIV1024 so a calendar "second" is ~1 ms and the smoke stays short.
+fn check_rtc() -> bool {
+    unsafe {
+        let m = read_volatile(PM_APBAMASK) | PM_APBAMASK_RTC;
+        write_volatile(PM_APBAMASK, m);
+        write_volatile(GCLK_GENDIV, 2 | 4 << 8); // GEN2, DIV = 2^(4+1)
+        gclk_sync();
+        write_volatile(
+            GCLK_GENCTRL,
+            2 | GCLK_SRC_OSCULP32K << 8 | GCLK_GENCTRL_GENEN | GCLK_GENCTRL_DIVSEL,
+        );
+        gclk_sync();
+        write_volatile(GCLK_CLKCTRL, GCLK_ID_RTC | 2 << 8 | GCLK_CLKCTRL_CLKEN);
+        gclk_sync();
+
+        // MODE2: 2024-02-28 23:59:58, alarm at 2024-02-29 00:00:01 (leap day).
+        rtc_reset();
+        write_volatile(RTC_CTRL, RTC_MODE2);
+        rtc_sync();
+        write_volatile(RTC_COUNT32, rtc_time(24, 2, 28, 23, 59, 58));
+        write_volatile(RTC_COMP32, rtc_time(24, 2, 29, 0, 0, 1));
+        write_volatile(RTC_MASK, RTC_MASK_YYMMDDHHMMSS);
+        write_volatile(RTC_INTENSET, RTC_INT_CMP0);
+        write_volatile(RTC_CTRL, RTC_MODE2 | RTC_CTRL_ENABLE);
+        rtc_sync();
+        let alarm = rtc_wait(RTC_INT_CMP0) & RTC_INT_CMP0 != 0;
+        write_volatile(RTC_READREQ, RTC_READREQ_RREQ);
+        rtc_sync();
+        let clock = read_volatile(RTC_COUNT32);
+        let pended = read_volatile(NVIC_ISPR) & (1 << RTC_IRQ) != 0;
+        write_volatile(RTC_INTFLAG, RTC_INT_CMP0);
+        write_volatile(RTC_INTENCLR, RTC_INT_CMP0);
+        write_volatile(NVIC_ICPR, 1 << RTC_IRQ);
+        let released = read_volatile(NVIC_ISPR) & (1 << RTC_IRQ) == 0;
+        let mode2 = alarm
+            && pended
+            && released
+            && clock & !0x3f == rtc_time(24, 2, 29, 0, 0, 0)
+            && clock & 0x3f >= 2;
+        puts("rtc mode2 alarm=");
+        put_bit(alarm);
+        puts(" nvic3=");
+        put_bit(pended);
+        puts(" released=");
+        put_bit(released);
+        puts(" day=");
+        put_hex8(((clock >> 17) & 0x1f) as u8);
+        puts(" hm=");
+        put_hex8(((clock >> 12) & 0x1f) as u8);
+        put_hex8(((clock >> 6) & 0x3f) as u8);
+        puts("\n");
+
+        // MODE0: COMP0 = 3 with MATCHCLR — CMP0 and OVF arrive together and
+        // the counter restarts from 0.
+        rtc_reset();
+        write_volatile(RTC_CTRL, RTC_CTRL_MATCHCLR);
+        rtc_sync();
+        write_volatile(RTC_COMP32, 3);
+        write_volatile(RTC_CTRL, RTC_CTRL_MATCHCLR | RTC_CTRL_ENABLE);
+        rtc_sync();
+        let f0 = rtc_wait(RTC_INT_OVF);
+        write_volatile(RTC_READREQ, RTC_READREQ_RREQ);
+        let c0 = read_volatile(RTC_COUNT32);
+        let mode0 = f0 & (RTC_INT_CMP0 | RTC_INT_OVF) == RTC_INT_CMP0 | RTC_INT_OVF && c0 <= 3;
+        puts("rtc mode0 flags=");
+        put_hex8(f0);
+        puts(" wrapped=");
+        put_bit(c0 <= 3);
+        puts("\n");
+
+        // MODE1: PER = 4, COMP0 = 1, COMP1 = 2 — both compares, then OVF.
+        rtc_reset();
+        write_volatile(RTC_CTRL, RTC_MODE1);
+        rtc_sync();
+        write_volatile(RTC_PER, 4);
+        write_volatile(RTC_COMP0_16, 1);
+        write_volatile(RTC_COMP1_16, 2);
+        let per = read_volatile(RTC_PER);
+        write_volatile(RTC_CTRL, RTC_MODE1 | RTC_CTRL_ENABLE);
+        rtc_sync();
+        let f1 = rtc_wait(RTC_INT_OVF);
+        write_volatile(RTC_READREQ, RTC_READREQ_RREQ);
+        let c1 = read_volatile(RTC_COUNT16);
+        let all = RTC_INT_CMP0 | RTC_INT_CMP1 | RTC_INT_OVF;
+        let mode1 = per == 4 && f1 & all == all && c1 <= 4;
+        puts("rtc mode1 per=");
+        put_hex8(per as u8);
+        puts(" flags=");
+        put_hex8(f1);
+        puts(" wrapped=");
+        put_bit(c1 <= 4);
+        puts("\n");
+        rtc_reset();
+        mode2 && mode0 && mode1
     }
 }

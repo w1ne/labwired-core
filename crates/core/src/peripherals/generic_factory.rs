@@ -197,6 +197,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "samd51_usb_device_banks",
     // SAM D21 TC3..TC7 (`build_samd21_tc`): fixed instance addresses.
     "samd21_tc",
+    // SAM D21 RTC (`build_samd21_rtc`): fixed address/IRQ, optional `gclk_hz`.
+    "samd21_rtc",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
     "sam_dmac",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
@@ -643,6 +645,27 @@ fn build_samd21_tc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Periphera
     Ok(Box::new(Samd21Tc::new(*instance)))
 }
 
+// SAM D21 RTC: fixed address and IRQ; `gclk_hz` declares GCLK_RTC.
+#[cold]
+#[inline(never)]
+fn build_samd21_rtc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::sam::rtc21::{Samd21Rtc, RTC21_BASE, RTC21_DEFAULT_GCLK_HZ, RTC21_IRQ};
+    if let Some(k) = p_cfg.config.keys().find(|k| k.as_str() != "gclk_hz") {
+        anyhow::bail!("samd21_rtc admits only `gclk_hz`, not `{k}`");
+    }
+    if p_cfg.base_address != RTC21_BASE || p_cfg.irq != Some(RTC21_IRQ) {
+        anyhow::bail!("SAMD21 RTC sits at {RTC21_BASE:#x} on IRQ {RTC21_IRQ}");
+    }
+    let hz = match p_cfg.config.get("gclk_hz") {
+        None => RTC21_DEFAULT_GCLK_HZ,
+        Some(v) => v
+            .as_u64()
+            .filter(|&hz| hz > 0)
+            .ok_or_else(|| anyhow::anyhow!("samd21_rtc `gclk_hz` must be a positive integer"))?,
+    };
+    Ok(Box::new(Samd21Rtc::new(hz)))
+}
+
 /// Build a generic peripheral model for `canonical_type`, or `None` if it is not
 /// a generic type (so `from_config` falls through to the descriptor loaders).
 pub fn try_build(
@@ -929,6 +952,7 @@ pub fn try_build(
             build_samd51_board_model(canonical_type, p_cfg)?
         }
         "samd21_tc" => build_samd21_tc(p_cfg)?,
+        "samd21_rtc" => build_samd21_rtc(p_cfg)?,
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
             let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());

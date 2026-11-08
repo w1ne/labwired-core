@@ -7,10 +7,11 @@
 # and the register windows Renode's `atsamd21j17d-aft.repl` models that this
 # engine also models: PORT groups A/B, SERCOM0/1/3 as USARTs (Renode calls the
 # 0x42001400 instance `usart2`; on silicon it is SERCOM3) and TC4/TC6.
-# Renode's SAMD21_RTC (0x40001400) has no model here and stays unmapped, as do
-# the EIC, DMAC, USB, ADC/DAC/AC and the other TCs/TCCs. The TC counters run
-# from the CPU clock / prescaler (GCLK routing is not modelled, see
-# crates/core/src/peripherals/sam/tc21.rs).
+# Renode's SAMD21_RTC (0x40001400) maps to `samd21_rtc` (MODE0/1/2). The EIC,
+# DMAC, USB, ADC/DAC/AC and the other TCs/TCCs stay unmapped. The TC counters
+# run from the CPU clock / prescaler and the RTC from a fixed 1.024 kHz
+# GCLK_RTC (GCLK routing is not modelled, see crates/core/src/peripherals/sam/
+# tc21.rs and rtc21.rs).
 name: atsamd21j17d-aft
 arch: arm
 core: cortex-m0+
@@ -66,6 +67,11 @@ peripherals:
   config:
     profile: sam
     num_pins: 32
+- id: rtc
+  type: samd21_rtc
+  base_address: 0x40001400
+  size: 32B
+  irq: 3
 - id: usart0
   type: sam_sercom_usart
   bus: sysbus

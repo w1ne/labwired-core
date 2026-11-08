@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="3" errors="0" time="0.048951">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="ba4e3f386c3d53bade150d8ec1c454c896bed7035c23abdf5ed4f1b45ad31923"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.048951">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: samd21 sercom0 up" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;samd21 sercom0 up&quot;, &quot;portb dir=00000400 out=00000400 clr=00000000&quot;, &quot;tc4 cc0=000003e7 adv=1 flags=11 nv…" time="0.000000">
+    <failure message="assertion failed">assertion 2: uart_ordered: [&quot;samd21 sercom0 up&quot;, &quot;portb dir=00000400 out=00000400 clr=00000000&quot;, &quot;tc4 cc0=000003e7 adv=1 flags=11 nv…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=800000
+stop_reason_details.observed.steps_executed=800000
+steps_executed=800000
+cycles=800000
+instructions=800000
+limits:
+  - max_steps=800000
+firmware_hash=ba4e3f386c3d53bade150d8ec1c454c896bed7035c23abdf5ed4f1b45ad31923
+firmware=examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-samd21-j17d-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/atsamd21j17d-aft-nortc.yaml
+script=examples/renode-onboarding/atsamd21j17d-aft-nortc-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;samd21 sercom0 up&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;samd21 sercom0 up&quot;, &quot;portb dir=00000400 out=00000400 clr=00000000&quot;, &quot;tc4 cc0=000003e7 adv=1 flags=11 nvic19=1 cleared=00 stop=1&quot;, &quot;tc6 reset_stop=1 oneshot_stop=1 ovf=1 count=20 retrigger=1 halted=1&quot;, &quot;sercom1 ctrla=40000006 dre=1 txc=1 w1c=1&quot;, &quot;sercom3 ctrla=40000006 dre=1 txc=1 w1c=1&quot;, &quot;rtc mode2 alarm=1 nvic3=1 released=1 day=1d hm=0000&quot;, &quot;rtc mode0 flags=81 wrapped=1&quot;, &quot;rtc mode1 per=04 flags=83 wrapped=1&quot;, &quot;SAMD21 PASS&quot;] }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio_a:17&quot;, min_edges: 4 } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536879104, expected_value: 1562443839, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpio_a:17 &gt;= 4 edges" time="0.000000">
+    <failure message="assertion failed">assertion 3: gpio_edges: gpio_a:17 &gt;= 4 edges
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=800000
+stop_reason_details.observed.steps_executed=800000
+steps_executed=800000
+cycles=800000
+instructions=800000
+limits:
+  - max_steps=800000
+firmware_hash=ba4e3f386c3d53bade150d8ec1c454c896bed7035c23abdf5ed4f1b45ad31923
+firmware=examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-samd21-j17d-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/atsamd21j17d-aft-nortc.yaml
+script=examples/renode-onboarding/atsamd21j17d-aft-nortc-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;samd21 sercom0 up&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;samd21 sercom0 up&quot;, &quot;portb dir=00000400 out=00000400 clr=00000000&quot;, &quot;tc4 cc0=000003e7 adv=1 flags=11 nvic19=1 cleared=00 stop=1&quot;, &quot;tc6 reset_stop=1 oneshot_stop=1 ovf=1 count=20 retrigger=1 halted=1&quot;, &quot;sercom1 ctrla=40000006 dre=1 txc=1 w1c=1&quot;, &quot;sercom3 ctrla=40000006 dre=1 txc=1 w1c=1&quot;, &quot;rtc mode2 alarm=1 nvic3=1 released=1 day=1d hm=0000&quot;, &quot;rtc mode0 flags=81 wrapped=1&quot;, &quot;rtc mode1 per=04 flags=83 wrapped=1&quot;, &quot;SAMD21 PASS&quot;] }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio_a:17&quot;, min_edges: 4 } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536879104, expected_value: 1562443839, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x20002000=0x5d21003f" time="0.000000">
+    <failure message="assertion failed">assertion 4: memory_value: @0x20002000=0x5d21003f
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=800000
+stop_reason_details.observed.steps_executed=800000
+steps_executed=800000
+cycles=800000
+instructions=800000
+limits:
+  - max_steps=800000
+firmware_hash=ba4e3f386c3d53bade150d8ec1c454c896bed7035c23abdf5ed4f1b45ad31923
+firmware=examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-samd21-j17d-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/atsamd21j17d-aft-nortc.yaml
+script=examples/renode-onboarding/atsamd21j17d-aft-nortc-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;samd21 sercom0 up&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;samd21 sercom0 up&quot;, &quot;portb dir=00000400 out=00000400 clr=00000000&quot;, &quot;tc4 cc0=000003e7 adv=1 flags=11 nvic19=1 cleared=00 stop=1&quot;, &quot;tc6 reset_stop=1 oneshot_stop=1 ovf=1 count=20 retrigger=1 halted=1&quot;, &quot;sercom1 ctrla=40000006 dre=1 txc=1 w1c=1&quot;, &quot;sercom3 ctrla=40000006 dre=1 txc=1 w1c=1&quot;, &quot;rtc mode2 alarm=1 nvic3=1 released=1 day=1d hm=0000&quot;, &quot;rtc mode0 flags=81 wrapped=1&quot;, &quot;rtc mode1 per=04 flags=83 wrapped=1&quot;, &quot;SAMD21 PASS&quot;] }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio_a:17&quot;, min_edges: 4 } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536879104, expected_value: 1562443839, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

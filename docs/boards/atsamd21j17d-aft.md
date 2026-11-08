@@ -4,10 +4,9 @@ The imported descriptor has the J17D memory map: 128 KiB flash at
 `0x00000000` and 16 KiB SRAM at `0x20000000`. Its execution profile contains
 the SAM D21 PM, SYSCTRL, GCLK and NVMCTRL register banks; modelled PORT groups
 A and B; SERCOM0, SERCOM1 and SERCOM3 as USARTs; TC4 and TC6 (`samd21_tc`);
-and the Cortex-M0+ NVIC and SysTick. That is the set of blocks Renode's
-`platforms/cpus/atsamd21j17d-aft.repl` models, minus its `SAMD21_RTC`, which
-has no model in this engine and stays unmapped (Renode's `usart2` at
-`0x42001400` is SERCOM3 on silicon and is named that here).
+the RTC (`samd21_rtc`); and the Cortex-M0+ NVIC and SysTick. That is the set
+of blocks Renode's `platforms/cpus/atsamd21j17d-aft.repl` models (Renode's
+`usart2` at `0x42001400` is SERCOM3 on silicon and is named that here).
 
 `samd21_tc` (`crates/core/src/peripherals/sam/tc21.rs`) models COUNT8/COUNT16,
 the NFRQ/MFRQ tops, up/down counting, ONESHOT, the RETRIGGER/STOP commands,
@@ -16,7 +15,28 @@ PM.APBCMASK bit. It counts CPU cycles / prescaler (GCLK routing is not
 modelled). COUNT32, capture, events, output inversion and pad waveforms are
 refused or not modelled.
 
+`samd21_rtc` (`crates/core/src/peripherals/sam/rtc21.rs`) models all three
+modes: MODE0 (32-bit COUNT, COMP0, MATCHCLR), MODE1 (16-bit COUNT, PER,
+COMP0/COMP1) and MODE2 (clock/calendar in 24- or 12-hour form, leap years,
+ALARM0 with MASK.SEL, MATCHCLR), with the datasheet's next-edge flag timing,
+the IRQ 3 line and the PM.APBAMASK.RTC gate. Renode's `SAMD21_RTC` covers
+MODE2 only. GCLK routing is not modelled: GCLK_RTC is a fixed 1.024 kHz
+(OSC32K / 32, the RTCZero/ASF setup) unless the chip declares `gclk_hz`.
+EVCTRL events and FREQCORR are refused.
+
 ## Smoke evidence
+
+On 2026-11-08 (Round 379) the firmware gained an RTC check and the run grew to
+800,000 instructions; all 5 assertions pass. The RTC lines in the ordered
+transcript cover MODE2 (2024-02-28 23:59:58 rolls into the leap day, ALARM0
+at 00:00:01 raises its flag, pends IRQ 3 and releases after W1C + ICPR),
+MODE0 (COMP0 = 3 with MATCHCLR: CMP0 and OVF together, counter restarted) and
+MODE1 (PER = 4: CMP0, CMP1, then OVF). The summary word is now `0x5D21003F`.
+With the `rtc` window removed, the same firmware bus-faults at `0x40001400`
+and passes 2/5
+(`attempt-history/atsamd21j17d-aft/2026-11-08-negative-control-no-rtc/`).
+
+Round 377 (TC model):
 
 On 2026-11-08 (Round 377), `firmware-samd21-j17d-smoke` ran against
 [`configs/systems/onboarding/atsamd21j17d-aft.yaml`](../../configs/systems/onboarding/atsamd21j17d-aft.yaml)

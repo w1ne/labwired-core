@@ -10,3 +10,7 @@
 - `2026-11-08-negative-control-no-tc/` — the final firmware against a copy of
   the chip with `tc4`/`tc6` removed (copy included): 2/5 assertions, a precise
   BusFault at `0x42003000` (TC4 CTRLA). The TC checks depend on the model.
+- `2026-11-08-negative-control-no-rtc/` — Round 379's firmware (RTC MODE2
+  alarm, MODE0 clear-on-match, MODE1 period) against a copy of the chip with
+  the new `rtc` window removed (copy included): 2/5 assertions, a precise
+  BusFault at `0x40001400` (RTC CTRL). The RTC checks depend on the model.

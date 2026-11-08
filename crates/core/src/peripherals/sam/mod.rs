@@ -23,6 +23,7 @@ pub mod eic;
 pub mod nvmctrl;
 pub mod oscctrl;
 pub mod pac;
+pub mod rtc21;
 pub mod sercom_i2cm;
 pub mod sercom_spi;
 pub mod sercom_usart;
