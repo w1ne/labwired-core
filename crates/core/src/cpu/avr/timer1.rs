@@ -21,15 +21,17 @@
 //! the high byte stores it in `TEMP`, and writing the low byte commits both.
 //! Reading the low byte latches the high byte into `TEMP` for the next read.
 //!
-//! The counter counts up to TOP and wraps for every WGM. TOP is 0xFFFF,
-//! 0x00FF/0x01FF/0x03FF, OCR1A or ICR1, depending on the mode. A counter
-//! already past a lowered TOP runs on to 0xFFFF first. OCF1A/OCF1B are set
-//! when the counter reaches OCR1A/OCR1B. TOV1 is set on the wrap to 0, or
-//! at MAX in CTC. ICF1, input capture and double-buffered OCR1x are not
+//! TOP is 0xFFFF, 0x00FF/0x01FF/0x03FF, OCR1A or ICR1, depending on the
+//! mode. The phase-correct modes (WGM 1-3, 8-11) count up to TOP and back
+//! down, so a cycle is `2 * TOP` clocks (Arduino's `analogWrite` on D9/D10:
+//! 16 MHz / 64 / 510 = 490 Hz). Every other mode counts up to TOP and wraps.
+//! A counter already past a lowered TOP runs on to 0xFFFF first. OCF1A/OCF1B
+//! are set when the counter reaches OCR1A/OCR1B (on either slope). TOV1 is
+//! set on the wrap to 0, at BOTTOM in phase-correct, or at MAX in CTC. ICF1, input capture and double-buffered OCR1x are not
 //! modelled. OC1A (PB1) and OC1B (PB2) follow `oc_pins.rs` in the PWM modes.
 
 use super::oc_pins::Waveform;
-use super::{t2_hits, Avr};
+use super::{dual_dist, dual_from_phase, dual_hits, dual_phase, t2_hits, Avr};
 
 /// `TIMER1_COMPA_vect` (`__vector_11`, byte 0x2C).
 pub const VEC_TIMER1_COMPA: u32 = 12;
@@ -59,6 +61,8 @@ pub struct Timer1 {
     pub icr: u16,
     pub timsk: u8,
     pub tifr: u8,
+    /// Counting down (phase-correct modes only).
+    pub down: bool,
     prescale_acc: u32,
     temp: std::cell::Cell<u8>,
 }
@@ -103,6 +107,11 @@ impl Timer1 {
         }
     }
 
+    /// Dual-slope counting, with a TOP it can turn around at.
+    fn dual_slope(&self) -> bool {
+        self.waveform() == Waveform::PhaseCorrect && self.top() > 0
+    }
+
     fn tov_target(&self) -> u64 {
         if self.is_ctc() {
             0xFFFF
@@ -139,10 +148,23 @@ impl Timer1 {
             tcnt = (tcnt + n) & 0xFFFF;
             ticks -= n;
         }
-        if ticks > 0 {
+        if ticks > 0 && self.dual_slope() {
+            let phase = dual_phase(tcnt, self.down, top);
+            for (bit, target) in [(OCF1A, ocra), (OCF1B, ocrb), (TOV1, 0)] {
+                if dual_hits(phase, ticks, top, target) {
+                    flags |= bit;
+                }
+            }
+            let (t, down) = dual_from_phase((phase + ticks) % (2 * top), top);
+            tcnt = t;
+            self.down = down;
+        } else if ticks > 0 {
             let period = top + 1;
             hits(tcnt, ticks, period);
             tcnt = (tcnt + ticks) % period;
+        }
+        if !self.dual_slope() {
+            self.down = false;
         }
         self.tcnt = tcnt as u16;
         self.tifr |= flags;
@@ -172,6 +194,19 @@ impl Timer1 {
             // Conservative: wake at the wrap and look again from there.
             return Some(0x1_0000 - tcnt);
         }
+        let mask = self.timsk & (OCF1A | OCF1B | TOV1);
+        if self.dual_slope() {
+            let phase = dual_phase(tcnt, self.down, top);
+            return [
+                (OCF1A, u64::from(self.ocra)),
+                (OCF1B, u64::from(self.ocrb)),
+                (TOV1, 0),
+            ]
+            .into_iter()
+            .filter(|(bit, _)| mask & bit != 0)
+            .filter_map(|(_, target)| dual_dist(phase, top, target))
+            .min();
+        }
         let period = top + 1;
         let dist = |target: u64| {
             (target < period).then(|| match (target + period - tcnt) % period {
@@ -179,7 +214,6 @@ impl Timer1 {
                 d => d,
             })
         };
-        let mask = self.timsk & (OCF1A | OCF1B | TOV1);
         [
             (OCF1A, u64::from(self.ocra)),
             (OCF1B, u64::from(self.ocrb)),
@@ -320,6 +354,49 @@ mod tests {
         t.tcnt = 500;
         t.apply_ticks(0x1_0000 - 500);
         assert_eq!((t.tcnt, t.tifr & TOV1), (0, TOV1), "CTC passes MAX once");
+    }
+
+    /// Arduino's `analogWrite` mode for D9/D10: WGM 1, 8-bit phase-correct.
+    /// Up to 0xFF and back down, OCF1A on both slopes, TOV1 at BOTTOM only.
+    #[test]
+    fn phase_correct_counts_up_and_back_down() {
+        let mut t = t1(1, 128);
+        t.apply_ticks(255);
+        assert_eq!((t.tcnt, t.down, t.tifr), (255, false, OCF1A));
+        t.tifr = 0;
+        t.apply_ticks(1);
+        assert_eq!((t.tcnt, t.down, t.tifr), (254, true, 0));
+        t.apply_ticks(126);
+        assert_eq!((t.tcnt, t.tifr), (128, OCF1A), "down-slope match");
+        t.tifr = 0;
+        t.apply_ticks(127);
+        assert_eq!((t.tcnt, t.down, t.tifr), (1, true, 0));
+        t.apply_ticks(1);
+        assert_eq!((t.tcnt, t.down, t.tifr), (0, false, TOV1 | OCF1B));
+        // 510 clocks per cycle: one more cycle lands back on BOTTOM.
+        t.tifr = 0;
+        t.apply_ticks(509);
+        assert_eq!((t.tcnt, t.tifr & TOV1), (1, 0));
+        t.apply_ticks(510 * 3 + 1);
+        assert_eq!((t.tcnt, t.tifr & TOV1), (0, TOV1));
+    }
+
+    #[test]
+    fn phase_correct_irq_distance_covers_both_slopes() {
+        let mut t = t1(1, 100);
+        t.timsk = OCF1A | TOV1;
+        assert_eq!(t.ticks_to_irq(), Some(100));
+        t.tcnt = 150;
+        assert_eq!(
+            t.ticks_to_irq(),
+            Some(105 + 155),
+            "up to TOP, then down to 100"
+        );
+        t.down = true;
+        t.tcnt = 50;
+        assert_eq!(t.ticks_to_irq(), Some(50), "BOTTOM first");
+        t.timsk = OCF1A;
+        assert_eq!(t.ticks_to_irq(), Some(150));
     }
 
     #[test]
