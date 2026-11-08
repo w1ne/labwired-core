@@ -225,6 +225,11 @@ boards:
     budget_reason: "L0 light; L3 Wire.begin i2c_computeTiming needs multi-M steps"
     led_watch: "gpiob:0"
     led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0 (AF1): LD1/PB0's PinMap_TIM entry is
+    # TIM1_CH2N, a complementary output the twin does not generate. Routed by
+    # the H5 timer AF table (pad_map: stm32h5), so L6 is proven on pad edges.
+    pwm_watch: "gpioa:0"
+    pwm_min_edges: 20
     family: stm32
     # L5: adc profile stm32h7; L8: FDCAN enter_loopback sequence
   - id: stm32l073
@@ -235,6 +240,10 @@ boards:
     budget_reason: "L0 light; L3 may run I2C timing compute under stm32duino"
     led_watch: "gpioa:5"
     led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0 (AF2), not LD2/PA5: PA5 is DAC_OUT2 and the
+    # twin models the DAC. Routed by the L0 timer AF table (pad_map: stm32l0).
+    pwm_watch: "gpioa:0"
+    pwm_min_edges: 20
     family: stm32
     sketches_skip: [L8_can]
     sketches_skip_reason:
@@ -248,6 +257,10 @@ boards:
     budget_reason: "L0~0.8M; L3 Wire.begin i2c_computeTiming ~7.3M steps measured"
     led_watch: "gpioa:5"
     led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0 (AF1), not LD2/PA5: PA5 is DAC1_OUT2 and the
+    # twin models the DAC. Routed by the L4 timer AF table (pad_map: stm32l4).
+    pwm_watch: "gpioa:0"
+    pwm_min_edges: 20
     family: stm32
     # L8_can: bxCAN1 loopback
 
@@ -259,6 +272,11 @@ boards:
     budget_reason: "L0 light; L3 Wire.begin i2c_computeTiming needs multi-M steps"
     led_watch: "gpiob:5"
     led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0 (AF1): LD2/PB5 has no timer channel, so
+    # analogWrite would fall back to digitalWrite. Routed by the WB timer AF
+    # table (pad_map: stm32wb).
+    pwm_watch: "gpioa:0"
+    pwm_min_edges: 20
     family: stm32
     sketches_skip: [L8_can]
     sketches_skip_reason:
@@ -273,6 +291,10 @@ boards:
     budget_reason: "L0 light; L3 Wire.begin i2c_computeTiming needs multi-M steps"
     led_watch: "gpiob:4"
     led_min_edges: 2
+    # L6 analogWrite(LED_BUILTIN): LD1/PB4 is TIM1_CH3 on AF1, routed by the
+    # WBA timer AF table (pad_map: stm32wba), so L6 is proven on pad edges.
+    pwm_watch: "gpiob:4"
+    pwm_min_edges: 20
     family: stm32
     sketches_skip: [L5_adc, L8_can]
     sketches_skip_reason:
@@ -287,6 +309,10 @@ boards:
     budget_reason: "Measured first run: L0~0.17M, L2~0.49M, L3 Wire.begin i2c_computeTiming 7.1M, L6 analogWrite 5.0M — 10M covers L0-L4/L6/L7 with ~40% headroom (was 20M H563/L476 sibling budget)"
     led_watch: "gpioc:7"
     led_min_edges: 2
+    # L6 analogWrite(LED_BUILTIN): LD1/PC7 is TIM3_CH2 on AF2, routed by the
+    # U5 timer AF table (pad_map: stm32u5), so L6 is proven on pad edges.
+    pwm_watch: "gpioc:7"
+    pwm_min_edges: 20
     family: stm32
     # L5: adc profile stm32u5; L8: FDCAN1 enter_loopback @ 0x4000A400 behind
     # RCC APB1ENR2.FDCAN1EN bit 9
@@ -302,6 +328,10 @@ boards:
     budget_reason: "Same U5 Arduino core boot as stm32u575 (L0~0.17M, L3 Wire.begin 7.1M); 10M budget carried over"
     led_watch: "gpioa:5"
     led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0 (AF1), not LD2/PA5 (DAC1_OUT2), see the L6
+    # sketch. Routed by the U5 timer AF table (pad_map: stm32u5).
+    pwm_watch: "gpioa:0"
+    pwm_min_edges: 20
     family: stm32
 
   - id: stm32g0b1re
