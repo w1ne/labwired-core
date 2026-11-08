@@ -206,6 +206,20 @@ pub enum AdcRegisterLayout {
     /// `ADRDY`. On the L4 map `CHSELR` lands on an unmodelled offset, so the
     /// channel firmware selected never reached the converter.
     Stm32V2,
+    /// The 12-bit "ADC4" block of the STM32WBA (RM0493 §21) — the same CHSELR
+    /// IP the STM32U5 carries as its ADC4. It runs on the [`Self::Stm32V2`]
+    /// engine but is not that map; every difference below is from the vendored
+    /// `tests/fixtures/real_world/stm32wba52.svd`:
+    /// * `CFGR1.RES` is two bits at [3:2] (12/10/8/6), not [4:3], and
+    ///   `SCANDIR` is bit 4, not bit 2.
+    /// * `CFGR1.CHSELRMOD` (bit 21) turns `CHSELR` into eight 4-bit `SQx`
+    ///   slots, `0b1111` ending the sequence.
+    /// * `CR.ADVREGEN` (bit 28) powers the internal LDO, reported by
+    ///   `ISR.LDORDY` (bit 12); `ADEN` only raises `ADRDY` once it is on.
+    /// * `CHSEL0..13` — 14 channels; `AWD1TR`/`AWD2TR`/`AWD3TR` at
+    ///   0x20/0x24/0x2C, `PWRR` @ 0x44, `AWD2CR`/`AWD3CR` @ 0xA0/0xA4 and
+    ///   `CALFACT` @ 0xC4 (the F0/L0's is at 0xB4).
+    Stm32Adc4,
 }
 
 impl FromStr for AdcRegisterLayout {
@@ -231,8 +245,9 @@ impl FromStr for AdcRegisterLayout {
             // capture was taken against it, and moving it is a capture, not
             // an alias change.
             "stm32f0" | "f0" | "stm32l0" | "l0" => Ok(Self::Stm32V2),
+            "stm32wba" | "wba" | "stm32_adc4" | "adc4" => Ok(Self::Stm32Adc4),
             _ => Err(format!(
-                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32h5, stm32h7, stm32u5, stm32f0, stm32l0",
+                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32h5, stm32h7, stm32u5, stm32f0, stm32l0, stm32wba",
                 value
             )),
         }
@@ -382,8 +397,70 @@ pub struct V2AdcRegs {
     smpr: u32,    // 0x14
     tr: u32,      // 0x20  reset 0x0FFF_0000 (HT = 0xFFF)
     chselr: u32,  // 0x28  channel bitmap, IN0..IN18
-    calfact: u32, // 0xB4
+    calfact: u32, // 0xB4 (0xC4 on ADC4)
     ccr: u32,     // 0x308
+    /// The registers only the WBA/U5 ADC4 has. `None` on the F0/L0, so their
+    /// snapshots keep the shape they were captured with.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    adc4: Option<Adc4Regs>,
+}
+
+/// ADC4-only registers (RM0493 §21; stm32wba52.svd).
+#[derive(Debug, Default, serde::Serialize)]
+pub struct Adc4Regs {
+    awd2tr: u32, // 0x24  reset 0x0FFF_0000
+    awd3tr: u32, // 0x2C  reset 0x0FFF_0000
+    pwrr: u32,   // 0x44  AUTOFF / DPD
+    awd2cr: u32, // 0xA0
+    awd3cr: u32, // 0xA4
+}
+
+/// ADC4 `CR.ADVREGEN` and the `ISR.LDORDY` it raises.
+const ADC4_CR_ADVREGEN: u32 = 1 << 28;
+const ADC4_ISR_LDORDY: u32 = 1 << 12;
+/// ADC4 `CFGR1.SCANDIR` — bit 4, where the F0/L0 put it at bit 2.
+const ADC4_CFGR1_SCANDIR: u32 = 1 << 4;
+/// ADC4 `CFGR1.CHSELRMOD`: `CHSELR` holds `SQ1..SQ8`, not a bitmap.
+const ADC4_CFGR1_CHSELRMOD: u32 = 1 << 21;
+/// `CHSEL0..CHSEL13`.
+const ADC4_CHANNELS: u32 = 14;
+/// `SQx` value that ends the sequence.
+const ADC4_SQ_END: u32 = 0xF;
+
+impl V2AdcRegs {
+    /// `CFGR1.RES` → bit width. Both maps encode 12/10/8/6; the F0/L0 put the
+    /// field at [4:3], ADC4 at [3:2].
+    fn resolution_bits(&self) -> u32 {
+        let shifted = if self.adc4.is_some() {
+            (self.cfgr1 >> 2) << 3
+        } else {
+            self.cfgr1
+        };
+        l4_resolution_bits(shifted)
+    }
+
+    /// The first channel of the programmed sequence, or `None` if it is empty.
+    fn first_channel(&self) -> Option<usize> {
+        let adc4 = self.adc4.is_some();
+        if adc4 && self.cfgr1 & ADC4_CFGR1_CHSELRMOD != 0 {
+            let sq1 = self.chselr & 0xF;
+            return (sq1 != ADC4_SQ_END && sq1 < ADC4_CHANNELS).then_some(sq1 as usize);
+        }
+        let (mask, scandir) = if adc4 {
+            ((1 << ADC4_CHANNELS) - 1, ADC4_CFGR1_SCANDIR)
+        } else {
+            (V2_CHSELR_MASK, V2_CFGR1_SCANDIR)
+        };
+        let selected = self.chselr & mask;
+        if selected == 0 {
+            return None;
+        }
+        Some(if self.cfgr1 & scandir != 0 {
+            31 - selected.leading_zeros()
+        } else {
+            selected.trailing_zeros()
+        } as usize)
+    }
 }
 
 /// `ADC_ISR` / `ADC_CR` / `ADC_CFGR1` bits of the v2 ADC (RM0367 §14.12).
@@ -528,6 +605,16 @@ impl Adc {
             }),
             AdcRegisterLayout::Stm32V2 => AdcRegs::Stm32V2(V2AdcRegs {
                 tr: 0x0FFF_0000,
+                ..Default::default()
+            }),
+            // All three ADC4 watchdog threshold registers reset to HT = 0xFFF.
+            AdcRegisterLayout::Stm32Adc4 => AdcRegs::Stm32V2(V2AdcRegs {
+                tr: 0x0FFF_0000,
+                adc4: Some(Adc4Regs {
+                    awd2tr: 0x0FFF_0000,
+                    awd3tr: 0x0FFF_0000,
+                    ..Default::default()
+                }),
                 ..Default::default()
             }),
         };
@@ -703,8 +790,10 @@ impl Adc {
     /// * U5 — 0..=19, the `PCSEL` bitmap's width.
     /// * V2 (F0/L0) — 0..=18, the `CHSELR` bitmap's width: IN0..IN15 on pads,
     ///   then the internal channels.
+    /// * ADC4 (WBA) — 0..=13, `CHSEL0..CHSEL13`.
     pub fn channel_count(&self) -> u8 {
         match &self.regs {
+            AdcRegs::Stm32V2(V2AdcRegs { adc4: Some(_), .. }) => ADC4_CHANNELS as u8,
             AdcRegs::Stm32F1(_)
             | AdcRegs::Stm32F4(_)
             | AdcRegs::Stm32L4(_)
@@ -1127,6 +1216,21 @@ impl Adc {
     }
 
     fn read_reg_v2(r: &V2AdcRegs, dr: u32, reg: u64) -> u32 {
+        if let Some(a) = &r.adc4 {
+            match reg {
+                0x24 => return a.awd2tr,
+                0x2C => return a.awd3tr,
+                0x44 => return a.pwrr,
+                0xA0 => return a.awd2cr,
+                0xA4 => return a.awd3cr,
+                0xC4 => return r.calfact,
+                0xB4 => {
+                    crate::census_reg!("adc:Adc", reg, "read");
+                    return 0;
+                }
+                _ => {}
+            }
+        }
         match reg {
             0x00 => r.isr,
             0x04 => r.ier,
@@ -1155,6 +1259,17 @@ impl Adc {
             return;
         };
         r.cr = value & !(V2_CR_ADCAL | V2_CR_ADDIS | V2_CR_ADSTP);
+        // ADC4: the LDO must be on before ADEN can bring the converter up.
+        let powered = if r.adc4.is_some() {
+            if r.cr & ADC4_CR_ADVREGEN != 0 {
+                r.isr |= ADC4_ISR_LDORDY;
+                true
+            } else {
+                false
+            }
+        } else {
+            true
+        };
         if value & V2_CR_ADCAL != 0 {
             r.isr |= V2_ISR_EOCAL;
         }
@@ -1164,7 +1279,7 @@ impl Adc {
         if value & V2_CR_ADDIS != 0 {
             r.cr &= !(V2_CR_ADEN | V2_CR_ADSTART);
             r.isr &= !V2_ISR_ADRDY;
-        } else if r.cr & V2_CR_ADEN != 0 {
+        } else if r.cr & V2_CR_ADEN != 0 && powered {
             r.isr |= V2_ISR_ADRDY;
         }
     }
@@ -1183,23 +1298,22 @@ impl Adc {
             return;
         };
         let ready = r.cr & V2_CR_ADEN != 0 && r.isr & V2_ISR_ADRDY != 0;
-        let selected = r.chselr & V2_CHSELR_MASK;
-        if !ready || r.cr & V2_CR_ADSTART == 0 || selected == 0 {
+        if !ready || r.cr & V2_CR_ADSTART == 0 {
             return;
         }
+        let Some(ch) = r.first_channel() else {
+            return;
+        };
         let (cfgr1, ccr) = (r.cfgr1, r.ccr);
-        let ch = if cfgr1 & V2_CFGR1_SCANDIR != 0 {
-            31 - selected.leading_zeros()
-        } else {
-            selected.trailing_zeros()
-        } as usize;
-        let bits = l4_resolution_bits(cfgr1);
+        let bits = r.resolution_bits();
         let vrefint_mv = if ccr & V2_CCR_VREFEN != 0 {
             V2_VREFINT_MV
         } else {
             0.0
         };
-        let internal_mv = (ch == V2_VREFINT_CHANNEL).then_some(vrefint_mv);
+        // ADC4's internal channels (V_REFINT, temperature sensor, V_CORE) are
+        // not modelled; an undriven ADC4 channel converts the fixed source.
+        let internal_mv = (r.adc4.is_none() && ch == V2_VREFINT_CHANNEL).then_some(vrefint_mv);
         let input_mv = self.channel_inputs_mv[ch].map(f64::from).or(internal_mv);
         let code = match input_mv {
             Some(mv) => scaled_input_code(Self::code_for_mv(mv, self.reference_millivolts), bits),
@@ -1226,6 +1340,31 @@ impl Adc {
             self.maybe_start_v2_conversion();
             return;
         }
+        if let AdcRegs::Stm32V2(r) = &mut self.regs {
+            let sequence_mode = r.cfgr1 & ADC4_CFGR1_CHSELRMOD != 0;
+            if let Some(a) = &mut r.adc4 {
+                match reg {
+                    0x24 => a.awd2tr = value,
+                    0x2C => a.awd3tr = value,
+                    0x44 => a.pwrr = value & 0x3,
+                    0xA0 => a.awd2cr = value,
+                    0xA4 => a.awd3cr = value,
+                    0xC4 => r.calfact = value,
+                    // In sequence mode every bit of CHSELR is an SQx nibble.
+                    0x28 if sequence_mode => r.chselr = value,
+                    0x28 => r.chselr = value & ((1 << ADC4_CHANNELS) - 1),
+                    0xB4 => crate::census_reg!("adc:Adc", reg, "write"),
+                    _ => {
+                        self.write_reg_v2_common(reg, value);
+                    }
+                }
+                return;
+            }
+        }
+        self.write_reg_v2_common(reg, value);
+    }
+
+    fn write_reg_v2_common(&mut self, reg: u64, value: u32) {
         if let AdcRegs::Stm32V2(r) = &mut self.regs {
             match reg {
                 0x00 => r.isr &= !value, // rc_w1
@@ -2403,6 +2542,96 @@ mod tests {
         adc.write_u32(0x308, 1 << 22).unwrap();
         adc.write_u32(0x08, 1 | (1 << 2)).unwrap();
         assert_eq!(adc.read_u32(0x40).unwrap(), 1224 * 4095 / 3300, "1.224 V");
+    }
+
+    // ── STM32WBA ADC4 (RM0493 §21; vendored tests/fixtures/real_world/stm32wba52.svd) ──
+    #[test]
+    fn adc4_layout_needs_the_ldo_and_reads_res_scandir_and_chselrmod_at_its_own_bits() {
+        for name in ["stm32wba", "wba", "stm32_adc4", "adc4"] {
+            assert_eq!(
+                name.parse::<AdcRegisterLayout>().unwrap(),
+                AdcRegisterLayout::Stm32Adc4,
+                "{name}"
+            );
+        }
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32Adc4);
+        assert_eq!(adc.channel_count(), 14, "CHSEL0..CHSEL13");
+        for awdtr in [0x20, 0x24, 0x2C] {
+            assert_eq!(
+                adc.read_u32(awdtr).unwrap(),
+                0x0FFF_0000,
+                "AWDxTR @{awdtr:#x}"
+            );
+        }
+        adc.write_u32(0xC4, 0x5A).unwrap();
+        assert_eq!(adc.read_u32(0xC4).unwrap(), 0x5A, "CALFACT @0xC4");
+        assert_eq!(adc.read_u32(0xB4).unwrap(), 0, "no F0/L0 CALFACT @0xB4");
+        adc.write_u32(0x44, 0b11).unwrap();
+        assert_eq!(adc.read_u32(0x44).unwrap(), 0b11, "PWRR AUTOFF/DPD");
+
+        // ADEN without the LDO does not bring the converter up.
+        adc.write_u32(0x08, 1).unwrap();
+        assert_eq!(
+            adc.read_u32(0x00).unwrap() & 1,
+            0,
+            "no ADRDY without ADVREGEN"
+        );
+        adc.write_u32(0x08, 0).unwrap();
+        adc.write_u32(0x08, 1 << 28).unwrap();
+        assert_ne!(
+            adc.read_u32(0x00).unwrap() & (1 << 12),
+            0,
+            "ADVREGEN raises LDORDY"
+        );
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap();
+        assert_ne!(adc.read_u32(0x00).unwrap() & 1, 0, "ADEN raises ADRDY");
+
+        adc.set_channel_input(3, 1650);
+        adc.set_channel_input(9, 2900);
+        let in3 = adc.channel_input_count(3) as u32;
+        let in9 = adc.channel_input_count(9) as u32;
+        let start = |adc: &mut Adc| adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        adc.write_u32(0x28, (1 << 3) | (1 << 9)).unwrap();
+        // RES[3:2]: the F0/L0's RES[4:3] = 0b01 (bit 3) is ADC4 RES = 0b10.
+        for (cfgr1, expected) in [
+            (0, in3),
+            (1 << 2, in3 >> 2),          // 10-bit
+            (1 << 3, in3 >> 4),          // 8-bit, not 10
+            (3 << 2, in3 >> 6),          // 6-bit
+            (1 << 4, in9),               // SCANDIR (bit 4) starts at the top
+            (1 << 2 | 1 << 4, in9 >> 2), // backward at 10-bit
+        ] {
+            adc.write_u32(0x0C, cfgr1).unwrap();
+            start(&mut adc);
+            assert_eq!(adc.read_u32(0x40).unwrap(), expected, "CFGR1 {cfgr1:#x}");
+        }
+        // CFGR1 bit 2 is RES here, not the F0/L0 SCANDIR: still IN3 first.
+        adc.write_u32(0x0C, 1 << 2).unwrap();
+        start(&mut adc);
+        assert_eq!(adc.read_u32(0x40).unwrap(), in3 >> 2);
+
+        // CHSELRMOD: CHSELR is SQ1..SQ8; SQ1 converts, 0xF ends the sequence.
+        adc.write_u32(0x0C, 1 << 21).unwrap();
+        adc.write_u32(0x28, 0xFFFF_FF39).unwrap(); // SQ1 = 9, SQ2 = 3
+        assert_eq!(adc.read_u32(0x28).unwrap(), 0xFFFF_FF39, "SQx nibbles kept");
+        start(&mut adc);
+        assert_eq!(adc.read_u32(0x40).unwrap(), in9, "SQ1 = IN9");
+        adc.write_u32(0x00, 0xC).unwrap(); // clear EOC/EOS
+        adc.write_u32(0x28, 0xFFFF_FFFF).unwrap(); // SQ1 = end
+        start(&mut adc);
+        assert_eq!(
+            adc.read_u32(0x00).unwrap() & 0x4,
+            0,
+            "empty sequence: no EOC"
+        );
+
+        // An undriven pad converts the fixed source; there is no IN17 V_REFINT.
+        adc.write_u32(0x0C, 0).unwrap();
+        adc.write_u32(0x28, 1 << 4).unwrap();
+        start(&mut adc);
+        assert_eq!(adc.read_u32(0x40).unwrap(), l4_adc_code(12));
+        adc.write_u32(0x28, 1 << 17).unwrap();
+        assert_eq!(adc.read_u32(0x28).unwrap(), 0, "CHSEL17 does not exist");
     }
 }
 

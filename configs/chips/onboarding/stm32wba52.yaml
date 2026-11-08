@@ -42,6 +42,8 @@ peripherals:
   type: stm32wba_adc
   bus: sysbus
   base_address: 1174540288
+  config:
+    profile: stm32wba
 - id: gpioPortA
   type: stm32_gpioport
   bus: sysbus

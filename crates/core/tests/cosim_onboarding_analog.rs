@@ -36,6 +36,7 @@ const CONVERTED: &[&str] = &[
     "nrf52840",
     "nucleo_f767zi",
     "nucleo_h753zi",
+    "nucleo_wba52cg",
     "ramn",
     "stm32f042",
     "stm32f072",
@@ -49,15 +50,14 @@ const CONVERTED: &[&str] = &[
     "stm32h753",
     "stm32l071",
     "stm32l072",
+    "stm32wba52",
 ];
 
 /// Onboarding profiles that declare an ADC whose IP LabWired does not yet
-/// convert from a routed input. The WBA ADC4 is a CHSELR block, but its
-/// `CFGR1.RES` sits at bits 3:2, not the F0/L0's 4:3, and it needs
-/// `PWRR`/`ADVREGEN` (RM0493 §21), so it is not the `stm32f0`/`stm32l0`
-/// layout. Listed so that closing the gap has to move the profile into
-/// [`CONVERTED`].
-const DECLARED_NOT_CONVERTIBLE: &[&str] = &["nucleo_wba52cg", "stm32wba52"];
+/// convert from a routed input. Empty: the last two, the STM32WBA52 ADC4
+/// boards, now convert on the `stm32wba` profile. A descriptor that lands
+/// with an unconvertible ADC fails here until it is converted or listed.
+const DECLARED_NOT_CONVERTIBLE: &[&str] = &[];
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -114,6 +114,9 @@ enum Family {
     /// Shared `adc` model, F0/L0 v2 map with the CHSELR bitmap (RM0091 §13,
     /// RM0367 §14).
     Stm32V2,
+    /// Shared `adc` model, STM32WBA ADC4 (RM0493 §21): the CHSELR block with
+    /// an LDO (`CR.ADVREGEN` → `ISR.LDORDY`) and `CFGR1.RES` at [3:2].
+    Stm32Adc4,
     /// i.MX RT 12-bit SAR ADC (IMXRT1060RM §66).
     Imxrt,
     /// nRF52840 SAADC with EasyDMA (nRF52840 PS §6.23).
@@ -145,6 +148,7 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
                 Some("stm32h7") => Family::Stm32H7,
                 Some("stm32l4") => Family::Stm32L4,
                 Some("stm32f0" | "stm32l0") => Family::Stm32V2,
+                Some("stm32wba") => Family::Stm32Adc4,
                 other => {
                     return Err(format!(
                         "{}:{} ({kind}, profile {other:?})",
@@ -167,9 +171,11 @@ impl Converter {
         let mv = millivolts(volts);
         match self.family {
             // 12-bit, mV * 4095 / VREF (3.3 V) truncated.
-            Family::Stm32F4 | Family::Stm32H7 | Family::Stm32L4 | Family::Stm32V2 => {
-                (mv * 4095 / 3300).min(4095)
-            }
+            Family::Stm32F4
+            | Family::Stm32H7
+            | Family::Stm32L4
+            | Family::Stm32V2
+            | Family::Stm32Adc4 => (mv * 4095 / 3300).min(4095),
             // 12-bit, rounded to nearest.
             Family::Imxrt => (mv.min(3300) * 4095 + 1650) / 3300,
             // Gain 1/4 against VDD/4: full scale is VDD, 12-bit, 2^12 / VDD.
@@ -247,6 +253,52 @@ impl Converter {
                     self.id
                 );
                 // CFGR1 RES[4:3] = 00 selects 12 bits, right-aligned.
+                bus.write_u32(self.base + 0x0C, 0).expect("select 12-bit");
+            }
+            Family::Stm32Adc4 => {
+                const ADEN: u32 = 1;
+                const ADVREGEN: u32 = 1 << 28;
+                const ADCAL: u32 = 1 << 31;
+                const LDORDY: u32 = 1 << 12;
+                const EOCAL: u32 = 1 << 11;
+                let cr = self.base + 0x08;
+                assert_eq!(
+                    bus.read_u32(cr).unwrap(),
+                    0,
+                    "{}: ADC4 CR resets to 0",
+                    self.id
+                );
+                bus.write_u32(cr, ADEN).expect("ADEN before the LDO");
+                assert_eq!(
+                    bus.read_u32(self.base).unwrap() & 1,
+                    0,
+                    "{}: ADC4 stays not-ready until ADVREGEN",
+                    self.id
+                );
+                bus.write_u32(cr, ADVREGEN).expect("enable ADC4 LDO");
+                assert_ne!(
+                    bus.read_u32(self.base).unwrap() & LDORDY,
+                    0,
+                    "{}: ADVREGEN raises LDORDY",
+                    self.id
+                );
+                bus.write_u32(cr, ADVREGEN | ADCAL).expect("calibrate ADC4");
+                assert_ne!(
+                    bus.read_u32(self.base).unwrap() & EOCAL,
+                    0,
+                    "{}: calibration raises EOCAL",
+                    self.id
+                );
+                bus.write_u32(self.base, EOCAL | LDORDY)
+                    .expect("clear EOCAL/LDORDY");
+                bus.write_u32(cr, ADVREGEN | ADEN).expect("enable ADC4");
+                assert_ne!(
+                    bus.read_u32(self.base).unwrap() & 1,
+                    0,
+                    "{}: ADEN raises ADRDY",
+                    self.id
+                );
+                // CFGR1 RES[3:2] = 00 selects 12 bits, right-aligned.
                 bus.write_u32(self.base + 0x0C, 0).expect("select 12-bit");
             }
             Family::Imxrt => {
@@ -338,12 +390,18 @@ impl Converter {
                 bus.write_u32(self.base, EOC_EOS).expect("clear EOC/EOS");
                 code
             }
-            Family::Stm32V2 => {
+            Family::Stm32V2 | Family::Stm32Adc4 => {
                 const EOC_EOS: u32 = (1 << 2) | (1 << 3);
+                // ADC4 keeps ADVREGEN on while it converts.
+                let ldo = if matches!(self.family, Family::Stm32Adc4) {
+                    1 << 28
+                } else {
+                    0
+                };
                 bus.write_u32(self.base + 0x28, 1 << channel)
                     .expect("select CHSELR channel");
                 bus.write_u32(self.base, EOC_EOS).expect("clear EOC/EOS");
-                bus.write_u32(self.base + 0x08, 1 | (1 << 2))
+                bus.write_u32(self.base + 0x08, ldo | 1 | (1 << 2))
                     .expect("ADSTART");
                 assert_eq!(
                     bus.read_u32(self.base).unwrap() & EOC_EOS,
@@ -384,7 +442,11 @@ impl Converter {
     fn held_count(&self, bus: &mut SystemBus, channel: u8) -> Option<u16> {
         if !matches!(
             self.family,
-            Family::Stm32F4 | Family::Stm32H7 | Family::Stm32L4 | Family::Stm32V2
+            Family::Stm32F4
+                | Family::Stm32H7
+                | Family::Stm32L4
+                | Family::Stm32V2
+                | Family::Stm32Adc4
         ) {
             return None;
         }
@@ -551,7 +613,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 30,
+        instances, 32,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
