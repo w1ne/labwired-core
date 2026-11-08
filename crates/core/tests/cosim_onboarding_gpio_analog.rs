@@ -127,6 +127,12 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x48,
         "Linux pinctrl-starfive-jh7100.c GPIODIN",
     ),
+    // Microwatt GPIO: DATA_OUT, DATA_IN, DIR words, pad k at bit k.
+    (
+        "declarative/microwatt/gpio.yaml",
+        0x04,
+        "microwatt gpio.vhdl GPIO_REG_DATA_IN (word 1)",
+    ),
     // V2M motherboard sysreg SYS_MCI: MMC card detect (bit 0), write protect (bit 1).
     (
         "declarative/vexpress/sysreg_mci.yaml",
@@ -449,6 +455,12 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
         "U-Boot vexpress_aemv8.h BASER_FVP V2M_SYSREGS (CS3 0x9C00_0000 + 0x1_0000) + vexpress-sysreg.c SYS_MCI",
     ),
     (
+        "microwatt",
+        "gpio",
+        0xC000_7004,
+        "microwatt soc.vhdl IO map 0xc0007000 GPIO + gpio.vhdl GPIO_REG_DATA_IN",
+    ),
+    (
         "vexpress",
         "sysCtl",
         0x1000_0048,
@@ -481,13 +493,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 217;
+const COVERED: usize = 218;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 112;
+const SILICON_REGISTER: usize = 113;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 28;
+const NO_ANALOG_ENDPOINT: usize = 27;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
