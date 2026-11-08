@@ -808,10 +808,32 @@ pub fn try_build(
                         ))
                     }
                 };
+                // `pad_map: stm32g0 | stm32g4 | stm32l0 | ...` — the V2
+                // alternate-function table the bus routes this timer's
+                // channel outputs through (the F4 one rides on
+                // `input_capture: stm32f4`).
+                let pad_map = match p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
+                    None => None,
+                    Some("stm32g0") => Some("stm32g0"),
+                    Some("stm32g4") => Some("stm32g4"),
+                    Some("stm32l0") => Some("stm32l0"),
+                    Some("stm32l4") => Some("stm32l4"),
+                    Some("stm32wb") => Some("stm32wb"),
+                    Some("stm32wba") => Some("stm32wba"),
+                    Some("stm32u5") => Some("stm32u5"),
+                    Some("stm32h5") => Some("stm32h5"),
+                    Some(other) => {
+                        return Err(anyhow::anyhow!(
+                            "timer '{}': unknown pad_map '{other}' (supported: stm32g0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
+                            p_cfg.id
+                        ))
+                    }
+                };
                 Box::new(
                     crate::peripherals::timer::Timer::new_with_layout(width, advanced)
                         .basic(basic)
-                        .ccer_np(ccer_np),
+                        .ccer_np(ccer_np)
+                        .pad_map(pad_map),
                 )
             }
         }
