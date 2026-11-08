@@ -12,10 +12,10 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `610`
+- pass_claimed_peripherals_total: `620`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1211`
-- median_elapsed_seconds: `1.211`
+- median_elapsed_ms: `1251`
+- median_elapsed_seconds: `1.251`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -66,7 +66,7 @@
 | `efm32g842` | `pass` | `True` | `yes` | `yes` | `1033` | `1.033` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `efm32g890` | `pass` | `True` | `yes` | `yes` | `761` | `0.761` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `efm32gg942` | `pass` | `True` | `yes` | `yes` | `771` | `0.771` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `efm32gg995` | `pass` | `True` | `yes` | `yes` | `781` | `0.781` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `efm32gg995` | `pass` | `True` | `yes` | `yes` | `99200` | `99.2` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `efm32hg350` | `pass` | `True` | `yes` | `yes` | `1017` | `1.017` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `efm32jg1` | `pass` | `True` | `yes` | `yes` | `1038` | `1.038` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `efm32jg12` | `pass` | `True` | `yes` | `yes` | `1031` | `1.031` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |

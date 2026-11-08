@@ -27,6 +27,7 @@ pub mod device;
 pub mod dma;
 pub mod dmamux;
 pub mod dwt;
+pub mod efm32;
 pub mod efr32;
 pub mod esp32;
 pub mod esp32c3;

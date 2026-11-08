@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
+      1,
+      4,
+      0,
+      537001728,
+      35,
+      200000,
+      1,
+      536997872,
       1073790992,
-      10,
-      2147483648,
-      2147483648,
-      0,
-      0,
-      0,
-      536887280,
-      0,
-      0,
-      0,
-      0,
-      0,
-      536887280,
-      134219623,
-      134219612
+      4294867296,
+      1073766568,
+      1073807376,
+      4294867296,
+      536997832,
+      134233877,
+      134235314
     ],
-    "pc": 134219612,
-    "xpsr": 16777216,
+    "pc": 134235314,
+    "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,9 +59,9 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "bce41cf1e3a3860c3047148a2539867de3c523877fa4c54ac8cd945eb93eae1a",
+  "firmware_hash": "f83499d3d523c7054583ed5d1076b30a1e7973d3359e7d7989fe1539870a6ac0",
   "config": {
-    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32g842-smoke",
+    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32gg995-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32gg995.yaml",
     "script": "examples/renode-onboarding/efm32gg995-smoke.yaml"
   }

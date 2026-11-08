@@ -268,6 +268,32 @@ impl Rig for Efr32 {
     }
 }
 
+struct Efm32s0;
+impl Rig for Efm32s0 {
+    fn name(&self) -> &'static str {
+        "GpioPort efm32s0"
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
+            crate::peripherals::gpio::GpioRegisterLayout::Efm32s0,
+        ))
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        // MODEL nibble: 1 INPUT, 2 INPUTPULL (DOUT picks the rail),
+        // 4 PUSHPULL, 8 WIREDAND (open-drain: drives only a 0).
+        let (nibble, dout) = match mode {
+            Mode::Input(Pull::None) => (1, false),
+            Mode::Input(Pull::Up) => (2, true),
+            Mode::Input(Pull::Down) => (2, false),
+            Mode::PushPull(level) => (4, level),
+            Mode::OpenDrain(level) => (8, level),
+        };
+        bit_to(port, 0x0C, pin, dout);
+        rmw(port, 0x04, 0xF << (pin * 4), nibble << (pin * 4));
+        true
+    }
+}
+
 struct Sam;
 impl Rig for Sam {
     fn name(&self) -> &'static str {
@@ -794,6 +820,7 @@ fn rigs() -> Vec<Box<dyn Rig>> {
         Box::new(Nrf52),
         Box::new(Kinetis::default()),
         Box::new(Efr32),
+        Box::new(Efm32s0),
         Box::new(Sam),
         Box::new(RaPort::default()),
         Box::new(Imxrt::default()),

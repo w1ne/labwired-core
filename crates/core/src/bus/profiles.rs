@@ -466,6 +466,13 @@ impl SystemBus {
             // (efr32mg12/13, sltb004a, …) stay on the case-3b placeholder
             // below, because their register map is the Series-1 one, not this.
             GpioRegisterLayout::Efr32s2
+        } else if has("efm32s0") {
+            // Silicon Labs Series-0 EFM32 (Gecko G/GG/LG/…): GPIO_P_TypeDef
+            // at a 0x24 stride (DOUT @0x0C, DIN @0x1C). Named explicitly;
+            // Renode's `efmgpioport` stays on the placeholder above because
+            // the same Renode type also covers Series-1 parts, whose ports sit
+            // at a 0x30 stride.
+            GpioRegisterLayout::Efm32s0
         } else if raw == "gpio" {
             // 3a. The bare vendor-neutral "gpio" type with no profile is the
             //     dangerous case (real product chips: KW41Z / STM32 / nRF /

@@ -201,6 +201,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "samd21_rtc",
     // SAM4S TC0..TC2 / TC3..TC5 blocks (`build_sam4s_tc`): fixed addresses.
     "sam4s_tc",
+    // EFM32 Series-0 TIMER0..3 (`build_efm32s0_timer`): IRQ from the yaml.
+    "efm32s0_timer",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
     "sam_dmac",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
@@ -671,6 +673,21 @@ fn build_sam4s_tc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral
     Ok(Box::new(Sam4sTc::new(*block)))
 }
 
+// EFM32 Series-0 TIMER: base from the chip yaml, IRQ required (it differs
+// per part: TIMER1 is IRQ 10 on EFM32G210, 12 on EFM32GG), no config keys.
+#[cold]
+#[inline(never)]
+fn build_efm32s0_timer(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::efm32::timer::Efm32Timer;
+    if !p_cfg.config.is_empty() {
+        anyhow::bail!("efm32s0_timer admits no config overrides");
+    }
+    let Some(irq) = p_cfg.irq else {
+        anyhow::bail!("efm32s0_timer '{}' needs an `irq`", p_cfg.id);
+    };
+    Ok(Box::new(Efm32Timer::new(irq)))
+}
+
 // SAM D21 RTC: base from the chip yaml, fixed IRQ; `gclk_hz` declares GCLK_RTC.
 #[cold]
 #[inline(never)]
@@ -980,6 +997,7 @@ pub fn try_build(
         "samd21_tc" => build_samd21_tc(p_cfg)?,
         "samd21_rtc" => build_samd21_rtc(p_cfg)?,
         "sam4s_tc" => build_sam4s_tc(p_cfg)?,
+        "efm32s0_timer" => build_efm32s0_timer(p_cfg)?,
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
             let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());

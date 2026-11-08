@@ -91,6 +91,11 @@ pub enum GpioRegisterLayout {
     /// DOUT @0x10 (output), DIN @0x14 (input). Offsets from the vendor CMSIS
     /// header (simplicity_sdk `efr32mg26_gpio_port.h`).
     Efr32s2,
+    /// Silicon Labs EFM32 **Series 0** (Gecko G/GG/LG/WG/TG/ZG/HG) GPIO port:
+    /// GPIO_P_TypeDef — CTRL @0x00, MODEL @0x04, MODEH @0x08, DOUT @0x0C,
+    /// DOUTSET/CLR/TGL @0x10/0x14/0x18, DIN @0x1C, PINLOCKN @0x20. Six ports
+    /// at a 0x24 stride from 0x40006000 (Gecko SDK `efm32gg_gpio_p.h`).
+    Efm32s0,
     /// Microchip **SAM** (SAM D21 / D51 / E5x) PORT group — DIR @0x00 with
     /// CLR/SET/TGL aliases, OUT @0x10 with the same three aliases, IN @0x20,
     /// CTRL @0x24, WRCONFIG @0x28, PMUX[16] @0x30, PINCFG[32] @0x40. Offsets
@@ -122,11 +127,12 @@ impl FromStr for GpioRegisterLayout {
             "nrf54l" | "nrf54lm20a" | "nrf54l15" => Ok(Self::Nrf54l),
             "kinetis" | "kw41z" | "nxp" => Ok(Self::Kinetis),
             "efr32s2" | "efr32_series2" | "efr32xg2" => Ok(Self::Efr32s2),
+            "efm32s0" | "efm32_series0" | "efm32gg" => Ok(Self::Efm32s0),
             "sam" | "sam_port" | "samd" | "samd21" | "samd51" | "microchip" => Ok(Self::SamPort),
             "ra_port" | "ra4m1" | "renesas_port" => Ok(Self::RaPort),
             "imxrt" | "imxrt_gpio" => Ok(Self::Imxrt),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, sam_port, ra_port, imxrt",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, efm32s0, sam_port, ra_port, imxrt",
                 value
             )),
         }
@@ -882,6 +888,197 @@ impl Efr32s2Gpio {
     }
 }
 
+// ── Silicon Labs EFM32 Series 0 (Gecko G/GG/LG/WG/TG/ZG/HG) GPIO port ───────
+// One GPIO_P_TypeDef. Series 0 packs its six ports (A..F) at a 0x24 stride
+// from the GPIO block base (0x40006000 on every Series-0 part), with the
+// block-level EXTI/ROUTE/INSENSE registers from +0x100. Each port is modelled
+// as its own 0x24 window, exactly as the Series-2 ports are.
+//
+// Register map — Gecko SDK `efm32gg_gpio_p.h` (GPIO_P_TypeDef):
+//   CTRL 0x00, MODEL 0x04, MODEH 0x08, DOUT 0x0C, DOUTSET 0x10, DOUTCLR 0x14,
+//   DOUTTGL 0x18, DIN 0x1C (read-only), PINLOCKN 0x20.
+// The Series-2 port struct is NOT this map (DOUT 0x10, DIN 0x14, no
+// SET/CLR/TGL words) — that is why this is a separate family.
+//
+// MODEn nibbles (`_GPIO_P_MODEL_MODE0_*`): 0 DISABLED, 1 INPUT,
+// 2 INPUTPULL, 3 INPUTPULLFILTER, 4 PUSHPULL, 5 PUSHPULLDRIVE,
+// 6 WIREDOR, 7 WIREDORPULLDOWN, 8 WIREDAND, 9 WIREDANDFILTER,
+// 10 WIREDANDPULLUP, 11 WIREDANDPULLUPFILTER, 12 WIREDANDDRIVE,
+// 13 WIREDANDDRIVEFILTER, 14 WIREDANDDRIVEPULLUP, 15 WIREDANDDRIVEPULLUPFILTER.
+// WIREDOR is an open-SOURCE output (drives only a 1); WIREDAND is open-DRAIN
+// (drives only a 0). DISABLED turns the input buffer off, so DIN reads 0 —
+// with DOUT = 1 it still pulls the pad up.
+//
+// NOT modelled, deliberately: CTRL drive strength (stored, no behaviour), the
+// glitch filters, PINLOCKN enforcement (stored clear-only; a locked pin's MODE
+// still accepts writes — warned), and the block head (EXTI, ROUTE, INSENSE,
+// EM4 wake), which is outside these windows and unmapped in the chip YAMLs.
+#[derive(Debug, serde::Serialize)]
+pub struct Efm32s0Gpio {
+    ctrl: u32,     // 0x00
+    model: u32,    // 0x04
+    modeh: u32,    // 0x08
+    dout: u32,     // 0x0C
+    din: u32,      // 0x1C — latched external (button/sensor) input
+    pinlockn: u32, // 0x20
+    /// Pins the outside world is holding; a pull applies only where this bit
+    /// is clear. Not a register.
+    #[serde(skip)]
+    external: u32,
+    /// Decoded from MODEL/MODEH/DOUT by [`Self::recompute`] on every write
+    /// of those registers: DIN is read on every instruction by the GPIO edge
+    /// pass. Not registers.
+    #[serde(skip)]
+    cached_driven: u32,
+    #[serde(skip)]
+    cached_pulled: u32,
+    #[serde(skip)]
+    cached_up: u32,
+    #[serde(skip)]
+    cached_disabled: u32,
+}
+
+impl Default for Efm32s0Gpio {
+    fn default() -> Self {
+        Self {
+            ctrl: 0,
+            model: 0,
+            modeh: 0,
+            dout: 0,
+            din: 0,
+            // _GPIO_P_PINLOCKN_RESETVALUE: every pin unlocked.
+            pinlockn: 0xFFFF,
+            external: 0,
+            cached_driven: 0,
+            cached_pulled: 0,
+            cached_up: 0,
+            // Every pin resets to DISABLED.
+            cached_disabled: 0xFFFF,
+        }
+    }
+}
+
+impl Efm32s0Gpio {
+    /// The 4-bit mode field of `pin` (MODEL for pins 0..7, MODEH for 8..15).
+    fn mode_nibble(&self, pin: u32) -> u32 {
+        let reg = if pin < 8 { self.model } else { self.modeh };
+        (reg >> ((pin % 8) * 4)) & 0xF
+    }
+
+    fn mask_where(&self, pred: impl Fn(u32) -> bool) -> u32 {
+        (0..16u32)
+            .filter(|&pin| pred(self.mode_nibble(pin)))
+            .fold(0, |m, pin| m | (1 << pin))
+    }
+
+    /// Re-decode the drive and pull masks. Driven pins: push-pull always,
+    /// WIREDOR only a 1, WIREDAND only a 0. Pulled (undriven) pins:
+    /// INPUTPULL* on the rail DOUT picks, DISABLED up when DOUT = 1, a
+    /// released WIREDORPULLDOWN down, a released WIREDAND*PULLUP* up.
+    fn recompute(&mut self) {
+        let push_pull = self.mask_where(|m| matches!(m, 4 | 5));
+        let wired_or = self.mask_where(|m| matches!(m, 6 | 7));
+        let wired_and = self.mask_where(|m| m >= 8);
+        let driven = push_pull | (wired_or & self.dout) | (wired_and & !self.dout);
+        let disabled = self.mask_where(|m| m == 0);
+        let in_pull = self.mask_where(|m| matches!(m, 2 | 3));
+        let disabled_up = disabled & self.dout;
+        let or_down = self.mask_where(|m| m == 7);
+        let and_up = self.mask_where(|m| matches!(m, 10 | 11 | 14 | 15));
+        self.cached_driven = driven;
+        self.cached_pulled = (in_pull | disabled_up | or_down | and_up) & !driven;
+        self.cached_up = (in_pull & self.dout) | disabled_up | and_up;
+        self.cached_disabled = disabled;
+    }
+
+    /// Mask of pins whose output stage drives the pad right now.
+    fn driven_mask(&self) -> u32 {
+        self.cached_driven
+    }
+
+    /// The pad level: driven pins read their drive, pulled pins nothing
+    /// outside holds read the rail, everything else the latched external
+    /// level.
+    fn pad_level(&self) -> u32 {
+        let driven = self.cached_driven;
+        let from_pull = self.cached_pulled & !self.external;
+        let from_latch = !driven & !from_pull;
+        ((self.dout & driven) | (self.cached_up & from_pull) | (self.din & from_latch)) & 0xFFFF
+    }
+
+    /// DIN as silicon presents it: the pad level wherever the input buffer
+    /// is on — every mode but DISABLED, outputs included.
+    fn effective_din(&self) -> u32 {
+        self.pad_level() & !self.cached_disabled
+    }
+
+    /// The pull rail `pin` sits on when nothing drives it, if any.
+    fn pull_of(&self, pin: u8) -> Option<bool> {
+        let bit = 1u32 << pin;
+        (self.cached_pulled & bit != 0).then_some(self.cached_up & bit != 0)
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.ctrl,
+            0x04 => self.model,
+            0x08 => self.modeh,
+            0x0C => self.dout,
+            // DOUTSET/CLR/TGL are write-only command words.
+            0x10 | 0x14 | 0x18 => 0,
+            0x1C => self.effective_din(),
+            0x20 => self.pinlockn,
+            _ => {
+                crate::census_reg!("gpio:Efm32s0Gpio", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.ctrl = value & 0x3,
+            0x04 => {
+                self.model = value;
+                self.recompute();
+            }
+            0x08 => {
+                self.modeh = value;
+                self.recompute();
+            }
+            // DOUT is 16 bits on every Series-0 port.
+            0x0C..=0x18 => {
+                let v = value & 0xFFFF;
+                match offset {
+                    0x0C => self.dout = v,
+                    0x10 => self.dout |= v,
+                    0x14 => self.dout &= !v,
+                    0x18 => self.dout ^= v,
+                    _ => {
+                        crate::census_reg!("gpio:Efm32s0Gpio", offset, "write");
+                        return;
+                    }
+                }
+                self.recompute();
+            }
+            // A cleared bit locks its pin until reset; a 1 cannot unlock.
+            0x20 => {
+                let next = self.pinlockn & value & 0xFFFF;
+                if next != self.pinlockn {
+                    tracing::warn!(
+                        "EFM32 GPIO PINLOCKN {:#06x}: pin lock is stored but not enforced",
+                        next
+                    );
+                }
+                self.pinlockn = next;
+            }
+            _ => {
+                crate::census_reg!("gpio:Efm32s0Gpio", offset, "write");
+            }
+        }
+    }
+}
+
 // ── Microchip SAM (SAM D21 / D51 / E5x) PORT ─────────────────────────────────
 // One GROUP of the PORT block. PORT packs its groups at a 0x80 stride
 // (GROUP[0] = PA, GROUP[1] = PB, …); each group is modelled here as its own
@@ -1282,6 +1479,7 @@ pub enum GpioFamily {
     Nrf52(Nrf52Gpio),
     Kinetis(KinetisGpio),
     Efr32s2(Efr32s2Gpio),
+    Efm32s0(Efm32s0Gpio),
     SamPort(SamGpio),
     RaPort(RaPortGpio),
     Imxrt(ImxrtGpio),
@@ -1295,6 +1493,7 @@ impl GpioFamily {
             Self::Nrf52(g) => g.read_reg(offset),
             Self::Kinetis(g) => g.read_reg(offset),
             Self::Efr32s2(g) => g.read_reg(offset),
+            Self::Efm32s0(g) => g.read_reg(offset),
             Self::SamPort(g) => g.read_reg(offset),
             Self::RaPort(g) => g.read_reg(offset),
             Self::Imxrt(g) => g.read_reg(offset),
@@ -1308,6 +1507,7 @@ impl GpioFamily {
             Self::Nrf52(g) => g.write_reg(offset, value),
             Self::Kinetis(g) => g.write_reg(offset, value),
             Self::Efr32s2(g) => g.write_reg(offset, value),
+            Self::Efm32s0(g) => g.write_reg(offset, value),
             Self::SamPort(g) => g.write_reg(offset, value),
             Self::RaPort(g) => g.write_reg(offset, value),
             Self::Imxrt(g) => g.write_reg(offset, value),
@@ -1360,6 +1560,11 @@ impl GpioFamily {
                 apply(&mut g.din);
                 g.external |= bit & 0xFFFF;
             }
+            // Series-0 EFM32 too.
+            Self::Efm32s0(g) => {
+                apply(&mut g.din);
+                g.external |= bit & 0xFFFF;
+            }
             // SAM PORT names it IN, and it is read-only to firmware.
             Self::SamPort(g) => {
                 apply(&mut g.in_latch);
@@ -1402,6 +1607,7 @@ impl GpioFamily {
             Self::Nrf52(g) => g.external &= !bit,
             Self::Kinetis(g) => g.external &= !bit,
             Self::Efr32s2(g) => g.external &= !bit,
+            Self::Efm32s0(g) => g.external &= !bit,
             Self::SamPort(g) => g.external &= !bit,
             Self::RaPort(g) => g.external &= !(bit as u16),
             Self::Imxrt(g) => {
@@ -1534,6 +1740,9 @@ impl GpioFamily {
             // latched inputs — it IS the pad view (no AF tracking on this
             // family: the ROUTE mux is not modelled).
             Self::Efr32s2(g) => Some(bit(g.read_reg(0x14))),
+            // Series 0: the pad level, also on a DISABLED pin (DIN reads 0
+            // there, but a DOUT=1 pull-up still holds the pad).
+            Self::Efm32s0(g) => Some(bit(g.pad_level())),
             // SAM PORT: a pad with PINCFG.PMUXEN is handed to a peripheral,
             // whose wire state this model cannot know — None, not a guess from
             // a DIR bit the port no longer owns. Every other pad reads IN,
@@ -1759,6 +1968,13 @@ impl GpioPort {
                 0x1..=0x3 => GpioMode::Input,
                 _ => GpioMode::Output,
             },
+            // Series-0 EFM32: same nibble split. ROUTE is in the block head
+            // (not modelled), so no AF verdict either.
+            GpioFamily::Efm32s0(g) => match g.mode_nibble(u32::from(pin)) {
+                0 => GpioMode::Analog,
+                0x1..=0x3 => GpioMode::Input,
+                _ => GpioMode::Output,
+            },
             // SAM PORT: PINCFG.PMUXEN is the AF verdict and it is a REGISTER,
             // not an inference — the pad is muxed or it is not. DIR then
             // separates output from input for the pads the port still owns.
@@ -1892,6 +2108,7 @@ impl GpioPort {
             GpioFamily::Efr32s2(g) => {
                 (pin < 16 && matches!(g.mode_nibble(u32::from(pin)), 2 | 3)).then(|| bit(g.dout))
             }
+            GpioFamily::Efm32s0(g) => g.pull_of(pin),
             GpioFamily::SamPort(g) => {
                 (g.pincfg[usize::from(pin)] & 0x4 != 0 && !bit(g.dir)).then(|| bit(g.out))
             }
@@ -1954,6 +2171,16 @@ impl GpioPort {
                     af()
                 } else {
                     output((g.odr >> pin) & 1 != 0, cnf & 0b01 != 0)
+                }
+            }
+            // Series-0 EFM32 has open-SOURCE (WIREDOR) as well as open-drain
+            // (WIREDAND) stages, which `output(level, open_drain)` cannot
+            // say: answer from the decoded drive mask the DIN read uses.
+            GpioFamily::Efm32s0(g) => {
+                if (g.driven_mask() >> pin) & 1 != 0 {
+                    Some(PadDriver::drive((g.dout >> pin) & 1 != 0).with_pull(pull))
+                } else {
+                    input()
                 }
             }
             _ => match self.pad_mode(pin)? {
@@ -2079,6 +2306,7 @@ impl GpioPort {
             }
             GpioRegisterLayout::Kinetis => GpioFamily::Kinetis(KinetisGpio::default()),
             GpioRegisterLayout::Efr32s2 => GpioFamily::Efr32s2(Efr32s2Gpio::default()),
+            GpioRegisterLayout::Efm32s0 => GpioFamily::Efm32s0(Efm32s0Gpio::default()),
             GpioRegisterLayout::SamPort => GpioFamily::SamPort(SamGpio::default()),
             GpioRegisterLayout::RaPort => GpioFamily::RaPort(RaPortGpio::default()),
             GpioRegisterLayout::Imxrt => GpioFamily::Imxrt(ImxrtGpio::default()),
@@ -2234,6 +2462,7 @@ impl GpioPort {
             GpioFamily::Nrf52(_) => 0x504,
             GpioFamily::Kinetis(_) => 0x00,
             GpioFamily::Efr32s2(_) => 0x10, // DOUT
+            GpioFamily::Efm32s0(_) => 0x0C, // DOUT
             GpioFamily::SamPort(_) => 0x10, // OUT
             // PCNTR1 holds PODR in [31:16]; consumers sample bit (pin+16).
             GpioFamily::RaPort(_) => 0x00,
@@ -2253,6 +2482,7 @@ impl GpioPort {
             GpioFamily::Nrf52(_) => 0x510,
             GpioFamily::Kinetis(_) => 0x10,
             GpioFamily::Efr32s2(_) => 0x14, // DIN
+            GpioFamily::Efm32s0(_) => 0x1C, // DIN
             GpioFamily::SamPort(_) => 0x20, // IN
             GpioFamily::RaPort(_) => 0x04,  // PCNTR2 PIDR[15:0]
             GpioFamily::Imxrt(_) => 0x08,   // PSR
@@ -2302,6 +2532,7 @@ impl GpioPort {
             GpioFamily::Nrf52(_) => GpioRegisterLayout::Nrf52,
             GpioFamily::Kinetis(_) => GpioRegisterLayout::Kinetis,
             GpioFamily::Efr32s2(_) => GpioRegisterLayout::Efr32s2,
+            GpioFamily::Efm32s0(_) => GpioRegisterLayout::Efm32s0,
             GpioFamily::SamPort(_) => GpioRegisterLayout::SamPort,
             GpioFamily::RaPort(_) => GpioRegisterLayout::RaPort,
             GpioFamily::Imxrt(_) => GpioRegisterLayout::Imxrt,
@@ -2582,7 +2813,8 @@ impl crate::pins::PinPort for GpioPort {
             GpioFamily::Stm32F1(_)
             | GpioFamily::Stm32V2(_)
             | GpioFamily::RaPort(_)
-            | GpioFamily::Efr32s2(_) => 16,
+            | GpioFamily::Efr32s2(_)
+            | GpioFamily::Efm32s0(_) => 16,
             GpioFamily::Nrf52(g) => g.num_pins.min(32) as u8,
             _ => 32,
         }
@@ -3052,6 +3284,7 @@ impl crate::Peripheral for GpioPort {
             GpioFamily::Nrf52(g) => serde_json::to_value(g),
             GpioFamily::Kinetis(g) => serde_json::to_value(g),
             GpioFamily::Efr32s2(g) => serde_json::to_value(g),
+            GpioFamily::Efm32s0(g) => serde_json::to_value(g),
             GpioFamily::SamPort(g) => serde_json::to_value(g),
             GpioFamily::RaPort(g) => serde_json::to_value(g),
             GpioFamily::Imxrt(g) => serde_json::to_value(g),
@@ -4252,5 +4485,96 @@ mod net_pull_tests {
         p.write(1, 1 << 5).unwrap(); // DDR: now an output driving 1
         assert_eq!(own_drive(&p, 5), Some(PadDrive::Driven));
         assert_eq!(own_drive(&p, 8), None, "an 8-bit port has no pad 8");
+    }
+}
+
+#[cfg(test)]
+mod efm32s0_tests {
+    use super::{GpioPort, GpioRegisterLayout};
+    use crate::Peripheral;
+
+    const MODEL: u64 = 0x04;
+    const MODEH: u64 = 0x08;
+    const DOUT: u64 = 0x0C;
+    const DOUTSET: u64 = 0x10;
+    const DOUTCLR: u64 = 0x14;
+    const DOUTTGL: u64 = 0x18;
+    const DIN: u64 = 0x1C;
+    const PINLOCKN: u64 = 0x20;
+
+    fn port() -> GpioPort {
+        GpioPort::new_with_layout(GpioRegisterLayout::Efm32s0)
+    }
+
+    #[test]
+    fn set_clear_toggle_words_act_on_dout_and_read_zero() {
+        let mut p = port();
+        p.write_u32(MODEH, 0x0000_4444).unwrap(); // PE8..PE11 push-pull (STK3700 LEDs: PE2/PE3)
+        p.write_u32(DOUTSET, 0x0F00).unwrap();
+        assert_eq!(p.read_u32(DOUT).unwrap(), 0x0F00);
+        p.write_u32(DOUTCLR, 0x0300).unwrap();
+        assert_eq!(p.read_u32(DOUT).unwrap(), 0x0C00);
+        p.write_u32(DOUTTGL, 0x0500).unwrap();
+        assert_eq!(p.read_u32(DOUT).unwrap(), 0x0900);
+        // Push-pull outputs read back through DIN.
+        assert_eq!(p.read_u32(DIN).unwrap() & 0x0F00, 0x0900);
+        for off in [DOUTSET, DOUTCLR, DOUTTGL] {
+            assert_eq!(p.read_u32(off).unwrap(), 0, "offset {off:#x} is write-only");
+        }
+        assert_eq!(p.register_layout(), GpioRegisterLayout::Efm32s0);
+        assert_eq!(p.odr_offset(), DOUT);
+        assert_eq!(p.idr_offset(), DIN);
+    }
+
+    #[test]
+    fn disabled_pins_read_zero_even_when_driven_from_outside() {
+        let mut p = port();
+        // Reset mode is DISABLED for every pin: the input buffer is off.
+        assert!(p.set_gpio_input(0, true));
+        assert_eq!(p.read_u32(DIN).unwrap() & 1, 0);
+        p.write_u32(MODEL, 0x1).unwrap(); // INPUT
+        assert_eq!(p.read_u32(DIN).unwrap() & 1, 1);
+    }
+
+    #[test]
+    fn wired_or_drives_only_a_one_and_wired_and_only_a_zero() {
+        let mut p = port();
+        // PA0 WIREDOR, PA1 WIREDORPULLDOWN, PA2 WIREDAND, PA3 WIREDANDPULLUP.
+        p.write_u32(MODEL, 0xA867).unwrap();
+        p.write_u32(DOUT, 0b1111).unwrap();
+        // PA0/PA1 drive 1; PA2 released (latched 0); PA3 released, pulled up.
+        assert_eq!(p.read_u32(DIN).unwrap() & 0xF, 0b1011);
+        p.write_u32(DOUT, 0b0000).unwrap();
+        // PA0 released (latched 0); PA1 pulled down; PA2/PA3 drive 0.
+        assert_eq!(p.read_u32(DIN).unwrap() & 0xF, 0b0000);
+        // A released open-source pin reads what the outside world holds.
+        assert!(p.set_gpio_input(0, true));
+        assert_eq!(p.read_u32(DIN).unwrap() & 1, 1);
+    }
+
+    #[test]
+    fn input_pull_follows_dout_until_something_outside_holds_the_pin() {
+        let mut p = port();
+        p.write_u32(MODEL, 0x2 << 4).unwrap(); // PA1 INPUTPULL
+        p.write_u32(DOUTSET, 1 << 1).unwrap();
+        assert_eq!(p.read_u32(DIN).unwrap() >> 1 & 1, 1, "pull-up");
+        assert!(p.set_gpio_input(1, false));
+        assert_eq!(
+            p.read_u32(DIN).unwrap() >> 1 & 1,
+            0,
+            "button to ground wins"
+        );
+        p.write_u32(DOUTCLR, 1 << 1).unwrap();
+        p.write_u32(MODEL, 0x1 << 4).unwrap();
+        assert_eq!(p.read_u32(DIN).unwrap() >> 1 & 1, 0);
+    }
+
+    #[test]
+    fn pinlockn_only_clears() {
+        let mut p = port();
+        assert_eq!(p.read_u32(PINLOCKN).unwrap(), 0xFFFF);
+        p.write_u32(PINLOCKN, 0xFFFE).unwrap();
+        p.write_u32(PINLOCKN, 0xFFFF).unwrap();
+        assert_eq!(p.read_u32(PINLOCKN).unwrap(), 0xFFFE);
     }
 }
