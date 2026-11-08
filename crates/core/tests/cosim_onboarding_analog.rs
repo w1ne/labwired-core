@@ -41,9 +41,13 @@ const CONVERTED: &[&str] = &[
     "brd4118a",
     "brd4120a",
     "brd4121a",
+    "brd4162a",
     "brd4186c",
     "brd4402a",
     "cc2538",
+    "efr32mg1",
+    "efr32mg12",
+    "efr32mg13",
     "efr32mg24",
     "efr32mg26",
     "efr32xg22",
@@ -225,6 +229,13 @@ enum Family {
     /// `STATUS.SINGLEFIFODV` and `IF.SINGLEDONE` rise, `SINGLEFIFODATA` pops
     /// 12 bits against AVDD (simplicity_sdk efr32mg2x_iadc.h, em_iadc.c).
     Efr32Iadc,
+    /// EFR32 Series-1 ADC0 (xG1/xG12/xG13): `SINGLECTRL.POSSEL` reaches a
+    /// pad through the APORT matrix (EFR32MG12 data sheet Table 6.12; PAn
+    /// is CH(8+n) on APORT3 and APORT4), `CMD.SINGLESTART` converts,
+    /// `STATUS.SINGLEDV` and `IF.SINGLE` rise, `SINGLEDATA` pops 12 bits
+    /// against `REF` = VDD (efr32mg12p_adc.h, em_adc.c, the vendor
+    /// series1 adc_single_polled example).
+    Efr32S1Adc,
     /// Renesas RA ADC12/ADC14 (`ra_adc12`/`ra_adc14`): group-A channels in
     /// `ADANSA0`, a software `ADCSR.ADST` write runs one scan that takes
     /// time, `ADST` clears at scan end and `ADDRn` holds each result, against
@@ -235,6 +246,17 @@ enum Family {
 
 /// `SINGLE.PORTPOS` value naming GPIO port A (`_IADC_SINGLE_PORTPOS_PORTA`).
 const IADC_PORTPOS_PORTA: u32 = 0x8;
+
+/// Series-1 `SINGLECTRL` for `POSSEL` at `REF` = VDD, 12 bits, right
+/// adjusted, `NEGSEL` = VSS (`_ADC_SINGLECTRL_*`, efr32mg12p_adc.h).
+const fn s1_singlectrl(possel: u32) -> u32 {
+    (0xFF << 16) | (possel << 8) | (2 << 5)
+}
+
+/// Series-1 POSSEL `APORT<bus><X|Y>CH<8+n>`, the bus channel PAn sits on.
+const fn s1_possel_pa(bus: u32, pin: u8) -> u32 {
+    bus * 0x20 + 8 + pin as u32
+}
 
 /// F1 `ADC_CR2.EXTTRIG` (bit 20, RM0008 §11.12.3).
 const F1_EXTTRIG: u32 = 1 << 20;
@@ -295,6 +317,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Xadc
         } else if kind == "efr32s2_iadc" {
             Family::Efr32Iadc
+        } else if kind == "efr32s1_adc" {
+            Family::Efr32S1Adc
         } else if kind == "ra_adc12" || kind == "ra_adc14" {
             Family::RaAdc {
                 adc14: kind == "ra_adc14",
@@ -363,6 +387,9 @@ impl Converter {
             Family::Samd51 => (mv * 4096 / 3300).min(4095),
             // 12-bit against AVDD (3.3 V), 2^12 / VREF, truncated, clamped.
             Family::Efr32Iadc => (mv * 4096 / 3300).min(4095),
+            // 12-bit against REF = VDD (3.3 V); the vendor example's
+            // inverse is mV = code * Vref / 4096. Truncated, clamped.
+            Family::Efr32S1Adc => (mv * 4096 / 3300).min(4095),
             // (2^bits - 1) / VREFH0 (3.3 V), truncated, clamped.
             Family::RaAdc { adc14: false } => (mv * 4095 / 3300).min(4095),
             Family::RaAdc { adc14: true } => (mv * 16383 / 3300).min(16383),
@@ -472,6 +499,33 @@ impl Converter {
                     self.id
                 );
                 bus.write_u32(self.base + 0x04, 1).expect("EN.EN");
+            }
+            Family::Efr32S1Adc => {
+                // CH13 on APORT1Y has no pin (Table 6.12: APORT1/2 carry
+                // PC0..11 and PF0..15). A SINGLESTART there converts nothing:
+                // no FIFO entry, no SINGLEDV, no IF.SINGLE.
+                bus.write_u32(self.base + 0x10, s1_singlectrl(0x2D))
+                    .expect("SINGLECTRL APORT1YCH13");
+                bus.write_u32(self.base + 0x08, 1).expect("SINGLESTART");
+                bus.tick_peripherals_fully();
+                assert_eq!(
+                    bus.read_u32(self.base + 0x0C).unwrap() & (1 << 16),
+                    0,
+                    "{}: an empty APORT cell converts nothing",
+                    self.id
+                );
+                assert_eq!(
+                    bus.read_u32(self.base + 0x38).unwrap(),
+                    0,
+                    "{}: IF",
+                    self.id
+                );
+                assert_eq!(
+                    bus.read_u32(self.base + 0x84).unwrap(),
+                    0,
+                    "{}: SINGLEFIFOCOUNT",
+                    self.id
+                );
             }
             Family::Xadc => {
                 // xadcps.c XAdcPs_CfgInitialize: CFG |= ENABLE | CFIFOTH |
@@ -2039,6 +2093,56 @@ impl Converter {
                 );
                 code
             }
+            Family::Efr32S1Adc => {
+                // em_adc ADC_InitSingle + ADC_Start(adcStartSingle), poll
+                // STATUS.SINGLEDV, ADC_DataSingleGet. Channel n is PAn,
+                // reached once through APORT3 and once through APORT4: the
+                // two buses carry the same pad, so the codes must agree.
+                const SINGLEDV: u32 = 1 << 16;
+                const IF_SINGLE: u32 = 1;
+                let (cmd, status, iflag, ifc) = (
+                    self.base + 0x08,
+                    self.base + 0x0C,
+                    self.base + 0x38,
+                    self.base + 0x40,
+                );
+                let mut codes = [0u32; 2];
+                for (slot, bus_no) in [3u32, 4].into_iter().enumerate() {
+                    bus.write_u32(
+                        self.base + 0x10,
+                        s1_singlectrl(s1_possel_pa(bus_no, channel)),
+                    )
+                    .expect("SINGLECTRL");
+                    bus.write_u32(ifc, IF_SINGLE).expect("IFC SINGLE");
+                    bus.write_u32(cmd, 1).expect("SINGLESTART");
+                    bus.tick_peripherals_fully();
+                    assert_ne!(
+                        bus.read_u32(status).unwrap() & SINGLEDV,
+                        0,
+                        "{}: APORT{bus_no} conversion raises SINGLEDV",
+                        self.id
+                    );
+                    assert_ne!(
+                        bus.read_u32(iflag).unwrap() & IF_SINGLE,
+                        0,
+                        "{}: and IF.SINGLE",
+                        self.id
+                    );
+                    codes[slot] = bus.read_u32(self.base + 0x48).expect("SINGLEDATA");
+                    assert_eq!(
+                        bus.read_u32(self.base + 0x84).unwrap(),
+                        0,
+                        "{}: SINGLEDATA pops the only result",
+                        self.id
+                    );
+                }
+                assert_eq!(
+                    codes[0], codes[1],
+                    "{}: APORT3 and APORT4 reach PA{channel}",
+                    self.id
+                );
+                codes[0]
+            }
             Family::RaAdc { .. } => self.ra_scan(bus, &[channel])[0],
             Family::Saadc { .. } => unreachable!("SAADC converts as a scan"),
         }
@@ -2252,6 +2356,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Samd21
                 | Family::Samd51
                 | Family::Efr32Iadc
+                | Family::Efr32S1Adc
                 | Family::RaAdc { .. }
         ) {
             assert_eq!(
@@ -2338,7 +2443,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 95,
+        instances, 99,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -2346,7 +2451,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 142,
+        without_adc, 138,
         "onboarding profiles that declare no modelled ADC"
     );
 }

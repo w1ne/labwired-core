@@ -115,3 +115,14 @@ peripherals:
   type: efr32mg12_ldma
   bus: sysbus
   base_address: 1074667520
+# ADC0, the Series-1 SAR ADC behind the APORT. ADC0_BASE = 0x40002000,
+# ADC0_IRQn = 15 (efr32mg13p732f512gm48.h, gecko_sdk gsdk_4.4); ADC_TypeDef matches
+# efr32mg12p_adc.h, which the efr32s1_adc model is walked from.
+# SINGLECTRL.POSSEL picks the pad through the APORT matrix (EFR32MG12 data
+# sheet Table 6.12), and channel = port * 16 + pin (PA5 = 5). The CMU here is
+# a stub, so there is no clock gate.
+- id: adc0
+  type: efr32s1_adc
+  base_address: 0x40002000
+  size: 1KB
+  irq: 15

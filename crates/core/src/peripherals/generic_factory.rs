@@ -343,6 +343,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "efr32s2_timerroute",
     "efr32s2_gpio_exti",
     "efr32s2_iadc",
+    "efr32s1_adc",
     "efr32s2_timer",
     "virtual_ble",
     // Microchip SAM clock controllers (SAMD21 PM/GCLK, SAMD51 MCLK).
@@ -679,6 +680,8 @@ pub fn try_build(
         // Its own model, NOT an `AdcRegisterLayout` variant: `adc.rs` is one
         // struct per STM32 family by design and shares no register with this.
         "efr32s2_iadc" => Box::new(crate::peripherals::efr32::iadc::Efr32s2Iadc::new()),
+        // Silicon Labs Series-1 (xG1/xG12/xG13) ADC0 behind the APORT.
+        "efr32s1_adc" => Box::new(crate::peripherals::efr32::adc_s1::Efr32s1Adc::new()),
         "efr32s2_msc" => Box::new(crate::peripherals::efr32::msc::Efr32s2Msc::new()),
         "efr32s2_usartroute" => {
             Box::new(crate::peripherals::efr32::usart_route::Efr32s2UsartRoute::new())
