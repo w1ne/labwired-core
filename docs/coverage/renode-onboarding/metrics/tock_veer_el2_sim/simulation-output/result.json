@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 100000,
-  "cycles": 200012,
+  "cycles": 200082,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -41,6 +41,23 @@
     },
     {
       "assertion": {
+        "memory_value": {
+          "address": 543162384,
+          "expected_value": 2118050080,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "VeeR EL2 htif ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -59,11 +76,11 @@
       0,
       0,
       0,
-      323,
       543162368,
-      0,
-      0,
-      0,
+      2118050080,
+      323,
+      3495428096,
+      10,
       0,
       0,
       0,
@@ -82,7 +99,7 @@
       0,
       0
     ],
-    "pc": 536870946,
+    "pc": 536871088,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -118,14 +135,22 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "3f8dfb3425d058f888bb146f091920b80bd27492933baccfcd7940b5ad9bcf9c",
+  "firmware_hash": "07cd23f275ba0706553328b083c1a2c7ae5fe070a4c5cc0cf3db9857c0959658",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-tock-veer-el2-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/tock_veer_el2_sim.yaml",
     "script": "examples/renode-onboarding/tock_veer_el2_sim-smoke.yaml"
   },
   "inspect": {
-    "peripherals": [],
+    "peripherals": [
+      {
+        "name": "htif",
+        "kind": "native",
+        "base": 3495428096,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
     "devices": []
   },
   "fidelity": [
@@ -137,16 +162,27 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "VeeR EL2 htif ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 36,
+    "text_bytes": 180,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 36,
+    "flash_used_bytes": 180,
     "ram_static_bytes": 0,
     "flash_total_bytes": 3145728,
     "ram_total_bytes": 3145728,
-    "flash_used_pct": 0.0,
+    "flash_used_pct": 0.01,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -159,16 +195,16 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 200012,
+    "cycles": 200082,
     "instructions": 100000,
     "steps_executed": 100000,
     "memory_reads": 0,
-    "memory_writes": 1,
-    "peripheral_accesses": 0,
+    "memory_writes": 2,
+    "peripheral_accesses": 17,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 536870946,
+        "pc": 536871088,
         "count": 390,
         "symbol": "main"
       }

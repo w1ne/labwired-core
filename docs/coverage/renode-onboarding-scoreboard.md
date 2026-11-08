@@ -248,7 +248,7 @@
 | `stm32wba52` | `pass` | `True` | `yes` | `yes` | `2429` | `2.429` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `tegra2` | `pass` | `True` | `yes` | `yes` | `1154` | `1.154` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `tegra3` | `pass` | `True` | `yes` | `yes` | `1043` | `1.043` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `tock_veer_el2_sim` | `pass` | `True` | `yes` | `yes` | `1001` | `1.001` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `tock_veer_el2_sim` | `pass` | `True` | `yes` | `yes` | `952` | `0.952` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `up_squared_x86_64` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 2: `hpet:hpet`, `pci:pythonperipheral` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no x86-64 CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `ut32m0r500` | `pass` | `True` | `yes` | `yes` | `1004` | `1.004` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `vegaboard_ri5cy` | `pass` | `True` | `yes` | `yes` | `1404` | `1.404` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

@@ -4,6 +4,16 @@
 use core::panic::PanicInfo;
 
 const RESULT: *mut u32 = 0x2060_0000 as *mut u32;
+const PASS: *mut u32 = 0x2060_0010 as *mut u32;
+
+// Renode `htif_mem` @0xD0580000 (cpus/tock_veer_el2_sim.repl): the
+// veer_el2-tock.resc watchpoint prints every byte written to the first word,
+// the console Tock's VeeR EL2 board uses. 0x01 and 0xFF mean "finish", so the
+// banner must avoid them.
+const HTIF: *mut u8 = 0xD058_0000 as *mut u8;
+
+const BANNER: &[u8] = b"VeeR EL2 htif ok\n";
+const PASS_WORD: u32 = 0x7E3E_E120;
 
 core::arch::global_asm!(
     ".section .text.entry,\"ax\",@progbits",
@@ -27,6 +37,15 @@ pub extern "C" fn main() -> ! {
             options(nomem, nostack),
         );
         core::ptr::write_volatile(RESULT, product);
+
+        // Byte stores, as Tock's VeeR EL2 console writes them.
+        for &byte in BANNER {
+            core::ptr::write_volatile(HTIF, byte);
+        }
+
+        if product == 0x143 {
+            core::ptr::write_volatile(PASS, PASS_WORD);
+        }
     }
 
     loop {

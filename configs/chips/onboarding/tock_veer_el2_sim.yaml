@@ -1,6 +1,7 @@
-# Bounded to generic RV32IMC execution and the memory windows used by the
-# direct-ELF smoke. The Renode platform also declares ROM0, a second flash
-# window, CLINT, the VeeR PIC, and HTIF; this engine profile does not claim them.
+# Bounded to generic RV32IMC execution, the memory windows used by the
+# direct-ELF smoke and the HTIF console byte. The Renode platform also declares
+# ROM0, a second flash window, CLINT and the VeeR PIC; this engine profile does
+# not claim them.
 # Memory map source: https://github.com/renode/renode/blob/master/platforms/cpus/tock_veer_el2_sim.repl
 name: tock_veer_el2_sim
 arch: riscv
@@ -12,4 +13,20 @@ flash:
 ram:
   base: 543162368
   size: 3145728B
-peripherals: []
+peripherals:
+# Renode maps the 4 KiB window as MappedMemory; its Tock script treats writes
+# to the first word as console output. Model only that 4-byte console window.
+- id: htif
+  type: uart
+  base_address: 0xD0580000
+  size: "4B"
+  config:
+    profile: custom
+    rx_offset: 0x0
+    tx_offset: 0x0
+# Renode maps `htif_mem` @0xD0580000 (0x1000) as plain MappedMemory; its
+# scripts/single-node/veer_el2-tock.resc hooks byte and word writes to the
+# first word and prints the value as a console character (Tock's VeeR EL2
+# board hard-codes this address). Only that write path is modelled: a write
+# transmits the low byte. Reads return 0 here (Renode's memory would read back
+# the last value) and the 0x01/0xFF "finish" convention is not modelled.

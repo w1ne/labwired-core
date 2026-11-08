@@ -1,5 +1,6 @@
-# RV32IMC direct-ELF execution against the narrowed Tock VeeR EL2 profile.
-# The memory assertion proves the explicit M-extension multiply and RAM write.
+# RV32IMC direct-ELF execution and HTIF console against the narrowed Tock VeeR
+# EL2 profile. This is LabWired's RV32IMC interpreter, not Renode's VeeR_EL2
+# CPU; CLINT, the VeeR PIC and the VeeR timer CSRs are not checked.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-tock-veer-el2-smoke"
@@ -11,4 +12,9 @@ assertions:
       address: 0x20600000
       expected_value: 0x00000143
       size: 4
+  - memory_value:
+      address: 0x20600010
+      expected_value: 0x7E3EE120
+      size: 4
+  - uart_contains: "VeeR EL2 htif ok"
   - expected_stop_reason: max_steps
