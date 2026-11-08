@@ -37,6 +37,7 @@ const CONVERTED: &[&str] = &[
     "eos-s3-quickfeather",
     "eos-s3",
     "imxrt1064",
+    "mars_zx3",
     "max32652-evkit",
     "max32652",
     "mimxrt1064_evk",
@@ -64,7 +65,9 @@ const CONVERTED: &[&str] = &[
     "stm32l072",
     "stm32wba52",
     "ut32m0r500",
+    "zedboard",
     "zolertia-firefly",
+    "zynq-7000",
 ];
 
 /// Onboarding profiles that declare an ADC whose IP LabWired does not yet
@@ -164,7 +167,15 @@ enum Family {
     /// enabled `SECHAN_CFG`, 12 bits against 1.5 V / PGA gain, bit 11
     /// flipped in `DATA_OUT` (Renode CAES_ADC.cs, CAES ADC app notes).
     Caes,
+    /// Zynq-7000 XADC through the PS-XADC interface: DRP read commands into
+    /// `CMDFIFO`, results one command later in `RDFIFO`, 12 bits
+    /// MSB-justified against 1 V on VP/VN and VAUXn (Renode Xilinx_XADC.cs,
+    /// embeddedsw xadcps.c), so the 3.3 V NTC divider saturates above 1 V.
+    Xadc,
 }
+
+/// XADC DRP channel of VAUXn (xadcps_hw.h `XADCPS_CH_AUX_MIN`).
+const XADC_AUX0: u8 = 0x10;
 
 struct Converter {
     id: String,
@@ -199,6 +210,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Da14Gpadc
         } else if kind == "caes_adc" {
             Family::Caes
+        } else if kind == "xilinx_xadc" {
+            Family::Xadc
         } else {
             match p.config.get("profile").and_then(|v| v.as_str()) {
                 Some("stm32f4") => Family::Stm32F4,
@@ -251,6 +264,8 @@ impl Converter {
             Family::Da14Gpadc => mv.min(3600) * 1023 / 3600,
             // 12-bit against 1.5 V at PGA 1 V/V, truncated, clamped.
             Family::Caes => mv.min(1500) * 4095 / 1500,
+            // Unipolar, 1 LSB = 1 V / 4096, clamped at 0xFFF.
+            Family::Xadc => (mv * 4096 / 1000).min(4095),
         }
     }
 
@@ -273,6 +288,8 @@ impl Converter {
             // AIN0 and AIN1: the two pads with a divide-by-5 channel.
             // DA1459x: SEL_P 0/1 are pads P1_0/P1_1.
             Family::Eoss3 | Family::Max32650 | Family::Da14Gpadc => [0, 1],
+            // VAUX5 and VAUX6: the DRP channel is 0x10 + n.
+            Family::Xadc => [XADC_AUX0 + NTC_CHANNEL, XADC_AUX0 + DIODE_CHANNEL],
             _ => [NTC_CHANNEL, DIODE_CHANNEL],
         }
     }
@@ -281,6 +298,36 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Xadc => {
+                // xadcps.c XAdcPs_CfgInitialize: CFG |= ENABLE | CFIFOTH |
+                // DFIFOTH, then MCTL = 0 to release the XADC from reset.
+                // Until then a command is dropped.
+                const CFG_ENABLE_FIFOTH: u32 = (1 << 31) | (0xF << 20) | (0xF << 16);
+                let (cfg, msts, cmdfifo, mctl) = (
+                    self.base,
+                    self.base + 0x0C,
+                    self.base + 0x10,
+                    self.base + 0x18,
+                );
+                assert_eq!(
+                    bus.read_u32(mctl).unwrap(),
+                    0x10,
+                    "{}: MCTL.RESET at reset",
+                    self.id
+                );
+                bus.write_u32(cmdfifo, 0).expect("no-op before release");
+                assert_eq!(
+                    bus.read_u32(msts).unwrap(),
+                    0x500,
+                    "{}: no command runs before bring-up (DFIFOE | CFIFOE)",
+                    self.id
+                );
+                let value = bus.read_u32(cfg).unwrap();
+                assert_eq!(value, 0x1114, "{}: CFG reset value", self.id);
+                bus.write_u32(cfg, value | CFG_ENABLE_FIFOTH)
+                    .expect("CFG.ENABLE");
+                bus.write_u32(mctl, 0).expect("release MCTL.RESET");
+            }
             Family::Caes => {
                 // Users Guide Example 1: ADC_REGDEF, then single sweep with
                 // ADC_EN, plus EN_PGA for the per-channel gains.
@@ -492,6 +539,47 @@ impl Converter {
     /// One firmware-style conversion per routed channel: `[ntc, diode]`.
     fn convert_routed(&self, bus: &mut SystemBus) -> [u32; 2] {
         match self.family {
+            Family::Xadc => {
+                // Three pipelined DRP reads and a no-op: each command shifts
+                // the previous result into RDFIFO, so the first word is the
+                // no-op latch and the reads follow in order.
+                let (msts, cmdfifo, rdfifo) =
+                    (self.base + 0x0C, self.base + 0x10, self.base + 0x14);
+                let read = |channel: u8| (1 << 26) | (u32::from(channel) << 16);
+                let [ntc, diode] = self.routed_channels();
+                for channel in [ntc, diode, XADC_AUX0 + IDLE_CHANNEL] {
+                    bus.write_u32(cmdfifo, read(channel)).expect("DRP read");
+                }
+                bus.write_u32(cmdfifo, 0).expect("DRP no-op");
+                assert_eq!(
+                    bus.read_u32(msts).unwrap() >> 12 & 0xF,
+                    4,
+                    "{}: four commands leave four RDFIFO words",
+                    self.id
+                );
+                let words: Vec<u32> = (0..4).map(|_| bus.read_u32(rdfifo).unwrap()).collect();
+                assert_eq!(
+                    words[0], 0,
+                    "{}: the first word is the no-op latch",
+                    self.id
+                );
+                assert_eq!(
+                    words[3], 0,
+                    "{}: unrouted VAUX{IDLE_CHANNEL} converts to zero",
+                    self.id
+                );
+                for word in &words {
+                    assert_eq!(word & 0xF, 0, "{}: 12 bits MSB-justified", self.id);
+                }
+                // The single-read path (XAdcPs_GetAdcData) agrees.
+                assert_eq!(
+                    self.convert(bus, ntc),
+                    words[1] >> 4,
+                    "{}: GetAdcData",
+                    self.id
+                );
+                [words[1] >> 4, words[2] >> 4]
+            }
             Family::Saadc { ram } => {
                 bus.write_u32(self.base + 0x104, 0).expect("clear END");
                 bus.write_u32(self.base, 1).expect("TASKS_START");
@@ -1172,6 +1260,16 @@ impl Converter {
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {
         match self.family {
+            Family::Xadc => {
+                // XAdcPs_ReadInternalReg: read command, dummy RDFIFO pop,
+                // write the dummy back (a no-op), pop the result.
+                let (cmdfifo, rdfifo) = (self.base + 0x10, self.base + 0x14);
+                bus.write_u32(cmdfifo, (1 << 26) | (u32::from(channel) << 16))
+                    .expect("DRP read");
+                let dummy = bus.read_u32(rdfifo).expect("dummy RDFIFO");
+                bus.write_u32(cmdfifo, dummy).expect("dummy command");
+                bus.read_u32(rdfifo).expect("RDFIFO") >> 4
+            }
             Family::Stm32F4 => {
                 const ADON: u32 = 1;
                 bus.write_u32(self.base + 0x34, u32::from(channel))
@@ -1526,10 +1624,13 @@ fn assert_converter_routes_generic_analog(
         ntc_codes.push(ntc_code);
     }
     // The NTC sits on the low side: hotter means lower resistance, lower volts.
-    if matches!(converter.family, Family::Apollo4 | Family::Eoss3) {
-        // Above the 1.19 V (Apollo4) or 1.4 V (EOS S3) full scale the -10 and
-        // 25 °C dividers (2.79 V, 1.65 V) both saturate; only 80 °C (0.37 V)
-        // is in range.
+    if matches!(
+        converter.family,
+        Family::Apollo4 | Family::Eoss3 | Family::Xadc
+    ) {
+        // Above the 1.19 V (Apollo4), 1.4 V (EOS S3) or 1 V (XADC) full
+        // scale the -10 and 25 °C dividers (2.79 V, 1.65 V) both saturate;
+        // only 80 °C (0.37 V) is in range.
         assert_eq!(
             ntc_codes[..2],
             [4095, 4095],
@@ -1596,7 +1697,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 46,
+        instances, 49,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -1604,7 +1705,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 177,
+        without_adc, 174,
         "onboarding profiles that declare no modelled ADC"
     );
 }
