@@ -1167,7 +1167,14 @@ pub fn try_build(
             Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new().with_layout(layout))
         }
         "rp2040_dma" => Box::new(crate::peripherals::rp2040::dma::Rp2040Dma::new()),
-        "rp2040_io_bank0" => Box::new(crate::peripherals::rp2040::io_bank0::Rp2040IoBank0::new()),
+        "rp2040_io_bank0" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::io_bank0::IoBankLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::io_bank0::IoBankLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::io_bank0::Rp2040IoBank0::new().with_layout(layout))
+        }
         "rp2040_sio" => {
             let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
                 Some("rp2350") => crate::peripherals::rp2040::sio::SioLayout::Rp2350,
@@ -1178,7 +1185,14 @@ pub fn try_build(
         }
         "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
         "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),
-        "rp2040_pwm" => Box::new(crate::peripherals::rp2040::pwm::Rp2040Pwm::new()),
+        "rp2040_pwm" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::pwm::PwmLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::pwm::PwmLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::pwm::Rp2040Pwm::new().with_layout(layout))
+        }
         "rp2040_adc" => Box::new(crate::peripherals::rp2040::adc::Rp2040Adc::new()),
         "rp2040_rtc" => Box::new(crate::peripherals::rp2040::rtc::Rp2040Rtc::new()),
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
