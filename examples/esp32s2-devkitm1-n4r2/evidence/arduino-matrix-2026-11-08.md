@@ -19,7 +19,7 @@ that run predates the narrowed descriptor, re-measured cell by cell after it):
 | L5 ADC | skip | no S2 SAR ADC model |
 | L6 PWM | **pass** | 1 kHz, 50 % PWM on the GPIO2 pad via LEDC LS ch6 (see below) |
 | L7 micros | **pass** | 80 MHz SYSTIMER (`SYSTIMER_LL_TICKS_PER_US` = 80) |
-| L8 CAN | skip | no S2 TWAI model: `LW_L8_FAIL no_can` |
+| L8 CAN | **pass** | TWAI self-reception returns ID 0x123 / 0xA5 (register-level, no bus; see below) |
 
 Gate test: `cargo test -p labwired-core --test esp32s2_arduino_boot`, with
 a negative control (erased partition table → no marker).
@@ -145,6 +145,35 @@ data phase reaches a device), a waveform on the pads, and the interrupt.
 interrupt mode would not complete. CS is not routed: the MAX31855 kit is
 broadcast, so the CS pin in the system file (GPIO5, the sketch's) is not
 checked.
+
+## L8 — TWAI self-reception (added later the same day)
+
+The S2 TWAI is the S3's controller. `soc/esp32s2/register/soc/twai_struct.h`
+matches `soc/esp32s3/register/soc/twai_struct.h` field for field. The one
+difference is `BUS_TIMING_0.brp`: 14 bits on the S2, 13 on the S3. The model
+stores all 16 low bits, so both round-trip. No new model was needed: the
+profile maps the existing `esp32s3_twai` type at 0x3F42_B000
+(`esp32s2.peripherals.ld`: `TWAI = 0x3f42B000`) with `irq: 47`
+(`ETS_TWAI_INTR_SOURCE` in `soc/esp32s2/include/soc/interrupts.h`). The L8
+sketch gets an `ARDUINO_ESP32S2_DEV` branch with the same register sequence
+and checks as the S3 branch. It leaves reset mode, loads the standard frame
+(ID 0x123, DLC 1, data 0xA5), and issues `CMD.self_rx_req`. Then it checks
+`STATUS.rx_buf_st`, `RX_MSG_CNT == 1` and the frame bytes.
+
+Re-run of the row
+([`arduino-matrix-esp32s2-l8-twai-2026-11-08.log`](arduino-matrix-esp32s2-l8-twai-2026-11-08.log)):
+L0, L1, L2, L3, L4, L6, L7 and L8 pass. L5 skips. UART0 prints `LW_L8_BOOT`,
+then `LW_L8_OK`. Mutation check: with the TWAI window moved off 0x3F42_B000,
+the same ELF stops after `LW_L8_` and the run fails.
+
+Gate test: `cargo test -p labwired-core --test esp32s2_arduino_twai` reaches
+`LW_L8_OK`. It then reads the controller back over the bus: operating mode,
+`rx_buf_st` set, `RX_MSG_CNT` 1, and the RX buffer bytes `01 24 60 A5`.
+
+Not modelled: a CAN bus. There are no peers, no arbitration, no ACK, and no
+bit timing. `tx_req` completes at once, and only self-reception produces an
+RX frame. The sketch is register-level, not the ESP-IDF `twai` driver: the
+driver's alert/ISR path through source 47 is not exercised.
 
 ## Vendor status (live, 2026-11-08)
 
