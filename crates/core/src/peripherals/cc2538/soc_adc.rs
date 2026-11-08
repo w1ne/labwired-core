@@ -567,7 +567,7 @@ mod tests {
     #[test]
     fn byte_reads_of_upper_lanes_do_not_clear_eoc() {
         let mut adc = Cc2538SocAdc::new();
-        adc.write(ADCCON3 as u64, ctl(0, 3, 15) as u8).unwrap();
+        adc.write(ADCCON3, ctl(0, 3, 15) as u8).unwrap();
         adc.read(ADCH + 1).unwrap();
         assert_ne!(adc.read(ADCCON1).unwrap() as u32 & ADCCON1_EOC, 0);
         adc.read(ADCH).unwrap();
