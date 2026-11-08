@@ -190,6 +190,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "samd51_adc",
     // The SAMD21 ADC: a different register layout, same conversion slice.
     "samd21_adc",
+    // The same TCC slice on the SAMD21 instances (single IRQ line, PM clock gate).
+    "samd21_tcc",
     "samd51_pac",
     "samd51_sercom_i2cm",
     // The same I2C master slice on SAMD21 SERCOM instances.
@@ -554,7 +556,7 @@ fn build_samd51_board_model(
             Box::new(adc)
         }
         "samd51_tcc" => {
-            use crate::peripherals::sam::tcc::{Samd51Tcc, TCC_INSTANCES};
+            use crate::peripherals::sam::tcc::{SamTcc, TCC_INSTANCES};
             let Some(instance) = TCC_INSTANCES.iter().find(|i| i.base == p_cfg.base_address) else {
                 anyhow::bail!("SAMD51 TCC base must be one of TCC0..TCC4");
             };
@@ -562,7 +564,20 @@ fn build_samd51_board_model(
             if p_cfg.irq.is_some_and(|irq| irq != instance.irq) {
                 anyhow::bail!("SAMD51 TCC IRQ must be its first line {}", instance.irq);
             }
-            Box::new(Samd51Tcc::new(*instance))
+            Box::new(SamTcc::new(*instance))
+        }
+        "samd21_tcc" => {
+            use crate::peripherals::sam::tcc::{SamTcc, SAMD21_TCC_INSTANCES};
+            let Some(instance) = SAMD21_TCC_INSTANCES
+                .iter()
+                .find(|i| i.base == p_cfg.base_address)
+            else {
+                anyhow::bail!("SAMD21 TCC base must be one of TCC0..TCC2");
+            };
+            if p_cfg.irq.is_some_and(|irq| irq != instance.irq) {
+                anyhow::bail!("SAMD21 TCC IRQ must be {}", instance.irq);
+            }
+            Box::new(SamTcc::new(*instance))
         }
         "samd51_dac" | "samd51_pac" => {
             let base = if kind == "samd51_dac" {
@@ -917,7 +932,9 @@ pub fn try_build(
         }
         "samd51_oscctrl" | "samd51_gclk" | "samd51_tc" | "samd51_tcc" | "samd51_eic"
         | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm"
-        | "samd21_sercom_i2cm" | "samd21_adc" => build_samd51_board_model(canonical_type, p_cfg)?,
+        | "samd21_sercom_i2cm" | "samd21_adc" | "samd21_tcc" => {
+            build_samd51_board_model(canonical_type, p_cfg)?
+        }
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
             let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());

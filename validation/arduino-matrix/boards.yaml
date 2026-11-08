@@ -342,11 +342,13 @@ boards:
     budget_reason: "Cortex-M0+ 48 MHz; L0 reaches loop() in well under 1M steps"
     led_watch: "gpio_a:17"
     led_min_edges: 2
+    # L6: analogWrite(LED_BUILTIN = D13 = PA17) runs TCC2 WO1 in NPWM on PMUX
+    # E; the pad must carry the waveform, not the PORT latch.
+    pwm_watch: "gpio_a:17"
     family: sam
     notes: "Arduino Zero (ArduinoCore-samd), Programming Port"
-    sketches_skip: [L6_pwm, L8_can]
+    sketches_skip: [L8_can]
     sketches_skip_reason:
-      L6_pwm: "SAMD21 TCC/TC not modelled yet"
       L8_can: "ATSAMD21G18A has no CAN controller"
 
   # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────

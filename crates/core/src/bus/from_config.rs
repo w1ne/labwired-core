@@ -1468,6 +1468,8 @@ impl SystemBus {
         bus.wire_stm32_timer_output_pads();
         // SAMD51 TC waveform outputs onto their PMUX-E pads (samd51_tc only).
         bus.wire_samd51_tc_output_pads();
+        // SAMD21 TCC WO[x] onto their PMUX-E/F pads (samd21_tcc only).
+        bus.wire_samd21_tcc_output_pads();
         // RA GPT GTIOCnA/B onto the pads the chip YAML names (PSEL 00011).
         bus.wire_ra_gpt_output_pads();
         // Board wires from an analog output (a DAC pin) to an ADC input.

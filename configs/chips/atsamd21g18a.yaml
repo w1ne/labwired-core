@@ -331,6 +331,31 @@ peripherals:
     base_address: 0x42004000
     size: "64B"
 
+  # ── TCC0..TCC2 (`samd21_tcc`) ──────────────────────────────────────────────
+  # Counters with compare matches, buffered CC/PER (CCB/PERB) and single-slope
+  # NPWM waveform outputs published onto the pads PMUX E/F hands them (bus
+  # `wire_samd21_tcc_output_pads`). That is what stock analogWrite() does on a
+  # TCC pin (Zero D13 = PA17 = TCC2/WO1, PER 0xFFFF, GCLK0). Counts at the CPU
+  # clock over the prescaler while PM.APBCMASK enables it; GCLK.CLKCTRL is a
+  # plain bank above, so the generic clock is NOT checked. Dual-slope, MFRQ,
+  # dithering, faults, capture, dead time, patterns, events and DMA are
+  # refused, not ignored. Size is the SVD addressBlock (0x80).
+  - id: "tcc0"
+    type: "samd21_tcc"
+    base_address: 0x42002000
+    size: "128B"
+    irq: 15
+  - id: "tcc1"
+    type: "samd21_tcc"
+    base_address: 0x42002400
+    size: "128B"
+    irq: 16
+  - id: "tcc2"
+    type: "samd21_tcc"
+    base_address: 0x42002800
+    size: "128B"
+    irq: 17
+
   # ── Cortex-M0+ core peripherals ────────────────────────────────────────────
   # No `debug_schema` on either: they are Arm core blocks in the PPB, which the
   # Microchip SVD does not describe, so there is no base to attach one to.
@@ -350,6 +375,7 @@ peripherals:
 #   EIC 0x40001800 (external interrupts / attachInterrupt), RTC 0x40001400,
 #   DSU 0x41002000 (device identity, CoreSight), DMAC 0x41004800,
 #   EVSYS 0x42000400,
-#   TCC0-2 0x42002000..0x42002800, TC3-5 0x42002C00..0x42003400,
+#   TC3-5 0x42002C00..0x42003400 (so analogWrite on a TC pin — Zero D10/D12
+#   — faults; the TCC pins work),
 #   AC 0x42004400, I2S 0x42005000,
 #   PAC0/1/2, HMATRIX, MTB, and the PORT_IOBUS alias at 0x60000000.

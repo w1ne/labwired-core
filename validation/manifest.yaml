@@ -2448,8 +2448,13 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 0b25393d311c2c3a038ce6e03ad0856e7d36776a28f151bf5a53570b044f05f4
+    # 2026-11-08 (feat/arduino-zero-samd21-row): peripheral.rs gains a
+    # default-false `bind_timer_output_pad_function` capability and gpio.rs
+    # implements it for the SAM PORT layout only (SAMD21 TCC WO pads on PMUX
+    # E/F); the STM32 GPIO arms and every existing method are untouched.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-08
+    drift_ack_digest: 320b3edc1e26528318350039c64d49e7438cea9b0ca0c7c8164c8fc74cae86bf
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4651,8 +4656,13 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 983045bcaae89f1c6acf27a43248dfacbc7400cc40f841f1ec7e99ee00f0aa0f
+    # 2026-11-08 (feat/arduino-zero-samd21-row): peripheral.rs gains a
+    # default-false `bind_timer_output_pad_function` capability and gpio.rs
+    # implements it for the SAM PORT layout only (SAMD21 TCC WO pads on PMUX
+    # E/F); the STM32 GPIO arms and every existing method are untouched.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-08
+    drift_ack_digest: cd2cbff51ac51ca7c2ad08a0201d2c35222383daf7c3d8a74cfb70246615a3a9
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5148,7 +5158,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: b80d2e3e65890e4964818135bddd7c7ffd2eeb02190e4f2794742592aa3998bc
+    drift_ack_digest: bbfd49921a906be0579e4b5ed038ae2828d14198198a962b75590295115217bc
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5704,7 +5714,12 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
+    # 2026-11-08 (feat/arduino-zero-samd21-row): peripheral.rs gains a
+    # default-false `bind_timer_output_pad_function` capability and gpio.rs
+    # implements it for the SAM PORT layout only (SAMD21 TCC WO pads on PMUX
+    # E/F); the STM32 GPIO arms and every existing method are untouched.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-08
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -6905,8 +6920,13 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 7a043bd038ddd21849f776d1045751c51539548e502b89e513411cb5cb00bf24
+    # 2026-11-08 (feat/arduino-zero-samd21-row): peripheral.rs gains a
+    # default-false `bind_timer_output_pad_function` capability and gpio.rs
+    # implements it for the SAM PORT layout only (SAMD21 TCC WO pads on PMUX
+    # E/F); the STM32 GPIO arms and every existing method are untouched.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-08
+    drift_ack_digest: 6bb5b09cf004e5e44379569a3804f27ceec156b3d757636261aab9e0050ad51f
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7423,7 +7443,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 99095c94a36c9666ae2a203f56c5a9b2889d6a72e160c0b23bab05e4a5a973c1
+    drift_ack_digest: 232822493e3bd9b47992dbf7e94db6d1cc58f0ffa2ef4c516565e57ab72b983e
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7981,7 +8001,12 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
+    # 2026-11-08 (feat/arduino-zero-samd21-row): peripheral.rs gains a
+    # default-false `bind_timer_output_pad_function` capability and gpio.rs
+    # implements it for the SAM PORT layout only (SAMD21 TCC WO pads on PMUX
+    # E/F); the STM32 GPIO arms and every existing method are untouched.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-08
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -9880,7 +9905,7 @@ boards:
     doc: docs/boards/atsamd21g18a.md
     chip: configs/chips/atsamd21g18a.yaml
     tier: sim-validated
-    note: "Microchip ATSAMD21G18A (Cortex-M0+, 256K flash at 0x0 / 32K SRAM) — the first SAM part in the engine, Arduino Zero / Feather M0 class. PORT and SERCOM are BEHAVIOURAL models, not stubs: PORT implements the DIR/OUT SET-CLR-TGL aliases as one register each, WRCONFIG's bulk PINCFG/PMUX write (the path ASF and the Arduino SAMD core actually take), and IN reading back what an output pin drives; SERCOM implements USART mode with DRE derived from CTRLA.ENABLE. A bare-metal firmware performs the real bring-up in datasheet order (NVMCTRL wait states, the SYSCTRL.PCLKSR ready poll, three GCLK SYNCBUSY spins, PM.APBCMASK, WRCONFIG, CTRLB before CTRLA.ENABLE) and its console reaches the capture sink — examples/samd21-smoke/io-smoke.yaml, 7 checks, executed by BOTH the strict-onboarding gate and the coverage matrix. Three of those checks are memory_value reads of the PORT registers the firmware configured, so the banner is not the gate. Every base and IRQ is checked against Microchip's Apache-2.0 ATSAMD21G18A.svd by svd_conformance with ZERO justified deviations. NOT PROVEN: no SAM D21 silicon diff (no bench part); nothing is clock-gated except the SERCOM3 I2C master and the ADC, which read PM.APBCMASK themselves (PM is a register bank, so firmware that forgets APBCMASK for any other block works here and fails on hardware); SYNCBUSY always reads 0 and transmission has no latency — modelling truths, not silicon ones; SERCOM3 runs as the I2C master slice and SERCOM4 as the SPI master (the Arduino Zero variant roles; stock ArduinoCore-samd Wire reads an INA219 and SPI a MAX31855, arduino-matrix L3/L4), with no SCL/SCK timing and no SPI interrupt; EIC, TCC/TC and DMAC are unmodelled and their windows deliberately unmapped; the ADC converts single-ended AINn against GND on the internal references (stock analogRead() reads A0 at a board-driven 1650 mV as exactly 512, arduino-matrix L5) with no settling, noise or IRQ; DAC and USB are declarative register banks only."
+    note: "Microchip ATSAMD21G18A (Cortex-M0+, 256K flash at 0x0 / 32K SRAM) — the first SAM part in the engine, Arduino Zero / Feather M0 class. PORT and SERCOM are BEHAVIOURAL models, not stubs: PORT implements the DIR/OUT SET-CLR-TGL aliases as one register each, WRCONFIG's bulk PINCFG/PMUX write (the path ASF and the Arduino SAMD core actually take), and IN reading back what an output pin drives; SERCOM implements USART mode with DRE derived from CTRLA.ENABLE. A bare-metal firmware performs the real bring-up in datasheet order (NVMCTRL wait states, the SYSCTRL.PCLKSR ready poll, three GCLK SYNCBUSY spins, PM.APBCMASK, WRCONFIG, CTRLB before CTRLA.ENABLE) and its console reaches the capture sink — examples/samd21-smoke/io-smoke.yaml, 7 checks, executed by BOTH the strict-onboarding gate and the coverage matrix. Three of those checks are memory_value reads of the PORT registers the firmware configured, so the banner is not the gate. Every base and IRQ is checked against Microchip's Apache-2.0 ATSAMD21G18A.svd by svd_conformance with ZERO justified deviations. NOT PROVEN: no SAM D21 silicon diff (no bench part); nothing is clock-gated except the SERCOM3 I2C master and the ADC, which read PM.APBCMASK themselves (PM is a register bank, so firmware that forgets APBCMASK for any other block works here and fails on hardware); SYNCBUSY always reads 0 and transmission has no latency — modelling truths, not silicon ones; SERCOM3 runs as the I2C master slice and SERCOM4 as the SPI master (the Arduino Zero variant roles; stock ArduinoCore-samd Wire reads an INA219 and SPI a MAX31855, arduino-matrix L3/L4), with no SCL/SCK timing and no SPI interrupt; TCC0..2 count at the CPU clock (GCLK is a register bank, not checked) and drive single-slope NPWM onto their PMUX E/F pads (stock analogWrite on D13 = PA17 = TCC2/WO1 is a 732 Hz, 50.0% waveform on the pad, arduino-matrix L6); EIC, TC3..5 and DMAC are unmodelled and their windows deliberately unmapped; the ADC converts single-ended AINn against GND on the internal references (stock analogRead() reads A0 at a board-driven 1650 mV as exactly 512, arduino-matrix L5) with no settling, noise or IRQ; DAC and USB are declarative register banks only."
     offline_tests:
       - "strict_onboarding::test_strict_board_onboarding (executes examples/samd21-smoke/io-smoke.yaml)"
       - "atsamd21_peripheral_estate::{the_estate_answers_at_its_own_addresses,the_sercom_instances_are_not_each_other,the_port_groups_are_not_each_other}"
