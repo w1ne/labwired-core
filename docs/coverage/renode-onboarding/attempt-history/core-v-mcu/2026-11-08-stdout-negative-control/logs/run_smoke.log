@@ -1,0 +1,11 @@
+[2m2026-11-08T07:46:25.610811Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/core-v-mcu.yaml
+[2m2026-11-08T07:46:25.611327Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x1a000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+[2m2026-11-08T07:46:25.611777Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Simulation error at step 0: Memory access violation at 0x1a10ff80
+[2m2026-11-08T07:46:25.611969Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Memory assertion failed at 0x1c000004 (size 4): expected 0x0, got 0xdeadbeef (mask 0xffffffff)
+[2m2026-11-08T07:46:25.611978Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762052, expected_value: 0, mask: None, size: Some(4), node: None } }) (captured len=0)
+[2m2026-11-08T07:46:25.611985Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Memory assertion failed at 0x1c000010 (size 4): expected 0xc0de5701, got 0x0 (mask 0xffffffff)
+[2m2026-11-08T07:46:25.611988Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762064, expected_value: 3235796737, mask: None, size: Some(4), node: None } }) (captured len=0)
+[2m2026-11-08T07:46:25.612000Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartContains(UartContainsAssertion { uart_contains: "CORE-V stdout ok" }) (captured len=0)
+[2m2026-11-08T07:46:25.612014Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }) (captured len=0)
+FAIL  1/5 checks · core-v-mcu-smoke · 0 steps · 0.00s

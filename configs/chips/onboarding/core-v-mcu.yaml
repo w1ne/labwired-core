@@ -5,9 +5,10 @@
 # See the LICENSE file in the project root for full license information.
 
 # Bounded imported CORE-V MCU profile. The CV32E40P execution surface matches
-# the validated A2 profile; this smoke claims only RV32IMC execution and the
-# imported flash/SRAM windows. PULP peripherals are omitted until individually
-# exercised against this system.
+# the validated A2 profile; this smoke claims RV32IMC execution, the imported
+# flash/SRAM windows and the PULP_STDOUT console. The other PULP peripherals
+# (uDMA UART/SPI/I2C/camera, timer, GPIO, I2S, interrupt controller) are
+# omitted until individually exercised against this system.
 name: core-v-mcu
 arch: riscv
 core: rv32imc
@@ -18,4 +19,16 @@ ram:
   base: 0x1C000000
   size: 512KiB
 flash_boot_alias: false
-peripherals: []
+peripherals:
+# Renode `UART.PULP_STDOUT` @0x1A10FF80 (cpus/core-v-mcu.repl): one 4-byte,
+# write-only STD_OUT register; a write transmits its low byte, reads return 0.
+# No status register exists, so the custom map sets none; a read lands on the
+# (never-fed) RX byte and returns 0.
+- id: stdout
+  type: uart
+  base_address: 0x1A10FF80
+  size: "4B"
+  config:
+    profile: custom
+    rx_offset: 0x0
+    tx_offset: 0x0

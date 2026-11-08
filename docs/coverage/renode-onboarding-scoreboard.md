@@ -21,7 +21,7 @@
 
 | Target | Status | Run Attempted | Booted | Smoke Passed | Elapsed (ms) | Elapsed (s) | Threshold Met | Smoke Depth | Zero Windows | Failure Stage | Hint | Signature |
 |---|---|---|---|---|---:|---:|---|---|---|---|---|---|
-| `A2_CV32E40P` | `pass` | `True` | `yes` | `yes` | `91017` | `91.017` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `A2_CV32E40P` | `pass` | `True` | `yes` | `yes` | `683` | `0.683` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `a20` | `pass` | `True` | `yes` | `yes` | `270406` | `270.406` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `acrn_x86_64` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 1: `hpet:hpet` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no x86-64 CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `alif_ae822fa0e5597bs0` | `pass` | `True` | `yes` | `yes` | `9943` | `9.943` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
@@ -47,7 +47,7 @@
 | `brd4402a` | `pass` | `True` | `yes` | `yes` | `985` | `0.985` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `cc2538` | `pass` | `True` | `yes` | `yes` | `4076` | `4.076` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `colibri-vf61` | `pass` | `True` | `yes` | `yes` | `10349` | `10.349` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `core-v-mcu` | `pass` | `True` | `yes` | `yes` | `764` | `0.764` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `core-v-mcu` | `pass` | `True` | `yes` | `yes` | `6360` | `6.36` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `cortex-a53-gicv2` | `pass` | `True` | `yes` | `yes` | `572` | `0.572` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `cortex-a53-gicv3` | `pass` | `True` | `yes` | `yes` | `534` | `0.534` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `cortex-a53-gicv3_smp` | `pass` | `True` | `yes` | `yes` | `546` | `0.546` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

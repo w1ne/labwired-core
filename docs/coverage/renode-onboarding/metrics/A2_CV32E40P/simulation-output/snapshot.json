@@ -13,13 +13,13 @@
       0,
       0,
       0,
+      3235796737,
       323,
+      323,
+      23072,
+      23050,
+      437321728,
       469762048,
-      0,
-      0,
-      0,
-      0,
-      0,
       0,
       0,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 436207632,
+    "pc": 436207820,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 200004,
+  "cycles": 200096,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "f260e4ba524a157575bb7cb2cd773466aafbac323203deca548680e531c3b0db",
+  "firmware_hash": "3d96a8687ad39511215eb6873d510d4e302e7d1cf417d658932506f309581a56",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-cv32e40p-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/A2_CV32E40P.yaml",

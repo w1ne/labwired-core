@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 100000,
-  "cycles": 200004,
+  "cycles": 200096,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -41,6 +41,34 @@
     },
     {
       "assertion": {
+        "memory_value": {
+          "address": 469762052,
+          "expected_value": 0,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 469762064,
+          "expected_value": 3235796737,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "CORE-V stdout ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -59,13 +87,13 @@
       0,
       0,
       0,
+      3235796737,
       323,
+      323,
+      23072,
+      23050,
+      437321728,
       469762048,
-      0,
-      0,
-      0,
-      0,
-      0,
       0,
       0,
       0,
@@ -82,7 +110,7 @@
       0,
       0
     ],
-    "pc": 436207632,
+    "pc": 436207820,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -118,14 +146,22 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "f260e4ba524a157575bb7cb2cd773466aafbac323203deca548680e531c3b0db",
+  "firmware_hash": "3d96a8687ad39511215eb6873d510d4e302e7d1cf417d658932506f309581a56",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-cv32e40p-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/core-v-mcu.yaml",
     "script": "examples/renode-onboarding/core-v-mcu-smoke.yaml"
   },
   "inspect": {
-    "peripherals": [],
+    "peripherals": [
+      {
+        "name": "stdout",
+        "kind": "native",
+        "base": 437321600,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
     "devices": []
   },
   "fidelity": [
@@ -137,16 +173,27 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "CORE-V stdout ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 20,
+    "text_bytes": 206,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 20,
+    "flash_used_bytes": 206,
     "ram_static_bytes": 0,
     "flash_total_bytes": 8192,
     "ram_total_bytes": 524288,
-    "flash_used_pct": 0.24,
+    "flash_used_pct": 2.51,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -159,18 +206,18 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 200004,
+    "cycles": 200096,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 0,
-    "memory_writes": 1,
-    "peripheral_accesses": 0,
+    "memory_reads": 1,
+    "memory_writes": 4,
+    "peripheral_accesses": 18,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 436207632,
+        "pc": 436207820,
         "count": 390,
-        "symbol": "_start"
+        "symbol": "main"
       }
     ]
   }

@@ -6,3 +6,4 @@
 
 name: core-v-mcu
 chip: ../../chips/onboarding/core-v-mcu.yaml
+debug_uart: stdout

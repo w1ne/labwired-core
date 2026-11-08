@@ -1,7 +1,8 @@
 # Bounded imported CV32E40P profile. The generated import mislabeled this
-# RISC-V system as ARM and listed PULP peripheral windows outside this
-# CPU-and-memory smoke. The profile claims RV32IMC execution and the imported
-# memory windows; no peripheral behavior is claimed here.
+# RISC-V system as ARM and listed PULP peripheral windows this smoke does not
+# exercise. The board repl only includes cpus/core-v-mcu.repl. The
+# profile claims RV32IMC execution, the imported memory windows and the
+# PULP_STDOUT console; the other PULP peripherals are not claimed.
 name: A2_CV32E40P
 arch: riscv
 core: rv32imc
@@ -12,4 +13,16 @@ ram:
   base: 0x1C000000
   size: 512KiB
 flash_boot_alias: false
-peripherals: []
+peripherals:
+# Renode `UART.PULP_STDOUT` @0x1A10FF80 (cpus/core-v-mcu.repl): one 4-byte,
+# write-only STD_OUT register; a write transmits its low byte, reads return 0.
+# No status register exists, so the custom map sets none; a read lands on the
+# (never-fed) RX byte and returns 0.
+- id: stdout
+  type: uart
+  base_address: 0x1A10FF80
+  size: "4B"
+  config:
+    profile: custom
+    rx_offset: 0x0
+    tx_offset: 0x0
