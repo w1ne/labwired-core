@@ -1,14 +1,26 @@
-# Cortex-M23 instruction and SRAM smoke against the exact imported RA2L1 system.
-# It does not exercise the imported peripherals or claim full RA2L1 parity.
+# Cortex-M23, SCI3 polled TX and PORT5 (P503, EK-RA2L1 LED1) smoke against the
+# narrowed imported RA2L1 profile. It does not claim ICU/GPT/AGT/IIC parity.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv8m.base-none-eabi/release/firmware-renesas-r7fa2l1a-smoke"
   system: "../../configs/systems/onboarding/renesas-r7fa2l1a.yaml"
 limits:
-  max_steps: 100000
+  max_steps: 200000
 assertions:
   - memory_value:
       address: 0x20000000
       expected_value: 0x00000143
       size: 4
+  - memory_value:
+      address: 0x20000004
+      expected_value: 0x00000020
+      size: 4
+  - memory_value:
+      address: 0x20000008
+      expected_value: 0x00000008
+      size: 4
+  - uart_contains: "RA2L1 SCI3 SMOKE"
+  - gpio_edges:
+      pin: "port5:3"
+      min_edges: 4
   - expected_stop_reason: max_steps
