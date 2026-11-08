@@ -6,12 +6,26 @@
 
 name: stm32w108
 arch: arm
-# Narrowed profile: CPU, memory and the two general-purpose timers Renode
-# maps (STM32_Timer at 0x4000_E000 / 0x4000_F000). The generic STM32 timer
-# model covers the counter path (CR1/EGR/CNT/PSC/ARR, 16-bit). On this part
-# the update/compare flags and interrupt enables live in the separate
-# INT_TIMx block at 0x4000_A800, which is not mapped, so no timer IRQ is
-# claimed. UART, GPIO, radio, ADC and clock control are not mapped.
+# Narrowed profile following Renode's cpus/stm32w108.repl: CPU, memory, the
+# SC1 serial controller in UART mode, and the two general-purpose timers
+# (STM32_Timer at 0x4000_E000 / 0x4000_F000).
+#
+# SC1 (Renode UART.STM32W_UART @ 0x4000_C800, +0x100) uses the vendor-neutral
+# custom UART map with the STM32W108 register offsets: SC1_DATA @ +0x3C
+# (TX/RX), SC1_UARTSTAT @ +0x48 reading SC_UARTTXFREE (bit 2) |
+# SC_UARTTXIDLE (bit 6) at idle and SC_UARTRXVAL (bit 1) while a byte is
+# queued, and SC1_MODE @ +0x54 gating TX until SC_MODE bit 0 is set
+# (1 = UART). SC1_UARTCFG/UARTPER/UARTFRAC writes are accepted but not
+# stored (they read 0), so baud and framing are not claimed. The SC1
+# interrupt flags live in INT_SC1FLAG @ 0x4000_A808, which is not mapped, so
+# no UART IRQ is claimed.
+#
+# The generic STM32 timer model covers the counter path (CR1/EGR/CNT/PSC/ARR,
+# 16-bit). On this part the update/compare flags and interrupt enables live in
+# the separate INT_TIMx block at 0x4000_A800, which is not mapped, so no timer
+# IRQ is claimed. Renode maps no GPIO block for this part; GPIO, SC2, the
+# radio, the calibration ADC, the FIB, external RAM and clock control are not
+# mapped.
 flash:
   base: 134217728
   size: 262144B
@@ -19,6 +33,20 @@ ram:
   base: 536870912
   size: 1048576B
 peripherals:
+- id: sc1
+  type: uart
+  base_address: 0x4000C800
+  size: 256
+  config:
+    profile: custom
+    tx_offset: 0x3C
+    rx_offset: 0x3C
+    status_offset: 0x48
+    status_width: 4
+    status_idle: 0x44
+    rx_present_set: 0x02
+    enable_offset: 0x54
+    enable_mask: 0x01
 - id: tim1
   type: timer
   base_address: 0x4000E000

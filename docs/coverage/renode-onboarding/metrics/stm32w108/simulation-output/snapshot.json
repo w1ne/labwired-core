@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1460699263,
-      1460699200,
-      1,
-      63,
+      1460666879,
       33,
+      1460666432,
       537395200,
-      17,
-      537919472,
+      1,
+      33,
       0,
-      0,
-      0,
-      0,
-      6011,
       537919472,
       751,
-      134219176
+      0,
+      0,
+      0,
+      68,
+      537919472,
+      6011,
+      134219918
     ],
-    "pc": 134219176,
-    "xpsr": 1627389952,
+    "pc": 134219918,
+    "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "c512d181faccaeccf157a0b1b102898772a944800276ff3bd97e5976ca6a56b2",
+  "firmware_hash": "fb9ce5ec06c50a83203a11a5d6bc3a357f0c6bc88e31d85eb7605138bf9be171",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32w108-boot-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32w108.yaml",

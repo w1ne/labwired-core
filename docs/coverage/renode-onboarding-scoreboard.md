@@ -244,7 +244,7 @@
 | `stm32l072` | `pass` | `True` | `yes` | `yes` | `1070` | `1.07` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `stm32l151` | `pass` | `True` | `yes` | `yes` | `1070` | `1.07` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `stm32l552` | `pass` | `True` | `yes` | `yes` | `1940` | `1.94` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `stm32w108` | `pass` | `True` | `yes` | `yes` | `11281` | `11.281` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `stm32w108` | `pass` | `True` | `yes` | `yes` | `7494` | `7.494` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `stm32wba52` | `pass` | `True` | `yes` | `yes` | `2429` | `2.429` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `tegra2` | `pass` | `True` | `yes` | `yes` | `1154` | `1.154` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `tegra3` | `pass` | `True` | `yes` | `yes` | `1043` | `1.043` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

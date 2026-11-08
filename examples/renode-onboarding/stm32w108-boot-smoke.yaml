@@ -1,6 +1,8 @@
-# TIM1/TIM2 counter smoke for the narrowed imported STM32W108 profile.
-# 0x5710807F = magic | seven checks: reset values, stopped hold, CEN count,
-# PSC=7 ratio, ARR=99 bound+wrap, CEN clear freeze.
+# SC1 UART + TIM1/TIM2 counter smoke for the narrowed imported STM32W108
+# profile. 0x571001FF = magic | nine checks: reset values, stopped hold, CEN
+# count, PSC=7 ratio, ARR=99 bound+wrap, CEN clear freeze (bits 0-6), SC1
+# UARTSTAT idle TXFREE|TXIDLE with RXVAL clear (bit 7), banner sent and
+# TXIDLE reached (bit 8). The UARTSTAT readback 0x44 is stored at +0x0C.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32w108-boot-smoke"
@@ -10,6 +12,11 @@ limits:
 assertions:
   - memory_value:
       address: 0x20080000
-      expected_value: 0x5710807F
+      expected_value: 0x571001FF
       size: 4
+  - memory_value:
+      address: 0x2008000C
+      expected_value: 0x00000044
+      size: 4
+  - uart_contains: "STM32W108 SC1 SMOKE"
   - expected_stop_reason: max_steps
