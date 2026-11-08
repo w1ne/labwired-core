@@ -400,9 +400,6 @@ boards:
     pwm_min_edges: 4
     family: ra
     notes: "Stock ArduinoCore-renesas; Serial = SCI9; Wire = IIC1 (INA219 exact tier); SPI = RSPI SPI0 (MAX31855)"
-    sketches_skip: [L8_can]
-    sketches_skip_reason:
-      L8_can: "RA4M1 CAN0 is not modelled; the L8 sketch has no renesas CAN path"
 
   # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────
   #

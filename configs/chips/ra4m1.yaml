@@ -31,7 +31,7 @@
 #
 # NOT modelled: USB FS (declared stub; the Minima's `Serial` is USB CDC, so
 # stock Minima sketches print nowhere; the WiFi board's `Serial` is SCI9),
-# the external IRQ pins (no `irq_pins`), DTC/DMAC/ELC (stubs), CAN0, CTSU,
+# the external IRQ pins (no `irq_pins`), DTC/DMAC/ELC (stubs), CTSU,
 # RTC, the watchdogs, flash programming, DAC12.
 
 name: "r7fa4m1ab"
@@ -272,6 +272,15 @@ peripherals:
     size: "256B"
     config:
       profile: "ra_rspi"
+  # CAN0 (R_CAN0_BASE 0x40050000; the RA4M1 has one channel). `ra_can`:
+  # normal mailbox mode, polled, with no bus attached, so a frame completes
+  # only in loopback (TCR.TSTM = 10/11); interrupts and FIFO mode are
+  # refused. The CTX0/CRX0 pads (D10 = P103 / D13 = P102, variant
+  # pins_arduino.h PIN_CAN0_TX/RX) are not bound.
+  - id: "can0"
+    type: "ra_can"
+    base_address: 0x40050000
+    size: "4KB"
   # USBFS stub — USB CDC (the Minima's `Serial`) is not modelled.
   - id: "usbfs"
     type: "stub"

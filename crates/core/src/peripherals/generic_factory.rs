@@ -362,12 +362,14 @@ pub const MODEL_TYPES: &[&str] = &[
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
     "ra8_pfs",
     // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT, the
-    // 12-bit ADC and DAC, the IIC (RIIC) master and the GPT (saw-wave PWM).
+    // 12-bit ADC and DAC, the IIC (RIIC) master, the CAN module (normal
+    // mailbox mode) and the GPT (saw-wave PWM).
     "ra_icu",
     "ra_agt",
     "ra_adc12",
     "ra_dac12",
     "ra_iic",
+    "ra_can",
     "ra_gpt",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
@@ -1636,6 +1638,16 @@ pub fn try_build(
                 get("pclkb_hz").unwrap_or(iic::DEFAULT_PCLKB_HZ),
                 get("elc_event").map_or(iic::DEFAULT_ELC_EVENT, |v| v as u32),
             ))
+        }
+        // Normal mailbox mode; interrupts are refused, so there is no `irq`.
+        "ra_can" => {
+            if p_cfg.irq.is_some() {
+                anyhow::bail!("ra_can '{}' models no interrupt (drop `irq`)", p_cfg.id);
+            }
+            if let Some(k) = p_cfg.config.keys().next() {
+                anyhow::bail!("ra_can '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            Box::new(crate::peripherals::ra_can::RaCan::new())
         }
         // `channels`: GPT channel count; `clock_hz`: the rate the bus cycles
         // run at; `pclkd_hz`: PCLKD, the count clock before GTCR.TPCS;
