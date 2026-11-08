@@ -34,6 +34,7 @@ const CONVERTED: &[&str] = &[
     "ambiq-apollo4",
     "arduino_nano_33_ble",
     "atsamd21j17d-aft",
+    "atsamd51g19a",
     "brd4116a",
     "brd4117a",
     "brd4118a",
@@ -205,6 +206,12 @@ enum Family {
     /// only once PORT hands it to the ADC (PINCFG.PMUXEN, PMUX function B)
     /// (DS40001882 §33, ASF adc_start_conversion/adc_read).
     Samd21,
+    /// SAM D5x ADC: the D21 pad hand-over (PMUX function B, PINCFG.PMUXEN)
+    /// plus the D5x clock gates, `MCLK.APBDMASK` and the ADC's GCLK
+    /// `PCHCTRL.CHEN`; `INPUTCTRL.MUXPOS` against GND, `SWTRIG.START`,
+    /// `INTFLAG.RESRDY` on the next tick, 12 bits against `REFCTRL.REFSEL`
+    /// INTVCC1 = VDDANA (DS60001507 §45, Arduino SAMD core analogRead).
+    Samd51,
     /// EFR32 Series-2 IADC (xG22/MG24/MG26): `SINGLE.PORTPOS`/`PINPOS` mux a
     /// pad, `CMD.SINGLESTART` converts only while `EN.EN` is set,
     /// `STATUS.SINGLEFIFODV` and `IF.SINGLEDONE` rise, `SINGLEFIFODATA` pops
@@ -223,6 +230,12 @@ const IADC_PORTPOS_PORTA: u32 = 0x8;
 
 /// SAM D21 PORT GROUP0 (PA). The routed AIN5..7 are pads PA05..PA07.
 const SAMD21_PORT_A: u64 = 0x4100_4400;
+
+/// SAM D5x PORT group 0 (PA); the routed AIN5..7 are pads PA05..PA07.
+const SAMD51_PORT_A: u64 = 0x4100_8000;
+/// SAM D5x `MCLK.APBDMASK` and GCLK `PCHCTRL[0]` (samd51g19a.h).
+const SAMD51_MCLK_APBDMASK: u64 = 0x4000_0820;
+const SAMD51_GCLK_PCHCTRL0: u64 = 0x4000_1C80;
 
 /// RA `ADCER` offset (R_ADC0_Type).
 const RA_ADCER: u64 = 0x0E;
@@ -265,6 +278,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Caes
         } else if kind == "samd21_adc" {
             Family::Samd21
+        } else if kind == "samd51_adc" {
+            Family::Samd51
         } else if kind == "xilinx_xadc" {
             Family::Xadc
         } else if kind == "efr32s2_iadc" {
@@ -330,6 +345,9 @@ impl Converter {
             // 12-bit against REFCTRL.REFSEL INTVCC0 = VDDANA / 1.48
             // (2229 mV at 3.3 V), truncated, clamped.
             Family::Samd21 => (mv * 4095 / (3300 * 100 / 148)).min(4095),
+            // 12-bit against INTVCC1 = VDDANA (3.3 V), 2^12 / VREF,
+            // truncated, clamped.
+            Family::Samd51 => (mv * 4096 / 3300).min(4095),
             // 12-bit against AVDD (3.3 V), 2^12 / VREF, truncated, clamped.
             Family::Efr32Iadc => (mv * 4096 / 3300).min(4095),
             // (2^bits - 1) / VREFH0 (3.3 V), truncated, clamped.
@@ -360,6 +378,17 @@ impl Converter {
             // VAUX5 and VAUX6: the DRP channel is 0x10 + n.
             Family::Xadc => [XADC_AUX0 + NTC_CHANNEL, XADC_AUX0 + DIODE_CHANNEL],
             _ => [NTC_CHANNEL, DIODE_CHANNEL],
+        }
+    }
+
+    /// SAM D5x `(MCLK.APBDMASK bit, GCLK PCHCTRL index)` of this ADC
+    /// (hal_atmel samd51 mclk.h `MCLK_APBDMASK_ADC0/1_Pos` = 7/8,
+    /// instance/adc0.h, adc1.h `ADC0/1_GCLK_ID` = 40/41).
+    fn samd51_clocks(&self) -> (u32, u64) {
+        match self.base {
+            0x4300_1C00 => (7, 40),
+            0x4300_2000 => (8, 41),
+            other => panic!("{}: no SAM D5x ADC at {other:#x}", self.id),
         }
     }
 
@@ -443,6 +472,54 @@ impl Converter {
                 bus.write_u16(self.base + 0x04, 0).expect("CTRLB 12-bit");
                 bus.write_u8(self.base + 0x01, 1).expect("REFCTRL INTVCC0");
                 bus.write_u8(self.base, 1 << 1).expect("CTRLA.ENABLE");
+            }
+            Family::Samd51 => {
+                // Arduino SAMD core pinPeripheral + analogRead: hand
+                // PA05..PA07 to function B (PMUX[2] odd nibble, PMUX[3] both
+                // nibbles, PINCFG.PMUXEN), 12-bit right-adjusted, INTVCC1,
+                // MUXPOS against GND, CTRLA.ENABLE.
+                bus.write_u8(SAMD51_PORT_A + 0x32, 0x10)
+                    .expect("PMUX[2] PA05 = B");
+                bus.write_u8(SAMD51_PORT_A + 0x33, 0x11)
+                    .expect("PMUX[3] PA06/PA07 = B");
+                for pad in [NTC_CHANNEL, DIODE_CHANNEL, IDLE_CHANNEL] {
+                    bus.write_u8(SAMD51_PORT_A + 0x40 + u64::from(pad), 1)
+                        .expect("PINCFG.PMUXEN");
+                }
+                bus.write_u16(self.base + 0x06, 0).expect("CTRLB 12-bit");
+                bus.write_u8(self.base + 0x08, 3).expect("REFCTRL INTVCC1");
+                bus.write_u16(self.base + 0x04, 0x1800 | u16::from(NTC_CHANNEL))
+                    .expect("INPUTCTRL");
+                bus.write_u16(self.base, 1 << 1).expect("CTRLA.ENABLE");
+                // Both clocks are off out of reset. A START now is held, not
+                // dropped: it completes only once the APB clock
+                // (MCLK.APBDMASK) and the generic clock (GCLK PCHCTRL.CHEN)
+                // both run.
+                let (apbd_bit, gclk_channel) = self.samd51_clocks();
+                let resrdy = |bus: &SystemBus| bus.read_u8(self.base + 0x2E).unwrap() & 1;
+                bus.write_u8(self.base + 0x14, 1 << 1)
+                    .expect("SWTRIG.START");
+                bus.tick_peripherals_fully();
+                assert_eq!(resrdy(bus), 0, "{}: no clocks, no conversion", self.id);
+                bus.write_u32(SAMD51_GCLK_PCHCTRL0 + 4 * gclk_channel, 1 << 6)
+                    .expect("PCHCTRL GEN0 | CHEN");
+                bus.tick_peripherals_fully();
+                assert_eq!(
+                    resrdy(bus),
+                    0,
+                    "{}: the generic clock alone does not convert",
+                    self.id
+                );
+                bus.write_u32(SAMD51_MCLK_APBDMASK, 1 << apbd_bit)
+                    .expect("MCLK.APBDMASK");
+                bus.tick_peripherals_fully();
+                assert_eq!(
+                    resrdy(bus),
+                    1,
+                    "{}: the held conversion ends once both clocks run",
+                    self.id
+                );
+                bus.write_u8(self.base + 0x2E, 1).expect("clear RESRDY");
             }
             Family::Caes => {
                 // Users Guide Example 1: ADC_REGDEF, then single sweep with
@@ -819,7 +896,7 @@ impl Converter {
                 }
                 codes
             }
-            Family::Samd21 => {
+            Family::Samd21 | Family::Samd51 => {
                 let codes = [
                     self.convert(bus, NTC_CHANNEL),
                     self.convert(bus, DIODE_CHANNEL),
@@ -827,7 +904,12 @@ impl Converter {
                 // The ADC reads the pad only while PORT hands it over:
                 // with PINCFG.PMUXEN cleared the driven NTC pad converts to
                 // zero, and handing it back restores the code.
-                let pincfg = SAMD21_PORT_A + 0x40 + u64::from(NTC_CHANNEL);
+                let port_a = if matches!(self.family, Family::Samd21) {
+                    SAMD21_PORT_A
+                } else {
+                    SAMD51_PORT_A
+                };
+                let pincfg = port_a + 0x40 + u64::from(NTC_CHANNEL);
                 bus.write_u8(pincfg, 0).expect("PA05 back to GPIO");
                 assert_eq!(
                     self.convert(bus, NTC_CHANNEL),
@@ -1664,6 +1746,32 @@ impl Converter {
                 );
                 code
             }
+            Family::Samd51 => {
+                // analogRead: MUXPOS against GND (0x18), SWTRIG.START,
+                // RESRDY on the next tick, read RESULT, write RESRDY clear.
+                const RESRDY: u8 = 1;
+                bus.write_u16(self.base + 0x04, 0x1800 | u16::from(channel))
+                    .expect("INPUTCTRL");
+                bus.write_u8(self.base + 0x14, 1 << 1)
+                    .expect("SWTRIG.START");
+                assert_eq!(
+                    bus.read_u8(self.base + 0x2E).unwrap() & RESRDY,
+                    0,
+                    "{}: START clears RESRDY until the conversion ends",
+                    self.id
+                );
+                bus.tick_peripherals_fully();
+                assert_ne!(
+                    bus.read_u8(self.base + 0x2E).unwrap() & RESRDY,
+                    0,
+                    "{}: the conversion raises INTFLAG.RESRDY",
+                    self.id
+                );
+                let code = u32::from(bus.read_u16(self.base + 0x40).expect("RESULT"));
+                bus.write_u8(self.base + 0x2E, RESRDY)
+                    .expect("clear RESRDY");
+                code
+            }
             Family::Efr32Iadc => {
                 // em_iadc IADC_initSingle + IADC_command(SINGLESTART), poll
                 // STATUS.SINGLEFIFODV, IADC_pullSingleFifoResult. Channel
@@ -1913,6 +2021,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Cc2538
                 | Family::Caes
                 | Family::Samd21
+                | Family::Samd51
                 | Family::Efr32Iadc
                 | Family::RaAdc { .. }
         ) {
@@ -2000,7 +2109,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 89,
+        instances, 90,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -2008,7 +2117,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 146,
+        without_adc, 145,
         "onboarding profiles that declare no modelled ADC"
     );
 }
