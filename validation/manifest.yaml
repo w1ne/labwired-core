@@ -10135,6 +10135,15 @@ boards:
       # claim for the corrected digest to invalidate — no ack is implied.
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
+      # 2026-11-08, model_paths_drift_gate: the stock-Arduino UNO R4 row put
+      # ICU, AGT, IIC, GPT, ADC14 and RSPI on the shared ra4m1.yaml, so this
+      # board registers them too. Still no silicon capture, so no ack.
+      - crates/core/src/peripherals/ra_adc12.rs
+      - crates/core/src/peripherals/ra_agt.rs
+      - crates/core/src/peripherals/ra_gpt.rs
+      - crates/core/src/peripherals/ra_icu.rs
+      - crates/core/src/peripherals/ra_iic.rs
+      - crates/core/src/peripherals/spi.rs
 
   - id: teensy-41
     doc: docs/boards/teensy-41.md
