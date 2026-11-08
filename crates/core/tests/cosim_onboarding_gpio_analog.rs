@@ -127,6 +127,12 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x48,
         "Linux pinctrl-starfive-jh7100.c GPIODIN",
     ),
+    // FocalTech FT9001 EPORT: EPDDR, EPPDR, EPDR bytes, pin k at bit k.
+    (
+        "declarative/ft9001/eport.yaml",
+        0x04,
+        "FT9001 HAL eport_reg.h EPPDR (EPORT_ReadGpioDatas)",
+    ),
     // Microwatt GPIO: DATA_OUT, DATA_IN, DIR words, pad k at bit k.
     (
         "declarative/microwatt/gpio.yaml",
@@ -204,12 +210,15 @@ fn input_bit(kind: &str, pin: u8) -> u32 {
 /// registers, and the byte after P1IN is P1OUT, so a word load would read
 /// past the port. RZ/G2L and RZ/T2M `PIN_m` are bytes (`readb` in
 /// pinctrl-rzg2l.c, a `uint8_t *` in gpio_rzt2m.c) and the next byte is the
-/// next port's. Every other map here is word-wide.
+/// next port's. FT9001 EPORT `EPPDR` is a byte (`uint8_t` in the HAL's
+/// `EPORT_ReadGpioDatas`) and the next byte is `EPDR`. Every other map here is
+/// word-wide.
 fn load_input(bus: &SystemBus, kind: &str, register: u64) -> u32 {
     match kind {
         "declarative/msp430/port8.yaml"
         | "declarative/rzg2l/port.yaml"
-        | "declarative/rzt2m/port.yaml" => bus.read_u8(register).map(u32::from),
+        | "declarative/rzt2m/port.yaml"
+        | "declarative/ft9001/eport.yaml" => bus.read_u8(register).map(u32::from),
         "declarative/msp430/port16.yaml" => bus.read_u16(register).map(u32::from),
         _ => bus.read_u32(register),
     }
@@ -455,6 +464,12 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
         "U-Boot vexpress_aemv8.h BASER_FVP V2M_SYSREGS (CS3 0x9C00_0000 + 0x1_0000) + vexpress-sysreg.c SYS_MCI",
     ),
     (
+        "focaltech_ft9001",
+        "eport0",
+        0x4001_9004,
+        "Zephyr ft9001.dtsi eport@40019000 + FT9001 HAL eport_reg.h EPPDR",
+    ),
+    (
         "microwatt",
         "gpio",
         0xC000_7004,
@@ -493,13 +508,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 218;
+const COVERED: usize = 219;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 113;
+const SILICON_REGISTER: usize = 114;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 27;
+const NO_ANALOG_ENDPOINT: usize = 26;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()

@@ -1,0 +1,132 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# FocalTech FT9001 EPORT (edge port) GPIO, one 8-pin block per EPORT. The
+# register layout is the vendor HAL's EPORT_TypeDef
+# (focaltech-3545/zephyr-ft9001-public hal/.../drv/inc/eport_reg.h):
+# EPPAR @0x00 (16-bit), EPIER @0x02, EPDDR @0x03, EPPDR @0x04, EPDR @0x05,
+# EPPUER @0x06, EPFR @0x07, EPODER @0x08, EPLPR @0x09, all bytes but EPPAR.
+# eport_drv.c reads the pin levels from EPPDR (EPORT_ReadGpioDatas), drives
+# EPDR (EPORT_WriteGpioDatas) and sets EPDDR bit k for an output
+# (EPORT_ConfigGpio). Pin k of the EPORT is bit k. Zephyr's ft9001.dtsi puts
+# eport0..7 at 0x4001_9000, 0x4001_A000, 0x4002_4000..0x4002_9000.
+#
+# EPDDR is the output enable, so it runs as the declarative GPIO path's
+# ENABLE register; EPPDR is IN and EPDR is OUT. FT9001 has no public
+# reference manual: the reset values are the ColdFire edge port's this block
+# follows (MCF5282 RM ch. 11, every register 0, so every pin starts as an
+# input). Not modelled: the edge / level interrupt logic (EPPAR, EPIER, EPFR
+# are storage only), pull-ups (EPPUER), open drain (EPODER), EPLPR, and the
+# IOCTRL / CPM pin swaps eport_drv.c sets for some pins.
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: EPPAR
+  address_offset: 0x00
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EPPAR
+    bit_range:
+    - 15
+    - 0
+    description: EPPAR, edge / level select, 2 bits per pin (storage only)
+  side_effects: null
+- id: EPIER
+  address_offset: 0x02
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EPIER
+    bit_range:
+    - 7
+    - 0
+    description: EPIER, interrupt enable per pin (storage only)
+  side_effects: null
+- id: ENABLE
+  address_offset: 0x03
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EPDDR
+    bit_range:
+    - 7
+    - 0
+    description: EPDDR, bit k 1 makes pin k an output
+  side_effects: null
+- id: IN
+  address_offset: 0x04
+  size: 8
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: EPPDR
+    bit_range:
+    - 7
+    - 0
+    description: EPPDR, the level of pin k at bit k
+  side_effects: null
+- id: OUT
+  address_offset: 0x05
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EPDR
+    bit_range:
+    - 7
+    - 0
+    description: EPDR, the level pin k drives when EPDDR makes it an output
+  side_effects: null
+- id: EPPUER
+  address_offset: 0x06
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EPPUER
+    bit_range:
+    - 7
+    - 0
+    description: EPPUER, pull-up enable (storage only)
+  side_effects: null
+- id: EPFR
+  address_offset: 0x07
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EPFR
+    bit_range:
+    - 7
+    - 0
+    description: EPFR, edge flags, never set here
+  side_effects: null
+- id: EPODER
+  address_offset: 0x08
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EPODER
+    bit_range:
+    - 7
+    - 0
+    description: EPODER, open-drain enable (storage only)
+  side_effects: null
+- id: EPLPR
+  address_offset: 0x09
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EPLPR (storage only)
+    bit_range:
+    - 7
+    - 0
+    description: EPLPR (storage only)
+  side_effects: null
