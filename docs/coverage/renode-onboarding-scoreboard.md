@@ -158,7 +158,7 @@
 | `ramn` | `pass` | `True` | `yes` | `yes` | `1208` | `1.208` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `renesas-ck_ra6m5` | `pass` | `True` | `yes` | `yes` | `1637` | `1.637` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `renesas-da14592` | `pass` | `True` | `yes` | `yes` | `1360` | `1.36` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `renesas-ek_ra2e1` | `pass` | `True` | `yes` | `yes` | `1325` | `1.325` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `renesas-ek_ra2e1` | `pass` | `True` | `yes` | `yes` | `7311` | `7.311` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `renesas-ek_ra8m1` | `pass` | `True` | `yes` | `yes` | `120815` | `120.815` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `renesas-r7fa2e1a9` | `pass` | `True` | `yes` | `yes` | `9510` | `9.51` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `renesas-r7fa2l1a` | `pass` | `True` | `yes` | `yes` | `7968` | `7.968` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
