@@ -1140,6 +1140,7 @@ NO_ISA_TARGETS = {
     "gr716-devboard": "SPARC V8 (LEON3FT)",
     "mpc5567": "PowerPC e200z6",
     "litex_microwatt": "OpenPOWER (Microwatt)",
+    "microwatt": "OpenPOWER (Microwatt)",
     "xtensa-sample-controller": "Xtensa sample controller (not ESP32)",
 }
 NOT_RUN_REASONS.update(
