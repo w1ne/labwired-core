@@ -8,11 +8,11 @@
     "pass": 224,
     "fail": 0,
     "pass_loading_zero_answering_windows": 0,
-    "pass_observable_assertions": 218,
-    "pass_stop_reason_only": 6,
+    "pass_observable_assertions": 221,
+    "pass_stop_reason_only": 3,
     "pass_depth_unknown": 0,
-    "median_elapsed_ms": 1125,
-    "median_elapsed_seconds": 1.125,
+    "median_elapsed_ms": 1151,
+    "median_elapsed_seconds": 1.151,
     "threshold_seconds": 3600,
     "threshold_met": 224,
     "descriptors_present": 245,
@@ -7050,32 +7050,34 @@
       "script": "examples/renode-onboarding/simavr-at90usb162-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-at90usb162.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T17:35:03Z",
-      "finished_at_utc": "2026-11-06T17:35:03Z",
-      "elapsed_seconds": 1,
-      "elapsed_ms": 596,
+      "started_at_utc": "2026-11-08T00:15:51Z",
+      "finished_at_utc": "2026-11-08T00:19:31Z",
+      "elapsed_seconds": 221,
+      "elapsed_ms": 220040,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.287,
+        "build_cli": 219.604,
         "build_firmware": null,
-        "run_smoke": 0.3
+        "run_smoke": 0.426
       },
       "stages_ms": {
-        "build_cli": 287,
+        "build_cli": 219604,
         "build_firmware": null,
-        "run_smoke": 300
+        "run_smoke": 426
       },
-      "prebuilt_firmware": "tests/fixtures/avr/at90usb162-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/at90usb162-io-smoke.elf",
       "_artifact_path": "simavr-at90usb162",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega128",
@@ -7555,32 +7557,34 @@
       "script": "examples/renode-onboarding/simavr-atmega16m1-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-atmega16m1.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T17:34:59Z",
-      "finished_at_utc": "2026-11-06T17:35:00Z",
+      "started_at_utc": "2026-11-08T00:19:33Z",
+      "finished_at_utc": "2026-11-08T00:19:33Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 607,
+      "elapsed_ms": 808,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.297,
+        "build_cli": 0.403,
         "build_firmware": null,
-        "run_smoke": 0.3
+        "run_smoke": 0.393
       },
       "stages_ms": {
-        "build_cli": 297,
+        "build_cli": 403,
         "build_firmware": null,
-        "run_smoke": 300
+        "run_smoke": 393
       },
-      "prebuilt_firmware": "tests/fixtures/avr/atmega16m1-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/atmega16m1-io-smoke.elf",
       "_artifact_path": "simavr-atmega16m1",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega2560",
@@ -7970,32 +7974,34 @@
       "script": "examples/renode-onboarding/simavr-atmega64m1-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-atmega64m1.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T17:35:00Z",
-      "finished_at_utc": "2026-11-06T17:35:01Z",
+      "started_at_utc": "2026-11-08T00:19:34Z",
+      "finished_at_utc": "2026-11-08T00:19:35Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 628,
+      "elapsed_ms": 811,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.303,
+        "build_cli": 0.431,
         "build_firmware": null,
-        "run_smoke": 0.317
+        "run_smoke": 0.37
       },
       "stages_ms": {
-        "build_cli": 303,
+        "build_cli": 431,
         "build_firmware": null,
-        "run_smoke": 317
+        "run_smoke": 370
       },
-      "prebuilt_firmware": "tests/fixtures/avr/atmega64m1-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/atmega64m1-io-smoke.elf",
       "_artifact_path": "simavr-atmega64m1",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega8",

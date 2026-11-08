@@ -1,15 +1,26 @@
 # Imported ATmega64M1 onboarding smoke
 
-This profile measures bounded AVR8 instruction execution and SRAM access
-against the imported 64 KiB flash / 4 KiB SRAM geometry, with SRAM at
-`0x0100..0x10FF`. The fixture increments a volatile SRAM counter, and the smoke
-asserts the bounded `max_steps` stop after 100,000 instructions. It makes no
-peripheral or board-I/O claims: timers, PSC, LIN/UART, CAN, SPI, ADC, DAC, analog comparators, GPIO ports, EEPROM and the watchdog are not modelled for this profile.
+This profile measures AVR8 execution and GPIOB against the imported 64 KiB flash
+/ 4 KiB SRAM geometry (SRAM at `0x0100..0x10FF`). The LabWired AVR model mirrors
+this part's ports at the ATmega328P addresses (PINB/DDRB/PORTB at 0x23..0x25)
+and implements write-one-to-toggle PINx, including SBI on PINx; the chip maps
+`portb` only. Ports C, D and E are kept by the CPU but no window is mapped for
+them. The fixture is
+[`tests/fixtures/avr/attiny-portb-io-smoke.c`](../../tests/fixtures/avr/attiny-portb-io-smoke.c)
+built with `-mmcu=atmega64m1 -DSCRATCH_LEN=48` by
+[`scripts/build_attiny_portb_io_smoke.sh`](../../scripts/build_attiny_portb_io_smoke.sh).
+It checks DDRB readback, SBI on PORTB keeping PB3 with PINB0 following the
+latch, CBI clearing PB3 only, a PINB write toggling PB0 low, SBI on PINB
+toggling PB0 only, and a 48-byte SRAM block readback. The part has no port A, so
+the port-A check (bit 0x40) is compiled out. It stores the check bits at
+`0x0130` and then toggles PB0 through PINB in a loop. The smoke asserts the
+result byte 0x3F, at least two PB0 edges and the bounded `max_steps` stop after
+100,000 instructions.
 
-The run assumes an ideal power rail; power-on and brown-out behavior are not
-measured. Build the fixture with
-[`scripts/build_classic_mega_cpu_smoke.sh`](../../scripts/build_classic_mega_cpu_smoke.sh).
-Result JSON, JUnit assertions, simulator logs, and the snapshot are under
+Not claimed: CAN, LIN/UART, SPI, the PSC, timers, ADC, DAC, analog comparators,
+pull-ups, interrupts, EEPROM and the watchdog. The run assumes an ideal power
+rail. Result JSON, JUnit assertions, simulator logs, and the snapshot are under
 [`docs/coverage/renode-onboarding/metrics/simavr-atmega64m1/`](../coverage/renode-onboarding/metrics/simavr-atmega64m1/).
-This is local CLI smoke evidence against the imported manifest, not full
-ATmega64M1 coverage or hardware confirmation.
+This smoke demonstrates the LabWired model only; it was not checked against a
+Part Knowledge record. This is local CLI smoke evidence against the imported
+manifest, not full ATmega64M1 coverage or hardware confirmation.

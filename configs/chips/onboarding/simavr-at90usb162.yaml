@@ -13,7 +13,16 @@ flash:
 ram:
   base: 256
   size: 512B
-peripherals: []
+peripherals:
+  # This bounded smoke claims only GPIOB. PINB/DDRB/PORTB sit at 0x23..0x25 as
+  # on the ATmega328P; the CPU owns them and mirrors them to this window.
+  # Ports C and D are kept by the CPU but not mapped or claimed. The USB
+  # device controller, USART1, SPI, timers, analog comparator, pull-ups,
+  # interrupts, EEPROM and the watchdog remain outside this profile.
+  - id: portb
+    type: avr_gpio
+    base_address: 0x00010023
+    size: 3
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

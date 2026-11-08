@@ -223,6 +223,9 @@ on:
       - "tests/fixtures/avr/attiny25-io-smoke.elf"
       - "tests/fixtures/avr/attiny45-io-smoke.elf"
       - "tests/fixtures/avr/attiny85-io-smoke.elf"
+      - "tests/fixtures/avr/at90usb162-io-smoke.elf"
+      - "tests/fixtures/avr/atmega16m1-io-smoke.elf"
+      - "tests/fixtures/avr/atmega64m1-io-smoke.elf"
       - "scripts/build_attiny_x5_cpu_smoke.sh"
       - "scripts/build_attiny_portb_io_smoke.sh"
       - "crates/cli/**"
@@ -1007,11 +1010,11 @@ jobs:
             script: examples/renode-onboarding/simavr-atmega169p-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega169p.yaml
           - id: simavr-atmega16m1
-            prebuilt_firmware: tests/fixtures/avr/atmega16m1-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/atmega16m1-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega16m1-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega16m1.yaml
           - id: simavr-atmega64m1
-            prebuilt_firmware: tests/fixtures/avr/atmega64m1-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/atmega64m1-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega64m1-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega64m1.yaml
           - id: simavr-atmega128rfa1
@@ -1023,7 +1026,7 @@ jobs:
             script: examples/renode-onboarding/simavr-atmega128rfr2-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega128rfr2.yaml
           - id: simavr-at90usb162
-            prebuilt_firmware: tests/fixtures/avr/at90usb162-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/at90usb162-io-smoke.elf
             script: examples/renode-onboarding/simavr-at90usb162-smoke.yaml
             system: configs/systems/onboarding/simavr-at90usb162.yaml
           # The Uno R4 import keeps the model-backed RA4M1 system, PORT1/PFS,

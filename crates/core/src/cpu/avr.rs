@@ -1002,8 +1002,13 @@ impl Avr {
             | AvrModel::Atmega168
             | AvrModel::Atmega88
             | AvrModel::Atmega48
-            | AvrModel::Atmega32u4 => {
+            | AvrModel::Atmega32u4
+            | AvrModel::At90usb162 => {
                 matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
+            }
+            // ATmega16M1/64M1 add PINE/DDRE/PORTE at 0x2C..0x2E.
+            AvrModel::Atmega16m1 | AvrModel::Atmega64m1 => {
+                matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND | 0x002C)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
             AvrModel::Atmega164
@@ -1034,12 +1039,7 @@ impl Avr {
             // ATtiny1634: PINC 0x27, PINB 0x2B, PINA 0x2F; each port's PUEx
             // pull-up register sits after PORTx (0x2A/0x2E/0x32).
             AvrModel::Attiny1634 => matches!(addr, 0x0027 | 0x002B | 0x002F),
-            AvrModel::Atmega169
-            | AvrModel::Atmega16m1
-            | AvrModel::Atmega64m1
-            | AvrModel::Atmega128rfa1
-            | AvrModel::Atmega128rfr2
-            | AvrModel::At90usb162 => false,
+            AvrModel::Atmega169 | AvrModel::Atmega128rfa1 | AvrModel::Atmega128rfr2 => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -1067,7 +1067,9 @@ impl Avr {
             | AvrModel::Atmega168
             | AvrModel::Atmega88
             | AvrModel::Atmega48
-            | AvrModel::Atmega32u4 => (AVR_PINB..=AVR_PIND + 2).contains(&addr),
+            | AvrModel::Atmega32u4
+            | AvrModel::At90usb162 => (AVR_PINB..=AVR_PIND + 2).contains(&addr),
+            AvrModel::Atmega16m1 | AvrModel::Atmega64m1 => (AVR_PINB..=0x002E).contains(&addr),
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
@@ -1095,12 +1097,7 @@ impl Avr {
                     || (0x002B..=0x002D).contains(&addr)
                     || (0x002F..=0x0031).contains(&addr)
             }
-            AvrModel::Atmega169
-            | AvrModel::Atmega16m1
-            | AvrModel::Atmega64m1
-            | AvrModel::Atmega128rfa1
-            | AvrModel::Atmega128rfr2
-            | AvrModel::At90usb162 => false,
+            AvrModel::Atmega169 | AvrModel::Atmega128rfa1 | AvrModel::Atmega128rfr2 => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -4760,6 +4757,53 @@ mod tests {
         cpu.data_write(0x2E, 0x5A, &mut bus).unwrap();
         assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x2E).unwrap(), 0x00);
         assert_eq!(cpu.data_read(0x2E, &bus).unwrap(), 0x5A);
+    }
+
+    /// AT90USB162 and ATmega16M1/64M1 share the x8 port layout (PINB/PINC/PIND
+    /// at 0x23/0x26/0x29); the M1 parts add PINE at 0x2C. PINx is
+    /// write-one-to-toggle and SBI PINx,n toggles bit n only.
+    #[test]
+    fn usb162_and_m1_ports_mirror_and_pin_toggle() {
+        for model in [
+            AvrModel::At90usb162,
+            AvrModel::Atmega16m1,
+            AvrModel::Atmega64m1,
+        ] {
+            let mut bus = MockBus::new();
+            let mut cpu = Avr::new_model(model);
+            cpu.data_write(0x24, 0x09, &mut bus).unwrap(); // DDRB
+            cpu.data_write(0x25, 0x09, &mut bus).unwrap(); // PORTB
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x25).unwrap(), 0x09);
+            cpu.data_write(0x23, 0x01, &mut bus).unwrap(); // PINB toggles PB0
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x25).unwrap(), 0x08);
+            assert_eq!(cpu.data_read(0x23, &bus).unwrap() & 0x09, 0x08);
+            // SBI PINB,0 (I/O 0x03): PB0 back high, PB3 untouched.
+            cpu.load_words(0x40, &[0x9A18, 0xCFFF]);
+            cpu.set_pc(0x40);
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x25).unwrap(), 0x09);
+            // An undriven input reads the external level.
+            bus.write_u8(AVR_IO_MIRROR_BASE + 0x23, 0x04).unwrap();
+            assert_eq!(cpu.data_read(0x23, &bus).unwrap() & 0x04, 0x04);
+            cpu.data_write(0x2B, 0x40, &mut bus).unwrap(); // PORTD
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x2B).unwrap(), 0x40);
+            let has_port_e = model != AvrModel::At90usb162;
+            cpu.data_write(0x2E, 0x04, &mut bus).unwrap(); // PORTE (M1 only)
+            assert_eq!(
+                bus.read_u8(AVR_IO_MIRROR_BASE + 0x2E).unwrap(),
+                if has_port_e { 0x04 } else { 0x00 },
+                "{model:?} PORTE mirror"
+            );
+            if has_port_e {
+                // SBI PINE,2 (I/O 0x0C) toggles PE2 only.
+                cpu.load_words(0x40, &[0x9A62, 0xCFFF]);
+                cpu.set_pc(0x40);
+                cpu.step(&mut bus, &[], &SimulationConfig::default())
+                    .unwrap();
+                assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x2E).unwrap(), 0x00);
+            }
+        }
     }
 
     /// SBI/CBI on ATmega16 PORTA (I/O 0x1B) are read-modify-write: the 328P

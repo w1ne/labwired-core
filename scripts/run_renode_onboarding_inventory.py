@@ -527,11 +527,11 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/simavr-atmega169p-smoke.yaml",
     },
     "simavr-atmega16m1": {
-        "prebuilt_firmware": "tests/fixtures/avr/atmega16m1-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/atmega16m1-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega16m1-smoke.yaml",
     },
     "simavr-atmega64m1": {
-        "prebuilt_firmware": "tests/fixtures/avr/atmega64m1-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/atmega64m1-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega64m1-smoke.yaml",
     },
     "simavr-atmega128rfa1": {
@@ -543,7 +543,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/simavr-atmega128rfr2-smoke.yaml",
     },
     "simavr-at90usb162": {
-        "prebuilt_firmware": "tests/fixtures/avr/at90usb162-cpu-smoke.elf",
+        "prebuilt_firmware": "tests/fixtures/avr/at90usb162-io-smoke.elf",
         "script": "examples/renode-onboarding/simavr-at90usb162-smoke.yaml",
     },
     "simavr-atmega16": {

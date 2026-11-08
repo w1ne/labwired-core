@@ -21,27 +21,27 @@
       0,
       0,
       0,
+      48,
+      0,
+      165,
+      138,
+      138,
+      0,
+      40,
       1,
-      0,
-      0,
-      0,
-      0,
-      0,
-      202,
-      55,
-      2,
+      49,
       1,
-      255,
+      250,
       2,
-      0,
-      0
+      47,
+      1
     ],
-    "pc": 168,
-    "sp": 765,
-    "sreg": 0
+    "pc": 322,
+    "sp": 762,
+    "sreg": 1
   },
   "steps_executed": 100000,
-  "cycles": 185705,
+  "cycles": 156675,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -66,9 +66,9 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "f83b2ff9323e2ad387ec5dc4b65dd8a277673c563fdec8f8c3c33b00cfc46d60",
+  "firmware_hash": "521a150dd32923642765c8be22e9f1e616e3a74938e65e2cfd4abc6ed6be9012",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/at90usb162-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/at90usb162-io-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-at90usb162.yaml",
     "script": "examples/renode-onboarding/simavr-at90usb162-smoke.yaml"
   }

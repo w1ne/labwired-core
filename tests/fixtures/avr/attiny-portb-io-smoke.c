@@ -60,3 +60,5 @@ int main(void) {
 
 // ATtiny1634: PINB/DDRB/PORTB at 0x2B..0x2D and PINA/DDRA/PORTA at 0x2F..0x31
 // (each port followed by a PUEx pull-up register), SRAM from 0x100.
+// AT90USB162 and ATmega16M1/64M1: PINB/DDRB/PORTB at 0x23..0x25 (x8 layout),
+// no port A, so bit 0x40 stays clear; SRAM from 0x100.

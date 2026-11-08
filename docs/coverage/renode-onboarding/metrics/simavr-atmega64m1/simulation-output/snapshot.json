@@ -21,27 +21,27 @@
       0,
       0,
       0,
+      48,
+      0,
+      165,
+      138,
+      138,
+      0,
+      40,
       1,
-      0,
-      0,
-      0,
-      0,
-      0,
-      202,
-      55,
-      2,
+      49,
       1,
-      255,
+      250,
       16,
-      0,
-      0
+      47,
+      1
     ],
-    "pc": 176,
-    "sp": 4349,
-    "sreg": 0
+    "pc": 330,
+    "sp": 4346,
+    "sreg": 1
   },
   "steps_executed": 100000,
-  "cycles": 185705,
+  "cycles": 156675,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -66,9 +66,9 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "aa4d56885616601537a3aa1b1040dac85bddfd2e74692cf61702cfa7e77dee4b",
+  "firmware_hash": "899b6fbfd760e9d2fc8a8db1cc5100f922bdd7e67e2249376b606fd62e3564a4",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega64m1-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega64m1-io-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-atmega64m1.yaml",
     "script": "examples/renode-onboarding/simavr-atmega64m1-smoke.yaml"
   }
