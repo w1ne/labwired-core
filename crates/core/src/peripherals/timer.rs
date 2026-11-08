@@ -174,6 +174,12 @@ pub struct Timer {
     /// `config: { input_capture: stm32f4 }` sets it.
     #[serde(skip)]
     ccer_np: bool,
+    /// The V2 alternate-function table the bus routes this timer's channel
+    /// OUTPUTS through, when it is not the F4 one (chip yaml `config: {
+    /// pad_map: stm32g0 | stm32g4 }`). Reported as
+    /// [`crate::Peripheral::timer_output_family`].
+    #[serde(skip)]
+    pad_map: Option<&'static str>,
     /// Per-channel ICxPSC event counter: a capture happens on every
     /// 1st/2nd/4th/8th accepted edge. Reset when CCxE is cleared.
     #[serde(skip)]
@@ -343,6 +349,7 @@ impl Timer {
             freeze_revision: Cell::new(0),
             clock: None,
             ccer_np: false,
+            pad_map: None,
             ic_psc_count: [0; 4],
             ti_level: [false; 4],
             ic_pending: Vec::new(),
@@ -355,6 +362,13 @@ impl Timer {
     /// [`Self::basic`].
     pub fn ccer_np(mut self, np: bool) -> Self {
         self.ccer_np = np;
+        self
+    }
+
+    /// Name the V2 pad table the bus routes this timer's outputs through
+    /// (`stm32g0` / `stm32g4`). Builder form, like [`Self::ccer_np`].
+    pub fn pad_map(mut self, map: Option<&'static str>) -> Self {
+        self.pad_map = map;
         self
     }
 
@@ -1660,6 +1674,14 @@ impl crate::Peripheral for Timer {
 
     fn wire_lines(&self) -> Option<&PadLines> {
         self.wave.pads.wire_lines()
+    }
+
+    fn timer_output_family(&self) -> Option<&'static str> {
+        if self.basic {
+            None
+        } else {
+            self.pad_map
+        }
     }
 
     fn timer_output_lines(&mut self, arm: bool) -> Option<Arc<PadLines>> {
