@@ -1110,7 +1110,7 @@ mod tests {
     #[test]
     fn nobits_filler_inside_filesz_does_not_overwrite_a_shared_window() {
         let image = load_elf_bytes(&shared_window_elf()).unwrap();
-        let mut window = vec![0u8; 0x40];
+        let mut window = [0u8; 0x40];
         for seg in &image.segments {
             let at = (seg.start_addr - 0x4200_0020) as usize;
             window[at..at + seg.data.len()].copy_from_slice(&seg.data);
