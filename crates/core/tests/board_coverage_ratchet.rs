@@ -705,6 +705,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // CAN1 (bxCAN), and runs five ch32fun CH32V20x examples (canbus_network
         // as a two-node world); same gap.
         "ch32v203c8t6-ch32fun-smoke",
+        // CH32V006F8U7 (QingKe V2C, CH32V00x AFIO/RCC): ch32fun's x00x blink,
+        // debugprintfdemo and dual_usart with remap-gated USART pads; no
+        // Playground catalog board or physical-silicon differential.
+        "ch32v006f8u7-ch32fun-smoke",
         // CH32V307VCT6 on the WCH CH32V307V-EVT: the QingKe V4F core (RV32F
         // checked against a host FPU oracle) runs ch32fun's V30x blink and
         // debugprintfdemo plus an FPU self-test; no Playground catalog board
