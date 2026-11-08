@@ -128,7 +128,7 @@ const CHIPS: &[ChipConf] = &[
         // no STM32L552 bench part. The new L5 RCC profile and the v2 GPIO /
         // LPUART / SPI / I2C / timer / DMA models carry the smoke. TrustZone/
         // SAU/GTZC, MPU/PMSAv8 enforcement and the L5 non-secure flash
-        // controller are NOT modelled; FLASH/EXTI/ADC/FDCAN/USB are declared
+        // controller are NOT modelled; FLASH/EXTI/FDCAN/USB are declared
         // stubs — see examples/nucleo-l552ze-q/VALIDATION.md.
         name: "stm32l552",
         yaml: "configs/chips/stm32l552.yaml",

@@ -1,6 +1,7 @@
 # Generic MNA devices drive the NUCLEO-L552ZE-Q's PA0/PA1 GPIO inputs through
-# the STM32L552 datasheet input thresholds. The ADC is a stub on this profile;
-# this exercises analog-to-digital GPIO routing, not ADC conversion.
+# the STM32L552 datasheet input thresholds (digital GPIO routing). The
+# analog-ntc-diode-adc-system.yaml next to this file routes the same netlists
+# to ADC1 through the PA0/PA1 `analog_pins` pad aliases.
 name: "nucleo-l552ze-q-analog"
 chip: "../../configs/chips/stm32l552.yaml"
 external_devices: []

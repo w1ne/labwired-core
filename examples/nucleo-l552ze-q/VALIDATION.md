@@ -28,7 +28,8 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | Unprivileged execution (CONTROL.nPRIV): PPB privileged-only, MSR to CONTROL/masks/SPs ignored, `TTT` R/RW for the unprivileged view | modelled — `cortex_m.rs`, `exec/system.rs`, `armv8m_mpu` | the PPB rule is applied on cores with `armv8m_mpu` only; the MSR rule on every Cortex-M. STIR with `CCR.USERSETMPEND` is not special-cased |
 | TrustZone / SAU / GTZC / secure aliasing | **not modelled** | `TT`'s SAU/IDAU fields read 0 |
 | VDDIO2 isolation of PG[15:2] until `PWR_CR2.IOSV` | **not modelled** — fidelity gap | the sim drives port G whether or not IOSV is set, so a firmware that forgets IOSV passes here and stays silent on the board. The smoke sets IOSV (RM0438 PWR chapter; CMSIS `PWR_CR2_IOSV_Pos = 9`) |
-| L5 non-secure FLASH controller, EXTI, ADC, FDCAN, USB | declared stubs | `configs/chips/stm32l552.yaml` |
+| ADC1 (regular SQx scan, injected JSQR/JDR1..4, RCC_AHB2ENR.ADCEN gate) with PA0/PA1 NTC + diode routed through `analog_pins` | modelled — shared L4-class `adc` (L5 bit layout per ST CMSIS `stm32l552xx.h`), sim-derived | `cosim_nucleo_l552_analog::nucleo_l552ze_q_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end` |
+| L5 non-secure FLASH controller, EXTI, ADC2, FDCAN, USB | declared stubs | `configs/chips/stm32l552.yaml` |
 | SPI/I2C/timers/DMA/RNG/RTC | modelled, **unexercised** | declared; no firmware path in this slice |
 | USB / Ethernet / radio | **not modelled** | — |
 
