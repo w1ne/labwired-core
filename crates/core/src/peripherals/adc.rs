@@ -592,10 +592,16 @@ fn sqr_regular_sequence(sqr: [u32; 4]) -> Vec<usize> {
 
 /// `ISR` / `CR` / `CFGR` bits the L4, H7 and U5 maps share with the V2.
 const SQR_ISR_EOC: u32 = 1 << 2;
+const SQR_ISR_EOS: u32 = 1 << 3;
 const SQR_CR_ADDIS: u32 = 1 << 1;
 const SQR_CR_ADSTART: u32 = 1 << 2;
 const SQR_CR_ADSTP: u32 = 1 << 4;
 const SQR_CFGR_CONT: u32 = 1 << 13;
+/// `CFGR.DISCEN` / `DISCNUM[2:0]`: each trigger converts the next
+/// `DISCNUM` + 1 channels of the sequence. Bits 16 and 19:17 on the L4
+/// (RM0351), the H7 (RM0433) and the U5 ADC1 `CFGR1` (RM0456).
+const SQR_CFGR_DISCEN: u32 = 1 << 16;
+const SQR_CFGR_DISCNUM_SHIFT: u32 = 17;
 
 /// `ADC_ISR` / `ADC_CR` / `ADC_CFGR1` bits of the v2 ADC (RM0367 §14.12).
 const V2_ISR_ADRDY: u32 = 1 << 0;
@@ -702,9 +708,10 @@ pub struct Adc {
     /// state, not a register: not serialized.
     #[serde(skip)]
     regular_sequence: Option<RegularSequence>,
-    /// V2 `DISCEN` pointer: the sequence position the next trigger converts.
+    /// `DISCEN` pointer (V2, L4, H7, U5): the sequence position the next
+    /// trigger converts.
     #[serde(skip)]
-    v2_discontinuous_next: usize,
+    discontinuous_next: usize,
     /// F1/F4 `CR1.SCAN` group position being converted. Conversion state,
     /// not a register: not serialized.
     #[serde(skip)]
@@ -792,7 +799,7 @@ impl Adc {
             f1_cal_live: false,
             ambient_temp_c: DEFAULT_AMBIENT_TEMPERATURE_C,
             regular_sequence: None,
-            v2_discontinuous_next: 0,
+            discontinuous_next: 0,
             f1_group_pos: 0,
         }
     }
@@ -1121,7 +1128,10 @@ impl Adc {
     /// once and raises `EOC`; each later channel lands as the previous result
     /// is read out of `DR`, and the landing of the last raises `EOS`. `CONT`
     /// wraps round for as long as `DR` is read; otherwise `ADSTART`
-    /// self-clears. `DISCEN` is not modelled. Returns `false`, having dropped
+    /// self-clears. `DISCEN` runs only the next `DISCNUM` + 1 channels per
+    /// trigger, stopping short at the sequence end (which raises `EOS`); the
+    /// next trigger resumes from there, wrapping to `SQ1`. `DISCEN` wins over
+    /// `CONT`, which the reference manuals forbid together. Returns `false`, having dropped
     /// any earlier sequence, for a one-channel sequence, which the caller
     /// converts on its own (unchanged) single-conversion path.
     fn maybe_start_sqr_sequence(&mut self) -> bool {
@@ -1133,13 +1143,26 @@ impl Adc {
             self.regular_sequence = None;
             return false;
         }
-        let cont = cfgr & SQR_CFGR_CONT != 0;
-        let limit = if cont { usize::MAX } else { channels.len() };
-        let code = self.sqr_dr_for_channel(channels[0]);
+        let len = channels.len();
+        let discontinuous = cfgr & SQR_CFGR_DISCEN != 0;
+        let cont = !discontinuous && cfgr & SQR_CFGR_CONT != 0;
+        let (offset, limit) = if discontinuous {
+            let offset = self.discontinuous_next % len;
+            let n = ((cfgr >> SQR_CFGR_DISCNUM_SHIFT) & 0x7) as usize + 1;
+            let n = n.min(len - offset);
+            self.discontinuous_next = (offset + n) % len;
+            (offset, n)
+        } else if cont {
+            (0, usize::MAX)
+        } else {
+            (0, len)
+        };
+        let code = self.sqr_dr_for_channel(channels[offset]);
         self.dr = code;
+        let ends_sequence = offset == len - 1;
         self.regular_sequence = Some(RegularSequence {
             channels,
-            offset: 0,
+            offset,
             limit,
             landed: Cell::new(1),
             dr: Cell::new(code),
@@ -1148,6 +1171,9 @@ impl Adc {
         });
         if let Some((isr, cr, _, _)) = self.sqr_regs() {
             *isr |= SQR_ISR_EOC;
+            if ends_sequence {
+                *isr |= SQR_ISR_EOS;
+            }
             if !cont {
                 *cr &= !SQR_CR_ADSTART;
             }
@@ -1604,8 +1630,8 @@ impl Adc {
         let cfgr1 = r.cfgr1;
         let len = channels.len();
         let (offset, limit) = if cfgr1 & V2_CFGR1_DISCEN != 0 {
-            let offset = self.v2_discontinuous_next % len;
-            self.v2_discontinuous_next = (offset + 1) % len;
+            let offset = self.discontinuous_next % len;
+            self.discontinuous_next = (offset + 1) % len;
             (offset, 1)
         } else if cfgr1 & V2_CFGR1_CONT != 0 {
             (0, usize::MAX)
@@ -1700,7 +1726,15 @@ impl Adc {
                     }
                 }
             }
-            0x08 if value & (SQR_CR_ADSTP | SQR_CR_ADDIS) != 0 => self.stop_regular_sequence(),
+            0x08 if value & (SQR_CR_ADSTP | SQR_CR_ADDIS) != 0 => {
+                self.stop_regular_sequence();
+                self.discontinuous_next = 0;
+            }
+            // A new L4/H7/U5 sequence or mode restarts the DISCEN pointer
+            // (`write_reg_v2` does this for the V2's CFGR1 / CHSELR).
+            0x0C | 0x30 | 0x34 | 0x38 | 0x3C if !matches!(self.regs, AdcRegs::Stm32V2(_)) => {
+                self.discontinuous_next = 0;
+            }
             _ => {}
         }
     }
@@ -1709,14 +1743,14 @@ impl Adc {
         if reg == 0x08 {
             self.v2_apply_cr(value);
             if value & (V2_CR_ADSTP | V2_CR_ADDIS) != 0 {
-                self.v2_discontinuous_next = 0;
+                self.discontinuous_next = 0;
             }
             self.maybe_start_v2_conversion();
             return;
         }
         // A new sequence or mode restarts the DISCEN pointer.
         if matches!(reg, 0x0C | 0x28) {
-            self.v2_discontinuous_next = 0;
+            self.discontinuous_next = 0;
         }
         if let AdcRegs::Stm32V2(r) = &mut self.regs {
             let sequence_mode = r.cfgr1 & ADC4_CFGR1_CHSELRMOD != 0;
@@ -3342,6 +3376,68 @@ mod tests {
                 c6,
                 "{layout:?} single DR is stable"
             );
+        }
+    }
+
+    #[test]
+    fn sqr_layouts_discen_converts_discnum_plus_one_channels_per_trigger() {
+        const EOC: u32 = 1 << 2;
+        const EOS: u32 = 1 << 3;
+        const ADSTART: u32 = 1 << 2;
+        const DISCEN: u32 = 1 << 16;
+        let cr = (1 << 28) | 1;
+        for layout in [
+            AdcRegisterLayout::Stm32L4,
+            AdcRegisterLayout::Stm32H7,
+            AdcRegisterLayout::Stm32U5,
+        ] {
+            let (mut adc, c5, c6, c7) = sqr_block(layout);
+            let cfgr = adc.read_u32(0x0C).unwrap();
+            // DISCNUM = 1: two conversions per trigger. CONT is set too and
+            // must lose to DISCEN.
+            adc.write_u32(0x0C, cfgr | DISCEN | (1 << 17) | (1 << 13))
+                .unwrap();
+            // L = 4: IN5, IN6, IN7, IN5, IN6.
+            adc.write_u32(0x30, 4 | 5 << 6 | 6 << 12 | 7 << 18 | 5 << 24)
+                .unwrap();
+            adc.write_u32(0x34, 6).unwrap();
+            // Four triggers: [5, 6], [7, 5], [6] + EOS (the last subsequence
+            // stops at the sequence end), then [5, 6] from SQ1 again.
+            let triggers: [&[u32]; 4] = [&[c5, c6], &[c7, c5], &[c6], &[c5, c6]];
+            for (t, expected) in triggers.iter().enumerate() {
+                adc.write_u32(0x00, EOC | EOS).unwrap();
+                adc.write_u32(0x08, cr | ADSTART).unwrap();
+                assert_eq!(
+                    adc.read_u32(0x08).unwrap() & ADSTART,
+                    0,
+                    "{layout:?} trigger {t}: ADSTART clears per subsequence"
+                );
+                let mut got = Vec::new();
+                for k in 0..expected.len() {
+                    let isr = adc.read_u32(0x00).unwrap();
+                    assert_ne!(isr & EOC, 0, "{layout:?} trigger {t} EOC {k}");
+                    assert_eq!(
+                        isr & EOS != 0,
+                        t == 2,
+                        "{layout:?} trigger {t}: EOS only at the sequence end"
+                    );
+                    adc.write_u32(0x00, EOC).unwrap();
+                    got.push(adc.read_u32(0x40).unwrap());
+                }
+                assert_eq!(&got, expected, "{layout:?} trigger {t}");
+                // The subsequence is done: no further landing, DR holds.
+                assert_eq!(adc.read_u32(0x00).unwrap() & EOC, 0, "{layout:?} {t}");
+                assert_eq!(adc.read_u32(0x40).unwrap(), *expected.last().unwrap());
+            }
+            // Rewriting the sequence restarts the pointer at SQ1, even
+            // mid-way through it.
+            adc.write_u32(0x08, cr | ADSTART).unwrap(); // [7, 5]
+            adc.write_u32(0x30, 4 | 7 << 6 | 6 << 12 | 7 << 18 | 5 << 24)
+                .unwrap();
+            adc.write_u32(0x00, EOC | EOS).unwrap();
+            adc.write_u32(0x08, cr | ADSTART).unwrap();
+            assert_eq!(adc.read_u32(0x40).unwrap(), c7, "{layout:?} SQ1 again");
+            assert_eq!(adc.read_u32(0x40).unwrap(), c6, "{layout:?} SQ2 again");
         }
     }
 

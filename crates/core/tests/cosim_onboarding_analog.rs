@@ -414,6 +414,19 @@ impl Converter {
                         self.id
                     );
                 }
+                // DISCEN, DISCNUM = 1: NTC, diode, idle, NTC, diode in
+                // subsequences of two; the third stops at the sequence end.
+                assert_eq!(
+                    self.scan_sqr_discontinuous(bus, 1, 5),
+                    vec![
+                        vec![ntc, diode],
+                        vec![idle, ntc],
+                        vec![diode],
+                        vec![ntc, diode]
+                    ],
+                    "{}: each ADSTART converts the next DISCNUM + 1 channels",
+                    self.id
+                );
                 single
             }
             _ => [
@@ -498,6 +511,73 @@ impl Converter {
                 .expect("restore SQRx");
         }
         codes
+    }
+
+    /// Four software triggers of a discontinuous (`CFGR.DISCEN`) L4/H7
+    /// `SQRx` sequence of `len` channels cycling NTC, diode, idle, read by
+    /// polling. Each converts the next `discnum` + 1 channels; only the one
+    /// reaching the sequence end raises `EOS`. Restores CFGR and SQR1..4.
+    fn scan_sqr_discontinuous(
+        &self,
+        bus: &mut SystemBus,
+        discnum: u32,
+        len: usize,
+    ) -> Vec<Vec<u32>> {
+        const EOC: u32 = 1 << 2;
+        const EOS: u32 = 1 << 3;
+        let cycle = [NTC_CHANNEL, DIODE_CHANNEL, IDLE_CHANNEL].map(u32::from);
+        let mut sqr = [len as u32 - 1, 0, 0, 0];
+        for slot in 0..len {
+            let (word, field) = match slot {
+                0..=3 => (0, slot + 1),
+                _ => (1, slot - 4),
+            };
+            sqr[word] |= cycle[slot % 3] << (6 * field);
+        }
+        for (k, word) in sqr.into_iter().enumerate() {
+            bus.write_u32(self.base + 0x30 + 4 * k as u64, word)
+                .expect("write SQRx");
+        }
+        let cfgr = bus.read_u32(self.base + 0x0C).expect("CFGR");
+        bus.write_u32(self.base + 0x0C, cfgr | (1 << 16) | (discnum << 17))
+            .expect("DISCEN");
+        let per_trigger = discnum as usize + 1;
+        let mut position = 0;
+        let mut triggers = Vec::new();
+        for _ in 0..4 {
+            let n = per_trigger.min(len - position);
+            bus.write_u32(self.base, EOC | EOS).expect("clear EOC/EOS");
+            bus.write_u32(self.base + 0x08, (1 << 28) | 1 | (1 << 2))
+                .expect("ADSTART");
+            let codes: Vec<u32> = (0..n)
+                .map(|_| {
+                    let isr = bus.read_u32(self.base).unwrap();
+                    assert_ne!(isr & EOC, 0, "{}: EOC", self.id);
+                    assert_eq!(
+                        isr & EOS != 0,
+                        position + n == len,
+                        "{}: EOS only on the subsequence reaching SQ{len}",
+                        self.id
+                    );
+                    bus.write_u32(self.base, EOC).expect("clear EOC");
+                    bus.read_u32(self.base + 0x40).expect("read DR")
+                })
+                .collect();
+            assert_eq!(
+                bus.read_u32(self.base).unwrap() & EOC,
+                0,
+                "{}: the subsequence stops after {n}",
+                self.id
+            );
+            triggers.push(codes);
+            position = (position + n) % len;
+        }
+        bus.write_u32(self.base + 0x0C, cfgr).expect("restore CFGR");
+        for k in 0..4u64 {
+            bus.write_u32(self.base + 0x30 + 4 * k, 0)
+                .expect("restore SQRx");
+        }
+        triggers
     }
 
     /// One software-started F2/F4/F7 `CR1.SCAN` group with `CR2.EOCS`, read
