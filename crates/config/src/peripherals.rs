@@ -237,6 +237,19 @@ pub struct PeripheralDescriptor {
     /// `GPDIn` / `GPDOn`, data in bit 0) set 8.
     #[serde(default)]
     pub gpio_pin_stride: Option<u8>,
+    /// `GPIO` descriptors only: bit of each pin's stride slot that holds the
+    /// pin, so pin k is bit `k * gpio_pin_stride + gpio_pin_bit`. Default 0.
+    /// Ports with a configuration register per pad keep the level inside it
+    /// (Intel `PAD_CFG_DW0` RX state, bit 1).
+    #[serde(default)]
+    pub gpio_pin_bit: Option<u8>,
+    /// `GPIO` descriptors only: pins on the port. Unset, a register holds
+    /// `width / gpio_pin_stride` pins. Set, the pins run on past the `IN` /
+    /// `OUT` / `ENABLE` register into the little-endian bytes declared after
+    /// it, as a `gpio_mode` field does, so a port with one 32-bit register
+    /// per pad (stride 64) is one `IN` run. At most 32.
+    #[serde(default)]
+    pub gpio_pins: Option<u8>,
 }
 
 /// Pin direction held in a mode field per pin (Allwinner `Pn_CFG` nibbles,
@@ -4523,6 +4536,8 @@ impl From<labwired_ir::IrPeripheral> for PeripheralDescriptor {
             },
             gpio_mode: None,
             gpio_pin_stride: None,
+            gpio_pin_bit: None,
+            gpio_pins: None,
         }
     }
 }

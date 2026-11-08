@@ -158,6 +158,13 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x08,
         "Linux gpio-mpc8xxx.c GPIO_DAT",
     ),
+    // PAD_CFG_DW0 of pad 0 at PADBAR (0x500); pad n's DW0 is 8n further on
+    // and holds its level in bit 1, see [`load_input`].
+    (
+        "declarative/intel/apl_gpio.yaml",
+        0x500,
+        "coreboot apollolake gpio_apl.h PAD_CFG_BASE; Zephyr gpio_intel.c PAD_CFG0_RXSTATE",
+    ),
     // Window based at the port's P_m byte, so PIN_m is +0x800.
     (
         "declarative/rzg2l/port.yaml",
@@ -220,7 +227,8 @@ fn input_bit(kind: &str, pin: u8) -> u32 {
 /// pinctrl-rzg2l.c, a `uint8_t *` in gpio_rzt2m.c) and the next byte is the
 /// next port's. FT9001 EPORT `EPPDR` is a byte (`uint8_t` in the HAL's
 /// `EPORT_ReadGpioDatas`) and the next byte is `EPDR`. MPC5500 SIU `GPDIn` is
-/// a byte per pad. Every other map here is word-wide.
+/// a byte per pad. Apollo Lake keeps each pad's level in bit 1 of its own
+/// `PAD_CFG_DW0`, 8 bytes apart. Every other map here is word-wide.
 fn load_input(bus: &SystemBus, kind: &str, register: u64) -> u32 {
     match kind {
         "declarative/msp430/port8.yaml"
@@ -233,6 +241,13 @@ fn load_input(bus: &SystemBus, kind: &str, register: u64) -> u32 {
         "declarative/mpc5500/siu_gpio.yaml" => (0..4u64).try_fold(0u32, |word, k| {
             bus.read_u8(register + k)
                 .map(|b| word | u32::from(b) << (8 * k))
+        }),
+        // Zephyr port_get_raw reads PAD_CFG_DW0 of each pad and tests
+        // PAD_CFG0_RXSTATE (bit 1); the eight loads are packed as pad k at
+        // bit k.
+        "declarative/intel/apl_gpio.yaml" => (0..8u64).try_fold(0u32, |word, k| {
+            bus.read_u32(register + 8 * k)
+                .map(|dw0| word | ((dw0 >> 1) & 1) << k)
         }),
         _ => bus.read_u32(register),
     }
@@ -283,6 +298,12 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[];
 /// base, so it cannot catch a base that is wrong for the silicon; these
 /// entries pin it. Each board listed must be covered.
 const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
+    (
+        "up_squared_x86_64",
+        "gpio_n",
+        0xD0C5_0500,
+        "Zephyr apollo_lake.dtsi gpio@d0c50000 + coreboot gpio_apl.h PAD_CFG_BASE 0x500",
+    ),
     (
         "fomu",
         "touch",
@@ -528,13 +549,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 220;
+const COVERED: usize = 221;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 115;
+const SILICON_REGISTER: usize = 116;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 25;
+const NO_ANALOG_ENDPOINT: usize = 24;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -929,7 +950,7 @@ fn load_onboarding_board(
 /// stride, and the diode pad never leaves 0, so neither catches a wrong pad
 /// position. Here the NTC moves to the second pad and must toggle that pad's
 /// bit in the firmware load.
-const NON_UNIT_PAD_POSITION: &[&str] = &["mpc5567"];
+const NON_UNIT_PAD_POSITION: &[&str] = &["mpc5567", "up_squared_x86_64"];
 
 #[test]
 fn ntc_on_the_second_input_pad_lands_at_that_pads_register_bit() {
