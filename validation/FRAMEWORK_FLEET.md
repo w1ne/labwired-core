@@ -39,7 +39,7 @@ Other columns are a record of intent.
 | nrf54l15 | ❌ | ❌ | — | Chip model present; frameworks TBD |
 | rp2040 | ✅ L0–L7 (8/8; L8 n/a, no CAN) | ✅ | ✅ Arduino; Zephyr L3 skip | L4 SPI slave attach + bootrom auto-load |
 | rp2350 | ✅ L0–L7 (8/8; L8 n/a, no CAN) | ❌ | ✅ Arduino | Raspberry Pi Pico 2 on arduino-pico; Serial = USB CDC; L6 PWM slice 4B on GP25 |
-| stm32f103 | ✅ L0–L8 (9/9) | ✅ | ✅ both | F1 Wire + Zephyr poll green |
+| stm32f103 | ✅ L0–L8 (9 pass / 0 skip) | ✅ | ✅ both | F1 Wire + Zephyr poll green; L6 on PA0 TIM2_CH1, pad-proven 1.000 kHz / 50.2 % (PC13 has no timer channel) |
 | stm32f401 | ✅ L0–L7 (8/8; L8 n/a, no CAN) | ✅ | ✅ both | |
 | stm32f407 | ✅ L0–L8 (9/9) | ❌ | ✅ Arduino | Add Zephyr `nucleo_f407zg` if west board ok |
 | stm32f411ceu6 | ✅ L0–L7 (8/8; L8 n/a, no CAN) | ❌ | ✅ Arduino (L3 ACK-only, F4 sketch ifdef) | WeAct Black Pill (`blackpill_f411ce`); L6 on PA0 TIM2_CH1, pad edges not routed |
@@ -54,7 +54,7 @@ Other columns are a record of intent.
 | stm32g0b1re | ✅ L0–L8 (9/9) | ❌ | ✅ Arduino | NUCLEO-G0B1RE; RCC `stm32g0b1` (HSI48), Serial = LPUART1, L6 on PA0 TIM2_CH1 (pad edges not routed), L8 FDCAN1 register-level loopback |
 | stm32wb55 | ✅ L0–L7 (8/8; L8 n/a, no CAN) | ✅ | ✅ Arduino | |
 | stm32wba52 | ✅ L0–L4, L6–L7 (7/7; L5 skip, no ADC model; L8 n/a) | ✅ | ✅ Arduino | Custom PIO board JSON |
-| atmega328p | ✅ L0–L7 (8/8; L8 n/a, no CAN) | ❌ | ✅ Arduino TWI | Nano: USART+PORT+Timer0+TWI+SPI on CPU |
+| atmega328p | ✅ L0–L7 (8 pass / 1 skip, no CAN) | ❌ | ✅ Arduino TWI | Nano: USART+PORT+Timer0/1/2+TWI+SPI on CPU; L6 on D9 OC1A, pad-proven 490 Hz phase-correct (D13 has no timer output) |
 | mkw41z4 | ❌ | ✅ | Zephyr system ready | Zephyr only today |
 
 Legend: ✅ in `validation/*-matrix/boards.yaml` · ❌ not yet · — blocked

@@ -38,6 +38,9 @@ jobs:
           path: .vendor/cmsis
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Read-only on pull requests; see `core-pr-gate` in core-ci.yml.
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: Install ARM GCC
         timeout-minutes: 10
         uses: ./.github/actions/apt-install-cached
@@ -80,6 +83,9 @@ jobs:
           python-version: '3.12'
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Read-only on pull requests; see `core-pr-gate` in core-ci.yml.
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: Install ARM GCC
         timeout-minutes: 10
         uses: ./.github/actions/apt-install-cached

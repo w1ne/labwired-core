@@ -387,8 +387,9 @@ pub struct Avr {
     pub t0_prescale_acc: u32,
     /// Timer2, the counter Arduino `tone()` runs in CTC mode.
     ///
-    /// Normal and CTC count as on silicon. The PWM modes count 0..255; their
-    /// OC2A/OC2B pad levels come from `avr/oc_pins.rs`.
+    /// Normal, CTC and phase-correct (WGM 1, TOP = 0xFF, up and down) count
+    /// as on silicon. Fast PWM and WGM 5 count 0..255. The OC2A/OC2B pad
+    /// levels come from `avr/oc_pins.rs`.
     pub tcnt2: u8,
     pub tccr2a: u8,
     pub tccr2b: u8,
@@ -401,6 +402,8 @@ pub struct Avr {
     /// so the counter stops instead of pretending the CPU clock still drives it.
     pub assr: u8,
     pub t2_prescale_acc: u32,
+    /// Timer2 is counting down (phase-correct mode only).
+    pub t2_down: bool,
     /// Timer1, the 16-bit counter (`avr/timer1.rs`).
     t1: timer1::Timer1,
     /// Port B / port D pads an output-compare unit owns, and the level it
@@ -598,6 +601,53 @@ fn t2_hits(phase: u64, ticks: u64, period: u64, target: u64) -> bool {
     ticks >= dist
 }
 
+/// Phase-correct (dual-slope) counting: BOTTOM up to TOP and back down, so
+/// one cycle is `2 * TOP` timer clocks (ATmega328P datasheet 15.7.4, 16.9.4,
+/// 18.7.4). The counter is tracked as `(tcnt, down)`; `dual_phase` maps that
+/// onto a position in `0..2 * TOP`, where `TOP` is reached once going up and
+/// `BOTTOM` once going down.
+fn dual_phase(tcnt: u64, down: bool, top: u64) -> u64 {
+    if down {
+        (2 * top - tcnt) % (2 * top)
+    } else {
+        tcnt
+    }
+}
+
+/// Inverse of [`dual_phase`]: the counter value and direction at `phase`.
+fn dual_from_phase(phase: u64, top: u64) -> (u64, bool) {
+    if phase <= top {
+        (phase, false)
+    } else {
+        (2 * top - phase, true)
+    }
+}
+
+/// `true` when `ticks` clocks from `phase` pass the counter over `target`,
+/// on either slope. A target above TOP never matches.
+fn dual_hits(phase: u64, ticks: u64, top: u64, target: u64) -> bool {
+    let period = 2 * top;
+    target <= top
+        && (t2_hits(phase, ticks, period, target)
+            || t2_hits(phase, ticks, period, (period - target) % period))
+}
+
+/// Timer clocks from `phase` until the counter next equals `target` (a full
+/// period if it equals it now), or `None` above TOP.
+fn dual_dist(phase: u64, top: u64, target: u64) -> Option<u64> {
+    let period = 2 * top;
+    (target <= top).then(|| {
+        [target, (period - target) % period]
+            .into_iter()
+            .map(|t| match (t + period - phase) % period {
+                0 => period,
+                d => d,
+            })
+            .min()
+            .unwrap_or(period)
+    })
+}
+
 /// CTC closed form. `tcnt` must already be in `0..=ocr_a`.
 fn t2_ctc_closed(tcnt: u8, ticks: u64, ocr_a: u8, ocr_b: u8) -> T2Step {
     let phase = u64::from(tcnt);
@@ -664,6 +714,7 @@ impl Avr {
             tifr2: 0,
             assr: 0,
             t2_prescale_acc: 0,
+            t2_down: false,
             t1: timer1::Timer1::default(),
             oc_mask: [0; 2],
             oc_level: [0; 2],
@@ -1554,6 +1605,13 @@ impl Avr {
         wgm == 0b010
     }
 
+    /// WGM22:0 == 1: phase-correct PWM with TOP = 0xFF, Arduino's
+    /// `analogWrite` mode for D3/D11. WGM 5 (TOP = OCR2A) still counts up.
+    fn t2_is_phase_correct(&self) -> bool {
+        let wgm = (self.tccr2a & 0x03) | ((self.tccr2b & 0x08) >> 1);
+        wgm == 0b001
+    }
+
     /// Compare-match interrupts stay pending while the flag and its enable
     /// are both set, including when firmware sets the enable after the flag.
     fn sync_timer2_irq(&mut self) {
@@ -1598,8 +1656,23 @@ impl Avr {
             if ticks > 0 {
                 self.t2_absorb(t2_ctc_closed(self.tcnt2, ticks, self.ocr2a, self.ocr2b));
             }
+        } else if self.t2_is_phase_correct() {
+            // OCF2x on the match on either slope, TOV2 at BOTTOM.
+            let phase = dual_phase(u64::from(self.tcnt2), self.t2_down, 0xFF);
+            let (tcnt, down) = dual_from_phase((phase + ticks) % 0x1FE, 0xFF);
+            let step = T2Step {
+                tcnt: tcnt as u8,
+                ocfa: dual_hits(phase, ticks, 0xFF, u64::from(self.ocr2a)),
+                ocfb: dual_hits(phase, ticks, 0xFF, u64::from(self.ocr2b)),
+                tov: dual_hits(phase, ticks, 0xFF, 0),
+            };
+            self.t2_absorb(step);
+            self.t2_down = down;
         } else {
             self.t2_absorb(t2_normal_closed(self.tcnt2, ticks, self.ocr2a, self.ocr2b));
+        }
+        if !self.t2_is_phase_correct() {
+            self.t2_down = false;
         }
         self.sync_timer2_irq();
     }
@@ -1644,6 +1717,20 @@ impl Avr {
         let mask = self.timsk2 & (TIMSK2_OCIE2A | TIMSK2_OCIE2B | TIMSK2_TOIE2);
         if mask == 0 {
             return None;
+        }
+        if self.t2_is_phase_correct() {
+            let phase = dual_phase(u64::from(self.tcnt2), self.t2_down, 0xFF);
+            let n = [
+                (TIMSK2_OCIE2A, u64::from(self.ocr2a)),
+                (TIMSK2_OCIE2B, u64::from(self.ocr2b)),
+                (TIMSK2_TOIE2, 0),
+            ]
+            .into_iter()
+            .filter(|(bit, _)| mask & bit != 0)
+            .filter_map(|(_, target)| dual_dist(phase, 0xFF, target))
+            .min()?;
+            let cycles = n * div - u64::from(self.t2_prescale_acc).min(div - 1);
+            return Some(cycles.max(1));
         }
         let ctc = self.t2_is_ctc();
         let mut tcnt = self.tcnt2;
@@ -2280,6 +2367,7 @@ impl Cpu for Avr {
         self.tifr2 = 0;
         self.assr = 0;
         self.t2_prescale_acc = 0;
+        self.t2_down = false;
         self.t1 = timer1::Timer1::default();
         self.oc_mask = [0; 2];
         self.oc_level = [0; 2];
@@ -3232,6 +3320,82 @@ mod tests {
             assert_eq!(cpu.tifr2 & TIFR2_OCF2B != 0, ocfb, "OCF2B");
             assert_eq!(cpu.tifr2 & TIFR2_TOV2 != 0, tov, "TOV2");
         }
+    }
+
+    /// Phase-correct (WGM 1) against a one-clock-at-a-time dual-slope
+    /// reference: 0..=255 up, 254..=1 down, OCF2x on the match on either
+    /// slope, TOV2 at BOTTOM.
+    #[test]
+    fn timer2_phase_correct_counts_up_and_back_down() {
+        let reference = |mut tcnt: u8, mut down: bool, ocr_a: u8, ocr_b: u8, ticks: u64| {
+            let (mut ocfa, mut ocfb, mut tov) = (false, false, false);
+            for _ in 0..ticks {
+                if tcnt == 0xFF {
+                    down = true;
+                }
+                if tcnt == 0 {
+                    down = false;
+                }
+                tcnt = if down { tcnt - 1 } else { tcnt + 1 };
+                ocfa |= tcnt == ocr_a;
+                ocfb |= tcnt == ocr_b;
+                tov |= tcnt == 0;
+            }
+            let down = down && tcnt != 0 && tcnt != 0xFF;
+            (tcnt, down, ocfa, ocfb, tov)
+        };
+        let cases = [
+            (0u8, false, 128u8, 0u8, 255u64),
+            (0, false, 128, 0, 256),
+            (0, false, 128, 0, 509),
+            (0, false, 128, 0, 510),
+            (200, true, 199, 201, 1),
+            (200, true, 10, 255, 150),
+            (255, false, 254, 1, 3),
+            (7, false, 255, 0, 510 * 4 + 300),
+            (1, true, 1, 2, 1),
+        ];
+        for (start, down, ocr_a, ocr_b, ticks) in cases {
+            let want = reference(start, down, ocr_a, ocr_b, ticks);
+            let mut cpu = Avr::new();
+            cpu.tccr2a = 0x01;
+            cpu.tccr2b = 1;
+            cpu.ocr2a = ocr_a;
+            cpu.ocr2b = ocr_b;
+            cpu.tcnt2 = start;
+            cpu.t2_down = down;
+            cpu.tick_timer2(ticks as u32);
+            let got = (
+                cpu.tcnt2,
+                cpu.t2_down,
+                cpu.tifr2 & TIFR2_OCF2A != 0,
+                cpu.tifr2 & TIFR2_OCF2B != 0,
+                cpu.tifr2 & TIFR2_TOV2 != 0,
+            );
+            assert_eq!(
+                got, want,
+                "start={start} down={down} ocr={ocr_a}/{ocr_b} ticks={ticks}"
+            );
+        }
+    }
+
+    /// Arduino `init()` puts Timer2 in phase-correct clk/64: TOV2 every
+    /// 64 * 510 = 32,640 CPU cycles (490 Hz on D3/D11), not 64 * 256.
+    #[test]
+    fn timer2_phase_correct_overflow_period_is_510_clocks() {
+        let mut cpu = Avr::new();
+        cpu.tccr2a = 0x01;
+        cpu.tccr2b = 0x04; // clk/64
+        cpu.timsk2 = TIMSK2_TOIE2;
+        cpu.sreg |= 0x80;
+        assert_eq!(cpu.timer2_wake_cycles(), Some(32_640));
+        cpu.tick_timer2(32_640 - 64);
+        assert_eq!(
+            (cpu.tcnt2, cpu.t2_down, cpu.tifr2 & TIFR2_TOV2),
+            (1, true, 0)
+        );
+        cpu.tick_timer2(64);
+        assert_eq!((cpu.tcnt2, cpu.tifr2 & TIFR2_TOV2), (0, TIFR2_TOV2));
     }
 
     /// Arduino `tone(6, 700, _)` at 16 MHz lands on OCR2A = 177, clk/64.
