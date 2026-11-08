@@ -38,5 +38,6 @@ confirmation.
 
 The smoke covers the AVR core, GPIO, USART0, ADC, and Timer0 used by `millis()`.
 It does not claim USB behavior or the ATmega16U2 bridge, USART1–3, Timer3–5,
-INTn/PCINT, or PWM output pads. Those unsupported paths are listed in the chip
+INTn/PCINT, or PWM pads on the Timer3–5 pins (the Timer0/1/2 pads are modelled
+and tested by `avr_mega2560_pwm`). Those unsupported paths are listed in the chip
 profile and [`docs/boards/arduino-mega-2560.md`](../../docs/boards/arduino-mega-2560.md).

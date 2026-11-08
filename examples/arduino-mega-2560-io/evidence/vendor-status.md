@@ -13,3 +13,10 @@ Checked live on 2026-11-03.
 
 The lifecycle check is for the MCU on the board; the store listing is for the
 board itself.
+
+## Re-check 2026-11-08 (Arduino matrix row)
+
+- **ATmega2560 lifecycle:** `mc-live-status.py ATmega2560` in real Chrome
+  returned **In Production** again.
+- **Board availability:** the Arduino store answered HTTP 429 (rate limit) to
+  the fetch. The availability above (2026-11-03) was not re-read today.

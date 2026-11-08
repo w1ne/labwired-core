@@ -344,6 +344,25 @@ boards:
     sketches_skip_reason:
       L8_can: "ATmega328P has no CAN controller"
 
+  - id: atmega2560
+    chip: atmega2560
+    system: systems/atmega2560.yaml
+    pio: { platform: atmelavr, board: megaatmega2560, framework: arduino }
+    max_steps: 500000
+    budget_reason: "AVR 16 MHz, same budget as the Nano row"
+    # LED_BUILTIN = D13 = PB7 on the Mega.
+    led_watch: "portb:7"
+    led_min_edges: 2
+    # L6 keeps LED_BUILTIN: on the Mega D13 = PB7 = OC0A (Timer0 fast PWM,
+    # 16 MHz / 64 / 256 = 976.6 Hz), unlike the Nano's D13.
+    pwm_watch: "portb:7"
+    pwm_min_edges: 20
+    family: avr
+    notes: "Arduino Mega 2560 Rev3"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "ATmega2560 has no CAN controller"
+
   # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────
   #
   # ⚠️ The ONLY board here that does not compile through PlatformIO. Silicon

@@ -30,5 +30,6 @@ USART0 banner, ADC values, and the PB7 LED edge; see
 
 This profile does not model the board's ATmega16U2 USB-to-serial bridge or USB
 enumeration. The host-console connector abstracts USART0 output. The ATmega2560
-profile also leaves INTn/PCINT, PWM output pads, Timer3/4/5, and USART1/2/3
-outside its modeled surface. The smoke makes no claim for those features.
+profile also leaves INTn/PCINT, the Timer3/4/5 PWM pads (D2 D3 D5 D6 D7 D8
+D44 D45 D46), OC1C, and USART1/2/3 outside its modeled surface. The Timer0/1/2
+pads (D4 D9 D10 D11 D12 D13) carry `analogWrite` PWM. The smoke makes no claim for those features.

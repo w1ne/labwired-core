@@ -1,0 +1,51 @@
+{
+  "board": "atmega2560",
+  "generated_at": "2026-11-08T10:47:32+0000",
+  "rows": [
+    {
+      "sketch": "L0_serial_boot",
+      "status": "pass",
+      "logic_edge_count": null
+    },
+    {
+      "sketch": "L1_serial_loop",
+      "status": "pass",
+      "logic_edge_count": null
+    },
+    {
+      "sketch": "L2_blink_serial",
+      "status": "pass",
+      "logic_edge_count": 3
+    },
+    {
+      "sketch": "L3_i2c_sensor",
+      "status": "pass",
+      "logic_edge_count": null
+    },
+    {
+      "sketch": "L4_spi_sensor",
+      "status": "pass",
+      "logic_edge_count": null
+    },
+    {
+      "sketch": "L5_adc",
+      "status": "pass",
+      "logic_edge_count": null
+    },
+    {
+      "sketch": "L6_pwm",
+      "status": "pass",
+      "logic_edge_count": 60
+    },
+    {
+      "sketch": "L7_timer",
+      "status": "pass",
+      "logic_edge_count": null
+    },
+    {
+      "sketch": "L8_can",
+      "status": "skipped",
+      "logic_edge_count": null
+    }
+  ]
+}
