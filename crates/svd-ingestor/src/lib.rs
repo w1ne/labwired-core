@@ -149,6 +149,7 @@ pub fn process_peripheral(
         },
         timing: None,
         gpio_mode: None,
+        gpio_pin_stride: None,
     })
 }
 

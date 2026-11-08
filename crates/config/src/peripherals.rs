@@ -231,6 +231,12 @@ pub struct PeripheralDescriptor {
     /// multi-bit mode field per pin rather than a one-bit `ENABLE` register.
     #[serde(default)]
     pub gpio_mode: Option<GpioModeDescriptor>,
+    /// `GPIO` descriptors only: bits from one pin to the next in the `IN`,
+    /// `OUT` and `ENABLE` registers, so pin k is bit `k * gpio_pin_stride`.
+    /// Default 1. Ports that give each pin a byte of its own (MPC5500 SIU
+    /// `GPDIn` / `GPDOn`, data in bit 0) set 8.
+    #[serde(default)]
+    pub gpio_pin_stride: Option<u8>,
 }
 
 /// Pin direction held in a mode field per pin (Allwinner `Pn_CFG` nibbles,
@@ -4516,6 +4522,7 @@ impl From<labwired_ir::IrPeripheral> for PeripheralDescriptor {
                 }
             },
             gpio_mode: None,
+            gpio_pin_stride: None,
         }
     }
 }

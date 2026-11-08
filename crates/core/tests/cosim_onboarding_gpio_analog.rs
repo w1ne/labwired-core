@@ -133,6 +133,12 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x04,
         "FT9001 HAL eport_reg.h EPPDR (EPORT_ReadGpioDatas)",
     ),
+    // MPC5500 SIU: GPDIn is pad n's own byte at +0x800 + n, level in bit 0.
+    (
+        "declarative/mpc5500/siu_gpio.yaml",
+        0x800,
+        "MPC5567 RM ch. 6 SIU_GPDIn (MPC55xx header SIU_tag GPDI[n])",
+    ),
     // Microwatt GPIO: DATA_OUT, DATA_IN, DIR words, pad k at bit k.
     (
         "declarative/microwatt/gpio.yaml",
@@ -197,6 +203,8 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
 fn input_bit(kind: &str, pin: u8) -> u32 {
     match kind {
         "s32k3_siul2" => 1 << (31 - u32::from(pin)),
+        // One byte per pad, level in bit 0 (`gpio_pin_stride: 8`).
+        "declarative/mpc5500/siu_gpio.yaml" => 1 << (8 * u32::from(pin)),
         "litex_controlandstatus" => {
             assert!((32..64).contains(&pin), "CAS switch pad, got {pin}");
             1 << (pin - 32)
@@ -211,8 +219,8 @@ fn input_bit(kind: &str, pin: u8) -> u32 {
 /// past the port. RZ/G2L and RZ/T2M `PIN_m` are bytes (`readb` in
 /// pinctrl-rzg2l.c, a `uint8_t *` in gpio_rzt2m.c) and the next byte is the
 /// next port's. FT9001 EPORT `EPPDR` is a byte (`uint8_t` in the HAL's
-/// `EPORT_ReadGpioDatas`) and the next byte is `EPDR`. Every other map here is
-/// word-wide.
+/// `EPORT_ReadGpioDatas`) and the next byte is `EPDR`. MPC5500 SIU `GPDIn` is
+/// a byte per pad. Every other map here is word-wide.
 fn load_input(bus: &SystemBus, kind: &str, register: u64) -> u32 {
     match kind {
         "declarative/msp430/port8.yaml"
@@ -220,6 +228,12 @@ fn load_input(bus: &SystemBus, kind: &str, register: u64) -> u32 {
         | "declarative/rzt2m/port.yaml"
         | "declarative/ft9001/eport.yaml" => bus.read_u8(register).map(u32::from),
         "declarative/msp430/port16.yaml" => bus.read_u16(register).map(u32::from),
+        // MPC5500 firmware reads SIU.GPDI[n].B.PDI, one `lbz` per pad; the
+        // four byte loads are packed back as pad k in byte k.
+        "declarative/mpc5500/siu_gpio.yaml" => (0..4u64).try_fold(0u32, |word, k| {
+            bus.read_u8(register + k)
+                .map(|b| word | u32::from(b) << (8 * k))
+        }),
         _ => bus.read_u32(register),
     }
     .expect("load the port input register")
@@ -470,6 +484,12 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
         "Zephyr ft9001.dtsi eport@40019000 + FT9001 HAL eport_reg.h EPPDR",
     ),
     (
+        "mpc5567",
+        "siu",
+        0xC3F9_0800,
+        "MPC5567 RM ch. 6 SIU at 0xC3F9_0000 + SIU_GPDI0 @0x800",
+    ),
+    (
         "microwatt",
         "gpio",
         0xC000_7004,
@@ -508,13 +528,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 219;
+const COVERED: usize = 220;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 114;
+const SILICON_REGISTER: usize = 115;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 26;
+const NO_ANALOG_ENDPOINT: usize = 25;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -876,32 +896,65 @@ fn assert_port_routes_generic_analog(
     }
 }
 
+/// An onboarding profile, its descriptor with the simulation thresholds
+/// filled in, and a probe bus built from both.
+fn load_onboarding_board(
+    system_path: &Path,
+) -> (String, ChipDescriptor, SystemManifest, SystemBus) {
+    let board = system_path
+        .file_stem()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
+    let mut profile =
+        SystemManifest::from_file(system_path).unwrap_or_else(|e| panic!("load {board}: {e}"));
+    // Anchor the chip path at the system file, as the CLI does, so a
+    // declarative port's descriptor `path` resolves next to the chip.
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    profile.chip = chip_path.to_string_lossy().into_owned();
+    let mut chip = ChipDescriptor::from_file(&chip_path)
+        .unwrap_or_else(|e| panic!("load {board} descriptor: {e}"));
+    // Simulation assumptions where the import records nothing; no
+    // silicon threshold is claimed.
+    chip.io_voltage_v.get_or_insert(3.3);
+    chip.gpio_input_thresholds
+        .get_or_insert(GpioInputThresholds { vil: 0.3, vih: 0.7 });
+    let probe = SystemBus::from_config(&chip, &profile)
+        .unwrap_or_else(|e| panic!("build {board} bus: {e}"));
+    (board, chip, profile, probe)
+}
+
+/// Covered ports whose pads do not sit at bit k of the input register.
+/// The main test puts the NTC on the first input pad, which is bit 0 at any
+/// stride, and the diode pad never leaves 0, so neither catches a wrong pad
+/// position. Here the NTC moves to the second pad and must toggle that pad's
+/// bit in the firmware load.
+const NON_UNIT_PAD_POSITION: &[&str] = &["mpc5567"];
+
+#[test]
+fn ntc_on_the_second_input_pad_lands_at_that_pads_register_bit() {
+    for wanted in NON_UNIT_PAD_POSITION {
+        let system_path = root(&format!("configs/systems/onboarding/{wanted}.yaml"));
+        let (board, chip, profile, probe) = load_onboarding_board(&system_path);
+        let (port_index, pins) =
+            first_input_port(&probe).unwrap_or_else(|| panic!("{board}: no input port"));
+        let swapped = Pins {
+            ntc: pins.diode,
+            diode: pins.ntc,
+        };
+        let outcome =
+            assert_port_routes_generic_analog(&board, &chip, &profile, port_index, swapped, &probe);
+        assert!(outcome.silicon_register, "{board}: silicon input register");
+    }
+}
+
 #[test]
 fn every_onboarding_profile_with_a_gpio_input_takes_routed_ntc_and_diode_levels() {
     let mut covered = Vec::new();
     let mut silicon = 0;
     let mut no_endpoint = 0;
     for system_path in onboarding_profiles() {
-        let board = system_path
-            .file_stem()
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
-        let mut profile =
-            SystemManifest::from_file(&system_path).unwrap_or_else(|e| panic!("load {board}: {e}"));
-        // Anchor the chip path at the system file, as the CLI does, so a
-        // declarative port's descriptor `path` resolves next to the chip.
-        let chip_path = system_path.parent().unwrap().join(&profile.chip);
-        profile.chip = chip_path.to_string_lossy().into_owned();
-        let mut chip = ChipDescriptor::from_file(&chip_path)
-            .unwrap_or_else(|e| panic!("load {board} descriptor: {e}"));
-        // Simulation assumptions where the import records nothing; no
-        // silicon threshold is claimed.
-        chip.io_voltage_v.get_or_insert(3.3);
-        chip.gpio_input_thresholds
-            .get_or_insert(GpioInputThresholds { vil: 0.3, vih: 0.7 });
-        let probe = SystemBus::from_config(&chip, &profile)
-            .unwrap_or_else(|e| panic!("build {board} bus: {e}"));
+        let (board, chip, profile, probe) = load_onboarding_board(&system_path);
         assert_no_peripheral_behind_bit_band(&board, &chip, &probe);
         let Some((port_index, pins)) = first_input_port(&probe) else {
             no_endpoint += 1;

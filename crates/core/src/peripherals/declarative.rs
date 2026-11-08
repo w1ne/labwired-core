@@ -248,7 +248,8 @@ impl GenericPeripheral {
     }
 
     /// A `GPIO` descriptor's `IN` / `OUT` / `ENABLE` register: its byte
-    /// offset and width in bits. Pin k is bit k, so the width bounds the pins.
+    /// offset and width in bits. Pin k is bit `k * gpio_pin_stride` (bit k
+    /// by default), so the width bounds the pins.
     /// Byte- and halfword-wide ports (MSP430 `PxIN` / `PxOUT` / `PxDIR`,
     /// SLAU049 §9.2) are as valid as 32-bit ones.
     fn gpio_reg(&self, id: &str) -> Option<(usize, u8)> {
@@ -262,14 +263,30 @@ impl GenericPeripheral {
             .map(|r| (r.address_offset as usize, r.size))
     }
 
-    /// Bit `pin` of a GPIO register; `None` past the register's width.
+    /// Bits from one pin to the next in `IN` / `OUT` / `ENABLE`: the
+    /// descriptor's `gpio_pin_stride`, 1 when unset.
+    fn gpio_stride(&self) -> u8 {
+        self.descriptor.gpio_pin_stride.unwrap_or(1).max(1)
+    }
+
+    /// Pins a `width`-bit GPIO register holds at the descriptor's stride.
+    fn gpio_pins_in(&self, width: u8) -> u8 {
+        width / self.gpio_stride()
+    }
+
+    /// Mask of `pin`'s bit in a `width`-bit GPIO register, at bit
+    /// `pin * gpio_pin_stride`; `None` past the register's pins.
+    fn gpio_pin_mask(&self, width: u8, pin: u8) -> Option<u32> {
+        (pin < self.gpio_pins_in(width))
+            .then(|| 1u32 << (u32::from(pin) * u32::from(self.gpio_stride())))
+    }
+
+    /// Pin `pin`'s bit of a GPIO register; `None` past the register's pins.
     fn gpio_bit(&self, id: &str, pin: u8) -> Option<bool> {
         let (offset, width) = self.gpio_reg(id)?;
-        if pin >= width {
-            return None;
-        }
+        let mask = self.gpio_pin_mask(width, pin)?;
         let value = self.read_register_storage(offset, width)?;
-        Some(value & (1u32 << pin) != 0)
+        Some(value & mask != 0)
     }
 
     /// Whether the output driver of `pin` is on: its `ENABLE` bit, or else
@@ -284,7 +301,7 @@ impl GenericPeripheral {
         }
         if self.descriptor.gpio_mode.is_none() && self.gpio_reg("OUT").is_none() {
             let (_, width) = self.gpio_reg("IN")?;
-            return (pin < width).then_some(false);
+            return (pin < self.gpio_pins_in(width)).then_some(false);
         }
         Some(self.gpio_mode_of(pin)? == crate::peripherals::gpio::GpioMode::Output)
     }
@@ -297,7 +314,7 @@ impl GenericPeripheral {
         use crate::peripherals::gpio::GpioMode;
         let mode = self.descriptor.gpio_mode.as_ref()?;
         let (_, in_width) = self.gpio_reg("IN")?;
-        if pin >= in_width || !(1..=8).contains(&mode.bits_per_pin) {
+        if pin >= self.gpio_pins_in(in_width) || !(1..=8).contains(&mode.bits_per_pin) {
             return None;
         }
         let start = self
@@ -486,7 +503,8 @@ impl GenericPeripheral {
 /// reports none.
 impl PinPort for GenericPeripheral {
     fn pin_count(&self) -> u8 {
-        self.gpio_reg("IN").map_or(0, |(_, width)| width)
+        self.gpio_reg("IN")
+            .map_or(0, |(_, width)| self.gpio_pins_in(width))
     }
 
     /// `ENABLE` set: driving its `OUT` bit; clear: released. Without an
@@ -513,17 +531,15 @@ impl PinPort for GenericPeripheral {
     /// A level is stored in the `IN` register; releasing leaves it there.
     fn set_external(&mut self, pin: u8, ext: External) -> Option<InputChange> {
         let (offset, width) = self.gpio_reg("IN")?;
-        if pin >= width {
-            return None;
-        }
+        let mask = self.gpio_pin_mask(width, pin)?;
         let mut value = self.read_register_storage(offset, width)?;
-        let before = value & (1u32 << pin) != 0;
+        let before = value & mask != 0;
         match ext {
             External::Level(level) => {
                 if level {
-                    value |= 1u32 << pin;
+                    value |= mask;
                 } else {
-                    value &= !(1u32 << pin);
+                    value &= !mask;
                 }
                 if !self.write_register_storage(offset, width, value) {
                     return None;
@@ -534,7 +550,7 @@ impl PinPort for GenericPeripheral {
         }
         Some(InputChange {
             before,
-            after: value & (1u32 << pin) != 0,
+            after: value & mask != 0,
         })
     }
 
@@ -917,6 +933,7 @@ mod tests {
             interrupts: None,
             timing: None,
             gpio_mode: None,
+            gpio_pin_stride: None,
         }
     }
 
@@ -1286,6 +1303,7 @@ mod tests {
             interrupts: None,
             timing: None,
             gpio_mode: None,
+            gpio_pin_stride: None,
         }
     }
 
@@ -1348,6 +1366,7 @@ mod tests {
             interrupts: None,
             timing: None,
             gpio_mode: None,
+            gpio_pin_stride: None,
         };
         let mut p = GenericPeripheral::new(descriptor(vec![reg("IN", 0), reg("IRQ_MODE", 4)]));
         assert_eq!(p.gpio_routing(2).unwrap().mode, GpioMode::Input);
@@ -1382,6 +1401,7 @@ mod tests {
             interrupts: None,
             timing: None,
             gpio_mode: None,
+            gpio_pin_stride: None,
         });
         assert_eq!(p.pin_count(), 8);
         p.write(1, 0x81).unwrap(); // OUT
@@ -1423,6 +1443,7 @@ mod tests {
                 output: vec![1],
                 input: vec![0],
             }),
+            gpio_pin_stride: None,
         });
         let mode = |p: &GenericPeripheral, pin| p.gpio_routing(pin).map(|r| r.mode);
         assert_eq!(mode(&p, 3), Some(GpioMode::Input), "reset nibble 0");
@@ -1470,6 +1491,7 @@ mod tests {
                 output: vec![2, 3],
                 input: vec![1],
             }),
+            gpio_pin_stride: None,
         });
         let mode = |p: &GenericPeripheral, pin| p.gpio_routing(pin).map(|r| r.mode);
         // Pin 0 input, 1 output, 2 output with input, 3 Hi-Z; pin 4 sits
@@ -1483,5 +1505,47 @@ mod tests {
         p.write(0, 0b10).unwrap(); // OUT: pin 1 high
         assert_eq!(p.read_gpio_pad(1), Some(true), "driven pad shows OUT");
         assert_eq!(p.read_gpio_pad(0), Some(false), "input pad shows IN");
+    }
+
+    /// A port that gives each pin a byte, data in bit 0 (MPC5500 SIU
+    /// `GPDIn` / `GPDOn`): `gpio_pin_stride: 8` puts pin k at bit 8k of
+    /// `IN`, `OUT` and `ENABLE`, so a 32-bit register holds pins 0..3.
+    #[test]
+    fn declarative_gpio_pin_stride_gives_each_pin_its_own_byte() {
+        let reg = |id: &str, off: u64| RegisterDescriptor {
+            id: id.to_string(),
+            address_offset: off,
+            size: 32,
+            access: Access::ReadWrite,
+            reset_value: 0,
+            fields: vec![],
+            side_effects: None,
+        };
+        let mut p = GenericPeripheral::new(PeripheralDescriptor {
+            peripheral: "GPIO".to_string(),
+            version: "1.0".to_string(),
+            registers: vec![reg("IN", 0), reg("OUT", 4), reg("ENABLE", 8)],
+            interrupts: None,
+            timing: None,
+            gpio_mode: None,
+            gpio_pin_stride: Some(8),
+        });
+        assert_eq!(p.pin_count(), 4, "four byte-wide pins in 32 bits");
+        assert!(p.set_gpio_input(1, true));
+        assert!(!p.set_gpio_input(4, true), "no pin 4 at stride 8");
+        assert_eq!(p.read(0).unwrap(), 0, "pin 1 is not in byte 0");
+        assert_eq!(p.read(1).unwrap(), 0x01, "pin 1 is bit 0 of byte 1");
+        assert_eq!(p.read_gpio_input(1), Some(true));
+        assert_eq!(p.read_gpio_input(0), Some(false));
+        assert_eq!(p.read_gpio_input(4), None);
+        // Bit 1 of IN is not a pin at stride 8.
+        p.write_u32(0, 0x0000_0002).unwrap();
+        assert_eq!(p.read_gpio_input(0), Some(false), "bit 1 is no pin");
+        assert_eq!(p.read_gpio_input(1), Some(false));
+        p.write(4 + 2, 0x01).unwrap(); // OUT byte 2: pin 2 latch
+        p.write(8 + 2, 0x01).unwrap(); // ENABLE byte 2: pin 2 driven
+        assert_eq!(p.read_gpio_output(2), Some(true));
+        assert_eq!(p.read_gpio_pad(2), Some(true), "driven pad shows OUT");
+        assert_eq!(p.read_gpio_pad(3), Some(false), "released pad shows IN");
     }
 }

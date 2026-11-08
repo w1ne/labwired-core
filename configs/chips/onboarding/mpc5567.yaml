@@ -27,3 +27,14 @@ peripherals:
   type: pythonperipheral
   bus: sysbus
   base_address: 3287810052
+# MPC5567 SIU pad registers (MPC5567 RM ch. 6; the MPC55xx header's SIU_tag at
+# 0xC3F9_0000, the 16 KB slot between FMPLL 0xC3F8_0000 and eMIOS
+# 0xC3FA_0000). Renode's mpc5567.repl does not declare the SIU. GPDIn
+# @+0x800 + n is pad n's input byte; GPIO[0..3] are declared.
+- id: siu
+  type: declarative
+  bus: sysbus
+  base_address: 3287875584
+  size: 16384B
+  config:
+    path: ../../peripherals/mpc5500/siu_gpio.yaml
