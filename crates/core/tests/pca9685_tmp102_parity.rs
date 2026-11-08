@@ -404,6 +404,7 @@ fn pca9685_artifacts_expose_prescale_period_off_counts_and_angles() {
     for op in &ops {
         match op {
             Op::Start => decl.start(),
+            Op::Stop => decl.stop(),
             Op::Write(b) => decl.write(*b),
             Op::Read => {
                 let _ = decl.read();

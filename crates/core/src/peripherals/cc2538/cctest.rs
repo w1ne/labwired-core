@@ -111,6 +111,18 @@ impl Peripheral for Cc2538CcTest {
         *self = Self::new();
     }
 
+    /// Register storage only: no `tick()`/`tick_elapsed()` override and no
+    /// IRQ, DMA or event output, so (like the stub it replaced) it can neither
+    /// block walk deletion nor needs a per-cycle visit. Leaving the defaults on
+    /// kept the walk alive and starved idle fast-forward.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
@@ -175,5 +187,14 @@ mod tests {
         cc.restore(saved).unwrap();
         assert_eq!(cc.read_u32(0x34).unwrap(), 0x2);
         assert_eq!(cc.read_u32(0x2C).unwrap(), 0x81);
+    }
+
+    #[test]
+    fn stays_out_of_the_legacy_walk() {
+        // Contiki-NG hello-world needs idle fast-forward to reach its second
+        // etimer inside the cc2538dk CI step budget.
+        let cc = Cc2538CcTest::new();
+        assert!(!cc.needs_legacy_walk());
+        assert!(!cc.legacy_tick_active());
     }
 }
