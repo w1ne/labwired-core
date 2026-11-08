@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1816,
+      536891344,
+      536871932,
+      0,
+      0,
+      536891192,
+      0,
+      1073809408,
+      8192,
+      4999996,
+      0,
+      0,
+      4294491393,
+      4294967295,
+      5475899,
+      3758157824,
+      0,
+      0,
+      3758097280,
+      0,
+      0,
+      0,
+      132,
+      1,
+      0,
+      0,
+      0,
+      9,
+      0,
+      0,
+      0
+    ],
+    "pc": 628,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 1718,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 39999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 40000000,
+  "cycles": 148175574,
+  "instructions": 40000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 40000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 40000000
+    }
+  },
+  "limits": {
+    "max_steps": 40000000,
+    "max_cycles": 40000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "6163c5e885bcdb0d955637fb5af3aa4abea574b7ea3c8a4beb9bb3894d6d6566",
+  "config": {
+    "firmware": "examples/weact-ch32x035/ch32fun/debugprintfdemo.elf",
+    "system": "examples/weact-ch32x035/../../configs/systems/weact-ch32x035-ch32fun-smoke.yaml",
+    "script": "examples/weact-ch32x035/ch32fun-debugprintf-smoke.yaml"
+  }
+}

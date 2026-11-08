@@ -710,6 +710,13 @@ fn every_shipped_descriptor_is_ratcheted() {
         // debugprintfdemo plus an FPU self-test; no Playground catalog board
         // or physical-silicon differential.
         "ch32v307vct6-ch32fun-smoke",
+        // CH32X035 (QingKe V4C, 48 MHz HSI, no PLL): ch32fun's X035 blink and
+        // debugprintfdemo on the WeAct core board's CH32X035F8U6, and
+        // exti_pin_change_isr on the LQFP48 CH32X035C8T6 (the X035 AFIO and
+        // EXTI vector grouping); no Playground catalog board or
+        // physical-silicon differential.
+        "ch32x035c8t6-ch32fun-smoke",
+        "ch32x035f8u6-ch32fun-smoke",
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
         "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)
         "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)

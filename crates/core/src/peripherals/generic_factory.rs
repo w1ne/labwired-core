@@ -1268,8 +1268,9 @@ pub fn try_build(
             let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
                 None | Some("stm32f1") => AfioLayout::Stm32F1,
                 Some("ch32v003") => AfioLayout::Ch32v003,
+                Some("ch32x03x") => AfioLayout::Ch32x03x,
                 Some(other) => anyhow::bail!(
-                    "afio `{}`: unsupported profile `{other}`; supported: stm32f1, ch32v003",
+                    "afio `{}`: unsupported profile `{other}`; supported: stm32f1, ch32v003, ch32x03x",
                     p_cfg.id
                 ),
             };

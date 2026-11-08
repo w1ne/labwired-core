@@ -18,10 +18,16 @@ pub enum AfioLayout {
     /// 0x04 and ONE `EXTICR` at 0x08 with a 2-bit port field per line for
     /// lines 0..7 (00 = PA, 10 = PC, 11 = PD). 0x00 is reserved.
     Ch32v003,
+    /// WCH CH32X035 (`AFIO_TypeDef` in ch32fun's ch32x03xhw.h): PCFR1 at
+    /// 0x04, then two EXTICRs of 2-bit port fields (00 = PA, 01 = PB,
+    /// 10 = PC): `EXTICR1` at 0x08 for lines 0..15 and `EXTICR2` at 0x0C for
+    /// lines 16..23. `CTLR` (USB pad pull-ups, PD switches) at 0x18 is
+    /// stored only.
+    Ch32x03x,
 }
 
-/// STM32F1 Alternate Function I/O (AFIO), and the CH32V003's cut-down copy
-/// of it ([`AfioLayout::Ch32v003`]).
+/// STM32F1 Alternate Function I/O (AFIO), and the WCH copies of it
+/// ([`AfioLayout::Ch32v003`], [`AfioLayout::Ch32x03x`]).
 #[derive(Debug, Default, serde::Serialize)]
 pub struct Afio {
     pub layout: AfioLayout,
@@ -29,6 +35,8 @@ pub struct Afio {
     pub mapr: u32,
     pub exticr: [u32; 4], // EXTICR1, EXTICR2, EXTICR3, EXTICR4
     pub mapr2: u32,
+    /// CH32X035 `AFIO_CTLR`.
+    pub ctlr: u32,
     /// `MAPR` (`PCFR1` on the CH32V003) as last written, shared with the pad
     /// routes whose mapping it selects ([`crate::Peripheral::remap_register`]).
     #[serde(skip)]
@@ -55,6 +63,9 @@ impl Afio {
 
     /// Returns the GPIO port index (0=A, 1=B, etc.) for a given EXTI line (0-15)
     pub fn get_exti_mapping(&self, line: u8) -> u8 {
+        if self.layout == AfioLayout::Ch32x03x && (16..24).contains(&line) {
+            return ((self.exticr[1] >> (u32::from(line - 16) * 2)) & 0x3) as u8;
+        }
         if line >= 16 {
             return 0;
         }
@@ -62,6 +73,9 @@ impl Afio {
             // Lines 8..15 have no GPIO source on the CH32V003; the caller
             // only asks for lines with a pad (PA1/PA2, PC0..7, PD0..7).
             return ((self.exticr[0] >> (u32::from(line % 8) * 2)) & 0x3) as u8;
+        }
+        if self.layout == AfioLayout::Ch32x03x {
+            return ((self.exticr[0] >> (u32::from(line) * 2)) & 0x3) as u8;
         }
         let reg_idx = (line / 4) as usize;
         let shift = (line % 4) * 4;
@@ -73,6 +87,18 @@ impl Afio {
             return match offset {
                 0x04 => self.mapr,
                 0x08 => self.exticr[0],
+                _ => {
+                    crate::census_reg!("afio:Afio", offset, "read");
+                    0
+                }
+            };
+        }
+        if self.layout == AfioLayout::Ch32x03x {
+            return match offset {
+                0x04 => self.mapr,
+                0x08 => self.exticr[0],
+                0x0C => self.exticr[1],
+                0x18 => self.ctlr,
                 _ => {
                     crate::census_reg!("afio:Afio", offset, "read");
                     0
@@ -103,6 +129,21 @@ impl Afio {
                 0x04 => self.set_mapr(value & 0x0000_FFFF),
                 // EXTICR: eight 2-bit fields in [15:0].
                 0x08 => self.exticr[0] = value & 0x0000_FFFF,
+                _ => {
+                    crate::census_reg!("afio:Afio", offset, "write");
+                }
+            }
+            return;
+        }
+        if self.layout == AfioLayout::Ch32x03x {
+            match offset {
+                // PCFR1: no pad route on this part reads it; stored only.
+                0x04 => self.set_mapr(value),
+                // EXTICR1: sixteen 2-bit fields; EXTICR2: eight, in [15:0].
+                // 0b11 selects no port on a three-port part; it is stored.
+                0x08 => self.exticr[0] = value,
+                0x0C => self.exticr[1] = value & 0x0000_FFFF,
+                0x18 => self.ctlr = value,
                 _ => {
                     crate::census_reg!("afio:Afio", offset, "write");
                 }
@@ -156,11 +197,12 @@ impl Peripheral for Afio {
     }
 
     /// AFIO_EXTICRx is the F1's EXTI line-source mux (AFIO_EXTICR, lines
-    /// 0..7, on the CH32V003).
+    /// 0..7, on the CH32V003; EXTICR1/2, lines 0..23, on the CH32X035).
     fn exti_line_source(&self, line: u8) -> Option<u8> {
         let lines = match self.layout {
             AfioLayout::Stm32F1 => 16,
             AfioLayout::Ch32v003 => 8,
+            AfioLayout::Ch32x03x => 24,
         };
         (line < lines).then(|| self.get_exti_mapping(line))
     }
@@ -260,5 +302,28 @@ mod tests {
         a.write_u32(0x0C, 0xFFFF).unwrap();
         assert_eq!(rd32(&a, 0x0C), 0);
         assert_eq!(rd32(&a, 0x00), 0, "0x00 is reserved");
+    }
+
+    #[test]
+    fn ch32x03x_exticr1_and_exticr2_cover_lines_0_to_23() {
+        let mut a = Afio::new_with_layout(AfioLayout::Ch32x03x);
+        // ch32fun examples_x035/exti_pin_change_isr: AFIO_EXTICR1_EXTI7_PC.
+        a.write_u32(0x08, 0x0000_8000).unwrap();
+        assert_eq!(a.exti_line_source(7), Some(2), "line 7 -> port C");
+        assert_eq!(a.exti_line_source(6), Some(0), "reset: port A");
+        // Line 15 sits in EXTICR1's top field; line 23 in EXTICR2 [15:14].
+        a.write_u32(0x08, 0x4000_0000).unwrap();
+        assert_eq!(a.exti_line_source(15), Some(1), "line 15 -> port B");
+        a.write_u32(0x0C, 0xFFFF_0000 | (0b10 << 14) | 0b01)
+            .unwrap();
+        assert_eq!(rd32(&a, 0x0C), 0x8001);
+        assert_eq!(a.exti_line_source(16), Some(1));
+        assert_eq!(a.exti_line_source(23), Some(2));
+        assert_eq!(a.exti_line_source(24), None, "no GPIO line 24");
+        // CTLR at 0x18 is storage; the F1 EXTICR3/4 offsets do not exist.
+        a.write_u32(0x18, 0x0000_000F).unwrap();
+        assert_eq!(rd32(&a, 0x18), 0xF);
+        a.write_u32(0x10, 0xFFFF).unwrap();
+        assert_eq!(rd32(&a, 0x10), 0);
     }
 }

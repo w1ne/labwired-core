@@ -43,6 +43,11 @@ pub enum ExtiRegisterLayout {
     /// EXTI15_10 = 56 as level requests — the STM32F1 vector table shifted
     /// by the 16 QingKe core vectors.
     Ch32v20x,
+    /// WCH CH32X035 (ch32fun `ch32x03xhw.h`): the same register file with 30
+    /// lines; GPIO lines 0..23 (port in `AFIO_EXTICR1/2`, 2-bit fields)
+    /// drive PFIC interrupts `EXTI7_0_IRQn` = 20, `EXTI15_8_IRQn` = 40 and
+    /// `EXTI25_16_IRQn` = 41 as level requests. Lines 24..29 have no source.
+    Ch32x03x,
 }
 
 impl FromStr for ExtiRegisterLayout {
@@ -58,8 +63,9 @@ impl FromStr for ExtiRegisterLayout {
             "stm32l0" | "l0" => Ok(Self::Stm32L0),
             "ch32v003" => Ok(Self::Ch32v003),
             "ch32v20x" | "ch32v203" => Ok(Self::Ch32v20x),
+            "ch32x03x" | "ch32x035" => Ok(Self::Ch32x03x),
             _ => Err(format!(
-                "unsupported EXTI register layout '{}'; supported: stm32f1, stm32l4, stm32g0, stm32u5, stm32l0, ch32v003, ch32v20x",
+                "unsupported EXTI register layout '{}'; supported: stm32f1, stm32l4, stm32g0, stm32u5, stm32l0, ch32v003, ch32v20x, ch32x03x",
                 value
             )),
         }
@@ -277,7 +283,9 @@ impl SplitPendingGpioExti {
 ///
 /// The CH32V20x variant ([`QingkeExtiFamily::Ch32v20x`]) has 20 lines, all
 /// sixteen GPIO lines, and the F1-style per-line vectors listed on
-/// [`ExtiRegisterLayout::Ch32v20x`]; it has no AWU line.
+/// [`ExtiRegisterLayout::Ch32v20x`]; it has no AWU line. The CH32X035
+/// variant ([`QingkeExtiFamily::Ch32x03x`]) has 30 lines, 24 of them GPIO,
+/// in the three groups listed on [`ExtiRegisterLayout::Ch32x03x`].
 #[derive(Debug, Default, serde::Serialize)]
 pub struct QingkeExti {
     bank1: ExtiBank,
@@ -292,6 +300,7 @@ pub enum QingkeExtiFamily {
     #[default]
     Ch32v003,
     Ch32v20x,
+    Ch32x03x,
 }
 
 impl QingkeExti {
@@ -301,13 +310,18 @@ impl QingkeExti {
     const V20X_EXTI0_IRQ: u32 = 22;
     const V20X_EXTI9_5_IRQ: u32 = 39;
     const V20X_EXTI15_10_IRQ: u32 = 56;
+    /// `EXTI15_8_IRQn`, `EXTI25_16_IRQn` in ch32x03xhw.h (lines 7..0 share
+    /// `EXTI7_0_IRQn` = 20 with the CH32V003).
+    const X03X_EXTI15_8_IRQ: u32 = 40;
+    const X03X_EXTI25_16_IRQ: u32 = 41;
 
     /// Implemented INTENR/EVENR/RTENR/FTENR/SWIEVR/INTFR bits: 0..9 on the
-    /// CH32V003, 0..19 on the CH32V20x.
+    /// CH32V003, 0..19 on the CH32V20x, 0..29 on the CH32X035.
     fn lines(&self) -> u32 {
         match self.family {
             QingkeExtiFamily::Ch32v003 => 0x3FF,
             QingkeExtiFamily::Ch32v20x => 0xF_FFFF,
+            QingkeExtiFamily::Ch32x03x => 0x3FFF_FFFF,
         }
     }
 
@@ -315,6 +329,7 @@ impl QingkeExti {
         match self.family {
             QingkeExtiFamily::Ch32v003 => 0xFF,
             QingkeExtiFamily::Ch32v20x => 0xFFFF,
+            QingkeExtiFamily::Ch32x03x => 0xFF_FFFF,
         }
     }
 
@@ -332,6 +347,11 @@ impl QingkeExti {
                     }
                     pfic.set_level(Self::V20X_EXTI9_5_IRQ, active & 0x03E0 != 0);
                     pfic.set_level(Self::V20X_EXTI15_10_IRQ, active & 0xFC00 != 0);
+                }
+                QingkeExtiFamily::Ch32x03x => {
+                    pfic.set_level(Self::EXTI7_0_IRQ, active & 0x00_00FF != 0);
+                    pfic.set_level(Self::X03X_EXTI15_8_IRQ, active & 0x00_FF00 != 0);
+                    pfic.set_level(Self::X03X_EXTI25_16_IRQ, active & 0xFF_0000 != 0);
                 }
             }
             pfic.exti_edge
@@ -409,6 +429,10 @@ impl Exti {
             ExtiRegisterLayout::Ch32v003 => Self::Qingke(QingkeExti::default()),
             ExtiRegisterLayout::Ch32v20x => Self::Qingke(QingkeExti {
                 family: QingkeExtiFamily::Ch32v20x,
+                ..Default::default()
+            }),
+            ExtiRegisterLayout::Ch32x03x => Self::Qingke(QingkeExti {
+                family: QingkeExtiFamily::Ch32x03x,
                 ..Default::default()
             }),
         }
@@ -1009,6 +1033,47 @@ mod tests {
         }
         // AFIO_EXTICR names another port: the edge is ignored.
         assert!(!exti.gpio_edge_with_source(0, 1, false, true, Some(1)));
+    }
+
+    /// CH32X035: lines 7..0 share interrupt 20, 15..8 share 40 and 23..16
+    /// share 41 (ch32x03xhw.h `EXTI7_0_IRQn`, `EXTI15_8_IRQn`,
+    /// `EXTI25_16_IRQn`); line 9 is a GPIO line, not an AWU.
+    #[test]
+    fn ch32x03x_gpio_lines_route_to_the_three_group_vectors() {
+        use crate::peripherals::qingke_pfic::QingkePficState;
+        use std::sync::atomic::Ordering::SeqCst;
+        use std::sync::Arc;
+        let pfic = Arc::new(QingkePficState::default());
+        let mut exti: Exti = "ch32x03x"
+            .parse::<ExtiRegisterLayout>()
+            .map(Exti::new_with_layout)
+            .unwrap();
+        exti.attach_qingke_pfic(pfic.clone());
+        pfic.enabled[0].store(u32::MAX, SeqCst);
+        pfic.enabled[1].store(u32::MAX, SeqCst);
+        let lines = (1 << 7) | (1 << 9) | (1 << 20);
+        exti.write_u32(0x0C, lines).unwrap(); // FTENR
+        exti.write_u32(0x00, lines).unwrap(); // INTENR
+
+        for (line, irq) in [(7u8, 20u32), (9, 40), (20, 41)] {
+            if line < 16 {
+                assert!(exti.gpio_edge_with_source(2, line, true, false, Some(2)));
+            } else {
+                // The GPIO model has no pad 16..23: raise line 20 by SWIEVR.
+                exti.write_u32(0x10, 1 << line).unwrap();
+            }
+            assert_eq!(pfic.next_interrupt(), Some(irq), "line {line}");
+            assert_eq!(pfic.level[0].load(SeqCst) & (1 << 21), 0, "no AWU");
+            exti.write_u32(0x14, 1 << line).unwrap();
+            assert_eq!(pfic.next_interrupt(), None, "INTFR clear drops line {line}");
+        }
+        // 30 implemented lines.
+        exti.write_u32(0x00, u32::MAX).unwrap();
+        let mut b = [0u8; 4];
+        for (i, v) in b.iter_mut().enumerate() {
+            *v = exti.read(i as u64).unwrap();
+        }
+        assert_eq!(u32::from_le_bytes(b), 0x3FFF_FFFF);
     }
 
     fn poke(exti: &mut Exti, off: u64, val: u32) {

@@ -1540,6 +1540,22 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: ch32x035c8t6-ch32fun-smoke
+    arch: rv32imac
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ch32x035f8u6-ch32fun-smoke
+    arch: rv32imac
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: esp32-devkitc-32e-gpio-smoke
     arch: xtensa-lx6
     headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."

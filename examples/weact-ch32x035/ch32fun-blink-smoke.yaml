@@ -1,0 +1,19 @@
+# ch32fun examples_x035/blink, unmodified (build-ch32fun-examples.sh). PB12
+# (the WeAct board LED), PA2, PA4 and PA7 toggle together every Delay_Ms(250)
+# at 48 MHz: DelaySysTick waits 1,500,000 HCLK/8 counts of the 64-bit
+# QingKe V4 SysTick, 12,000,000 cycles per edge, so 80,000,000 cycles hold 7
+# edges on each pin (the committed run measured 12,000,010..20 cycles between
+# edges).
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/blink.elf"
+  system: "../../configs/systems/weact-ch32x035-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 80000000
+  max_steps: 80000000
+  wall_time_ms: 600000
+assertions:
+  - gpio_edges: { pin: "gpiob:12", min_edges: 6 }
+  - gpio_edges: { pin: "gpioa:2", min_edges: 6 }
+  - gpio_edges: { pin: "gpioa:4", min_edges: 6 }
+  - gpio_edges: { pin: "gpioa:7", min_edges: 6 }

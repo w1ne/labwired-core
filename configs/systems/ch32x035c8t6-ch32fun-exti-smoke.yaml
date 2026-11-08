@@ -1,0 +1,11 @@
+# A bare CH32X035C8T6 (LQFP48) running ch32fun's
+# examples_x035/exti_pin_change_isr, unmodified: a push button from PC7 to
+# GND (the example enables PC7's internal pull-up) and an LED on PC14, the
+# pad the EXTI7_0 handler drives. Both are test connections. Not the WeAct
+# board: its CH32X035F8U6 (QFN20) does not bond PC7.
+name: ch32x035c8t6-ch32fun-exti-smoke
+chip: ../chips/ch32x035c8t6-ch32fun-smoke.yaml
+external_devices: []
+board_io:
+  - { id: button_pc7, kind: button, peripheral: gpioc, pin: 7, signal: input, active_high: false }
+  - { id: external_led_pc14, kind: led, peripheral: gpioc, pin: 14, signal: output, active_high: true }

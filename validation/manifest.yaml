@@ -3626,6 +3626,10 @@ boards:
     # NOT a new silicon capture.
 
   - id: nucleo-l476rg
+    # 2026-11-08: CH32X035 EXTI changes the shared exti.rs digest. New
+    # layout `ch32x03x` (30 lines, PFIC 20/40/41 groups) only; the L4 EXTI
+    # banks and IRQ routing are unchanged. This is a reviewed model-drift
+    # acknowledgment, NOT a new silicon capture; no capture or ack date moves.
     # 2026-11-07 (WS2812): CH32V003 SPI1 MOSI pads + DMA1 channel 3 change
     # the shared spi.rs/dma.rs/gpio.rs/pad_lines.rs/pad_routing.rs/attach.rs
     # digests. STM32-visible effects: (1) the classic/FIFO SPI answers
@@ -4135,7 +4139,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 6aa61a23a2125207ec2c7c06891a9f02870a0b8ffc245d63ef8c1ed39778f77d
+    drift_ack_digest: b43a23e275c3923105ded205fd3ccf0c99fad3506c01222429ba8347b5a14945
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6026,6 +6030,12 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f103
+    # 2026-11-08: CH32X035 AFIO + EXTI change the shared afio.rs/exti.rs
+    # digests. New `profile: ch32x03x` AFIO (2-bit EXTICR1/EXTICR2 fields,
+    # CTLR storage) and EXTI layout `ch32x03x` (30 lines, PFIC 20/40/41
+    # groups) only; the F1 AFIO register file and masks, the F1 EXTI bank and
+    # its IRQ routing are unchanged. This is a reviewed model-drift
+    # acknowledgment, NOT a new silicon capture; no capture or ack date moves.
     # 2026-11-07 (WS2812): CH32V003 SPI1 MOSI pads + DMA1 channel 3 change
     # the shared spi.rs/dma.rs/gpio.rs/pad_lines.rs/pad_routing.rs/attach.rs
     # digests. STM32-visible effects: (1) the classic/FIFO SPI answers
@@ -6548,7 +6558,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 7049bc43aa3ae222b4a5214b986e5b3197d6bf5d9ee93dbead6eeb7e95b9a2d9
+    drift_ack_digest: aea51a638b5a5b26cb35b1c4d2ccf5ecef1ecfdcfe49201c184d945518dfe4bf
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
