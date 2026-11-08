@@ -1,17 +1,57 @@
-# Cortex-M33 instruction and SRAM smoke against the exact imported CK-RA6M5.
-# It does not exercise the board's SCI, GPIO, or any other peripherals.
-schema_version: "1.0"
+# Cortex-M33 board smoke against the narrowed imported CK-RA6M5: SCI0 polled
+# TX, the three board LEDs on PORT6 and the button (P804, high while pressed
+# as in Renode) on PORT8. The button is pressed twice; the green LED (P609)
+# mirrors it and the firmware counts the presses in SRAM. R_MSTP reset values
+# are read back. It does not claim ICU/GPT/AGT/IIC or sensor parity.
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-renesas-ck-ra6m5-smoke"
   system: "../../configs/systems/onboarding/renesas-ck_ra6m5.yaml"
 limits:
-  max_steps: 100000
+  max_steps: 400000
+stimuli:
+  - target: { component: "button", channel: "pressed" }
+    trigger: !after_cycles { cycles: 100000 }
+    value: 1.0
+  - target: { component: "button", channel: "pressed" }
+    trigger: !after_cycles { cycles: 160000 }
+    value: 0.0
+  - target: { component: "button", channel: "pressed" }
+    trigger: !after_cycles { cycles: 220000 }
+    value: 1.0
+  - target: { component: "button", channel: "pressed" }
+    trigger: !after_cycles { cycles: 280000 }
+    value: 0.0
 assertions:
   - memory_value:
       address: 0x20000000
       expected_value: 0x00000143
       size: 4
+  - memory_value:
+      address: 0x20000004
+      expected_value: 0x00000020
+      size: 4
+  # PODR after setup: red and blue on, green off.
+  - memory_value:
+      address: 0x20000008
+      expected_value: 0x00000402
+      size: 4
+  # Button released at boot reads low.
+  - memory_value:
+      address: 0x2000000C
+      expected_value: 0x00000000
+      size: 4
+  - memory_value:
+      address: 0x20000010
+      expected_value: 0x00000002
+      size: 4
   - memory_value: {address: 0x40084000, expected_value: 0xFFBFFF7E}  # MSTPCRA reset
-  - memory_value: {address: 0x40084004, expected_value: 0xFFFFFFFF}  # MSTPCRB reset; this fixture does not write it
-  - memory_value: {address: 0x40084010, expected_value: 0xFFFFFFFF}  # MSTPCRE reset
+  - memory_value: {address: 0x40084004, expected_value: 0xFFFFFFFF}  # MSTPCRB reset; MSTP does not gate SCI0
+  - uart_contains: "CK-RA6M5 SCI0 SMOKE"
+  - gpio_edges:
+      pin: "port6:10"
+      min_edges: 4
+  - gpio_edges:
+      pin: "port6:9"
+      min_edges: 4
   - expected_stop_reason: max_steps

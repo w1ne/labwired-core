@@ -1,20 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.001832">
+<testsuite name="labwired" tests="12" failures="0" errors="0" time="0.007695">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="f870c6c34e651dd5e0e01d039323df15af5cb40617d419d597419f6013ca5bce"/>
+    <property name="firmware_hash" value="fa7f6ffaf2627aabffe17eb97a171363e19e9a28f03cdf76cc90863de64d0d63"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.001832">
+  <testcase classname="labwired" name="run" time="0.007695">
   </testcase>
   <testcase classname="labwired" name="assertion 1: memory_value: @0x20000000=0x143" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: memory_value: @0x40084000=0xffbfff7e" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x20000004=0x20" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 3: memory_value: @0x40084004=0xffffffff" time="0.000000">
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x20000008=0x402" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 4: memory_value: @0x40084010=0xffffffff" time="0.000000">
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x2000000c=0x0" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x20000010=0x2" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x40084000=0xffbfff7e" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: memory_value: @0x40084004=0xffffffff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: uart_contains: CK-RA6M5 SCI0 SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: gpio_edges: port6:10 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: gpio_edges: port6:9 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>
