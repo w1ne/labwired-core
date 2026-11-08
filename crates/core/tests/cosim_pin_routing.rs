@@ -20,7 +20,8 @@ use common::root;
 use labwired_config::{ChipDescriptor, CosimAdapter, CosimModelConfig, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cosim::{CosimSession, CosimSignalValue, RoutingError};
-use labwired_core::Bus;
+use labwired_core::system::cortex_m::configure_cortex_m;
+use labwired_core::{Bus, DebugControl, Machine};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -181,9 +182,28 @@ fn f401_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
         .expect("power up ADC1");
     bus.write_u32(ADC1_BASE + 0x08, ADON | SWSTART)
         .expect("software-start ADC1 conversion");
+
+    // Advance through a Machine, not bare bus ticks. With event-scheduler (on
+    // under workspace feature unification) the conversion completes as a
+    // scheduled event that only a Machine drains; a bare tick never fires it.
+    const SPIN_PC: u64 = 0x0800_0040;
+    let owned = std::mem::replace(bus, f401_bus());
+    let mut machine = {
+        let mut owned = owned;
+        owned.write_u16(SPIN_PC, 0xe7fe).expect("b ."); // branch-to-self guest
+        let (mut cpu, _) = configure_cortex_m(&mut owned);
+        cpu.pc = SPIN_PC as u32;
+        cpu.sp = 0x2000_5000;
+        Machine::new(cpu, owned)
+    };
+    machine.total_cycles = machine.bus.current_cycle;
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
     for _ in 0..15 {
-        bus.tick_peripherals_fully();
+        machine.run(Some(1)).expect("advance one step");
     }
+    *bus = machine.bus;
+
     let status = bus.read_u32(ADC1_BASE).expect("read ADC1 SR");
     assert_ne!(status & EOC, 0, "ADC1 conversion completes with EOC set");
     bus.read_u32(ADC1_BASE + 0x4c)

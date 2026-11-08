@@ -9325,6 +9325,7 @@ boards:
       - crates/core/src/peripherals/rp2040/adc.rs
       - crates/core/src/peripherals/rp2040/dma.rs
       - crates/core/src/peripherals/rp2040/i2c.rs
+      - crates/core/src/peripherals/rp2040/io_bank0.rs
       - crates/core/src/peripherals/rp2040/pwm.rs
       - crates/core/src/peripherals/rp2040/sio.rs
       - crates/core/src/peripherals/rp2040/spi.rs
