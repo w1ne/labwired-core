@@ -458,6 +458,10 @@ pub struct SystemBus {
     /// False for architectures (e.g. RISC-V) whose memory maps collide with
     /// the bit-band alias ranges 0x42000000–0x44000000 / 0x22000000–0x24000000.
     pub bit_band_enabled: bool,
+    /// The chip's core is ARMv6-M (Cortex-M0/M0+/M1): the SCB has no
+    /// CFSR/HFSR/MMFAR/BFAR and SHCSR holds only SVCALLPENDED, so every fault
+    /// is a HardFault. `configure_cortex_m` hands this to the SCB fault state.
+    pub armv6m: bool,
     /// Offset (bytes) from the flash base to the application vector table when
     /// a second-stage bootloader precedes it (RP2040 boot2 = `0x100`). `0`
     /// means the vector table sits at the flash base. Carried from the chip

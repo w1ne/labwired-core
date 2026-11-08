@@ -47,6 +47,13 @@ pub struct ScbFaultState {
     /// reads this bit on SDIV/UDIV with a zero divisor to decide whether to
     /// raise UsageFault(DIVBYZERO). Written on every CCR write.
     pub ccr_div_0_trp: AtomicBool,
+    /// The core is ARMv6-M (Cortex-M0/M0+/M1). Its SCB has no CFSR, HFSR,
+    /// MMFAR or BFAR (ARMv6-M ARM B3.2.2: 0xE000ED28..0xE000ED3C reserved),
+    /// so firmware reads zero there and its writes are dropped, and SHCSR
+    /// holds only SVCALLPENDED (C1.6.3), so no MemManage/BusFault/UsageFault
+    /// enable can be set and every fault is a HardFault. The core still
+    /// records the cause in the fields above for the fault report.
+    pub armv6m: AtomicBool,
 }
 
 /// `SHCSR.MEMFAULTENA`, bit 16 (ARMv7-M ARM B3.2.13).
@@ -81,6 +88,8 @@ pub const HFSR_FORCED: u32 = 1 << 30;
 /// Bits defined in SHCSR on ARMv7-M (B3.2.13); everything above bit 18 is
 /// reserved and reads as zero.
 const SHCSR_VALID: u32 = 0x0007_FFFF;
+/// The one SHCSR bit ARMv6-M defines: SVCALLPENDED, bit 15 (C1.6.3).
+const SHCSR_VALID_V6M: u32 = 1 << 15;
 
 impl ScbFaultState {
     pub fn new(enabled: bool) -> Self {
@@ -103,6 +112,9 @@ impl ScbFaultState {
         if !self.is_enabled() {
             return None;
         }
+        if self.armv6m.load(Ordering::Relaxed) && matches!(offset, 0x28 | 0x2C | 0x34 | 0x38) {
+            return Some(0);
+        }
         Some(match offset {
             0x24 => self.shcsr.load(Ordering::Relaxed),
             0x28 => self.cfsr.load(Ordering::Relaxed),
@@ -119,8 +131,13 @@ impl ScbFaultState {
         if !self.is_enabled() {
             return false;
         }
+        let armv6m = self.armv6m.load(Ordering::Relaxed);
+        if armv6m && matches!(offset, 0x28 | 0x2C | 0x34 | 0x38) {
+            return true;
+        }
+        let shcsr_valid = if armv6m { SHCSR_VALID_V6M } else { SHCSR_VALID };
         match offset {
-            0x24 => self.shcsr.store(value & SHCSR_VALID, Ordering::Relaxed),
+            0x24 => self.shcsr.store(value & shcsr_valid, Ordering::Relaxed),
             // CFSR and HFSR are write-1-to-clear (B3.2.15 / B3.2.16): a fault
             // handler acknowledges by writing back what it read. Storing the
             // value instead would make `SCB->CFSR = SCB->CFSR;` a no-op and the

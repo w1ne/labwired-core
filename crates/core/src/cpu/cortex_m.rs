@@ -2891,6 +2891,10 @@ impl Cpu for CortexM {
             regs,
             entry: self.fault_entry,
             lockup: self.lockup,
+            armv6m: self
+                .faults
+                .as_ref()
+                .is_some_and(|f| f.armv6m.load(Ordering::Relaxed)),
         };
         capture.is_fault().then_some(capture)
     }

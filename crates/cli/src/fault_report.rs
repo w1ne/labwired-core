@@ -63,9 +63,16 @@ fn read_only_region_for(
 }
 
 /// The two human lines: the sentence, then the raw registers it came from.
+///
+/// An ARMv6-M core has no HFSR/CFSR, so the second line names the cause the
+/// engine recorded instead of registers firmware could read.
 pub fn render(v: &FaultVerdict) -> String {
     let flags: Vec<&str> = v.causes.iter().map(|c| c.flag.as_str()).collect();
-    let mut regs = format!("HFSR={} CFSR={}", v.registers.hfsr, v.registers.cfsr);
+    let mut regs = if v.armv6m {
+        "ARMv6-M (no HFSR/CFSR); engine-recorded cause".to_string()
+    } else {
+        format!("HFSR={} CFSR={}", v.registers.hfsr, v.registers.cfsr)
+    };
     if !flags.is_empty() {
         regs.push_str(&format!(" [{}]", flags.join(" ")));
     }

@@ -78,6 +78,7 @@ impl SystemBus {
             riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
             native_code_identity: next_native_code_identity(),
             bit_band_enabled: true,
+            armv6m: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
             esp32c3_io_mux_idx: None,
@@ -193,6 +194,7 @@ impl SystemBus {
             riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
             native_code_identity: next_native_code_identity(),
             bit_band_enabled: false,
+            armv6m: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
             esp32c3_io_mux_idx: None,
@@ -1251,6 +1253,16 @@ impl SystemBus {
             }
             None => matches!(chip.arch, labwired_config::Arch::Arm),
         }
+    }
+
+    /// True when the chip declares an ARMv6-M core (Cortex-M0, M0+, M1).
+    /// An absent `core` keeps the ARMv7-M fault register file, as before.
+    pub(crate) fn chip_is_armv6m(chip: &ChipDescriptor) -> bool {
+        chip.core.as_deref().is_some_and(|core| {
+            let c = core.trim().to_ascii_lowercase();
+            let c = c.strip_prefix("cortex-").unwrap_or(&c);
+            matches!(c, "m0" | "m0+" | "m0plus" | "m1")
+        })
     }
 
     /// Decode an atomic register-alias access. Returns the aligned base

@@ -10,7 +10,7 @@ use crate::peripherals::dwt::Dwt;
 use crate::peripherals::itm::Itm;
 use crate::peripherals::nvic::{Nvic, NvicState};
 use crate::peripherals::scb::{Scb, ScbFaultState, SharedScbState};
-use std::sync::atomic::{AtomicBool, AtomicU32};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 /// Process-wide default for ARMv7-M fault escalation, read once from
@@ -62,6 +62,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     // not serve those offsets at all and the core keeps #880's abort contract.
     // `CortexM::set_faults_enabled` is the per-core override.
     let faults = Arc::new(ScbFaultState::new(faults_enabled_default()));
+    faults.armv6m.store(bus.armv6m, Ordering::Relaxed);
 
     let mut cpu = CortexM::default();
     cpu.set_shared_vtor(vtor.clone());

@@ -436,6 +436,7 @@ impl SystemBus {
             cpu_hz: manifest.cpu_hz.unwrap_or(chip.cpu_hz),
             riscv_profile: crate::cpu::RiscVCoreProfile::for_chip(chip),
             bit_band_enabled: Self::chip_has_bit_band(chip),
+            armv6m: Self::chip_is_armv6m(chip),
             reset_vector_offset: chip.reset_vector_offset,
             flash_boot_alias: chip.flash_boot_alias,
             atomic_register_aliases: chip.atomic_register_aliases,

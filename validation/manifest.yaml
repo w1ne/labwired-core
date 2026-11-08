@@ -465,7 +465,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 358a434cc84e49767bcafd0ae2953840c701e1095f069f5b77263dd96a08c767
+    drift_ack_digest: 2bb6053f13bb3ea6457a41c0d286ada5dce8b2d1adbad9c7b1e7dcd89fc27b99
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -683,7 +683,14 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-07
+    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
+    # Cortex-M fault reporting. bus/* carry an `armv6m` flag set only for
+    # chips declaring core cortex-m0/m0+/m1; peripherals/scb.rs then reads
+    # CFSR/HFSR/MMFAR/BFAR as zero and keeps only SHCSR.SVCALLPENDED;
+    # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
+    # not ARMv6-M, so its SCB and fault escalation are unchanged.
+    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
+    drift_ack: 2026-11-08
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -1046,7 +1053,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 358a434cc84e49767bcafd0ae2953840c701e1095f069f5b77263dd96a08c767
+    drift_ack_digest: 2bb6053f13bb3ea6457a41c0d286ada5dce8b2d1adbad9c7b1e7dcd89fc27b99
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1264,7 +1271,14 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-07
+    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
+    # Cortex-M fault reporting. bus/* carry an `armv6m` flag set only for
+    # chips declaring core cortex-m0/m0+/m1; peripherals/scb.rs then reads
+    # CFSR/HFSR/MMFAR/BFAR as zero and keeps only SHCSR.SVCALLPENDED;
+    # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
+    # not ARMv6-M, so its SCB and fault escalation are unchanged.
+    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
+    drift_ack: 2026-11-08
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -2492,8 +2506,15 @@ boards:
     # publishes Series-2 WIREDAND pads into PadClaims (publish_open_drain
     # returns at once on every non-Efr32s2 port) for the EFR32 I2C pad check.
     # No STM32 arm changed. Digest-only drift; same ack, re-capture pending.
+    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
+    # Cortex-M fault reporting. bus/* carry an `armv6m` flag set only for
+    # chips declaring core cortex-m0/m0+/m1; peripherals/scb.rs then reads
+    # CFSR/HFSR/MMFAR/BFAR as zero and keeps only SHCSR.SVCALLPENDED;
+    # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
+    # not ARMv6-M, so its SCB and fault escalation are unchanged.
+    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: 49125309cead8074dc1e92c32c6fee619bbe39fc4106a9e5c780bed7cd1c4474
+    drift_ack_digest: eddb2ef0b73c57200bbcb146c430321ca8a2030f83c85a26b584a8071e589b62
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -4748,8 +4769,15 @@ boards:
     # publishes Series-2 WIREDAND pads into PadClaims (publish_open_drain
     # returns at once on every non-Efr32s2 port) for the EFR32 I2C pad check.
     # No STM32 arm changed. Digest-only drift; same ack, re-capture pending.
+    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
+    # Cortex-M fault reporting. bus/* carry an `armv6m` flag set only for
+    # chips declaring core cortex-m0/m0+/m1; peripherals/scb.rs then reads
+    # CFSR/HFSR/MMFAR/BFAR as zero and keeps only SHCSR.SVCALLPENDED;
+    # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
+    # not ARMv6-M, so its SCB and fault escalation are unchanged.
+    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: 65a5069a956ae2812079f4f053ca9324c03e84a330c591634d379453ab056ba5
+    drift_ack_digest: 5a4a902e1913202b18232ae9421dbd628af874729313b5931de717b83d3becc5
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -5840,8 +5868,16 @@ boards:
     # publishes Series-2 WIREDAND pads into PadClaims (publish_open_drain
     # returns at once on every non-Efr32s2 port) for the EFR32 I2C pad check.
     # No STM32 arm changed. Digest-only drift; same ack, re-capture pending.
+    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
+    # Cortex-M fault reporting. This board's STM32L073 is a Cortex-M0+, so
+    # its SCB now reads CFSR/HFSR/MMFAR/BFAR (0xE000ED28..0xE000ED3C,
+    # reserved on ARMv6-M, PM0223 4.3) as zero, ignores writes there, and
+    # keeps only SHCSR.SVCALLPENDED, so a fault is always a HardFault. That
+    # matches the silicon; the model previously served the ARMv7-M file.
+    # No validated peripheral path reads those offsets. ACK, NOT A SILICON
+    # CAPTURE, re-capture pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: 234629dc985083360c334819950aaf5d3276a3e4fca33c22eb1924eb866cccc7
+    drift_ack_digest: eb67a0292f8051a0ad97d1c6bc1909acca6579dfc93d563f3b353721532d0635
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -7086,8 +7122,15 @@ boards:
     # publishes Series-2 WIREDAND pads into PadClaims (publish_open_drain
     # returns at once on every non-Efr32s2 port) for the EFR32 I2C pad check.
     # No STM32 arm changed. Digest-only drift; same ack, re-capture pending.
+    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
+    # Cortex-M fault reporting. bus/* carry an `armv6m` flag set only for
+    # chips declaring core cortex-m0/m0+/m1; peripherals/scb.rs then reads
+    # CFSR/HFSR/MMFAR/BFAR as zero and keeps only SHCSR.SVCALLPENDED;
+    # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
+    # not ARMv6-M, so its SCB and fault escalation are unchanged.
+    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: 13a2402987cdd1398d803b5ec4cded848f820bf0519b87727d60470f5a2338d7
+    drift_ack_digest: 5f9b96e39aa038d780a9c3aaace2fa0b45d4532feb223914de5ddb7c949bc744
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -8201,8 +8244,15 @@ boards:
     # publishes Series-2 WIREDAND pads into PadClaims (publish_open_drain
     # returns at once on every non-Efr32s2 port) for the EFR32 I2C pad check.
     # No STM32 arm changed. Digest-only drift; same ack, re-capture pending.
+    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
+    # Cortex-M fault reporting. bus/* carry an `armv6m` flag set only for
+    # chips declaring core cortex-m0/m0+/m1; peripherals/scb.rs then reads
+    # CFSR/HFSR/MMFAR/BFAR as zero and keeps only SHCSR.SVCALLPENDED;
+    # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
+    # not ARMv6-M, so its SCB and fault escalation are unchanged.
+    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: 91fc062c93ee9708758c1451575b2bad6288d982497c3d0ee75576372930514b
+    drift_ack_digest: 4c2702620feacfddf703975722736e8a81030c76393bf2133dab1f02cf6f1fa4
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
