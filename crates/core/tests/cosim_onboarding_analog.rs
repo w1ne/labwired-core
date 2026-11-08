@@ -372,6 +372,31 @@ impl Converter {
                 }
                 single
             }
+            Family::Stm32H7 | Family::Stm32L4 => {
+                let single = [
+                    self.convert(bus, NTC_CHANNEL),
+                    self.convert(bus, DIODE_CHANNEL),
+                ];
+                let idle = self.convert(bus, IDLE_CHANNEL);
+                let [ntc, diode] = single;
+                for (sqr, order) in Self::sqr_scans() {
+                    let expected: Vec<u32> = order
+                        .iter()
+                        .map(|&ch| match ch {
+                            NTC_CHANNEL => ntc,
+                            DIODE_CHANNEL => diode,
+                            _ => idle,
+                        })
+                        .collect();
+                    assert_eq!(
+                        self.scan_sqr(bus, sqr, order.len()),
+                        expected,
+                        "{}: one ADSTART scans SQR sequence {order:?} into DR in turn",
+                        self.id
+                    );
+                }
+                single
+            }
             _ => [
                 self.convert(bus, NTC_CHANNEL),
                 self.convert(bus, DIODE_CHANNEL),
@@ -401,6 +426,61 @@ impl Converter {
         }
     }
 
+    /// `([SQR1..SQR4], channel order)` for the multi-channel scans the L4 and
+    /// H7 maps run. `SQR1.L` is the length minus one; SQ1..SQ4 follow it in
+    /// SQR1, SQ5.. continue five to a word in SQR2. The order is the SQx order
+    /// whatever the channel numbers, so the reversed pair converts the diode
+    /// first, and the six-long one reaches into SQR2.
+    fn sqr_scans() -> Vec<([u32; 4], Vec<u8>)> {
+        let [ntc, diode, idle] = [NTC_CHANNEL, DIODE_CHANNEL, IDLE_CHANNEL].map(u32::from);
+        vec![
+            (
+                [2 | (ntc << 6) | (diode << 12) | (idle << 18), 0, 0, 0],
+                vec![NTC_CHANNEL, DIODE_CHANNEL, IDLE_CHANNEL],
+            ),
+            (
+                [1 | (diode << 6) | (ntc << 12), 0, 0, 0],
+                vec![DIODE_CHANNEL, NTC_CHANNEL],
+            ),
+            (
+                [
+                    5 | (idle << 6) | (idle << 12) | (idle << 18) | (idle << 24),
+                    ntc | (diode << 6),
+                    0,
+                    0,
+                ],
+                vec![
+                    IDLE_CHANNEL,
+                    IDLE_CHANNEL,
+                    IDLE_CHANNEL,
+                    IDLE_CHANNEL,
+                    NTC_CHANNEL,
+                    DIODE_CHANNEL,
+                ],
+            ),
+        ]
+    }
+
+    /// One software-started L4/H7 `SQRx` scan read by polling. Leaves SQR1..4
+    /// at a one-channel sequence.
+    fn scan_sqr(&self, bus: &mut SystemBus, sqr: [u32; 4], len: usize) -> Vec<u32> {
+        const EOC: u32 = 1 << 2;
+        const EOS: u32 = 1 << 3;
+        for (k, word) in sqr.into_iter().enumerate() {
+            bus.write_u32(self.base + 0x30 + 4 * k as u64, word)
+                .expect("write SQRx");
+        }
+        bus.write_u32(self.base, EOC | EOS).expect("clear EOC/EOS");
+        bus.write_u32(self.base + 0x08, (1 << 28) | 1 | (1 << 2))
+            .expect("ADSTART");
+        let codes = self.poll_scan(bus, len);
+        for k in 0..4u64 {
+            bus.write_u32(self.base + 0x30 + 4 * k, 0)
+                .expect("restore SQRx");
+        }
+        codes
+    }
+
     /// One software-started v2 scan read by polling: wait for EOC, read DR.
     /// EOS must stay low until the last conversion lands. Leaves CFGR1 at 0.
     fn scan_v2(&self, bus: &mut SystemBus, cfgr1: u32, chselr: u32, len: usize) -> Vec<u32> {
@@ -417,7 +497,18 @@ impl Converter {
         bus.write_u32(self.base, EOC | EOS).expect("clear EOC/EOS");
         bus.write_u32(self.base + 0x08, ldo | 1 | (1 << 2))
             .expect("ADSTART");
-        let codes = (0..len)
+        let codes = self.poll_scan(bus, len);
+        bus.write_u32(self.base + 0x0C, 0).expect("restore CFGR1");
+        codes
+    }
+
+    /// Read a running `len`-conversion scan the way polling firmware does:
+    /// wait for EOC, clear it, read DR. EOS must stay low until the last
+    /// conversion lands.
+    fn poll_scan(&self, bus: &mut SystemBus, len: usize) -> Vec<u32> {
+        const EOC: u32 = 1 << 2;
+        const EOS: u32 = 1 << 3;
+        (0..len)
             .map(|slot| {
                 let isr = bus.read_u32(self.base).unwrap();
                 assert_ne!(isr & EOC, 0, "{}: EOC for conversion {slot}", self.id);
@@ -430,9 +521,7 @@ impl Converter {
                 bus.write_u32(self.base, EOC).expect("clear EOC");
                 bus.read_u32(self.base + 0x40).expect("read DR")
             })
-            .collect();
-        bus.write_u32(self.base + 0x0C, 0).expect("restore CFGR1");
-        codes
+            .collect()
     }
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {

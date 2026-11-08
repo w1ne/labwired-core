@@ -471,7 +471,8 @@ impl V2AdcRegs {
     }
 }
 
-/// A V2 regular sequence that `ADSTART` set running.
+/// A regular sequence that `ADSTART` set running: the V2 `CHSELR` sequence,
+/// or a two-or-more-channel `SQR1..SQR4` sequence on the L4/H7/U5 maps.
 ///
 /// The engine converts at once, so a multi-channel sequence cannot land all
 /// its results in the one `DR` at `ADSTART`. It lands them the way polling
@@ -482,7 +483,7 @@ impl V2AdcRegs {
 /// result is sampled when it lands, so a routed input that moved since
 /// `ADSTART` converts at its new level. Overrun (`OVR`) is not modelled.
 #[derive(Debug)]
-struct V2Sequence {
+struct RegularSequence {
     /// The whole sequence, in conversion order.
     channels: Vec<usize>,
     /// Position in `channels` of this trigger's first conversion: 0, or the
@@ -502,7 +503,7 @@ struct V2Sequence {
     eos_cleared_at: usize,
 }
 
-impl V2Sequence {
+impl RegularSequence {
     /// Position in `channels` of the `k`-th conversion of this trigger.
     fn position(&self, k: usize) -> usize {
         (self.offset + k) % self.channels.len()
@@ -524,6 +525,34 @@ impl V2Sequence {
         flags
     }
 }
+
+/// The regular sequence an `SQR1..SQR4` quartet programs, in conversion
+/// order: `SQR1.L[3:0]` + 1 channels, `SQ1..SQ4` at `SQR1[10:6]`, `[16:12]`,
+/// `[22:18]`, `[28:24]`, `SQ5..SQ9` five to a word in `SQR2`, `SQ10..SQ14` in
+/// `SQR3`, `SQ15..SQ16` in `SQR4`. One layout on the L4 (RM0351), the H7
+/// (RM0433) and the U5 ADC1 (RM0456) `ADC_SQRx` registers.
+fn sqr_regular_sequence(sqr: [u32; 4]) -> Vec<usize> {
+    let len = (sqr[0] & 0xF) as usize + 1;
+    (0..len)
+        .map(|slot| {
+            // SQR1 spends its first field on L, so SQ1 sits in its second.
+            let (word, field) = match slot {
+                0..=3 => (0, slot + 1),
+                4..=8 => (1, slot - 4),
+                9..=13 => (2, slot - 9),
+                _ => (3, slot - 14),
+            };
+            ((sqr[word] >> (6 * field)) & 0x1F) as usize
+        })
+        .collect()
+}
+
+/// `ISR` / `CR` / `CFGR` bits the L4, H7 and U5 maps share with the V2.
+const SQR_ISR_EOC: u32 = 1 << 2;
+const SQR_CR_ADDIS: u32 = 1 << 1;
+const SQR_CR_ADSTART: u32 = 1 << 2;
+const SQR_CR_ADSTP: u32 = 1 << 4;
+const SQR_CFGR_CONT: u32 = 1 << 13;
 
 /// `ADC_ISR` / `ADC_CR` / `ADC_CFGR1` bits of the v2 ADC (RM0367 §14.12).
 const V2_ISR_ADRDY: u32 = 1 << 0;
@@ -629,7 +658,7 @@ pub struct Adc {
     /// The V2 sequence in progress, if `ADSTART` started one. Conversion
     /// state, not a register: not serialized.
     #[serde(skip)]
-    v2_sequence: Option<V2Sequence>,
+    regular_sequence: Option<RegularSequence>,
     /// V2 `DISCEN` pointer: the sequence position the next trigger converts.
     #[serde(skip)]
     v2_discontinuous_next: usize,
@@ -715,7 +744,7 @@ impl Adc {
             f1_rstcal_live: false,
             f1_cal_live: false,
             ambient_temp_c: DEFAULT_AMBIENT_TEMPERATURE_C,
-            v2_sequence: None,
+            regular_sequence: None,
             v2_discontinuous_next: 0,
         }
     }
@@ -946,18 +975,121 @@ impl Adc {
         }
     }
 
-    /// L4 single-conversion engine. ADSTART (CR bit 2) with ADEN (bit 0) and a
-    /// ready converter (ISR.ADRDY) converts the first regular channel,
-    /// `SQR1.SQ1` (bits 10:6), the way the U5 and V2 engines do: a routed input
-    /// converts against the reference at CFGR.RES, and a channel nothing drives
-    /// converts the fixed internal source. Loads DR, raises ISR.EOC + EOS, and
-    /// auto-clears ADSTART. Deterministic and immediate (no analog settling to
-    /// model).
+    /// The `DR` value one L4/H7/U5 conversion of `ch` produces now, at the
+    /// layout's `CFGR.RES`: a routed input converts against the reference; a
+    /// channel nothing drives converts the layout's fixed internal source.
+    fn sqr_dr_for_channel(&self, ch: usize) -> u32 {
+        let (bits, undriven) = match &self.regs {
+            AdcRegs::Stm32L4(r) => {
+                let bits = l4_resolution_bits(r.cfgr);
+                (bits, l4_adc_code(bits))
+            }
+            AdcRegs::Stm32H7(r) => {
+                let bits = h7_resolution_bits(r.cfgr);
+                (bits, scaled_adc_code(bits))
+            }
+            AdcRegs::Stm32U5(r) => {
+                let bits = u5_resolution_bits(r.cfgr);
+                (bits, scaled_adc_code(bits))
+            }
+            _ => return 0,
+        };
+        match self.channel_inputs_mv.get(ch).copied().flatten() {
+            // Convert at 12 bits, then scale to the configured width rather
+            // than truncating a raw millivolt value.
+            Some(mv) => scaled_input_code(
+                Self::code_for_mv(f64::from(mv), self.reference_millivolts),
+                bits,
+            ),
+            None => undriven,
+        }
+    }
+
+    /// The `DR` value the sequence's next conversion of `ch` lands.
+    fn sequence_dr_for_channel(&self, ch: usize) -> u32 {
+        match self.regs {
+            AdcRegs::Stm32V2(_) => self.v2_dr_for_channel(ch),
+            _ => self.sqr_dr_for_channel(ch),
+        }
+    }
+
+    /// `(ISR, CR, CFGR, [SQR1..SQR4])` of an L4/H7/U5 block.
+    fn sqr_regs(&mut self) -> Option<(&mut u32, &mut u32, u32, [u32; 4])> {
+        match &mut self.regs {
+            AdcRegs::Stm32L4(r) => Some((
+                &mut r.isr,
+                &mut r.cr,
+                r.cfgr,
+                [r.sqr1, r.sqr2, r.sqr3, r.sqr4],
+            )),
+            AdcRegs::Stm32H7(r) => Some((
+                &mut r.isr,
+                &mut r.cr,
+                r.cfgr,
+                [r.sqr1, r.sqr2, r.sqr3, r.sqr4],
+            )),
+            AdcRegs::Stm32U5(r) => Some((
+                &mut r.isr,
+                &mut r.cr,
+                r.cfgr,
+                [r.sqr1, r.sqr2, r.sqr3, r.sqr4],
+            )),
+            _ => None,
+        }
+    }
+
+    /// Start an L4/H7/U5 regular sequence of two or more channels (nonzero
+    /// `SQR1.L`) on the shared [`RegularSequence`] engine: `SQ1` lands in `DR` at
+    /// once and raises `EOC`; each later channel lands as the previous result
+    /// is read out of `DR`, and the landing of the last raises `EOS`. `CONT`
+    /// wraps round for as long as `DR` is read; otherwise `ADSTART`
+    /// self-clears. `DISCEN` is not modelled. Returns `false`, having dropped
+    /// any earlier sequence, for a one-channel sequence, which the caller
+    /// converts on its own (unchanged) single-conversion path.
+    fn maybe_start_sqr_sequence(&mut self) -> bool {
+        let Some((_, _, cfgr, sqr)) = self.sqr_regs() else {
+            return false;
+        };
+        let channels = sqr_regular_sequence(sqr);
+        if channels.len() < 2 {
+            self.regular_sequence = None;
+            return false;
+        }
+        let cont = cfgr & SQR_CFGR_CONT != 0;
+        let limit = if cont { usize::MAX } else { channels.len() };
+        let code = self.sqr_dr_for_channel(channels[0]);
+        self.dr = code;
+        self.regular_sequence = Some(RegularSequence {
+            channels,
+            offset: 0,
+            limit,
+            landed: Cell::new(1),
+            dr: Cell::new(code),
+            eoc_cleared_at: 1,
+            eos_cleared_at: 1,
+        });
+        if let Some((isr, cr, _, _)) = self.sqr_regs() {
+            *isr |= SQR_ISR_EOC;
+            if !cont {
+                *cr &= !SQR_CR_ADSTART;
+            }
+        }
+        true
+    }
+
+    /// L4 conversion engine. ADSTART (CR bit 2) with ADEN (bit 0) and a
+    /// ready converter (ISR.ADRDY) converts the regular sequence: a routed
+    /// input converts against the reference at CFGR.RES, and a channel nothing
+    /// drives converts the fixed internal source. A one-channel sequence
+    /// (`SQR1.L` = 0) converts `SQR1.SQ1` (bits 10:6), loads DR, raises
+    /// ISR.EOC + EOS and auto-clears ADSTART; a longer one runs through
+    /// [`Self::maybe_start_sqr_sequence`]. Deterministic and immediate (no
+    /// analog settling to model).
     fn maybe_start_l4_conversion(&mut self, cr: u32) {
         let aden = cr & 0x1 != 0;
         let adstart = cr & (1 << 2) != 0;
-        let (adrdy, cfgr, sqr1) = match &self.regs {
-            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr, r.sqr1),
+        let (adrdy, sqr1) = match &self.regs {
+            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.sqr1),
             // H7, U5 and V2 have their own engines (`maybe_start_h7_conversion`,
             // `maybe_start_u5_conversion`, `maybe_start_v2_conversion`).
             AdcRegs::Stm32F1(_)
@@ -969,15 +1101,10 @@ impl Adc {
         if !(aden && adstart && adrdy) {
             return;
         }
-        let bits = l4_resolution_bits(cfgr);
-        let ch = ((sqr1 >> 6) & 0x1F) as usize;
-        self.dr = match self.channel_inputs_mv.get(ch).copied().flatten() {
-            Some(mv) => scaled_input_code(
-                Self::code_for_mv(f64::from(mv), self.reference_millivolts),
-                bits,
-            ),
-            None => l4_adc_code(bits),
-        };
+        if self.maybe_start_sqr_sequence() {
+            return;
+        }
+        self.dr = self.sqr_dr_for_channel(((sqr1 >> 6) & 0x1F) as usize);
         if let AdcRegs::Stm32L4(r) = &mut self.regs {
             r.cr &= !(1 << 2); // ADSTART auto-clears after a single conversion
             r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
@@ -1073,7 +1200,8 @@ impl Adc {
         }
     }
 
-    /// One H7 regular conversion. Requires `ADEN` + `ADRDY` + `ADSTART`.
+    /// H7 regular conversion. Requires `ADEN` + `ADRDY` + `ADSTART`. A
+    /// sequence longer than `SQ1` runs through [`Self::maybe_start_sqr_sequence`].
     fn maybe_start_h7_conversion(&mut self) {
         let AdcRegs::Stm32H7(r) = &self.regs else {
             return;
@@ -1082,21 +1210,12 @@ impl Adc {
             return;
         }
         let cfgr = r.cfgr;
-        let bits = h7_resolution_bits(cfgr);
+        let sqr1 = r.sqr1;
+        if self.maybe_start_sqr_sequence() {
+            return;
+        }
         // SQR1[10:6] is the first conversion in the regular sequence (SQ1).
-        let ch = ((r.sqr1 >> 6) & 0x1F) as usize;
-        let injected = self.channel_inputs_mv.get(ch).copied().flatten();
-        // Preserve the existing 12-bit mV conversion, then scale to the
-        // configured width rather than truncating a raw millivolt value.
-        let code = if let Some(injected) = injected {
-            scaled_input_code(
-                Self::code_for_mv(f64::from(injected), self.reference_millivolts),
-                bits,
-            )
-        } else {
-            scaled_adc_code(bits)
-        };
-        self.dr = code;
+        self.dr = self.sqr_dr_for_channel(((sqr1 >> 6) & 0x1F) as usize);
         let cont = cfgr & (1 << 13) != 0;
         if let AdcRegs::Stm32H7(r) = &mut self.regs {
             r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
@@ -1218,7 +1337,8 @@ impl Adc {
         }
     }
 
-    /// One U5 regular conversion. Requires `ADEN` + `ADRDY` + `ADSTART`.
+    /// U5 regular conversion. Requires `ADEN` + `ADRDY` + `ADSTART`. A
+    /// sequence longer than `SQ1` runs through [`Self::maybe_start_sqr_sequence`].
     fn maybe_start_u5_conversion(&mut self) {
         let AdcRegs::Stm32U5(r) = &self.regs else {
             return;
@@ -1227,18 +1347,11 @@ impl Adc {
             return;
         }
         let cfgr = r.cfgr;
-        let bits = u5_resolution_bits(cfgr);
-        let ch = ((r.sqr1 >> 6) & 0x1F) as usize;
-        let injected = self.channel_inputs_mv.get(ch).copied().flatten();
-        let code = if let Some(injected) = injected {
-            scaled_input_code(
-                Self::code_for_mv(f64::from(injected), self.reference_millivolts),
-                bits,
-            )
-        } else {
-            scaled_adc_code(bits)
-        };
-        self.dr = code;
+        let sqr1 = r.sqr1;
+        if self.maybe_start_sqr_sequence() {
+            return;
+        }
+        self.dr = self.sqr_dr_for_channel(((sqr1 >> 6) & 0x1F) as usize);
         let cont = cfgr & (1 << 13) != 0;
         if let AdcRegs::Stm32U5(r) = &mut self.regs {
             r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
@@ -1394,7 +1507,7 @@ impl Adc {
     /// V2 conversion. `ADSTART` with the converter ready runs the `CHSELR`
     /// sequence (see [`V2AdcRegs::sequence`]): its first channel lands in `DR`
     /// at once and raises `EOSMP | EOC`, plus `EOS` if it is also the last.
-    /// The rest land one per `DR` read (see [`V2Sequence`]). `CONT` wraps
+    /// The rest land one per `DR` read (see [`RegularSequence`]). `CONT` wraps
     /// round the sequence for as long as `DR` is read; `DISCEN` converts only
     /// the next channel per trigger. `ADSTART` self-clears unless `CONT` is
     /// set. An empty `CHSELR` converts nothing.
@@ -1424,7 +1537,7 @@ impl Adc {
         let code = self.v2_dr_for_channel(channels[offset]);
         self.dr = code;
         let ends_sequence = offset == len - 1;
-        self.v2_sequence = Some(V2Sequence {
+        self.regular_sequence = Some(RegularSequence {
             channels,
             offset,
             limit,
@@ -1445,40 +1558,72 @@ impl Adc {
     }
 
     /// Stop the V2 sequence: the result in `DR` stays, nothing more lands.
-    fn v2_stop_sequence(&mut self) {
-        if let Some(sequence) = self.v2_sequence.take() {
+    fn stop_regular_sequence(&mut self) {
+        if let Some(sequence) = self.regular_sequence.take() {
             self.dr = sequence.dr.get();
         }
     }
 
     /// V2 `DR` read: the result in `DR`, landing the sequence's next
     /// conversion if this trigger has one.
-    fn v2_read_dr(&self) -> u32 {
-        let Some(sequence) = &self.v2_sequence else {
+    fn read_sequence_dr(&self) -> u32 {
+        let Some(sequence) = &self.regular_sequence else {
             return self.dr;
         };
         let value = sequence.dr.get();
         let landed = sequence.landed.get();
         if landed < sequence.limit {
             let ch = sequence.channels[sequence.position(landed)];
-            sequence.dr.set(self.v2_dr_for_channel(ch));
+            sequence.dr.set(self.sequence_dr_for_channel(ch));
             sequence.landed.set(landed + 1);
         }
         value
     }
 
-    /// V2 register word as firmware reads it: `ISR` carries the flags later
-    /// landings raised, `DR` the result of the sequence in progress. With
-    /// `consume`, a `DR` read lands the next conversion.
-    fn v2_read_word(&self, reg: u64, consume: bool) -> u32 {
-        let AdcRegs::Stm32V2(r) = &self.regs else {
-            return 0;
+    /// Register word of a sequencing layout (V2, L4, H7, U5) as firmware
+    /// reads it: `ISR` carries the flags later landings raised, `DR` (0x40 on
+    /// all four) the result of the sequence in progress. With `consume`, a
+    /// `DR` read lands the next conversion. With no sequence running this is
+    /// the plain register read.
+    fn read_sequenced_word(&self, reg: u64, consume: bool) -> u32 {
+        let plain = |reg| match &self.regs {
+            AdcRegs::Stm32L4(r) => Self::read_reg_l4(r, self.dr, reg),
+            AdcRegs::Stm32H7(r) => Self::read_reg_h7(r, self.dr, reg),
+            AdcRegs::Stm32U5(r) => Self::read_reg_u5(r, self.dr, reg),
+            AdcRegs::Stm32V2(r) => Self::read_reg_v2(r, self.dr, reg),
+            AdcRegs::Stm32F1(_) | AdcRegs::Stm32F4(_) => 0,
         };
-        match (reg, &self.v2_sequence) {
-            (0x00, Some(sequence)) => r.isr | sequence.pending_flags(),
-            (0x40, _) if consume => self.v2_read_dr(),
+        match (reg, &self.regular_sequence) {
+            (0x00, Some(sequence)) => plain(reg) | sequence.pending_flags(),
+            (0x40, _) if consume => self.read_sequence_dr(),
             (0x40, Some(sequence)) => sequence.dr.get(),
-            _ => Self::read_reg_v2(r, self.dr, reg),
+            _ => plain(reg),
+        }
+    }
+
+    /// Does this layout run [`RegularSequence`]s (so `DR` reads consume)?
+    fn sequences(&self) -> bool {
+        !matches!(self.regs, AdcRegs::Stm32F1(_) | AdcRegs::Stm32F4(_))
+    }
+
+    /// Book-keeping a sequencing layout's `ISR` / `CR` write does to the
+    /// sequence in progress: clearing `EOC`/`EOS` (rc_w1) records how many
+    /// landings it covered; `ADSTP` / `ADDIS` stop the sequence.
+    fn note_sequence_write(&mut self, reg: u64, value: u32) {
+        match reg {
+            0x00 => {
+                if let Some(sequence) = &mut self.regular_sequence {
+                    let landed = sequence.landed.get();
+                    if value & V2_ISR_EOC != 0 {
+                        sequence.eoc_cleared_at = landed;
+                    }
+                    if value & V2_ISR_EOS != 0 {
+                        sequence.eos_cleared_at = landed;
+                    }
+                }
+            }
+            0x08 if value & (SQR_CR_ADSTP | SQR_CR_ADDIS) != 0 => self.stop_regular_sequence(),
+            _ => {}
         }
     }
 
@@ -1486,7 +1631,6 @@ impl Adc {
         if reg == 0x08 {
             self.v2_apply_cr(value);
             if value & (V2_CR_ADSTP | V2_CR_ADDIS) != 0 {
-                self.v2_stop_sequence();
                 self.v2_discontinuous_next = 0;
             }
             self.maybe_start_v2_conversion();
@@ -1523,18 +1667,7 @@ impl Adc {
     fn write_reg_v2_common(&mut self, reg: u64, value: u32) {
         if let AdcRegs::Stm32V2(r) = &mut self.regs {
             match reg {
-                0x00 => {
-                    r.isr &= !value; // rc_w1
-                    if let Some(sequence) = &mut self.v2_sequence {
-                        let landed = sequence.landed.get();
-                        if value & V2_ISR_EOC != 0 {
-                            sequence.eoc_cleared_at = landed;
-                        }
-                        if value & V2_ISR_EOS != 0 {
-                            sequence.eos_cleared_at = landed;
-                        }
-                    }
-                }
+                0x00 => r.isr &= !value, // rc_w1
                 0x04 => r.ier = value,
                 0x0C => r.cfgr1 = value,
                 0x10 => r.cfgr2 = value,
@@ -1790,11 +1923,11 @@ impl Peripheral for Adc {
                     0
                 }
             },
-            AdcRegs::Stm32L4(r) => Self::read_reg_l4(r, self.dr, offset & !3),
-            AdcRegs::Stm32H7(r) => Self::read_reg_h7(r, self.dr, offset & !3),
-            AdcRegs::Stm32U5(r) => Self::read_reg_u5(r, self.dr, offset & !3),
             // A byte read of DR's low byte is the read that consumes it.
-            AdcRegs::Stm32V2(_) => self.v2_read_word(offset & !3, offset & 3 == 0),
+            AdcRegs::Stm32L4(_)
+            | AdcRegs::Stm32H7(_)
+            | AdcRegs::Stm32U5(_)
+            | AdcRegs::Stm32V2(_) => self.read_sequenced_word(offset & !3, offset & 3 == 0),
         };
         let shift = (offset % 4) * 8;
         Ok(((val >> shift) & 0xFF) as u8)
@@ -1851,6 +1984,7 @@ impl Peripheral for Adc {
                     full = (Self::read_reg_l4(r, dr, reg) & !mask) | val_shifted;
                     Self::write_reg_l4(r, reg, full, calibration_completes);
                 }
+                self.note_sequence_write(reg, full);
                 // A write touching CR may have set ADSTART — try to convert.
                 if reg == 0x08 {
                     self.maybe_start_l4_conversion(full);
@@ -1868,6 +2002,7 @@ impl Peripheral for Adc {
                 } else {
                     0
                 };
+                self.note_sequence_write(reg, full);
                 self.write_reg_h7(reg, full);
             }
             AdcRegs::Stm32U5(_) => {
@@ -1880,6 +2015,7 @@ impl Peripheral for Adc {
                 } else {
                     0
                 };
+                self.note_sequence_write(reg, full);
                 self.write_reg_u5(reg, full);
             }
             AdcRegs::Stm32V2(_) => {
@@ -1891,17 +2027,19 @@ impl Peripheral for Adc {
                 } else {
                     0
                 };
+                self.note_sequence_write(reg, full);
                 self.write_reg_v2(reg, full);
             }
         }
         Ok(())
     }
 
-    // A V2 `DR` read lands the next conversion of a sequence, so a half-word
-    // or word read must consume it once, not once per byte.
+    // A sequencing layout's `DR` read lands the next conversion of a
+    // sequence, so a half-word or word read must consume it once, not once
+    // per byte.
     fn read_u16(&self, offset: u64) -> SimResult<u16> {
-        if matches!(self.regs, AdcRegs::Stm32V2(_)) && offset & 3 != 3 {
-            let word = self.v2_read_word(offset & !3, offset & 3 == 0);
+        if self.sequences() && offset & 3 != 3 {
+            let word = self.read_sequenced_word(offset & !3, offset & 3 == 0);
             return Ok((word >> ((offset & 3) * 8)) as u16);
         }
         let b0 = self.read(offset)? as u16;
@@ -1910,8 +2048,8 @@ impl Peripheral for Adc {
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
-        if matches!(self.regs, AdcRegs::Stm32V2(_)) && offset & 3 == 0 {
-            return Ok(self.v2_read_word(offset, true));
+        if self.sequences() && offset & 3 == 0 {
+            return Ok(self.read_sequenced_word(offset, true));
         }
         let b0 = self.read(offset)? as u32;
         let b1 = self.read(offset + 1)? as u32;
@@ -2823,6 +2961,147 @@ mod tests {
         assert_eq!(adc.read_u32(0x40).unwrap(), l4_adc_code(12));
         adc.write_u32(0x28, 1 << 17).unwrap();
         assert_eq!(adc.read_u32(0x28).unwrap(), 0, "CHSEL17 does not exist");
+    }
+    // ── L4/H7/U5 SQR1..SQR4 regular sequence ──
+
+    #[test]
+    fn sqr_regular_sequence_reads_all_sixteen_slots_in_order() {
+        // SQ(n) = channel n + 1 in every slot, L = 15.
+        let ch = |n: u32| n + 1;
+        let word = |first: u32, fields: std::ops::Range<u32>| {
+            fields
+                .enumerate()
+                .fold(0, |acc, (i, n)| acc | (ch(n) << (6 * (first + i as u32))))
+        };
+        let sqr = [
+            15 | word(1, 0..4),
+            word(0, 4..9),
+            word(0, 9..14),
+            word(0, 14..16),
+        ];
+        assert_eq!(sqr_regular_sequence(sqr), (1..=16).collect::<Vec<usize>>());
+        // L counts from zero: L = 0 is SQ1 alone, whatever SQ2.. hold.
+        assert_eq!(sqr_regular_sequence([3 << 6 | 9 << 12, 0, 0, 0]), vec![3]);
+        assert_eq!(
+            sqr_regular_sequence([1 | 3 << 6 | 9 << 12, 0, 0, 0]),
+            vec![3, 9]
+        );
+    }
+
+    /// Power an L4/H7/U5 block up to ADRDY, drive IN5/IN6, and return their
+    /// codes at the layout's default width.
+    fn sqr_block(layout: AdcRegisterLayout) -> (Adc, u32, u32, u32) {
+        let mut adc = Adc::new_with_layout(layout);
+        adc.write_u32(0x08, 0).unwrap(); // DEEPPWD = 0
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADEN -> ADRDY
+        assert_ne!(adc.read_u32(0x00).unwrap() & 1, 0, "{layout:?} ADRDY");
+        adc.set_channel_input(5, 1650);
+        adc.set_channel_input(6, 700);
+        let code = |adc: &mut Adc, ch: u32| {
+            adc.write_u32(0x30, ch << 6).unwrap(); // L = 0
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            adc.write_u32(0x00, 0xC).unwrap();
+            adc.read_u32(0x40).unwrap()
+        };
+        let (c5, c6, c7) = (code(&mut adc, 5), code(&mut adc, 6), code(&mut adc, 7));
+        assert_ne!(c5, c6);
+        assert_ne!(c6, c7);
+        (adc, c5, c6, c7)
+    }
+
+    #[test]
+    fn sqr_layouts_scan_the_whole_regular_sequence_one_result_per_dr_read() {
+        const EOC: u32 = 1 << 2;
+        const EOS: u32 = 1 << 3;
+        for layout in [
+            AdcRegisterLayout::Stm32L4,
+            AdcRegisterLayout::Stm32H7,
+            AdcRegisterLayout::Stm32U5,
+        ] {
+            let (mut adc, c5, c6, c7) = sqr_block(layout);
+            // L = 2: SQ1 = IN6, SQ2 = IN7 (undriven), SQ3 = IN5.
+            adc.write_u32(0x30, 2 | 6 << 6 | 7 << 12 | 5 << 18).unwrap();
+            adc.write_u32(0x00, EOC | EOS).unwrap();
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_eq!(
+                adc.read_u32(0x08).unwrap() & (1 << 2),
+                0,
+                "{layout:?} ADSTART"
+            );
+            let mut got = Vec::new();
+            for k in 0..3 {
+                let isr = adc.read_u32(0x00).unwrap();
+                assert_ne!(isr & EOC, 0, "{layout:?} EOC for conversion {k}");
+                assert_eq!(isr & EOS != 0, k == 2, "{layout:?} EOS at {k}");
+                adc.write_u32(0x00, EOC).unwrap();
+                got.push(adc.read_u32(0x40).unwrap());
+            }
+            assert_eq!(got, vec![c6, c7, c5], "{layout:?} SQx order");
+            // The sequence is done: DR holds the last result and EOC stays
+            // clear.
+            assert_eq!(
+                adc.read_u32(0x00).unwrap() & EOC,
+                0,
+                "{layout:?} no 4th EOC"
+            );
+            assert_eq!(adc.read_u32(0x40).unwrap(), c5, "{layout:?} DR holds SQ3");
+            // A later L = 0 conversion takes the single path again: EOC|EOS
+            // at once.
+            adc.write_u32(0x00, EOC | EOS).unwrap();
+            adc.write_u32(0x30, 6 << 6).unwrap();
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_eq!(
+                adc.read_u32(0x00).unwrap() & (EOC | EOS),
+                EOC | EOS,
+                "{layout:?}"
+            );
+            assert_eq!(
+                adc.read_u32(0x40).unwrap(),
+                c6,
+                "{layout:?} single after scan"
+            );
+            assert_eq!(
+                adc.read_u32(0x40).unwrap(),
+                c6,
+                "{layout:?} single DR is stable"
+            );
+        }
+    }
+
+    #[test]
+    fn sqr_layouts_sample_each_channel_when_it_lands_wrap_with_cont_and_stop_with_adstp() {
+        for layout in [
+            AdcRegisterLayout::Stm32L4,
+            AdcRegisterLayout::Stm32H7,
+            AdcRegisterLayout::Stm32U5,
+        ] {
+            let (mut adc, c5, c6, _) = sqr_block(layout);
+            adc.write_u32(0x0C, adc.read_u32(0x0C).unwrap() | (1 << 13))
+                .unwrap(); // CONT
+            adc.write_u32(0x30, 1 | 5 << 6 | 6 << 12).unwrap();
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_ne!(
+                adc.read_u32(0x08).unwrap() & (1 << 2),
+                0,
+                "{layout:?} CONT keeps ADSTART"
+            );
+            assert_eq!(adc.read_u32(0x40).unwrap(), c5, "{layout:?} 1st");
+            // IN5 moves before its next landing: the wrap converts the new level.
+            adc.set_channel_input(5, 3000);
+            assert_eq!(adc.read_u32(0x40).unwrap(), c6, "{layout:?} 2nd");
+            let moved = adc.read_u32(0x40).unwrap();
+            assert!(moved > c5, "{layout:?} wrapped IN5 converts its new level");
+            // ADSTP stops it: DR keeps the result in it.
+            let held = adc.read_u32(0x40).unwrap();
+            assert_eq!(held, c6, "{layout:?} 4th is IN6 again");
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 4)).unwrap();
+            assert_eq!(
+                adc.read_u32(0x40).unwrap(),
+                adc.read_u32(0x40).unwrap(),
+                "{layout:?} ADSTP freezes DR"
+            );
+        }
     }
 }
 
