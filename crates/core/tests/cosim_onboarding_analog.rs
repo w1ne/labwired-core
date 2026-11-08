@@ -33,6 +33,7 @@ const IDLE_CHANNEL: u8 = 7;
 const CONVERTED: &[&str] = &[
     "ambiq-apollo4",
     "arduino_nano_33_ble",
+    "arduino_uno_r4_minima",
     "atsamd21j17d-aft",
     "atsamd51g19a",
     "brd4116a",
@@ -92,6 +93,7 @@ const CONVERTED: &[&str] = &[
     "stm32h753",
     "stm32l071",
     "stm32l072",
+    "stm32l552",
     "stm32wba52",
     "ut32m0r500",
     "zedboard",
@@ -1925,12 +1927,14 @@ fn assert_stm32_series_map(board: &str, converter: &Converter) {
 
 /// The RA type must match the part's converter: only the RA4M1 has the
 /// 14-bit ADC140 (FSP `BSP_FEATURE_ADC_MAX_RESOLUTION_BITS` 14); RA2E1,
-/// RA2L1, RA6M5 and RA8M1 report 12.
+/// RA2L1, RA6M5 and RA8M1 report 12. The Arduino UNO R4 Minima carries an
+/// R7FA4M1AB3CFM.
 fn assert_ra_resolution(board: &str, converter: &Converter) {
     let Family::RaAdc { adc14 } = converter.family else {
         return;
     };
-    let ra4m1 = board.contains("r7fa4m1") || board.contains("ra4m1");
+    let ra4m1 =
+        board.contains("r7fa4m1") || board.contains("ra4m1") || board == "arduino_uno_r4_minima";
     assert_eq!(
         adc14, ra4m1,
         "{board}:{} declares the wrong RA ADC resolution",
@@ -2109,7 +2113,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 90,
+        instances, 92,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -2117,7 +2121,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 145,
+        without_adc, 143,
         "onboarding profiles that declare no modelled ADC"
     );
 }
