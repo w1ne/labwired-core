@@ -76,10 +76,13 @@ Arduino image below.
 
 ## WCH Arduino core (`L0_serial_boot`)
 
-The stock Arduino matrix L0 sketch, built with WCH's official Arduino core
-(PlatformIO `ch32v`, board `genericCH32V003F4P6`), boots and prints
-`LW_L0_OK`. `crates/core/tests/ch32v003_arduino.rs` runs the committed
-`tests/fixtures/ch32v003f4p6-arduino-l0.elf`; build inputs are in
+The stock Arduino matrix L0 sketch is built and run in the
+`core-arduino-matrix-smoke` workflow with WCH's official Arduino core
+(PlatformIO `ch32v`, board `genericCH32V003F4P6`). The workflow builds from
+pinned inputs, then runs the opt-in PFIC integration test. No WCH-linked ELF is
+committed or uploaded as an artifact because the upstream core has no license.
+The test prints `LW_L0_OK`. `crates/core/tests/ch32v003_arduino.rs` runs the
+ELF built by the workflow; build inputs are in
 `tests/fixtures/ch32v003f4p6-arduino-l0.md`. That image needs the QingKe pieces
 plain EVT code does not:
 

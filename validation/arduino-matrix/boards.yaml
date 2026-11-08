@@ -102,8 +102,9 @@ boards:
     chip: ch32v003f4p6
     system: systems/ch32v003.yaml
     # WCH's official core (openwch/arduino_core_ch32) via the community ch32v
-    # platform; the fixture in tests/fixtures/ch32v003f4p6-arduino-l0.md
-    # records the exact package revisions.
+    # platform; the build provenance file records exact revisions. The ELF is
+    # built in CI, used for the smoke, and excluded from artifacts because the
+    # upstream Arduino core has no redistribution license.
     pio:
       # Not in the PlatformIO registry; pinned to the fixture's revisions.
       platform: https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7

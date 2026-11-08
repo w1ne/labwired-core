@@ -1,27 +1,30 @@
-# CH32V003 WCH Arduino L0 fixture
+# CH32V003 WCH Arduino L0 build provenance
 
-`ch32v003f4p6-arduino-l0.elf` is the Arduino matrix L0 sketch
+The Arduino matrix L0 sketch
 (`validation/arduino-matrix/sketches/L0_serial_boot/src/main.ino`, unchanged)
-built for the CH32V003F4P6 with WCH's official Arduino core. It is used by
-`crates/core/tests/ch32v003_arduino.rs`.
+built for the CH32V003F4P6 with WCH's official Arduino core. CI creates the ELF
+in a temporary workspace, supplies it to the opt-in
+`crates/core/tests/ch32v003_arduino.rs` test, and excludes the firmware binary
+from uploaded artifacts.
 
 Build inputs (PlatformIO 6.2.0):
 
 | package | version |
 |---|---|
 | platform `ch32v` (Community-PIO-CH32V/platform-ch32v) | 1.1.0, `f26b06a375c5a8b4dd58af5265538e88aa2a68c7` |
-| `framework-arduino-openwch-ch32` (openwch/arduino_core_ch32) | `3820604346d0a9f0ee9a72cab8b7583e488e6674` |
+| `framework-arduino-openwch-ch32` (Community-PIO-CH32V/arduino_core_ch32, fork of openwch/arduino_core_ch32) | `3820604346d0a9f0ee9a72cab8b7583e488e6674` |
 | `toolchain-riscv` (WCH GCC 12.2.0, `riscv-wch-elf`) | 1.120200.220829, `fde267f` |
 
 ```ini
 [env:ch32v003]
-platform = https://github.com/Community-PIO-CH32V/platform-ch32v.git
+platform = https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7
 board = genericCH32V003F4P6
 framework = arduino
+platform_packages =
+  framework-arduino-openwch-ch32 @ https://github.com/Community-PIO-CH32V/arduino_core_ch32.git#3820604346d0a9f0ee9a72cab8b7583e488e6674
 ```
 
-`pio run` builds with `-march=rv32ecxw -mabi=ilp32e`. sha256 of the ELF:
-`8f745f373e9a48ad900b036b727a0dbcb91ffa1e0c565dd2b0cae1c520a817a0`.
+`pio run` builds with `-march=rv32ecxw -mabi=ilp32e`.
 
 What the image exercises before it prints `LW_L0_OK`:
 
@@ -42,5 +45,7 @@ The stock L2 sketch is not a fixture: the CH32V003F4 variant defines
 `digitalWrite(LED_BUILTIN, ...)` to a trap (`sw zero, 16(zero); ebreak`).
 L2 needs a board LED pin passed at build time.
 
-The upstream Arduino core repository ships no LICENSE file; its sources carry
-the WCH copyright header.
+The pinned Community-PIO framework repository is a fork of WCH's
+`openwch/arduino_core_ch32`; the pinned commit is identical in both repositories.
+Neither repository provides a LICENSE file for this source. Do not commit or
+publish the linked ELF.
