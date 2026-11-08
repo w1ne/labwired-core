@@ -4,8 +4,9 @@ inputs:
   firmware: firmware/.pio/build/nano_every/firmware.elf
   system: ../../configs/systems/arduino-nano-every.yaml
 limits:
-  max_steps: 50000
+  max_steps: 500000
 assertions:
+  - uart_contains: "NANO_EVERY_OK"
   - gpio_edges:
       pin: "porte:2"
       min_edges: 8

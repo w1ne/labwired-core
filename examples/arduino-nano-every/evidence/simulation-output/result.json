@@ -1,23 +1,23 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 50000,
-  "cycles": 82662,
-  "instructions": 50000,
+  "steps_executed": 500000,
+  "cycles": 851152,
+  "instructions": 499949,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 50000
+      "value": 500000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 50000
+      "value": 500000
     }
   },
   "limits": {
-    "max_steps": 50000,
+    "max_steps": 500000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -28,6 +28,12 @@
     "stop_when_assertions_pass_min_steps": 0
   },
   "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "NANO_EVERY_OK"
+      },
+      "passed": true
+    },
     {
       "assertion": {
         "gpio_edges": {
@@ -59,32 +65,32 @@
       0,
       0,
       0,
+      212,
+      210,
       0,
       0,
       0,
       0,
+      51,
       0,
       0,
-      255,
       0,
-      10,
+      128,
+      207,
+      149,
       0,
-      1,
-      0,
-      194,
-      0,
-      24,
       0,
       4,
-      63,
-      232,
-      3
+      4,
+      0,
+      226,
+      4
     ],
-    "pc": 760,
-    "sp": 16381,
-    "sreg": 128
+    "pc": 1378,
+    "sp": 16371,
+    "sreg": 149
   },
-  "firmware_hash": "06e3bf80ee118ca705efa68021458a1f3c0448f37ecb210b815edeb62e74790f",
+  "firmware_hash": "e46c90f55ab75e8901c1d5305dc8ab5f98349b4dbd6197f43349ae90885b736e",
   "config": {
     "firmware": "examples/arduino-nano-every/firmware/.pio/build/nano_every/firmware.elf",
     "system": "examples/arduino-nano-every/../../configs/systems/arduino-nano-every.yaml",
@@ -93,10 +99,1408 @@
   "inspect": {
     "peripherals": [
       {
+        "name": "porta",
+        "kind": "native",
+        "base": 66560,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 66592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 66624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 66656,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "porte",
         "kind": "native",
-        "base": 65552,
+        "base": 66688,
         "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portf",
+        "kind": "native",
+        "base": 66720,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "uart",
+        "base": 67584,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "uart",
+        "base": 67616,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "uart",
+        "base": 67648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart3",
+        "kind": "uart",
+        "base": 67680,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timers",
+        "kind": "native",
+        "base": 68096,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rstctrl",
+        "kind": "declarative",
+        "base": 65600,
+        "registers": [
+          {
+            "name": "RSTFR",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "BORF",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "EXTRF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "PORF",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SWRF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "UPDIRF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "WDRF",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SWRR",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SWRE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "slpctrl",
+        "kind": "declarative",
+        "base": 65616,
+        "registers": [
+          {
+            "name": "CTRLA",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SMODE",
+                "bits": [
+                  2,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "clkctrl",
+        "kind": "declarative",
+        "base": 65632,
+        "registers": [
+          {
+            "name": "MCLKCTRLA",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CLKOUT",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "CLKSEL",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MCLKCTRLB",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PDIV",
+                "bits": [
+                  4,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "PEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MCLKLOCK",
+            "offset": 2,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LOCKEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MCLKSTATUS",
+            "offset": 3,
+            "size": 8,
+            "value": 16,
+            "fields": [
+              {
+                "name": "EXTS",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "OSC20MS",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "OSC32KS",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SOSC",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "XOSC32KS",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "OSC20MCTRLA",
+            "offset": 16,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OSC20MCALIBA",
+            "offset": 17,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CAL20M",
+                "bits": [
+                  6,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OSC20MCALIBB",
+            "offset": 18,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LOCK",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "TEMPCAL20M",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OSC32KCTRLA",
+            "offset": 24,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "XOSC32KCTRLA",
+            "offset": 28,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CSUT",
+                "bits": [
+                  5,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "ENABLE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "RUNSTDBY",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEL",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "bod",
+        "kind": "declarative",
+        "base": 65664,
+        "registers": [
+          {
+            "name": "CTRLA",
+            "offset": 0,
+            "size": 8,
+            "value": 5,
+            "fields": [
+              {
+                "name": "ACTIVE",
+                "bits": [
+                  3,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "SAMPFREQ",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLEEP",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTRLB",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LVL",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "VLMCTRLA",
+            "offset": 8,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "VLMLVL",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTCTRL",
+            "offset": 9,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "VLMCFG",
+                "bits": [
+                  2,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "VLMIE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTFLAGS",
+            "offset": 10,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "VLMIF",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 11,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "VLMS",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "vref",
+        "kind": "declarative",
+        "base": 65696,
+        "registers": [
+          {
+            "name": "CTRLA",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "AC0REFSEL",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADC0REFSEL",
+                "bits": [
+                  6,
+                  4
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTRLB",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "AC0REFEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADC0REFEN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "portmux",
+        "kind": "declarative",
+        "base": 67040,
+        "registers": [
+          {
+            "name": "EVSYSROUTEA",
+            "offset": 0,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EVOUT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "EVOUT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "EVOUT2",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "EVOUT3",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "EVOUT4",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "EVOUT5",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CCLROUTEA",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LUT0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "LUT1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "LUT2",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "LUT3",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USARTROUTEA",
+            "offset": 2,
+            "size": 8,
+            "value": 64,
+            "fields": [
+              {
+                "name": "USART0",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "USART1",
+                "bits": [
+                  3,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "USART2",
+                "bits": [
+                  5,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "USART3",
+                "bits": [
+                  7,
+                  6
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "TWISPIROUTEA",
+            "offset": 3,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SPI0",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TWI0",
+                "bits": [
+                  5,
+                  4
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "TCAROUTEA",
+            "offset": 4,
+            "size": 8,
+            "value": 1,
+            "fields": [
+              {
+                "name": "TCA0",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "TCBROUTEA",
+            "offset": 5,
+            "size": 8,
+            "value": 3,
+            "fields": [
+              {
+                "name": "TCB0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "TCB1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "TCB2",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCB3",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "adc0",
+        "kind": "declarative",
+        "base": 67072,
+        "registers": [
+          {
+            "name": "CTRLA",
+            "offset": 0,
+            "size": 8,
+            "value": 1,
+            "fields": [
+              {
+                "name": "ENABLE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "FREERUN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RESSEL",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "RUNSTBY",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTRLB",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SAMPNUM",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTRLC",
+            "offset": 2,
+            "size": 8,
+            "value": 22,
+            "fields": [
+              {
+                "name": "PRESC",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 6
+              },
+              {
+                "name": "REFSEL",
+                "bits": [
+                  5,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "SAMPCAP",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTRLD",
+            "offset": 3,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ASDV",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "INITDLY",
+                "bits": [
+                  7,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SAMPDLY",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTRLE",
+            "offset": 4,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "WINCM",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SAMPCTRL",
+            "offset": 5,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SAMPLEN",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MUXPOS",
+            "offset": 6,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "MUXPOS",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "COMMAND",
+            "offset": 8,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STCONV",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "EVCTRL",
+            "offset": 9,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "STARTEI",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTCTRL",
+            "offset": 10,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RESRDY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "WCMP",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTFLAGS",
+            "offset": 11,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RESRDY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "WCMP",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DBGCTRL",
+            "offset": 12,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DBGRUN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "TEMP",
+            "offset": 13,
+            "size": 8,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TEMP",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "RES",
+            "offset": 16,
+            "size": 16,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "WINLT",
+            "offset": 18,
+            "size": 16,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "WINHT",
+            "offset": 20,
+            "size": 16,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CALIB",
+            "offset": 22,
+            "size": 8,
+            "value": 1,
+            "fields": [
+              {
+                "name": "DUTYCYC",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "sigrow",
+        "kind": "declarative",
+        "base": 69888,
+        "registers": [
+          {
+            "name": "DEVICEID0",
+            "offset": 0,
+            "size": 8,
+            "value": 30,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "DEVICEID1",
+            "offset": 1,
+            "size": 8,
+            "value": 150,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "DEVICEID2",
+            "offset": 2,
+            "size": 8,
+            "value": 81,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM0",
+            "offset": 3,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM1",
+            "offset": 4,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM2",
+            "offset": 5,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM3",
+            "offset": 6,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM4",
+            "offset": 7,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM5",
+            "offset": 8,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM6",
+            "offset": 9,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM7",
+            "offset": 10,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM8",
+            "offset": 11,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "SERNUM9",
+            "offset": 12,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSCCAL32K",
+            "offset": 20,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSCCAL16M0",
+            "offset": 24,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSCCAL16M1",
+            "offset": 25,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSCCAL20M0",
+            "offset": 26,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSCCAL20M1",
+            "offset": 27,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "TEMPSENSE0",
+            "offset": 32,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "TEMPSENSE1",
+            "offset": 33,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSC16ERR3V",
+            "offset": 34,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSC16ERR5V",
+            "offset": 35,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSC20ERR3V",
+            "offset": 36,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "OSC20ERR5V",
+            "offset": 37,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "CHECKSUM1",
+            "offset": 47,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "ro"
+          }
+        ],
         "artifacts": []
       }
     ],
@@ -113,7 +1517,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 82662,
+    "now_cycle": 851356,
     "channels": [
       {
         "ch": 0,
@@ -123,672 +1527,440 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 982,
+            "cycle": 5179,
             "value": 1
           },
           {
-            "cycle": 1990,
+            "cycle": 21410,
             "value": 0
           },
           {
-            "cycle": 2998,
+            "cycle": 37646,
             "value": 1
           },
           {
-            "cycle": 4006,
+            "cycle": 53877,
             "value": 0
           },
           {
-            "cycle": 5014,
+            "cycle": 70117,
             "value": 1
           },
           {
-            "cycle": 6022,
+            "cycle": 86348,
             "value": 0
           },
           {
-            "cycle": 7030,
+            "cycle": 102584,
             "value": 1
           },
           {
-            "cycle": 8038,
+            "cycle": 118815,
             "value": 0
           },
           {
-            "cycle": 9046,
+            "cycle": 135051,
             "value": 1
           },
           {
-            "cycle": 10054,
+            "cycle": 151282,
             "value": 0
           },
           {
-            "cycle": 11062,
+            "cycle": 167518,
             "value": 1
           },
           {
-            "cycle": 12070,
+            "cycle": 183749,
             "value": 0
           },
           {
-            "cycle": 13078,
+            "cycle": 199985,
             "value": 1
           },
           {
-            "cycle": 14086,
+            "cycle": 216220,
             "value": 0
           },
           {
-            "cycle": 15094,
+            "cycle": 232352,
             "value": 1
           },
           {
-            "cycle": 16102,
+            "cycle": 248583,
             "value": 0
           },
           {
-            "cycle": 17110,
+            "cycle": 264819,
             "value": 1
           },
           {
-            "cycle": 18118,
+            "cycle": 281050,
             "value": 0
           },
           {
-            "cycle": 19126,
+            "cycle": 297182,
             "value": 1
           },
           {
-            "cycle": 20134,
+            "cycle": 313413,
             "value": 0
           },
           {
-            "cycle": 21142,
+            "cycle": 329649,
             "value": 1
           },
           {
-            "cycle": 22150,
+            "cycle": 345880,
             "value": 0
           },
           {
-            "cycle": 23158,
+            "cycle": 362120,
             "value": 1
           },
           {
-            "cycle": 24166,
+            "cycle": 378455,
             "value": 0
           },
           {
-            "cycle": 25174,
+            "cycle": 394795,
             "value": 1
           },
           {
-            "cycle": 26182,
+            "cycle": 411130,
             "value": 0
           },
           {
-            "cycle": 27190,
+            "cycle": 427470,
             "value": 1
           },
           {
-            "cycle": 28198,
+            "cycle": 443805,
             "value": 0
           },
           {
-            "cycle": 29206,
+            "cycle": 460013,
             "value": 1
           },
           {
-            "cycle": 30214,
+            "cycle": 476348,
             "value": 0
           },
           {
-            "cycle": 31222,
+            "cycle": 492584,
             "value": 1
           },
           {
-            "cycle": 32230,
+            "cycle": 508815,
             "value": 0
           },
           {
-            "cycle": 33238,
+            "cycle": 525051,
             "value": 1
           },
           {
-            "cycle": 34246,
+            "cycle": 541282,
             "value": 0
           },
           {
-            "cycle": 35254,
+            "cycle": 557522,
             "value": 1
           },
           {
-            "cycle": 36262,
+            "cycle": 573649,
             "value": 0
           },
           {
-            "cycle": 37270,
+            "cycle": 589781,
             "value": 1
           },
           {
-            "cycle": 38278,
+            "cycle": 605908,
             "value": 0
           },
           {
-            "cycle": 39286,
+            "cycle": 622040,
             "value": 1
           },
           {
-            "cycle": 40294,
+            "cycle": 638167,
             "value": 0
           },
           {
-            "cycle": 41302,
+            "cycle": 654299,
             "value": 1
           },
           {
-            "cycle": 42310,
+            "cycle": 670426,
             "value": 0
           },
           {
-            "cycle": 43318,
+            "cycle": 686558,
             "value": 1
           },
           {
-            "cycle": 44326,
+            "cycle": 702798,
             "value": 0
           },
           {
-            "cycle": 45334,
+            "cycle": 719034,
             "value": 1
           },
           {
-            "cycle": 46342,
+            "cycle": 735265,
             "value": 0
           },
           {
-            "cycle": 47350,
+            "cycle": 751501,
             "value": 1
           },
           {
-            "cycle": 48358,
+            "cycle": 767732,
             "value": 0
           },
           {
-            "cycle": 49366,
+            "cycle": 783968,
             "value": 1
           },
           {
-            "cycle": 50374,
+            "cycle": 800199,
             "value": 0
           },
           {
-            "cycle": 51382,
+            "cycle": 816435,
             "value": 1
           },
           {
-            "cycle": 52390,
+            "cycle": 832666,
             "value": 0
           },
           {
-            "cycle": 53398,
+            "cycle": 848802,
             "value": 1
-          },
-          {
-            "cycle": 54406,
-            "value": 0
-          },
-          {
-            "cycle": 55414,
-            "value": 1
-          },
-          {
-            "cycle": 56422,
-            "value": 0
-          },
-          {
-            "cycle": 57430,
-            "value": 1
-          },
-          {
-            "cycle": 58438,
-            "value": 0
-          },
-          {
-            "cycle": 59446,
-            "value": 1
-          },
-          {
-            "cycle": 60454,
-            "value": 0
-          },
-          {
-            "cycle": 61462,
-            "value": 1
-          },
-          {
-            "cycle": 62470,
-            "value": 0
-          },
-          {
-            "cycle": 63478,
-            "value": 1
-          },
-          {
-            "cycle": 64486,
-            "value": 0
-          },
-          {
-            "cycle": 65494,
-            "value": 1
-          },
-          {
-            "cycle": 66502,
-            "value": 0
-          },
-          {
-            "cycle": 67510,
-            "value": 1
-          },
-          {
-            "cycle": 68518,
-            "value": 0
-          },
-          {
-            "cycle": 69526,
-            "value": 1
-          },
-          {
-            "cycle": 70534,
-            "value": 0
-          },
-          {
-            "cycle": 71542,
-            "value": 1
-          },
-          {
-            "cycle": 72550,
-            "value": 0
-          },
-          {
-            "cycle": 73558,
-            "value": 1
-          },
-          {
-            "cycle": 74566,
-            "value": 0
-          },
-          {
-            "cycle": 75574,
-            "value": 1
-          },
-          {
-            "cycle": 76582,
-            "value": 0
-          },
-          {
-            "cycle": 77590,
-            "value": 1
-          },
-          {
-            "cycle": 78598,
-            "value": 0
-          },
-          {
-            "cycle": 79606,
-            "value": 1
-          },
-          {
-            "cycle": 80614,
-            "value": 0
-          },
-          {
-            "cycle": 81622,
-            "value": 1
-          },
-          {
-            "cycle": 82630,
-            "value": 0
           }
         ],
         "gaps": [],
         "initial_state": "z",
         "states": [
           {
-            "cycle": 974,
+            "cycle": 1996,
             "state": "0"
           },
           {
-            "cycle": 982,
+            "cycle": 5179,
             "state": "1"
           },
           {
-            "cycle": 1990,
+            "cycle": 21410,
             "state": "0"
           },
           {
-            "cycle": 2998,
+            "cycle": 37646,
             "state": "1"
           },
           {
-            "cycle": 4006,
+            "cycle": 53877,
             "state": "0"
           },
           {
-            "cycle": 5014,
+            "cycle": 70117,
             "state": "1"
           },
           {
-            "cycle": 6022,
+            "cycle": 86348,
             "state": "0"
           },
           {
-            "cycle": 7030,
+            "cycle": 102584,
             "state": "1"
           },
           {
-            "cycle": 8038,
+            "cycle": 118815,
             "state": "0"
           },
           {
-            "cycle": 9046,
+            "cycle": 135051,
             "state": "1"
           },
           {
-            "cycle": 10054,
+            "cycle": 151282,
             "state": "0"
           },
           {
-            "cycle": 11062,
+            "cycle": 167518,
             "state": "1"
           },
           {
-            "cycle": 12070,
+            "cycle": 183749,
             "state": "0"
           },
           {
-            "cycle": 13078,
+            "cycle": 199985,
             "state": "1"
           },
           {
-            "cycle": 14086,
+            "cycle": 216220,
             "state": "0"
           },
           {
-            "cycle": 15094,
+            "cycle": 232352,
             "state": "1"
           },
           {
-            "cycle": 16102,
+            "cycle": 248583,
             "state": "0"
           },
           {
-            "cycle": 17110,
+            "cycle": 264819,
             "state": "1"
           },
           {
-            "cycle": 18118,
+            "cycle": 281050,
             "state": "0"
           },
           {
-            "cycle": 19126,
+            "cycle": 297182,
             "state": "1"
           },
           {
-            "cycle": 20134,
+            "cycle": 313413,
             "state": "0"
           },
           {
-            "cycle": 21142,
+            "cycle": 329649,
             "state": "1"
           },
           {
-            "cycle": 22150,
+            "cycle": 345880,
             "state": "0"
           },
           {
-            "cycle": 23158,
+            "cycle": 362120,
             "state": "1"
           },
           {
-            "cycle": 24166,
+            "cycle": 378455,
             "state": "0"
           },
           {
-            "cycle": 25174,
+            "cycle": 394795,
             "state": "1"
           },
           {
-            "cycle": 26182,
+            "cycle": 411130,
             "state": "0"
           },
           {
-            "cycle": 27190,
+            "cycle": 427470,
             "state": "1"
           },
           {
-            "cycle": 28198,
+            "cycle": 443805,
             "state": "0"
           },
           {
-            "cycle": 29206,
+            "cycle": 460013,
             "state": "1"
           },
           {
-            "cycle": 30214,
+            "cycle": 476348,
             "state": "0"
           },
           {
-            "cycle": 31222,
+            "cycle": 492584,
             "state": "1"
           },
           {
-            "cycle": 32230,
+            "cycle": 508815,
             "state": "0"
           },
           {
-            "cycle": 33238,
+            "cycle": 525051,
             "state": "1"
           },
           {
-            "cycle": 34246,
+            "cycle": 541282,
             "state": "0"
           },
           {
-            "cycle": 35254,
+            "cycle": 557522,
             "state": "1"
           },
           {
-            "cycle": 36262,
+            "cycle": 573649,
             "state": "0"
           },
           {
-            "cycle": 37270,
+            "cycle": 589781,
             "state": "1"
           },
           {
-            "cycle": 38278,
+            "cycle": 605908,
             "state": "0"
           },
           {
-            "cycle": 39286,
+            "cycle": 622040,
             "state": "1"
           },
           {
-            "cycle": 40294,
+            "cycle": 638167,
             "state": "0"
           },
           {
-            "cycle": 41302,
+            "cycle": 654299,
             "state": "1"
           },
           {
-            "cycle": 42310,
+            "cycle": 670426,
             "state": "0"
           },
           {
-            "cycle": 43318,
+            "cycle": 686558,
             "state": "1"
           },
           {
-            "cycle": 44326,
+            "cycle": 702798,
             "state": "0"
           },
           {
-            "cycle": 45334,
+            "cycle": 719034,
             "state": "1"
           },
           {
-            "cycle": 46342,
+            "cycle": 735265,
             "state": "0"
           },
           {
-            "cycle": 47350,
+            "cycle": 751501,
             "state": "1"
           },
           {
-            "cycle": 48358,
+            "cycle": 767732,
             "state": "0"
           },
           {
-            "cycle": 49366,
+            "cycle": 783968,
             "state": "1"
           },
           {
-            "cycle": 50374,
+            "cycle": 800199,
             "state": "0"
           },
           {
-            "cycle": 51382,
+            "cycle": 816435,
             "state": "1"
           },
           {
-            "cycle": 52390,
+            "cycle": 832666,
             "state": "0"
           },
           {
-            "cycle": 53398,
+            "cycle": 848802,
             "state": "1"
-          },
-          {
-            "cycle": 54406,
-            "state": "0"
-          },
-          {
-            "cycle": 55414,
-            "state": "1"
-          },
-          {
-            "cycle": 56422,
-            "state": "0"
-          },
-          {
-            "cycle": 57430,
-            "state": "1"
-          },
-          {
-            "cycle": 58438,
-            "state": "0"
-          },
-          {
-            "cycle": 59446,
-            "state": "1"
-          },
-          {
-            "cycle": 60454,
-            "state": "0"
-          },
-          {
-            "cycle": 61462,
-            "state": "1"
-          },
-          {
-            "cycle": 62470,
-            "state": "0"
-          },
-          {
-            "cycle": 63478,
-            "state": "1"
-          },
-          {
-            "cycle": 64486,
-            "state": "0"
-          },
-          {
-            "cycle": 65494,
-            "state": "1"
-          },
-          {
-            "cycle": 66502,
-            "state": "0"
-          },
-          {
-            "cycle": 67510,
-            "state": "1"
-          },
-          {
-            "cycle": 68518,
-            "state": "0"
-          },
-          {
-            "cycle": 69526,
-            "state": "1"
-          },
-          {
-            "cycle": 70534,
-            "state": "0"
-          },
-          {
-            "cycle": 71542,
-            "state": "1"
-          },
-          {
-            "cycle": 72550,
-            "state": "0"
-          },
-          {
-            "cycle": 73558,
-            "state": "1"
-          },
-          {
-            "cycle": 74566,
-            "state": "0"
-          },
-          {
-            "cycle": 75574,
-            "state": "1"
-          },
-          {
-            "cycle": 76582,
-            "state": "0"
-          },
-          {
-            "cycle": 77590,
-            "state": "1"
-          },
-          {
-            "cycle": 78598,
-            "state": "0"
-          },
-          {
-            "cycle": 79606,
-            "state": "1"
-          },
-          {
-            "cycle": 80614,
-            "state": "0"
-          },
-          {
-            "cycle": 81622,
-            "state": "1"
-          },
-          {
-            "cycle": 82630,
-            "state": "0"
           }
         ],
         "mode": "output",
-        "edge_count": 82
+        "edge_count": 53
       }
     ]
   },
@@ -799,23 +1971,34 @@
       "number": 2,
       "mode": "output",
       "func": null,
-      "output": false,
-      "input": false,
-      "pad": false,
-      "drive": "0"
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NANO_EVERY_OK",
+        "cycle_lo": 0,
+        "cycle": 16016,
+        "end_cycle": 16016
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 822,
+    "text_bytes": 2915,
     "data_bytes": 4,
-    "bss_bytes": 18,
-    "flash_used_bytes": 826,
-    "ram_static_bytes": 22,
+    "bss_bytes": 173,
+    "flash_used_bytes": 2919,
+    "ram_static_bytes": 177,
     "flash_total_bytes": 49152,
     "ram_total_bytes": 6144,
-    "flash_used_pct": 1.68,
-    "ram_static_pct": 0.36,
+    "flash_used_pct": 5.94,
+    "ram_static_pct": 2.88,
     "notes": [
       "section_sum_not_bin_image",
       "totals_from_chip_catalog"
@@ -827,24 +2010,76 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 82662,
-    "instructions": 50000,
-    "steps_executed": 50000,
+    "cycles": 851152,
+    "instructions": 499949,
+    "steps_executed": 500000,
     "memory_reads": 0,
-    "memory_writes": 42,
-    "peripheral_accesses": 168,
+    "memory_writes": 66330,
+    "peripheral_accesses": 16368,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 760,
+        "pc": 1328,
+        "count": 117
+      },
+      {
+        "pc": 1390,
+        "count": 117
+      },
+      {
+        "pc": 2746,
+        "count": 117
+      },
+      {
+        "pc": 1370,
+        "count": 79
+      },
+      {
+        "pc": 1320,
         "count": 78
       },
       {
-        "pc": 762,
+        "pc": 1366,
         "count": 78
       },
       {
-        "pc": 764,
+        "pc": 1378,
+        "count": 78
+      },
+      {
+        "pc": 1386,
+        "count": 78
+      },
+      {
+        "pc": 1408,
+        "count": 78
+      },
+      {
+        "pc": 1474,
+        "count": 78
+      },
+      {
+        "pc": 2688,
+        "count": 78
+      },
+      {
+        "pc": 2692,
+        "count": 78
+      },
+      {
+        "pc": 2694,
+        "count": 78
+      },
+      {
+        "pc": 2700,
+        "count": 40
+      },
+      {
+        "pc": 2744,
+        "count": 40
+      },
+      {
+        "pc": 794,
         "count": 39
       }
     ]
