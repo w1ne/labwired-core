@@ -109,6 +109,12 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x00,
         "litex/soc/cores/gpio.py GPIOIn `in` (Zephyr gpio_litex.c)",
     ),
+    // Fomu TouchPads: o, oe, i CSRs, pad k at bit k.
+    (
+        "declarative/litex/fomu_touch.yaml",
+        0x08,
+        "foboot hw/rtl/fomutouch.py TouchPads `i` (csr.h CSR_TOUCH_I_ADDR)",
+    ),
     // EOS S3 MISC IO_INPUT, GPIO k at bit k.
     (
         "declarative/eoss3/io_in.yaml",
@@ -248,6 +254,12 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[];
 /// base, so it cannot catch a base that is wrong for the silicon; these
 /// entries pin it. Each board listed must be covered.
 const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
+    (
+        "fomu",
+        "touch",
+        0xE000_5808,
+        "foboot sw/include/generated/csr.h CSR_TOUCH_I_ADDR",
+    ),
     (
         "cortex-a53-gicv2",
         "gpio",
@@ -451,13 +463,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 213;
+const COVERED: usize = 214;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 108;
+const SILICON_REGISTER: usize = 109;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 32;
+const NO_ANALOG_ENDPOINT: usize = 31;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()

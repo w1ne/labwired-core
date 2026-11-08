@@ -1,0 +1,53 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# Fomu TouchPads (foboot hw/rtl/fomutouch.py): four tristate pads on the edge
+# of the board, one TSTriple each. Three 4-bit CSRs in declaration order:
+# `o` (CSRStorage) @0x00, `oe` (CSRStorage) @0x04, `i` (CSRStatus) @0x08, pad
+# k at bit k. foboot's generated csr.h puts the block at CSR_TOUCH_BASE
+# 0xE000_5800 (CSR_TOUCH_O/OE/I_ADDR 0xE000_5800/04/08, each SIZE 1, so the
+# value sits in the low byte of each word).
+#
+# Runs on the declarative GPIO path (IN / OUT / ENABLE, ENABLE set = output).
+# `oe` resets to 0, so every pad starts as an input. Not modelled: the
+# captouch block (fomucaptouch.py) and the 0x6000_5800 alias Renode maps.
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: OUT
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: O
+    bit_range:
+    - 3
+    - 0
+    description: touch_o, the output value of pads 1-4
+  side_effects: null
+- id: ENABLE
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OE
+    bit_range:
+    - 3
+    - 0
+    description: touch_oe, 1 enables the output driver of the pad
+  side_effects: null
+- id: IN
+  address_offset: 8
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: I
+    bit_range:
+    - 3
+    - 0
+    description: touch_i, the level of pads 1-4
+  side_effects: null
