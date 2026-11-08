@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 100000,
+    "instructions": 4000000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/mimxrt798s-smoke.yaml",
   "system": "configs/systems/onboarding/mimxrt798s.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:48:54Z",
-  "finished_at_utc": "2026-11-05T14:48:55Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1094,
+  "started_at_utc": "2026-11-08T05:31:39Z",
+  "finished_at_utc": "2026-11-08T05:32:36Z",
+  "elapsed_seconds": 58,
+  "elapsed_ms": 57262,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.284,
-    "build_firmware": 0.41,
-    "run_smoke": 0.39
+    "build_cli": 53.259,
+    "build_firmware": 2.435,
+    "run_smoke": 1.56
   },
   "stages_ms": {
-    "build_cli": 284,
-    "build_firmware": 410,
-    "run_smoke": 390
+    "build_cli": 53259,
+    "build_firmware": 2435,
+    "run_smoke": 1560
   }
 }

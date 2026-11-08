@@ -123,7 +123,7 @@
 | `microwatt` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 1: `uart:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no OpenPOWER (Microwatt) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `mimxrt1064_evk` | `pass` | `True` | `yes` | `yes` | `788` | `0.788` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `mimxrt700_evk` | `pass` | `True` | `yes` | `yes` | `1596` | `1.596` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `mimxrt798s` | `pass` | `True` | `yes` | `yes` | `1094` | `1.094` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `mimxrt798s` | `pass` | `True` | `yes` | `yes` | `57262` | `57.262` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `miv` | `pass` | `True` | `yes` | `yes` | `804` | `0.804` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `miv-board` | `pass` | `True` | `yes` | `yes` | `1083` | `1.083` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `miv-board-additional-uarts` | `pass` | `True` | `yes` | `yes` | `1018` | `1.018` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
