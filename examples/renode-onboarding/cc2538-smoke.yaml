@@ -4,7 +4,8 @@
 # register readback, SOC_ADC internal-channel
 # conversions with the IRQ 14 pend, the RNG LFSR/CRC16 and the comparator, and an
 # SSI0 loopback self-test, an I2CM/TMP102 read, an I2CM->I2CS loopback, a PKA SRAM fill/readback and
-# GPTimer0/1 time-out, match, one-shot and prescaler checks.
+# GPTimer0/1 time-out, match, one-shot and prescaler checks. It also proves
+# that the imported SMWDTHROSC counter advances and compare IRQ 145 reaches NVIC.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke"
@@ -34,6 +35,7 @@ assertions:
       - "i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0"
       - "i2cs rx stat=05 dr=5a after=00 mis=01 irq8=1 ris=07 tx stat=02 busy=1 m_dr=c3 m_stat=20"
       - "pka_sram words=512 bad=0 last=751ef9b8"
+      - "sleep advanced=1 load=1 irq=1"
       - "gpt0 to=3 nvic19=1 held=1"
       - "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok"
       - "hb=0 yellow=1 green=0 orange=0"

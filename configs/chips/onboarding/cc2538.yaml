@@ -24,14 +24,20 @@ peripherals:
   type: pl011
   bus: sysbus
   base_address: 1073790976
-- id: watchdog
-  type: cc2538watchdog
+# SMWDTHROSC (SWRU319C §13/§14): Renode splits it into CC2538Watchdog
+# @0x400D5000 and CC2538SleepTimer @0x400D5040 -> nvic@145. Our model covers
+# the whole block (WDCTL @0x00, ST0-ST3 @0x40), so it sits at the block base.
+# The imported `cc2538sleeptimer` spelling was not a model type and fell
+# through the fuzzy `contains("timer")` rule onto the STM32 TIMx map.
+- id: sleepTimer
+  type: cc2538_sleep_timer
+  renode_type: cc2538sleeptimer
   bus: sysbus
   base_address: 1074614272
-- id: sleepTimer
-  type: cc2538sleeptimer
-  bus: sysbus
-  base_address: 1074614336
+  size: 4KB
+  irq: 145
+  config:
+    clock_hz: 16000000
 - id: uart1
   type: pl011
   bus: sysbus

@@ -106,12 +106,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          onboarding/zolertia-firefly.",
     ),
     (
-        "cc2538watchdog",
-        "TI CC2538 watchdog. Renode-imported onboarding descriptor; no model in this engine, \
-         so the window answers reads with zeros. Used by: onboarding/cc2538, \
-         onboarding/zolertia-firefly.",
-    ),
-    (
         "efuse_stub",
         "ESP32-S3 eFuse window, authored as an explicit placeholder so eFuse reads decode \
          instead of faulting. No eFuse state is modelled. Used by: esp32s3-zero.",

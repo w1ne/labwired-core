@@ -50,7 +50,8 @@ peripherals:
   bus: sysbus
   base_address: 2150649856
 - id: timer0
-  type: gaisler_gptimer
+  type: stub
+  renode_type: gaisler_gptimer
   bus: sysbus
   base_address: 2147495936
 - id: gpio0

@@ -14,6 +14,7 @@ peripherals:
   bus: sysbus
   base_address: 3221231616
 - id: timer0
-  type: litex_timer64
+  type: stub
+  renode_type: litex_timer64
   bus: sysbus
   base_address: 3221233664

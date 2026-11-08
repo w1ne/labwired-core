@@ -32,7 +32,8 @@ peripherals:
   bus: sysbus
   base_address: 2147483904
 - id: timer
-  type: gaisler_gptimer
+  type: stub
+  renode_type: gaisler_gptimer
   bus: sysbus
   base_address: 2147484416
 - id: eth

@@ -4,8 +4,9 @@
 //
 //! CC2538DK (CC2538SF53, Cortex-M3) L1 smoke: UART0 console, a walk over the
 //! SmartRF06 LEDs with GPIO_DATA readback, the keys' pad levels, an SSI0
-//! loopback self-test, an I2CM/TMP102 transfer, an I2CM->I2CS loopback, a PKA SRAM readback, a GPTimer0/1 self-test and a heartbeat, in bare
-//! registers.
+//! loopback self-test, an I2CM/TMP102 transfer, an I2CM->I2CS loopback, a PKA
+//! SRAM readback, the 32-kHz sleep timer and its compare IRQ, a GPTimer0/1
+//! self-test and a heartbeat, in bare registers.
 //!
 //! Board facts (Contiki-NG `cc2538dk` dev/board.h; RIOT `cc2538dk`):
 //!   LED1 red    PC0 (active high) — shared with the USB D+ pull-up, NOT driven
@@ -204,6 +205,16 @@ const IRQ_GPT0A: u32 = 19;
 const IRQ_GPT1B: u32 = 22;
 const NVIC_ISPR0: u32 = 0xE000_E200;
 const NVIC_ICPR0: u32 = 0xE000_E280;
+
+// ── SMWDTHROSC sleep timer (SWRU319C §13, base 0x400D_5000) ────────────────
+const SLEEP_TIMER: u32 = 0x400D_5000;
+const SLEEP_ST0: u32 = SLEEP_TIMER + 0x40;
+const SLEEP_ST1: u32 = SLEEP_TIMER + 0x44;
+const SLEEP_ST2: u32 = SLEEP_TIMER + 0x48;
+const SLEEP_ST3: u32 = SLEEP_TIMER + 0x4C;
+const SLEEP_STLOAD: u32 = SLEEP_TIMER + 0x50;
+/// Imported Renode CC2538 descriptor's external NVIC IRQ position.
+const IRQ_SLEEP_TIMER: u32 = 145;
 
 /// Customer Configuration Area (SWRU319C §8.6, Tables 8-3 to 8-6), placed at
 /// 0x0027_FFD4 by memory.x. The ROM boot code reads it at reset: a valid image
@@ -679,6 +690,44 @@ fn wait_set(addr: u32, mask: u32) -> bool {
     false
 }
 
+/// Read ST0 first to latch the 32-kHz count, then collect the upper bytes.
+fn sleep_count() -> u32 {
+    (rd(SLEEP_ST0) & 0xFF)
+        | ((rd(SLEEP_ST1) & 0xFF) << 8)
+        | ((rd(SLEEP_ST2) & 0xFF) << 16)
+        | ((rd(SLEEP_ST3) & 0xFF) << 24)
+}
+
+/// Prove that the 32-kHz counter advances and a staged compare reaches NVIC.
+fn sleep_timer_selftest() {
+    let before = sleep_count();
+    spin(4_000);
+    let after = sleep_count();
+    let advanced = after != before;
+
+    // Leave several 32-kHz ticks for the four byte writes before the compare.
+    let target = after.wrapping_add(8);
+    wr(SLEEP_ST3, target >> 24);
+    wr(SLEEP_ST2, target >> 16);
+    wr(SLEEP_ST1, target >> 8);
+    wr(SLEEP_ST0, target);
+
+    let nvic_word = NVIC_ISPR0 + (IRQ_SLEEP_TIMER / 32) * 4;
+    let nvic_clear = NVIC_ICPR0 + (IRQ_SLEEP_TIMER / 32) * 4;
+    let irq_mask = 1 << (IRQ_SLEEP_TIMER % 32);
+    wr(nvic_clear, irq_mask);
+    let fired = wait_set(nvic_word, irq_mask);
+    wr(nvic_clear, irq_mask);
+
+    puts(b"sleep advanced=");
+    put_dec32(u32::from(advanced));
+    puts(b" load=");
+    put_dec32(rd(SLEEP_STLOAD));
+    puts(b" irq=");
+    put_dec32(u32::from(fired));
+    putc(b'\n');
+}
+
 /// GPTimer self-test (§11), polled with the NVIC lines left disabled so the
 /// pends show in ISPR without a handler.
 /// 1. GPT0 as one 32-bit periodic down-counter, TAILR = 1999: three
@@ -881,6 +930,7 @@ fn main() -> ! {
     i2cm_selftest();
     i2cs_loopback_selftest();
     pka_sram_selftest();
+    sleep_timer_selftest();
     gpt_selftest();
 
     // Leave yellow lit; the heartbeat reports the three driven pad levels.

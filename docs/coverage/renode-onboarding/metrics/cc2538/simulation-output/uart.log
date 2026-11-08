@@ -19,8 +19,9 @@ ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08
 i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0
 i2cs rx stat=05 dr=5a after=00 mis=01 irq8=1 ris=07 tx stat=02 busy=1 m_dr=c3 m_stat=20
 pka_sram words=512 bad=0 last=751ef9b8
+sleep advanced=1 load=1 irq=1
 gpt0 to=3 nvic19=1 held=1
-gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16002
+gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16006
 hb=0 yellow=1 green=0 orange=0
 hb=1 yellow=1 green=0 orange=0
 hb=2 yellow=1 green=0 orange=0
