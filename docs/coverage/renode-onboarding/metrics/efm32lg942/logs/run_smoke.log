@@ -1,6 +1,6 @@
-[2m2026-11-08T15:45:11.351173Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/efm32lg942.yaml
-[2m2026-11-08T15:45:11.352978Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000401
+[2m2026-11-08T19:00:48.233210Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/efm32lg942.yaml
+[2m2026-11-08T19:00:48.236468Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-[2m2026-11-08T15:45:11.354427Z[0m [33m WARN[0m [2mlabwired_core::peripherals::gpio[0m[2m:[0m EFM32 GPIO PINLOCKN 0xfffe: pin lock is stored but not enforced
-PASS  5/5 checks · efm32lg942-smoke · 400000 steps · 0.04s
+[2m2026-11-08T19:00:48.238760Z[0m [33m WARN[0m [2mlabwired_core::peripherals::gpio[0m[2m:[0m EFM32 GPIO PINLOCKN 0xfffe: pin lock is stored but not enforced
+PASS  5/5 checks · efm32lg942-smoke · 400000 steps · 0.06s

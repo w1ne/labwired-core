@@ -95,9 +95,9 @@
       536870912,
       536899520,
       1073799168,
-      134235996
+      18268
     ],
-    "pc": 134235996,
+    "pc": 18268,
     "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
@@ -110,7 +110,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "0c35ce68b50ce35ac913d130d8b1086455d119461622523fb877a96f6d6b0960",
+  "firmware_hash": "e2a0a6a712d143789a2eb1539605ffe57dd02d06233d086aae7150c5b4be6009",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32wg995-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32wg995.yaml",
@@ -995,82 +995,82 @@
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134236024,
+        "pc": 18296,
         "count": 79,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134236028,
+        "pc": 18300,
         "count": 79,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134235996,
+        "pc": 18268,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134236000,
+        "pc": 18272,
         "count": 78,
         "symbol": "firmware_efm32wg995_smoke::s0::run"
       },
       {
-        "pc": 134236002,
+        "pc": 18274,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134236004,
+        "pc": 18276,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134236012,
+        "pc": 18284,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134236016,
+        "pc": 18288,
         "count": 78,
         "symbol": "firmware_efm32wg995_smoke::s0::run"
       },
       {
-        "pc": 134236018,
+        "pc": 18290,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134236032,
+        "pc": 18304,
         "count": 78,
         "symbol": "firmware_efm32wg995_smoke::s0::run"
       },
       {
-        "pc": 134236036,
+        "pc": 18308,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134236040,
+        "pc": 18312,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134236044,
+        "pc": 18316,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134236048,
+        "pc": 18320,
         "count": 78,
         "symbol": "firmware_efm32wg995_smoke::s0::run"
       },
       {
-        "pc": 134236050,
+        "pc": 18322,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 134236052,
+        "pc": 18324,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       }

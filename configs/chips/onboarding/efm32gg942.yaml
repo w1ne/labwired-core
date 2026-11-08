@@ -8,7 +8,9 @@ name: efm32gg942
 arch: arm
 core: cortex-m3
 flash:
-  base: 134217728
+  # EFM32GG main flash is mapped at 0x00000000 (Renode efm32gg942.repl;
+  # EFM32GG reference manual memory map).
+  base: 0
   size: 1048576B
 ram:
   base: 536870912

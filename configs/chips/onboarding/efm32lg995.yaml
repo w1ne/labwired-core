@@ -11,7 +11,9 @@ arch: arm
 # the Series-0 GPIO ports and TIMER0..3; it does not claim the remaining
 # Leopard Gecko peripherals (I2C, LEUART, CMU, EBI, LCD).
 flash:
-  base: 134217728
+  # EFM32LG main flash is mapped at 0x00000000 (Renode efm32lg995.repl, which includes efm32gg942.repl;
+  # EFM32LG reference manual memory map).
+  base: 0
   size: 1048576B
 ram:
   base: 536870912

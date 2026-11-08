@@ -11,7 +11,9 @@ arch: arm
 # Other generated blocks (I2C, USART, LEUART, CMU) are not claimed here because the engine has no model-backed coverage for them.
 core: cortex-m4
 flash:
-  base: 134217728
+  # EFM32WG main flash is mapped at 0x00000000 (Renode efm32wg995.repl;
+  # EFM32WG reference manual memory map).
+  base: 0
   size: 262144B
 ram:
   base: 536870912

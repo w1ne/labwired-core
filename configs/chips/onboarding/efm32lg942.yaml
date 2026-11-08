@@ -10,7 +10,9 @@ core: cortex-m3
 # Bounded to imported memory, the USART0 console, and the Series-0 GPIO
 # ports + TIMER0..3 the smoke exercises (I2C, LEUART, CMU not claimed).
 flash:
-  base: 134217728
+  # EFM32LG main flash is mapped at 0x00000000 (Renode efm32lg942.repl, which includes efm32gg942.repl;
+  # EFM32LG reference manual memory map).
+  base: 0
   size: 1048576B
 ram:
   base: 536870912
