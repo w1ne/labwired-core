@@ -329,6 +329,26 @@ boards:
     sketches_skip_reason:
       L8_can: "ATmega328P has no CAN controller"
 
+  - id: arduino-zero
+    chip: atsamd21g18a
+    system: systems/arduino-zero.yaml
+    # `zero` = "Arduino Zero (Programming/Debug Port)": Serial is the EDBG
+    # UART (SERCOM5), not native USB CDC. The sketch is linked at 0x2000
+    # behind the bootloader; the chip's reset_vector_offset enters it there.
+    pio: { platform: atmelsam@9.0.0, board: zero, framework: arduino }
+    max_steps: 3000000
+    budget_reason: "Cortex-M0+ 48 MHz; L0 reaches loop() in well under 1M steps"
+    led_watch: "gpio_a:17"
+    led_min_edges: 2
+    # L6: analogWrite(LED_BUILTIN = D13 = PA17) runs TCC2 WO1 in NPWM on PMUX
+    # E; the pad must carry the waveform, not the PORT latch.
+    pwm_watch: "gpio_a:17"
+    family: sam
+    notes: "Arduino Zero (ArduinoCore-samd), Programming Port"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "ATSAMD21G18A has no CAN controller"
+
   # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────
   #
   # ⚠️ The ONLY board here that does not compile through PlatformIO. Silicon

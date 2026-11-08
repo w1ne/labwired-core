@@ -2967,6 +2967,23 @@ impl crate::Peripheral for GpioPort {
         }
     }
 
+    fn bind_timer_output_pad_function(
+        &mut self,
+        cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        pin: u8,
+        function: u32,
+        line: usize,
+        func: &'static str,
+    ) -> bool {
+        match self.family {
+            GpioFamily::SamPort(_) if pin < 32 && function < 16 => {
+                self.pad_routes.bind(cell, pin, Some(function), line, func);
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn take_timer_input_edges(&mut self) -> Vec<TimerInputEdge> {
         std::mem::take(&mut self.timer_edges)
     }

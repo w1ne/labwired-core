@@ -2839,6 +2839,92 @@ impl SystemBus {
         }
     }
 
+    /// Route each SAMD21 TCC's waveform outputs WO[x] onto the pads that carry
+    /// them on PMUX function E or F, so `analogWrite` on a TCC pin is a
+    /// waveform on the pad rather than the PORT latch. Pads from CMSIS
+    /// `pio/samd21g18a.h` (`PIN_PxyyE/F_TCCn_WOx`); the route is live only
+    /// while the pad's PINCFG.PMUXEN selects that function. Only `samd21_tcc`
+    /// instances on a chip with `gpio_a`/`gpio_b` SAM ports are wired.
+    pub(crate) fn wire_samd21_tcc_output_pads(&mut self) {
+        const E: u32 = 4;
+        const F: u32 = 5;
+        // (TCC, WO, port, pin, PMUX function)
+        const PADS: &[(u8, usize, char, u8, u32)] = &[
+            (0, 0, 'a', 4, E),
+            (0, 0, 'a', 8, E),
+            (0, 1, 'a', 5, E),
+            (0, 1, 'a', 9, E),
+            (0, 2, 'a', 10, F),
+            (0, 2, 'a', 18, F),
+            (0, 3, 'a', 11, F),
+            (0, 3, 'a', 19, F),
+            (0, 4, 'a', 14, F),
+            (0, 4, 'a', 22, F),
+            (0, 4, 'b', 10, F),
+            (0, 5, 'a', 15, F),
+            (0, 5, 'a', 23, F),
+            (0, 5, 'b', 11, F),
+            (0, 6, 'a', 12, F),
+            (0, 6, 'a', 20, F),
+            (0, 6, 'a', 16, F),
+            (0, 7, 'a', 13, F),
+            (0, 7, 'a', 21, F),
+            (0, 7, 'a', 17, F),
+            (1, 0, 'a', 6, E),
+            (1, 0, 'a', 10, E),
+            (1, 0, 'a', 30, E),
+            (1, 1, 'a', 7, E),
+            (1, 1, 'a', 11, E),
+            (1, 1, 'a', 31, E),
+            (1, 2, 'a', 8, F),
+            (1, 2, 'a', 24, F),
+            (1, 3, 'a', 9, F),
+            (1, 3, 'a', 25, F),
+            (2, 0, 'a', 12, E),
+            (2, 0, 'a', 16, E),
+            (2, 0, 'a', 0, E),
+            (2, 1, 'a', 13, E),
+            (2, 1, 'a', 17, E),
+            (2, 1, 'a', 1, E),
+        ];
+        const FUNCS: [[&str; 8]; 3] = [
+            [
+                "TCC0_WO0", "TCC0_WO1", "TCC0_WO2", "TCC0_WO3", "TCC0_WO4", "TCC0_WO5", "TCC0_WO6",
+                "TCC0_WO7",
+            ],
+            [
+                "TCC1_WO0", "TCC1_WO1", "TCC1_WO2", "TCC1_WO3", "", "", "", "",
+            ],
+            ["TCC2_WO0", "TCC2_WO1", "", "", "", "", "", ""],
+        ];
+        for &(tcc, wo, port, pin, function) in PADS {
+            let Some(t_idx) = self.find_peripheral_index_by_name(&format!("tcc{tcc}")) else {
+                continue;
+            };
+            if self.peripherals[t_idx].dev.timer_output_family() != Some("samd21_tcc") {
+                continue;
+            }
+            let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio_{port}")) else {
+                continue;
+            };
+            let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
+                continue;
+            };
+            if self.peripherals[gpio_idx]
+                .dev
+                .bind_timer_output_pad_function(
+                    &lines,
+                    pin,
+                    function,
+                    wo,
+                    FUNCS[usize::from(tcc)][wo],
+                )
+            {
+                self.peripherals[t_idx].dev.timer_output_lines(true);
+            }
+        }
+    }
+
     /// Route each Renesas RA GPT's GTIOCnA/B wires onto the pads its chip
     /// YAML names (`gtioc_pads`), so a pad whose `PmnPFS` hands it to the GPT
     /// (PMR = 1, PSEL = 00011) reads, and the logic analyzer records, the PWM
