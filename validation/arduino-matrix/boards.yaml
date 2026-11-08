@@ -376,9 +376,8 @@ boards:
     led_min_edges: 2
     family: sam
     notes: "Arduino Zero (ArduinoCore-samd), Programming Port"
-    sketches_skip: [L5_adc, L6_pwm, L8_can]
+    sketches_skip: [L6_pwm, L8_can]
     sketches_skip_reason:
-      L5_adc: "SAMD21 ADC is a declarative register bank; no conversion model yet"
       L6_pwm: "SAMD21 TCC/TC not modelled yet"
       L8_can: "ATSAMD21G18A has no CAN controller"
 

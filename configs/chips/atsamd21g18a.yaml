@@ -300,7 +300,7 @@ peripherals:
   #
   # ⚠️ Declarative register banks from the SVD, not behavioural models: the
   # DAC drives no pad and the USB block enumerates nothing (`SerialUSB` prints
-  # nothing here). The ADC is a separate entry below.
+  # nothing here). The ADC is a behavioural model, below.
   - id: "dac"
     type: "declarative"
     base_address: 0x42004800
@@ -319,15 +319,17 @@ peripherals:
       path: "../peripherals/atsamd21g18a/usb.yaml"
       profile: "sam"
       num_pins: 32
+  # The ADC converts (`samd21_adc`): single-ended AINn against GND, software
+  # START, 8/10/12-bit, gain 1x..16x and DIV2, internal references. That is
+  # every path stock analogRead() takes (AR_DEFAULT = GAIN DIV2 against
+  # INTVCC1, full scale VDDANA). Inputs read 0 mV unless the host or the board
+  # (`input_mv: { <ain>: <mV> }`) drives them. No IRQ line (23) is declared:
+  # the model raises none. Averaging, freerun, scan, window, events, external
+  # references and differential mode are refused, not ignored.
   - id: "adc"
-    type: "declarative"
+    type: "samd21_adc"
     base_address: 0x42004000
     size: "64B"
-    irq: 23
-    config:
-      path: "../peripherals/atsamd21g18a/adc.yaml"
-      profile: "sam"
-      num_pins: 32
 
   # ── Cortex-M0+ core peripherals ────────────────────────────────────────────
   # No `debug_schema` on either: they are Arm core blocks in the PPB, which the

@@ -4,6 +4,8 @@
 # EDBG chip only bridges it to USB. LED_BUILTIN = D13 = PA17.
 # L3: INA219 on Wire (SERCOM3, SDA PA22 / SCL PA23).
 # L4: MAX31855 on SPI (SERCOM4); CS is the sketch's SS = A2 = PB9.
+# L5: A0 (PA02 = AIN0) held at 1650 mV, half of VDDANA — a divider on the
+# pin. Stock analogRead() must return exactly 512 (10-bit, full scale 3.3 V).
 name: "arduino-matrix-arduino-zero"
 chip: "../../../configs/chips/atsamd21g18a.yaml"
 external_devices:
@@ -17,4 +19,10 @@ external_devices:
     connection: "sercom4"
     config:
       cs_pin: "PB9"
+peripherals:
+  - id: "adc"
+    type: "samd21_adc"
+    base_address: 0x42004000
+    config:
+      input_mv: { 0: 1650 }
 board_io: []
