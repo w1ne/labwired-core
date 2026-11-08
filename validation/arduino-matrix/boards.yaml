@@ -123,6 +123,11 @@ boards:
     # Pico LED = GPIO25 via SIO (not APB GPIO)
     led_watch: "sio:25"
     led_min_edges: 2
+    # L6: Mbed analogWrite(LED_BUILTIN) = PWM slice 4 B on GP25 (FUNCSEL 4),
+    # period_ms(2): DIV 250.0, TOP 1000 = 250,250 cycles (499.5 Hz), CC 502.
+    # 30 ms of sketch = 30 edges.
+    pwm_watch: "sio:25"
+    pwm_min_edges: 20
     family: rp2040
     notes: "Needs platform raspberrypi (pio pkg install -g -p raspberrypi if missing); SPI slave attach for L4"
     sketches_skip: [L8_can]
@@ -145,6 +150,11 @@ boards:
     # coprocessor, p0).
     led_watch: "sio:25"
     led_min_edges: 2
+    # L6: arduino-pico analogWrite(LED_BUILTIN, 128) = PWM slice 4 B on GP25
+    # (FUNCSEL 4) via the RP2350 IO_BANK0 model: 150,004 cycles @150 MHz =
+    # 1.000 kHz, 50.2 % high; ~60 edges in the 3M-step window.
+    pwm_watch: "sio:25"
+    pwm_min_edges: 20
     family: rp2040
     notes: "arduino-pico core; Serial = USB CDC; L6 analogWrite = PWM slice 4B on GP25"
     sketches_skip: [L8_can]
