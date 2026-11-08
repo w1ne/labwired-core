@@ -1448,6 +1448,8 @@ impl SystemBus {
         // measures the shifted bytes rather than the SIO output latch. MISO is
         // deliberately unrouted — nothing drives it.
         bus.wire_rp2040_spi_pads();
+        // And the PWM slices' A/B outputs, so analogWrite reaches its pad.
+        bus.wire_rp2040_pwm_pads();
         // STM32: share each classic/FIFO SPI bit engine's live SCK/MOSI/MISO
         // line levels with the STM32 GPIO ports so AF-routed pads carry the
         // real waveform. No-op for every other chip.
