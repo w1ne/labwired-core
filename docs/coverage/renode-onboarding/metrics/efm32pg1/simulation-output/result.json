@@ -111,7 +111,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "8114f182f5966625e32e8b6787c2713bc5cb17896c43d7d4f43161a0eb91f046",
+  "firmware_hash": "d4820f461e0af61bdc788fee66fd0628d7ffd604def663a771bb7851741ffd60",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efm32pg1-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32pg1.yaml",

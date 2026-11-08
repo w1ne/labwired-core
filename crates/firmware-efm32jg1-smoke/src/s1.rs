@@ -16,6 +16,11 @@
 //! 0x4001A000/0x4001A400; MG13: WTIMER0 only) it checks the 32-bit counter:
 //! counting up from 0xFFF0, CC0 at 0x10000 fires before any overflow (a
 //! 16-bit counter would wrap first) and OF comes at a TOP above 0xFFFF.
+//!
+//! On parts where Renode models the RTCC (`efm32s1_rtcc`, MG12 IRQ 30, MG13
+//! IRQ 31; Gecko SDK `efr32mg12p_rtcc.h`) it checks the 32 retention words,
+//! CNT wrapping to OF just before CC1 matches, CNTTICK, the IEN-gated NVIC
+//! line, COMBCNT = PRECNT | CNT << 15, and the CNTPRESC pre-counter tap.
 #![allow(dead_code)]
 
 use core::ptr::{read_volatile, write_volatile};
@@ -72,6 +77,27 @@ const T_CC0_CTRL: u32 = 0x60;
 const T_CC0_CCV: u32 = 0x64;
 const IF_CC0: u32 = 1 << 4;
 const W_TOP: u32 = 0x0001_1000;
+
+// RTCC_TypeDef (efr32mg12p_rtcc.h) at 0x40042000.
+const RTCC: u32 = 0x4004_2000;
+const R_CTRL: u32 = 0x00;
+const R_PRECNT: u32 = 0x04;
+const R_CNT: u32 = 0x08;
+const R_COMBCNT: u32 = 0x0C;
+const R_IF: u32 = 0x18;
+const R_IFC: u32 = 0x20;
+const R_IEN: u32 = 0x24;
+const R_LOCK: u32 = 0x38;
+const R_CC1_CTRL: u32 = 0x50;
+const R_CC1_CCV: u32 = 0x54;
+const R_RET0: u32 = 0x104;
+const R_RET31: u32 = 0x180;
+const R_ENABLE: u32 = 1;
+const R_IF_OF: u32 = 1;
+const R_IF_CC1: u32 = 1 << 2;
+const R_IF_CNTTICK: u32 = 1 << 5;
+/// _RTCC_LOCK_LOCKKEY_UNLOCK.
+const R_UNLOCK: u32 = 0xAEE8;
 
 const NVIC_ISPR0: u32 = 0xE000_E200;
 const NVIC_ICPR0: u32 = 0xE000_E280;
@@ -388,6 +414,57 @@ fn check_wtimer(n: u32, irq: u32) -> bool {
     verdict(top && cc0 && no_early_of && cnt_hi && of && masked && pend && released && ifs)
 }
 
+/// RTCC normal mode at LFECLK/1 from 0xFFFFFFFD: OF on the wrap to 0, then
+/// CC1 (CCV 1); IEN pends the NVIC line. Then CNTPRESC DIV4 from zero: CNT
+/// follows PRECNT >> 2, and COMBCNT joins the frozen pair.
+fn check_rtcc(irq: u32) -> bool {
+    wr(RTCC + R_LOCK, R_UNLOCK);
+    wr(RTCC + R_RET0, 0xA5A5_5A5A);
+    wr(RTCC + R_RET31, 0x0BAD_F00D);
+    let ret = rd(RTCC + R_RET0) == 0xA5A5_5A5A && rd(RTCC + R_RET31) == 0x0BAD_F00D;
+    wr(RTCC + R_IFC, 0x7FF);
+    wr(RTCC + R_CNT, 0xFFFF_FFFD);
+    wr(RTCC + R_CC1_CTRL, 2);
+    wr(RTCC + R_CC1_CCV, 1);
+    wr(RTCC + R_CTRL, R_ENABLE);
+    let of = wait(|| rd(RTCC + R_IF) & R_IF_OF != 0);
+    let of_first = rd(RTCC + R_IF) & R_IF_CC1 == 0;
+    let cc1 = wait(|| rd(RTCC + R_IF) & R_IF_CC1 != 0);
+    let tick = rd(RTCC + R_IF) & R_IF_CNTTICK != 0;
+    let (ispr, b) = nvic(NVIC_ISPR0, irq);
+    let (icpr, _) = nvic(NVIC_ICPR0, irq);
+    let masked = !bit(ispr, b);
+    wr(RTCC + R_IEN, R_IF_CC1);
+    let pend = bit(ispr, b);
+    wr(RTCC + R_IFC, 0x7FF);
+    wr(icpr, 1 << b);
+    let released = !bit(ispr, b);
+    wr(RTCC + R_IEN, 0);
+    // CNTPRESC DIV4 from zero.
+    wr(RTCC + R_CTRL, 0);
+    wr(RTCC + R_PRECNT, 0);
+    wr(RTCC + R_CNT, 0);
+    wr(RTCC + R_CTRL, R_ENABLE | (2 << 8));
+    let counted = wait(|| rd(RTCC + R_CNT) >= 3);
+    wr(RTCC + R_CTRL, 0);
+    let pre = rd(RTCC + R_PRECNT);
+    let cnt = rd(RTCC + R_CNT);
+    let presc = counted && cnt == pre >> 2;
+    let comb = rd(RTCC + R_COMBCNT) == pre | (cnt << 15);
+    puts("rtcc ");
+    flag("ret=", ret);
+    flag("of=", of);
+    flag("of_first=", of_first);
+    flag("cc1=", cc1);
+    flag("tick=", tick);
+    flag("masked=", masked);
+    flag("pend=", pend);
+    flag("released=", released);
+    flag("presc=", presc);
+    flag("comb=", comb);
+    verdict(ret && of && of_first && cc1 && tick && masked && pend && released && presc && comb)
+}
+
 pub struct Board {
     /// First UART line, e.g. "EFM32PG1 RENODE SMOKE".
     pub banner: &'static str,
@@ -401,11 +478,13 @@ pub struct Board {
     pub timer0_irq: u32,
     /// NVIC lines of WTIMER0, WTIMER1, ... (empty where there is none).
     pub wtimer_irqs: &'static [u32],
+    /// The RTCC's NVIC line where the descriptor maps one (MG12 30, MG13 31).
+    pub rtcc_irq: Option<u32>,
 }
 
 /// Run every check, store the summary word (0xEF310000 | one bit per check
 /// = 0xEF3101FF on a pass, plus bits 9.. for the WTIMERs: 0xEF3103FF with
-/// one, 0xEF3107FF with two), then toggle LED0 forever on a busy-wait delay.
+/// one, 0xEF3107FF with two, and the next bit for the RTCC), then toggle LED0 forever on a busy-wait delay.
 pub fn run(board: &Board) -> ! {
     wr(USART0 + U_CMD, CMD_TXEN);
     puts(board.banner);
@@ -432,6 +511,13 @@ pub fn run(board: &Board) -> ! {
         let bitn = checks.len() + n;
         expected |= 1 << bitn;
         if check_wtimer(n as u32, irq) {
+            summary |= 1 << bitn;
+        }
+    }
+    if let Some(irq) = board.rtcc_irq {
+        let bitn = checks.len() + board.wtimer_irqs.len();
+        expected |= 1 << bitn;
+        if check_rtcc(irq) {
             summary |= 1 << bitn;
         }
     }

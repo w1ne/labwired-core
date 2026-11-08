@@ -8,6 +8,9 @@
 # (IRQ 11), DOWN one-shot, UP/DOWN with CC3 and DIRCHG.
 # WTIMER0/WTIMER1 32-bit (efm32s1_wtimer): from 0xFFF0, CC0 at 0x10000
 # fires before OF, OF at TOP 0x11000, IEN pends IRQ 36/37.
+# RTCC (efm32s1_rtcc, 32768 Hz LFECLK on the 19 MHz HFRCO): RET words,
+# CNT from 0xFFFFFFFD wraps (OF) before CC1 matches, CNTTICK, IEN pends
+# IRQ 30, CNTPRESC DIV4 tap, COMBCNT.
 # LED0 toggles in the idle loop. Summary word at 0x2003FC00.
 schema_version: "1.0"
 inputs:
@@ -29,12 +32,13 @@ assertions:
       - "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok"
       - "wtim0 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok"
       - "wtim1 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok"
+      - "rtcc ret=1 of=1 of_first=1 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 ok"
       - "EFR32MG12 PASS"
   - gpio_edges:
       pin: "gpiof:4"
       min_edges: 4
   - memory_value:
       address: 0x2003FC00
-      expected_value: 0xEF3107FF
+      expected_value: 0xEF310FFF
       size: 4
   - expected_stop_reason: max_steps

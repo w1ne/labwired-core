@@ -48,6 +48,7 @@
           "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok",
           "wtim0 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok",
           "wtim1 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok",
+          "rtcc ret=1 of=1 of_first=1 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 ok",
           "EFR32MG12 PASS"
         ]
       },
@@ -66,7 +67,7 @@
       "assertion": {
         "memory_value": {
           "address": 537132032,
-          "expected_value": 4012967935,
+          "expected_value": 4012969983,
           "mask": null,
           "size": 4
         }
@@ -84,24 +85,24 @@
     "type": "arm",
     "registers": [
       16,
-      1261,
+      920,
       1073783036,
-      4294867296,
-      4294867296,
+      4012969983,
       1,
-      4012967935,
+      98316,
+      4012969983,
       537132008,
-      8,
-      1073807376,
-      112,
       1,
+      1073807376,
       4294867296,
-      537131952,
-      18561,
-      23998
+      1725,
+      4294867296,
+      537131944,
+      27191,
+      28340
     ],
-    "pc": 23998,
-    "xpsr": 2164260864,
+    "pc": 28340,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -113,7 +114,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "fcb2693f7ddd3d0d2768ecf3241acba82d45bf9ee73a69ec53fd94b71b2fb6c6",
+  "firmware_hash": "3d80733d5907a839de4cb8fff92daa264788881f84f209e4dcd46a85e2b90e91",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efr32mg12-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sltb004a.yaml",
@@ -199,6 +200,13 @@
         "artifacts": []
       },
       {
+        "name": "rtcc",
+        "kind": "native",
+        "base": 1074012160,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "scb",
         "kind": "native",
         "base": 3758157056,
@@ -266,52 +274,40 @@
             "value": 0
           },
           {
-            "cycle": 54620,
+            "cycle": 94254,
             "value": 1
           },
           {
-            "cycle": 67120,
+            "cycle": 106754,
             "value": 0
           },
           {
-            "cycle": 79620,
+            "cycle": 119254,
             "value": 1
           },
           {
-            "cycle": 92120,
+            "cycle": 131754,
             "value": 0
           },
           {
-            "cycle": 104620,
+            "cycle": 144254,
             "value": 1
           },
           {
-            "cycle": 117120,
+            "cycle": 156754,
             "value": 0
           },
           {
-            "cycle": 129620,
+            "cycle": 169254,
             "value": 1
           },
           {
-            "cycle": 142120,
+            "cycle": 181754,
             "value": 0
           },
           {
-            "cycle": 154620,
+            "cycle": 194254,
             "value": 1
-          },
-          {
-            "cycle": 167120,
-            "value": 0
-          },
-          {
-            "cycle": 179620,
-            "value": 1
-          },
-          {
-            "cycle": 192120,
-            "value": 0
           }
         ],
         "gaps": [],
@@ -338,56 +334,44 @@
             "state": "0"
           },
           {
-            "cycle": 54620,
+            "cycle": 94254,
             "state": "1"
           },
           {
-            "cycle": 67120,
+            "cycle": 106754,
             "state": "0"
           },
           {
-            "cycle": 79620,
+            "cycle": 119254,
             "state": "1"
           },
           {
-            "cycle": 92120,
+            "cycle": 131754,
             "state": "0"
           },
           {
-            "cycle": 104620,
+            "cycle": 144254,
             "state": "1"
           },
           {
-            "cycle": 117120,
+            "cycle": 156754,
             "state": "0"
           },
           {
-            "cycle": 129620,
+            "cycle": 169254,
             "state": "1"
           },
           {
-            "cycle": 142120,
+            "cycle": 181754,
             "state": "0"
           },
           {
-            "cycle": 154620,
+            "cycle": 194254,
             "state": "1"
-          },
-          {
-            "cycle": 167120,
-            "state": "0"
-          },
-          {
-            "cycle": 179620,
-            "state": "1"
-          },
-          {
-            "cycle": 192120,
-            "state": "0"
           }
         ],
         "mode": "output",
-        "edge_count": 16
+        "edge_count": 13
       }
     ]
   },
@@ -398,10 +382,10 @@
       "number": 4,
       "mode": "output",
       "func": null,
-      "output": false,
-      "input": false,
-      "pad": false,
-      "drive": "0"
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
     }
   ],
   "uart_lines": {
@@ -462,9 +446,9 @@
       },
       {
         "text": "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
       },
       {
         "text": "wtim0 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok",
@@ -479,24 +463,30 @@
         "end_cycle": 50000
       },
       {
+        "text": "rtcc ret=1 of=1 of_first=1 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 ok",
+        "cycle_lo": 80000,
+        "cycle": 90000,
+        "end_cycle": 90000
+      },
+      {
         "text": "EFR32MG12 PASS",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 80000,
+        "cycle": 90000,
+        "end_cycle": 90000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 24680,
+    "text_bytes": 28984,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 24680,
+    "flash_used_bytes": 28984,
     "ram_static_bytes": 0,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 262144,
-    "flash_used_pct": 2.35,
+    "flash_used_pct": 2.76,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -506,15 +496,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 261120,
-    "main_stack_high_water_bytes": 88,
-    "main_stack_free_min_bytes": 261032,
+    "main_stack_high_water_bytes": 96,
+    "main_stack_free_min_bytes": 261024,
     "main_stack_base": 536870912,
     "main_stack_top": 537132032,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 261120,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 261032,
+    "heap_free_min_bytes": 261024,
     "heap_base": 536870912,
     "heap_top": 537132032
   },
@@ -522,33 +512,43 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 4873,
-    "memory_writes": 70,
-    "peripheral_accesses": 11035,
+    "memory_reads": 5840,
+    "memory_writes": 81,
+    "peripheral_accesses": 20440,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 23998,
-        "count": 625,
-        "symbol": "core::ptr::write_volatile"
+        "pc": 28340,
+        "count": 469,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
       },
       {
-        "pc": 16284,
+        "pc": 18762,
+        "count": 78,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 18764,
+        "count": 78,
+        "symbol": "firmware_efr32mg12_smoke::s1::wait"
+      },
+      {
+        "pc": 23068,
         "count": 39,
         "symbol": "firmware_efr32mg12_smoke::s1::wait"
       },
       {
-        "pc": 18754,
+        "pc": 23150,
         "count": 39,
-        "symbol": "firmware_efr32mg12_smoke::s1::wait"
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 18766,
+        "pc": 23158,
         "count": 39,
-        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 18768,
+        "pc": 23166,
         "count": 39,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       }

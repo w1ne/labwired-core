@@ -12,10 +12,10 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `820`
+- pass_claimed_peripherals_total: `824`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1366`
-- median_elapsed_seconds: `1.366`
+- median_elapsed_ms: `1338`
+- median_elapsed_seconds: `1.338`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -44,7 +44,7 @@
 | `brd4118a` | `pass` | `True` | `yes` | `yes` | `741` | `0.741` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `brd4120a` | `pass` | `True` | `yes` | `yes` | `762` | `0.762` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `brd4121a` | `pass` | `True` | `yes` | `yes` | `741` | `0.741` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `brd4162a` | `pass` | `True` | `yes` | `yes` | `1062` | `1.062` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `brd4162a` | `pass` | `True` | `yes` | `yes` | `991` | `0.991` | `True` | `observable` | `12` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `brd4186c` | `pass` | `True` | `yes` | `yes` | `781` | `0.781` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `brd4402a` | `pass` | `True` | `yes` | `yes` | `839` | `0.839` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `cc2538` | `pass` | `True` | `yes` | `yes` | `300519` | `300.519` | `True` | `observable` | `24` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
@@ -68,18 +68,18 @@
 | `efm32gg942` | `pass` | `True` | `yes` | `yes` | `1115` | `1.115` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `efm32gg995` | `pass` | `True` | `yes` | `yes` | `1274` | `1.274` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `efm32hg350` | `pass` | `True` | `yes` | `yes` | `745` | `0.745` | `True` | `observable` | `10` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `efm32jg1` | `pass` | `True` | `yes` | `yes` | `2145` | `2.145` | `True` | `observable` | `9` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `efm32jg12` | `pass` | `True` | `yes` | `yes` | `2098` | `2.098` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `efm32jg1` | `pass` | `True` | `yes` | `yes` | `961` | `0.961` | `True` | `observable` | `9` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `efm32jg12` | `pass` | `True` | `yes` | `yes` | `1035` | `1.035` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `efm32lg942` | `pass` | `True` | `yes` | `yes` | `1208` | `1.208` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `efm32lg995` | `pass` | `True` | `yes` | `yes` | `1286` | `1.286` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `efm32pg1` | `pass` | `True` | `yes` | `yes` | `2038` | `2.038` | `True` | `observable` | `9` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `efm32pg12` | `pass` | `True` | `yes` | `yes` | `185174` | `185.174` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `efm32pg1` | `pass` | `True` | `yes` | `yes` | `183494` | `183.494` | `True` | `observable` | `9` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `efm32pg12` | `pass` | `True` | `yes` | `yes` | `2648` | `2.648` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `efm32tg840` | `pass` | `True` | `yes` | `yes` | `12018` | `12.018` | `True` | `observable` | `9` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `efm32wg995` | `pass` | `True` | `yes` | `yes` | `2664` | `2.664` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `efm32zg222` | `pass` | `True` | `yes` | `yes` | `1812` | `1.812` | `True` | `observable` | `9` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `efr32mg1` | `pass` | `True` | `yes` | `yes` | `2171` | `2.171` | `True` | `observable` | `9` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `efr32mg12` | `pass` | `True` | `yes` | `yes` | `2160` | `2.16` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `efr32mg13` | `pass` | `True` | `yes` | `yes` | `2541` | `2.541` | `True` | `observable` | `10` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `efr32mg1` | `pass` | `True` | `yes` | `yes` | `966` | `0.966` | `True` | `observable` | `9` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `efr32mg12` | `pass` | `True` | `yes` | `yes` | `1008` | `1.008` | `True` | `observable` | `12` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `efr32mg13` | `pass` | `True` | `yes` | `yes` | `971` | `0.971` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `efr32mg24` | `pass` | `True` | `yes` | `yes` | `1151` | `1.151` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `efr32mg26` | `pass` | `True` | `yes` | `yes` | `1013` | `1.013` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `efr32xg22` | `pass` | `True` | `yes` | `yes` | `1387` | `1.387` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
@@ -216,8 +216,8 @@
 | `simavr-attiny45` | `pass` | `True` | `yes` | `yes` | `530` | `0.53` | `True` | `observable` | `1` | `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny84` | `pass` | `True` | `yes` | `yes` | `571` | `0.571` | `True` | `observable` | `2` | `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `simavr-attiny85` | `pass` | `True` | `yes` | `yes` | `534` | `0.534` | `True` | `observable` | `1` | `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `sltb001a` | `pass` | `True` | `yes` | `yes` | `1024` | `1.024` | `True` | `observable` | `9` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `sltb004a` | `pass` | `True` | `yes` | `yes` | `1090` | `1.09` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `sltb001a` | `pass` | `True` | `yes` | `yes` | `972` | `0.972` | `True` | `observable` | `9` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `sltb004a` | `pass` | `True` | `yes` | `yes` | `1032` | `1.032` | `True` | `observable` | `12` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `slwstk6220a` | `pass` | `True` | `yes` | `yes` | `1383` | `1.383` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `starfive-jh7100` | `pass` | `True` | `yes` | `yes` | `1328` | `1.328` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `stk3200` | `pass` | `True` | `yes` | `yes` | `1334` | `1.334` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |

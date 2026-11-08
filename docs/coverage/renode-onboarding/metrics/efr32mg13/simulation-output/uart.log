@@ -9,4 +9,5 @@ tim0 up of=1 masked=1 pend=1 released=1 running=1 ok
 tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok
 tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok
 wtim0 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok
+rtcc ret=1 of=1 of_first=1 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 ok
 EFR32MG13 PASS

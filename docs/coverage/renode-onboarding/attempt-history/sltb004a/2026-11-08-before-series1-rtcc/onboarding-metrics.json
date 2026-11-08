@@ -1,0 +1,37 @@
+{
+  "target_id": "sltb004a",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 200000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-efr32mg12-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/sltb004a-smoke.yaml",
+  "system": "configs/systems/onboarding/sltb004a.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-08T20:04:02Z",
+  "finished_at_utc": "2026-11-08T20:04:04Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1090,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.41,
+    "build_firmware": 0.261,
+    "run_smoke": 0.405
+  },
+  "stages_ms": {
+    "build_cli": 410,
+    "build_firmware": 261,
+    "run_smoke": 405
+  }
+}

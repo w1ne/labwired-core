@@ -113,7 +113,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "5220ac7f0756df21b5babaf1836b199b1a334f33596cdb750329c92837f54cef",
+  "firmware_hash": "c4901778b933f4d2b12ff5380e28313977025b361d7d8daa5c41aca29c7b3954",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efm32pg12-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32pg12.yaml",
@@ -489,10 +489,10 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 24680,
+    "text_bytes": 24676,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 24680,
+    "flash_used_bytes": 24676,
     "ram_static_bytes": 0,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 262144,

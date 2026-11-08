@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "5d00b4b61000f6c7a35b045aa88799d7e3543f8e6cd0594826d651e61453494c",
+  "firmware_hash": "37d8d8576140d3ec677e1737211425f2e2fa8be65766fdd8955d7c950edb319d",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efr32mg1-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sltb001a.yaml",

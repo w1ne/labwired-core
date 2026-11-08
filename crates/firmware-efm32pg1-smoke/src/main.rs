@@ -21,5 +21,6 @@ fn main() -> ! {
         led: (5, 4),
         timer0_irq: 10,
         wtimer_irqs: &[],
+        rtcc_irq: None,
     })
 }

@@ -207,6 +207,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "efm32s1_timer",
     // EFM32/EFR32 Series-1 WTIMER0/1 (same builder, 32-bit counter).
     "efm32s1_wtimer",
+    // EFR32 Series-1 RTCC (`build_efm32_rtcc`): IRQ from the yaml, optional
+    // `lfeclk_hz`.
+    "efm32s1_rtcc",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
     "sam_dmac",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
@@ -698,6 +701,27 @@ fn build_efm32_timer(ty: &str, p_cfg: &PeripheralConfig) -> anyhow::Result<Box<d
     }))
 }
 
+// EFR32 Series-1 RTCC: base from the chip yaml, IRQ required (30 on MG12,
+// 31 on MG13), optional `lfeclk_hz` (default 32768, as the Renode repl).
+#[cold]
+#[inline(never)]
+fn build_efm32_rtcc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::efm32::rtcc::{Efm32Rtcc, RTCC_DEFAULT_LFECLK_HZ};
+    if let Some(k) = p_cfg.config.keys().find(|k| k.as_str() != "lfeclk_hz") {
+        anyhow::bail!("efm32s1_rtcc admits only `lfeclk_hz`, not `{k}`");
+    }
+    let Some(irq) = p_cfg.irq else {
+        anyhow::bail!("efm32s1_rtcc '{}' needs an `irq`", p_cfg.id);
+    };
+    let hz = match p_cfg.config.get("lfeclk_hz") {
+        None => RTCC_DEFAULT_LFECLK_HZ,
+        Some(v) => v.as_u64().filter(|&hz| hz > 0).ok_or_else(|| {
+            anyhow::anyhow!("efm32s1_rtcc `lfeclk_hz` must be a positive integer")
+        })?,
+    };
+    Ok(Box::new(Efm32Rtcc::new(irq, hz)))
+}
+
 // SAM D21 RTC: base from the chip yaml, fixed IRQ; `gclk_hz` declares GCLK_RTC.
 #[cold]
 #[inline(never)]
@@ -1010,6 +1034,7 @@ pub fn try_build(
         "efm32s0_timer" | "efm32s1_timer" | "efm32s1_wtimer" => {
             build_efm32_timer(canonical_type, p_cfg)?
         }
+        "efm32s1_rtcc" => build_efm32_rtcc(p_cfg)?,
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
             let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());

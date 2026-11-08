@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "5220ac7f0756df21b5babaf1836b199b1a334f33596cdb750329c92837f54cef",
+  "firmware_hash": "c4901778b933f4d2b12ff5380e28313977025b361d7d8daa5c41aca29c7b3954",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efm32pg12-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32pg12.yaml",

@@ -8,9 +8,12 @@ name: brd4162a
 arch: arm
 # Renode silabs/efr32/efr32mg12.repl (brd4162a uses the EFR32MG12): cpuType "cortex-m4f".
 core: cortex-m4f
-# Mapped: the memory map, USART0, the Series-1 GPIO ports and TIMER0/TIMER1,
+# HFRCO reset band: Gecko SDK v4.4.0 system_efr32mg12p.c EFR32_HFRCO_STARTUP_FREQ
+# 19000000. Only the RTCC converts CPU cycles to its 32768 Hz LFECLK with it.
+cpu_hz: 19000000
+# Mapped: the memory map, USART0, the Series-1 GPIO ports, TIMERs and RTCC,
 # all exercised by the exact-system smoke. Everything else in the repl
-# (LDMA, CMU, I2C, LEUART, RTCC, GPCRC, ...) is omitted: no model behind it.
+# (LDMA, CMU, I2C, LEUART, GPCRC, ...) is omitted: no model behind it.
 # Main SRAM 256 KiB at 0x20000000 (Renode efr32mg12.repl `sram` size
 # 0x40000; Gecko SDK efr32mg12p433f1024im48.h SRAM_SIZE 0x40000). The
 # radio sequencer RAM at 0x21000000 is a separate region.
@@ -90,3 +93,13 @@ peripherals:
   base_address: 0x4001A400
   size: 1KB
   irq: 37
+# Series-1 RTCC at 0x40042000 (Renode efr32/efr32mg12.repl: EFR32_RTCC, frequency
+# 32768 -> nvic@30; Gecko SDK v4.4.0 efr32mg12p_rtcc.h RTCC_TypeDef,
+# RTCC_IRQn 30). Normal mode only: PRECNT, CNT, CC0..CC2 output compare,
+# OF/CCx/CNTTICK, RET[0..31]; calendar mode and input capture are refused.
+# LFECLK is a fixed 32768 Hz: CMU LFECLKSEL/LFECLKEN0 are not modelled.
+- id: rtcc
+  type: efm32s1_rtcc
+  base_address: 0x40042000
+  size: 1KB
+  irq: 30

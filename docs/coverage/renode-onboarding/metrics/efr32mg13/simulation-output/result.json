@@ -47,6 +47,7 @@
           "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok",
           "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok",
           "wtim0 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok",
+          "rtcc ret=1 of=1 of_first=1 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 ok",
           "EFR32MG13 PASS"
         ]
       },
@@ -65,7 +66,7 @@
       "assertion": {
         "memory_value": {
           "address": 536935424,
-          "expected_value": 4012966911,
+          "expected_value": 4012967935,
           "mask": null,
           "size": 4
         }
@@ -83,23 +84,23 @@
     "type": "arm",
     "registers": [
       16,
-      1932,
-      4012966911,
+      1437,
+      4012967935,
       4294867296,
       1,
       1,
-      1,
+      98316,
       536935400,
-      0,
+      98316,
       1073807376,
       4294867296,
       1073783036,
       4294867296,
       536935360,
-      22719,
-      23886
+      26985,
+      28098
     ],
-    "pc": 23886,
+    "pc": 28098,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -112,7 +113,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "c7fc1b4a71978a491fb6a216ebbb65bc00435be8644f2e4b0cfebb05dcec1eb4",
+  "firmware_hash": "f789e5c161238832ef7becf468b8c98c17aeed3f171173fa6dee9cf71a10c1c5",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efr32mg13-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efr32mg13.yaml",
@@ -191,6 +192,13 @@
         "artifacts": []
       },
       {
+        "name": "rtcc",
+        "kind": "native",
+        "base": 1074012160,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "scb",
         "kind": "native",
         "base": 3758157056,
@@ -258,56 +266,44 @@
             "value": 0
           },
           {
-            "cycle": 37925,
+            "cycle": 78520,
             "value": 1
           },
           {
-            "cycle": 50425,
+            "cycle": 91020,
             "value": 0
           },
           {
-            "cycle": 62925,
+            "cycle": 103520,
             "value": 1
           },
           {
-            "cycle": 75425,
+            "cycle": 116020,
             "value": 0
           },
           {
-            "cycle": 87925,
+            "cycle": 128520,
             "value": 1
           },
           {
-            "cycle": 100425,
+            "cycle": 141020,
             "value": 0
           },
           {
-            "cycle": 112925,
+            "cycle": 153520,
             "value": 1
           },
           {
-            "cycle": 125425,
+            "cycle": 166020,
             "value": 0
           },
           {
-            "cycle": 137925,
+            "cycle": 178520,
             "value": 1
           },
           {
-            "cycle": 150425,
+            "cycle": 191020,
             "value": 0
-          },
-          {
-            "cycle": 162925,
-            "value": 1
-          },
-          {
-            "cycle": 175425,
-            "value": 0
-          },
-          {
-            "cycle": 187925,
-            "value": 1
           }
         ],
         "gaps": [],
@@ -334,60 +330,48 @@
             "state": "0"
           },
           {
-            "cycle": 37925,
+            "cycle": 78520,
             "state": "1"
           },
           {
-            "cycle": 50425,
+            "cycle": 91020,
             "state": "0"
           },
           {
-            "cycle": 62925,
+            "cycle": 103520,
             "state": "1"
           },
           {
-            "cycle": 75425,
+            "cycle": 116020,
             "state": "0"
           },
           {
-            "cycle": 87925,
+            "cycle": 128520,
             "state": "1"
           },
           {
-            "cycle": 100425,
+            "cycle": 141020,
             "state": "0"
           },
           {
-            "cycle": 112925,
+            "cycle": 153520,
             "state": "1"
           },
           {
-            "cycle": 125425,
+            "cycle": 166020,
             "state": "0"
           },
           {
-            "cycle": 137925,
+            "cycle": 178520,
             "state": "1"
           },
           {
-            "cycle": 150425,
+            "cycle": 191020,
             "state": "0"
-          },
-          {
-            "cycle": 162925,
-            "state": "1"
-          },
-          {
-            "cycle": 175425,
-            "state": "0"
-          },
-          {
-            "cycle": 187925,
-            "state": "1"
           }
         ],
         "mode": "output",
-        "edge_count": 17
+        "edge_count": 14
       }
     ]
   },
@@ -398,10 +382,10 @@
       "number": 4,
       "mode": "output",
       "func": null,
-      "output": true,
-      "input": true,
-      "pad": true,
-      "drive": "1"
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
     }
   ],
   "uart_lines": {
@@ -473,24 +457,30 @@
         "end_cycle": 30000
       },
       {
+        "text": "rtcc ret=1 of=1 of_first=1 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 ok",
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
+      },
+      {
         "text": "EFR32MG13 PASS",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 24384,
+    "text_bytes": 28656,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 24384,
+    "flash_used_bytes": 28656,
     "ram_static_bytes": 0,
     "flash_total_bytes": 524288,
     "ram_total_bytes": 65536,
-    "flash_used_pct": 4.65,
+    "flash_used_pct": 5.47,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -516,25 +506,45 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 4781,
-    "memory_writes": 45,
-    "peripheral_accesses": 6738,
+    "memory_reads": 5694,
+    "memory_writes": 53,
+    "peripheral_accesses": 16145,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 23886,
-        "count": 703,
+        "pc": 28098,
+        "count": 547,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 18574,
+        "pc": 18516,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 18518,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 22822,
+        "count": 39,
+        "symbol": "firmware_efr32mg13_smoke::s1::wait"
+      },
+      {
+        "pc": 22936,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 22954,
         "count": 39,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 18578,
+        "pc": 22962,
         "count": 39,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_efr32mg13_smoke::s1::wait"
       }
     ]
   }

@@ -23,5 +23,7 @@ fn main() -> ! {
         timer0_irq: 11,
         // WTIMER0 only (WTIMER_COUNT 1), WTIMER0_IRQn 37.
         wtimer_irqs: &[37],
+        // RTCC_IRQn 31 (Gecko SDK v4.4.0).
+        rtcc_irq: Some(31),
     })
 }
