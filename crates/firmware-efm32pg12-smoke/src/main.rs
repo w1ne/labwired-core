@@ -6,9 +6,9 @@ use cortex_m_rt::entry;
 use panic_halt as _;
 
 // EFM32PG12 USART0 register map: CMD@0x0C, STATUS@0x10, TXDATA@0x34.
-const USART0_CMD: *mut u32 = 0x4000_C00C as *mut u32;
-const USART0_STATUS: *const u32 = 0x4000_C010 as *const u32;
-const USART0_TXDATA: *mut u32 = 0x4000_C034 as *mut u32;
+const USART0_CMD: *mut u32 = 0x4001_000C as *mut u32;
+const USART0_STATUS: *const u32 = 0x4001_0010 as *const u32;
+const USART0_TXDATA: *mut u32 = 0x4001_0034 as *mut u32;
 
 const CMD_TXEN: u32 = 1 << 0;
 const STATUS_TXBL: u32 = 1 << 6;

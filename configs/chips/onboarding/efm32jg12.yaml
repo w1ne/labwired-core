@@ -6,8 +6,11 @@
 
 name: efm32jg12
 arch: arm
+# Flash at 0x0 as in Renode's efm32xg1x/efm32jg12.repl
+# (`flash: Memory.MappedMemory @ sysbus 0x00000000`) and the EFM32 Series 1
+# memory map.
 flash:
-  base: 134217728
+  base: 0
   size: 1048576B
 ram:
   base: 536870912

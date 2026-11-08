@@ -15,12 +15,12 @@
       0,
       0,
       0,
-      134218932,
+      1204,
       536903664,
       10,
-      134218912
+      1184
     ],
-    "pc": 134218912,
+    "pc": 1184,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "010483ab8630ecb58db52747d8573b33a8ebf4035597aa88093a584b44522b76",
+  "firmware_hash": "faa844f435ec6b112191cf161818fcab93f6a6084d69cb627170edb5c9caa139",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efm32pg1-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32pg1.yaml",

@@ -9,8 +9,11 @@ arch: arm
 # The imported profile is limited to its Cortex-M4F memory map and modeled
 # USART0. Other generated peripheral windows are omitted because this profile
 # does not exercise them.
+# Flash at 0x0 as in Renode's efm32xg1x/efm32pg1.repl
+# (`flash: Memory.MappedMemory @ sysbus 0x00000000`) and the EFM32 Series 1
+# memory map.
 flash:
-  base: 134217728
+  base: 0
   size: 262144B
 ram:
   base: 536870912

@@ -13,8 +13,8 @@
     "pass_depth_unknown": 0,
     "pass_claimed_peripherals_total": 729,
     "pass_claimed_peripherals_median": 2,
-    "median_elapsed_ms": 1328,
-    "median_elapsed_seconds": 1.328,
+    "median_elapsed_ms": 1330,
+    "median_elapsed_seconds": 1.33,
     "threshold_seconds": 3600,
     "threshold_met": 226,
     "descriptors_present": 245,
@@ -2116,24 +2116,24 @@
       "script": "examples/renode-onboarding/efm32jg1-smoke.yaml",
       "system": "configs/systems/onboarding/efm32jg1.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:48:00Z",
-      "finished_at_utc": "2026-11-05T14:48:01Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1038,
+      "started_at_utc": "2026-11-08T17:26:12Z",
+      "finished_at_utc": "2026-11-08T17:29:00Z",
+      "elapsed_seconds": 168,
+      "elapsed_ms": 167747,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.306,
-        "build_firmware": 0.453,
-        "run_smoke": 0.268
+        "build_cli": 166.854,
+        "build_firmware": 0.548,
+        "run_smoke": 0.331
       },
       "stages_ms": {
-        "build_cli": 306,
-        "build_firmware": 453,
-        "run_smoke": 268
+        "build_cli": 166854,
+        "build_firmware": 548,
+        "run_smoke": 331
       },
       "_artifact_path": "efm32jg1",
       "zero_answering_windows": [],
@@ -2161,24 +2161,24 @@
       "script": "examples/renode-onboarding/efm32jg12-smoke.yaml",
       "system": "configs/systems/onboarding/efm32jg12.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:48:01Z",
-      "finished_at_utc": "2026-11-05T14:48:02Z",
+      "started_at_utc": "2026-11-08T17:29:01Z",
+      "finished_at_utc": "2026-11-08T17:29:02Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1031,
+      "elapsed_ms": 1302,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.293,
-        "build_firmware": 0.449,
-        "run_smoke": 0.277
+        "build_cli": 0.329,
+        "build_firmware": 0.632,
+        "run_smoke": 0.328
       },
       "stages_ms": {
-        "build_cli": 293,
-        "build_firmware": 449,
-        "run_smoke": 277
+        "build_cli": 329,
+        "build_firmware": 632,
+        "run_smoke": 328
       },
       "_artifact_path": "efm32jg12",
       "zero_answering_windows": [],
@@ -2302,24 +2302,24 @@
       "script": "examples/renode-onboarding/efm32pg1-smoke.yaml",
       "system": "configs/systems/onboarding/efm32pg1.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:48:04Z",
-      "finished_at_utc": "2026-11-05T14:48:05Z",
-      "elapsed_seconds": 1,
-      "elapsed_ms": 993,
+      "started_at_utc": "2026-11-08T17:29:04Z",
+      "finished_at_utc": "2026-11-08T17:29:05Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1257,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.287,
-        "build_firmware": 0.424,
-        "run_smoke": 0.27
+        "build_cli": 0.309,
+        "build_firmware": 0.63,
+        "run_smoke": 0.306
       },
       "stages_ms": {
-        "build_cli": 287,
-        "build_firmware": 424,
-        "run_smoke": 270
+        "build_cli": 309,
+        "build_firmware": 630,
+        "run_smoke": 306
       },
       "_artifact_path": "efm32pg1",
       "zero_answering_windows": [],
@@ -2347,24 +2347,24 @@
       "script": "examples/renode-onboarding/efm32pg12-smoke.yaml",
       "system": "configs/systems/onboarding/efm32pg12.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:48:05Z",
-      "finished_at_utc": "2026-11-05T14:48:06Z",
+      "started_at_utc": "2026-11-08T17:29:07Z",
+      "finished_at_utc": "2026-11-08T17:29:08Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1001,
+      "elapsed_ms": 1259,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.291,
-        "build_firmware": 0.42,
-        "run_smoke": 0.28
+        "build_cli": 0.342,
+        "build_firmware": 0.576,
+        "run_smoke": 0.327
       },
       "stages_ms": {
-        "build_cli": 291,
-        "build_firmware": 420,
-        "run_smoke": 280
+        "build_cli": 342,
+        "build_firmware": 576,
+        "run_smoke": 327
       },
       "_artifact_path": "efm32pg12",
       "zero_answering_windows": [],

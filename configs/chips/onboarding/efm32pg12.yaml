@@ -8,8 +8,11 @@ name: efm32pg12
 arch: arm
 # The imported memory map and model-backed USART0 are the only advertised
 # execution surfaces exercised by the exact-system smoke.
+# Flash at 0x0 as in Renode's efm32xg1x/efm32pg12.repl
+# (`flash: Memory.MappedMemory @ sysbus 0x00000000`) and the EFM32 Series 1
+# memory map.
 flash:
-  base: 134217728
+  base: 0
   size: 1048576B
 ram:
   base: 536870912
@@ -18,4 +21,6 @@ peripherals:
 - id: usart0
   type: efm32_uart
   bus: sysbus
-  base_address: 0x4000C000
+  # USART0 at 0x40010000 (Renode efm32pg12.repl, EFM32PG12 RM); 0x4000C000
+  # is I2C0.
+  base_address: 0x40010000

@@ -3,7 +3,7 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1073790992,
+      1073807376,
       24,
       4294867296,
       2147483648,
@@ -15,12 +15,12 @@
       0,
       0,
       0,
-      134218936,
+      1204,
       537133040,
       10,
-      134218914
+      1184
     ],
-    "pc": 134218914,
+    "pc": 1184,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "806e2b5228662d2e5b109a85f6f23d475cc1de4f180d49c3b36bd557e8b1ef32",
+  "firmware_hash": "d97fa3010e25a54681282dbad82a5a42944824f166b40628dc0abc635abee738",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efm32pg12-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32pg12.yaml",

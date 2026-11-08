@@ -56,12 +56,12 @@
       0,
       0,
       0,
-      134218932,
+      1204,
       537133040,
       10,
-      134218912
+      1184
     ],
-    "pc": 134218912,
+    "pc": 1184,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -74,7 +74,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "2230c6ff2f405d4f8428b9e555bb331d49e970442be515144270f65bf70d4c4f",
+  "firmware_hash": "dfb213a7a547e41bc6e3dc01c80f65afa54c366e0c7ba83d782a186460137d9d",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32jg12-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32jg12.yaml",
@@ -181,7 +181,7 @@
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134218912,
+        "pc": 1184,
         "count": 390,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
       }
