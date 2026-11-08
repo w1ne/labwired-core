@@ -10,4 +10,15 @@ flash_boot_alias: false
 ram:
   base: 0x10000000
   size: "128KB"
-peripherals: []
+# Renode `cpus/fomu.repl` timer0: LiteX_Timer @ 0x60002800 (shadow
+# 0xE0002800 not mapped). Foboot's generated csr.h uses csr_data_width = 8.
+# Its IRQ (cpu@0) is not wired into the core here; the smoke polls the event
+# CSRs. ValentyUSB, PicoRV_SPI + MT25Q flash, and the tagged CTRL/TOUCH/
+# REBOOT/RGB/VERSION pages are not modelled and stay unmapped.
+peripherals:
+  - id: "timer0"
+    type: "litex_timer"
+    base_address: 0x60002800
+    size: "2KB"
+    config:
+      csr_data_width: 8

@@ -12,8 +12,8 @@
 - pass_observable_assertions: `225/225`
 - pass_stop_reason_only: `0/225`
 - pass_depth_unknown: `0/225`
-- median_elapsed_ms: `1154`
-- median_elapsed_seconds: `1.154`
+- median_elapsed_ms: `1175`
+- median_elapsed_seconds: `1.175`
 - threshold_seconds: `3600`
 - threshold_met: `225/225`
 
@@ -89,7 +89,7 @@
 | `ezr32lg330` | `pass` | `True` | `yes` | `yes` | `1047` | `1.047` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `ezr32wg330` | `pass` | `True` | `yes` | `yes` | `738` | `0.738` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `focaltech_ft9001` | `pass` | `True` | `yes` | `yes` | `86395` | `86.395` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `fomu` | `pass` | `True` | `yes` | `yes` | `1011` | `1.011` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `fomu` | `pass` | `True` | `yes` | `yes` | `229775` | `229.775` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `fsl_lx2160ardb` | `pass` | `True` | `yes` | `yes` | `79412` | `79.412` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `gr712rc` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 6: `ftmctrl:gaisler_faulttolerantmemorycontroller`, `greth:gaislereth`, `phy:ethernetphysicallayer`, `ahbInfo:gaislerahbplugandplayinfo`, `apb1Controller:gaislerapbcontroller`, `apb2Controller:gaislerapbcontroller` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no SPARC V8 (LEON3FT) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `gr716` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 0 | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no SPARC V8 (LEON3FT) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |

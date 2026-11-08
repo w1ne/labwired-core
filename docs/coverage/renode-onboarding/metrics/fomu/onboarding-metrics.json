@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/fomu-smoke.yaml",
   "system": "configs/systems/onboarding/fomu.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:48:20Z",
-  "finished_at_utc": "2026-11-05T14:48:21Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1011,
+  "started_at_utc": "2026-11-08T06:20:09Z",
+  "finished_at_utc": "2026-11-08T06:23:58Z",
+  "elapsed_seconds": 230,
+  "elapsed_ms": 229775,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.286,
-    "build_firmware": 0.412,
-    "run_smoke": 0.304
+    "build_cli": 229.345,
+    "build_firmware": 0.151,
+    "run_smoke": 0.27
   },
   "stages_ms": {
-    "build_cli": 286,
-    "build_firmware": 412,
-    "run_smoke": 304
+    "build_cli": 229345,
+    "build_firmware": 151,
+    "run_smoke": 270
   }
 }

@@ -1079,6 +1079,7 @@ SMOKE_MAPPINGS = {
     "fomu": {
         "crate": "firmware-fomu-smoke",
         "target": "riscv32im-unknown-none-elf",
+        "features": "timer0",
         "script": "examples/renode-onboarding/fomu-smoke.yaml",
     },
     "zolertia-firefly": {

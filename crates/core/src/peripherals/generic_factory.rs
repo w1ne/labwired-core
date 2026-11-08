@@ -1812,7 +1812,14 @@ pub fn try_build(
         }
         // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
         // load/reload/en/update_value/value plus the zero-event manager.
-        "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
+        // `csr_data_width: 8` selects the one-byte-per-slot layout (Fomu).
+        "litex_timer" => {
+            let timer = crate::peripherals::litex_timer::LitexTimer::new();
+            match p_cfg.config.get("csr_data_width").and_then(|v| v.as_u64()) {
+                Some(8) => Box::new(timer.with_csr8()),
+                _ => Box::new(timer),
+            }
+        }
         "litex_controlandstatus" => {
             let active_low = p_cfg
                 .config

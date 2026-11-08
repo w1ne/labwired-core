@@ -6,6 +6,11 @@ authors = ["LabWired Team"]
 license = "MIT"
 build = "build.rs"
 
+[features]
+default = []
+# Fomu timer0 (LiteX, csr_data_width = 8) smoke; off for the iCE40 MDP.
+timer0 = []
+
 [[bin]]
 name = "firmware-fomu-smoke"
 path = "src/main.rs"

@@ -20,6 +20,14 @@
 //! | 0x18 | `ev_pending` | R/W1C | bit 0: latched zero event; write 1 to clear |
 //! | 0x1C | `ev_enable` | R/W | bit 0: zero-event interrupt enable |
 //!
+//! SoCs built with `csr_data_width = 8` (Fomu/foboot) spread each CSR over
+//! one 8-bit register per 4-byte slot, most-significant byte first:
+//! `load` 0x00-0x0C, `reload` 0x10-0x1C, `en` 0x20, `update_value` 0x24,
+//! `value` 0x28-0x34, `ev_status` 0x38, `ev_pending` 0x3C, `ev_enable` 0x40
+//! (foboot `sw/include/generated/csr.h`). [`LitexTimer::with_csr8`] selects
+//! that layout; each byte store updates its slice of the CSR immediately, as
+//! the non-atomic CSRStorage does.
+//!
 //! Semantics, straight from the gateware:
 //!
 //! * While **disabled** the counter continuously takes `load` (the RTL's
@@ -74,6 +82,9 @@ pub struct LitexTimer {
     /// so the first observation is the rising edge the event manager sees.
     #[serde(default)]
     zero_level: bool,
+    /// `csr_data_width = 8` register layout (see the module docs).
+    #[serde(default)]
+    csr8: bool,
 }
 
 impl LitexTimer {
@@ -88,7 +99,64 @@ impl LitexTimer {
             ev_pending: false,
             ev_enable: false,
             zero_level: false,
+            csr8: false,
         }
+    }
+
+    /// Use the `csr_data_width = 8` layout (one CSR byte per 4-byte slot).
+    pub fn with_csr8(mut self) -> Self {
+        self.csr8 = true;
+        self
+    }
+
+    /// Map a CSR8 slot offset to `(32-bit register, bit shift)`. Multi-byte
+    /// CSRs put their most-significant byte at the lowest slot.
+    fn csr8_slot(offset: u64) -> Option<(u64, u32)> {
+        let slot = offset / 4;
+        let wide = |base: u64, reg: u64| Some((reg, 8 * (3 - (slot - base) as u32)));
+        match slot {
+            0..=3 => wide(0, LOAD),
+            4..=7 => wide(4, RELOAD),
+            8 => Some((EN, 0)),
+            9 => Some((UPDATE_VALUE, 0)),
+            10..=13 => wide(10, VALUE),
+            14 => Some((EV_STATUS, 0)),
+            15 => Some((EV_PENDING, 0)),
+            16 => Some((EV_ENABLE, 0)),
+            _ => None,
+        }
+    }
+
+    fn csr8_read(&self, offset: u64) -> u8 {
+        // Only byte lane 0 of each slot carries data.
+        if offset % 4 != 0 {
+            return 0;
+        }
+        match Self::csr8_slot(offset) {
+            Some((reg, shift)) => (self.read_reg(reg) >> shift) as u8,
+            None => {
+                crate::census_reg!("litex_timer:LitexTimer", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn csr8_write(&mut self, offset: u64, value: u8) {
+        if offset % 4 != 0 {
+            return;
+        }
+        let Some((reg, shift)) = Self::csr8_slot(offset) else {
+            crate::census_reg!("litex_timer:LitexTimer", offset, "write");
+            return;
+        };
+        let written = u32::from(value) << shift;
+        if reg == EV_PENDING || reg == UPDATE_VALUE {
+            // W1C / strobe: write the byte alone, never the read-back.
+            self.write_reg(reg, written);
+            return;
+        }
+        let v = (self.read_reg(reg) & !(0xFF << shift)) | written;
+        self.write_reg(reg, v);
     }
 
     /// Latch the zero event on the rising edge of `counter == 0`.
@@ -233,12 +301,19 @@ impl Default for LitexTimer {
 
 impl crate::Peripheral for LitexTimer {
     fn read(&self, offset: u64) -> SimResult<u8> {
+        if self.csr8 {
+            return Ok(self.csr8_read(offset));
+        }
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
         Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        if self.csr8 {
+            self.csr8_write(offset, value);
+            return Ok(());
+        }
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
         // W1C: only the bits this byte writes count. A read-modify-write would
@@ -262,6 +337,11 @@ impl crate::Peripheral for LitexTimer {
     /// event (writing 256 from 1 passes through 0 in the low byte). The
     /// counters are 32-bit CSRs — the bus's word write is the accurate one.
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if self.csr8 {
+            // One 8-bit CSR per slot: the bus word carries it in bits 7:0.
+            self.csr8_write(offset, value as u8);
+            return Ok(());
+        }
         if offset % 4 == 0 {
             self.write_reg(offset, value);
             return Ok(());
@@ -277,6 +357,10 @@ impl crate::Peripheral for LitexTimer {
     /// position: a split byte store could pass through zero and latch a false
     /// event.
     fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        if self.csr8 {
+            self.csr8_write(offset, value as u8);
+            return Ok(());
+        }
         if offset % 2 == 0 {
             let reg = offset & !3;
             let (mask, shift) = if offset % 4 == 0 {
@@ -672,5 +756,52 @@ mod tests {
         let _ = t.tick_elapsed(20);
         t.write_u32(UPDATE_VALUE, 0).unwrap();
         assert_eq!(t.read_u32(VALUE).unwrap(), 50);
+    }
+
+    #[test]
+    fn csr8_layout_matches_foboot_csr_h() {
+        let mut t = LitexTimer::new().with_csr8();
+        // timer0_load_write(0x0001_2345): MSB first, one byte per slot.
+        for (i, b) in 0x0001_2345u32.to_be_bytes().iter().enumerate() {
+            t.write_u32(i as u64 * 4, u32::from(*b)).unwrap();
+        }
+        for (i, b) in 0x0000_0010u32.to_be_bytes().iter().enumerate() {
+            t.write_u32(0x10 + i as u64 * 4, u32::from(*b)).unwrap();
+        }
+        assert_eq!(t.read_u32(0x00).unwrap(), 0x00);
+        assert_eq!(t.read_u32(0x04).unwrap(), 0x01);
+        assert_eq!(t.read_u32(0x08).unwrap(), 0x23);
+        assert_eq!(t.read_u32(0x0C).unwrap(), 0x45);
+        assert_eq!(t.read_u32(0x1C).unwrap(), 0x10);
+        assert_eq!(t.load, 0x0001_2345);
+        assert_eq!(t.reload, 0x10);
+        t.write_u32(0x20, 1).unwrap(); // en
+        assert_eq!(t.read_u32(0x20).unwrap(), 1);
+        t.tick_elapsed(0x45);
+        t.write_u32(0x24, 1).unwrap(); // update_value
+        let value = (0..4).fold(0u32, |v, i| (v << 8) | t.read_u32(0x28 + i * 4).unwrap());
+        assert_eq!(value, 0x0001_2300);
+        assert_eq!(t.read_u32(0x38).unwrap(), 0); // ev_status
+        t.write_u32(0x40, 1).unwrap(); // ev_enable
+        assert!(t.ev_enable);
+        // Unused byte lanes and slots past ev_enable read zero.
+        assert_eq!(t.read(0x01).unwrap(), 0);
+        assert_eq!(t.read_u32(0x44).unwrap(), 0);
+    }
+
+    #[test]
+    fn csr8_ev_pending_is_w1c() {
+        let mut t = LitexTimer::new().with_csr8();
+        t.write_u32(0x0C, 2).unwrap(); // load = 2 (the 0 -> 2 edge ends reset's zero)
+        t.write_u32(0x20, 1).unwrap();
+        t.write_u32(0x3C, 1).unwrap(); // clear the reset-time edge
+        assert_eq!(t.read_u32(0x3C).unwrap(), 0);
+        t.tick_elapsed(2);
+        assert_eq!(t.read_u32(0x38).unwrap(), 1);
+        assert_eq!(t.read_u32(0x3C).unwrap(), 1);
+        t.write_u32(0x3C, 0).unwrap();
+        assert_eq!(t.read_u32(0x3C).unwrap(), 1);
+        t.write_u32(0x3C, 1).unwrap();
+        assert_eq!(t.read_u32(0x3C).unwrap(), 0);
     }
 }
