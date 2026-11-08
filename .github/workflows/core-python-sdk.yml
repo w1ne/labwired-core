@@ -59,7 +59,10 @@ concurrency:
 jobs:
   python-sdk:
     name: python-sdk (wheel + pytest, 0 skipped)
-    runs-on: ubuntu-latest
+    # Python 3.9 is not published in actions/setup-python's version manifest
+    # for Ubuntu 26.04 yet; keep this compatibility job on the supported 24.04
+    # image until the SDK drops Python 3.9.
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
