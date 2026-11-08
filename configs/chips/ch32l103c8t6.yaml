@@ -1,0 +1,225 @@
+# CH32L103C8T6 profile. Unmodified ch32fun examples_l103/blink and
+# examples/debugprintfdemo run on it (examples/ch32l103c8t6). WCH's official
+# Arduino core (variant CH32L10x/CH32L103C8T6) does not run as shipped: its
+# startup never calls __libc_init_array, and the README records that and the
+# other two upstream defects.
+#
+# QingKe V4C (RV32IMAC), 62 KB flash, 20 KB SRAM, LQFP48. The low-power
+# PDUSB member of the CH32 line (CH32L103DS0).
+# Register blocks: ch32l103.h (Arduino core system/CH32L10x) and ch32fun
+# ch32l103hw.h. The peripheral bases are the STM32F1 ones, and USART1, I2C2,
+# SPI1, ADC1, TIM1..4, AFIO and GPIO keep the F1 register layouts
+# (USART_TypeDef, I2C_TypeDef, SPI_TypeDef, TIM_TypeDef, AFIO_TypeDef,
+# GPIO_TypeDef). IRQn are ch32l103.h's, which are the CH32V20x numbers (F1
+# vector + 16) up to 59. RCC enable bits are ch32l103_rcc.h
+# RCC_PB1Periph_* / RCC_PB2Periph_*, the F1 positions.
+#
+# USART1, I2C2, SPI1, ADC1 and TIM1..4 are here for the Arduino core's
+# Serial (PA9/PA10), Wire (I2C2 on PB10/PB11), SPI, analogRead and
+# analogWrite; only USART1, ADC1 and TIM2 were exercised, through a locally
+# fixed core. Timer outputs reach pads through the STM32F1 default table,
+# which matches the variant's PinMap_TIM (AFIO_NONE rows).
+#
+# Not modeled here: USART2..4, I2C1, SPI2, DMA, CAN, LPTIM, OPA/CMP,
+# TouchKey, USBFS/USBPD, RTC, the low-power HSI_LP clock and Stop/Standby,
+# real factory trim values, PFIC nesting, and physical-board parity.
+name: ch32l103c8t6
+arch: riscv
+core: qingke-v4c
+registers_count: 32
+# SYSCLK: the board's f_cpu (96000000L, HSI x12 PLL).
+cpu_hz: 96_000_000
+
+flash:
+  base: 0x08000000
+  size: 62KB
+ram:
+  base: 0x20000000
+  size: 20KB
+# The L103 aliases its flash at 0 for reset fetch.
+flash_boot_alias: true
+
+package: LQFP48
+pin_count: 48
+
+# The pads the Arduino variant numbers (variant_CH32L103C8T6.h).
+pins:
+  PA0: { gpio: gpioa, bit: 0 }
+  PA1: { gpio: gpioa, bit: 1 }
+  PA2: { gpio: gpioa, bit: 2 }
+  PA3: { gpio: gpioa, bit: 3 }
+  PA4: { gpio: gpioa, bit: 4 }
+  PA5: { gpio: gpioa, bit: 5 }
+  PA6: { gpio: gpioa, bit: 6 }
+  PA7: { gpio: gpioa, bit: 7 }
+  PA8: { gpio: gpioa, bit: 8 }
+  PA9: { gpio: gpioa, bit: 9 }
+  PA10: { gpio: gpioa, bit: 10 }
+  PB0: { gpio: gpiob, bit: 0 }
+  PB1: { gpio: gpiob, bit: 1 }
+  PB5: { gpio: gpiob, bit: 5 }
+  PB8: { gpio: gpiob, bit: 8 }
+  PB9: { gpio: gpiob, bit: 9 }
+  PB10: { gpio: gpiob, bit: 10 }
+  PB11: { gpio: gpiob, bit: 11 }
+  PB12: { gpio: gpiob, bit: 12 }
+  PB13: { gpio: gpiob, bit: 13 }
+  PB14: { gpio: gpiob, bit: 14 }
+  PB15: { gpio: gpiob, bit: 15 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 1KB
+    config:
+      profile: ch32v20x
+
+  - id: flash_ctrl
+    type: flash
+    base_address: 0x40022000
+    size: 4B
+    config:
+      profile: stm32f1
+
+  # Vendor system-area words SystemInit reads (CHIPID + trims; see the
+  # descriptor).
+  - id: sys_info
+    type: declarative
+    base_address: 0x1FFFF704
+    size: 40B
+    config:
+      path: "../peripherals/ch32l10x/sys_info.yaml"
+
+  # EXTEND at 0x40023800: storage only; SystemInit sets PLL_HSI_PRE.
+  - id: exten
+    type: declarative
+    base_address: 0x40023800
+    size: 4B
+    config:
+      path: "../peripherals/ch32l10x/exten.yaml"
+
+  - id: afio
+    type: afio
+    base_address: 0x40010000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 0 }
+
+  - id: exti
+    type: exti
+    base_address: 0x40010400
+    size: 24B
+    config:
+      profile: ch32v20x
+
+  # WCH-LinkE attached and polling like `minichlink -T`; DMDATA0/1 and the
+  # attach sentinel sit at 0xE0000380 on the V4 (ch32l103hw.h).
+  - id: debug_printf
+    type: wch_debug_printf
+    base_address: 0xE0000380
+    size: 12B
+
+  - id: pfic
+    type: qingke_pfic
+    base_address: 0xE000E000
+    size: 4KB
+
+  - id: stk
+    type: qingke_v4_systick
+    base_address: 0xE000F000
+    size: 24B
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x40010800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 2 }
+    config:
+      profile: stm32f1
+
+  - id: gpiob
+    type: gpio
+    base_address: 0x40010C00
+    size: 1KB
+    clock: { reg: apb2enr, bit: 3 }
+    config:
+      profile: stm32f1
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x40011000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 4 }
+    config:
+      profile: stm32f1
+
+  - id: gpiod
+    type: gpio
+    base_address: 0x40011400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 5 }
+    config:
+      profile: stm32f1
+
+  - id: usart1
+    type: uart
+    base_address: 0x40013800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 14 }
+    config:
+      profile: stm32f1
+
+  - id: i2c2
+    type: i2c
+    base_address: 0x40005800
+    size: 1KB
+    irq: 49
+    clock: { reg: apb1enr, bit: 22 }
+    config:
+      irq_error: 50
+
+  - id: spi1
+    type: spi
+    base_address: 0x40013000
+    size: 1KB
+    irq: 51
+    clock: { reg: apb2enr, bit: 12 }
+
+  - id: adc1
+    type: adc
+    base_address: 0x40012400
+    size: 1KB
+    irq: 34
+    clock: { reg: apb2enr, bit: 9 }
+    config:
+      profile: stm32f1
+
+  - id: tim1
+    type: timer
+    base_address: 0x40012C00
+    size: 1KB
+    irq: 41
+    clock: { reg: apb2enr, bit: 11 }
+    config:
+      advanced: true
+
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: 1KB
+    irq: 44
+    clock: { reg: apb1enr, bit: 0 }
+
+  - id: tim3
+    type: timer
+    base_address: 0x40000400
+    size: 1KB
+    irq: 45
+    clock: { reg: apb1enr, bit: 1 }
+
+  - id: tim4
+    type: timer
+    base_address: 0x40000800
+    size: 1KB
+    irq: 46
+    clock: { reg: apb1enr, bit: 2 }

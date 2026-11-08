@@ -1,0 +1,13 @@
+--- a/system/CH32L10x/SRC/Startup/startup_ch32l103.S	2026-11-07 04:04:48.421581874 +0000
++++ b/system/CH32L10x/SRC/Startup/startup_ch32l103.S	2026-11-08 05:00:56.187581239 +0000
+@@ -263,6 +263,10 @@
+     ori t0, t0, 3           
+ 	csrw mtvec, t0
+ 
++    la a0, __libc_fini_array
++    call atexit
++    call __libc_init_array
++
+     jal  SystemInit
+ 	la t0, main
+ 	csrw mepc, t0

@@ -1,0 +1,2 @@
+~/.platformio/packages/framework-arduino-openwch-ch32/libraries/Wire/src/utility/twi.c:144:34: error: 'RCC_APB1Periph_I2C1' undeclared (first use in this function); did you mean 'RCC_PB1Periph_I2C1'?
+~/.platformio/packages/framework-arduino-openwch-ch32/libraries/Wire/src/utility/twi.c:157:34: error: 'RCC_APB1Periph_I2C2' undeclared (first use in this function); did you mean 'RCC_PB1Periph_I2C2'?

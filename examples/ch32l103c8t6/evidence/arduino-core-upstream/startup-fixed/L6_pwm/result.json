@@ -1,0 +1,525 @@
+{
+ "status": "pass",
+ "stop_reason": "assertions_passed",
+ "steps_executed": 2977975,
+ "cycles": 11907168,
+ "assertions": [
+  {
+   "assertion": {
+    "uart_contains": "LW_L6_OK"
+   },
+   "passed": true
+  }
+ ],
+ "logic_edges": {
+  "dropped": 0,
+  "now_cycle": 2977975,
+  "channels": [
+   {
+    "ch": 0,
+    "channel": "CH0",
+    "peripheral": "gpioa",
+    "pin": 0,
+    "initial": 0,
+    "transitions": [
+     {
+      "cycle": 98245,
+      "value": 1
+     },
+     {
+      "cycle": 101254,
+      "value": 0
+     },
+     {
+      "cycle": 194254,
+      "value": 1
+     },
+     {
+      "cycle": 197254,
+      "value": 0
+     },
+     {
+      "cycle": 290254,
+      "value": 1
+     },
+     {
+      "cycle": 293254,
+      "value": 0
+     },
+     {
+      "cycle": 386254,
+      "value": 1
+     },
+     {
+      "cycle": 389254,
+      "value": 0
+     },
+     {
+      "cycle": 482254,
+      "value": 1
+     },
+     {
+      "cycle": 485254,
+      "value": 0
+     },
+     {
+      "cycle": 578254,
+      "value": 1
+     },
+     {
+      "cycle": 581254,
+      "value": 0
+     },
+     {
+      "cycle": 674254,
+      "value": 1
+     },
+     {
+      "cycle": 677254,
+      "value": 0
+     },
+     {
+      "cycle": 770254,
+      "value": 1
+     },
+     {
+      "cycle": 773254,
+      "value": 0
+     },
+     {
+      "cycle": 866254,
+      "value": 1
+     },
+     {
+      "cycle": 869254,
+      "value": 0
+     },
+     {
+      "cycle": 962254,
+      "value": 1
+     },
+     {
+      "cycle": 965254,
+      "value": 0
+     },
+     {
+      "cycle": 1058254,
+      "value": 1
+     },
+     {
+      "cycle": 1061254,
+      "value": 0
+     },
+     {
+      "cycle": 1154254,
+      "value": 1
+     },
+     {
+      "cycle": 1157254,
+      "value": 0
+     },
+     {
+      "cycle": 1250254,
+      "value": 1
+     },
+     {
+      "cycle": 1253254,
+      "value": 0
+     },
+     {
+      "cycle": 1346254,
+      "value": 1
+     },
+     {
+      "cycle": 1349254,
+      "value": 0
+     },
+     {
+      "cycle": 1442254,
+      "value": 1
+     },
+     {
+      "cycle": 1445254,
+      "value": 0
+     },
+     {
+      "cycle": 1538254,
+      "value": 1
+     },
+     {
+      "cycle": 1541254,
+      "value": 0
+     },
+     {
+      "cycle": 1634254,
+      "value": 1
+     },
+     {
+      "cycle": 1637254,
+      "value": 0
+     },
+     {
+      "cycle": 1730254,
+      "value": 1
+     },
+     {
+      "cycle": 1733254,
+      "value": 0
+     },
+     {
+      "cycle": 1826254,
+      "value": 1
+     },
+     {
+      "cycle": 1829254,
+      "value": 0
+     },
+     {
+      "cycle": 1922254,
+      "value": 1
+     },
+     {
+      "cycle": 1925254,
+      "value": 0
+     },
+     {
+      "cycle": 2018254,
+      "value": 1
+     },
+     {
+      "cycle": 2021254,
+      "value": 0
+     },
+     {
+      "cycle": 2114254,
+      "value": 1
+     },
+     {
+      "cycle": 2117254,
+      "value": 0
+     },
+     {
+      "cycle": 2210254,
+      "value": 1
+     },
+     {
+      "cycle": 2213254,
+      "value": 0
+     },
+     {
+      "cycle": 2306254,
+      "value": 1
+     },
+     {
+      "cycle": 2309254,
+      "value": 0
+     },
+     {
+      "cycle": 2402254,
+      "value": 1
+     },
+     {
+      "cycle": 2405254,
+      "value": 0
+     },
+     {
+      "cycle": 2498254,
+      "value": 1
+     },
+     {
+      "cycle": 2501254,
+      "value": 0
+     },
+     {
+      "cycle": 2594254,
+      "value": 1
+     },
+     {
+      "cycle": 2597254,
+      "value": 0
+     },
+     {
+      "cycle": 2690254,
+      "value": 1
+     },
+     {
+      "cycle": 2693254,
+      "value": 0
+     },
+     {
+      "cycle": 2786254,
+      "value": 1
+     },
+     {
+      "cycle": 2789254,
+      "value": 0
+     },
+     {
+      "cycle": 2882254,
+      "value": 1
+     },
+     {
+      "cycle": 2885254,
+      "value": 0
+     }
+    ],
+    "gaps": [],
+    "initial_state": "z",
+    "states": [
+     {
+      "cycle": 97345,
+      "state": "0"
+     },
+     {
+      "cycle": 98245,
+      "state": "z"
+     },
+     {
+      "cycle": 98246,
+      "state": "1"
+     },
+     {
+      "cycle": 101254,
+      "state": "0"
+     },
+     {
+      "cycle": 194254,
+      "state": "1"
+     },
+     {
+      "cycle": 197254,
+      "state": "0"
+     },
+     {
+      "cycle": 290254,
+      "state": "1"
+     },
+     {
+      "cycle": 293254,
+      "state": "0"
+     },
+     {
+      "cycle": 386254,
+      "state": "1"
+     },
+     {
+      "cycle": 389254,
+      "state": "0"
+     },
+     {
+      "cycle": 482254,
+      "state": "1"
+     },
+     {
+      "cycle": 485254,
+      "state": "0"
+     },
+     {
+      "cycle": 578254,
+      "state": "1"
+     },
+     {
+      "cycle": 581254,
+      "state": "0"
+     },
+     {
+      "cycle": 674254,
+      "state": "1"
+     },
+     {
+      "cycle": 677254,
+      "state": "0"
+     },
+     {
+      "cycle": 770254,
+      "state": "1"
+     },
+     {
+      "cycle": 773254,
+      "state": "0"
+     },
+     {
+      "cycle": 866254,
+      "state": "1"
+     },
+     {
+      "cycle": 869254,
+      "state": "0"
+     },
+     {
+      "cycle": 962254,
+      "state": "1"
+     },
+     {
+      "cycle": 965254,
+      "state": "0"
+     },
+     {
+      "cycle": 1058254,
+      "state": "1"
+     },
+     {
+      "cycle": 1061254,
+      "state": "0"
+     },
+     {
+      "cycle": 1154254,
+      "state": "1"
+     },
+     {
+      "cycle": 1157254,
+      "state": "0"
+     },
+     {
+      "cycle": 1250254,
+      "state": "1"
+     },
+     {
+      "cycle": 1253254,
+      "state": "0"
+     },
+     {
+      "cycle": 1346254,
+      "state": "1"
+     },
+     {
+      "cycle": 1349254,
+      "state": "0"
+     },
+     {
+      "cycle": 1442254,
+      "state": "1"
+     },
+     {
+      "cycle": 1445254,
+      "state": "0"
+     },
+     {
+      "cycle": 1538254,
+      "state": "1"
+     },
+     {
+      "cycle": 1541254,
+      "state": "0"
+     },
+     {
+      "cycle": 1634254,
+      "state": "1"
+     },
+     {
+      "cycle": 1637254,
+      "state": "0"
+     },
+     {
+      "cycle": 1730254,
+      "state": "1"
+     },
+     {
+      "cycle": 1733254,
+      "state": "0"
+     },
+     {
+      "cycle": 1826254,
+      "state": "1"
+     },
+     {
+      "cycle": 1829254,
+      "state": "0"
+     },
+     {
+      "cycle": 1922254,
+      "state": "1"
+     },
+     {
+      "cycle": 1925254,
+      "state": "0"
+     },
+     {
+      "cycle": 2018254,
+      "state": "1"
+     },
+     {
+      "cycle": 2021254,
+      "state": "0"
+     },
+     {
+      "cycle": 2114254,
+      "state": "1"
+     },
+     {
+      "cycle": 2117254,
+      "state": "0"
+     },
+     {
+      "cycle": 2210254,
+      "state": "1"
+     },
+     {
+      "cycle": 2213254,
+      "state": "0"
+     },
+     {
+      "cycle": 2306254,
+      "state": "1"
+     },
+     {
+      "cycle": 2309254,
+      "state": "0"
+     },
+     {
+      "cycle": 2402254,
+      "state": "1"
+     },
+     {
+      "cycle": 2405254,
+      "state": "0"
+     },
+     {
+      "cycle": 2498254,
+      "state": "1"
+     },
+     {
+      "cycle": 2501254,
+      "state": "0"
+     },
+     {
+      "cycle": 2594254,
+      "state": "1"
+     },
+     {
+      "cycle": 2597254,
+      "state": "0"
+     },
+     {
+      "cycle": 2690254,
+      "state": "1"
+     },
+     {
+      "cycle": 2693254,
+      "state": "0"
+     },
+     {
+      "cycle": 2786254,
+      "state": "1"
+     },
+     {
+      "cycle": 2789254,
+      "state": "0"
+     },
+     {
+      "cycle": 2882254,
+      "state": "1"
+     },
+     {
+      "cycle": 2885254,
+      "state": "0"
+     }
+    ],
+    "mode": "af",
+    "func": "TIM2_CH1",
+    "edge_count": 60
+   }
+  ]
+ },
+ "firmware_hash": "534b84076f25969effccaaf0089dfb9c1fc5a0196d94298eaf00417c5f8b986d"
+}

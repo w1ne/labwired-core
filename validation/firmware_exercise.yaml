@@ -1572,6 +1572,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: ch32l103c8t6
+    arch: rv32imac
+    headline: "Chip profile; ch32fun blink and debugprintfdemo are rubric-level GPIO/console checks, so no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: esp32-devkitc-32e-gpio-smoke
     arch: xtensa-lx6
     headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."

@@ -1,0 +1,15 @@
+{
+ "status": "pass",
+ "stop_reason": "assertions_passed",
+ "steps_executed": 193774,
+ "cycles": 772612,
+ "assertions": [
+  {
+   "assertion": {
+    "uart_contains": "LW_L1_OK"
+   },
+   "passed": true
+  }
+ ],
+ "firmware_hash": "e7b9d9940183fa09b1e9998ad7ee4a71a875c6bc9e13bb0b88bbf449c47f9b08"
+}

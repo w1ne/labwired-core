@@ -1,0 +1,15 @@
+{
+ "status": "fail",
+ "stop_reason": "max_steps",
+ "steps_executed": 20000000,
+ "cycles": 79874072,
+ "assertions": [
+  {
+   "assertion": {
+    "uart_contains": "LW_L1_OK"
+   },
+   "passed": false
+  }
+ ],
+ "firmware_hash": "af1fcc62b52f712f5d43af964ef6bab8ede38be4cc87fe129864db20e2599ab1"
+}

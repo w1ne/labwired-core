@@ -47,6 +47,8 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
         packed!("atsamd21g18a/sysctrl.yaml"),
     ),
     ("atsamd21g18a/wdt.yaml", packed!("atsamd21g18a/wdt.yaml")),
+    ("ch32l10x/exten.yaml", packed!("ch32l10x/exten.yaml")),
+    ("ch32l10x/sys_info.yaml", packed!("ch32l10x/sys_info.yaml")),
     ("ch32v003/exten.yaml", packed!("ch32v003/exten.yaml")),
     ("ch32v20x/exten.yaml", packed!("ch32v20x/exten.yaml")),
     (

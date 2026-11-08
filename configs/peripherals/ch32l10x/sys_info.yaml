@@ -1,0 +1,50 @@
+# CH32L10x vendor-programmed system-area words, 0x1FFFF704..0x1FFFF72B
+# (ch32l103.h CHIPID_BASE 0x1FFFF704, TS_BASE 0x1FFFF720, OPA_TRIM_BASE
+# 0x1FFFF724, ADC_TRIM_BASE 0x1FFFF728, HSI_LP_TRIM_BASE 0x1FFFF72A).
+# Not in the reference manual's memory map. WCH's SystemInit reads all of them
+# (system_ch32l103.c:179 -> ch32l103_gpio.c GPIO_IPD_Unused): it switches on
+# CHIPID & ~0xF0 to pull up the pads the package does not bond, and caches the
+# trim words for the OPA, temperature-sensor and ADC-calibration helpers.
+#
+# The model is a CH32L103C8T6: ch32l103_dbgmcu.c lists its CHIPID as
+# 0x103107x0, where x (bits 7:4) is the silicon revision. No source gives x,
+# so it reads 0. The C8T6 case in GPIO_IPD_Unused does nothing (it bonds every
+# pad). No source gives the factory trim values; they read 0, which the SPL
+# treats as "no trim" (OPA_Trim keeps only the inverted sign bits). Read-only.
+peripheral: SYS_INFO
+version: 0.1.0
+registers:
+- id: CHIPID
+  address_offset: 0x00
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x10310700
+  fields:
+  - name: DEVID
+    bit_range: [31, 8]
+    description: "0x103107 = CH32L103C8T6 (ch32l103_dbgmcu.c ChipID list)"
+  - name: REV
+    bit_range: [7, 4]
+    description: "Silicon revision; no source gives it, reads 0"
+  side_effects: null
+- id: TS
+  address_offset: 0x1C
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x00000000
+  fields: []
+  side_effects: null
+- id: OPA_TRIM
+  address_offset: 0x20
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x00000000
+  fields: []
+  side_effects: null
+- id: ADC_HSI_LP_TRIM
+  address_offset: 0x24
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x00000000
+  fields: []
+  side_effects: null

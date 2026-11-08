@@ -246,12 +246,16 @@ fn ram_geometry_is_valid(chip: &ChipDescriptor) -> bool {
 /// `terase_sec` "Sector (1K bytes) erase time"). The CH32X035 (all three
 /// packages, one die) has 62 KB erased in 1 KiB pages (WCH SPL
 /// ch32x035_flash.c `FLASH_ErasePage`: "Erases a specified FLASH page(1KB)";
-/// PlatformIO ch32v genericCH32X035* `maximum_size` 63488).
+/// PlatformIO ch32v genericCH32X035* `maximum_size` 63488). The CH32L103
+/// has 62 KB erased in 1 KiB pages (WCH product page "20KB SRAM, 62KB
+/// Flash"; SPL ch32l103_flash.c `FLASH_ErasePage`: "Erases a specified FLASH
+/// page(1KB)").
 const SMALL_SECTOR_FLASH_PARTS: &[(&str, u64, u64)] = &[
     ("ch32v006f8u7-ch32fun-smoke", 62 * 1024, 1024),
     ("ch32x035c8t6-ch32fun-smoke", 62 * 1024, 1024),
     ("ch32x035f8u6-ch32fun-smoke", 62 * 1024, 1024),
     ("ch32x035g8u6", 62 * 1024, 1024),
+    ("ch32l103c8t6", 62 * 1024, 1024),
 ];
 
 fn flash_geometry_is_valid(chip: &ChipDescriptor) -> bool {
