@@ -1,5 +1,12 @@
-# Arduino matrix system — ESP32-S2 (single-core Xtensa LX7). L0 first.
+# Arduino matrix system — ESP32-S2 (single-core Xtensa LX7).
+# L3: INA219 on Wire (I2C0, the S2 variant's SDA GPIO8 / SCL GPIO9).
 name: "arduino-matrix-esp32s2"
 chip: "../../../configs/chips/esp32s2-arduino.yaml"
-external_devices: []
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c0"
+    route: { sda: "GPIO8", scl: "GPIO9" }
+    config:
+      i2c_address: 0x40
 board_io: []

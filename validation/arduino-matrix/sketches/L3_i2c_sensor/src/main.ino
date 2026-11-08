@@ -41,6 +41,10 @@ static void wireBegin() {
   Wire.begin(4, 5);
 #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV)
   Wire.begin(8, 9);
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+  // The S2 variant's SDA/SCL (variants/esp32s2/pins_arduino.h); the S2 has
+  // no GPIO22 for the classic pair below.
+  Wire.begin(8, 9);
 #elif defined(ARDUINO_ARCH_ESP32)
   Wire.begin(21, 22);
 #elif defined(ARDUINO_ARCH_RP2040)

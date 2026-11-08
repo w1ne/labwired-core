@@ -97,6 +97,15 @@ const REG_CMD15: u64 = 0x94;
 /// bits, which is why this is 0x3 and the C3/S3 reset is 0x20B.
 const CTR_RESET: u32 = 0x0000_0003;
 
+/// ESP32-S2 CTR reset (`soc/esp32s2/register/soc/i2c_reg.h`): REF_ALWAYS_ON
+/// (11), ARBITRATION_EN (9), RX_FULL_ACK_LEVEL (3), SCL/SDA_FORCE_OUT (1, 0)
+/// default to 1.
+pub const ESP32S2_CTR_RESET: u32 = 0x0000_0A0B;
+
+/// ESP32-S2 `ETS_I2C_EXT0_INTR_SOURCE` (`soc/esp32s2/include/soc/interrupts.h`,
+/// LEDC = 45 fixes the ordinal base); I2C_EXT1 is 53.
+pub const ESP32S2_I2C0_INTR_SOURCE_ID: u32 = 52;
+
 /// SR bit 0: ACK_REC — set when the slave acknowledged during the most recent
 /// command. esp-hal raises `AcknowledgeCheckFailed` after MST_COMPLETE if clear.
 /// (Same bit as the C3/S3 `RESP_REC`; the classic SR carries no STRETCH_CAUSE
@@ -249,6 +258,19 @@ impl Esp32I2c {
     /// (I2C1 = `ETS_I2C_EXT1_INTR_SOURCE` = 50).
     pub fn with_intr_source(intr_source_id: u32) -> Self {
         Self {
+            intr_source_id,
+            ..Self::new()
+        }
+    }
+
+    /// ESP32-S2 I2C0/I2C1: the classic register map, 16 COMD slots and
+    /// opcode numbering (esp-idf `hal/esp32s2/include/hal/i2c_ll.h`), with
+    /// the S2's CTR reset [`ESP32S2_CTR_RESET`] and its own source ordinal
+    /// ([`ESP32S2_I2C0_INTR_SOURCE_ID`]). The S2's I2CEXT0 matrix signals are
+    /// the classic 29/30 too (`soc/esp32s2/include/soc/gpio_sig_map.h`).
+    pub fn new_esp32s2(intr_source_id: u32) -> Self {
+        Self {
+            ctr: ESP32S2_CTR_RESET,
             intr_source_id,
             ..Self::new()
         }
@@ -1108,6 +1130,15 @@ mod tests {
     fn ctr_reset_is_force_out_bits() {
         let p = Esp32I2c::new();
         assert_eq!(p.read_u32(REG_CTR).unwrap(), 0x0000_0003);
+    }
+
+    /// The S2 shares the classic map but resets CTR to 0xA0B and raises
+    /// `ETS_I2C_EXT0_INTR_SOURCE` = 52 (esp-idf soc/esp32s2 headers).
+    #[test]
+    fn esp32s2_variant_has_s2_ctr_reset_and_source() {
+        let p = Esp32I2c::new_esp32s2(ESP32S2_I2C0_INTR_SOURCE_ID);
+        assert_eq!(p.read_u32(REG_CTR).unwrap(), 0x0000_0A0B);
+        assert_eq!(p.intr_source_id, 52);
     }
 
     /// Scheduler mode: an MMIO write that flips the interrupt level hands the

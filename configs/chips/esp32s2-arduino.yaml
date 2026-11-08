@@ -6,13 +6,14 @@
 # memory map, external flash behind the MMU-translated cache windows and SPI1
 # (crates/core/src/system/xtensa/esp32s2.rs), UART0, SYSTIMER, TIMG0/1, the
 # interrupt matrix + FROM_CPU doorbells, the WDEV RNG, the EXTMEM cache
-# controller, RMT transmit (symbols played out through the GPIO matrix) and
-# LEDC PWM (channel waveforms on the pads the matrix routes them to).
+# controller, RMT transmit (symbols played out through the GPIO matrix),
+# LEDC PWM (channel waveforms on the pads the matrix routes them to) and the
+# I2C0 master command list (classic-ESP32 I2C design).
 # Blocks marked "register file" below store what is written and read it
 # back; they carry no behaviour, and nothing that depends on them (clock tree,
 # RF, eFuse values, IO_MUX pad function) is claimed.
 #
-# Not modelled: Wi-Fi, USB OTG, PSRAM, I2C, GP-SPI, RMT RX, ADC, TWAI, touch.
+# Not modelled: Wi-Fi, USB OTG, PSRAM, I2C1, I2C slave mode, GP-SPI, RMT RX, ADC, TWAI, touch.
 # The narrow freestanding DevKitM-1 smoke profile is configs/chips/esp32s2.yaml.
 #
 # Addresses: ESP-IDF components/soc/esp32s2/include/soc/reg_base.h and
@@ -113,6 +114,14 @@ peripherals:
     base_address: 0x3F419000
     size: "4KB"
     irq: 45 # ETS_LEDC_INTR_SOURCE
+  # I2C0: the classic-ESP32 design (16 COMD slots, original opcodes,
+  # I2CEXT0 matrix signals 29/30). IDF's i2c_ll reaches the FIFO through
+  # PeriBus2 (0x6001_301C), which the peribus2 alias above maps here.
+  - id: "i2c0"
+    type: "esp32s2_i2c"
+    base_address: 0x3F413000
+    size: "4KB"
+    irq: 52 # ETS_I2C_EXT0_INTR_SOURCE
   - id: "rng"
     type: "esp32s2_rng"
     base_address: 0x3F435000

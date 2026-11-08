@@ -41,6 +41,10 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32_i2c" => Box::new(i2c::Esp32I2c::with_intr_source(
             p_cfg.irq.unwrap_or(i2c::I2C0_INTR_SOURCE_ID),
         )),
+        // Classic I2C design on the S2; I2C_EXT0 is source 52, I2C_EXT1 53.
+        "esp32s2_i2c" => Box::new(i2c::Esp32I2c::new_esp32s2(
+            p_cfg.irq.unwrap_or(i2c::ESP32S2_I2C0_INTR_SOURCE_ID),
+        )),
         "esp32_gpio" | "gpio_esp32" => Box::new(gpio::Esp32Gpio::new()),
         "esp32_dport" => Box::new(dport::Dport::new()),
         "esp32_sha" => Box::new(sha::Sha::new()),
@@ -82,6 +86,7 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32_rtc_cntl",
     "esp32_rmt",
     "esp32s2_rmt",
+    "esp32s2_i2c",
     "esp32_timg",
     "esp32_efuse",
     "esp32_syscon",

@@ -14,7 +14,7 @@ that run predates the narrowed descriptor, re-measured cell by cell after it):
 | L0 serial boot | **pass** | `LW_L0_OK` at 606k steps |
 | L1 serial loop | **pass** | |
 | L2 blink | **pass** | WS2812 waveform on the GPIO18 pad via RMT ch0 (see below) |
-| L3 I2C INA219 | skip | no S2 I2C model: `LW_L3_FAIL nack` |
+| L3 I2C INA219 | **pass** | Wire reads INA219 CONFIG 0x399F and BUS 0x19CA via I2C0 (see below) |
 | L4 SPI MAX31855 | skip | no S2 GP-SPI model (fault @ 0x3F424030) |
 | L5 ADC | skip | no S2 SAR ADC model |
 | L6 PWM | **pass** | 1 kHz, 50 % PWM on the GPIO2 pad via LEDC LS ch6 (see below) |
@@ -80,6 +80,36 @@ the same widths from the logic analyzer on the pad. Without the
 `matrix_output_lines` publication it sees 0 edges and fails
 (mutation-checked). Fades, the LEDC timer counter (`VALUE` reads 0) and
 the overflow interrupts are not modelled.
+
+## L3 — I2C0 (added later the same day)
+
+The S2 I2C is the classic ESP32 design, not the S3's: `i2c_reg.h` puts 16
+COMD slots at 0x58..0x94 (the S3 has 8) and `hal/esp32s2/.../i2c_ll.h` uses
+the original opcodes (RSTART 0, WRITE 1, READ 2, STOP 3, END 4). The
+I2CEXT0 matrix signals are the classic 29/30 too. So type `esp32s2_i2c` is
+the classic `Esp32I2c` with the two values that differ: the CTR reset
+(0xA0B: REF_ALWAYS_ON, ARBITRATION_EN, RX_FULL_ACK_LEVEL, SCL/SDA_FORCE_OUT)
+and `ETS_I2C_EXT0_INTR_SOURCE` = 52. IDF writes and reads the FIFO through
+PeriBus2 (0x6001_301C), which the profile's `peribus2` alias already maps.
+
+The sketch had to change for this board. Its generic ESP32 branch calls
+`Wire.begin(21, 22)`, and the S2 has no GPIO22. For `CONFIG_IDF_TARGET_ESP32S2`
+it now uses the S2 variant's SDA 8 / SCL 9 (`variants/esp32s2/pins_arduino.h`).
+The matrix system puts an INA219 at 0x40 on those pads.
+
+Re-run of the row
+([`arduino-matrix-esp32s2-l3-i2c-2026-11-08.log`](arduino-matrix-esp32s2-l3-i2c-2026-11-08.log)):
+L0, L1, L2, L3, L6, L7 pass. L3 prints `LW_L3_OK` with no
+`LW_L3_PARTIAL_NO_RX`, at 1.33M steps. That means the full tier passed:
+pointer write, then `requestFrom` of CONFIG and BUS, and both values matched.
+With the INA219 removed from the system, the same ELF prints
+`LW_L3_FAIL nack`.
+
+Gate test: `cargo test -p labwired-core --test esp32s2_arduino_i2c` runs both
+the pass and the no-device negative control. Not modelled: I2C1 (same type
+with `irq: 53`, but not in this profile), slave mode, clock stretching, and
+bus timing. The controller does not check that the matrix routes I2CEXT0 to
+GPIO8/9, so the pad assignment is not verified.
 
 ## Vendor status (live, 2026-11-08)
 
