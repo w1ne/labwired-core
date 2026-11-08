@@ -15,7 +15,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | arty-litex-vexriscv | open | L1 | 6 | — | — | ≥1× (CI) | [doc](docs/boards/arty-litex-vexriscv.md) |
 | vegaboard-ri5cy | open | L1 | 9 | — | — | ≥1× (CI) | [doc](docs/boards/vegaboard-ri5cy.md) |
 | stm32l552 | open | L1 | 50 | 904.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32l552.md) |
-| cc2538sf53 | open | L1 | 27 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/cc2538sf53.md) |
+| cc2538sf53 | open | L1 | 24 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/cc2538sf53.md) |
 | mpfs095t | open | L1 | 13 | — | — | ≥1× (CI) | [doc](docs/boards/mpfs095t.md) |
 | am6234 | open | L1 | 9 | — | — | ≥1× (CI) | [doc](docs/boards/am6234.md) |
 | r5f52618bgfp | open | L1 | 10 | — | — | ≥1× (CI) | [doc](docs/boards/r5f52618bgfp.md) |
