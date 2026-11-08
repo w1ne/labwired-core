@@ -404,6 +404,22 @@ impl Converter {
                     "{}: DISCNUM=1 converts the next two routed sensors per SWSTART",
                     self.id
                 );
+                // Injected group: one JSWSTART converts both routed sensors
+                // into JDR1..JDRn in rank order.
+                for (ranks, expected) in [
+                    (vec![DIODE_CHANNEL], vec![diode]),
+                    (
+                        vec![NTC_CHANNEL, DIODE_CHANNEL, NTC_CHANNEL],
+                        vec![ntc, diode, ntc],
+                    ),
+                ] {
+                    assert_eq!(
+                        self.injected_f4(bus, &ranks),
+                        expected,
+                        "{}: one JSWSTART converts injected ranks {ranks:?}",
+                        self.id
+                    );
+                }
                 single
             }
             Family::Stm32H7 | Family::Stm32L4 => {
@@ -627,6 +643,35 @@ impl Converter {
         bus.write_u32(self.base + 0x04, 0).expect("restore CR1");
         bus.write_u32(self.base + 0x2c, 0).expect("restore SQR1");
         codes
+    }
+
+    /// F2/F4/F7 injected group over `channels` (rank 1 first), placed the
+    /// way the ST HAL's `ADC_JSQR_RK_JL` does — rank r of n in `JSQ(4 - n +
+    /// r)` — and started by `CR2.JSWSTART` (bit 22, RM0090 §13.13.3). Waits
+    /// for `JEOC` and returns `JDR1..JDRn`.
+    fn injected_f4(&self, bus: &mut SystemBus, channels: &[u8]) -> Vec<u32> {
+        const ADON: u32 = 1;
+        let n = channels.len();
+        let jsqr = channels
+            .iter()
+            .enumerate()
+            .fold(((n as u32) - 1) << 20, |w, (r, &ch)| {
+                w | (u32::from(ch) << (5 * (4 - n + r)))
+            });
+        bus.write_u32(self.base + 0x38, jsqr).expect("JSQR");
+        bus.write_u32(self.base, 0).expect("clear SR");
+        bus.write_u32(self.base + 0x08, ADON).expect("ADON");
+        bus.write_u32(self.base + 0x08, ADON | (1 << 22))
+            .expect("JSWSTART");
+        let mut ticks = 0;
+        while bus.read_u32(self.base).unwrap() & (1 << 2) == 0 {
+            assert!(ticks < 64 * n, "{}: JEOC", self.id);
+            bus.tick_peripherals_fully();
+            ticks += 1;
+        }
+        (0..n)
+            .map(|k| bus.read_u32(self.base + 0x3c + 4 * k as u64).expect("JDRx"))
+            .collect()
     }
 
     /// F2/F4/F7 `CR1.DISCEN` with `DISCNUM` = `per_trigger` - 1 and

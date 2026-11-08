@@ -175,6 +175,25 @@ const F1_EVT_CONVERT: u32 = 0;
 const F1_EVT_RSTCAL: u32 = 1;
 const F1_EVT_CAL: u32 = 2;
 
+// ── F1/F2/F4 injected group (RM0008 §11.3.9 / §11.12, RM0090 §13.3.8 / §13.13) ──
+/// `ADC_SR.JEOC` (bit 2): the whole injected group has converted. `JSTRT`
+/// (bit 3): an injected group was started. Same bits on the F1 and the F4.
+const F1_SR_JEOC: u32 = 1 << 2;
+const F1_SR_JSTRT: u32 = 1 << 3;
+/// `ADC_CR1.JEOCIE` (bit 7) and `JAUTO` (bit 10): interrupt on `JEOC`, and
+/// convert the injected group automatically after the regular group.
+const F1_CR1_JEOCIE: u32 = 1 << 7;
+const F1_CR1_JAUTO: u32 = 1 << 10;
+/// `ADC_CR2.ALIGN` (bit 11): left-aligned data. Same bit on the F1 and F4.
+const F1_CR2_ALIGN: u32 = 1 << 11;
+/// F1 `ADC_CR2.JEXTSEL[14:12]` = 0b111 selects `JSWSTART` (bit 21) as the
+/// injected trigger (RM0008 §11.12.3).
+const F1_CR2_JEXTSEL: u32 = 0b111 << 12;
+const F1_CR2_JSWSTART: u32 = 1 << 21;
+/// F2/F4 `ADC_CR2.JSWSTART` is bit 22 (RM0090 §13.13.3) — the bit the F1
+/// spends on its regular `SWSTART`.
+const F4_CR2_JSWSTART: u32 = 1 << 22;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AdcRegisterLayout {
@@ -286,10 +305,26 @@ pub struct F1AdcRegs {
     /// SQ1[4:0] is converted. Reset value 0 selects channel 0, which is what
     /// firmware that never programs the sequence converts on silicon.
     sqr3: u32,
+    /// ADC_JOFR1..4 @ 0x14..0x20: 12-bit offsets subtracted from the
+    /// injected results in JDR1..4. Left out of snapshots while all zero.
+    #[serde(skip_serializing_if = "all_zero")]
+    jofr: [u32; 4],
+    /// ADC_JSQR @ 0x38: `JL[21:20]` and `JSQ1..JSQ4`, five bits each from
+    /// bit 0. See [`F1AdcRegs::injected_channels`] for the slot order.
+    #[serde(skip_serializing_if = "is_zero")]
+    jsqr: u32,
+    /// ADC_JDR1..4 @ 0x3C..0x48, read-only: the injected group's results in
+    /// conversion order.
+    #[serde(skip_serializing_if = "all_zero")]
+    jdr: [u32; 4],
 }
 
 fn is_zero(v: &u32) -> bool {
     *v == 0
+}
+
+fn all_zero(v: &[u32; 4]) -> bool {
+    v.iter().all(|w| *w == 0)
 }
 
 impl F1AdcRegs {
@@ -312,6 +347,18 @@ impl F1AdcRegs {
             _ => (self.sqr1, k - 12),
         };
         ((word >> (5 * field)) & 0x1F) as usize
+    }
+
+    /// The injected group in conversion order: `JL` + 1 channels taken from
+    /// the END of `JSQ1..JSQ4`. With `JL` < 3 the sequence starts at
+    /// `JSQ(4 - JL)`, so one conversion converts `JSQ4` alone (RM0008
+    /// §11.12.15 and RM0090 §13.13.12, "When JL=1 ... JSQ3, JSQ4"). This is
+    /// why the ST HAL's `ADC_JSQR_RK_JL` shifts rank 1 to slot `4 - JL`.
+    fn injected_channels(&self) -> Vec<usize> {
+        let len = ((self.jsqr >> 20) & 0x3) as usize + 1;
+        (4 - len..4)
+            .map(|slot| ((self.jsqr >> (5 * slot)) & 0x1F) as usize)
+            .collect()
     }
 }
 
@@ -725,6 +772,14 @@ pub struct Adc {
     /// length, or the end of a `CR1.DISCEN` subgroup.
     #[serde(skip)]
     f1_run_end: usize,
+    /// F1/F4 injected group countdown (model cycles until every `JDRx`
+    /// lands). `None` = no injected group in flight.
+    #[serde(skip)]
+    injected_remaining: Option<u32>,
+    /// Inputs latched for each injected conversion at `JSWSTART`, in
+    /// conversion order.
+    #[serde(skip)]
+    injected_samples: Vec<Option<HeldAdcInput>>,
 }
 
 impl Adc {
@@ -811,6 +866,8 @@ impl Adc {
             discontinuous_next: 0,
             f1_group_pos: 0,
             f1_run_end: 0,
+            injected_remaining: None,
+            injected_samples: Vec::new(),
         }
     }
 
@@ -874,7 +931,12 @@ impl Adc {
     }
 
     fn sample_f1_input(&self) -> Option<HeldAdcInput> {
-        let channel = self.f1_regular_channel();
+        self.sample_f1_channel(self.f1_regular_channel())
+    }
+
+    /// Sample-and-hold of one F1/F4 channel: its routed level (or modeled
+    /// internal source) and the current VREF+.
+    fn sample_f1_channel(&self, channel: usize) -> Option<HeldAdcInput> {
         let injected = self
             .channel_inputs_mv
             .get(channel)
@@ -941,6 +1003,11 @@ impl Adc {
                     if (cr1 & (1 << 5)) != 0 {
                         irq = true; // EOCIE
                     }
+                }
+                // CR1.JAUTO: the injected group follows the regular group
+                // without its own trigger (RM0008 §11.3.9 "Auto-injection").
+                if group_done && cr1 & F1_CR1_JAUTO != 0 {
+                    self.start_f1_injected();
                 }
                 if !run_done {
                     self.f1_group_pos += 1;
@@ -1037,6 +1104,81 @@ impl Adc {
     fn start_conversion(&mut self) {
         self.acquire_f1_input();
         self.sr &= !0x2; // clear EOC on start
+    }
+
+    /// Start the F1/F4 injected group (`JSWSTART`, or `JAUTO` after the
+    /// regular group): raise `JSTRT`, clear `JEOC`, and latch every `JSQx`
+    /// channel's input and VREF+ now. All `JL` + 1 results land together
+    /// after as many single-conversion times.
+    ///
+    /// Simplification, stated: silicon samples each injected channel in
+    /// turn and pauses a regular conversion it interrupts. Here the group
+    /// is held at the trigger and the regular countdown keeps running, so a
+    /// routed level that moves mid-group, or regular/injected timing
+    /// interplay, is not reproduced. `JDISCEN` is not modelled.
+    fn start_f1_injected(&mut self) {
+        let channels = match &self.regs {
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => r.injected_channels(),
+            _ => return,
+        };
+        self.injected_samples = channels
+            .iter()
+            .map(|&ch| self.sample_f1_channel(ch))
+            .collect();
+        self.injected_remaining = Some(channels.len() as u32 * (self.conversion_time + 1));
+        self.sr = (self.sr & !F1_SR_JEOC) | F1_SR_JSTRT;
+    }
+
+    /// One cycle of the injected countdown. Returns whether its landing
+    /// raises the ADC interrupt. Shared by the walk and the scheduler.
+    fn advance_injected(&mut self) -> bool {
+        let Some(left) = self.injected_remaining.as_mut() else {
+            return false;
+        };
+        *left = left.saturating_sub(1);
+        if *left > 0 {
+            return false;
+        }
+        self.injected_remaining = None;
+        self.land_injected()
+    }
+
+    /// Write the injected results to `JDR1..JDR(JL+1)` in conversion order.
+    ///
+    /// Each result is the 12-bit code minus `JOFRx` (RM0008 §11.3.11 "the
+    /// result can be a negative value"), sign-extended: right-aligned it
+    /// fills bits 15:12 with the sign; left-aligned (`CR2.ALIGN`) it is
+    /// shifted by 3 so the sign is bit 15 (RM0008 Figure 31/32). A channel
+    /// with no routed level and no modeled internal source converts 0.
+    ///
+    /// `JEOC` rises at the end of the group. On the F1, `EOC` rises too:
+    /// RM0008 §11.12.1 sets it "at the end of a group channel conversion
+    /// (regular or injected)". The F2/F4 `EOC` is regular-only (RM0090
+    /// §13.13.1), so it is left alone there.
+    fn land_injected(&mut self) -> bool {
+        let samples = std::mem::take(&mut self.injected_samples);
+        let (cr1, cr2) = self.f1_ctrl();
+        let f1 = matches!(self.regs, AdcRegs::Stm32F1(_));
+        let (AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r)) = &mut self.regs else {
+            return false;
+        };
+        for (k, sample) in samples.iter().enumerate() {
+            let code = sample
+                .map(|s| Self::code_for_mv(s.millivolts, s.reference_millivolts))
+                .unwrap_or(0) as i32;
+            let signed = code - (r.jofr[k] & 0xFFF) as i32;
+            let aligned = if cr2 & F1_CR2_ALIGN != 0 {
+                signed << 3
+            } else {
+                signed
+            };
+            r.jdr[k] = u32::from(aligned as i16 as u16);
+        }
+        self.sr |= F1_SR_JEOC;
+        if f1 {
+            self.sr |= 1 << 1; // EOC
+        }
+        cr1 & F1_CR1_JEOCIE != 0 || (f1 && cr1 & (1 << 5) != 0)
     }
 
     /// Sample the current group channel and start its conversion countdown.
@@ -1910,6 +2052,8 @@ impl Adc {
         self.f1_cal_remaining = None;
         self.f1_rstcal_live = false;
         self.f1_cal_live = false;
+        self.injected_remaining = None;
+        self.injected_samples.clear();
     }
 
     /// Apply a full CR2 word on the STM32F1 layout after a byte merge.
@@ -1927,17 +2071,21 @@ impl Adc {
     /// write — only when the scheduled completion fires, or when ADON drops
     /// (pending work is cancelled and the command bits are dropped so a HAL
     /// poll cannot hang on a cancelled request).
-    fn apply_f1_cr2(&mut self, old_cr2: u32, new_cr2: u32) -> bool {
+    ///
+    /// Returns `(regular trigger, injected trigger)`. The injected group is
+    /// software-started by a rising `JSWSTART` (bit 21) with
+    /// `JEXTSEL[14:12]` = 111, the same contract as the regular pair.
+    fn apply_f1_cr2(&mut self, old_cr2: u32, new_cr2: u32) -> (bool, bool) {
         let mut cr2 = new_cr2;
         let adon = (cr2 & F1_CR2_ADON) != 0;
         if !adon {
             self.cancel_f1_pending();
             // Drop sticky command bits so a cancelled cal cannot trap a poll.
-            cr2 &= !(F1_CR2_RSTCAL | F1_CR2_CAL | F1_CR2_SWSTART);
+            cr2 &= !(F1_CR2_RSTCAL | F1_CR2_CAL | F1_CR2_SWSTART | F1_CR2_JSWSTART);
             if let AdcRegs::Stm32F1(r) = &mut self.regs {
                 r.cr2 = cr2;
             }
-            return false;
+            return (false, false);
         }
 
         let rstcal_rise = (cr2 & F1_CR2_RSTCAL) != 0 && (old_cr2 & F1_CR2_RSTCAL) == 0;
@@ -1971,35 +2119,41 @@ impl Adc {
         // Touch the constant so a rename/removal cannot silently drop the bit.
         debug_assert_eq!(F1_CR2_EXTTRIG, 1 << 20);
 
+        let jswstart_rise = (cr2 & F1_CR2_JSWSTART) != 0 && (old_cr2 & F1_CR2_JSWSTART) == 0;
+        let mut injected = false;
+        if jswstart_rise {
+            cr2 &= !F1_CR2_JSWSTART;
+            injected = (cr2 & F1_CR2_JEXTSEL) == F1_CR2_JEXTSEL;
+        }
+
         if let AdcRegs::Stm32F1(r) = &mut self.regs {
             r.cr2 = cr2;
         }
-        trigger
+        (trigger, injected)
     }
 
-    /// F2/F4 CR2 write: SWSTART at bit 30, rising edge + ADON starts conversion.
-    fn apply_f4_cr2(&mut self, old_cr2: u32, new_cr2: u32) -> bool {
+    /// F2/F4 CR2 write: SWSTART at bit 30, rising edge + ADON starts conversion;
+    /// JSWSTART at bit 22 likewise starts the injected group. Returns
+    /// `(regular trigger, injected trigger)`.
+    fn apply_f4_cr2(&mut self, old_cr2: u32, new_cr2: u32) -> (bool, bool) {
         let mut cr2 = new_cr2;
         let adon = (cr2 & F1_CR2_ADON) != 0;
         if !adon {
             self.cancel_f1_pending();
-            cr2 &= !F4_CR2_SWSTART;
+            cr2 &= !(F4_CR2_SWSTART | F4_CR2_JSWSTART);
             if let AdcRegs::Stm32F4(r) = &mut self.regs {
                 r.cr2 = cr2;
             }
-            return false;
+            return (false, false);
         }
-        let swstart = (cr2 & F4_CR2_SWSTART) != 0;
-        let old_swstart = (old_cr2 & F4_CR2_SWSTART) != 0;
-        let mut trigger = false;
-        if swstart && !old_swstart {
-            cr2 &= !F4_CR2_SWSTART;
-            trigger = true;
-        }
+        let rise = |bit: u32| (cr2 & bit) != 0 && (old_cr2 & bit) == 0;
+        let trigger = rise(F4_CR2_SWSTART);
+        let injected = rise(F4_CR2_JSWSTART);
+        cr2 &= !(F4_CR2_SWSTART | F4_CR2_JSWSTART);
         if let AdcRegs::Stm32F4(r) = &mut self.regs {
             r.cr2 = cr2;
         }
-        trigger
+        (trigger, injected)
     }
 
     /// Advance one model cycle of F1 RSTCAL/CAL countdowns (walk path).
@@ -2076,6 +2230,9 @@ impl Peripheral for Adc {
                 0x2C..=0x2F => r.sqr1,
                 0x30..=0x33 => r.sqr2,
                 0x34..=0x37 => r.sqr3,
+                0x14..=0x23 => r.jofr[((offset - 0x14) / 4) as usize],
+                0x38..=0x3B => r.jsqr,
+                0x3C..=0x4B => r.jdr[((offset - 0x3C) / 4) as usize],
                 0x4C..=0x4F => self.dr,
                 _ => {
                     crate::census_reg!("adc:Adc", offset, "read");
@@ -2121,13 +2278,16 @@ impl Peripheral for Adc {
                         AdcRegs::Stm32F4(r) => (r.cr2, (r.cr2 & !mask) | val_shifted, false),
                         _ => (0, 0, false),
                     };
-                    let trigger = if is_f1 {
+                    let (trigger, injected) = if is_f1 {
                         self.apply_f1_cr2(old_cr2, merged)
                     } else {
                         self.apply_f4_cr2(old_cr2, merged)
                     };
                     if trigger {
                         self.start_f1_trigger();
+                    }
+                    if injected {
+                        self.start_f1_injected();
                     }
                 }
                 0x2C..=0x37 => match &mut self.regs {
@@ -2143,6 +2303,19 @@ impl Peripheral for Adc {
                     }
                     _ => {}
                 },
+                // JOFR1..4 (12-bit), JSQR (22-bit). JDR1..4 are read-only.
+                0x14..=0x23 | 0x38..=0x3B => match &mut self.regs {
+                    AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
+                        let (word, width) = if offset >= 0x38 {
+                            (&mut r.jsqr, 0x003F_FFFF)
+                        } else {
+                            (&mut r.jofr[((offset - 0x14) / 4) as usize], 0xFFF)
+                        };
+                        *word = ((*word & !mask) | val_shifted) & width;
+                    }
+                    _ => {}
+                },
+                0x3C..=0x4B => {}
                 _ => {
                     crate::census_reg!("adc:Adc", offset, "write");
                 }
@@ -2237,7 +2410,11 @@ impl Peripheral for Adc {
             return PeripheralTickResult::default();
         }
         self.advance_f1_calibration();
-        let irq = self.advance_conversion();
+        // Before the regular engine, so a JAUTO group started by this
+        // tick's regular landing counts down from the next tick, as it
+        // does on the scheduler path.
+        let injected_irq = self.advance_injected();
+        let irq = self.advance_conversion() || injected_irq;
         // Tick-cost normalization (mirrors SysTick B1): the legacy model charged
         // `cycles: 1` per converting tick into `total_cycles` — a sim artifact (a
         // real ADC conversion runs on the ADC clock and consumes zero *core*
@@ -2278,7 +2455,9 @@ impl Peripheral for Adc {
             return Vec::new();
         }
         let mut out = Vec::new();
-        if self.converting && !self.chain_live {
+        // The injected countdown rides the conversion chain: a JAUTO group
+        // starts inside `on_event`, where no new chain can be armed.
+        if (self.converting || self.injected_remaining.is_some()) && !self.chain_live {
             self.chain_live = true;
             out.push((0u64, F1_EVT_CONVERT));
         }
@@ -2322,12 +2501,14 @@ impl Peripheral for Adc {
                 }
             }
             _ => {
-                // Conversion countdown (token 0) — same engine as the walk.
-                let irq = self.advance_conversion();
-                self.chain_live = self.converting;
+                // Conversion + injected countdowns (token 0) — the same
+                // engine, in the same order, as the walk's `tick()`.
+                let injected_irq = self.advance_injected();
+                let irq = self.advance_conversion() || injected_irq;
+                self.chain_live = self.converting || self.injected_remaining.is_some();
                 crate::sched::EventResult {
                     raise_own_irq: irq,
-                    reschedule_delay: self.converting.then_some(1),
+                    reschedule_delay: self.chain_live.then_some(1),
                     ..Default::default()
                 }
             }
@@ -3616,6 +3797,182 @@ mod tests {
             );
         }
     }
+
+    /// ADON with both software trigger selections, then a JSWSTART edge.
+    fn f1_injected_start(adc: &mut Adc, extra_cr2: u32) {
+        let armed = F1_CR2_ADON | F1_CR2_EXTSEL | F1_CR2_JEXTSEL | extra_cr2;
+        adc.write_u32(0x08, armed).unwrap();
+        adc.write_u32(0x08, armed | F1_CR2_JSWSTART).unwrap();
+    }
+
+    fn ticks_until(adc: &mut Adc, flag: u32) -> usize {
+        for t in 1..=200 {
+            adc.tick();
+            if adc.read_u32(0x00).unwrap() & flag != 0 {
+                return t;
+            }
+        }
+        panic!("SR flag {flag:#x} never rose");
+    }
+
+    #[test]
+    fn f1_injected_group_converts_jsq_slots_from_the_end_into_jdr_in_order() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(2, 1000);
+        adc.set_channel_input(7, 2500);
+        let c2 = adc.channel_input_count(2) as u32;
+        let c7 = adc.channel_input_count(7) as u32;
+        // JL = 2 (three conversions): JSQ2, JSQ3, JSQ4. JSQ1 holds a channel
+        // that must NOT convert; JSQ4 = 2 again proves the slot order.
+        let jsqr = (2 << 20) | (2 << 15) | (2 << 10) | (7 << 5) | 9;
+        adc.write_u32(0x38, jsqr).unwrap();
+        assert_eq!(adc.read_u32(0x38).unwrap(), jsqr, "JSQR round-trips");
+        f1_injected_start(&mut adc, 0);
+        assert_eq!(
+            adc.read_u32(0x08).unwrap() & F1_CR2_JSWSTART,
+            0,
+            "JSWSTART self-clears"
+        );
+        let sr = adc.read_u32(0x00).unwrap();
+        assert_eq!(
+            sr & (F1_SR_JSTRT | F1_SR_JEOC),
+            F1_SR_JSTRT,
+            "JSTRT, no JEOC yet"
+        );
+        let single = (adc.conversion_time + 1) as usize;
+        assert_eq!(
+            ticks_until(&mut adc, F1_SR_JEOC),
+            3 * single,
+            "JEOC after 3 conversions"
+        );
+        assert_eq!(adc.read_u32(0x3C).unwrap(), c7, "JDR1 = JSQ2");
+        assert_eq!(adc.read_u32(0x40).unwrap(), c2, "JDR2 = JSQ3");
+        assert_eq!(adc.read_u32(0x44).unwrap(), c2, "JDR3 = JSQ4");
+        assert_eq!(adc.read_u32(0x48).unwrap(), 0, "JDR4 untouched");
+        assert_ne!(
+            adc.read_u32(0x00).unwrap() & 0x2,
+            0,
+            "F1 raises EOC for injected too"
+        );
+        assert_eq!(adc.dr, 0, "the regular DR is not written");
+
+        // JL = 0 converts JSQ4 alone.
+        adc.write_u32(0x38, (7 << 15) | 2).unwrap();
+        adc.write_u32(0x00, 0).unwrap();
+        f1_injected_start(&mut adc, 0);
+        ticks_until(&mut adc, F1_SR_JEOC);
+        assert_eq!(adc.read_u32(0x3C).unwrap(), c7, "JL=0: JDR1 = JSQ4");
+
+        // Without JEXTSEL=111 a JSWSTART edge converts nothing.
+        let mut ext = Adc::new();
+        ext.set_channel_input(2, 1000);
+        ext.write_u32(0x38, 2 << 15).unwrap();
+        ext.write_u32(0x08, F1_CR2_ADON).unwrap();
+        ext.write_u32(0x08, F1_CR2_ADON | F1_CR2_JSWSTART).unwrap();
+        for _ in 0..50 {
+            ext.tick();
+        }
+        assert_eq!(
+            ext.read_u32(0x00).unwrap(),
+            0,
+            "external JEXTSEL: no conversion"
+        );
+        assert_eq!(ext.read_u32(0x3C).unwrap(), 0);
+    }
+
+    #[test]
+    fn f1_injected_offset_is_subtracted_and_sign_extended_in_both_alignments() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(4, 1650);
+        let code = adc.channel_input_count(4) as i32; // 2047
+        adc.write_u32(0x38, (1 << 20) | (4 << 15) | (4 << 10))
+            .unwrap();
+        adc.write_u32(0x14, 0xF000 | 100).unwrap(); // JOFR1, 12 bits kept
+        adc.write_u32(0x18, 3000).unwrap(); // JOFR2 > code → negative
+        assert_eq!(adc.read_u32(0x14).unwrap(), 100, "JOFR is 12 bits");
+        f1_injected_start(&mut adc, 0);
+        ticks_until(&mut adc, F1_SR_JEOC);
+        assert_eq!(adc.read_u32(0x3C).unwrap(), (code - 100) as u32);
+        let negative = adc.read_u32(0x40).unwrap();
+        assert_eq!(
+            negative,
+            u32::from((code - 3000) as i16 as u16),
+            "sign in 15:12"
+        );
+        assert_eq!(negative >> 12, 0xF, "right-aligned negative fills SEXT");
+
+        // CR2.ALIGN: shifted by 3, sign at bit 15.
+        adc.write_u32(0x00, 0).unwrap();
+        f1_injected_start(&mut adc, F1_CR2_ALIGN);
+        ticks_until(&mut adc, F1_SR_JEOC);
+        assert_eq!(adc.read_u32(0x3C).unwrap(), ((code - 100) << 3) as u32);
+        assert_eq!(
+            adc.read_u32(0x40).unwrap(),
+            u32::from(((code - 3000) << 3) as i16 as u16)
+        );
+    }
+
+    #[test]
+    fn f4_injected_uses_jswstart_bit22_and_leaves_regular_eoc_alone() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(5, 3000);
+        adc.set_channel_input(1, 500);
+        let c5 = adc.channel_input_count(5) as u32;
+        adc.write_u32(0x34, 1).unwrap(); // regular SQ1 = 1
+        adc.write_u32(0x38, 5 << 15).unwrap(); // JL=0, JSQ4 = 5
+        adc.write_u32(0x04, F1_CR1_JEOCIE).unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON).unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_JSWSTART).unwrap();
+        assert_eq!(
+            adc.read_u32(0x08).unwrap(),
+            F1_CR2_ADON,
+            "JSWSTART self-clears"
+        );
+        assert!(!adc.converting, "bit 22 is not the F4 regular SWSTART");
+        let mut irq_at = None;
+        for t in 1..=40 {
+            if adc.tick().irq {
+                irq_at.get_or_insert(t);
+            }
+        }
+        assert_eq!(
+            irq_at,
+            Some(adc.conversion_time as usize + 1),
+            "JEOCIE fires on JEOC"
+        );
+        let sr = adc.read_u32(0x00).unwrap();
+        assert_eq!(
+            sr & (F1_SR_JEOC | 0x2),
+            F1_SR_JEOC,
+            "F4 EOC is regular-only"
+        );
+        assert_eq!(adc.read_u32(0x3C).unwrap(), c5);
+        assert_eq!(adc.dr, 0);
+    }
+
+    #[test]
+    fn f1_jauto_converts_the_injected_group_after_the_regular_group() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(0, 800);
+        adc.set_channel_input(6, 2900);
+        adc.write_u32(0x34, 0).unwrap(); // SQ1 = 0
+        adc.write_u32(0x38, 6 << 15).unwrap(); // JSQ4 = 6
+        adc.write_u32(0x04, F1_CR1_JAUTO).unwrap();
+        f1_software_start(&mut adc);
+        let single = (adc.conversion_time + 1) as usize;
+        assert_eq!(ticks_until(&mut adc, 0x2), single, "regular EOC first");
+        assert_eq!(adc.read_u32(0x00).unwrap() & F1_SR_JEOC, 0);
+        assert_eq!(adc.dr, adc.channel_input_count(0) as u32);
+        assert_eq!(
+            ticks_until(&mut adc, F1_SR_JEOC),
+            single,
+            "then the injected group"
+        );
+        assert_eq!(
+            adc.read_u32(0x3C).unwrap(),
+            adc.channel_input_count(6) as u32
+        );
+    }
 }
 
 // ── Walk-free differential: F1 ADC conversion engine walk vs scheduler ────────
@@ -3720,6 +4077,31 @@ mod scheduler_diff {
         ];
         // 2 + 15 + 15 + 15 ≈ 47 cycles covers three back-to-back conversions.
         assert_walk_identical(&script, 50);
+    }
+
+    #[test]
+    fn f1_injected_group_walk_identity() {
+        // JEOCIE + JAUTO over a two-slot injected group behind a regular SQ1:
+        // the regular landing starts the injected countdown, whose JEOC IRQ
+        // must pend on the same cycle on both routes. A second, software
+        // JSWSTART (bit 21, byte 0x0A bit 5; JEXTSEL=111 is byte 0x09 bits
+        // 6:4) re-runs the group alone.
+        let script = [
+            (1u64, Op::Write(0x04, (1 << 7) as u8)), // CR1.JEOCIE
+            (1, Op::Write(0x05, 1 << 2)),            // CR1.JAUTO (bit 10)
+            (1, Op::Write(0x34, 3)),                 // SQR3.SQ1 = channel 3
+            (1, Op::Write(0x38, 3 << 5)),            // JSQR.JSQ2 = channel 3
+            (1, Op::Write(0x39, 3 << 2)),            // JSQR.JSQ3 = 3 (bits 14:10)
+            (1, Op::Write(0x3A, 1 << 4)),            // JSQR.JL = 1 → JSQ3, JSQ4
+            (1, Op::Write(0x08, 1)),                 // CR2.ADON
+            (1, Op::Write(0x0A, 0x0E)),              // EXTSEL = 111
+            (1, Op::Write(0x09, 0x70)),              // JEXTSEL = 111
+            (2, Op::Write(0x0A, 0x4E)),              // SWSTART → regular, then JAUTO
+            (60, Op::Write(0x04, 0)),                // CR1: drop JAUTO and JEOCIE
+            (60, Op::Write(0x05, 0)),
+            (61, Op::Write(0x0A, 0x2E)), // EXTSEL | JSWSTART (bit 21)
+        ];
+        assert_walk_identical(&script, 100);
     }
 
     // ── STM32H7 ADC (RM0468) ────────────────────────────────────────────────

@@ -271,6 +271,52 @@ impl Adc1 {
         bus.write_u32(self.base + 0x2c, 0).expect("restore SQR1");
         out
     }
+
+    /// One software-started injected group over `channels` (rank 1 first)
+    /// with `JOFRx` = `offsets`, programmed the way the ST HAL's
+    /// `ADC_JSQR_RK_JL` does: rank r of an n-channel group sits in slot
+    /// `JSQ(4 - n + r)`. F1: `JEXTSEL` = 111 and `JSWSTART` is CR2 bit 21;
+    /// F2/F4: `JSWSTART` is CR2 bit 22 (RM0008 §11.12.3, RM0090 §13.13.3).
+    /// Returns `JDR1..JDRn` (sign-extended 16-bit) and the ticks to `JEOC`.
+    fn injected(&self, bus: &mut SystemBus, channels: &[u8], offsets: &[u32]) -> (Vec<u32>, usize) {
+        const ADON: u32 = 1;
+        const JEOC: u32 = 1 << 2;
+        let n = channels.len();
+        let jsqr = channels
+            .iter()
+            .enumerate()
+            .fold(((n as u32) - 1) << 20, |w, (r, &ch)| {
+                w | (u32::from(ch) << (5 * (4 - n + r)))
+            });
+        bus.write_u32(self.base + 0x38, jsqr).expect("JSQR");
+        for (k, offset) in offsets.iter().enumerate() {
+            bus.write_u32(self.base + 0x14 + 4 * k as u64, *offset)
+                .expect("JOFRx");
+        }
+        bus.write_u32(self.base, 0).expect("clear SR");
+        let (armed, start) = if self.f1_profile {
+            let armed = ADON | (0b111 << 12) | (1 << 15);
+            (armed, armed | (1 << 21))
+        } else {
+            (ADON, ADON | (1 << 22))
+        };
+        bus.write_u32(self.base + 0x08, armed).expect("arm ADC1");
+        bus.write_u32(self.base + 0x08, start).expect("JSWSTART");
+        let mut ticks = 0;
+        while bus.read_u32(self.base).unwrap() & JEOC == 0 {
+            assert!(ticks < 64 * n, "ADC1 injected group stalls");
+            bus.tick_peripherals_fully();
+            ticks += 1;
+        }
+        let jdr = (0..n)
+            .map(|k| bus.read_u32(self.base + 0x3c + 4 * k as u64).expect("JDRx"))
+            .collect();
+        for k in 0..offsets.len() {
+            bus.write_u32(self.base + 0x14 + 4 * k as u64, 0)
+                .expect("restore JOFRx");
+        }
+        (jdr, ticks)
+    }
 }
 
 /// The highest-channel ADC1 pad this package bonds out — PB1 on 36/48-pin
@@ -444,6 +490,43 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
             adc1.discontinuous(&mut bus, &[top_channel, 0], 1, 3, single_ticks),
             vec![(diode, false), (ntc, true), (diode, false)],
             "{part}: DISCEN converts one routed sensor per trigger"
+        );
+
+        // Injected group: both routed sensors convert on one JSWSTART into
+        // JDR1..JDRn in rank order, with no regular group touched.
+        let dr_before = bus.read_u32(adc1.base + 0x4c).unwrap();
+        for (ranks, codes) in [
+            (vec![top_channel], vec![diode]),
+            (vec![0, top_channel], vec![ntc, diode]),
+            (
+                vec![top_channel, 0, idle_channel, top_channel],
+                vec![diode, ntc, 0, diode],
+            ),
+        ] {
+            let (jdr, ticks) = adc1.injected(&mut bus, &ranks, &[]);
+            assert_eq!(
+                jdr, codes,
+                "{part}: injected ranks {ranks:?} land in JDR order"
+            );
+            assert_eq!(
+                ticks,
+                ranks.len() * single_ticks,
+                "{part}: JEOC after all {} injected conversions",
+                ranks.len()
+            );
+        }
+        // JOFRx subtracts a per-rank offset; the diode's code (~0.6 V) less
+        // the NTC's offset goes negative and reads back sign-extended.
+        let (jdr, _) = adc1.injected(&mut bus, &[0, top_channel], &[ntc, 2047]);
+        assert_eq!(
+            jdr,
+            vec![0, u32::from((diode as i32 - 2047) as i16 as u16)],
+            "{part}: JOFRx offsets the routed injected results"
+        );
+        assert_eq!(
+            bus.read_u32(adc1.base + 0x4c).unwrap(),
+            dr_before,
+            "{part}: the injected group leaves the regular DR alone"
         );
     }
     assert!(
