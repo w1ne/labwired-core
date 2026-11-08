@@ -9692,6 +9692,9 @@ boards:
       - crates/core/src/peripherals/esp32/i2c.rs
       - crates/core/src/peripherals/esp32/ledc.rs
       - crates/core/src/peripherals/esp32/mcpwm.rs
+      # 2026-11-08: the PCNT pulse counter (was a round-trip stub), inputs from
+      # the GPIO input matrix. No silicon capture on this board.
+      - crates/core/src/peripherals/esp32/pcnt.rs
       - crates/core/src/peripherals/esp32/sar_adc.rs
       - crates/core/src/peripherals/esp32/sdio_stub.rs
       - crates/core/src/peripherals/esp32/sha.rs
