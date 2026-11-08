@@ -46,6 +46,7 @@ pub mod mips;
 pub mod riscv;
 #[deny(clippy::let_underscore_must_use)]
 pub mod riscv64;
+pub mod riscv_fp;
 #[deny(clippy::let_underscore_must_use)]
 pub mod rx;
 pub mod xtensa_lockstep;

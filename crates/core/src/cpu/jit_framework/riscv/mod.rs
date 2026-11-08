@@ -96,7 +96,7 @@ pub enum InstrClass {
     ControlFlow,
     /// An instruction whose side effects are owned by the interpreter and
     /// which this frontend does not translate — CSR access, `ECALL`/`EBREAK`,
-    /// `MRET`/`WFI`/`FENCE`, the A-extension atomics, and any `Unknown`
+    /// `MRET`/`WFI`/`FENCE`, the A-extension atomics, RV32F, and any `Unknown`
     /// encoding. The block is **cut before** it (the interpreter executes
     /// it), and the edge carries [`BailReason::UnsupportedInstruction`].
     Unmodeled,
@@ -144,7 +144,8 @@ pub fn classify(inst: &Instruction) -> InstrClass {
         | LrW { .. } | ScW { .. }
         | AmoSwapW { .. } | AmoAddW { .. } | AmoXorW { .. } | AmoOrW { .. } | AmoAndW { .. }
         | AmoMinW { .. } | AmoMaxW { .. } | AmoMinuW { .. } | AmoMaxuW { .. }
-        | Unknown(_) => InstrClass::Unmodeled,
+        // RV32F: the interpreter owns the f registers and fcsr.
+        | Fp(_) | Unknown(_) => InstrClass::Unmodeled,
     }
 }
 

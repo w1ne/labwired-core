@@ -1,0 +1,37 @@
+{
+  "manifest_schema_version": "1.0",
+  "engine_version": "0.25.0",
+  "seed": 0,
+  "nondeterminism": "none",
+  "firmware": {
+    "path": "blink.elf",
+    "sha256": "342e94cfe52990ab65f6b7621889efe4980b945ba38fb42d2b3fd947d355d027"
+  },
+  "configs": [
+    {
+      "path": "ch32fun-blink-smoke.yaml",
+      "sha256": "3d6c1a5790f2c869f50c1ddf80ca746b144ccb7009d2f705958366aebca493b5"
+    },
+    {
+      "path": "ch32v307v-evt-ch32fun-smoke.yaml",
+      "sha256": "d93b41964c40efc03ca30f06361bb974a41a1a7f2683c624ea7c46f01634f402"
+    }
+  ],
+  "results": {
+    "status": "pass",
+    "stop_reason": "MaxSteps",
+    "steps_executed": 300000000,
+    "cycles": 1114285634,
+    "instructions": 300000000,
+    "assertions": [
+      {
+        "assertion": "GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: \"gpioa:3\", min_edges: 2 } })",
+        "passed": true
+      }
+    ],
+    "cpu_state_digest": "baf1a0a607ba7f0c4c376e7af502b057b99ce714e38fa84fcd95c206c095d938"
+  },
+  "coverage": null,
+  "fault_injections": [],
+  "digest": "ddd0fb57b011d5d28951b6a8008dcd674275334ba1ba903beac90db0dfd119d2"
+}

@@ -1,0 +1,143 @@
+# Narrow CH32V307VCT6 profile for ch32fun (cnlohr/ch32fun) CH32V30x firmware
+# (examples/ch32v307v-evt/build-ch32fun-examples.sh): the QingKe V4F core —
+# RV32IMAFC, with the single-precision F extension (f0..f31, fcsr,
+# mstatus.FS) — its PFIC and 64-bit SysTick, the HSI PLL handshake ch32fun's
+# SystemInit runs, and the WCH-Link debug printf channel ch32fun uses as its
+# default console.
+#
+# QingKe V4F, LQFP100. Memory is the split ch32fun's SystemInit selects
+# (TARGET_MCU_MEMORY_SPLIT 3, written to FLASH->OBR): 288 KB flash and
+# 32 KB SRAM, as its linker script maps them. Register blocks: ch32fun
+# ch32v30xhw.h and the CH32FV2x_V3x reference manual. The RCC, flash
+# interface, GPIO and USART registers used here share the STM32F1 offsets
+# and bits (as on the CH32V20x), so the F1 models serve them; the RCC's
+# PLLMUL value is not decoded into SYSCLK, and cpu_hz states the 144 MHz
+# ch32fun configures.
+#
+# HPE saves the integer registers only; an interrupt handler that touches
+# the FPU keeps its own f registers (nothing here takes an interrupt).
+#
+# Not modeled here: the V30x extras over the V20x (USART3..8, TIM8..10,
+# DVP, SDIO, FSMC, ETH, USBHS, CAN2, DAC, OPA, RNG), I2C/SPI/timers/ADC/DMA
+# on this profile, EXTI, PFIC interrupt nesting and priority grouping, HSE,
+# low-power modes, and physical-board parity.
+name: ch32v307vct6-ch32fun-smoke
+arch: riscv
+core: qingke-v4f
+registers_count: 32
+cpu_hz: 144_000_000
+
+flash:
+  base: 0x08000000
+  size: 288KB
+ram:
+  base: 0x20000000
+  size: 32KB
+# ch32fun links at 0; the CH32V30x aliases its flash there for reset fetch.
+flash_boot_alias: true
+
+package: LQFP100
+pin_count: 100
+
+pins:
+  PA3: { gpio: gpioa, bit: 3 }
+  PC0: { gpio: gpioc, bit: 0 }
+  PD0: { gpio: gpiod, bit: 0 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 1KB
+    config:
+      profile: ch32v20x
+
+  # The F1 flash interface. SystemInit writes TARGET_MCU_MEMORY_SPLIT to
+  # OBR (+0x1C), a read-only register: the write is accepted and ignored.
+  - id: flash_ctrl
+    type: flash
+    base_address: 0x40022000
+    size: 1KB
+    config:
+      profile: stm32f1
+
+  # EXTEND at 0x40023800: storage only.
+  - id: exten
+    type: declarative
+    base_address: 0x40023800
+    size: 4B
+    config:
+      path: "../peripherals/ch32v20x/exten.yaml"
+
+  - id: afio
+    type: afio
+    base_address: 0x40010000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 0 }
+
+  # WCH-Link attached and polling like `minichlink -T`; DMDATA0/1 and the
+  # attach sentinel sit at 0xE0000380 on the V4.
+  - id: debug_printf
+    type: wch_debug_printf
+    base_address: 0xE0000380
+    size: 12B
+
+  - id: pfic
+    type: qingke_pfic
+    base_address: 0xE000E000
+    size: 4KB
+
+  - id: stk
+    type: qingke_v4_systick
+    base_address: 0xE000F000
+    size: 24B
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x40010800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 2 }
+    config:
+      profile: stm32f1
+
+  - id: gpiob
+    type: gpio
+    base_address: 0x40010C00
+    size: 1KB
+    clock: { reg: apb2enr, bit: 3 }
+    config:
+      profile: stm32f1
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x40011000
+    size: 1KB
+    clock: { reg: apb2enr, bit: 4 }
+    config:
+      profile: stm32f1
+
+  - id: gpiod
+    type: gpio
+    base_address: 0x40011400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 5 }
+    config:
+      profile: stm32f1
+
+  - id: gpioe
+    type: gpio
+    base_address: 0x40011800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 6 }
+    config:
+      profile: stm32f1
+
+  # USART1 (TX on PA9), the F1 block: FUNCONF_USE_UARTPRINTF firmware
+  # programs it; nothing in these smokes asserts its output.
+  - id: usart1
+    type: uart
+    base_address: 0x40013800
+    size: 1KB
+    clock: { reg: apb2enr, bit: 14 }
+    config:
+      profile: stm32f1

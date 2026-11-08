@@ -1,0 +1,101 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      3348,
+      536903280,
+      536871932,
+      0,
+      0,
+      0,
+      0,
+      2166136832,
+      0,
+      3716,
+      536870928,
+      536870928,
+      1073876992,
+      4096,
+      3758097280,
+      0,
+      0,
+      0,
+      0,
+      28672,
+      0,
+      0,
+      0,
+      16777216,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1950,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 3340,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 112,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 0,
+  "cycles": 360,
+  "instructions": 114,
+  "stop_reason": "decode_error",
+  "stop_reason_details": {
+    "triggered_stop_condition": "decode_error",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 100000000,
+    "max_cycles": 100000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 600000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "6064c2a773f0849d1b0ae39ac858c866ad4be106b595b9afbb71290a3f51d7cd",
+  "config": {
+    "firmware": "./examples/ch32v307v-evt/ch32fun/fpu_selftest.elf",
+    "system": "negative-control/sys.yaml",
+    "script": "negative-control/smoke.yaml"
+  }
+}

@@ -1,0 +1,21 @@
+# fpu-selftest/fpu_selftest.c on ch32fun: every RV32F instruction under
+# RNE/RTZ/RDN/RUP, results and fflags hashed per vector, printed on the
+# WCH-Link debug printf channel. The expected lines come from the same
+# source run on the build host's x86-64 SSE/FMA unit
+# (fpu-selftest/expected.txt; check-fpu-selftest.py compares every line).
+# "all" folds every per-vector hash, so it alone pins every result and flag.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/fpu_selftest.elf"
+  system: "../../configs/systems/ch32v307v-evt-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 100000000
+  max_steps: 100000000
+  wall_time_ms: 600000
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "all 194d1e10" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "static-rtz 3eaaaaaa" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "newton-sqrt2 3fb504f3" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "harmonic64 4097cdf6" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "mstatus-fs-sd 00000013" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "done" }

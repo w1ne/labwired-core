@@ -1,0 +1,7 @@
+error: unexpected argument '--manifest' found
+
+  tip: a similar argument exists: '--run-manifest'
+
+Usage: labwired test --script <SCRIPT> --output-dir <OUTPUT_DIR> --run-manifest
+
+For more information, try '--help'.

@@ -1,0 +1,10 @@
+# WCH CH32V307V-EVT (CH32V307VCT6) running ch32fun CH32V30x firmware, with
+# the board's on-board WCH-Link on SWDIO as the debug-printf console. The EVT
+# brings the MCU pins out to headers and leaves its two user LEDs (LED1,
+# LED2) unwired, to be jumpered by the user; the LED here is the test
+# connection ch32fun's blink drives on PA3, not a factory part.
+name: ch32v307v-evt-ch32fun-smoke
+chip: ../chips/ch32v307vct6-ch32fun-smoke.yaml
+external_devices: []
+board_io:
+  - { id: external_led_pa3, kind: led, peripheral: gpioa, pin: 3, signal: output, active_high: true }

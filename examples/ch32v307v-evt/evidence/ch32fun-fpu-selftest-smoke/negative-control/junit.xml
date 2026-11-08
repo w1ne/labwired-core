@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="6" errors="0" time="0.002579">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="DecodeError"/>
+    <property name="firmware_hash" value="6064c2a773f0849d1b0ae39ac858c866ad4be106b595b9afbb71290a3f51d7cd"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.002579">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: peripheral_log: debug_printf.terminal contains &quot;all 194d1e10&quot;" time="0.000000">
+    <failure message="assertion failed">assertion 1: peripheral_log: debug_printf.terminal contains &quot;all 194d1e10&quot;
+
+result_schema_version=1.0
+stop_reason=DecodeError
+stop_reason_details.triggered_stop_condition=DecodeError
+steps_executed=0
+cycles=360
+instructions=114
+limits:
+  - max_steps=100000000
+  - max_cycles=100000000
+  - wall_time_ms=600000
+firmware_hash=6064c2a773f0849d1b0ae39ac858c866ad4be106b595b9afbb71290a3f51d7cd
+firmware=./examples/ch32v307v-evt/ch32fun/fpu_selftest.elf
+system=negative-control/sys.yaml
+script=negative-control/smoke.yaml
+assertions:
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;all 194d1e10&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;static-rtz 3eaaaaaa&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;newton-sqrt2 3fb504f3&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;harmonic64 4097cdf6&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;mstatus-fs-sd 00000013&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;done&quot;, min_count: 1, node: None } }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: peripheral_log: debug_printf.terminal contains &quot;static-rtz 3eaaaaaa&quot;" time="0.000000">
+    <failure message="assertion failed">assertion 2: peripheral_log: debug_printf.terminal contains &quot;static-rtz 3eaaaaaa&quot;
+
+result_schema_version=1.0
+stop_reason=DecodeError
+stop_reason_details.triggered_stop_condition=DecodeError
+steps_executed=0
+cycles=360
+instructions=114
+limits:
+  - max_steps=100000000
+  - max_cycles=100000000
+  - wall_time_ms=600000
+firmware_hash=6064c2a773f0849d1b0ae39ac858c866ad4be106b595b9afbb71290a3f51d7cd
+firmware=./examples/ch32v307v-evt/ch32fun/fpu_selftest.elf
+system=negative-control/sys.yaml
+script=negative-control/smoke.yaml
+assertions:
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;all 194d1e10&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;static-rtz 3eaaaaaa&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;newton-sqrt2 3fb504f3&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;harmonic64 4097cdf6&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;mstatus-fs-sd 00000013&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;done&quot;, min_count: 1, node: None } }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: peripheral_log: debug_printf.terminal contains &quot;newton-sqrt2 3fb504f3&quot;" time="0.000000">
+    <failure message="assertion failed">assertion 3: peripheral_log: debug_printf.terminal contains &quot;newton-sqrt2 3fb504f3&quot;
+
+result_schema_version=1.0
+stop_reason=DecodeError
+stop_reason_details.triggered_stop_condition=DecodeError
+steps_executed=0
+cycles=360
+instructions=114
+limits:
+  - max_steps=100000000
+  - max_cycles=100000000
+  - wall_time_ms=600000
+firmware_hash=6064c2a773f0849d1b0ae39ac858c866ad4be106b595b9afbb71290a3f51d7cd
+firmware=./examples/ch32v307v-evt/ch32fun/fpu_selftest.elf
+system=negative-control/sys.yaml
+script=negative-control/smoke.yaml
+assertions:
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;all 194d1e10&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;static-rtz 3eaaaaaa&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;newton-sqrt2 3fb504f3&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;harmonic64 4097cdf6&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;mstatus-fs-sd 00000013&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;done&quot;, min_count: 1, node: None } }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: peripheral_log: debug_printf.terminal contains &quot;harmonic64 4097cdf6&quot;" time="0.000000">
+    <failure message="assertion failed">assertion 4: peripheral_log: debug_printf.terminal contains &quot;harmonic64 4097cdf6&quot;
+
+result_schema_version=1.0
+stop_reason=DecodeError
+stop_reason_details.triggered_stop_condition=DecodeError
+steps_executed=0
+cycles=360
+instructions=114
+limits:
+  - max_steps=100000000
+  - max_cycles=100000000
+  - wall_time_ms=600000
+firmware_hash=6064c2a773f0849d1b0ae39ac858c866ad4be106b595b9afbb71290a3f51d7cd
+firmware=./examples/ch32v307v-evt/ch32fun/fpu_selftest.elf
+system=negative-control/sys.yaml
+script=negative-control/smoke.yaml
+assertions:
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;all 194d1e10&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;static-rtz 3eaaaaaa&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;newton-sqrt2 3fb504f3&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;harmonic64 4097cdf6&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;mstatus-fs-sd 00000013&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;done&quot;, min_count: 1, node: None } }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: peripheral_log: debug_printf.terminal contains &quot;mstatus-fs-sd 00000013&quot;" time="0.000000">
+    <failure message="assertion failed">assertion 5: peripheral_log: debug_printf.terminal contains &quot;mstatus-fs-sd 00000013&quot;
+
+result_schema_version=1.0
+stop_reason=DecodeError
+stop_reason_details.triggered_stop_condition=DecodeError
+steps_executed=0
+cycles=360
+instructions=114
+limits:
+  - max_steps=100000000
+  - max_cycles=100000000
+  - wall_time_ms=600000
+firmware_hash=6064c2a773f0849d1b0ae39ac858c866ad4be106b595b9afbb71290a3f51d7cd
+firmware=./examples/ch32v307v-evt/ch32fun/fpu_selftest.elf
+system=negative-control/sys.yaml
+script=negative-control/smoke.yaml
+assertions:
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;all 194d1e10&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;static-rtz 3eaaaaaa&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;newton-sqrt2 3fb504f3&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;harmonic64 4097cdf6&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;mstatus-fs-sd 00000013&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;done&quot;, min_count: 1, node: None } }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: peripheral_log: debug_printf.terminal contains &quot;done&quot;" time="0.000000">
+    <failure message="assertion failed">assertion 6: peripheral_log: debug_printf.terminal contains &quot;done&quot;
+
+result_schema_version=1.0
+stop_reason=DecodeError
+stop_reason_details.triggered_stop_condition=DecodeError
+steps_executed=0
+cycles=360
+instructions=114
+limits:
+  - max_steps=100000000
+  - max_cycles=100000000
+  - wall_time_ms=600000
+firmware_hash=6064c2a773f0849d1b0ae39ac858c866ad4be106b595b9afbb71290a3f51d7cd
+firmware=./examples/ch32v307v-evt/ch32fun/fpu_selftest.elf
+system=negative-control/sys.yaml
+script=negative-control/smoke.yaml
+assertions:
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;all 194d1e10&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;static-rtz 3eaaaaaa&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;newton-sqrt2 3fb504f3&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;harmonic64 4097cdf6&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;mstatus-fs-sd 00000013&quot;, min_count: 1, node: None } }): false
+  - PeripheralLog(PeripheralLogAssertion { peripheral_log: PeripheralLogDetails { peripheral: &quot;debug_printf&quot;, log: &quot;terminal&quot;, contains: &quot;done&quot;, min_count: 1, node: None } }): false
+</failure>
+  </testcase>
+</testsuite>

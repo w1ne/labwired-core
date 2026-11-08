@@ -7,94 +7,387 @@
 /// RISC-V RV32I Base Integer Instruction Set
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Instruction {
-    Lui { rd: u8, imm: u32 },             // LUI rd, imm
-    Auipc { rd: u8, imm: u32 },           // AUIPC rd, imm
-    Jal { rd: u8, imm: i32 },             // JAL rd, offset
-    Jalr { rd: u8, rs1: u8, imm: i32 },   // JALR rd, rs1, offset
-    Beq { rs1: u8, rs2: u8, imm: i32 },   // BEQ rs1, rs2, offset
-    Bne { rs1: u8, rs2: u8, imm: i32 },   // BNE rs1, rs2, offset
-    Blt { rs1: u8, rs2: u8, imm: i32 },   // BLT rs1, rs2, offset
-    Bge { rs1: u8, rs2: u8, imm: i32 },   // BGE rs1, rs2, offset
-    Bltu { rs1: u8, rs2: u8, imm: i32 },  // BLTU rs1, rs2, offset
-    Bgeu { rs1: u8, rs2: u8, imm: i32 },  // BGEU rs1, rs2, offset
-    Lb { rd: u8, rs1: u8, imm: i32 },     // LB rd, offset(rs1)
-    Lh { rd: u8, rs1: u8, imm: i32 },     // LH rd, offset(rs1)
-    Lw { rd: u8, rs1: u8, imm: i32 },     // LW rd, offset(rs1)
-    Lbu { rd: u8, rs1: u8, imm: i32 },    // LBU rd, offset(rs1)
-    Lhu { rd: u8, rs1: u8, imm: i32 },    // LHU rd, offset(rs1)
-    Sb { rs1: u8, rs2: u8, imm: i32 },    // SB rs2, offset(rs1)
-    Sh { rs1: u8, rs2: u8, imm: i32 },    // SH rs2, offset(rs1)
-    Sw { rs1: u8, rs2: u8, imm: i32 },    // SW rs2, offset(rs1)
-    Addi { rd: u8, rs1: u8, imm: i32 },   // ADDI rd, rs1, imm
-    Slti { rd: u8, rs1: u8, imm: i32 },   // SLTI rd, rs1, imm
-    Sltiu { rd: u8, rs1: u8, imm: i32 },  // SLTIU rd, rs1, imm
-    Xori { rd: u8, rs1: u8, imm: i32 },   // XORI rd, rs1, imm
-    Ori { rd: u8, rs1: u8, imm: i32 },    // ORI rd, rs1, imm
-    Andi { rd: u8, rs1: u8, imm: i32 },   // ANDI rd, rs1, imm
-    Slli { rd: u8, rs1: u8, shamt: u8 },  // SLLI rd, rs1, shamt
-    Srli { rd: u8, rs1: u8, shamt: u8 },  // SRLI rd, rs1, shamt
-    Srai { rd: u8, rs1: u8, shamt: u8 },  // SRAI rd, rs1, shamt
-    Add { rd: u8, rs1: u8, rs2: u8 },     // ADD rd, rs1, rs2
-    Sub { rd: u8, rs1: u8, rs2: u8 },     // SUB rd, rs1, rs2
-    Sll { rd: u8, rs1: u8, rs2: u8 },     // SLL rd, rs1, rs2
-    Slt { rd: u8, rs1: u8, rs2: u8 },     // SLT rd, rs1, rs2
-    Sltu { rd: u8, rs1: u8, rs2: u8 },    // SLTU rd, rs1, rs2
-    Xor { rd: u8, rs1: u8, rs2: u8 },     // XOR rd, rs1, rs2
-    Srl { rd: u8, rs1: u8, rs2: u8 },     // SRL rd, rs1, rs2
-    Sra { rd: u8, rs1: u8, rs2: u8 },     // SRA rd, rs1, rs2
-    Or { rd: u8, rs1: u8, rs2: u8 },      // OR rd, rs1, rs2
-    And { rd: u8, rs1: u8, rs2: u8 },     // AND rd, rs1, rs2
-    Fence,                                // FENCE
-    Ecall,                                // ECALL
-    Ebreak,                               // EBREAK
-    Mret,                                 // MRET
-    Wfi,                                  // WFI (wait for interrupt)
-    Csrrw { rd: u8, rs1: u8, csr: u16 },  // CSRRW
-    Csrrs { rd: u8, rs1: u8, csr: u16 },  // CSRRS
-    Csrrc { rd: u8, rs1: u8, csr: u16 },  // CSRRC
-    Csrrwi { rd: u8, imm: u8, csr: u16 }, // CSRRWI
-    Csrrsi { rd: u8, imm: u8, csr: u16 }, // CSRRSI
-    Csrrci { rd: u8, imm: u8, csr: u16 }, // CSRRCI
+    Lui {
+        rd: u8,
+        imm: u32,
+    }, // LUI rd, imm
+    Auipc {
+        rd: u8,
+        imm: u32,
+    }, // AUIPC rd, imm
+    Jal {
+        rd: u8,
+        imm: i32,
+    }, // JAL rd, offset
+    Jalr {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // JALR rd, rs1, offset
+    Beq {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // BEQ rs1, rs2, offset
+    Bne {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // BNE rs1, rs2, offset
+    Blt {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // BLT rs1, rs2, offset
+    Bge {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // BGE rs1, rs2, offset
+    Bltu {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // BLTU rs1, rs2, offset
+    Bgeu {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // BGEU rs1, rs2, offset
+    Lb {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // LB rd, offset(rs1)
+    Lh {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // LH rd, offset(rs1)
+    Lw {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // LW rd, offset(rs1)
+    Lbu {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // LBU rd, offset(rs1)
+    Lhu {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // LHU rd, offset(rs1)
+    Sb {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // SB rs2, offset(rs1)
+    Sh {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // SH rs2, offset(rs1)
+    Sw {
+        rs1: u8,
+        rs2: u8,
+        imm: i32,
+    }, // SW rs2, offset(rs1)
+    Addi {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // ADDI rd, rs1, imm
+    Slti {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // SLTI rd, rs1, imm
+    Sltiu {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // SLTIU rd, rs1, imm
+    Xori {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // XORI rd, rs1, imm
+    Ori {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // ORI rd, rs1, imm
+    Andi {
+        rd: u8,
+        rs1: u8,
+        imm: i32,
+    }, // ANDI rd, rs1, imm
+    Slli {
+        rd: u8,
+        rs1: u8,
+        shamt: u8,
+    }, // SLLI rd, rs1, shamt
+    Srli {
+        rd: u8,
+        rs1: u8,
+        shamt: u8,
+    }, // SRLI rd, rs1, shamt
+    Srai {
+        rd: u8,
+        rs1: u8,
+        shamt: u8,
+    }, // SRAI rd, rs1, shamt
+    Add {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // ADD rd, rs1, rs2
+    Sub {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // SUB rd, rs1, rs2
+    Sll {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // SLL rd, rs1, rs2
+    Slt {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // SLT rd, rs1, rs2
+    Sltu {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // SLTU rd, rs1, rs2
+    Xor {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // XOR rd, rs1, rs2
+    Srl {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // SRL rd, rs1, rs2
+    Sra {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // SRA rd, rs1, rs2
+    Or {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // OR rd, rs1, rs2
+    And {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    }, // AND rd, rs1, rs2
+    Fence,  // FENCE
+    Ecall,  // ECALL
+    Ebreak, // EBREAK
+    Mret,   // MRET
+    Wfi,    // WFI (wait for interrupt)
+    Csrrw {
+        rd: u8,
+        rs1: u8,
+        csr: u16,
+    }, // CSRRW
+    Csrrs {
+        rd: u8,
+        rs1: u8,
+        csr: u16,
+    }, // CSRRS
+    Csrrc {
+        rd: u8,
+        rs1: u8,
+        csr: u16,
+    }, // CSRRC
+    Csrrwi {
+        rd: u8,
+        imm: u8,
+        csr: u16,
+    }, // CSRRWI
+    Csrrsi {
+        rd: u8,
+        imm: u8,
+        csr: u16,
+    }, // CSRRSI
+    Csrrci {
+        rd: u8,
+        imm: u8,
+        csr: u16,
+    }, // CSRRCI
     // RV32M Extension
-    Mul { rd: u8, rs1: u8, rs2: u8 },
-    Mulh { rd: u8, rs1: u8, rs2: u8 },
-    Mulhsu { rd: u8, rs1: u8, rs2: u8 },
-    Mulhu { rd: u8, rs1: u8, rs2: u8 },
-    Div { rd: u8, rs1: u8, rs2: u8 },
-    Divu { rd: u8, rs1: u8, rs2: u8 },
-    Rem { rd: u8, rs1: u8, rs2: u8 },
-    Remu { rd: u8, rs1: u8, rs2: u8 },
+    Mul {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Mulh {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Mulhsu {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Mulhu {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Div {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Divu {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Rem {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    Remu {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
 
     // RV32C Extension (Selection of common ones)
-    CAddi { rd: u8, imm: i32 },
-    CLw { rd: u8, rs1: u8, imm: u32 },
-    CSw { rs2: u8, rs1: u8, imm: u32 },
-    CJr { rs1: u8 },
-    CJalr { rs1: u8 },
-    CLi { rd: u8, imm: i32 },
-    CMv { rd: u8, rs2: u8 },
-    CAddi16sp { imm: i32 },
-    CAddi4spn { rd: u8, imm: u32 },
-    CSli { rd: u8, shamt: u8 },
-    CLwsp { rd: u8, imm: u32 },
-    CSwsp { rs2: u8, imm: u32 },
-    CJ { imm: i32 },
-    CBeqz { rs1: u8, imm: i32 },
-    CBnez { rs1: u8, imm: i32 },
+    CAddi {
+        rd: u8,
+        imm: i32,
+    },
+    CLw {
+        rd: u8,
+        rs1: u8,
+        imm: u32,
+    },
+    CSw {
+        rs2: u8,
+        rs1: u8,
+        imm: u32,
+    },
+    CJr {
+        rs1: u8,
+    },
+    CJalr {
+        rs1: u8,
+    },
+    CLi {
+        rd: u8,
+        imm: i32,
+    },
+    CMv {
+        rd: u8,
+        rs2: u8,
+    },
+    CAddi16sp {
+        imm: i32,
+    },
+    CAddi4spn {
+        rd: u8,
+        imm: u32,
+    },
+    CSli {
+        rd: u8,
+        shamt: u8,
+    },
+    CLwsp {
+        rd: u8,
+        imm: u32,
+    },
+    CSwsp {
+        rs2: u8,
+        imm: u32,
+    },
+    CJ {
+        imm: i32,
+    },
+    CBeqz {
+        rs1: u8,
+        imm: i32,
+    },
+    CBnez {
+        rs1: u8,
+        imm: i32,
+    },
 
     // RV32A Atomics (word). aq/rl ignored on a single-hart simulator;
     // any store invalidates any outstanding LR reservation per ISA §8.2.
-    LrW { rd: u8, rs1: u8 },
-    ScW { rd: u8, rs1: u8, rs2: u8 },
-    AmoSwapW { rd: u8, rs1: u8, rs2: u8 },
-    AmoAddW { rd: u8, rs1: u8, rs2: u8 },
-    AmoXorW { rd: u8, rs1: u8, rs2: u8 },
-    AmoOrW { rd: u8, rs1: u8, rs2: u8 },
-    AmoAndW { rd: u8, rs1: u8, rs2: u8 },
-    AmoMinW { rd: u8, rs1: u8, rs2: u8 },
-    AmoMaxW { rd: u8, rs1: u8, rs2: u8 },
-    AmoMinuW { rd: u8, rs1: u8, rs2: u8 },
-    AmoMaxuW { rd: u8, rs1: u8, rs2: u8 },
+    LrW {
+        rd: u8,
+        rs1: u8,
+    },
+    ScW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoSwapW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoAddW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoXorW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoOrW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoAndW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoMinW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoMaxW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoMinuW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+    AmoMaxuW {
+        rd: u8,
+        rs1: u8,
+        rs2: u8,
+    },
+
+    /// RV32F: FLW/FSW, the fused multiply-adds and OP-FP, carried as the
+    /// 32-bit encoding (a C.FLW/C.FSW/C.FLWSP/C.FSWSP is expanded to its
+    /// FLW/FSW). Only the major opcode is decoded; the core's FP unit checks
+    /// the remaining fields, and a core without F treats it as `Unknown`.
+    Fp(u32),
 
     Unknown(u32),
 }
@@ -341,7 +634,34 @@ pub fn decode_rv32(inst: u32) -> Instruction {
                 _ => Instruction::Unknown(inst),
             }
         }
+        0x07 | 0x27 | 0x43 | 0x47 | 0x4B | 0x4F | 0x53 => Instruction::Fp(inst),
         _ => Instruction::Unknown(inst),
+    }
+}
+
+/// C.FLW / C.FSW (quadrant 0) and C.FLWSP / C.FSWSP (quadrant 2) use the
+/// operand layout of C.LW / C.SW / C.LWSP / C.SWSP one funct3 code higher;
+/// decode the integer twin and re-encode it as the 32-bit FLW / FSW.
+fn decode_rv32fc(inst: u16) -> Instruction {
+    let flw = |rd: u8, rs1: u8, imm: u32| {
+        Instruction::Fp((imm << 20) | ((rs1 as u32) << 15) | (2 << 12) | ((rd as u32) << 7) | 0x07)
+    };
+    let fsw = |rs1: u8, rs2: u8, imm: u32| {
+        Instruction::Fp(
+            ((imm >> 5) << 25)
+                | ((rs2 as u32) << 20)
+                | ((rs1 as u32) << 15)
+                | (2 << 12)
+                | ((imm & 0x1F) << 7)
+                | 0x27,
+        )
+    };
+    match decode_rv32c(inst & !(1 << 13)) {
+        Instruction::CLw { rd, rs1, imm } => flw(rd, rs1, imm),
+        Instruction::CSw { rs2, rs1, imm } => fsw(rs1, rs2, imm),
+        Instruction::CLwsp { rd, imm } => flw(rd, 2, imm),
+        Instruction::CSwsp { rs2, imm } => fsw(2, rs2, imm),
+        _ => Instruction::Unknown(inst as u32),
     }
 }
 
@@ -407,6 +727,7 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                         imm: imm as u32,
                     }
                 }
+                3 | 7 => decode_rv32fc(inst),
                 _ => Instruction::Unknown(inst as u32),
             }
         }
@@ -680,6 +1001,7 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                         imm: imm as u32,
                     }
                 }
+                3 | 7 => decode_rv32fc(inst),
                 _ => Instruction::Unknown(inst as u32),
             }
         }

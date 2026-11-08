@@ -2175,8 +2175,154 @@ fn riscv_profile_is_selected_from_the_chip_descriptor() {
         "the QingKe V4B core string selects the WCH V4 profile"
     );
     assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("ch32v307vct6", Some("qingke-v4f"))),
+        RiscVCoreProfile::QingkeV4F,
+        "the QingKe V4F core string selects the FPU profile"
+    );
+    assert_eq!(
         RiscVCoreProfile::for_chip(&chip("mystery-riscv", None)),
         RiscVCoreProfile::Esp32C3,
         "an undeclared core keeps the historical default"
+    );
+}
+
+/// Load a mixed 32/16-bit program (bytes) at flash 0 on a QingKe V4F core.
+fn qingke_v4f_machine(program: &[u8]) -> Machine<RiscV> {
+    let mut bus = SystemBus::new();
+    bus.flash.data = program.to_vec();
+    bus.flash.data.resize(0x100, 0);
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::QingkeV4F);
+    cpu.pc = 0;
+    cpu.mtvec = 0x80;
+    Machine::new(cpu, bus)
+}
+
+fn words(ws: &[u32]) -> Vec<u8> {
+    ws.iter().flat_map(|w| w.to_le_bytes()).collect()
+}
+
+#[test]
+fn qingke_v4f_runs_rv32f_with_fcsr_and_mstatus_fs() {
+    // Encodings from riscv64-unknown-elf-as -march=rv32imafc.
+    let program = words(&[
+        0x0000_6537, // lui a0, 0x6           ; FS = Dirty
+        0x3005_2073, // csrs mstatus, a0
+        0x0005_a007, // flw ft0, 0(a1)
+        0x0045_a087, // flw ft1, 4(a1)
+        0x1810_7153, // fdiv.s ft2, ft0, ft1  (dyn = RNE)
+        0x0025_a427, // fsw ft2, 8(a1)
+        0x0010_2673, // csrr a2, fflags
+        0x1810_11d3, // fdiv.s ft3, ft0, ft1, rtz
+        0xe001_86d3, // fmv.x.w a3, ft3
+        0x3000_2773, // csrr a4, mstatus
+        0xc001_37d3, // fcvt.w.s a5, ft2, rup
+    ]);
+    let mut machine = qingke_v4f_machine(&program);
+    machine.cpu.x[11] = 0x2000_0000; // a1
+    machine
+        .bus
+        .write_u32(0x2000_0000, 1.0f32.to_bits())
+        .unwrap();
+    machine
+        .bus
+        .write_u32(0x2000_0004, 3.0f32.to_bits())
+        .unwrap();
+    for _ in 0..11 {
+        machine.step().unwrap();
+    }
+    assert_eq!(machine.cpu.mcause, 0, "no instruction trapped");
+    assert_eq!(machine.bus.read_u32(0x2000_0008).unwrap(), 0x3eaa_aaab);
+    assert_eq!(machine.cpu.x[12], 1, "fflags = NX");
+    assert_eq!(machine.cpu.x[13], 0x3eaa_aaaa, "static RTZ");
+    assert_eq!(machine.cpu.x[14] >> 13 & 3, 3, "FS Dirty");
+    assert_ne!(machine.cpu.x[14] & (1 << 31), 0, "SD summarises FS");
+    assert_eq!(machine.cpu.x[15], 1, "ceil(1/3)");
+}
+
+#[test]
+fn qingke_v4f_expands_compressed_fp_loads_and_stores() {
+    let mut program = words(&[0x0000_6537, 0x3005_2073]);
+    program.extend_from_slice(&[
+        0x88, 0x61, // c.flw fa0, 0(a1)
+        0xc8, 0xe5, // c.fsw fa0, 12(a1)
+        0x92, 0x65, // c.flwsp fa1, 4(sp)
+        0x2e, 0xe8, // c.fswsp fa1, 16(sp)
+    ]);
+    let mut machine = qingke_v4f_machine(&program);
+    machine.cpu.x[11] = 0x2000_0000;
+    machine.cpu.x[2] = 0x2000_0100;
+    machine.bus.write_u32(0x2000_0000, 0x4049_0fdb).unwrap();
+    machine.bus.write_u32(0x2000_0104, 0x402d_f854).unwrap();
+    for _ in 0..6 {
+        machine.step().unwrap();
+    }
+    assert_eq!(machine.cpu.pc, 16);
+    assert_eq!(machine.cpu.f[10], 0x4049_0fdb);
+    assert_eq!(machine.bus.read_u32(0x2000_000c).unwrap(), 0x4049_0fdb);
+    assert_eq!(machine.bus.read_u32(0x2000_0110).unwrap(), 0x402d_f854);
+}
+
+#[test]
+fn qingke_v4f_traps_fp_while_fs_is_off_and_on_reserved_rounding_modes() {
+    // FS Off at reset: FLW is an illegal instruction, as is the fflags CSR.
+    let mut machine = qingke_v4f_machine(&words(&[0x0005_a007]));
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.mcause, 2);
+    assert_eq!(machine.cpu.mtval, 0x0005_a007);
+    assert_eq!(machine.cpu.pc, 0x80);
+
+    let mut machine = qingke_v4f_machine(&words(&[0x0010_2673]));
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.mcause, 2, "fflags needs FS on");
+
+    // rm = 5 is reserved: fdiv.s ft2, ft0, ft1 with funct3 = 5.
+    let fdiv_rm5 = 0x1810_7153 & !(7 << 12) | (5 << 12);
+    let mut machine = qingke_v4f_machine(&words(&[0x0000_6537, 0x3005_2073, fdiv_rm5]));
+    for _ in 0..3 {
+        machine.step().unwrap();
+    }
+    assert_eq!(machine.cpu.mcause, 2);
+    assert_eq!(machine.cpu.f[2], 0, "the illegal op wrote nothing");
+}
+
+#[test]
+fn cores_without_f_keep_fp_encodings_undecodable_and_fs_unwritable() {
+    // QingKe V4 (CH32V20x, RV32IMAC): mstatus.FS does not stick, and an FP
+    // opcode is a decode error exactly as before RV32F existed.
+    let mut machine = qingke_v4f_machine(&words(&[0x0000_6537, 0x3005_2073, 0x0005_a007]));
+    machine.cpu = RiscV::new_for(RiscVCoreProfile::QingkeV4);
+    machine.cpu.mtvec = 0x80;
+    machine.step().unwrap();
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.mstatus & (3 << 13), 0);
+    assert!(machine.step().is_err());
+}
+
+#[test]
+fn qingke_v4f_fp_state_survives_both_snapshot_formats() {
+    let mut machine = qingke_v4f_machine(&[]);
+    machine.cpu.mstatus = 3 << 13;
+    machine.cpu.f[7] = 0x3f80_0000;
+    machine.cpu.f[31] = 0xdead_beef;
+    machine.cpu.fcsr = 0b011_10101;
+
+    let snap = machine.cpu.snapshot();
+    let mut json_restored = RiscV::new_for(RiscVCoreProfile::QingkeV4F);
+    json_restored.apply_snapshot(&snap);
+    assert_eq!(json_restored.f, machine.cpu.f);
+    assert_eq!(json_restored.fcsr, machine.cpu.fcsr);
+
+    let (kind, bytes) = machine.cpu.runtime_snapshot().unwrap();
+    let mut bin_restored = RiscV::new_for(RiscVCoreProfile::QingkeV4F);
+    bin_restored.apply_runtime_snapshot(kind, &bytes).unwrap();
+    assert_eq!(bin_restored.f, machine.cpu.f);
+    assert_eq!(bin_restored.fcsr, machine.cpu.fcsr);
+
+    // A core without F writes the V2 blob it always wrote.
+    let plain = RiscV::new_for(RiscVCoreProfile::QingkeV4);
+    let (_, plain_bytes) = plain.runtime_snapshot().unwrap();
+    assert!(
+        bincode::deserialize::<crate::runtime_snapshot::RiscVRuntimeSnapshotV3>(&plain_bytes)
+            .is_err()
     );
 }
