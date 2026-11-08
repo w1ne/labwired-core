@@ -13,4 +13,21 @@ workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
-    Finished `dev` profile [optimized + debuginfo] target(s) in 0.24s
+   Compiling ring v0.17.14
+warning: method `pad_lines_arc` is never used
+   --> crates/core/src/peripherals/esp32s3/ledc.rs:271:19
+    |
+203 | impl Esp32s3Ledc {
+    | ---------------- method in this implementation
+...
+271 |     pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+    |                   ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `labwired-core` (lib) generated 1 warning
+   Compiling rustls v0.23.40
+   Compiling rustls-webpki v0.103.13
+   Compiling ureq v2.12.1
+   Compiling labwired-cli v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/cli)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 8.19s
