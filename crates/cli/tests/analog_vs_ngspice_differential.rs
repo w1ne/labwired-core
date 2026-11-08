@@ -291,9 +291,10 @@ const DEVICE_TOLERANCE: f64 = 5e-4;
 struct Differential {
     /// What the failure message calls it.
     name: &'static str,
-    /// SPICE text. Both engines parse this exact string; the in-core engine
-    /// ignores the `.model` parameters it has no term for and the analysis
-    /// cards, and ngspice ignores nothing.
+    /// SPICE text shared by both runs. These fixtures use model parameters
+    /// implemented by the in-core solver; `ngspice_series` adds analysis cards
+    /// only to ngspice's copy. The `adapter: analog` path rejects unsupported
+    /// model parameters, temperature directives, and control scripts.
     deck: &'static str,
     /// Node to compare.
     node: &'static str,
@@ -550,4 +551,38 @@ fn nonlinear_devices_match_ngspice_on_the_same_deck() {
             worst_sample + 1
         );
     }
+}
+
+#[test]
+fn cli_reports_unsupported_model_parameters_before_running() {
+    let dir = labwired_cli::test_support::unique_temp_dir("analog-model-omission");
+    std::fs::create_dir_all(&dir).unwrap();
+    let system = dir.join("system.yaml");
+    let manifest = r#"
+name: fidelity-cli
+chip: stm32f401
+cosim_models:
+  - id: vendor_circuit
+    adapter: analog
+    step_ns: 100000
+    config:
+      netlist_text: |
+        V1 in 0 dc 1
+        R1 in out 1k
+        D1 out 0 vendor
+        .model vendor D(IS=2n XTI=3)
+      probes: { out: "v(out)" }
+"#;
+    std::fs::write(&system, manifest).unwrap();
+    let output = Command::new(cli_binary())
+        .arg("cosim-step")
+        .arg(&system)
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "unsupported model must not run");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("vendor_circuit") && stderr.contains("XTI") && stderr.contains("ngspice"),
+        "{stderr}"
+    );
 }

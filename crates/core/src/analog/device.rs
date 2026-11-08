@@ -38,8 +38,10 @@
 //! and `MJSW` grading coefficients.
 //! There is no temperature model: every parameter is taken at
 //! [`TEMPERATURE_K`] as written. A `.model` line may
-//! carry unmodelled parameters (real vendor models do) and they are accepted
-//! and ignored; see [`super::netlist`]. Diode soft recovery covers the
+//! carry unmodelled parameters (real vendor models do). Unsupported parameters
+//! on diode, BJT, JFET, and MOSFET cards are recorded by the parser and cause
+//! analog adapters to refuse runs that use them; see [`super::netlist`]. Diode
+//! soft recovery covers the
 //! first-order `VP` charge state. Other recovery models and stored charge in
 //! unsupported junctions still require `adapter: external_process` with ngspice.
 //!

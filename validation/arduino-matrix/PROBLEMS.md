@@ -163,4 +163,3 @@ python3 validation/arduino-matrix/run_matrix.py --boards stm32f407,nrf52832
 49. **DW I2C transfer state came from the waveform buffer** — `rp2040_i2c` STARTed the slave whenever `wire_frames` was short, but `wire_frames` only fills when a lab routed the pads. With unrouted pads (the RP2350 descriptor), every byte re-STARTed the INA219, so a 2-byte read returned 0x3939 for 0x399F. An explicit in-transfer flag now ends at STOP/abort/disable.
 
 50. **arduino-pico sketch quirks (silicon behaviour, not twin bugs)** — (a) `Serial` is USB CDC and drops writes until the host asserts DTR, so the sketches `while (!Serial)` on arduino-pico only. (b) `SPI.begin()` applies a 0 Hz default without `spi_init()`, so SSE stays 0 and a bare `SPI.transfer()` blocks in `spi_write_read_blocking`. L4 calls `beginTransaction` on arduino-pico. Both are guarded `ARDUINO_ARCH_RP2040 && !ARDUINO_ARCH_MBED`, so the Mbed rp2040 row is untouched.
-

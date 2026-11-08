@@ -61,22 +61,11 @@
 //!
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
 //! card; parameters may also be written without the parentheses, and a card may
-//! be declared after the elements that use it. Parameters this engine does not
-//! model (except diode forward/reverse knee currents `IK`/`IKF`/`IKR`, diode
-//! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
-//! soft-recovery parameter `VP`, BJT base-resistance rolloff `RBM`/`IRB` and
-//! terminal resistances `RB`/`RC`/`RE`, JFET terminal
-//! resistances `RD`/`RS`, the Parker–Skellern channel fit `B`, and
-//! gate-junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
-//! MOSFET terminal resistances `RD`/`RS` or `RSH` times instance `NRD`/`NRS`,
-//! level-1 channel charge from `TOX`, gate overlap capacitance
-//! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion capacitance
-//! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
-//! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
-//! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
-//! `AD`/`AS`/`PD`/`PS`, temperature coefficients, and most terminal
-//! resistances, …) are **accepted
-//! and ignored rather than rejected**. OPAMP and COMP `IBIAS`/`IOS` model the
+//! be declared after the elements that use it. The parser records unsupported
+//! parameters on referenced diode, BJT, JFET, and MOSFET cards; analog adapters
+//! reject runs that use those cards rather than claiming unsupported behavior.
+//! See [`super::device`] for the supported equations and limitations. OPAMP and COMP
+//! `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
 //! models fixed differential resistance between them, and `RINCM` models an
 //! equal fixed resistance from each input to `V−`; `CMRR` converts common-mode
@@ -147,8 +136,9 @@
 //! ## Directives and comments
 //!
 //! Plus `*` comments, `;`/`$` trailing comments, `.end`, `.ic V(node)=<v>` and
-//! `.options`/`.print`/`.tran`/`.save`/`.control`…`.endc`, which are accepted
-//! and ignored so that one deck can be handed to both this engine and ngspice.
+//! `.options`/`.print`/`.tran`/`.save`/`.control`…`.endc`. The low-level
+//! parser records temperature settings and script blocks; analog adapters reject
+//! those because this engine does not execute them.
 //!
 //! Note on the first line: a classic SPICE deck treats line 1 as a title and
 //! ignores it. This parser does not, because silently dropping an element line
@@ -1954,11 +1944,28 @@ pub struct Switch {
     pub voltage: Option<VoltageSwitchControl>,
 }
 
+/// A vendor model parameter accepted by the parser but not used by the solver.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IgnoredModelParameter {
+    /// Source line containing the model card.
+    pub line: usize,
+    /// Model name as written in the card.
+    pub model: String,
+    /// Parameter name, normalized to uppercase.
+    pub parameter: String,
+}
+
 /// A parsed netlist: elements in file order plus the node table.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Circuit {
     node_names: Vec<String>,
     node_index: BTreeMap<String, usize>,
+    /// Parameters omitted from model cards actually used by this circuit.
+    pub ignored_model_parameters: Vec<IgnoredModelParameter>,
+    /// Temperature directives that the fixed-temperature engine cannot honor.
+    pub ignored_temperature_directives: Vec<usize>,
+    /// Script blocks are not executed by the in-core adapter.
+    pub ignored_control_directives: Vec<usize>,
     /// Resistors, in netlist order.
     pub resistors: Vec<Resistor>,
     /// Capacitors, in netlist order.
@@ -2291,9 +2298,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
         }
         let ctx = LineCtx { number, text: line };
         // A `.control` block is ngspice's scripting language, not a circuit.
-        // Skipping it wholesale is what lets one deck drive both engines: the
-        // in-core adapter takes its run length from the manifest, ngspice
-        // takes it from the block.
+        // The parser records the block and skips its commands. Analog adapters
+        // reject it because it may change the circuit or solver settings.
         if in_control {
             if line.eq_ignore_ascii_case(".endc") {
                 in_control = false;
@@ -2311,15 +2317,36 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             match directive.to_ascii_lowercase().as_str() {
                 "end" => ended = true,
                 "ic" => parse_ic(&mut circuit, &ctx, &tokens[1..])?,
-                "model" => parse_model(&mut models, &ctx, &tokens[1..])?,
-                "control" => in_control = true,
-                // Analysis and housekeeping cards. This engine's run length,
-                // step and outputs come from the manifest, so these say
-                // nothing it can act on — but rejecting them would mean a deck
-                // cannot be shared with ngspice, which is the whole point of
-                // spelling the subset in SPICE.
-                "options" | "option" | "tran" | "op" | "print" | "plot" | "save" | "probe"
-                | "width" | "temp" | "nodeset" | "title" | "endc" => {}
+                "model" => parse_model(
+                    &mut models,
+                    &mut circuit.ignored_model_parameters,
+                    &ctx,
+                    &tokens[1..],
+                )?,
+                "control" => {
+                    circuit.ignored_control_directives.push(number);
+                    in_control = true;
+                }
+                // Temperature is fixed in this engine, so record temperature
+                // options as well as explicit .temp directives.
+                "temp" => circuit.ignored_temperature_directives.push(number),
+                "options" | "option" => {
+                    if tokens[1..].iter().any(|token| {
+                        matches!(
+                            token
+                                .split('=')
+                                .next()
+                                .unwrap_or("")
+                                .to_ascii_lowercase()
+                                .as_str(),
+                            "temp" | "tnom"
+                        )
+                    }) {
+                        circuit.ignored_temperature_directives.push(number);
+                    }
+                }
+                "tran" | "op" | "print" | "plot" | "save" | "probe" | "width" | "nodeset"
+                | "title" | "endc" => {}
                 _ => return Err(ctx.unsupported()),
             }
             continue;
@@ -2822,6 +2849,15 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
     }
 
     bind_mutual_inductors(&mut circuit, pending_mutuals)?;
+    // An unused card does not affect this circuit. Report only omitted
+    // parameters on models referenced by a device in this netlist.
+    let used_models: std::collections::BTreeSet<String> = pending
+        .iter()
+        .map(|device| device.model_name.to_ascii_lowercase())
+        .collect();
+    circuit
+        .ignored_model_parameters
+        .retain(|item| used_models.contains(&item.model.to_ascii_lowercase()));
     bind_models(&mut circuit, &models, pending)?;
     bind_controls(&mut circuit, &controls)?;
     Ok(circuit)
@@ -3517,13 +3553,12 @@ fn parse_source(ctx: &LineCtx<'_>, tokens: &[&str], shape: &str) -> Result<Wavef
 
 /// Parse `.model <name> <type>(<param>=<value> ...)`.
 ///
-/// Unknown parameters are accepted and dropped on purpose: a vendor model card
-/// carries a dozen charge and temperature parameters this engine has no term
-/// for, and refusing the card would mean the user has to hand-edit every
-/// datasheet model to run it. The docs say what survives; [`super::device`]
-/// says what it costs.
+/// Unknown diode, BJT, JFET, and MOS model parameters are recorded as omissions.
+/// Analog adapters reject runs using them. The low-level parser keeps the
+/// record available to its caller.
 fn parse_model(
     models: &mut BTreeMap<String, ModelCard>,
+    omissions: &mut Vec<IgnoredModelParameter>,
     ctx: &LineCtx<'_>,
     tokens: &[&str],
 ) -> Result<(), AnalogError> {
@@ -3799,7 +3834,14 @@ fn parse_model(
                      `adapter: external_process` with `tools/cosim/labwired_ngspice.py`"
                 )))
             }
-            _ => {}
+            (ModelCard::Mos(_), "LEVEL") | (ModelCard::Jfet(_), "LEVEL") => {}
+            (ModelCard::Diode(_) | ModelCard::Bjt(_) | ModelCard::Mos(_) | ModelCard::Jfet(_), _) => {
+                omissions.push(IgnoredModelParameter {
+                    line: ctx.number,
+                    model: name.to_string(),
+                    parameter: param.clone(),
+                });
+            }
         }
     }
 
