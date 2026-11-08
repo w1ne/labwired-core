@@ -1,0 +1,5 @@
+RAMN LPUART1 SMOKE
+lpuart1 brr=000022b8 isr=006000c0
+pa moder=abf3ffaf afrl=00008800 hw_type=00000001
+pb6 set=00000001 clr=00000000
+pass=0000003f

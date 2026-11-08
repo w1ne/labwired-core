@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 100000,
+    "instructions": 400000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/ramn-smoke.yaml",
   "system": "configs/systems/onboarding/ramn.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:49:20Z",
-  "finished_at_utc": "2026-11-05T14:49:21Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1208,
+  "started_at_utc": "2026-11-08T04:45:16Z",
+  "finished_at_utc": "2026-11-08T04:45:27Z",
+  "elapsed_seconds": 12,
+  "elapsed_ms": 11200,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.29,
-    "build_firmware": 0.557,
-    "run_smoke": 0.352
+    "build_cli": 10.54,
+    "build_firmware": 0.17,
+    "run_smoke": 0.479
   },
   "stages_ms": {
-    "build_cli": 290,
-    "build_firmware": 557,
-    "run_smoke": 352
+    "build_cli": 10540,
+    "build_firmware": 170,
+    "run_smoke": 479
   }
 }

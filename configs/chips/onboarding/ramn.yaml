@@ -1,8 +1,22 @@
 # Bounded profile of one RAMN ECU for the imported inventory smoke.
-# Renode identifies RAMN as STM32L552; this profile exercises its Cortex-M33
-# and code/SRAM map only. CAN, ADC, UART, board wiring, and multi-node behavior
-# are outside this smoke. SRAM range: ToyotaInfoTech/RAMN memory layout.
+# Renode identifies RAMN as STM32L552 (boards/ramn.repl includes
+# cpus/stm32l552.repl). SRAM range: ToyotaInfoTech/RAMN memory layout.
 # https://github.com/ToyotaInfoTech/RAMN/blob/main/docs/firmware/memory_layout.rst
+#
+# Mapped, following stm32l552.repl and the RAMN firmware's own bring-up
+# (firmware/RAMNV1/Core/Src/main.c, stm32l5xx_hal_msp.c):
+# - RCC @0x40021000 (`stm32l5`, RM0438 map; MSI 4 MHz reset clock).
+# - LPUART1 @0x40008000 (`stm32v2`): the RAMN console, PA2/PA3 AF8,
+#   115200 8N1 with FIFO off.
+# - GPIOA/GPIOB @0x42020000/0x42020400 (`stm32v2`): PA9 HW_TYPE input with
+#   pull-up, PB6 FDCAN1_STB output.
+# The same entries as configs/chips/stm32l552.yaml, plus the per-port GPIO
+# reset values from stm32l552.repl.
+#
+# Not claimed: FDCAN1, ADC1, SPI1-3, I2C1, USART1-3/UART4-5, GPIOC-H, DMA,
+# DMAMUX, EXTI, RTC, timers, IWDG, RNG, USB, flash controller, PWR and the
+# OTP/UID window (Renode fakes PWR and OTP with Python peripherals), board
+# wiring (LCD, ECU enables) and four-node behavior.
 name: ramn
 arch: arm
 core: cortex-m33
@@ -12,4 +26,40 @@ flash:
 ram:
   base: 536870912
   size: 262144B
-peripherals: []
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32l5"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 0 }
+    config:
+      profile: "stm32v2"
+      # PA13/PA14 SWD + PA15 JTDI defaults (stm32l552.repl gpioPortA).
+      reset_moder: 0xABFFFFFF
+      reset_ospeedr: 0x0C000000
+      reset_pupdr: 0x64000000
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x42020400
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 1 }
+    config:
+      profile: "stm32v2"
+      # PB3 JTDO + PB4 NJTRST defaults (stm32l552.repl gpioPortB). OSPEEDR
+      # reset is left at 0, as in the repl.
+      reset_moder: 0xFFFFFEBF
+      reset_pupdr: 0x00000100
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x40008000
+    size: "1KB"
+    irq: 66
+    clock: { reg: "apb1enr2", bit: 0 }
+    config:
+      profile: "stm32v2"

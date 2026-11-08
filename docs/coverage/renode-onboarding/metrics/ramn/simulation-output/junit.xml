@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.001197">
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.148541">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="c5da8ba709118c94ffb47a203b60b792463ca399ee1a677adad5f99487ec7df9"/>
+    <property name="firmware_hash" value="9e084e7a4d1a89b391f14357cc323590137c2d3a077268a2a735eb11081302e7"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.001197">
+  <testcase classname="labwired" name="run" time="0.148541">
   </testcase>
-  <testcase classname="labwired" name="assertion 1: memory_value: @0x20001000=0x143" time="0.000000">
+  <testcase classname="labwired" name="assertion 1: uart_contains: RAMN LPUART1 SMOKE" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;lpuart1 brr=000022b8&quot;, &quot;pa moder=abf3ffaf afrl=00008800&quot;, &quot;hw_type=00000001&quot;, &quot;pb6 set=00000001 clr=000…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpiob:6 &gt;= 3 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x20001000=0x143" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x20001004=0x5a4e003f" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>
