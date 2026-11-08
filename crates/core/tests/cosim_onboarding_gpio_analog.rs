@@ -127,6 +127,13 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x48,
         "Linux vexpress-sysreg.c SYS_MCI (sys_mci basic-mmio-gpio dat)",
     ),
+    // QorIQ GPDAT: Linux line n is bit 31 - n (BGPIOF_BIG_ENDIAN); pad k
+    // is bit k, see the descriptor.
+    (
+        "declarative/qoriq/gpio.yaml",
+        0x08,
+        "Linux gpio-mpc8xxx.c GPIO_DAT",
+    ),
     // Window based at the port's P_m byte, so PIN_m is +0x800.
     (
         "declarative/rzg2l/port.yaml",
@@ -241,6 +248,12 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[];
 /// base, so it cannot catch a base that is wrong for the silicon; these
 /// entries pin it. Each board listed must be covered.
 const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
+    (
+        "fsl_lx2160ardb",
+        "gpio1",
+        0x0230_0008,
+        "Linux fsl-lx2160a.dtsi gpio@2300000 + gpio-mpc8xxx.c GPIO_DAT",
+    ),
     (
         "mimxrt798s",
         "gpio0",
@@ -402,13 +415,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 206;
+const COVERED: usize = 207;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 101;
+const SILICON_REGISTER: usize = 102;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 39;
+const NO_ANALOG_ENDPOINT: usize = 38;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -585,6 +598,12 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
                 .expect("SIUL2 MSCR.IBE");
         }
     }
+    if descriptor_path(chip, port).is_some_and(|p| p.ends_with("qoriq/gpio.yaml")) {
+        // gpio-mpc8xxx probe turns every input buffer on (GPIO_IBE) on
+        // ls1028a/ls1088a/ls2080a-compatible parts, LX2160A among them.
+        bus.write_u32(base + 0x18, 0xFFFF_FFFF)
+            .expect("QorIQ GPIBE");
+    }
     set_gpio_mode_fields_to_input(bus, port, base, pins);
     if kind.as_deref() == Some("gpio") && profile_of(chip, port) == Some("sam_port") {
         // ASF/Arduino pinMode(INPUT) sets PINCFGn.INEN (bit 1); PINCFG is
@@ -634,6 +653,14 @@ fn set_gpio_mode_fields_to_input(bus: &mut SystemBus, port: &str, base: u64, pin
         bus.write_u8(address + 1, (new >> 8) as u8)
             .expect("mode field high byte");
     }
+}
+
+fn descriptor_path<'a>(chip: &'a ChipDescriptor, port: &str) -> Option<&'a str> {
+    chip.peripherals
+        .iter()
+        .find(|p| p.id == port)
+        .and_then(|p| p.config.get("path"))
+        .and_then(|v| v.as_str())
 }
 
 fn profile_of<'a>(chip: &'a ChipDescriptor, port: &str) -> Option<&'a str> {
