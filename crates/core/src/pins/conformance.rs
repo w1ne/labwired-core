@@ -254,13 +254,13 @@ impl Rig for Efr32 {
     }
     fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
         // MODEL nibble: 1 INPUT, 2 INPUTPULL (DOUT picks the rail),
-        // 4 PUSHPULL, 6 WIREDOR (released for a 1 in this model).
+        // 4 PUSHPULL, 8 WIREDAND (open-drain: drives only a 0).
         let (nibble, dout) = match mode {
             Mode::Input(Pull::None) => (1, false),
             Mode::Input(Pull::Up) => (2, true),
             Mode::Input(Pull::Down) => (2, false),
             Mode::PushPull(level) => (4, level),
-            Mode::OpenDrain(level) => (6, level),
+            Mode::OpenDrain(level) => (8, level),
         };
         bit_to(port, 0x10, pin, dout);
         rmw(port, 0x04, 0xF << (pin * 4), nibble << (pin * 4));

@@ -14,8 +14,8 @@
 - pass_depth_unknown: `0/226`
 - pass_claimed_peripherals_total: `729`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1321`
-- median_elapsed_seconds: `1.321`
+- median_elapsed_ms: `1328`
+- median_elapsed_seconds: `1.328`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -45,8 +45,8 @@
 | `brd4120a` | `pass` | `True` | `yes` | `yes` | `762` | `0.762` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `brd4121a` | `pass` | `True` | `yes` | `yes` | `741` | `0.741` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `brd4162a` | `pass` | `True` | `yes` | `yes` | `1028` | `1.028` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `brd4186c` | `pass` | `True` | `yes` | `yes` | `1007` | `1.007` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `brd4402a` | `pass` | `True` | `yes` | `yes` | `985` | `0.985` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `brd4186c` | `pass` | `True` | `yes` | `yes` | `781` | `0.781` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `brd4402a` | `pass` | `True` | `yes` | `yes` | `839` | `0.839` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `cc2538` | `pass` | `True` | `yes` | `yes` | `300519` | `300.519` | `True` | `observable` | `24` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `colibri-vf61` | `pass` | `True` | `yes` | `yes` | `10349` | `10.349` | `True` | `observable` | `8` | `uart_contains`, `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `core-v-mcu` | `pass` | `True` | `yes` | `yes` | `6360` | `6.36` | `True` | `observable` | `1` | `memory_value`, `uart_contains` | 0 | `n/a` | n/a | n/a |
@@ -80,9 +80,9 @@
 | `efr32mg1` | `pass` | `True` | `yes` | `yes` | `980` | `0.98` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `efr32mg12` | `pass` | `True` | `yes` | `yes` | `734` | `0.734` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `efr32mg13` | `pass` | `True` | `yes` | `yes` | `989` | `0.989` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `efr32mg24` | `pass` | `True` | `yes` | `yes` | `741` | `0.741` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `efr32mg24` | `pass` | `True` | `yes` | `yes` | `1151` | `1.151` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `efr32mg26` | `pass` | `True` | `yes` | `yes` | `1013` | `1.013` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `efr32xg22` | `pass` | `True` | `yes` | `yes` | `727` | `0.727` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `efr32xg22` | `pass` | `True` | `yes` | `yes` | `1387` | `1.387` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `egis_et171` | `pass` | `True` | `yes` | `yes` | `7562` | `7.562` | `True` | `observable` | `1` | `memory_value`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `eos-s3` | `pass` | `True` | `yes` | `yes` | `736` | `0.736` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `eos-s3-qomu` | `pass` | `True` | `yes` | `yes` | `1009` | `1.009` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |

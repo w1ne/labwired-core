@@ -742,16 +742,20 @@ impl KinetisGpio {
 // @0x04 (pins 0..7), MODEH @0x0C (pins 8..15), DOUT @0x10, DIN @0x14.
 //
 // Mode is 4 bits per pin: 0 DISABLED, 1 INPUT, 2 INPUTPULL, 3 INPUTPULLFILTER,
-// 4 PUSHPULL, 5 PUSHPULLALT, 6 WIREDOR, 7 WIREDORPULLDOWN, 8..15 the WIREDAND
-// (open-source) family. This model implements the digital truth of that table:
-// outputs drive the pin, WIREDOR* pins only pull LOW, and DIN reads the pin —
-// the same contract the STM32 families above implement.
+// 4 PUSHPULL, 5 PUSHPULLALT, 6 WIREDOR, 7 WIREDORPULLDOWN, 8 WIREDAND,
+// 9 WIREDANDFILTER, 10 WIREDANDPULLUP, 11 WIREDANDPULLUPFILTER, 12..15 the
+// WIREDANDALT twins of 8..11 (`_GPIO_P_MODEL_MODE0_*`). This model implements
+// the digital truth of that table: push-pull outputs drive the pin, WIREDOR is
+// open-SOURCE (drives only a 1), WIREDAND is open-DRAIN (drives only a 0), a
+// released WIREDORPULLDOWN pin sits low and a released WIREDAND*PULLUP* pin
+// high, and DIN reads the pin — the same contract the STM32 families above
+// implement.
 //
 // NOT modelled (documented in configs/chips/efr32mg26.yaml): the block-level
 // SET/CLR/TGL aliases at +0x1000/+0x2000/+0x3000 (outside this port window),
 // the ROUTE pin-mux registers (they live in the GPIO block head, not in the
 // port struct), CTRL slew-rate/drive-strength fields (stored, no behaviour),
-// the WIREDAND pull-up/filter analog niceties (treated as push-pull), and the
+// the glitch filters and the ALT drive-strength set, and the
 // EM4 wakeup / EXTI path (GPIO IF/IEN live in the block head).
 #[derive(Debug, serde::Serialize)]
 pub struct Efr32s2Gpio {
@@ -760,17 +764,26 @@ pub struct Efr32s2Gpio {
     modeh: u32, // 0x0C
     dout: u32,  // 0x10
     din: u32,   // 0x14 — latched external (button/sensor) input
-    /// Drive masks decoded from MODEL/MODEH. DIN is read on every instruction
+    /// Mode masks decoded from MODEL/MODEH. DIN is read on every instruction
     /// by the GPIO edge pass, and the nibble scan used to run on that read.
     /// A mode write is the only thing that changes them. Not registers.
     #[serde(skip)]
-    cached_output: u32,
+    cached_push_pull: u32,
+    /// WIREDOR / WIREDORPULLDOWN: open-source, drives only a 1.
     #[serde(skip)]
-    cached_open_drain: u32,
-    /// Pins in INPUTPULL / INPUTPULLFILTER (DOUT picks the rail), decoded
-    /// with the drive masks.
+    cached_wired_or: u32,
+    /// WIREDAND*: open-drain, drives only a 0.
+    #[serde(skip)]
+    cached_wired_and: u32,
+    /// Pins in INPUTPULL / INPUTPULLFILTER (DOUT picks the rail).
     #[serde(skip)]
     cached_pull: u32,
+    /// WIREDORPULLDOWN pins: pulled down while released.
+    #[serde(skip)]
+    cached_or_down: u32,
+    /// WIREDAND*PULLUP* pins: pulled up while released.
+    #[serde(skip)]
+    cached_and_up: u32,
     /// Pins the outside world is holding; the pull applies only where this
     /// bit is clear. Not a register.
     #[serde(skip)]
@@ -786,9 +799,12 @@ impl Default for Efr32s2Gpio {
             modeh: 0,
             dout: 0,
             din: 0,
-            cached_output: 0,
-            cached_open_drain: 0,
+            cached_push_pull: 0,
+            cached_wired_or: 0,
+            cached_wired_and: 0,
             cached_pull: 0,
+            cached_or_down: 0,
+            cached_and_up: 0,
             external: 0,
         }
     }
@@ -801,55 +817,59 @@ impl Efr32s2Gpio {
         (reg >> ((pin % 8) * 4)) & 0xF
     }
 
-    /// Refresh [`Self::output_mask`] and [`Self::open_drain_mask`] from MODEL
-    /// and MODEH. Called on every write of those registers.
+    fn mask_where(&self, pred: impl Fn(u32) -> bool) -> u32 {
+        (0..16u32)
+            .filter(|&pin| pred(self.mode_nibble(pin)))
+            .fold(0, |m, pin| m | (1 << pin))
+    }
+
+    /// Refresh the mode masks from MODEL and MODEH. Called on every write of
+    /// those registers.
     fn recompute_drive_masks(&mut self) {
-        let mut output = 0u32;
-        let mut open_drain = 0u32;
-        let mut pull = 0u32;
-        for pin in 0..16u32 {
-            let mode = self.mode_nibble(pin);
-            if mode >= 0x4 {
-                output |= 1 << pin;
-            }
-            if matches!(mode, 0x6 | 0x7) {
-                open_drain |= 1 << pin;
-            }
-            if matches!(mode, 0x2 | 0x3) {
-                pull |= 1 << pin;
-            }
-        }
-        self.cached_output = output;
-        self.cached_open_drain = open_drain;
-        self.cached_pull = pull;
+        self.cached_push_pull = self.mask_where(|m| matches!(m, 4 | 5));
+        self.cached_wired_or = self.mask_where(|m| matches!(m, 6 | 7));
+        self.cached_wired_and = self.mask_where(|m| m >= 8);
+        self.cached_pull = self.mask_where(|m| matches!(m, 2 | 3));
+        self.cached_or_down = self.mask_where(|m| m == 7);
+        self.cached_and_up = self.mask_where(|m| matches!(m, 10 | 11 | 14 | 15));
     }
 
-    /// Mask of pins configured as an output (any drive mode, nibble >= 4).
-    fn output_mask(&self) -> u32 {
-        self.cached_output
+    /// Mask of pins whose output stage drives the pad right now: push-pull
+    /// always, WIREDOR only a 1, WIREDAND only a 0.
+    fn driven_mask(&self) -> u32 {
+        self.cached_push_pull
+            | (self.cached_wired_or & self.dout)
+            | (self.cached_wired_and & !self.dout)
     }
 
-    /// Mask of output pins in a WIREDOR (open-drain) mode: 6 WIREDOR,
-    /// 7 WIREDORPULLDOWN. These only pull LOW; driving a 1 releases the pin.
-    fn open_drain_mask(&self) -> u32 {
-        self.cached_open_drain
+    /// Undriven pins sitting on a pull, and the subset pulled up: INPUTPULL*
+    /// on the rail DOUT picks, a released WIREDORPULLDOWN down, a released
+    /// WIREDAND*PULLUP* up.
+    fn pull_masks(&self) -> (u32, u32) {
+        let pulled =
+            (self.cached_pull | self.cached_or_down | self.cached_and_up) & !self.driven_mask();
+        let up = (self.cached_pull & self.dout) | self.cached_and_up;
+        (pulled, up)
+    }
+
+    /// The pull rail `pin` sits on when nothing drives it, if any.
+    fn pull_of(&self, pin: u8) -> Option<bool> {
+        let bit = 1u32 << pin;
+        let (pulled, up) = self.pull_masks();
+        (pulled & bit != 0).then_some(up & bit != 0)
     }
 
     /// DIN as silicon presents it: the *pin* level, not a bare latch. A
-    /// push-pull output drives its pin, so reading DIN returns what DOUT is
-    /// driving; an INPUTPULL / INPUTPULLFILTER pin nothing outside holds reads
-    /// the rail DOUT selects; a released open-drain pin and every other input
-    /// take the latched external level. Same contract as
-    /// V2Gpio::effective_idr.
+    /// driving output stage sets its pin, so reading DIN returns what DOUT is
+    /// driving; a pulled pin nothing outside holds reads its rail; a released
+    /// wired pin and every other input take the latched external level. Same
+    /// contract as V2Gpio::effective_idr.
     fn effective_din(&self) -> u32 {
-        let out = self.output_mask();
-        let od = self.open_drain_mask();
-        let push_pull = out & !od;
-        let od_driven_low = od & !self.dout;
-        let driven = push_pull | od_driven_low;
-        let from_pull = self.cached_pull & !self.external;
+        let driven = self.driven_mask();
+        let (pulled, up) = self.pull_masks();
+        let from_pull = pulled & !self.external;
         let from_latch = !driven & !from_pull;
-        ((self.dout & push_pull) | (self.dout & from_pull) | (self.din & from_latch)) & 0xFFFF
+        ((self.dout & driven) | (up & from_pull) | (self.din & from_latch)) & 0xFFFF
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -2105,9 +2125,7 @@ impl GpioPort {
                 3 => Some(true),
                 _ => None,
             },
-            GpioFamily::Efr32s2(g) => {
-                (pin < 16 && matches!(g.mode_nibble(u32::from(pin)), 2 | 3)).then(|| bit(g.dout))
-            }
+            GpioFamily::Efr32s2(g) => (pin < 16).then(|| g.pull_of(pin)).flatten(),
             GpioFamily::Efm32s0(g) => g.pull_of(pin),
             GpioFamily::SamPort(g) => {
                 (g.pincfg[usize::from(pin)] & 0x4 != 0 && !bit(g.dir)).then(|| bit(g.out))
@@ -2173,9 +2191,17 @@ impl GpioPort {
                     output((g.odr >> pin) & 1 != 0, cnf & 0b01 != 0)
                 }
             }
-            // Series-0 EFM32 has open-SOURCE (WIREDOR) as well as open-drain
-            // (WIREDAND) stages, which `output(level, open_drain)` cannot
-            // say: answer from the decoded drive mask the DIN read uses.
+            // Silicon Labs GPIO (Series 0 and Series 2) has open-SOURCE
+            // (WIREDOR) as well as open-drain (WIREDAND) stages, which
+            // `output(level, open_drain)` cannot say: answer from the decoded
+            // drive mask the DIN read uses.
+            GpioFamily::Efr32s2(g) => {
+                if (g.driven_mask() >> pin) & 1 != 0 {
+                    Some(PadDriver::drive((g.dout >> pin) & 1 != 0).with_pull(pull))
+                } else {
+                    input()
+                }
+            }
             GpioFamily::Efm32s0(g) => {
                 if (g.driven_mask() >> pin) & 1 != 0 {
                     Some(PadDriver::drive((g.dout >> pin) & 1 != 0).with_pull(pull))
@@ -2184,14 +2210,8 @@ impl GpioPort {
                 }
             }
             _ => match self.pad_mode(pin)? {
-                GpioMode::Output => {
-                    // EFR32 Series 2 WIREDOR modes release the pad for a 1
-                    // (`Efr32s2Gpio::open_drain_mask`, the same truth DIN
-                    // reads); the other families model push-pull only.
-                    let open_drain = matches!(&self.family,
-                        GpioFamily::Efr32s2(g) if (g.open_drain_mask() >> pin) & 1 != 0);
-                    output(self.read_gpio_output_bit(pin)?, open_drain)
-                }
+                // The remaining families model push-pull only.
+                GpioMode::Output => output(self.read_gpio_output_bit(pin)?, false),
                 GpioMode::Input | GpioMode::Analog => input(),
                 GpioMode::Af => af(),
                 GpioMode::Unknown => None,
@@ -4131,22 +4151,34 @@ mod efr32s2_tests {
         assert_eq!(g.read_u32(0x14).unwrap() & 0x3, 0x2);
     }
 
-    /// WIREDOR (open-drain) only pulls LOW: DOUT=1 releases the pin to the
-    /// latched input, DOUT=0 drives LOW.
+    /// WIREDOR is open-SOURCE and WIREDAND open-DRAIN
+    /// (`_GPIO_P_MODEL_MODE0_*`, efr32mg26_gpio_port.h): WIREDOR drives only
+    /// a 1, WIREDAND only a 0, a released WIREDORPULLDOWN pin sits low and a
+    /// released WIREDANDPULLUP / WIREDANDALTPULLUP pin high.
     #[test]
-    fn efr32s2_wiredor_only_pulls_low() {
+    fn efr32s2_wired_or_drives_only_a_one_and_wired_and_only_a_zero() {
         let mut g = s2();
-        g.write_u32(0x04, 0x6).unwrap(); // pin 0 = WIREDOR
-        assert!(g.set_gpio_input(0, true)); // external pull holds it high
-
-        g.write_u32(0x10, 1).unwrap(); // release
+        // P0 WIREDOR, P1 WIREDORPULLDOWN, P2 WIREDAND, P3 WIREDANDPULLUP,
+        // P4 WIREDANDALTPULLUP.
+        g.write_u32(0x04, 0xE_A867).unwrap();
+        g.write_u32(0x10, 0b1_1111).unwrap();
+        // P0/P1 drive 1; P2 released (latched 0); P3/P4 released, pulled up.
+        assert_eq!(g.read_u32(0x14).unwrap() & 0x1F, 0b1_1011);
+        assert_eq!(g.read_gpio_pad(0), Some(true));
+        g.write_u32(0x10, 0).unwrap();
+        // P0 released (latched 0); P1 pulled down; P2..P4 drive 0.
+        assert_eq!(g.read_u32(0x14).unwrap() & 0x1F, 0);
+        // A released open-source pin reads what the outside world holds.
+        assert!(g.set_gpio_input(0, true));
+        assert_eq!(g.read_u32(0x14).unwrap() & 1, 1);
+        // Something outside pulling a released WIREDANDPULLUP line low wins.
+        g.write_u32(0x10, 1 << 3).unwrap();
+        assert!(g.set_gpio_input(3, false));
         assert_eq!(
-            g.read_u32(0x14).unwrap() & 1,
-            1,
-            "released open-drain pin floats to the latched input"
+            g.read_u32(0x14).unwrap() >> 3 & 1,
+            0,
+            "wired-AND bus held low"
         );
-        g.write_u32(0x10, 0).unwrap(); // pull low
-        assert_eq!(g.read_u32(0x14).unwrap() & 1, 0, "open-drain driving LOW");
     }
 
     /// DOUT is 16-bit on this part (GPIO_PORT_x_WIDTH = 0x10); DIN is

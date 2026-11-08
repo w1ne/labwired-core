@@ -2479,8 +2479,12 @@ boards:
     # EFM32 Series-0 port family (Efm32s0Gpio / GpioFamily::Efm32s0), reached
     # only by the `efm32s0_gpioport` type; every STM32 arm is unchanged.
     # Digest-only drift again; same ack, re-capture still pending.
+    # 2026-11-08 (lane/renode-coverage, round 386): peripherals/gpio.rs fixes
+    # the EFR32 Series-2 WIREDOR/WIREDAND decode (Efr32s2Gpio and its
+    # GpioFamily::Efr32s2 pad-driver/pull arms only). No STM32 arm changed.
+    # Digest-only drift; same ack, re-capture still pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: b306be96c04ff13a14702859a2fa6a4f1bcaf03bd4f04faec59e66e10d2c99d1
+    drift_ack_digest: 7b27249d4124ac5cb0a6df11d0eeadab72f5b72f636c3a8434de1675e20c398e
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -4722,8 +4726,12 @@ boards:
     # EFM32 Series-0 port family (Efm32s0Gpio / GpioFamily::Efm32s0), reached
     # only by the `efm32s0_gpioport` type; every STM32 arm is unchanged.
     # Digest-only drift again; same ack, re-capture still pending.
+    # 2026-11-08 (lane/renode-coverage, round 386): peripherals/gpio.rs fixes
+    # the EFR32 Series-2 WIREDOR/WIREDAND decode (Efr32s2Gpio and its
+    # GpioFamily::Efr32s2 pad-driver/pull arms only). No STM32 arm changed.
+    # Digest-only drift; same ack, re-capture still pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: a16057fed95f42d7262622d20f6cb9aff6ab592920595b4f290036ee3fa020d3
+    drift_ack_digest: 21188bad6044d2074ab9116f4eed08d84d3258e6410d81d5354fe133ea856186
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -5801,8 +5809,12 @@ boards:
     # EFM32 Series-0 port family (Efm32s0Gpio / GpioFamily::Efm32s0), reached
     # only by the `efm32s0_gpioport` type; every STM32 arm is unchanged.
     # Digest-only drift again; same ack, re-capture still pending.
+    # 2026-11-08 (lane/renode-coverage, round 386): peripherals/gpio.rs fixes
+    # the EFR32 Series-2 WIREDOR/WIREDAND decode (Efr32s2Gpio and its
+    # GpioFamily::Efr32s2 pad-driver/pull arms only). No STM32 arm changed.
+    # Digest-only drift; same ack, re-capture still pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: 0b70394594c932fb8a8e37ebf698f55f050e9a4dc8cb4d40ca15409d0b205fcd
+    drift_ack_digest: 0fd6b5ccea45c1e88507d72ff383906d647d24db41f4c570e7aa1f1aad72e947
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -7034,8 +7046,12 @@ boards:
     # EFM32 Series-0 port family (Efm32s0Gpio / GpioFamily::Efm32s0), reached
     # only by the `efm32s0_gpioport` type; every STM32 arm is unchanged.
     # Digest-only drift again; same ack, re-capture still pending.
+    # 2026-11-08 (lane/renode-coverage, round 386): peripherals/gpio.rs fixes
+    # the EFR32 Series-2 WIREDOR/WIREDAND decode (Efr32s2Gpio and its
+    # GpioFamily::Efr32s2 pad-driver/pull arms only). No STM32 arm changed.
+    # Digest-only drift; same ack, re-capture still pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: d69e611be7437465e03e3e01751c78ed746eb223f743875e0af04d37633359e5
+    drift_ack_digest: bd579ba779265c112a1c800f9161d1804890f41a27ec2c1fe2bae1e29913d83f
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -8136,8 +8152,12 @@ boards:
     # EFM32 Series-0 port family (Efm32s0Gpio / GpioFamily::Efm32s0), reached
     # only by the `efm32s0_gpioport` type; every STM32 arm is unchanged.
     # Digest-only drift again; same ack, re-capture still pending.
+    # 2026-11-08 (lane/renode-coverage, round 386): peripherals/gpio.rs fixes
+    # the EFR32 Series-2 WIREDOR/WIREDAND decode (Efr32s2Gpio and its
+    # GpioFamily::Efr32s2 pad-driver/pull arms only). No STM32 arm changed.
+    # Digest-only drift; same ack, re-capture still pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: 2ad656f2ba3008a0dbfec1beefbb30367bbfef7dbaac99556aded7223166c661
+    drift_ack_digest: 60953527e02b88a0efe88fd15e66c066a5ae592cb7b993b6857d1ae49ac3cf16
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
