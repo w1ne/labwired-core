@@ -1,17 +1,34 @@
 # Cortex-M4 smoke against the imported SAM4S Xplained platform descriptor.
+# Bare-register firmware (firmware-sam4s-xplained-renode-smoke) checks what
+# Renode's sam4s.repl models and the chip descriptor claims: PMC PCER0/PCDR0/
+# PCSR0 peripheral clocks, UART0 as the console, PC10 (LED) toggling in the
+# idle loop, and both SAM_TC blocks (`sam4s_tc`): TC0 UP_RC with the RC
+# compare pending NVIC line 23 and the TC_SR read-to-clear releasing it, TC1
+# UP overflow (COVFS), TC2 CPCSTOP, TC3 CPCDIS (CLKSTA clears), TC4/TC5 held
+# by CLKEN alone and started by BCR.SYNC, TC5 capture mode (RA ignores
+# stores) stopping when PMC_PCDR0 gates it. Summary word at 0x2001FF00.
 schema_version: "1.0"
 inputs:
-  firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-smoke"
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-renode-smoke"
   system: "../../configs/systems/onboarding/sam4s_xplained.yaml"
 limits:
   max_steps: 4000000
 assertions:
-  - uart_contains: "SAM4S XPLAINED SMOKE"
+  - uart_contains: "SAM4S XPLAINED RENODE SMOKE"
   - uart_ordered:
-      - "cpu=cortex-m4 uart=uart0"
-      - "led=on odsr=00000400"
-      - "led=off odsr=00000000"
-      - "btn=1"
-      - "hb=0 odsr=00000000 btn=1"
-      - "hb=1 odsr=00000000 btn=1"
+      - "pmc pcsr0=1f802100 ok"
+      - "tc0 up_rc imr=10 pends=3 released=3 cv<=rc=1 ok"
+      - "tc1 up adv=1 covfs=1 cleared=1 ok"
+      - "tc2 cpcstop cpcs=1 held=1 clksta=1 ok"
+      - "tc3 cpcdis running=1 cpcs=1 clksta=0 ok"
+      - "tc4 tc5 idle=1 sync=1 ra=0000 ok"
+      - "tc5 pmc gated=1 held=1 tc4_runs=1 ok"
+      - "SAM4S PASS"
+  - gpio_edges:
+      pin: "pioC:10"
+      min_edges: 4
+  - memory_value:
+      address: 0x2001FF00
+      expected_value: 0x5A45007F
+      size: 4
   - expected_stop_reason: max_steps

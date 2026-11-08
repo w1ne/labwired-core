@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="2" errors="0" time="0.842778">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="d0de76e40d07d0b8fe8227b093890fb35507d82ed7e5fb9f6b1ce0740089d640"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.842778">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: SAM4S XPLAINED RENODE SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;pmc pcsr0=1f802100 ok&quot;, &quot;tc0 up_rc imr=10 pends=3 released=3 cv&lt;=rc=1 ok&quot;, &quot;tc1 up adv=1 covfs=1 cleare…" time="0.000000">
+    <failure message="assertion failed">assertion 2: uart_ordered: [&quot;pmc pcsr0=1f802100 ok&quot;, &quot;tc0 up_rc imr=10 pends=3 released=3 cv&lt;=rc=1 ok&quot;, &quot;tc1 up adv=1 covfs=1 cleare…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=d0de76e40d07d0b8fe8227b093890fb35507d82ed7e5fb9f6b1ce0740089d640
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-renode-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/sam4s_xplained.yaml
+script=examples/renode-onboarding/sam4s_xplained-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;SAM4S XPLAINED RENODE SMOKE&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;pmc pcsr0=1f802100 ok&quot;, &quot;tc0 up_rc imr=10 pends=3 released=3 cv&lt;=rc=1 ok&quot;, &quot;tc1 up adv=1 covfs=1 cleared=1 ok&quot;, &quot;tc2 cpcstop cpcs=1 held=1 clksta=1 ok&quot;, &quot;tc3 cpcdis running=1 cpcs=1 clksta=0 ok&quot;, &quot;tc4 tc5 idle=1 sync=1 ra=0000 ok&quot;, &quot;tc5 pmc gated=1 held=1 tc4_runs=1 ok&quot;, &quot;SAM4S PASS&quot;] }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;pioC:10&quot;, min_edges: 4 } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537001728, expected_value: 1514471551, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: pioC:10 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x2001ff00=0x5a45007f" time="0.000000">
+    <failure message="assertion failed">assertion 4: memory_value: @0x2001ff00=0x5a45007f
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=d0de76e40d07d0b8fe8227b093890fb35507d82ed7e5fb9f6b1ce0740089d640
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-renode-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/sam4s_xplained.yaml
+script=examples/renode-onboarding/sam4s_xplained-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;SAM4S XPLAINED RENODE SMOKE&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;pmc pcsr0=1f802100 ok&quot;, &quot;tc0 up_rc imr=10 pends=3 released=3 cv&lt;=rc=1 ok&quot;, &quot;tc1 up adv=1 covfs=1 cleared=1 ok&quot;, &quot;tc2 cpcstop cpcs=1 held=1 clksta=1 ok&quot;, &quot;tc3 cpcdis running=1 cpcs=1 clksta=0 ok&quot;, &quot;tc4 tc5 idle=1 sync=1 ra=0000 ok&quot;, &quot;tc5 pmc gated=1 held=1 tc4_runs=1 ok&quot;, &quot;SAM4S PASS&quot;] }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;pioC:10&quot;, min_edges: 4 } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537001728, expected_value: 1514471551, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

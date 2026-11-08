@@ -454,32 +454,34 @@ fn nrf5340_gpio_ports_answer_at_their_own_silicon_addresses() {
     );
 }
 
-/// The imported execution profile keeps only SERCOM0, which is the USART used
-/// by the exact-system UART smoke. Other SERCOM and timer instances remain
-/// outside this profile until they have their own exercised firmware path.
+/// The imported execution profile maps the SERCOMs Renode's repl models as
+/// USARTs (SERCOM0 console, SERCOM1, SERCOM3) — each exercised by the
+/// exact-system smoke — and leaves the others out.
 #[test]
-fn atsamd21_smoke_profile_exposes_only_sercom0() {
-    const SERCOM0: u64 = 0x4200_0800;
-    const SERCOM1: u64 = 0x4200_0C00;
-    const SERCOM3: u64 = 0x4200_1400;
-
+fn atsamd21_smoke_profile_maps_only_the_exercised_sercoms() {
     let bus = bus_for_chip("configs/chips/onboarding/atsamd21j17d-aft.yaml");
-    let owner = bus
-        .find_peripheral_index(SERCOM0)
-        .map(|i| bus.peripherals[i].name.clone());
-    assert_eq!(owner.as_deref(), Some("usart0"));
-    assert!(bus.find_peripheral_index(SERCOM1).is_none());
-    assert!(bus.find_peripheral_index(SERCOM3).is_none());
+    let owner = |addr: u64| {
+        bus.find_peripheral_index(addr)
+            .map(|i| bus.peripherals[i].name.clone())
+    };
+    assert_eq!(owner(0x4200_0800).as_deref(), Some("usart0"));
+    assert_eq!(owner(0x4200_0C00).as_deref(), Some("sercom1"));
+    assert_eq!(owner(0x4200_1400).as_deref(), Some("sercom3"));
+    assert!(owner(0x4200_1000).is_none(), "SERCOM2 is not exercised");
+    assert!(owner(0x4200_1800).is_none(), "SERCOM4 is not exercised");
 }
 
-/// The UART smoke firmware configures PA10/PA11 and toggles PA17. Its profile
-/// uses the engine's SAM GPIO register layout for PORTA and leaves PORTB out.
+/// The smoke firmware configures PA10/PA11, toggles PA17 and checks PB10, so
+/// the profile maps PORT groups A and B with the engine's SAM GPIO layout and
+/// nothing past them.
 #[test]
-fn atsamd21_smoke_profile_maps_modeled_port_a_only() {
+fn atsamd21_smoke_profile_maps_port_a_and_b_only() {
     let bus = bus_for_chip("configs/chips/onboarding/atsamd21j17d-aft.yaml");
-    let owner = bus
-        .find_peripheral_index(0x4100_4400)
-        .map(|i| bus.peripherals[i].name.clone());
-    assert_eq!(owner.as_deref(), Some("gpio_a"));
-    assert!(bus.find_peripheral_index(0x4100_4480).is_none());
+    let owner = |addr: u64| {
+        bus.find_peripheral_index(addr)
+            .map(|i| bus.peripherals[i].name.clone())
+    };
+    assert_eq!(owner(0x4100_4400).as_deref(), Some("gpio_a"));
+    assert_eq!(owner(0x4100_4480).as_deref(), Some("gpio_b"));
+    assert!(owner(0x4100_4500).is_none());
 }

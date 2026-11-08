@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/atsamd21j17d-aft-smoke.yaml",
   "system": "configs/systems/onboarding/atsamd21j17d-aft.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-08T13:26:46Z",
-  "finished_at_utc": "2026-11-08T13:26:51Z",
-  "elapsed_seconds": 5,
-  "elapsed_ms": 4572,
+  "started_at_utc": "2026-11-08T14:25:01Z",
+  "finished_at_utc": "2026-11-08T14:26:35Z",
+  "elapsed_seconds": 94,
+  "elapsed_ms": 93747,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.486,
-    "build_firmware": 2.617,
-    "run_smoke": 1.444
+    "build_cli": 93.18,
+    "build_firmware": 0.157,
+    "run_smoke": 0.4
   },
   "stages_ms": {
-    "build_cli": 486,
-    "build_firmware": 2617,
-    "run_smoke": 1444
+    "build_cli": 93180,
+    "build_firmware": 157,
+    "run_smoke": 400
   }
 }

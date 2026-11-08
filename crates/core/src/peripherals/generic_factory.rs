@@ -197,8 +197,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "samd51_usb_device_banks",
     // SAM D21 TC3..TC7 (`build_samd21_tc`): fixed instance addresses.
     "samd21_tc",
-    // SAM D21 RTC (`build_samd21_rtc`): fixed address/IRQ, optional `gclk_hz`.
+    // SAM D21 RTC (`build_samd21_rtc`): fixed IRQ, optional `gclk_hz`.
     "samd21_rtc",
+    // SAM4S TC0..TC2 / TC3..TC5 blocks (`build_sam4s_tc`): fixed addresses.
+    "sam4s_tc",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
     "sam_dmac",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
@@ -645,16 +647,40 @@ fn build_samd21_tc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Periphera
     Ok(Box::new(Samd21Tc::new(*instance)))
 }
 
-// SAM D21 RTC: fixed address and IRQ; `gclk_hz` declares GCLK_RTC.
+// SAM4S TC block: fixed address and channel-0 IRQ, no config overrides.
+#[cold]
+#[inline(never)]
+fn build_sam4s_tc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::sam::tc4s::{Sam4sTc, SAM4S_TC_BLOCKS};
+    if !p_cfg.config.is_empty() {
+        anyhow::bail!("sam4s_tc admits no config overrides");
+    }
+    let Some(block) = SAM4S_TC_BLOCKS
+        .iter()
+        .find(|b| b.base == p_cfg.base_address)
+    else {
+        anyhow::bail!("SAM4S TC base must be 0x40010000 (TC0..2) or 0x40014000 (TC3..5)");
+    };
+    if p_cfg.irq != Some(block.first_irq) {
+        anyhow::bail!(
+            "SAM4S TC at {:#x} requires IRQ {} (channel 0)",
+            block.base,
+            block.first_irq
+        );
+    }
+    Ok(Box::new(Sam4sTc::new(*block)))
+}
+
+// SAM D21 RTC: base from the chip yaml, fixed IRQ; `gclk_hz` declares GCLK_RTC.
 #[cold]
 #[inline(never)]
 fn build_samd21_rtc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
-    use crate::peripherals::sam::rtc21::{Samd21Rtc, RTC21_BASE, RTC21_DEFAULT_GCLK_HZ, RTC21_IRQ};
+    use crate::peripherals::sam::rtc21::{Samd21Rtc, RTC21_DEFAULT_GCLK_HZ, RTC21_IRQ};
     if let Some(k) = p_cfg.config.keys().find(|k| k.as_str() != "gclk_hz") {
         anyhow::bail!("samd21_rtc admits only `gclk_hz`, not `{k}`");
     }
-    if p_cfg.base_address != RTC21_BASE || p_cfg.irq != Some(RTC21_IRQ) {
-        anyhow::bail!("SAMD21 RTC sits at {RTC21_BASE:#x} on IRQ {RTC21_IRQ}");
+    if p_cfg.irq != Some(RTC21_IRQ) {
+        anyhow::bail!("SAMD21 RTC sits on IRQ {RTC21_IRQ}");
     }
     let hz = match p_cfg.config.get("gclk_hz") {
         None => RTC21_DEFAULT_GCLK_HZ,
@@ -953,6 +979,7 @@ pub fn try_build(
         }
         "samd21_tc" => build_samd21_tc(p_cfg)?,
         "samd21_rtc" => build_samd21_rtc(p_cfg)?,
+        "sam4s_tc" => build_sam4s_tc(p_cfg)?,
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
             let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());

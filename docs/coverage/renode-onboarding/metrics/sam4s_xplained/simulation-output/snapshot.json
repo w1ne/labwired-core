@@ -3,24 +3,24 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      67319,
-      24,
-      0,
-      6,
+      5591,
+      537001728,
+      854,
+      49,
       1074660884,
-      6,
-      32,
-      537001944,
-      429496730,
-      87,
-      537001956,
-      98,
+      1074663988,
+      1024,
+      537001960,
+      1,
+      127,
+      233,
       0,
-      537001944,
-      4197997,
-      4199392
+      16,
+      537001960,
+      4206915,
+      4207668
     ],
-    "pc": 4199392,
+    "pc": 4207668,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,9 +59,9 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "cdf197f45686724ced4c22553529553e7a9d1dff055dc093e36192bbe913a1b0",
+  "firmware_hash": "d0de76e40d07d0b8fe8227b093890fb35507d82ed7e5fb9f6b1ce0740089d640",
   "config": {
-    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-smoke",
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s_xplained.yaml",
     "script": "examples/renode-onboarding/sam4s_xplained-smoke.yaml"
   }

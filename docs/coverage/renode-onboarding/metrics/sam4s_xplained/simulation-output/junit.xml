@@ -1,16 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.017578">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="1.870234">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="cdf197f45686724ced4c22553529553e7a9d1dff055dc093e36192bbe913a1b0"/>
+    <property name="firmware_hash" value="d0de76e40d07d0b8fe8227b093890fb35507d82ed7e5fb9f6b1ce0740089d640"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.017578">
+  <testcase classname="labwired" name="run" time="1.870234">
   </testcase>
-  <testcase classname="labwired" name="assertion 1: uart_contains: SAM4S XPLAINED SMOKE" time="0.000000">
+  <testcase classname="labwired" name="assertion 1: uart_contains: SAM4S XPLAINED RENODE SMOKE" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=cortex-m4 uart=uart0&quot;, &quot;led=on odsr=00000400&quot;, &quot;led=off odsr=00000000&quot;, &quot;btn=1&quot;, &quot;hb=0 odsr=0000000…" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;pmc pcsr0=1f802100 ok&quot;, &quot;tc0 up_rc imr=10 pends=3 released=3 cv&lt;=rc=1 ok&quot;, &quot;tc1 up adv=1 covfs=1 cleare…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 3: gpio_edges: pioC:10 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x2001ff00=0x5a45007f" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

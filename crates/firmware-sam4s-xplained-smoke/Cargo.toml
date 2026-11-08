@@ -14,3 +14,9 @@ name = "firmware-sam4s-xplained-smoke"
 path = "src/main.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-sam4s-xplained-renode-smoke"
+path = "src/renode_smoke.rs"
+test = false
+bench = false

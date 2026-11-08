@@ -30,7 +30,6 @@
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult, SimulationError};
 use std::any::Any;
 
-pub const RTC21_BASE: u64 = 0x4000_1400;
 pub const RTC21_IRQ: u32 = 3;
 /// GCLK_RTC assumed when the chip yaml declares none: OSC32K / 32.
 pub const RTC21_DEFAULT_GCLK_HZ: u64 = 1024;
