@@ -1,10 +1,31 @@
 # Cortex-M4 smoke against the imported Renode STM32F401 Black Pill system.
+# Bare-register firmware enables RCC clocks, toggles the active-low PC13 user
+# LED through BSRR with ODR readback, runs TIM2 (PSC/ARR readback, counter
+# advance, UIF latch + W1C clear), and drives an I2C1 master transaction
+# (OAR1 readback, START/SB, then the address NACKs — SR1.AF, no ADDR — because
+# the bare board has nothing on I2C1; AF clear, STOP releases BUSY). Results
+# print on USART2 and a summary word lands at 0x20017F00. PC13 resets low, so
+# three on/off toggles give 5 edges, not 6. SPI, ADC, EXTI, the other timers and
+# USARTs claimed by the chip are not exercised here.
 schema_version: "1.0"
 inputs:
-  firmware: "../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-demo"
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-renode-smoke"
   system: "../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml"
 limits:
-  max_steps: 64
+  max_steps: 200000
 assertions:
-  - uart_contains: "OK"
+  - uart_ordered:
+      - "BLACKPILL F401 SMOKE"
+      - "rcc apb1=00220001 ok"
+      - "led pc13 odr=00002000 ok"
+      - "tim2 arr=00000040 ok"
+      - "i2c1 nack sr1=00000400 ok"
+      - "BLACKPILL PASS"
+  - gpio_edges:
+      pin: "gpioc:13"
+      min_edges: 5
+  - memory_value:
+      address: 0x20017F00
+      expected_value: 0xB1AC000F
+      size: 4
   - expected_stop_reason: max_steps

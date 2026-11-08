@@ -229,7 +229,7 @@
 | `stm32f072b_discovery` | `pass` | `True` | `yes` | `yes` | `9087` | `9.087` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `stm32f103` | `pass` | `True` | `yes` | `yes` | `116069` | `116.069` | `True` | `observable` | `5` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `stm32f4` | `pass` | `True` | `yes` | `yes` | `2282` | `2.282` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
-| `stm32f401cdu6-blackpill` | `pass` | `True` | `yes` | `yes` | `1175` | `1.175` | `True` | `observable` | `28` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `stm32f401cdu6-blackpill` | `pass` | `True` | `yes` | `yes` | `750` | `0.75` | `True` | `observable` | `28` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `stm32f412` | `pass` | `True` | `yes` | `yes` | `1343` | `1.343` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32f429` | `pass` | `True` | `yes` | `yes` | `964` | `0.964` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32f4_discovery` | `pass` | `True` | `yes` | `yes` | `1905` | `1.905` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |

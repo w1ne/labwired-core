@@ -23,3 +23,9 @@ name = "firmware-f401cdu6-blackpill-i2c-demo"
 path = "src/i2c_smoke.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-f401cdu6-blackpill-renode-smoke"
+path = "src/renode_smoke.rs"
+test = false
+bench = false

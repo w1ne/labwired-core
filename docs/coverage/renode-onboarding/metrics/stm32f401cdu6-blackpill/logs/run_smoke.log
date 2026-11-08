@@ -1,5 +1,7 @@
-2026-11-05T14:50:09.757340Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f401cdu6-blackpill.yaml
-2026-11-05T14:50:09.759800Z  INFO labwired_loader: ELF Entry Point: 0x8000009
+sccache: warning: The server looks like it shut down unexpectedly, compiling locally instead
+[2m2026-11-08T11:29:34.590093Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f401cdu6-blackpill.yaml
+[2m2026-11-08T11:29:34.592411Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000009
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-PASS  2/2 checks · stm32f401cdu6-blackpill-smoke · 64 steps · 0.00s
+labwired-cli test: idle_ff skipped 12343 of 200000 device cycles (187657 interpreted)
+PASS  4/4 checks · stm32f401cdu6-blackpill-smoke · 200000 steps · 0.05s

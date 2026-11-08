@@ -1,0 +1,11 @@
+sccache: warning: The server looks like it shut down unexpectedly, compiling locally instead
+[2m2026-11-08T11:28:13.042083Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f401cdu6-blackpill.yaml
+[2m2026-11-08T11:28:13.044383Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000009
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 16509 of 200000 device cycles (183491 interpreted)
+[2m2026-11-08T11:28:13.097191Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["BLACKPILL F401 SMOKE", "rcc apb1=00220001 ok", "led pc13 odr=00002000 ok", "tim2 arr=00000040 ok", "i2c1 sr1=", "BLACKPILL PASS"] }) (captured len=132)
+[2m2026-11-08T11:28:13.097214Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpioc:13", min_edges: 6 } }) (captured len=132)
+[2m2026-11-08T11:28:13.097225Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Memory assertion failed at 0x20017f00 (size 4): expected 0xb1ac000f, got 0xb1ac0007 (mask 0xffffffff)
+[2m2026-11-08T11:28:13.097229Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536968960, expected_value: 2980839439, mask: None, size: Some(4), node: None } }) (captured len=132)
+FAIL  1/4 checks · stm32f401cdu6-blackpill-smoke · 200000 steps · 0.05s
