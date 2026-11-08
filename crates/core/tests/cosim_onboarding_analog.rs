@@ -34,7 +34,17 @@ const CONVERTED: &[&str] = &[
     "ambiq-apollo4",
     "arduino_nano_33_ble",
     "atsamd21j17d-aft",
+    "brd4116a",
+    "brd4117a",
+    "brd4118a",
+    "brd4120a",
+    "brd4121a",
+    "brd4186c",
+    "brd4402a",
     "cc2538",
+    "efr32mg24",
+    "efr32mg26",
+    "efr32xg22",
     "eos-s3-qomu",
     "eos-s3-quickfeather",
     "eos-s3",
@@ -187,7 +197,15 @@ enum Family {
     /// only once PORT hands it to the ADC (PINCFG.PMUXEN, PMUX function B)
     /// (DS40001882 §33, ASF adc_start_conversion/adc_read).
     Samd21,
+    /// EFR32 Series-2 IADC (xG22/MG24/MG26): `SINGLE.PORTPOS`/`PINPOS` mux a
+    /// pad, `CMD.SINGLESTART` converts only while `EN.EN` is set,
+    /// `STATUS.SINGLEFIFODV` and `IF.SINGLEDONE` rise, `SINGLEFIFODATA` pops
+    /// 12 bits against AVDD (simplicity_sdk efr32mg2x_iadc.h, em_iadc.c).
+    Efr32Iadc,
 }
+
+/// `SINGLE.PORTPOS` value naming GPIO port A (`_IADC_SINGLE_PORTPOS_PORTA`).
+const IADC_PORTPOS_PORTA: u32 = 0x8;
 
 /// SAM D21 PORT GROUP0 (PA). The routed AIN5..7 are pads PA05..PA07.
 const SAMD21_PORT_A: u64 = 0x4100_4400;
@@ -232,6 +250,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Samd21
         } else if kind == "xilinx_xadc" {
             Family::Xadc
+        } else if kind == "efr32s2_iadc" {
+            Family::Efr32Iadc
         } else {
             match p.config.get("profile").and_then(|v| v.as_str()) {
                 Some("stm32f4") => Family::Stm32F4,
@@ -289,6 +309,8 @@ impl Converter {
             // 12-bit against REFCTRL.REFSEL INTVCC0 = VDDANA / 1.48
             // (2229 mV at 3.3 V), truncated, clamped.
             Family::Samd21 => (mv * 4095 / (3300 * 100 / 148)).min(4095),
+            // 12-bit against AVDD (3.3 V), 2^12 / VREF, truncated, clamped.
+            Family::Efr32Iadc => (mv * 4096 / 3300).min(4095),
         }
     }
 
@@ -321,6 +343,28 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Efr32Iadc => {
+                // A SINGLESTART before EN.EN is accepted and dropped: no
+                // result, no flag, which is how a missing IADC_init hangs on
+                // the bench. Then IADC_init's EN = 1.
+                bus.write_u32(self.base + 0x98, (IADC_PORTPOS_PORTA << 12) | (5 << 8))
+                    .expect("SINGLE PA05");
+                bus.write_u32(self.base + 0x0C, 1).expect("SINGLESTART");
+                bus.tick_peripherals_fully();
+                assert_eq!(
+                    bus.read_u32(self.base + 0x14).unwrap() & (1 << 8),
+                    0,
+                    "{}: a disabled IADC converts nothing",
+                    self.id
+                );
+                assert_eq!(
+                    bus.read_u32(self.base + 0x24).unwrap(),
+                    0,
+                    "{}: IF",
+                    self.id
+                );
+                bus.write_u32(self.base + 0x04, 1).expect("EN.EN");
+            }
             Family::Xadc => {
                 // xadcps.c XAdcPs_CfgInitialize: CFG |= ENABLE | CFIFOTH |
                 // DFIFOTH, then MCTL = 0 to release the XADC from reset.
@@ -1579,6 +1623,48 @@ impl Converter {
                 );
                 code
             }
+            Family::Efr32Iadc => {
+                // em_iadc IADC_initSingle + IADC_command(SINGLESTART), poll
+                // STATUS.SINGLEFIFODV, IADC_pullSingleFifoResult. Channel
+                // n is PA<n>: PORTPOS = PORTA, PINPOS = n.
+                const SINGLEFIFODV: u32 = 1 << 8;
+                const SINGLEDONE: u32 = 1 << 9;
+                let (cmd, status, iflag) = (self.base + 0x0C, self.base + 0x14, self.base + 0x24);
+                bus.write_u32(
+                    self.base + 0x98,
+                    (IADC_PORTPOS_PORTA << 12) | (u32::from(channel) << 8),
+                )
+                .expect("SINGLE");
+                bus.write_u32(iflag, SINGLEDONE).expect("clear SINGLEDONE");
+                bus.write_u32(cmd, 1).expect("SINGLESTART");
+                bus.tick_peripherals_fully();
+                assert_ne!(
+                    bus.read_u32(status).unwrap() & SINGLEFIFODV,
+                    0,
+                    "{}: the conversion raises SINGLEFIFODV",
+                    self.id
+                );
+                assert_ne!(
+                    bus.read_u32(iflag).unwrap() & SINGLEDONE,
+                    0,
+                    "{}: and IF.SINGLEDONE",
+                    self.id
+                );
+                let code = bus.read_u32(self.base + 0x74).expect("SINGLEFIFODATA");
+                assert_eq!(
+                    bus.read_u32(status).unwrap() & SINGLEFIFODV,
+                    0,
+                    "{}: popping the only result empties the FIFO",
+                    self.id
+                );
+                assert_eq!(
+                    bus.read_u32(self.base + 0x7C).unwrap(),
+                    code,
+                    "{}: SINGLEDATA keeps the newest result",
+                    self.id
+                );
+                code
+            }
             Family::Saadc { .. } => unreachable!("SAADC converts as a scan"),
         }
     }
@@ -1734,6 +1820,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Cc2538
                 | Family::Caes
                 | Family::Samd21
+                | Family::Efr32Iadc
         ) {
             assert_eq!(
                 converter.convert(&mut bus, IDLE_CHANNEL),
@@ -1818,7 +1905,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 71,
+        instances, 81,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -1826,7 +1913,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 164,
+        without_adc, 154,
         "onboarding profiles that declare no modelled ADC"
     );
 }

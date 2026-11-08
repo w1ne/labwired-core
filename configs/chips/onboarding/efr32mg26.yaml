@@ -44,3 +44,13 @@ peripherals:
   bus: sysbus
   base_address: 0x4003c0c0
   size: 48B
+# IADC0, the Series-2 incremental ADC. IADC0_S_BASE = 0x49004000, IADC_IRQn =
+# 65 (efr32mg26b510f3200im48.h, simplicity_sdk sisdk-2025.6). IADC_TypeDef in
+# efr32mg26_iadc.h is word for word the efr32mg26_iadc.h layout the
+# efr32s2_iadc model is walked from. SINGLE.PORTPOS/PINPOS picks the pad, so
+# channel = port * 16 + pin (PA05 = 5). No CMU here, so no clock gate.
+- id: iadc0
+  type: efr32s2_iadc
+  base_address: 0x49004000
+  size: 4KB
+  irq: 65
