@@ -32,19 +32,22 @@ This is the product bar beyond unit tests and UART-only CI fixtures.
 | nrf5340 | ❌ | ✅ | ❌ no I2C model | Add Arduino when PIO path exists |
 | nrf54l15 | ❌ | ❌ | — | Chip model present; frameworks TBD |
 | rp2040 | ✅ L0–L4 | ✅ | ✅ Arduino; Zephyr L3 skip | L4 SPI slave attach + bootrom auto-load |
-| stm32f103 | ✅ L0–L4 | ✅ | ✅ both | F1 Wire + Zephyr poll green |
+| stm32f103 | ✅ L0–L8 (9 pass / 0 skip) | ✅ | ✅ both | F1 Wire + Zephyr poll green; L6 on PA0 TIM2_CH1, pad-proven 1.000 kHz / 50.2 % (PC13 has no timer channel) |
 | stm32f401 | ✅ L0–L4 | ✅ | ✅ both | |
 | stm32f407 | ✅ L0–L4 | ❌ | ✅ Arduino | Add Zephyr `nucleo_f407zg` if west board ok |
+| stm32f411ceu6 | ✅ L0–L7 (L8 n/a, no CAN) | ❌ | ✅ Arduino (L3 ACK-only, F4 sketch ifdef) | WeAct Black Pill (`blackpill_f411ce`); L6 on PA0 TIM2_CH1, pad edges not routed |
 | stm32g474re | ✅ L0–L4 | ✅ | ✅ Arduino | |
+| stm32g071rb | ✅ L0–L7 (L8 n/a, no CAN) | ❌ | ✅ Arduino (L3 exact tier) | NUCLEO-G071RB (`nucleo_g071rb`); L6 on PA0 TIM2_CH1 (PA5 is DAC1_OUT2), pad edges not routed |
 | stm32h563 | ✅ L0–L4 | ✅ | ✅ Arduino | |
 | stm32h735 | ❌ | ❌ | — | Chip model; framework path TBD |
 | stm32l073 | ✅ L0–L4 | ✅ | ✅ Arduino | |
 | stm32l476 | ✅ L0–L4 | ✅ | ✅ Arduino | |
 | stm32u575 | ✅ L0–L8 (9 pass / 0 skip) | ✅ L0–L3 | ✅ both | U5 RCC ready bits + CRS; Zephyr `nucleo_u575zi_q` |
 | stm32u545 | ✅ L0–L8 | ❌ | ✅ Arduino | Generic `U545RETxQ` variant with NUCLEO-U545RE-Q pin overrides; Zephyr not validated |
+| stm32g0b1re | ✅ L0–L8 (9 pass / 0 skip) | ❌ | ✅ Arduino | NUCLEO-G0B1RE; RCC `stm32g0b1` (HSI48), Serial = LPUART1, L6 on PA0 TIM2_CH1 (pad edges not routed), L8 FDCAN1 register-level loopback |
 | stm32wb55 | ✅ L0–L4 | ✅ | ✅ Arduino | |
 | stm32wba52 | ✅ L0–L4 | ✅ | ✅ Arduino | Custom PIO board JSON |
-| atmega328p | ✅ L0–L4 | ❌ | ✅ Arduino TWI | Nano: USART+PORT+Timer0+TWI+SPI on CPU |
+| atmega328p | ✅ L0–L7 (8 pass / 1 skip, no CAN) | ❌ | ✅ Arduino TWI | Nano: USART+PORT+Timer0/1/2+TWI+SPI on CPU; L6 on D9 OC1A, pad-proven 490 Hz phase-correct (D13 has no timer output) |
 | mkw41z4 | ❌ | ✅ | Zephyr system ready | Zephyr only today |
 
 Legend: ✅ in `validation/*-matrix/boards.yaml` · ❌ not yet · — blocked

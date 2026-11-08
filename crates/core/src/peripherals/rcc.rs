@@ -109,6 +109,12 @@ pub enum RccRegisterLayout {
     /// HSI48ON/CRRCR for this part). NOT the L0 map — L0 has CRRCR at 0x08,
     /// a 2-bit CFGR switch, and IOPENR@0x2C.
     Stm32G0,
+    /// STM32G0B1/G0C1 (RM0444 §5): the [`Self::Stm32G0`] map plus the
+    /// G0B1's USB clock. CR HSI48ON bit22 → HSI48RDY bit23 and CCIPR2@0x58
+    /// (USBSEL / FDCANSEL), per ST's CMSIS `stm32g0b1xx.h`
+    /// (RCC_CR_HSI48ON_Pos 22, RCC_CR_HSI48RDY_Pos 23, CCIPR2 offset 0x58).
+    /// The G071 has no HSI48, so its bits 22/23 stay reserved there.
+    Stm32G0b1,
     /// STM32F0 family (RM0360 §6.4, STM32F030x4/x6/x8/xC and F070). The F1
     /// register map for CR/CFGR/CIR/APB2RSTR/APB1RSTR/AHBENR/APB2ENR/APB1ENR/
     /// BDCR/CSR at 0x00–0x24 — with the same CR enable→ready pairs and the
@@ -160,6 +166,7 @@ impl FromStr for RccRegisterLayout {
             "stm32wba" | "wba" => Ok(Self::Stm32Wba),
             "wch" | "ch32v003" => Ok(Self::Wch),
             "stm32g0" | "g0" => Ok(Self::Stm32G0),
+            "stm32g0b1" | "g0b1" => Ok(Self::Stm32G0b1),
             "stm32f0" | "f0" => Ok(Self::Stm32F0),
             "stm32c0" | "c0" => Ok(Self::Stm32C0),
             "stm32c5" | "c5" => Ok(Self::Stm32C5),
@@ -168,7 +175,7 @@ impl FromStr for RccRegisterLayout {
             "ch32v20x" => Ok(Self::Ch32v20x),
             "ch32v00x" => Ok(Self::Ch32v00x),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32f0, stm32c0, stm32c5, stm32u0, stm32u3, ch32v20x, ch32v00x",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32f0, stm32c0, stm32c5, stm32u0, stm32u3, stm32g0b1, ch32v20x, ch32v00x",
                 value
             )),
         }
@@ -2501,8 +2508,12 @@ pub struct G0Rcc {
     apbsmenr1: u32, // 0x4C
     apbsmenr2: u32, // 0x50
     ccipr: u32,     // 0x54
+    ccipr2: u32,    // 0x58 — G0B1 only (USBSEL / FDCANSEL)
     bdcr: u32,      // 0x5C — LSEON bit0 → LSERDY bit1
     csr: u32,       // 0x60 — LSION bit0 → LSIRDY bit1, reset flags 31:24
+    /// G0B1/G0C1: HSI48ON(22)→HSI48RDY(23) and CCIPR2 exist. False on G071.
+    #[serde(skip)]
+    hsi48: bool,
 }
 
 impl G0Rcc {
@@ -2513,16 +2524,26 @@ impl G0Rcc {
             cr: 0x0000_0500,
             ..Default::default()
         };
-        s.cr = Self::ready(s.cr);
+        s.cr = s.ready(s.cr);
+        s
+    }
+
+    /// G0B1/G0C1: the G0 map plus HSI48 and CCIPR2 (see
+    /// [`RccRegisterLayout::Stm32G0b1`]).
+    fn new_g0b1() -> Self {
+        let mut s = Self::new();
+        s.hsi48 = true;
         s
     }
 
     /// G0 CR ready rule: HSION(8)→HSIRDY(10), HSEON(16)→HSERDY(17),
     /// PLLON(24)→PLLRDY(25). HSEBYP is not gated on here — the L4 model's
     /// bypass gate exists because CubeL4 polls it; the G0 smoke path and the
-    /// HAL bring-up only need the ON→RDY pair to latch.
-    fn ready(mut cr: u32) -> u32 {
-        for &(on, rdy) in &[(8u32, 10u32), (16, 17), (24, 25)] {
+    /// HAL bring-up only need the ON→RDY pair to latch. G0B1 adds
+    /// HSI48ON(22)→HSI48RDY(23).
+    fn ready(&self, mut cr: u32) -> u32 {
+        let g0b1: &[(u32, u32)] = if self.hsi48 { &[(22, 23)] } else { &[] };
+        for &(on, rdy) in [(8u32, 10u32), (16, 17), (24, 25)].iter().chain(g0b1) {
             if cr & (1 << on) != 0 {
                 cr |= 1 << rdy;
             } else {
@@ -2556,6 +2577,7 @@ impl RccModel for G0Rcc {
             0x4C => self.apbsmenr1,
             0x50 => self.apbsmenr2,
             0x54 => self.ccipr,
+            0x58 if self.hsi48 => self.ccipr2,
             0x5C => self.bdcr,
             0x60 => self.csr,
             _ => {
@@ -2567,7 +2589,7 @@ impl RccModel for G0Rcc {
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            0x00 => self.cr = Self::ready(value),
+            0x00 => self.cr = self.ready(value),
             0x04 => self.icscr = value,
             // RCC_CFGR (RM0444 §5.4.3): SW[2:0] → SWS[5:3] follows only once
             // the requested source is ready. Source → CR ready bit:
@@ -2611,6 +2633,7 @@ impl RccModel for G0Rcc {
             0x4C => self.apbsmenr1 = value,
             0x50 => self.apbsmenr2 = value,
             0x54 => self.ccipr = value,
+            0x58 if self.hsi48 => self.ccipr2 = value,
             // BDCR: LSEON (bit0) → LSERDY (bit1); rest is RTC/backup storage.
             0x5C => {
                 self.bdcr = if value & 1 != 0 {
@@ -3116,6 +3139,7 @@ impl Rcc {
             RccRegisterLayout::Stm32L0 => Self::Stm32L0(L0Rcc::new()),
             RccRegisterLayout::Stm32G4 => Self::Stm32G4(G4Rcc::new()),
             RccRegisterLayout::Stm32G0 => Self::Stm32G0(G0Rcc::new()),
+            RccRegisterLayout::Stm32G0b1 => Self::Stm32G0(G0Rcc::new_g0b1()),
             RccRegisterLayout::Stm32F0 => Self::Stm32F0(F0Rcc::new()),
             RccRegisterLayout::Stm32C0 => Self::Stm32C0(C0Rcc::default()),
             RccRegisterLayout::Stm32C5 => Self::Stm32C5(C5Rcc::default()),
@@ -4814,6 +4838,32 @@ mod tests {
         assert_eq!(rcc.read_u32(0x00).unwrap() & (1 << 17), 0);
         rcc.write_u32(0x04, 0b01).unwrap();
         assert_ne!(rcc.read_u32(0x04).unwrap() & 0xC, 0x4);
+    }
+
+    /// STM32G0B1 (`stm32g0b1xx.h`): RCC_CR HSI48ON bit22 → HSI48RDY bit23 and
+    /// CCIPR2 @ 0x58. STM32duino's NUCLEO-G0B1RE SystemClock_Config turns on
+    /// HSI48 for USB and calls Error_Handler when HSI48RDY never rises. The
+    /// G071 has neither, so on `stm32g0` the same writes must stay inert.
+    #[test]
+    fn test_rcc_g0b1_hsi48_and_ccipr2() {
+        let mut rcc = Rcc::new_with_layout("stm32g0b1".parse().unwrap());
+        assert_eq!(rcc.read_u32(0x00).unwrap(), 0x0000_0500, "G0 CR reset");
+        rcc.write_u32(0x00, 0x500 | (1 << 22)).unwrap();
+        assert_ne!(rcc.read_u32(0x00).unwrap() & (1 << 23), 0, "HSI48RDY");
+        rcc.write_u32(0x00, 0x500).unwrap();
+        assert_eq!(rcc.read_u32(0x00).unwrap() & (1 << 23), 0, "HSI48RDY drops");
+        rcc.write_u32(0x58, 0x0000_2000).unwrap(); // USBSEL = 10 (HSI48)
+        assert_eq!(rcc.read_u32(0x58).unwrap(), 0x0000_2000, "CCIPR2");
+
+        let mut g071 = Rcc::new_with_layout(RccRegisterLayout::Stm32G0);
+        g071.write_u32(0x00, 0x500 | (1 << 22)).unwrap();
+        assert_eq!(
+            g071.read_u32(0x00).unwrap() & (1 << 23),
+            0,
+            "no HSI48 on G071"
+        );
+        g071.write_u32(0x58, 0x0000_2000).unwrap();
+        assert_eq!(g071.read_u32(0x58).unwrap(), 0, "no CCIPR2 on G071");
     }
 
     /// The F030 clock bring-up STM32Cube and generated programs run (RM0360

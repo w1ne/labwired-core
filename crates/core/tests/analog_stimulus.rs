@@ -252,3 +252,73 @@ fn c3_gp2y0a21_attaches_and_distance_drives_apb_saradc() {
     assert!(far < 1000, "far distance should be low counts, got {far}");
     assert!(near > far, "near={near} must exceed far={far}");
 }
+
+/// The LiPo charger has two independent controls but one analog output. Both
+/// controls must be retained after attach and update only the ADC channel the
+/// system manifest assigned to the battery.
+#[test]
+fn lipo_charger_inputs_reach_the_attached_adc_channel() {
+    let chip_path = root("configs/chips/stm32f103.yaml");
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load chip descriptor");
+    let mut config = std::collections::HashMap::new();
+    config.insert("channel".to_string(), serde_yaml::Value::from(2u64));
+    let manifest = SystemManifest {
+        parts: Vec::new(),
+        cosim_models: Vec::new(),
+        motor_models: Vec::new(),
+        walk_deleted: Some(false),
+        schema_version: "1.0".to_string(),
+        name: "lipo-charger-analog-stimulus".to_string(),
+        chip: chip_path.to_string_lossy().to_string(),
+        cpu_hz: None,
+        external_devices: vec![labwired_config::ExternalDevice {
+            id: "battery".to_string(),
+            r#type: "lipo_charger".to_string(),
+            connection: "adc1".to_string(),
+            channel: None,
+            route: Default::default(),
+            config,
+        }],
+        board_io: vec![],
+        debug_uart: None,
+        wifi_ap: None,
+        peripherals: vec![],
+        memory_overrides: Default::default(),
+    };
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
+
+    let inputs: Vec<_> = bus
+        .list_inputs()
+        .into_iter()
+        .filter(|(owner, _)| owner == "battery")
+        .collect();
+    assert!(inputs.iter().any(|(_, channel)| channel.key == "soc_pct"));
+    assert!(inputs
+        .iter()
+        .any(|(_, channel)| channel.key == "usb_present"));
+
+    let idle = adc_channel_count(&mut bus, "adc1", 2);
+    assert!(
+        (idle as i32 - 2325).abs() <= 3,
+        "50% SoC with no charger should start near 1875 mV, got {idle} counts"
+    );
+    assert_eq!(adc_channel_count(&mut bus, "adc1", 1), 0xFFFF);
+
+    bus.set_input(Some("battery"), "usb_present", 1.0)
+        .expect("connect charger");
+    let charging = adc_channel_count(&mut bus, "adc1", 2);
+    assert!(charging > idle, "charging should raise the divided voltage");
+
+    bus.set_input(Some("battery"), "soc_pct", 80.0)
+        .expect("raise state of charge");
+    let higher_soc = adc_channel_count(&mut bus, "adc1", 2);
+    assert!(
+        higher_soc > charging,
+        "state of charge should raise the battery voltage"
+    );
+    assert_eq!(
+        adc_channel_count(&mut bus, "adc1", 1),
+        0xFFFF,
+        "the source must leave unassigned ADC channels untouched"
+    );
+}

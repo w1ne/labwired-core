@@ -64,6 +64,21 @@ const SPINLOCK31: u64 = 0x17c;
 
 // The RP2040 exposes 30 GPIOs (0..29) on bank 0.
 const GPIO_MASK: u32 = 0x3fff_ffff;
+
+/// Register map variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SioLayout {
+    /// RP2040 SIO: OUT 0x10, OUT_SET 0x14, ..., OE 0x20 (lo bank only).
+    #[default]
+    Rp2040,
+    /// RP2350 SIO (pico-sdk rp2350 hardware_regs/sio.h): every GPIO register
+    /// has a HI twin at +4, so OUT 0x10 / HI_OUT 0x14, OUT_SET 0x18,
+    /// OUT_CLR 0x20, OUT_XOR 0x28, OE 0x30, OE_SET 0x38, OE_CLR 0x40,
+    /// OE_XOR 0x48. Only the lo bank (GPIO 0..29, the RP2350A pads) is
+    /// modelled: HI registers read 0 and ignore writes, as `GPIO_HI_IN`
+    /// already does. The RP2040 divider window is left as it is.
+    Rp2350,
+}
 /// Pads this model answers for, named so the register mask and the per-pin
 /// capability methods (`read_gpio_pad`, `read_gpio_input`, `set_gpio_input`)
 /// cannot drift apart — a pin the mask drops must also be a pin the external
@@ -73,6 +88,8 @@ const PAD_COUNT: u8 = 30;
 
 #[derive(Debug, Default)]
 pub struct Rp2040Sio {
+    /// Register map variant (RP2040 or RP2350 GPIO offsets).
+    layout: SioLayout,
     gpio_out: u32,
     gpio_oe: u32,
     /// Level the OUTSIDE WORLD holds on each pad — a `board_io` button wired to
@@ -143,6 +160,31 @@ impl Rp2040Sio {
             .as_ref()
             .map(|clock| clock.now())
             .unwrap_or(self.cycle)
+    }
+
+    pub fn with_layout(mut self, layout: SioLayout) -> Self {
+        self.layout = layout;
+        self
+    }
+
+    /// Map an offset onto the RP2040 constants below. `None` = an RP2350
+    /// HI-bank GPIO register (reads 0, writes ignored).
+    fn canonical(&self, offset: u64) -> Option<u64> {
+        if self.layout == SioLayout::Rp2040 {
+            return Some(offset);
+        }
+        Some(match offset {
+            0x10 => GPIO_OUT,
+            0x18 => GPIO_OUT_SET,
+            0x20 => GPIO_OUT_CLR,
+            0x28 => GPIO_OUT_XOR,
+            0x30 => GPIO_OE,
+            0x38 => GPIO_OE_SET,
+            0x40 => GPIO_OE_CLR,
+            0x48 => GPIO_OE_XOR,
+            0x14..=0x4c if offset & 0x4 != 0 => return None,
+            _ => offset,
+        })
     }
 
     /// Level at the pads — what `GPIO_IN` reports.
@@ -456,6 +498,9 @@ impl Peripheral for Rp2040Sio {
         if Self::is_spinlock(offset) {
             return Ok(self.claim_spinlock(offset));
         }
+        let Some(offset) = self.canonical(offset) else {
+            return Ok(0);
+        };
         let val = match offset {
             CPUID => 0, // single core context: always core 0
             GPIO_IN => self.gpio_in(),
@@ -491,6 +536,9 @@ impl Peripheral for Rp2040Sio {
             self.release_spinlock(offset);
             return Ok(());
         }
+        let Some(offset) = self.canonical(offset) else {
+            return Ok(());
+        };
         match offset {
             DIV_UDIVIDEND => {
                 self.div_dividend = value;
@@ -571,10 +619,11 @@ impl Peripheral for Rp2040Sio {
             return self.write_u32(aligned, value as u32);
         }
         let shift = (offset & 0x3) * 8;
-        let cur = match aligned {
-            GPIO_OUT | GPIO_OUT_SET | GPIO_OUT_CLR | GPIO_OUT_XOR => self.gpio_out,
-            GPIO_OE | GPIO_OE_SET | GPIO_OE_CLR | GPIO_OE_XOR => self.gpio_oe,
-            _ => self.read_u32(aligned)?,
+        let cur = match self.canonical(aligned) {
+            None => 0,
+            Some(GPIO_OUT | GPIO_OUT_SET | GPIO_OUT_CLR | GPIO_OUT_XOR) => self.gpio_out,
+            Some(GPIO_OE | GPIO_OE_SET | GPIO_OE_CLR | GPIO_OE_XOR) => self.gpio_oe,
+            Some(_) => self.read_u32(aligned)?,
         };
         let new = (cur & !(0xFF << shift)) | ((value as u32) << shift);
         self.write_u32(aligned, new)

@@ -118,6 +118,28 @@ boards:
     sketches_skip_reason:
       L8_can: "No on-chip CAN model"
 
+  - id: rp2350
+    chip: rp2350
+    system: systems/rp2350.yaml
+    # Raspberry Pi Pico 2 on Earle Philhower's arduino-pico core. The registry
+    # `raspberrypi` platform has no RP2350 boards (and its `pico` board is the
+    # Mbed core the rp2040 row uses), so this pins Max Gerhardt's platform,
+    # the one arduino-pico documents for PlatformIO, at a fixed commit.
+    pio: { platform: "https://github.com/maxgerhardt/platform-raspberrypi.git#5d4561a05e3b212660ac6fdd3fbfb328d1988aa1", board: rpipico2, framework: arduino }
+    # Serial is native USB CDC: the sketches wait for the simulated host's
+    # DTR (`while (!Serial)`), so every cell pays USB enumeration first.
+    max_steps: 3000000
+    budget_reason: "USB CDC enumeration + DTR before the first print: L0/L5 ~0.73M steps; ~4x headroom"
+    # Pico 2 LED = GP25 via SIO (pinMode/digitalWrite go through the GPIO
+    # coprocessor, p0).
+    led_watch: "sio:25"
+    led_min_edges: 2
+    family: rp2040
+    notes: "arduino-pico core; Serial = USB CDC; L6 analogWrite = PWM slice 4B on GP25"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "RP2350 has no CAN controller"
+
   - id: stm32f103
     chip: stm32f103
     system: systems/stm32f103.yaml
@@ -126,6 +148,10 @@ boards:
     budget_reason: "L0~0.7M L2~0.22M; L3 Wire I2C may need multi-M steps"
     led_watch: "gpioc:13"
     led_min_edges: 2
+    # L6 drives PA0 = TIM2_CH1 (1 kHz). PC13 has no timer channel, so
+    # analogWrite(LED_BUILTIN, 128) was a digitalWrite(HIGH).
+    pwm_watch: "gpioa:0"
+    pwm_min_edges: 20
     family: stm32
 
   - id: stm32f401
@@ -140,6 +166,23 @@ boards:
     sketches_skip: [L8_can]
     sketches_skip_reason:
       L8_can: "No bxCAN/FDCAN in chip yaml"
+
+  - id: stm32f411ceu6
+    chip: stm32f411ceu6
+    system: systems/stm32f411ceu6.yaml
+    pio: { platform: ststm32, board: blackpill_f411ce, framework: arduino }
+    max_steps: 4000000
+    budget_reason: "Black Pill 100 MHz: L0~0.10M L2~0.29M L4~0.20M; L6 30x delay(1) ~2.98M"
+    led_watch: "gpioc:13"
+    led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0 (PC13 has no timer channel, so analogWrite
+    # would fall back to digitalWrite). TIM2 reaches PWM1/CC1E with PA0 on
+    # AF1, but no pwm_watch: there is no STM32 TIM OC->pad routing on main
+    # yet (PROBLEMS.md "L6 PWM edges"), so PA0 shows one edge, not a wave.
+    family: stm32
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "STM32F411 has no CAN peripheral"
 
   - id: stm32f407
     chip: stm32f407
@@ -166,6 +209,24 @@ boards:
     sketches_skip: [L8_can]
     sketches_skip_reason:
       L8_can: "No FDCAN in chip yaml for matrix L8"
+
+  - id: stm32g071rb
+    chip: stm32g071
+    system: systems/stm32g071rb.yaml
+    pio: { platform: ststm32, board: nucleo_g071rb, framework: arduino }
+    max_steps: 20000000
+    budget_reason: "NUCLEO-G071RB 64 MHz: L0~0.07M L2~0.20M; L3 Wire.begin i2c_computeTiming ~11M; L5 ~5.9M; L6 ~2.0M"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0, not LD4/PA5: PA5 is DAC1_OUT2 and the twin
+    # models DAC1, so analogWrite(LED_BUILTIN) took the DAC path (DAC_CR.EN2=1,
+    # TIM2 untouched) and passed without any PWM. On PA0, TIM2 reaches
+    # CEN/PWM1/CC1E with PA0 on AF2. No pwm_watch: no STM32 TIM OC->pad
+    # routing on main yet (PROBLEMS.md "L6 PWM edges"), PA0 shows 0 edges.
+    family: stm32
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "STM32G071 has no CAN peripheral"
 
   - id: stm32h563
     chip: stm32h563
@@ -254,6 +315,17 @@ boards:
     led_min_edges: 2
     family: stm32
 
+  - id: stm32g0b1re
+    chip: stm32g0b1re
+    system: systems/stm32g0b1re.yaml
+    pio: { platform: ststm32, board: nucleo_g0b1re, framework: arduino }
+    max_steps: 20000000
+    budget_reason: "NUCLEO-G0B1RE 64 MHz: L0~0.07M L2~0.20M; L3 Wire.begin i2c_computeTiming ~11M; L5 ~5.9M; L6 ~2.0M"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0, not LD4/PA5 (DAC1_OUT2), see the L6 sketch.
+    family: stm32
+
   - id: atmega328p
     chip: atmega328p
     system: systems/atmega328p.yaml
@@ -262,6 +334,10 @@ boards:
     budget_reason: "AVR: L0~14k L2~40k L3/L4 TWI/SPI headroom for millis + Wire/SPI"
     led_watch: "portb:5"
     led_min_edges: 2
+    # L6 drives D9 = PB1 = OC1A (Timer1 phase-correct, 490 Hz). D13 has no
+    # timer output, so analogWrite(LED_BUILTIN, 128) was a digitalWrite(HIGH).
+    pwm_watch: "portb:1"
+    pwm_min_edges: 20
     family: avr
     notes: "Classic Arduino Nano — L0–L7 twin; L8 no CAN"
     sketches_skip: [L8_can]

@@ -679,6 +679,9 @@ pub enum CortexMCoprocessor {
     /// RP2350 double-precision coprocessor, p4 (current security state) and
     /// p5 (Non-secure) — RP2350 datasheet 3.6.2.
     Rp2350Dcp,
+    /// RP2350 GPIO coprocessor, p0: single-cycle access to the SIO GPIO
+    /// registers (RP2350 datasheet 3.6.1, pico-sdk `gpio_coproc.h`).
+    Rp2350Gpioc,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
