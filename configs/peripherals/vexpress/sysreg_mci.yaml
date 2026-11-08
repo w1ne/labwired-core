@@ -1,0 +1,35 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# ARM Versatile Express V2M motherboard system registers, SYS_MCI. The sysreg
+# block is the 4 KiB `arm,vexpress-sysreg` window at CS7 offset 0, 0x1000_0000
+# in the legacy (CA9) memory map (Linux vexpress-v2m.dtsi sysreg@0; QEMU
+# vexpress.c VE_SYSREGS). SYS_MCI @0x048 reports the MMC socket: bit 0 card
+# detect, bit 1 write protect. Linux registers it as a two-GPIO
+# basic-mmio-gpio with only a "dat" resource (vexpress-sysreg.c SYS_MCI,
+# "arm,vexpress-sysreg,sys_mci"), so it is an input-only port, and the V2M
+# device tree takes the MMCI cd-gpios / wp-gpios from lines 0 and 1. QEMU
+# arm_sysctl.c `case 0x48` returns sys_mci, set by ARM_SYSCTL_GPIO_MMC_CARDIN
+# (bit 0) and ARM_SYSCTL_GPIO_MMC_WPROT (bit 1).
+#
+# Only SYS_MCI is declared, so the declarative GPIO path runs this window
+# input-only (IN with no OUT, ENABLE or gpio_mode). Not modelled: SYS_ID,
+# SYS_SW, SYS_LED (the eight-bit LED bgpio @0x008), SYS_FLASH @0x04C, the
+# 24 MHz / 100 Hz counters, SYS_CFGCTRL and the rest of the block; they read 0
+# as the `armsysctl` stub did.
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: IN
+  address_offset: 0x48
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SYS_MCI
+    bit_range:
+    - 1
+    - 0
+    description: SYS_MCI, bit 0 MMC card detect, bit 1 MMC write protect
+  side_effects: null

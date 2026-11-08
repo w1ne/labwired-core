@@ -121,6 +121,12 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x48,
         "Linux pinctrl-starfive-jh7100.c GPIODIN",
     ),
+    // V2M motherboard sysreg SYS_MCI: MMC card detect (bit 0), write protect (bit 1).
+    (
+        "declarative/vexpress/sysreg_mci.yaml",
+        0x48,
+        "Linux vexpress-sysreg.c SYS_MCI (sys_mci basic-mmio-gpio dat)",
+    ),
     // Window based at the port's P_m byte, so PIN_m is +0x800.
     (
         "declarative/rzg2l/port.yaml",
@@ -225,11 +231,10 @@ const PLACEHOLDER_TYPES: &[&str] = &[
 /// Profiles whose port takes the routed level (`read_gpio_input` follows it)
 /// but where a firmware load from the port's input register does not see it.
 /// Fixing one has to move it out of this list.
-const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
-    // i.MX 8M Plus: every load in the GPIO1 window returns 0xFFFF_FFFF.
-    ("nxp-frdm-imx8mplus", "GPIO1 window reads all ones"),
-    ("nxp-mimx8ml", "GPIO1 window reads all ones"),
-];
+///
+/// Empty: the i.MX 8M Plus profiles left it once their flash boot alias,
+/// which shadowed GPIO1 with erased flash, was turned off.
+const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[];
 
 /// Absolute input-register address of the covered port, from the vendor
 /// header. [`input_register`] derives the address from the descriptor's own
@@ -365,6 +370,12 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
         "Linux jh7100.dtsi pinctrl@11910000 + pinctrl-starfive-jh7100.c GPIODIN",
     ),
     (
+        "vexpress",
+        "sysCtl",
+        0x1000_0048,
+        "Linux vexpress-v2m.dtsi sysreg@0 (CS7 0x1000_0000) + vexpress-sysreg.c SYS_MCI",
+    ),
+    (
         "litex_vexriscv",
         "gpio_in",
         0xE000_6000,
@@ -391,13 +402,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 205;
+const COVERED: usize = 206;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 100;
+const SILICON_REGISTER: usize = 101;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 40;
+const NO_ANALOG_ENDPOINT: usize = 39;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()

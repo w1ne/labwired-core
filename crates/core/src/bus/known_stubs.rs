@@ -96,7 +96,7 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "armsysctl",
         "ARM Versatile/VExpress system controller. Renode-imported onboarding descriptor; no \
          model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/versatile, onboarding/vexpress.",
+         onboarding/versatile.",
     ),
     (
         "arraymemory",
