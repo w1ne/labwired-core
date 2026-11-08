@@ -22,6 +22,9 @@ pub mod cortex_m_mpu_enforcement;
 pub mod device_identity_one_home;
 #[cfg(test)]
 pub mod device_time_derived;
+/// STM32 timers count the APB timer kernel clock (RCC_CFGR.PPREx), not HCLK.
+#[cfg(test)]
+pub mod stm32_timer_kernel_clock;
 /// STM32F103 timer outputs on pads, RCC gates, internal temperature sensor.
 #[cfg(test)]
 pub mod stm32f1_timer_outputs;

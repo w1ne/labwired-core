@@ -171,12 +171,12 @@ boards:
     budget_reason: "Disco L0~1.7M L2~0.5M; green LED PD12"
     led_watch: "gpiod:12"
     led_min_edges: 2
-    # L6 analogWrite(LED_BUILTIN): the green LED PD12 is TIM4_CH1 on AF2 and
-    # the F4 timer AF table routes it (120 edges), but NO pwm_watch: the wave
-    # is 2 kHz, not 1 kHz. The Disco runs HCLK 168 MHz with APB1 /4, so TIM4
-    # counts at 84 MHz on silicon, and the twin ticks every STM32 timer at
-    # HCLK (no APB-prescaler timer clock yet). An edge-count watch would pass
-    # at the wrong frequency.
+    # L6 analogWrite(LED_BUILTIN): the green LED PD12 is TIM4_CH1 on AF2,
+    # routed by the F4 timer AF table. The Disco runs HCLK 168 MHz with APB1
+    # /4, so TIM4 counts at TIMCLK = 2 x PCLK1 = 84 MHz; the twin derives that
+    # from RCC_CFGR.PPRE1 (bus/timer_kernel_clock.rs), so the wave is 1 kHz.
+    pwm_watch: "gpiod:12"
+    pwm_min_edges: 20
     family: stm32
     # L8_can: bxCAN1 loopback (chip yaml + RM0090 APB1ENR bit 25)
 

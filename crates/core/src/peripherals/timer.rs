@@ -166,6 +166,13 @@ pub struct Timer {
     /// walk path.
     #[serde(skip)]
     clock: Option<CycleClock>,
+    /// HCLK cycles per TIMxCLK cycle: the STM32 timer kernel clock is the APB
+    /// clock, doubled whenever the APB prescaler is not 1 (RM0090 §7.2, RM0008
+    /// §7.2), so it only falls below HCLK at APB /4 and slower. The bus
+    /// derives it from RCC_CFGR.PPREx ([`Self::set_kernel_clock_div`]); 1
+    /// (and the `Default` 0) mean the timer counts every HCLK cycle.
+    #[serde(skip)]
+    kernel_div: u32,
 
     // ── Input capture (CCxS != 0) ──────────────────────────────────────────
     /// The CCER has the CCxNP bits on a general-purpose timer (F2/F4 and
@@ -348,6 +355,7 @@ impl Timer {
             phase_revision: 0,
             freeze_revision: Cell::new(0),
             clock: None,
+            kernel_div: 1,
             ccer_np: false,
             pad_map: None,
             ic_psc_count: [0; 4],
@@ -449,7 +457,7 @@ impl Timer {
             counter_enabled: (self.cr1 & 1) != 0,
             period_ticks: period,
             counter_ticks: self.cnt.get(),
-            prescaler_divisor: u64::from(self.psc) + 1,
+            prescaler_divisor: u64::from(self.count_psc()) + 1,
             prescaler_phase: self.psc_cnt.get(),
             phase_revision: self.phase_revision,
             counter_frozen: self.counter_frozen(),
@@ -474,6 +482,32 @@ impl Timer {
     /// the cycle the waveform was last advanced to.
     pub fn output_level(&self, ch: usize) -> bool {
         self.wave.pads.level(ch)
+    }
+
+    /// The prescaler as the counter sees it in HCLK cycles: PSC+1 timer
+    /// kernel clocks, each [`Self::kernel_div`] HCLK cycles long, minus one.
+    fn count_psc(&self) -> u32 {
+        (self.psc + 1) * self.kernel_div.max(1) - 1
+    }
+
+    /// See [`crate::Peripheral::set_timer_kernel_clock_div`].
+    pub fn set_kernel_clock_div(&mut self, div: u32) -> bool {
+        let div = div.max(1);
+        if div == self.kernel_div.max(1) {
+            return false;
+        }
+        self.kernel_div = div;
+        self.phase_revision = self.phase_revision.wrapping_add(1);
+        if self.wave.wired {
+            let now = self.wave_now();
+            self.redrive_outputs(now);
+        }
+        true
+    }
+
+    /// HCLK cycles per timer kernel clock cycle.
+    pub fn kernel_clock_div(&self) -> u32 {
+        self.kernel_div.max(1)
     }
 
     fn wave_now(&self) -> u64 {
@@ -572,7 +606,7 @@ impl Timer {
         };
         // Phase: count index 0 is the cycle CNT last read 0 with an empty
         // prescaler, so the waveform lines up with the counter firmware reads.
-        let div = u64::from(self.psc) + 1;
+        let div = u64::from(self.count_psc()) + 1;
         let elapsed =
             (u64::from(self.cnt.get()) % period) * div + u64::from(self.psc_cnt.get()).min(div - 1);
         let timer = LedcTimebase {
@@ -928,7 +962,7 @@ impl Timer {
     /// tick.
     #[inline]
     fn ticks_to_first_increment(&self) -> u64 {
-        (self.psc as u64).saturating_sub(self.psc_cnt.get() as u64) + 1
+        (self.count_psc() as u64).saturating_sub(self.psc_cnt.get() as u64) + 1
     }
 
     /// Number of increments until the counter first *visits* value `w`
@@ -1052,7 +1086,7 @@ impl Timer {
             self.psc_cnt.set(self.psc_cnt.get() + e as u32);
             return;
         }
-        let period = self.psc as u64 + 1;
+        let period = self.count_psc() as u64 + 1;
         let n = 1 + (e - k1) / period; // increments the un-frozen walk would do
         let freeze_j = self.first_enabled_event();
         // Increments actually applied: the walk stops counting after the
@@ -1153,7 +1187,7 @@ impl Timer {
             .map(|p| p.accept.saturating_sub(anchor).max(1));
         let counter = self
             .first_enabled_event()
-            .map(|j| self.ticks_to_first_increment() + (j - 1) * (self.psc as u64 + 1));
+            .map(|j| self.ticks_to_first_increment() + (j - 1) * (self.count_psc() as u64 + 1));
         match (counter, filter) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
@@ -1429,7 +1463,7 @@ impl Timer {
         }
 
         self.psc_cnt.set(self.psc_cnt.get().wrapping_add(1));
-        if self.psc_cnt.get() > self.psc {
+        if self.psc_cnt.get() > self.count_psc() {
             self.psc_cnt.set(0);
             self.cnt.set(self.cnt.get().wrapping_add(1));
 
@@ -1674,6 +1708,14 @@ impl crate::Peripheral for Timer {
 
     fn wire_lines(&self) -> Option<&PadLines> {
         self.wave.pads.wire_lines()
+    }
+
+    fn has_timer_kernel_clock(&self) -> bool {
+        true
+    }
+
+    fn set_timer_kernel_clock_div(&mut self, div: u32) -> bool {
+        self.set_kernel_clock_div(div)
     }
 
     fn timer_output_family(&self) -> Option<&'static str> {
