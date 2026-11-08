@@ -6,8 +6,8 @@
 
 name: simavr-atmega128rfa1
 description: >-
-  ATmega128RFA1 (Atmel AVR). Imported profile measured for bounded AVR8 CPU and SRAM
-  execution only; it declares no peripheral models and makes no board-I/O claim.
+  ATmega128RFA1 (Atmel AVR). Imported profile measured for bounded AVR8 execution
+  and GPIOA/GPIOB only. Other peripheral ranges are omitted from this profile.
   Memory geometry: flash 128KB @ 0x0, ram 16KB @ 0x200.
 family: Atmel AVR
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
@@ -15,6 +15,20 @@ code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // 
 pass_rate: 0
 verified: false
 system: systems/onboarding/simavr-atmega128rfa1.yaml
+validation:
+  method: renode-onboarding-exact-import-smoke
+  reason: bounded AVR8 execution and GPIOA/GPIOB (PB0 output) only; ideal rail assumed; whole platform remains unverified
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    avr8_cpu_sram_smoke: true
+    gpio: true
+    whole_platform: false
+    other_peripherals: false
+    board_io: true
+  timestamp_utc: '2026-11-08T01:30:00Z'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/simavr-atmega128rfa1.validation.md
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

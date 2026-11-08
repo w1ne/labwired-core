@@ -1,10 +1,13 @@
-# CPU and SRAM smoke for the imported ATmega169P profile.
-# No peripheral accesses or board I/O are asserted.
+# GPIO smoke against the imported ATmega169P profile (no USART is used).
 schema_version: "1.0"
 inputs:
-  firmware: "../../tests/fixtures/avr/atmega169p-cpu-smoke.elf"
+  firmware: "../../tests/fixtures/avr/atmega169p-io-smoke.elf"
   system: "../../configs/systems/onboarding/simavr-atmega169p.yaml"
 limits:
   max_steps: 100000
 assertions:
+  - memory_value: {address: 0x0130, expected_value: 0x7F, size: 1}
+  - gpio_edges:
+      pin: "portb:0"
+      min_edges: 2
   - expected_stop_reason: max_steps

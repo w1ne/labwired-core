@@ -8,8 +8,8 @@
     "pass": 224,
     "fail": 0,
     "pass_loading_zero_answering_windows": 0,
-    "pass_observable_assertions": 221,
-    "pass_stop_reason_only": 3,
+    "pass_observable_assertions": 224,
+    "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
     "median_elapsed_ms": 1151,
     "median_elapsed_seconds": 1.151,
@@ -7284,32 +7284,34 @@
       "script": "examples/renode-onboarding/simavr-atmega128rfa1-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-atmega128rfa1.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T17:35:01Z",
-      "finished_at_utc": "2026-11-06T17:35:01Z",
+      "started_at_utc": "2026-11-08T00:53:28Z",
+      "finished_at_utc": "2026-11-08T00:53:29Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 610,
+      "elapsed_ms": 705,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.3,
+        "build_cli": 0.351,
         "build_firmware": null,
-        "run_smoke": 0.303
+        "run_smoke": 0.343
       },
       "stages_ms": {
-        "build_cli": 300,
+        "build_cli": 351,
         "build_firmware": null,
-        "run_smoke": 303
+        "run_smoke": 343
       },
-      "prebuilt_firmware": "tests/fixtures/avr/atmega128rfa1-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/atmega128rfa1-io-smoke.elf",
       "_artifact_path": "simavr-atmega128rfa1",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega128rfr2",
@@ -7328,32 +7330,34 @@
       "script": "examples/renode-onboarding/simavr-atmega128rfr2-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-atmega128rfr2.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T17:35:02Z",
-      "finished_at_utc": "2026-11-06T17:35:02Z",
+      "started_at_utc": "2026-11-08T00:53:30Z",
+      "finished_at_utc": "2026-11-08T00:53:30Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 621,
+      "elapsed_ms": 737,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.301,
+        "build_cli": 0.376,
         "build_firmware": null,
-        "run_smoke": 0.312
+        "run_smoke": 0.353
       },
       "stages_ms": {
-        "build_cli": 301,
+        "build_cli": 376,
         "build_firmware": null,
-        "run_smoke": 312
+        "run_smoke": 353
       },
-      "prebuilt_firmware": "tests/fixtures/avr/atmega128rfr2-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/atmega128rfr2-io-smoke.elf",
       "_artifact_path": "simavr-atmega128rfr2",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega16",
@@ -7513,32 +7517,34 @@
       "script": "examples/renode-onboarding/simavr-atmega169p-smoke.yaml",
       "system": "configs/systems/onboarding/simavr-atmega169p.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T17:33:31Z",
-      "finished_at_utc": "2026-11-06T17:34:59Z",
-      "elapsed_seconds": 88,
-      "elapsed_ms": 87484,
+      "started_at_utc": "2026-11-08T00:53:16Z",
+      "finished_at_utc": "2026-11-08T00:53:27Z",
+      "elapsed_seconds": 11,
+      "elapsed_ms": 10783,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 87.038,
+        "build_cli": 10.336,
         "build_firmware": null,
-        "run_smoke": 0.437
+        "run_smoke": 0.434
       },
       "stages_ms": {
-        "build_cli": 87038,
+        "build_cli": 10336,
         "build_firmware": null,
-        "run_smoke": 437
+        "run_smoke": 434
       },
-      "prebuilt_firmware": "tests/fixtures/avr/atmega169p-cpu-smoke.elf",
+      "prebuilt_firmware": "tests/fixtures/avr/atmega169p-io-smoke.elf",
       "_artifact_path": "simavr-atmega169p",
       "zero_answering_windows": [],
       "smoke_assertion_kinds": [
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
-      "smoke_depth": "stop_reason_only"
+      "smoke_depth": "observable"
     },
     {
       "target_id": "simavr-atmega16m1",

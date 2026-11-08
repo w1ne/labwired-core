@@ -21,27 +21,27 @@
       0,
       0,
       0,
+      48,
+      0,
+      165,
+      138,
+      138,
+      0,
+      38,
+      1,
+      49,
       2,
-      0,
-      0,
-      0,
-      0,
-      0,
-      202,
-      55,
-      2,
-      2,
-      255,
+      250,
       65,
-      0,
-      0
+      47,
+      2
     ],
-    "pc": 340,
-    "sp": 16893,
-    "sreg": 0
+    "pc": 524,
+    "sp": 16890,
+    "sreg": 1
   },
   "steps_executed": 100000,
-  "cycles": 185705,
+  "cycles": 156669,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -66,9 +66,9 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "9f6c66b0c9e049709ca301d3214811650f882d12f7fa62e385aba2e232e538d7",
+  "firmware_hash": "ee0d6a3eaa551daad4684d2c0d2d5ee77e598fe055313e139894081740bd30f4",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega128rfa1-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega128rfa1-io-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-atmega128rfa1.yaml",
     "script": "examples/renode-onboarding/simavr-atmega128rfa1-smoke.yaml"
   }

@@ -1011,6 +1011,11 @@ impl Avr {
                 matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND | 0x002C)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
+            // ATmega169P and ATmega128RFA1/RFR2: ports A-G at 0x20..0x34 as on
+            // the 1281; no extended-I/O ports H-L.
+            AvrModel::Atmega169 | AvrModel::Atmega128rfa1 | AvrModel::Atmega128rfr2 => {
+                MEGA2560_PIN_ADDRS[..7].contains(&addr)
+            }
             AvrModel::Atmega164
             | AvrModel::Atmega324
             | AvrModel::Atmega644
@@ -1039,7 +1044,6 @@ impl Avr {
             // ATtiny1634: PINC 0x27, PINB 0x2B, PINA 0x2F; each port's PUEx
             // pull-up register sits after PORTx (0x2A/0x2E/0x32).
             AvrModel::Attiny1634 => matches!(addr, 0x0027 | 0x002B | 0x002F),
-            AvrModel::Atmega169 | AvrModel::Atmega128rfa1 | AvrModel::Atmega128rfr2 => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -1073,6 +1077,9 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
+            AvrModel::Atmega169 | AvrModel::Atmega128rfa1 | AvrModel::Atmega128rfr2 => {
+                (0x20..=0x34).contains(&addr)
+            }
             AvrModel::Atmega164
             | AvrModel::Atmega324
             | AvrModel::Atmega644
@@ -1097,7 +1104,6 @@ impl Avr {
                     || (0x002B..=0x002D).contains(&addr)
                     || (0x002F..=0x0031).contains(&addr)
             }
-            AvrModel::Atmega169 | AvrModel::Atmega128rfa1 | AvrModel::Atmega128rfr2 => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -4803,6 +4809,49 @@ mod tests {
                     .unwrap();
                 assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x2E).unwrap(), 0x00);
             }
+        }
+    }
+
+    /// ATmega169P and ATmega128RFA1/RFR2 have ports A-G at 0x20..0x34 (as on
+    /// the 1281). PINx is write-one-to-toggle and SBI PINx,n toggles bit n.
+    #[test]
+    fn mega169_and_rf_ports_mirror_and_pin_toggle() {
+        for model in [
+            AvrModel::Atmega169,
+            AvrModel::Atmega128rfa1,
+            AvrModel::Atmega128rfr2,
+        ] {
+            let mut bus = MockBus::new();
+            let mut cpu = Avr::new_model(model);
+            cpu.data_write(0x24, 0x09, &mut bus).unwrap(); // DDRB
+            cpu.data_write(0x25, 0x09, &mut bus).unwrap(); // PORTB
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x25).unwrap(), 0x09);
+            cpu.data_write(0x23, 0x01, &mut bus).unwrap(); // PINB toggles PB0
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x25).unwrap(), 0x08);
+            // SBI PINB,0 (I/O 0x03): PB0 back high, PB3 untouched.
+            cpu.load_words(0x40, &[0x9A18, 0xCFFF]);
+            cpu.set_pc(0x40);
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x25).unwrap(), 0x09);
+            // PORTA mirrors; SBI PINA,7 (I/O 0x00) toggles PA7 only.
+            cpu.data_write(0x22, 0x82, &mut bus).unwrap();
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x22).unwrap(), 0x82);
+            cpu.load_words(0x40, &[0x9A07, 0xCFFF]);
+            cpu.set_pc(0x40);
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x22).unwrap(), 0x02);
+            // PORTG at 0x34 is the last mirrored byte.
+            cpu.data_write(0x34, 0x01, &mut bus).unwrap();
+            assert_eq!(
+                bus.read_u8(AVR_IO_MIRROR_BASE + 0x34).unwrap(),
+                0x01,
+                "{model:?}"
+            );
+            // An undriven input reads the external level.
+            bus.write_u8(AVR_IO_MIRROR_BASE + 0x2C, 0x10).unwrap();
+            assert_eq!(cpu.data_read(0x2C, &bus).unwrap() & 0x10, 0x10);
         }
     }
 

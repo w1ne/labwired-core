@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="2" failures="0" errors="0" time="0.021747">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.016873">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="9377e92f5ae26bd2438df34b102e79ea80381f39efe6b8023b7ca11d785497f5"/>
+    <property name="firmware_hash" value="c3c45383d23ef9acf420f369cde117f19795c49e7123b985aed823c4b228635c"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.021747">
+  <testcase classname="labwired" name="run" time="0.016873">
   </testcase>
-  <testcase classname="labwired" name="assertion 1: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x230=0x7f" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: portb:0 &gt;= 2 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

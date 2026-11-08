@@ -62,3 +62,5 @@ int main(void) {
 // (each port followed by a PUEx pull-up register), SRAM from 0x100.
 // AT90USB162 and ATmega16M1/64M1: PINB/DDRB/PORTB at 0x23..0x25 (x8 layout),
 // no port A, so bit 0x40 stays clear; SRAM from 0x100.
+// ATmega169P and ATmega128RFA1/RFR2: ports A-G at 0x20..0x34, so port A sets
+// bit 0x40; SRAM from 0x100 (169P) or 0x200 (RF parts).

@@ -35,6 +35,19 @@ fn write_one_register(data_addr: u16, model: AvrModel) -> bool {
         // Classic layout: 0x35..0x3B are PORTC..PORTA/DDRx/PINx (read-only
         // PINx), so a single-bit write there would clobber the latch.
         false
+    } else if matches!(
+        model,
+        AvrModel::Atmega1281
+            | AvrModel::Atmega2560
+            | AvrModel::Atmega169
+            | AvrModel::Atmega128rfa1
+            | AvrModel::Atmega128rfr2
+    ) {
+        // Ports A-G: PINA..PING at 0x20, 0x23, .., 0x32.
+        matches!(
+            data_addr,
+            0x20 | 0x23 | 0x26 | 0x29 | 0x2C | 0x2F | 0x32 | 0x35..=0x37 | 0x3B | 0x3C
+        )
     } else if matches!(model, AvrModel::Atmega16m1 | AvrModel::Atmega64m1) {
         // The M1 parts add PINE at 0x2C.
         matches!(
