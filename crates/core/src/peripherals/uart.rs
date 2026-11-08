@@ -819,6 +819,20 @@ const SCI_SSR_FIFO_RDF: u8 = 1 << 6;
 const SCI_SSR_FIFO_TEND: u8 = 1 << 2;
 const SCI_SSR_FIFO_DR: u8 = 1 << 0;
 
+/// The WCH TX pad table a USART on the F1 register map uses instead of the
+/// STM32F1 one ([`crate::bus::SystemBus::wire_stm32_uart_pads`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum WchPadMap {
+    #[default]
+    None,
+    /// CH32V003: USART1_TX on PD5 (`pad_map: ch32v003`).
+    Ch32v003,
+    /// CH32V002..V007: USART1/USART2 TX behind AFIO_PCFR1 (`pad_map: ch32v00x`).
+    Ch32v00x,
+    /// CH32X035: USART1_TX on PB10 behind AFIO_PCFR1 (`pad_map: ch32x03x`).
+    Ch32x03x,
+}
+
 /// Minimal UART mock with selectable register layout.
 #[derive(serde::Serialize)]
 pub struct Uart {
@@ -853,15 +867,10 @@ pub struct Uart {
     /// console (unit tests, every other layout).
     #[serde(skip)]
     tx_console_af: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-    /// The CH32V003's USART1_TX default pad differs from the STM32F1 table.
-    /// Enabled only by the narrow CH32V003 descriptor that has a sourced
-    /// PD5 route; it reuses the F1 USART register map, not the F1 pin map.
+    /// Which WCH TX pad table replaces the STM32F1 one (`pad_map:`). The WCH
+    /// parts reuse the F1 USART register map, not the F1 pin map.
     #[serde(skip)]
-    ch32v003_pad_map: bool,
-    /// The CH32V00x (V002..V007) USART1/USART2 TX pads, behind their
-    /// AFIO_PCFR1 remap fields (`pad_map: ch32v00x`).
-    #[serde(skip)]
-    ch32v00x_pad_map: bool,
+    wch_pad_map: WchPadMap,
     #[serde(skip)]
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     #[serde(skip)]
@@ -1125,8 +1134,7 @@ impl Uart {
             enable_value: 0,
             route_gate: None,
             tx_console_af: None,
-            ch32v003_pad_map: false,
-            ch32v00x_pad_map: false,
+            wch_pad_map: WchPadMap::None,
             sink: None,
             rx_buf: Arc::new(Mutex::new(VecDeque::new())),
             echo_stdout: !matches!(layout, UartRegisterLayout::Avr),
@@ -1206,24 +1214,36 @@ impl Uart {
     /// use this only with the STM32F1-shaped USART layout and a sourced
     /// CH32V003 GPIO descriptor.
     pub fn set_ch32v003_pad_map(mut self) -> Self {
-        self.ch32v003_pad_map = true;
+        self.wch_pad_map = WchPadMap::Ch32v003;
         self
     }
 
     pub(crate) fn uses_ch32v003_pad_map(&self) -> bool {
-        self.ch32v003_pad_map
+        self.wch_pad_map == WchPadMap::Ch32v003
     }
 
     /// Select the CH32V00x USART TX pad routes (USART1 PD5, USART2 PD2,
     /// each under its AFIO_PCFR1 remap value). Same caller contract as
     /// [`Self::set_ch32v003_pad_map`].
     pub fn set_ch32v00x_pad_map(mut self) -> Self {
-        self.ch32v00x_pad_map = true;
+        self.wch_pad_map = WchPadMap::Ch32v00x;
         self
     }
 
+    /// Select the CH32X035 USART1 TX pad route (PB10 while AFIO_PCFR1
+    /// USART1_RM [6:5] is 0). Same caller contract as
+    /// [`Self::set_ch32v003_pad_map`].
+    pub fn set_ch32x03x_pad_map(mut self) -> Self {
+        self.wch_pad_map = WchPadMap::Ch32x03x;
+        self
+    }
+
+    pub(crate) fn uses_ch32x03x_pad_map(&self) -> bool {
+        self.wch_pad_map == WchPadMap::Ch32x03x
+    }
+
     pub(crate) fn uses_ch32v00x_pad_map(&self) -> bool {
-        self.ch32v00x_pad_map
+        self.wch_pad_map == WchPadMap::Ch32v00x
     }
 
     /// Mark this instance as an STM32 LPUART on the V2 register map.

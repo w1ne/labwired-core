@@ -243,9 +243,16 @@ fn ram_geometry_is_valid(chip: &ChipDescriptor) -> bool {
 /// Parts whose erase sector is smaller than 4 KiB, with the flash size the
 /// datasheet gives. The CH32V006 has 62 KB of code flash erased in 1 KiB
 /// sectors (CH32V006DS0: "Built-in 62K-byte program flash memory area",
-/// `terase_sec` "Sector (1K bytes) erase time").
-const SMALL_SECTOR_FLASH_PARTS: &[(&str, u64, u64)] =
-    &[("ch32v006f8u7-ch32fun-smoke", 62 * 1024, 1024)];
+/// `terase_sec` "Sector (1K bytes) erase time"). The CH32X035 (all three
+/// packages, one die) has 62 KB erased in 1 KiB pages (WCH SPL
+/// ch32x035_flash.c `FLASH_ErasePage`: "Erases a specified FLASH page(1KB)";
+/// PlatformIO ch32v genericCH32X035* `maximum_size` 63488).
+const SMALL_SECTOR_FLASH_PARTS: &[(&str, u64, u64)] = &[
+    ("ch32v006f8u7-ch32fun-smoke", 62 * 1024, 1024),
+    ("ch32x035c8t6-ch32fun-smoke", 62 * 1024, 1024),
+    ("ch32x035f8u6-ch32fun-smoke", 62 * 1024, 1024),
+    ("ch32x035g8u6", 62 * 1024, 1024),
+];
 
 fn flash_geometry_is_valid(chip: &ChipDescriptor) -> bool {
     const SECTOR: u64 = 4096;

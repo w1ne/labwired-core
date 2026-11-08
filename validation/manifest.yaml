@@ -1298,6 +1298,16 @@ boards:
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: stm32h563
+    # 2026-11-08 (CH32X035G8U6 Arduino core row, hw-onboarding): changes the
+    # shared uart.rs/attach.rs/from_config.rs digests. The two WCH pad-map
+    # bools on Uart become one private `WchPadMap` enum with a new
+    # `ch32x03x` variant (`pad_map: ch32x03x`, USART1_TX on PB10 behind
+    # AFIO_PCFR1 [6:5]); the V00X table loop now takes either remap table.
+    # A Uart with no `pad_map` keeps `WchPadMap::None`, so the STM32 F1/V2/
+    # L0/G0 UART pad tables, the console gate and every IRQ path are
+    # unchanged (g0_uart_pad, logic_analyzer_f1_rp2040_pad_visibility pass).
+    # This is a reviewed model-drift acknowledgment, NOT a new silicon
+    # capture; no capture or ack date moves.
     # 2026-11-08 (CH32V006 ch32fun dual_usart, hw-onboarding): changes the
     # shared afio.rs/rcc.rs/uart.rs/gpio.rs/pad_routing.rs/attach.rs/
     # from_config.rs/generic_factory.rs digests. New `ch32v00x` AFIO layout
@@ -1827,7 +1837,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 4264e9c5049c0c27f7a9dac3127a27932323a0daae07b6d136f77f1596951ff1
+    drift_ack_digest: 1182d3c5336065aa5ba5631fbb2ec69979cf9fbed5bf0ebf249acbcdb22823c5
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3654,6 +3664,16 @@ boards:
     # NOT a new silicon capture.
 
   - id: nucleo-l476rg
+    # 2026-11-08 (CH32X035G8U6 Arduino core row, hw-onboarding): changes the
+    # shared uart.rs/attach.rs/from_config.rs digests. The two WCH pad-map
+    # bools on Uart become one private `WchPadMap` enum with a new
+    # `ch32x03x` variant (`pad_map: ch32x03x`, USART1_TX on PB10 behind
+    # AFIO_PCFR1 [6:5]); the V00X table loop now takes either remap table.
+    # A Uart with no `pad_map` keeps `WchPadMap::None`, so the STM32 F1/V2/
+    # L0/G0 UART pad tables, the console gate and every IRQ path are
+    # unchanged (g0_uart_pad, logic_analyzer_f1_rp2040_pad_visibility pass).
+    # This is a reviewed model-drift acknowledgment, NOT a new silicon
+    # capture; no capture or ack date moves.
     # 2026-11-08 (CH32V006 ch32fun dual_usart, hw-onboarding): changes the
     # shared afio.rs/rcc.rs/uart.rs/gpio.rs/pad_routing.rs/attach.rs/
     # from_config.rs/generic_factory.rs digests. New `ch32v00x` AFIO layout
@@ -4176,7 +4196,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: b82671ff57c85d8326b5f0d4996f1c9b38f0415e1ec6e957923b7ff12a7bf1f5
+    drift_ack_digest: 977c8b5804feb07f2a92d77e8632d730be3b0d784be83eda52dd6bbfee694b6a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4926,6 +4946,16 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: nucleo-l073rz
+    # 2026-11-08 (CH32X035G8U6 Arduino core row, hw-onboarding): changes the
+    # shared uart.rs/attach.rs/from_config.rs digests. The two WCH pad-map
+    # bools on Uart become one private `WchPadMap` enum with a new
+    # `ch32x03x` variant (`pad_map: ch32x03x`, USART1_TX on PB10 behind
+    # AFIO_PCFR1 [6:5]); the V00X table loop now takes either remap table.
+    # A Uart with no `pad_map` keeps `WchPadMap::None`, so the STM32 F1/V2/
+    # L0/G0 UART pad tables, the console gate and every IRQ path are
+    # unchanged (g0_uart_pad, logic_analyzer_f1_rp2040_pad_visibility pass).
+    # This is a reviewed model-drift acknowledgment, NOT a new silicon
+    # capture; no capture or ack date moves.
     # 2026-11-08 (CH32V006 ch32fun dual_usart, hw-onboarding): changes the
     # shared afio.rs/rcc.rs/uart.rs/gpio.rs/pad_routing.rs/attach.rs/
     # from_config.rs/generic_factory.rs digests. New `ch32v00x` AFIO layout
@@ -5396,7 +5426,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 230177bcec8ba45b5ad0ce1998cf62086c915f0f47845805d125a6bf38a23ede
+    drift_ack_digest: 7f8abf55d93de42d8b41bab174301759c3877cac54ee1bdce42c48372ca4ac2a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6076,6 +6106,16 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f103
+    # 2026-11-08 (CH32X035G8U6 Arduino core row, hw-onboarding): changes the
+    # shared uart.rs/attach.rs/from_config.rs digests. The two WCH pad-map
+    # bools on Uart become one private `WchPadMap` enum with a new
+    # `ch32x03x` variant (`pad_map: ch32x03x`, USART1_TX on PB10 behind
+    # AFIO_PCFR1 [6:5]); the V00X table loop now takes either remap table.
+    # A Uart with no `pad_map` keeps `WchPadMap::None`, so the STM32 F1/V2/
+    # L0/G0 UART pad tables, the console gate and every IRQ path are
+    # unchanged (g0_uart_pad, logic_analyzer_f1_rp2040_pad_visibility pass).
+    # This is a reviewed model-drift acknowledgment, NOT a new silicon
+    # capture; no capture or ack date moves.
     # 2026-11-08 (CH32V006 ch32fun dual_usart, hw-onboarding): changes the
     # shared afio.rs/rcc.rs/uart.rs/gpio.rs/pad_routing.rs/attach.rs/
     # from_config.rs/generic_factory.rs digests. New `ch32v00x` AFIO layout
@@ -6613,7 +6653,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: b1d0170d5bfe1fe59cfa6208323f79158e7ed59a0f52925383583a5bfbb6a9e3
+    drift_ack_digest: 69d0fa3a62928e4ed113f336b0085c906306d1a45794c45abdd8d16a4cafd0ea
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7369,6 +7409,16 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f407
+    # 2026-11-08 (CH32X035G8U6 Arduino core row, hw-onboarding): changes the
+    # shared uart.rs/attach.rs/from_config.rs digests. The two WCH pad-map
+    # bools on Uart become one private `WchPadMap` enum with a new
+    # `ch32x03x` variant (`pad_map: ch32x03x`, USART1_TX on PB10 behind
+    # AFIO_PCFR1 [6:5]); the V00X table loop now takes either remap table.
+    # A Uart with no `pad_map` keeps `WchPadMap::None`, so the STM32 F1/V2/
+    # L0/G0 UART pad tables, the console gate and every IRQ path are
+    # unchanged (g0_uart_pad, logic_analyzer_f1_rp2040_pad_visibility pass).
+    # This is a reviewed model-drift acknowledgment, NOT a new silicon
+    # capture; no capture or ack date moves.
     # 2026-11-08 (CH32V006 ch32fun dual_usart, hw-onboarding): changes the
     # shared afio.rs/rcc.rs/uart.rs/gpio.rs/pad_routing.rs/attach.rs/
     # from_config.rs/generic_factory.rs digests. New `ch32v00x` AFIO layout
@@ -7856,7 +7906,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 715166b25e7b15d66efc1916131435ab4a587b3f98b712e9f9aa8ebd91b88946
+    drift_ack_digest: 29404d189404722fdbecf699ba87eadceed829cf706d540a79ecf2dd3756f1e4
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the

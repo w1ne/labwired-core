@@ -2590,6 +2590,13 @@ impl SystemBus {
             (1, 'd', 5, LINE_TX, "USART1_TX", 6, 0xF, 0),
             (2, 'd', 2, LINE_TX, "USART2_TX", 20, 0x7, 3),
         ];
+        // WCH CH32X035 (`pad_map: ch32x03x`), same row shape as V00X.
+        // USART1_RM is PCFR1 [6:5] (ch32fun ch32x03xhw.h
+        // AFIO_PCFR1_USART1_REMAP 0x60; WCH SPL ch32x035_gpio.h
+        // GPIO_PartialRemap1_USART1 0x00150020 = 2-bit field at bit 5); RM 0
+        // puts TX on PB10 (openwch arduino_core_ch32 variant CH32X035G8U
+        // PinMap_UART_TX: PB10 USART1, AFIO_NONE). The remap rows are not bound.
+        const X03X: &[V00xPad] = &[(1, 'b', 10, LINE_TX, "USART1_TX", 5, 0x3, 0)];
 
         for instance in 1u8..=3 {
             // Chip configs name these both ways — `uart2` on the L4/F1 configs,
@@ -2601,14 +2608,21 @@ impl SystemBus {
             else {
                 continue;
             };
-            let (ch32v003_pad_map, ch32v00x_pad_map) = self.peripherals[uart_idx]
+            let (ch32v003_pad_map, remapped_table) = self.peripherals[uart_idx]
                 .dev
                 .as_any()
                 .and_then(|a| a.downcast_ref::<Uart>())
-                .map_or((false, false), |uart| {
-                    (uart.uses_ch32v003_pad_map(), uart.uses_ch32v00x_pad_map())
+                .map_or((false, None), |uart| {
+                    let table = if uart.uses_ch32v00x_pad_map() {
+                        Some(V00X)
+                    } else if uart.uses_ch32x03x_pad_map() {
+                        Some(X03X)
+                    } else {
+                        None
+                    };
+                    (uart.uses_ch32v003_pad_map(), table)
                 });
-            let v00x_remap = if ch32v00x_pad_map {
+            let v00x_remap = if remapped_table.is_some() {
                 self.remap_block_register()
             } else {
                 None
@@ -2661,10 +2675,14 @@ impl SystemBus {
                             }
                         }
                     }
-                    GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch if ch32v00x_pad_map => {
+                    GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch
+                        if remapped_table.is_some() =>
+                    {
                         // No AFIO on the bus: nothing moves a pad, so only
                         // the reset-mapping (value 0) rows apply.
-                        for &(inst, p, pin, line, func, shift, mask, value) in V00X {
+                        for &(inst, p, pin, line, func, shift, mask, value) in
+                            remapped_table.unwrap_or_default()
+                        {
                             if inst != instance || p != port {
                                 continue;
                             }

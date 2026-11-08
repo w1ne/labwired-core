@@ -353,6 +353,42 @@ boards:
         micros() runs backwards inside each millisecond (same bug as the
         ch32v003 and ch32v203 rows)
 
+  - id: ch32x035
+    chip: ch32x035g8u6
+    system: systems/ch32x035.yaml
+    # WCH's official core (openwch/arduino_core_ch32) via the community ch32v
+    # platform, pinned to the same revisions as the ch32v203 row. The core
+    # ships one X035 variant, CH32X035G8U (QFN28).
+    pio:
+      platform: https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7
+      board: genericCH32X035G8U6
+      framework: arduino
+      platform_packages:
+        - "framework-arduino-openwch-ch32 @ https://github.com/Community-PIO-CH32V/arduino_core_ch32.git#3820604346d0a9f0ee9a72cab8b7583e488e6674"
+      # The variant leaves LED_BUILTIN as PNUM_NOT_DEFINED (this is a chip
+      # row, no board LED). PB12 is a plain GPIO pad. L6 drives TIM3_CH1 on
+      # PA6 (variant PeripheralPins.c PinMap_TIM, AFIO_NONE = reset mapping).
+      build_flags: ["-DLED_BUILTIN=PB12", "-DLW_PWM_PIN=PA6"]
+    max_steps: 20000000
+    budget_reason: "48 MHz QingKe V4C; same budget as the other WCH rows"
+    led_watch: "gpiob:12"
+    led_min_edges: 2
+    pwm_watch: "gpioa:6"
+    pwm_min_edges: 4
+    family: wch
+    notes: "QingKe V4C on CH32X035G8U6; Wire is I2C1 on PC16/PC17 (PartialRemap2) in WCH's variant"
+    sketches_skip: [L7_timer, L8_can]
+    sketches_skip_reason:
+      # Measured 2026-11-08 with a Serial.print probe (the core's libprintf
+      # drops %lu): t0=1999 t1=3999 t2=3788 t3=4999, STK CTLR=0xF.
+      L7_timer: >-
+        Upstream core bug, not a model gap: getCurrentMicros() (ch32/clock.c)
+        computes (CMP+1-CNT), which assumes a down-counter, but hw_config.c
+        starts the V4 STK with CTLR=0xF, MODE (bit 4) clear = count up, so
+        micros() runs backwards inside each millisecond (same bug as the
+        ch32v003, ch32v203 and ch32v307 rows)
+      L8_can: "No CAN on the CH32X035 (ch32x035.h has no CAN block)"
+
 sketches:
   - id: L0_serial_boot
     dir: sketches/L0_serial_boot

@@ -1,0 +1,13 @@
+labwired: target/debug/labwired
+boards:   ch32x035
+sketches: L6_pwm
+out:      <neg>/o3
+mode:     sim-only (no compile)
+
+==> ch32x035 × L6_pwm
+    compile: skipped (--sim-only)
+    run: oracle_fail
+
+Done in 1s — 0 pass / 0 skip / 1 fail (cells 1; gate treats skip as non-fail)
+Scoreboard: <neg>/o3/scoreboard.md
+Docs scoreboard unchanged (partial run; not full 22×9)

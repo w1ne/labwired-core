@@ -1564,6 +1564,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: ch32x035g8u6
+    arch: rv32imac
+    headline: "Chip profile; the Arduino matrix's stock L0-L6 (Serial, GPIO, Wire, SPI, analogRead, analogWrite) are rubric-level checks, so no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: esp32-devkitc-32e-gpio-smoke
     arch: xtensa-lx6
     headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."

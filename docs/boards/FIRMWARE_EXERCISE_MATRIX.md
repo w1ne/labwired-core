@@ -990,6 +990,10 @@ _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in th
 
 _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
 
+### `ch32x035g8u6`
+
+_Chip profile; the Arduino matrix's stock L0-L6 (Serial, GPIO, Wire, SPI, analogRead, analogWrite) are rubric-level checks, so no beyond-rubric firmware exercise is recorded in this ledger._
+
 ### `esp32-devkitc-32e-gpio-smoke`
 
 _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._

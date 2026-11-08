@@ -846,21 +846,22 @@ impl SystemBus {
                             .set_full_featured(full)
                             .set_stm32_lpuart(stm32_lpuart)
                             .set_u5_features(u5_features);
-                    if p_cfg.config.get("pad_map").and_then(|v| v.as_str()) == Some("ch32v003") {
-                        anyhow::ensure!(
-                            matches!(layout, crate::peripherals::uart::UartRegisterLayout::Stm32F1),
-                            "Peripheral '{}' selects the CH32V003 pad map but not the STM32F1 USART register layout",
-                            p_cfg.id
-                        );
-                        uart = uart.set_ch32v003_pad_map();
-                    }
-                    if p_cfg.config.get("pad_map").and_then(|v| v.as_str()) == Some("ch32v00x") {
-                        anyhow::ensure!(
-                            matches!(layout, crate::peripherals::uart::UartRegisterLayout::Stm32F1),
-                            "Peripheral '{}' selects the CH32V00x pad map but not the STM32F1 USART register layout",
-                            p_cfg.id
-                        );
-                        uart = uart.set_ch32v00x_pad_map();
+                    // WCH parts reuse the F1 USART register map with their own TX pads.
+                    if let Some(map) = p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
+                        if matches!(map, "ch32v003" | "ch32v00x" | "ch32x03x") {
+                            anyhow::ensure!(
+                                matches!(layout, crate::peripherals::uart::UartRegisterLayout::Stm32F1),
+                                "Peripheral '{}' selects the {} pad map but not the STM32F1 USART register layout",
+                                p_cfg.id,
+                                map
+                            );
+                        }
+                        uart = match map {
+                            "ch32v003" => uart.set_ch32v003_pad_map(),
+                            "ch32v00x" => uart.set_ch32v00x_pad_map(),
+                            "ch32x03x" => uart.set_ch32x03x_pad_map(),
+                            _ => uart,
+                        };
                     }
                     // Renesas SCI_B and classic SCI: `elc_event` is the
                     // channel's RXI event (TXI/TEI follow); the events reach
