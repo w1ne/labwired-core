@@ -1,6 +1,7 @@
-# Direct-ELF RV32IM and RAM smoke against the exact imported UARTLite system.
-# This uses LabWired's local RV32IM interpreter, not Renode's RiscV32 model or
-# the external Verilated UART co-simulation.
+# Direct-ELF RV32IM, RAM and UART smoke against the exact imported UARTLite
+# system. This uses LabWired's local RV32IM interpreter and a register-level
+# model of the Verilated UART RTL's map, not Renode's RiscV32 model or the
+# external Verilated co-simulation. Baud timing and UART IRQs are not checked.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-riscv-verilated-uartlite-smoke"
@@ -12,4 +13,17 @@ assertions:
       address: 0x60001000
       expected_value: 0x00000143
       size: 4
+  - memory_value:
+      address: 0x60001004
+      expected_value: 0x00000000
+      size: 4
+  - memory_value:
+      address: 0x60001008
+      expected_value: 0x00000004
+      size: 4
+  - memory_value:
+      address: 0x60001010
+      expected_value: 0x0A117E01
+      size: 4
+  - uart_contains: "UARTLite cosim ok"
   - expected_stop_reason: max_steps

@@ -41,6 +41,45 @@
     },
     {
       "assertion": {
+        "memory_value": {
+          "address": 1610616836,
+          "expected_value": 0,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1610616840,
+          "expected_value": 4,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1610616848,
+          "expected_value": 168918529,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "UARTLite cosim ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -50,20 +89,20 @@
     "type": "risc_v",
     "registers": [
       0,
-      1610613484,
+      1610613540,
       1715470304,
-      1610615708,
+      1610616240,
       0,
       0,
       1715470336,
       0,
-      1715470336,
-      0,
-      323,
       1610616832,
+      1879048192,
+      168918529,
+      4,
       0,
       0,
-      0,
+      4,
       0,
       0,
       0,
@@ -82,11 +121,11 @@
       0,
       0
     ],
-    "pc": 1610613496,
+    "pc": 1610614024,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
-    "mtvec": 1610613072,
+    "mtvec": 1610613112,
     "mscratch": 0,
     "mepc": 0,
     "mcause": 0,
@@ -118,14 +157,22 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "7084dc25c098429dfba1c028ee6068ab54acd0f151e89b7f5fc232ab2cae388a",
+  "firmware_hash": "737c4273656667341beb9b6d5dc638b2fce9484f6e5fff5279d91c6f2405d96e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-riscv-verilated-uartlite-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/riscv_verilated_uartlite.yaml",
     "script": "examples/renode-onboarding/riscv_verilated_uartlite-smoke.yaml"
   },
   "inspect": {
-    "peripherals": [],
+    "peripherals": [
+      {
+        "name": "uart",
+        "kind": "native",
+        "base": 1879048192,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
     "devices": []
   },
   "fidelity": [
@@ -151,13 +198,24 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "UARTLite cosim ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 924,
+    "text_bytes": 1456,
     "data_bytes": 0,
-    "bss_bytes": 104856676,
-    "flash_used_bytes": 924,
-    "ram_static_bytes": 104856676,
+    "bss_bytes": 104856144,
+    "flash_used_bytes": 1456,
+    "ram_static_bytes": 104856144,
     "flash_total_bytes": 0,
     "ram_total_bytes": 104857600,
     "flash_used_pct": 0.0,
@@ -177,12 +235,12 @@
     "instructions": 100000,
     "steps_executed": 100000,
     "memory_reads": 100000,
-    "memory_writes": 3,
-    "peripheral_accesses": 0,
+    "memory_writes": 13,
+    "peripheral_accesses": 44,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1610613496,
+        "pc": 1610614024,
         "count": 390,
         "symbol": "main"
       }

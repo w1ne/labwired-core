@@ -12,8 +12,8 @@
 - pass_observable_assertions: `225/225`
 - pass_stop_reason_only: `0/225`
 - pass_depth_unknown: `0/225`
-- median_elapsed_ms: `1175`
-- median_elapsed_seconds: `1.175`
+- median_elapsed_ms: `1154`
+- median_elapsed_seconds: `1.154`
 - threshold_seconds: `3600`
 - threshold_met: `225/225`
 
@@ -169,7 +169,7 @@
 | `renesas_rz_g2l` | `pass` | `True` | `yes` | `yes` | `95819` | `95.819` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `renesas_rz_t2m` | `pass` | `True` | `yes` | `yes` | `181038` | `181.038` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `ri5cy` | `pass` | `True` | `yes` | `yes` | `1953` | `1.953` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `riscv_verilated_uartlite` | `pass` | `True` | `yes` | `yes` | `1297` | `1.297` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `riscv_verilated_uartlite` | `pass` | `True` | `yes` | `yes` | `787` | `0.787` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `riscv_virt` | `pass` | `True` | `yes` | `yes` | `1408` | `1.408` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `s32k118` | `pass` | `True` | `yes` | `yes` | `1432` | `1.432` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `sam4s` | `pass` | `True` | `yes` | `yes` | `1373` | `1.373` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
