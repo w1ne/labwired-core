@@ -50,9 +50,10 @@ pub const SRAM_START: u16 = 0x0100;
 /// specific address below 0x4000. Its common instruction execution is shared,
 /// but its peripherals and interrupt controller are not yet modelled.
 ///
+/// Timer0/1/2 output-compare pads use the mega pins (OC0A = PB7, OC0B = PG5,
+/// OC1A/OC1B = PB5/PB6, OC2A = PB4, OC2B = PH6; see `avr/oc_pins.rs`).
 /// Not modelled on the ATmega2560: INTn/PCINT (its pins differ from the
-/// 328P's; the registers are stored only), output-compare pads (PWM
-/// `analogWrite` levels; the pads follow `PORTx`), Timer3/4/5 and USART1..3
+/// 328P's; the registers are stored only), OC1C, Timer3/4/5 and USART1..3
 /// (registers stored only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
@@ -406,10 +407,11 @@ pub struct Avr {
     pub t2_down: bool,
     /// Timer1, the 16-bit counter (`avr/timer1.rs`).
     t1: timer1::Timer1,
-    /// Port B / port D pads an output-compare unit owns, and the level it
-    /// drives there, as last pushed to the bus-side port model.
-    oc_mask: [u8; 2],
-    oc_level: [u8; 2],
+    /// Pads an output-compare unit owns, per port slot of `oc_pins::OcMap`
+    /// (B/D on the 328P, B/G/H on the mega), and the level it drives there,
+    /// as last pushed to the bus-side port model.
+    oc_mask: [u8; 3],
+    oc_level: [u8; 3],
     pub serial_tx: Vec<u8>,
     /// Optional live sink for MachineTrait UART capture.
     pub serial_sink: Option<Arc<Mutex<Vec<u8>>>>,
@@ -716,8 +718,8 @@ impl Avr {
             t2_prescale_acc: 0,
             t2_down: false,
             t1: timer1::Timer1::default(),
-            oc_mask: [0; 2],
-            oc_level: [0; 2],
+            oc_mask: [0; 3],
+            oc_level: [0; 3],
             serial_tx: Vec::new(),
             serial_sink: None,
             ucsr0a: UCSRA_UDRE,
@@ -1422,7 +1424,9 @@ impl Avr {
             0x0100..=0x01FF if self.is_mega() => {
                 self.io[(addr - 0x20) as usize] = value;
                 if self.is_port_reg(addr) {
-                    let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + addr as u64, value);
+                    // PORTH carries OC2B (PH6) on the ATmega2560.
+                    let pad = self.port_pad_value(addr, value);
+                    let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + addr as u64, pad);
                 }
                 Ok(())
             }
@@ -2369,8 +2373,8 @@ impl Cpu for Avr {
         self.t2_prescale_acc = 0;
         self.t2_down = false;
         self.t1 = timer1::Timer1::default();
-        self.oc_mask = [0; 2];
-        self.oc_level = [0; 2];
+        self.oc_mask = [0; 3];
+        self.oc_level = [0; 3];
         self.serial_tx.clear();
         self.ucsr0a = UCSRA_UDRE;
         self.ucsr0b = 0;
