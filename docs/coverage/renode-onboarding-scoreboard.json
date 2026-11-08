@@ -11,6 +11,8 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
+    "pass_claimed_peripherals_total": 602,
+    "pass_claimed_peripherals_median": 2,
     "median_elapsed_ms": 1211,
     "median_elapsed_seconds": 1.211,
     "threshold_seconds": 3600,
@@ -57,6 +59,7 @@
       },
       "_artifact_path": "A2_CV32E40P",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -103,6 +106,7 @@
       "prebuilt_firmware": "tests/fixtures/a20-a7-uart-smoke.elf",
       "_artifact_path": "a20",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -145,6 +149,7 @@
       "zero_answering_windows": [
         "hpet:hpet"
       ],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -187,6 +192,7 @@
       "prebuilt_firmware": "tests/fixtures/alif-e8-m55-cpu-smoke.elf",
       "_artifact_path": "alif_ae822fa0e5597bs0",
       "zero_answering_windows": [],
+      "claimed_peripherals": 8,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -233,6 +239,7 @@
       },
       "_artifact_path": "ambiq-apollo4",
       "zero_answering_windows": [],
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -278,6 +285,7 @@
       },
       "_artifact_path": "andes_ae350_n25",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -327,6 +335,7 @@
         "pwm:stub",
         "scss:stub"
       ],
+      "claimed_peripherals": 10,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -368,6 +377,7 @@
       },
       "_artifact_path": "arduino_nano_33_ble",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -413,6 +423,7 @@
       },
       "_artifact_path": "arduino_uno_r4_minima",
       "zero_answering_windows": [],
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -458,6 +469,7 @@
       },
       "_artifact_path": "arty_litex_vexriscv",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -503,6 +515,7 @@
       },
       "_artifact_path": "arvsom",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -549,6 +562,7 @@
       "prebuilt_firmware": "tests/fixtures/at91rm9200-dbgu-smoke.elf",
       "_artifact_path": "at91rm9200",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -593,6 +607,7 @@
       },
       "_artifact_path": "atsamd21j17d-aft",
       "zero_answering_windows": [],
+      "claimed_peripherals": 8,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -637,6 +652,7 @@
       },
       "_artifact_path": "atsamd51g19a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -683,6 +699,7 @@
       "prebuilt_firmware": "tests/fixtures/mpfs-gpio-smoke.elf",
       "_artifact_path": "beaglev-fire",
       "zero_answering_windows": [],
+      "claimed_peripherals": 8,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -728,6 +745,7 @@
       },
       "_artifact_path": "beaglev_starlight",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -772,6 +790,7 @@
       },
       "_artifact_path": "brd4116a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -816,6 +835,7 @@
       },
       "_artifact_path": "brd4117a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -860,6 +880,7 @@
       },
       "_artifact_path": "brd4118a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -904,6 +925,7 @@
       },
       "_artifact_path": "brd4120a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -948,6 +970,7 @@
       },
       "_artifact_path": "brd4121a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -992,6 +1015,7 @@
       },
       "_artifact_path": "brd4162a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1036,6 +1060,7 @@
       },
       "_artifact_path": "brd4186c",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1080,6 +1105,7 @@
       },
       "_artifact_path": "brd4402a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1124,6 +1150,7 @@
       },
       "_artifact_path": "cc2538",
       "zero_answering_windows": [],
+      "claimed_peripherals": 24,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -1170,6 +1197,7 @@
       "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",
       "_artifact_path": "colibri-vf61",
       "zero_answering_windows": [],
+      "claimed_peripherals": 8,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -1216,6 +1244,7 @@
       },
       "_artifact_path": "core-v-mcu",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -1262,6 +1291,7 @@
       "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf",
       "_artifact_path": "cortex-a53-gicv2",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1307,6 +1337,7 @@
       "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf",
       "_artifact_path": "cortex-a53-gicv3",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1352,6 +1383,7 @@
       "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf",
       "_artifact_path": "cortex-a53-gicv3_smp",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1397,6 +1429,7 @@
       "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf",
       "_artifact_path": "cortex-a78",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1442,6 +1475,7 @@
       "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
       "_artifact_path": "cortex-r52",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1487,6 +1521,7 @@
       "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
       "_artifact_path": "cortex-r52_smp",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1532,6 +1567,7 @@
       "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
       "_artifact_path": "cortex-r52_smp_4",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1577,6 +1613,7 @@
       "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf",
       "_artifact_path": "cortex_a53_console",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1622,6 +1659,7 @@
       "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf",
       "_artifact_path": "cortex_a53_virtio",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1666,6 +1704,7 @@
       },
       "_artifact_path": "crosslink-nx-evn",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -1711,6 +1750,7 @@
       },
       "_artifact_path": "efm32g210",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1755,6 +1795,7 @@
       },
       "_artifact_path": "efm32g222",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1799,6 +1840,7 @@
       },
       "_artifact_path": "efm32g232",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1843,6 +1885,7 @@
       },
       "_artifact_path": "efm32g842",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1887,6 +1930,7 @@
       },
       "_artifact_path": "efm32g890",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1931,6 +1975,7 @@
       },
       "_artifact_path": "efm32gg942",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -1975,6 +2020,7 @@
       },
       "_artifact_path": "efm32gg995",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2019,6 +2065,7 @@
       },
       "_artifact_path": "efm32hg350",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2063,6 +2110,7 @@
       },
       "_artifact_path": "efm32jg1",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2107,6 +2155,7 @@
       },
       "_artifact_path": "efm32jg12",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2151,6 +2200,7 @@
       },
       "_artifact_path": "efm32lg942",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2195,6 +2245,7 @@
       },
       "_artifact_path": "efm32lg995",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2239,6 +2290,7 @@
       },
       "_artifact_path": "efm32pg1",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2283,6 +2335,7 @@
       },
       "_artifact_path": "efm32pg12",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2327,6 +2380,7 @@
       },
       "_artifact_path": "efm32tg840",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2371,6 +2425,7 @@
       },
       "_artifact_path": "efm32wg995",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2415,6 +2470,7 @@
       },
       "_artifact_path": "efm32zg222",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2459,6 +2515,7 @@
       },
       "_artifact_path": "efr32mg1",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2503,6 +2560,7 @@
       },
       "_artifact_path": "efr32mg12",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2547,6 +2605,7 @@
       },
       "_artifact_path": "efr32mg13",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2591,6 +2650,7 @@
       },
       "_artifact_path": "efr32mg24",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2635,6 +2695,7 @@
       },
       "_artifact_path": "efr32mg26",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2679,6 +2740,7 @@
       },
       "_artifact_path": "efr32xg22",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2723,6 +2785,7 @@
       },
       "_artifact_path": "egis_et171",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -2768,6 +2831,7 @@
       },
       "_artifact_path": "eos-s3",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2812,6 +2876,7 @@
       },
       "_artifact_path": "eos-s3-qomu",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2856,6 +2921,7 @@
       },
       "_artifact_path": "eos-s3-quickfeather",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2900,6 +2966,7 @@
       },
       "_artifact_path": "ezr32hg320",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2944,6 +3011,7 @@
       },
       "_artifact_path": "ezr32lg330",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2988,6 +3056,7 @@
       },
       "_artifact_path": "ezr32wg330",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -3032,6 +3101,7 @@
       },
       "_artifact_path": "focaltech_ft9001",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_regex",
         "uart_ordered",
@@ -3077,6 +3147,7 @@
       },
       "_artifact_path": "fomu",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "expected_stop_reason"
@@ -3122,6 +3193,7 @@
       "prebuilt_firmware": "tests/fixtures/lx2160a-a72-uart-smoke.elf",
       "_artifact_path": "fsl_lx2160ardb",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -3171,6 +3243,7 @@
         "apb1Controller:gaislerapbcontroller",
         "apb2Controller:gaislerapbcontroller"
       ],
+      "claimed_peripherals": 16,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -3210,6 +3283,7 @@
       "zero_answering_windows": [
         "timer0:stub"
       ],
+      "claimed_peripherals": 9,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -3253,6 +3327,7 @@
         "switch3:button",
         "timer0:stub"
       ],
+      "claimed_peripherals": 13,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -3294,6 +3369,7 @@
       },
       "_artifact_path": "ice40up5k-mdp-evn",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "expected_stop_reason"
@@ -3338,6 +3414,7 @@
       },
       "_artifact_path": "imxrt1064",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -3383,6 +3460,7 @@
       },
       "_artifact_path": "imxrt500",
       "zero_answering_windows": [],
+      "claimed_peripherals": 6,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -3428,6 +3506,7 @@
       },
       "_artifact_path": "kendryte_k210",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -3476,6 +3555,7 @@
         "phy:ethernetphysicallayer",
         "led:led"
       ],
+      "claimed_peripherals": 9,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -3515,6 +3595,7 @@
       "zero_answering_windows": [
         "phy:ethernetphysicallayer"
       ],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -3556,6 +3637,7 @@
       },
       "_artifact_path": "litex_ibex",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -3601,6 +3683,7 @@
       },
       "_artifact_path": "litex_linux_vexriscv_sdcard",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_ordered",
         "expected_stop_reason"
@@ -3643,6 +3726,7 @@
       "zero_answering_windows": [
         "timer0:stub"
       ],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -3684,6 +3768,7 @@
       },
       "_artifact_path": "litex_minerva",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -3729,6 +3814,7 @@
       },
       "_artifact_path": "litex_nexys_video_vexriscv_linux",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_ordered",
         "expected_stop_reason"
@@ -3773,6 +3859,7 @@
       },
       "_artifact_path": "litex_picorv32",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -3818,6 +3905,7 @@
       },
       "_artifact_path": "litex_tock",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -3862,6 +3950,7 @@
       },
       "_artifact_path": "litex_vexriscv",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -3907,6 +3996,7 @@
       },
       "_artifact_path": "litex_vexriscv_linux",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_ordered",
         "expected_stop_reason"
@@ -3951,6 +4041,7 @@
       },
       "_artifact_path": "litex_vexriscv_micropython",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -3996,6 +4087,7 @@
       },
       "_artifact_path": "litex_vexriscv_smp",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_ordered",
         "expected_stop_reason"
@@ -4040,6 +4132,7 @@
       },
       "_artifact_path": "litex_vexriscv_tftp",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_ordered",
         "expected_stop_reason"
@@ -4084,6 +4177,7 @@
       },
       "_artifact_path": "litex_vexriscv_verilated_cfu",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -4129,6 +4223,7 @@
       },
       "_artifact_path": "litex_vexriscv_verilated_liteuart",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -4174,6 +4269,7 @@
       },
       "_artifact_path": "litex_vexriscv_zephyr",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -4219,6 +4315,7 @@
       },
       "_artifact_path": "litex_zephyr_vexriscv_i2s",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -4264,6 +4361,7 @@
       "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-uart-smoke.elf",
       "_artifact_path": "lpc2294",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -4309,6 +4407,7 @@
       "prebuilt_firmware": "tests/fixtures/zynq7000-a9-uart-smoke.elf",
       "_artifact_path": "mars_zx3",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -4353,6 +4452,7 @@
       },
       "_artifact_path": "max32652",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -4397,6 +4497,7 @@
       },
       "_artifact_path": "max32652-evkit",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -4439,6 +4540,7 @@
       "zero_answering_windows": [
         "uart:stub"
       ],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -4480,6 +4582,7 @@
       },
       "_artifact_path": "mimxrt1064_evk",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -4525,6 +4628,7 @@
       },
       "_artifact_path": "mimxrt700_evk",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -4571,6 +4675,7 @@
       },
       "_artifact_path": "mimxrt798s",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -4617,6 +4722,7 @@
       },
       "_artifact_path": "miv",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -4662,6 +4768,7 @@
       },
       "_artifact_path": "miv-board",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -4707,6 +4814,7 @@
       },
       "_artifact_path": "miv-board-additional-uarts",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -4751,6 +4859,7 @@
       },
       "_artifact_path": "miv_rv32",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -4796,6 +4905,7 @@
         "emios:emios",
         "fmpllSynsr:pythonperipheral"
       ],
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -4838,6 +4948,7 @@
       "prebuilt_firmware": "tests/fixtures/mpfs-gpio-smoke.elf",
       "_artifact_path": "mpfs-icicle-kit",
       "zero_answering_windows": [],
+      "claimed_peripherals": 8,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -4884,6 +4995,7 @@
         "code:arraymemory",
         "info_mem:arraymemory"
       ],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -4921,6 +5033,7 @@
       },
       "_artifact_path": "mspsim-msp430f149",
       "zero_answering_windows": [],
+      "claimed_peripherals": 0,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -4958,6 +5071,7 @@
       },
       "_artifact_path": "mspsim-msp430f1611",
       "zero_answering_windows": [],
+      "claimed_peripherals": 0,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -4995,6 +5109,7 @@
       },
       "_artifact_path": "mspsim-msp430f2617",
       "zero_answering_windows": [],
+      "claimed_peripherals": 0,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -5032,6 +5147,7 @@
       },
       "_artifact_path": "mspsim-msp430f5437",
       "zero_answering_windows": [],
+      "claimed_peripherals": 0,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -5073,6 +5189,7 @@
       },
       "_artifact_path": "murax_vexriscv",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -5117,6 +5234,7 @@
       },
       "_artifact_path": "murax_vexriscv_verilated_uart",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -5161,6 +5279,7 @@
       },
       "_artifact_path": "nrf52840",
       "zero_answering_windows": [],
+      "claimed_peripherals": 49,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -5206,6 +5325,7 @@
       },
       "_artifact_path": "nrf52840dk_nrf52840",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -5251,6 +5371,7 @@
       },
       "_artifact_path": "nucleo_f767zi",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -5296,6 +5417,7 @@
       },
       "_artifact_path": "nucleo_h753zi",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -5341,6 +5463,7 @@
       },
       "_artifact_path": "nucleo_wba52cg",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -5387,6 +5510,7 @@
       },
       "_artifact_path": "nuvoton_npcx9",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -5431,6 +5555,7 @@
       },
       "_artifact_path": "nuvoton_npcx9m6fb_evb",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -5476,6 +5601,7 @@
       "prebuilt_firmware": "tests/fixtures/imx8mp-a53-uart4-smoke.elf",
       "_artifact_path": "nxp-frdm-imx8mplus",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -5521,6 +5647,7 @@
       "prebuilt_firmware": "tests/fixtures/frdm-k64f-smoke.elf",
       "_artifact_path": "nxp-k6xf",
       "zero_answering_windows": [],
+      "claimed_peripherals": 7,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -5568,6 +5695,7 @@
       "prebuilt_firmware": "tests/fixtures/imx8mp-a53-uart2-smoke.elf",
       "_artifact_path": "nxp-mimx8ml",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -5613,6 +5741,7 @@
       "prebuilt_firmware": "tests/fixtures/s32k388-evb-smoke.elf",
       "_artifact_path": "nxp-s32k388",
       "zero_answering_windows": [],
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -5660,6 +5789,7 @@
       "prebuilt_firmware": "tests/fixtures/s32k388-evb-smoke.elf",
       "_artifact_path": "nxp-s32k388evb",
       "zero_answering_windows": [],
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -5706,6 +5836,7 @@
       },
       "_artifact_path": "opentitan-earlgrey",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -5751,6 +5882,7 @@
       },
       "_artifact_path": "opentitan-earlgrey-cw310",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -5796,6 +5928,7 @@
       },
       "_artifact_path": "picosoc",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -5841,6 +5974,7 @@
       "prebuilt_firmware": "tests/fixtures/mpfs-gpio-smoke.elf",
       "_artifact_path": "polarfire-soc",
       "zero_answering_windows": [],
+      "claimed_peripherals": 8,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -5887,6 +6021,7 @@
         "pwm:stub",
         "scss:stub"
       ],
+      "claimed_peripherals": 7,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -5933,6 +6068,7 @@
         "pwm:stub",
         "scss:stub"
       ],
+      "claimed_peripherals": 11,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -5974,6 +6110,7 @@
       },
       "_artifact_path": "ramn",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -6021,6 +6158,7 @@
       },
       "_artifact_path": "renesas-ck_ra6m5",
       "zero_answering_windows": [],
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -6067,6 +6205,7 @@
       },
       "_artifact_path": "renesas-da14592",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -6112,6 +6251,7 @@
       },
       "_artifact_path": "renesas-ek_ra2e1",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -6158,6 +6298,7 @@
       },
       "_artifact_path": "renesas-ek_ra8m1",
       "zero_answering_windows": [],
+      "claimed_peripherals": 8,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -6204,6 +6345,7 @@
       },
       "_artifact_path": "renesas-r7fa2e1a9",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -6250,6 +6392,7 @@
       },
       "_artifact_path": "renesas-r7fa2l1a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -6296,6 +6439,7 @@
       },
       "_artifact_path": "renesas-r7fa4m1a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -6342,6 +6486,7 @@
       "prebuilt_firmware": "tests/fixtures/ek-ra6m5-smoke.elf",
       "_artifact_path": "renesas-r7fa6m5b",
       "zero_answering_windows": [],
+      "claimed_peripherals": 8,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -6388,6 +6533,7 @@
       },
       "_artifact_path": "renesas-r7fa8m1a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -6435,6 +6581,7 @@
       "prebuilt_firmware": "tests/fixtures/rz-t2m-r52-sci-smoke.elf",
       "_artifact_path": "renesas-rz_t2m_rsk",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -6480,6 +6627,7 @@
       "prebuilt_firmware": "tests/fixtures/rzg2l-cm33-cpu-smoke.elf",
       "_artifact_path": "renesas_rz_g2l",
       "zero_answering_windows": [],
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "uart_regex",
         "uart_ordered",
@@ -6527,6 +6675,7 @@
       "prebuilt_firmware": "tests/fixtures/rz-t2m-r52-sci-smoke.elf",
       "_artifact_path": "renesas_rz_t2m",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -6571,6 +6720,7 @@
       },
       "_artifact_path": "ri5cy",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -6616,6 +6766,7 @@
       },
       "_artifact_path": "riscv_verilated_uartlite",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -6661,6 +6812,7 @@
       },
       "_artifact_path": "riscv_virt",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -6706,6 +6858,7 @@
       },
       "_artifact_path": "s32k118",
       "zero_answering_windows": [],
+      "claimed_peripherals": 6,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -6753,6 +6906,7 @@
       },
       "_artifact_path": "sam4s",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -6797,6 +6951,7 @@
       },
       "_artifact_path": "sam4s16c",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -6841,6 +6996,7 @@
       },
       "_artifact_path": "sam4s8b",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -6885,6 +7041,7 @@
       },
       "_artifact_path": "sam4s_xplained",
       "zero_answering_windows": [],
+      "claimed_peripherals": 8,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -6930,6 +7087,7 @@
       },
       "_artifact_path": "sam_e70",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -6976,6 +7134,7 @@
       },
       "_artifact_path": "sifive-fe310",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -7021,6 +7180,7 @@
       },
       "_artifact_path": "sifive-fu540",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -7065,6 +7225,7 @@
       },
       "_artifact_path": "sifive-fu740",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -7110,6 +7271,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/at90usb162-io-smoke.elf",
       "_artifact_path": "simavr-at90usb162",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -7156,6 +7318,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega128-io-smoke.elf",
       "_artifact_path": "simavr-atmega128",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -7203,6 +7366,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega1280-io-smoke.elf",
       "_artifact_path": "simavr-atmega1280",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -7250,6 +7414,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega1281-io-smoke.elf",
       "_artifact_path": "simavr-atmega1281",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -7297,6 +7462,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega1284p-io-smoke.elf",
       "_artifact_path": "simavr-atmega1284p",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -7344,6 +7510,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega128rfa1-io-smoke.elf",
       "_artifact_path": "simavr-atmega128rfa1",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -7390,6 +7557,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega128rfr2-io-smoke.elf",
       "_artifact_path": "simavr-atmega128rfr2",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -7436,6 +7604,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega16-io-smoke.elf",
       "_artifact_path": "simavr-atmega16",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -7483,6 +7652,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega164-io-smoke.elf",
       "_artifact_path": "simavr-atmega164",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -7530,6 +7700,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega168-io-smoke.elf",
       "_artifact_path": "simavr-atmega168",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -7577,6 +7748,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega169p-io-smoke.elf",
       "_artifact_path": "simavr-atmega169p",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -7623,6 +7795,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega16m1-io-smoke.elf",
       "_artifact_path": "simavr-atmega16m1",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -7669,6 +7842,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/arduino-mega-2560-io.elf",
       "_artifact_path": "simavr-atmega2560",
       "zero_answering_windows": [],
+      "claimed_peripherals": 7,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -7715,6 +7889,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega32-io-smoke.elf",
       "_artifact_path": "simavr-atmega32",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -7762,6 +7937,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega324-io-smoke.elf",
       "_artifact_path": "simavr-atmega324",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -7809,6 +7985,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/arduino-uno-blinky.elf",
       "_artifact_path": "simavr-atmega328",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -7855,6 +8032,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega328pb-usart1.elf",
       "_artifact_path": "simavr-atmega328pb",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -7901,6 +8079,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega32u4-gpio-smoke.elf",
       "_artifact_path": "simavr-atmega32u4",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "gpio_edges",
         "expected_stop_reason"
@@ -7946,6 +8125,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega48-io-smoke.elf",
       "_artifact_path": "simavr-atmega48",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -7993,6 +8173,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega644-io-smoke.elf",
       "_artifact_path": "simavr-atmega644",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -8040,6 +8221,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega64m1-io-smoke.elf",
       "_artifact_path": "simavr-atmega64m1",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -8086,6 +8268,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega8-io-smoke.elf",
       "_artifact_path": "simavr-atmega8",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -8133,6 +8316,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/atmega88-io-smoke.elf",
       "_artifact_path": "simavr-atmega88",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -8180,6 +8364,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/attiny13-io-smoke.elf",
       "_artifact_path": "simavr-attiny13",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -8226,6 +8411,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/attiny1634-io-smoke.elf",
       "_artifact_path": "simavr-attiny1634",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -8272,6 +8458,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/attiny2313-io-smoke.elf",
       "_artifact_path": "simavr-attiny2313",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -8319,6 +8506,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/attiny2313a-io-smoke.elf",
       "_artifact_path": "simavr-attiny2313a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -8366,6 +8554,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/attiny24-io-smoke.elf",
       "_artifact_path": "simavr-attiny24",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -8412,6 +8601,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/attiny25-io-smoke.elf",
       "_artifact_path": "simavr-attiny25",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -8458,6 +8648,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/attiny4313-io-smoke.elf",
       "_artifact_path": "simavr-attiny4313",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -8505,6 +8696,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/attiny44-io-smoke.elf",
       "_artifact_path": "simavr-attiny44",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -8551,6 +8743,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/attiny45-io-smoke.elf",
       "_artifact_path": "simavr-attiny45",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -8597,6 +8790,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/attiny84-io-smoke.elf",
       "_artifact_path": "simavr-attiny84",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -8643,6 +8837,7 @@
       "prebuilt_firmware": "tests/fixtures/avr/attiny85-io-smoke.elf",
       "_artifact_path": "simavr-attiny85",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "gpio_edges",
@@ -8688,6 +8883,7 @@
       },
       "_artifact_path": "sltb001a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -8732,6 +8928,7 @@
       },
       "_artifact_path": "sltb004a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -8776,6 +8973,7 @@
       },
       "_artifact_path": "slwstk6220a",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -8820,6 +9018,7 @@
       },
       "_artifact_path": "starfive-jh7100",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -8864,6 +9063,7 @@
       },
       "_artifact_path": "stk3200",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -8908,6 +9108,7 @@
       },
       "_artifact_path": "stk3600",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -8952,6 +9153,7 @@
       },
       "_artifact_path": "stk3700",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -8996,6 +9198,7 @@
       },
       "_artifact_path": "stk3800",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -9040,6 +9243,7 @@
       },
       "_artifact_path": "stm32f042",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9085,6 +9289,7 @@
       },
       "_artifact_path": "stm32f072",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9130,6 +9335,7 @@
       },
       "_artifact_path": "stm32f072b_discovery",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -9175,6 +9381,7 @@
       },
       "_artifact_path": "stm32f103",
       "zero_answering_windows": [],
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -9219,6 +9426,7 @@
       },
       "_artifact_path": "stm32f4",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -9264,6 +9472,7 @@
       },
       "_artifact_path": "stm32f401cdu6-blackpill",
       "zero_answering_windows": [],
+      "claimed_peripherals": 28,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -9308,6 +9517,7 @@
       },
       "_artifact_path": "stm32f412",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9353,6 +9563,7 @@
       },
       "_artifact_path": "stm32f429",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9398,6 +9609,7 @@
       },
       "_artifact_path": "stm32f4_discovery",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -9443,6 +9655,7 @@
       },
       "_artifact_path": "stm32f4_discovery-kit",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -9488,6 +9701,7 @@
       },
       "_artifact_path": "stm32f746",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9533,6 +9747,7 @@
       },
       "_artifact_path": "stm32f777",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9578,6 +9793,7 @@
       },
       "_artifact_path": "stm32f7_discovery-bb",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9623,6 +9839,7 @@
       },
       "_artifact_path": "stm32h7",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9668,6 +9885,7 @@
       },
       "_artifact_path": "stm32h743",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9713,6 +9931,7 @@
       },
       "_artifact_path": "stm32h747",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9758,6 +9977,7 @@
       },
       "_artifact_path": "stm32h747-disco",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9803,6 +10023,7 @@
       },
       "_artifact_path": "stm32h753",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9848,6 +10069,7 @@
       },
       "_artifact_path": "stm32l071",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9893,6 +10115,7 @@
       },
       "_artifact_path": "stm32l072",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "gpio_edges",
@@ -9938,6 +10161,7 @@
       },
       "_artifact_path": "stm32l151",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -9982,6 +10206,7 @@
       },
       "_artifact_path": "stm32l552",
       "zero_answering_windows": [],
+      "claimed_peripherals": 7,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -10027,6 +10252,7 @@
       },
       "_artifact_path": "stm32w108",
       "zero_answering_windows": [],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -10072,6 +10298,7 @@
       },
       "_artifact_path": "stm32wba52",
       "zero_answering_windows": [],
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -10119,6 +10346,7 @@
       "prebuilt_firmware": "tests/fixtures/tegra-a9-uart-smoke.elf",
       "_artifact_path": "tegra2",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -10164,6 +10392,7 @@
       "prebuilt_firmware": "tests/fixtures/tegra-a9-uart-smoke.elf",
       "_artifact_path": "tegra3",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -10208,6 +10437,7 @@
       },
       "_artifact_path": "tock_veer_el2_sim",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "memory_value",
         "uart_contains",
@@ -10252,6 +10482,7 @@
         "hpet:hpet",
         "pci:pythonperipheral"
       ],
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -10293,6 +10524,7 @@
       },
       "_artifact_path": "ut32m0r500",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -10337,6 +10569,7 @@
       },
       "_artifact_path": "vegaboard_ri5cy",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -10382,6 +10615,7 @@
       },
       "_artifact_path": "verilated_ibex",
       "zero_answering_windows": [],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -10428,6 +10662,7 @@
       "prebuilt_firmware": "tests/fixtures/versatile-arm926-uart-smoke.elf",
       "_artifact_path": "versatile",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -10473,6 +10708,7 @@
       "prebuilt_firmware": "tests/fixtures/vexpress-a9-uart-smoke.elf",
       "_artifact_path": "vexpress",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -10518,6 +10754,7 @@
       "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",
       "_artifact_path": "vybrid",
       "zero_answering_windows": [],
+      "claimed_peripherals": 8,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -10562,6 +10799,7 @@
       "zero_answering_windows": [
         "hpet:hpet"
       ],
+      "claimed_peripherals": 2,
       "smoke_assertion_kinds": null,
       "smoke_depth": "unknown"
     },
@@ -10604,6 +10842,7 @@
       "prebuilt_firmware": "tests/fixtures/xtensa-sample-controller-cpu-smoke.elf",
       "_artifact_path": "xtensa-sample-controller",
       "zero_answering_windows": [],
+      "claimed_peripherals": 0,
       "smoke_assertion_kinds": [
         "memory_value",
         "expected_stop_reason"
@@ -10649,6 +10888,7 @@
       "prebuilt_firmware": "tests/fixtures/zynq7000-a9-uart-smoke.elf",
       "_artifact_path": "zedboard",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -10693,6 +10933,7 @@
       },
       "_artifact_path": "zolertia-firefly",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "fidelity_clean",
@@ -10739,6 +10980,7 @@
       "prebuilt_firmware": "tests/fixtures/zynq7000-a9-uart-smoke.elf",
       "_artifact_path": "zynq-7000",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -10784,6 +11026,7 @@
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
       "_artifact_path": "zynqmp",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -10829,6 +11072,7 @@
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
       "_artifact_path": "zynqmp-zcu102-revA",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -10874,6 +11118,7 @@
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
       "_artifact_path": "zynqmp-zcu102-revB",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -10919,6 +11164,7 @@
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
       "_artifact_path": "zynqmp-zcu104",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -10964,6 +11210,7 @@
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
       "_artifact_path": "zynqmp-zcu106-vcu",
       "zero_answering_windows": [],
+      "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"

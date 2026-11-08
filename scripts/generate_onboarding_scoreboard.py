@@ -45,13 +45,9 @@ def load_zero_answering_types(path: Path = KNOWN_STUBS_RS) -> set[str]:
     return types - REPLACED_AT_CONSTRUCTION
 
 
-def zero_answering_windows(system: str | None, stub_types: set[str]) -> list[str] | None:
-    """Peripheral ids in the chip a target's system loads that answer reads with zeros.
-
-    None means it could not be measured (no system path, unreadable YAML, or no
-    PyYAML); an empty list means the loaded chip names no stubbed window.
-    """
-    if yaml is None or not system or not stub_types:
+def load_chip(system: str | None) -> dict | None:
+    """The chip YAML a target's system loads, or None when it cannot be resolved."""
+    if yaml is None or not system:
         return None
     system_path = REPO_ROOT / system
     try:
@@ -61,17 +57,46 @@ def zero_answering_windows(system: str | None, stub_types: set[str]) -> list[str
         chip = yaml.safe_load((system_path.parent / chip_ref).read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError, AttributeError):
         return None
+    return chip if isinstance(chip, dict) else None
+
+
+def chip_peripherals(chip: dict) -> list[dict]:
+    return [p for p in chip.get("peripherals") or [] if isinstance(p, dict)]
+
+
+def zero_answering_windows(system: str | None, stub_types: set[str]) -> list[str] | None:
+    """Peripheral ids in the chip a target's system loads that answer reads with zeros.
+
+    None means it could not be measured (no system path, unreadable YAML, or no
+    PyYAML); an empty list means the loaded chip names no stubbed window.
+    """
+    if not stub_types:
+        return None
+    chip = load_chip(system)
+    if chip is None:
+        return None
     return [
         f"{p.get('id')}:{str(p.get('type')).lower()}"
-        for p in chip.get("peripherals") or []
-        if isinstance(p, dict) and str(p.get("type", "")).lower() in stub_types
+        for p in chip_peripherals(chip)
+        if str(p.get("type", "")).lower() in stub_types
     ]
+
+
+def claimed_peripherals(system: str | None) -> int | None:
+    """How many peripheral windows the loaded chip claims; None when unresolvable.
+
+    This is what the profile says the engine models, not what the smoke touched:
+    read it next to the smoke's assertion kinds.
+    """
+    chip = load_chip(system)
+    return None if chip is None else len(chip_peripherals(chip))
 
 
 def annotate_zero_answering_windows(metrics: list[dict]) -> None:
     stub_types = load_zero_answering_types()
     for m in metrics:
         m["zero_answering_windows"] = zero_answering_windows(m.get("system"), stub_types)
+        m["claimed_peripherals"] = claimed_peripherals(m.get("system"))
 
 
 def _load_script(text: str):
@@ -150,6 +175,12 @@ def summarize(metrics: list[dict], threshold_seconds: int) -> dict:
     passed_with_zero_windows = sum(
         1 for m in metrics if m.get("status") == "pass" and m.get("zero_answering_windows")
     )
+    passing_claims = [
+        m["claimed_peripherals"]
+        for m in metrics
+        if m.get("status") == "pass" and m.get("claimed_peripherals") is not None
+    ]
+
     def passed_with_depth(depth: str) -> int:
         return sum(1 for m in metrics if m.get("status") == "pass" and m.get("smoke_depth") == depth)
 
@@ -167,6 +198,10 @@ def summarize(metrics: list[dict], threshold_seconds: int) -> dict:
         "pass_observable_assertions": passed_with_depth("observable"),
         "pass_stop_reason_only": passed_with_depth("stop_reason_only"),
         "pass_depth_unknown": passed_with_depth("unknown"),
+        "pass_claimed_peripherals_total": sum(
+            m.get("claimed_peripherals") or 0 for m in metrics if m.get("status") == "pass"
+        ),
+        "pass_claimed_peripherals_median": int(median(passing_claims)) if passing_claims else 0,
         "median_elapsed_ms": median_elapsed_ms,
         "median_elapsed_seconds": round(median_elapsed_ms / 1000.0, 3),
         "threshold_seconds": threshold_seconds,
@@ -198,15 +233,17 @@ def build_markdown(
         f"- pass_observable_assertions: `{summary['pass_observable_assertions']}/{summary['pass']}`",
         f"- pass_stop_reason_only: `{summary['pass_stop_reason_only']}/{summary['pass']}`",
         f"- pass_depth_unknown: `{summary['pass_depth_unknown']}/{summary['pass']}`",
+        f"- pass_claimed_peripherals_total: `{summary['pass_claimed_peripherals_total']}`",
+        f"- pass_claimed_peripherals_median: `{summary['pass_claimed_peripherals_median']}`",
         f"- median_elapsed_ms: `{median_elapsed_ms}`",
         f"- median_elapsed_seconds: `{median_elapsed_seconds}`",
         f"- threshold_seconds: `{threshold_seconds}`",
         f"- threshold_met: `{threshold_hits}/{summary['run_attempted']}`",
         "",
-        "> `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor. `Zero Windows` lists the peripherals in the chip the target's system actually loads that are allowlisted stubs (`crates/core/src/bus/known_stubs.rs`) and answer reads with zeros; a pass with zero windows did not exercise those blocks. `Smoke Depth` is `stop_reason_only` when the script asserts nothing but `expected_stop_reason` (the CPU stepped to its budget without faulting; no UART, memory or GPIO result is checked) and `observable` when it also checks a UART, memory, GPIO or fidelity result.",
+        "> `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor. `Zero Windows` lists the peripherals in the chip the target's system actually loads that are allowlisted stubs (`crates/core/src/bus/known_stubs.rs`) and answer reads with zeros; a pass with zero windows did not exercise those blocks. `Smoke Depth` is `stop_reason_only` when the script asserts nothing but `expected_stop_reason` (the CPU stepped to its budget without faulting; no UART, memory or GPIO result is checked) and `observable` when it also checks a UART, memory, GPIO or fidelity result. `Claimed` is the number of peripheral windows the loaded chip profile declares and `Checks` the assertion kinds the smoke script uses; a smoke rarely exercises every claimed window, so a large `Claimed` next to a single `uart_contains` is a profile claim the smoke does not prove.",
         "",
-        "| Target | Status | Run Attempted | Booted | Smoke Passed | Elapsed (ms) | Elapsed (s) | Threshold Met | Smoke Depth | Zero Windows | Failure Stage | Hint | Signature |",
-        "|---|---|---|---|---|---:|---:|---|---|---|---|---|---|",
+        "| Target | Status | Run Attempted | Booted | Smoke Passed | Elapsed (ms) | Elapsed (s) | Threshold Met | Smoke Depth | Claimed | Checks | Zero Windows | Failure Stage | Hint | Signature |",
+        "|---|---|---|---|---|---:|---:|---|---|---:|---|---|---|---|---|",
     ]
     if descriptors_present is not None:
         lines.insert(2, f"- descriptors_present: `{descriptors_present}`")
@@ -233,11 +270,19 @@ def build_markdown(
             "n/a" if windows is None else "0" if not windows else f"{len(windows)}: " + ", ".join(f"`{w}`" for w in windows)
         )
         depth_label = m.get("smoke_depth", "unknown") if run_attempted else "n/a"
+        claimed = m.get("claimed_peripherals")
+        claimed_label = "n/a" if claimed is None else str(claimed)
+        kinds = m.get("smoke_assertion_kinds")
+        checks_label = (
+            "n/a"
+            if not run_attempted or kinds is None
+            else ", ".join(f"`{k}`" for k in kinds if k != "expected_stop_reason") or "`expected_stop_reason`"
+        )
         failure_stage = m.get("failure_stage") or "n/a"
         hint = (m.get("failure_hint") or "n/a").replace("|", "/")
         signature = (m.get("first_error_signature") or "n/a").replace("|", "/")
         lines.append(
-            f"| `{target}` | `{status}` | `{run_attempted}` | `{booted_label}` | `{smoke_label}` | `{elapsed_ms}` | `{elapsed_seconds}` | `{threshold_label}` | `{depth_label}` | {windows_label} | `{failure_stage}` | {hint} | {signature} |"
+            f"| `{target}` | `{status}` | `{run_attempted}` | `{booted_label}` | `{smoke_label}` | `{elapsed_ms}` | `{elapsed_seconds}` | `{threshold_label}` | `{depth_label}` | `{claimed_label}` | {checks_label} | {windows_label} | `{failure_stage}` | {hint} | {signature} |"
         )
     return "\n".join(lines) + "\n"
 
