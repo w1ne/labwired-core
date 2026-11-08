@@ -37,7 +37,7 @@ struct L0Run {
     serial: String,
     systicks: u32,
     reached_main: bool,
-    mcause: u32,
+    last_mcause: u32,
 }
 
 /// Run the L0 image until `LW_L0_OK\r\n` or `max_steps`.
@@ -76,7 +76,7 @@ fn run_l0(chip: &ChipDescriptor, max_steps: usize) -> L0Run {
         serial: String::from_utf8_lossy(&sink.lock().unwrap()).into_owned(),
         systicks,
         reached_main,
-        mcause: machine.cpu.mcause,
+        last_mcause: machine.cpu.mcause,
     }
 }
 
@@ -89,7 +89,9 @@ fn ch32v003_wch_arduino_l0_boots_and_prints() {
     // `delay(1)` returns on the first msTick change, so at least one
     // SysTick_Handler entry, taken through the mode-3 table, preceded it.
     assert!(run.systicks >= 1, "no SysTick interrupt was taken");
-    assert_eq!(run.mcause, 0, "compiled firmware must not trap");
+    // mcause retains the last taken interrupt after mret; it must be the
+    // expected SysTick cause, not a synchronous exception.
+    assert_eq!(run.last_mcause, 0x8000_000C, "unexpected final trap cause");
 }
 
 #[test]
@@ -127,7 +129,7 @@ fn ch32v003_wch_arduino_l0_stalls_when_stk_irq_is_not_routed() {
         serde_yaml::from_value(yaml).expect("parse descriptor without the STK IRQ route");
     let run = run_l0(&chip, 1_000_000);
     assert!(run.reached_main, "negative control failed before main");
-    assert_eq!(run.mcause, 0, "negative control trapped before delay");
+    assert_eq!(run.last_mcause, 0, "negative control trapped before delay");
     assert_eq!(run.systicks, 0, "SysTick taken without its PFIC route");
     assert!(
         run.serial.is_empty(),
