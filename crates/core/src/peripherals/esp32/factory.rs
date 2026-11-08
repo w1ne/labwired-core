@@ -36,6 +36,8 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
             Box::new(uart::Esp32Uart::new(echo, p_cfg.irq.unwrap_or(34)))
         }
         "esp32_spi" => Box::new(spi::Esp32Spi::new()),
+        // The S2's own GP-SPI register file (neither the classic nor the S3's).
+        "esp32s2_spi" => Box::new(spi_s2::Esp32s2Spi::new()),
         "esp32_sar_adc" => Box::new(sar_adc::Esp32SarAdc::new()),
         // I2C0 asserts source 49, I2C1 50 (`ETS_I2C_EXT{0,1}_INTR_SOURCE`).
         "esp32_i2c" => Box::new(i2c::Esp32I2c::with_intr_source(
@@ -87,6 +89,7 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32_rmt",
     "esp32s2_rmt",
     "esp32s2_i2c",
+    "esp32s2_spi",
     "esp32_timg",
     "esp32_efuse",
     "esp32_syscon",

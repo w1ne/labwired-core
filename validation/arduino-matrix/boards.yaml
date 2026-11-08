@@ -71,11 +71,10 @@ boards:
     pwm_watch: "gpio:2"
     pwm_min_edges: 4
     family: esp32
-    notes: "Arduino-ESP32-S2 on the genuine S2 mask ROM; L0/L1/L7 (UART0, FreeRTOS tick, 80 MHz SYSTIMER), L2 (RMT WS2812 waveform on GPIO18), L3 (I2C0 Wire reads INA219 CONFIG/BUS), L6 (LEDC PWM on GPIO2)"
-    sketches_skip: [L4_spi_sensor, L5_adc, L8_can]
+    notes: "Arduino-ESP32-S2 on the genuine S2 mask ROM; L0/L1/L7 (UART0, FreeRTOS tick, 80 MHz SYSTIMER), L2 (RMT WS2812 waveform on GPIO18), L3 (I2C0 Wire reads INA219 CONFIG/BUS), L4 (FSPI/SPI2 reads the MAX31855 frame), L6 (LEDC PWM on GPIO2)"
+    sketches_skip: [L5_adc, L8_can]
     sketches_skip_reason:
       # Each measured 2026-11-08 on this profile.
-      L4_spi_sensor: "no S2 GP-SPI model: SPI2 access at 0x3F424030 faults"
       L5_adc: "no S2 SAR ADC model: analogRead never completes"
       L8_can: "no S2 TWAI model: the sketch prints LW_L8_FAIL no_can"
 

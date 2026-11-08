@@ -15,7 +15,7 @@ that run predates the narrowed descriptor, re-measured cell by cell after it):
 | L1 serial loop | **pass** | |
 | L2 blink | **pass** | WS2812 waveform on the GPIO18 pad via RMT ch0 (see below) |
 | L3 I2C INA219 | **pass** | Wire reads INA219 CONFIG 0x399F and BUS 0x19CA via I2C0 (see below) |
-| L4 SPI MAX31855 | skip | no S2 GP-SPI model (fault @ 0x3F424030) |
+| L4 SPI MAX31855 | **pass** | `SPI.transfer` reads the MAX31855 frame 0x01901600 via GP-SPI2 (see below) |
 | L5 ADC | skip | no S2 SAR ADC model |
 | L6 PWM | **pass** | 1 kHz, 50 % PWM on the GPIO2 pad via LEDC LS ch6 (see below) |
 | L7 micros | **pass** | 80 MHz SYSTIMER (`SYSTIMER_LL_TICKS_PER_US` = 80) |
@@ -110,6 +110,41 @@ the pass and the no-device negative control. Not modelled: I2C1 (same type
 with `irq: 53`, but not in this profile), slave mode, clock stretching, and
 bus timing. The controller does not check that the matrix routes I2CEXT0 to
 GPIO8/9, so the pad assignment is not verified.
+
+## L4 — GP-SPI2 (added later the same day)
+
+The S2's GP-SPI matches neither model the engine already had. Its own
+`soc/esp32s2/register/soc/spi_reg.h` launches with `SPI_CMD.USR` at bit 24,
+like the S3. But it keeps separate `MOSI_DLEN` (0x24) and `MISO_DLEN` (0x28)
+and reports completion in `SPI_SLAVE.TRANS_DONE` (0x30 bit 4), like the
+classic part. `USER` is at 0x18 and `W0` at 0x98. The classic `Esp32Spi`
+reads CMD bit 24 as `FLASH_SE`, and the S3 model has a single `MS_DLEN` at
+0x1C. So the new type `esp32s2_spi` is a small model of its own: a register
+file seeded with the header's reset values, and a synchronous data phase.
+Each W-buffer byte goes through the attached devices, and with `USR_MISO`
+the reply goes back into the same lane. `USR` self-clears and `TRANS_DONE`
+latches. `CTRL.WR/RD_BIT_ORDER` select LSB-first. The profile maps SPI2
+(FSPI, Arduino's default `SPI`) at 0x3F42_4000 and SPI3 at 0x3F42_5000.
+
+Re-run of the row
+([`arduino-matrix-esp32s2-l4-spi-2026-11-08.log`](arduino-matrix-esp32s2-l4-spi-2026-11-08.log)):
+L0, L1, L2, L3, L4, L6, L7 pass, L5 and L8 skip. L4 prints `LW_L4_OK` at
+852k steps, so the four `SPI.transfer(0)` bytes equal the MAX31855 model's
+default frame 0x01901600 (25.0 C hot junction, 22.0 C internal, no fault).
+With the MAX31855 removed from the system, the same ELF prints
+`LW_L4_FAIL frame=0xffffffff` (MISO idles high).
+
+Gate test: `cargo test -p labwired-core --test esp32s2_arduino_spi` runs the
+pass and the no-device negative control. The unit tests in
+`peripherals::esp32::spi_s2` cover reset values, bit order, and the bit-24
+launch (a classic bit-18 write does not start a transaction).
+
+Not modelled: DMA, slave mode, the command/address/dummy phases (only the
+data phase reaches a device), a waveform on the pads, and the interrupt.
+`ETS_SPI2_INTR_SOURCE` (33) is never raised, so ESP-IDF `spi_master` in
+interrupt mode would not complete. CS is not routed: the MAX31855 kit is
+broadcast, so the CS pin in the system file (GPIO5, the sketch's) is not
+checked.
 
 ## Vendor status (live, 2026-11-08)
 

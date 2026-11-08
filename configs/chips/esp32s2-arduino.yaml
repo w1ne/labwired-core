@@ -7,13 +7,14 @@
 # (crates/core/src/system/xtensa/esp32s2.rs), UART0, SYSTIMER, TIMG0/1, the
 # interrupt matrix + FROM_CPU doorbells, the WDEV RNG, the EXTMEM cache
 # controller, RMT transmit (symbols played out through the GPIO matrix),
-# LEDC PWM (channel waveforms on the pads the matrix routes them to) and the
-# I2C0 master command list (classic-ESP32 I2C design).
+# LEDC PWM (channel waveforms on the pads the matrix routes them to), the
+# I2C0 master command list (classic-ESP32 I2C design) and the GP-SPI2/3
+# CPU-driven master data phase (no DMA, no pad waveform, no interrupt).
 # Blocks marked "register file" below store what is written and read it
 # back; they carry no behaviour, and nothing that depends on them (clock tree,
 # RF, eFuse values, IO_MUX pad function) is claimed.
 #
-# Not modelled: Wi-Fi, USB OTG, PSRAM, I2C1, I2C slave mode, GP-SPI, RMT RX, ADC, TWAI, touch.
+# Not modelled: Wi-Fi, USB OTG, PSRAM, I2C1, I2C slave mode, GP-SPI DMA/slave, RMT RX, ADC, TWAI, touch.
 # The narrow freestanding DevKitM-1 smoke profile is configs/chips/esp32s2.yaml.
 #
 # Addresses: ESP-IDF components/soc/esp32s2/include/soc/reg_base.h and
@@ -122,6 +123,19 @@ peripherals:
     base_address: 0x3F413000
     size: "4KB"
     irq: 52 # ETS_I2C_EXT0_INTR_SOURCE
+  # GP-SPI2 (FSPI, Arduino's default SPI) and SPI3: the S2's own register
+  # file (USR at CMD bit 24, split MOSI/MISO DLEN, W0 at 0x98). Polled data
+  # phase only; ETS_SPI2/3_INTR_SOURCE (33/34) are never raised.
+  - id: "spi2"
+    type: "esp32s2_spi"
+    base_address: 0x3F424000
+    size: "4KB"
+    irq: 33 # ETS_SPI2_INTR_SOURCE
+  - id: "spi3"
+    type: "esp32s2_spi"
+    base_address: 0x3F425000
+    size: "4KB"
+    irq: 34 # ETS_SPI3_INTR_SOURCE
   - id: "rng"
     type: "esp32s2_rng"
     base_address: 0x3F435000

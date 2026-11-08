@@ -1,5 +1,6 @@
 # Arduino matrix system — ESP32-S2 (single-core Xtensa LX7).
 # L3: INA219 on Wire (I2C0, the S2 variant's SDA GPIO8 / SCL GPIO9).
+# L4: MAX31855 on Arduino's default SPI (FSPI = SPI2); CS is the sketch's GPIO5.
 name: "arduino-matrix-esp32s2"
 chip: "../../../configs/chips/esp32s2-arduino.yaml"
 external_devices:
@@ -9,4 +10,9 @@ external_devices:
     route: { sda: "GPIO8", scl: "GPIO9" }
     config:
       i2c_address: 0x40
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi2"
+    config:
+      cs_pin: "GPIO5"
 board_io: []

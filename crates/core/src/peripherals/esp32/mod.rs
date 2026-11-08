@@ -28,6 +28,7 @@ pub mod sar_adc;
 pub mod sdio_stub;
 pub mod sha;
 pub mod spi;
+pub mod spi_s2;
 pub mod syscon;
 pub mod timg;
 pub mod twai;
