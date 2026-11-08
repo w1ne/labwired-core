@@ -15,7 +15,12 @@
 # SPI2 + DMA1 carry the spidmatest smoke: SPI2 TX on the F1 default pads
 # (PB13 SCK, PB15 MOSI), fed by DMA1 channel 5 with the channel interrupts
 # as PFIC levels 27..33. USART1 is here because ch32fun's UART printf setup
-# programs it; nothing in these smokes asserts its output.
+# programs it; the ch32fun smokes do not assert its output, the Arduino rows do.
+#
+# WCH's official Arduino core (validation/arduino-matrix row `ch32v203`) also
+# runs on this profile. It adds I2C1, SPI1, ADC1 and TIM1..TIM4 for Wire, SPI,
+# analogRead and analogWrite, and the FLASH + 0x30 silicon-revision word that
+# WCH's SPL reads before it touches GPIOC or AFIO remaps.
 #
 # CAN1 carries the canbus_network smoke: the bxCAN register block at
 # 0x40006400 (CTLR/STATR/TSTATR/RFIFO0, three TX mailboxes, two RX FIFOs,
@@ -89,6 +94,13 @@ peripherals:
       profile: stm32f1
 
   # EXTEND at 0x40023800: storage only; SystemInit sets PLL_HSI_PRE.
+  - id: flash_chip_rev
+    type: declarative
+    base_address: 0x40022030
+    size: 4B
+    config:
+      path: "../peripherals/ch32v20x/flash_chip_rev.yaml"
+
   - id: exten
     type: declarative
     base_address: 0x40023800
@@ -173,6 +185,65 @@ peripherals:
   # SPI2: the F1 register block (CTLR1.DFF, BIDIMODE/BIDIOE, CTLR2.TXDMAEN).
   # HSCR at 0x24 (the V20x high-speed bit): writes are accepted, it reads 0
   # and has no effect.
+  # I2C1/SPI1/ADC1/TIM1..4: the F103 register layouts, which the CH32V20x RM
+  # keeps, at the ch32v20x.h bases. IRQ numbers are ch32v20x.h IRQn (the F1
+  # vector numbers + 16 on the PFIC); clock gates are RCC APB1PCENR /
+  # APB2PCENR bits, the same positions as the F103.
+  - id: i2c1
+    type: i2c
+    base_address: 0x40005400
+    size: 1KB
+    irq: 47
+    clock: { reg: apb1enr, bit: 21 }
+    config:
+      irq_error: 48
+
+  - id: spi1
+    type: spi
+    base_address: 0x40013000
+    size: 1KB
+    irq: 51
+    clock: { reg: apb2enr, bit: 12 }
+
+  - id: adc1
+    type: adc
+    base_address: 0x40012400
+    size: 1KB
+    irq: 34
+    clock: { reg: apb2enr, bit: 9 }
+    config:
+      profile: stm32f1
+
+  - id: tim1
+    type: timer
+    base_address: 0x40012C00
+    size: 1KB
+    irq: 41
+    clock: { reg: apb2enr, bit: 11 }
+    config:
+      advanced: true
+
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: 1KB
+    irq: 44
+    clock: { reg: apb1enr, bit: 0 }
+
+  - id: tim3
+    type: timer
+    base_address: 0x40000400
+    size: 1KB
+    irq: 45
+    clock: { reg: apb1enr, bit: 1 }
+
+  - id: tim4
+    type: timer
+    base_address: 0x40000800
+    size: 1KB
+    irq: 46
+    clock: { reg: apb1enr, bit: 2 }
+
   - id: spi2
     type: spi
     base_address: 0x40003800

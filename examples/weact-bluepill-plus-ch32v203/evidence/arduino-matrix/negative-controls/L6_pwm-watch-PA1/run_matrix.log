@@ -1,0 +1,12 @@
+labwired: target/debug/labwired
+boards:   ch32v203
+sketches: L6_pwm
+out:      <out>
+
+==> ch32v203 × L6_pwm
+    compile: ok (firmware.elf)
+    run: oracle_fail
+
+Done in 5s — 0 pass / 0 skip / 1 fail (cells 1; gate treats skip as non-fail)
+Scoreboard: <out>/scoreboard.md
+Docs scoreboard unchanged (partial run; not full 20×9)

@@ -1576,8 +1576,18 @@ impl RiscV {
         let (instruction, inst_len) = if let Some(entry) = cached {
             (entry.instruction, entry.inst_len as u32)
         } else {
-            let instruction = decode_rv32(opcode);
+            let mut instruction = decode_rv32(opcode);
             let inst_len = if (opcode & 0x3) == 0x3 { 4 } else { 2 };
+            // WCH XW (`-march=rv32imacxw`, WCH's Arduino core) lives in RVC
+            // slots the base decoder leaves Unknown; only a QingKe core asks.
+            if self.core_profile.is_qingke()
+                && inst_len == 2
+                && matches!(instruction, Instruction::Unknown(_))
+            {
+                if let Some(xw) = crate::decoder::riscv::decode_wch_xw(opcode as u16) {
+                    instruction = xw;
+                }
+            }
             if _config.decode_cache_enabled {
                 self.decode_cache[cache_idx] = Some(RiscVDecodeCacheEntry {
                     tag: self.pc,

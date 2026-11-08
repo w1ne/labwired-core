@@ -59,6 +59,7 @@ jobs:
           - stm32wb55
           - stm32wba52
           - atmega328p
+          - ch32v203
 
     steps:
       - uses: actions/checkout@v4
@@ -121,6 +122,8 @@ jobs:
             rp2040)      platform=raspberrypi ;;
             esp32*)      platform=espressif32@7.0.1 ;;
             atmega328p)  platform=atmelavr@5.3.0 ;;
+            # Not in the registry; same pin as boards.yaml.
+            ch32v203)    platform=https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7 ;;
             *)
               echo "::error::no PlatformIO platform mapped for board '${{ matrix.board }}'"
               exit 1

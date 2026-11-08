@@ -123,7 +123,9 @@ static bool lw_can_probe() {
 #define LW_HAS_CAN 1
 
 #elif defined(STM32F1xx) || defined(ARDUINO_BLUEPILL_F103C8) || defined(ARDUINO_GENERIC_F103C8TX) || \
-    defined(ARDUINO_BLUEPILL_F103CB) || defined(STM32F103xB) || defined(STM32F103xE)
+    defined(ARDUINO_BLUEPILL_F103CB) || defined(STM32F103xB) || defined(STM32F103xE) || defined(CH32V20x)
+// CH32V20x keeps the F1 bxCAN1 map at 0x40006400 and CAN1EN at RCC
+// APB1PCENR (0x4002101C) bit 25 (ch32v20x.h CAN1_BASE, RCC_APB1Periph_CAN1).
 static bool lw_can_probe() {
   const uint32_t can = 0x40006400u;
   const uint32_t rcc = 0x40021000u;

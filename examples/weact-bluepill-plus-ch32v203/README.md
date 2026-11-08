@@ -24,7 +24,8 @@ or other peripherals are STM32F1-compatible.
 
 **Not modeled:** PFIC/interrupts, PLL/HSE clock setup (WCH's `SystemInit`
 raises the clock to 96/144 MHz), the PA0 user key, USB-C and CAN (both: see the
-ch32fun profile below), timers, ADC,
+ch32fun profile below), timers and ADC (all three: see the Arduino core
+section below),
 RTC, the unplaced SPI flash, WCH SDI debug, and physical-board parity.
 
 ## Copy-paste example (WCH SDK / MounRiver Studio)
@@ -203,12 +204,87 @@ cargo run -q -p labwired-cli -- test \
   --script examples/weact-bluepill-plus-ch32v203/ch32fun-exti-blink-smoke.yaml
 ```
 
-**Not modelled in this profile:** SPI1, I2C, timers, ADC, the USBD block
+## WCH's official Arduino core (stock sketches)
+
+The same `ch32v203c8t6-ch32fun-smoke` profile runs the Arduino matrix's stock
+sketches built with WCH's official core,
+[openwch/arduino_core_ch32](https://github.com/openwch/arduino_core_ch32),
+through the community PlatformIO `ch32v` platform (`genericCH32V203C8T6`,
+`-march=rv32imacxw`). The sketches are not modified for this board. The row
+(`ch32v203` in [`boards.yaml`](../../validation/arduino-matrix/boards.yaml))
+adds two build flags. `-DLED_BUILTIN=PB2` is needed because the CH32V203C8
+variant leaves LED_BUILTIN undefined, and PB2 is this board's LED.
+`-DLW_PWM_PIN=PA0` is needed because PB2 has no timer channel.
+
+| Sketch | What it exercises | Result |
+| --- | --- | --- |
+| L0 / L1 | core boot, `Serial` on USART1 (PA9), `millis()` from the STK interrupt | ✅ ✅ |
+| L2 | `digitalWrite(LED_BUILTIN)` on PB2, ≥2 edges | ✅ |
+| L3 | `Wire` on I2C1 (PB6/PB7) to an INA219 at 0x40: config 0x399F, bus 0x19CA | ✅ |
+| L4 | `SPI` on SPI1 (PA5/6/7, CS PA4) to a MAX31855: frame 0x01901600 | ✅ |
+| L5 | `analogRead(A0)` on ADC1: two completed conversions (2, 3 on the F1 unseeded path) | ✅ |
+| L6 | `analogWrite(PA0, 128)` on TIM2_CH1, ≥4 edges. The core's default resolution is 12-bit, so duty is 128/4096 = 3.125 %; the twin measured 4509 high cycles per 144009-cycle (1 kHz) period, 3.131 % | ✅ |
+| L7 | `micros()` | ⏭️ upstream bug, below |
+| L8 | bxCAN1 loopback (sketch's F1 register branch; CH32V20x keeps the map) | ✅ |
+
+Evidence: [`evidence/arduino-matrix/`](evidence/arduino-matrix/) (scoreboard,
+per-sketch UART log, result JSON and the test script). Reproduce:
+
+```bash
+cargo build -p labwired-cli --release
+python3 validation/arduino-matrix/run_matrix.py --boards ch32v203
+```
+
+Getting the core to boot needed three things:
+
+- **WCH XW instructions.** The core is built `-march=rv32imacxw`, and its
+  prebuilt libraries use XW `c.lbu`/`c.sb`/`c.lhu`/`c.sh` and the sp-relative
+  forms. On a QingKe profile, an RVC word that the base decoder leaves
+  Unknown now goes through `decode_wch_xw`. That is the same decoder as the
+  CH32V003 Arduino work (#1716). The first one the L0 image executes is
+  `0xa44e` at 0x9b4.
+- **The silicon-revision word at 0x40022030.** WCH's SPL reads it in
+  `GPIO_Init`, `GPIO_PinRemapConfig` and `CAN_FilterInit`. If bits 27:24
+  are 0, it takes the first-revision paths: GPIOC PC13..15 driven from
+  CFGHR bits 2..0, and PCFR1 remap bits shifted. It is not in the RM's
+  FLASH map; the EEVblog thread "CH32V203 Chip errata issue - PORTC" covers
+  the same split. The model is current silicon, so it reads 0x0100_0000:
+  the smallest value with a non-zero revision nibble. Nothing else is claimed
+  ([`flash_chip_rev.yaml`](../../configs/peripherals/ch32v20x/flash_chip_rev.yaml)).
+  Without it, L0 faults on the unmapped read at step 687.
+- **I2C1, SPI1, ADC1 and TIM1..TIM4.** These are the F103 register
+  layouts at the ch32v20x.h bases, with ch32v20x.h IRQ numbers (F1 + 16
+  on the PFIC).
+
+Negative controls ([`evidence/arduino-matrix/negative-controls/`](evidence/arduino-matrix/negative-controls/)):
+L0 without the revision word: memory violation, no UART. L3 with no INA219
+on the bus: `LW_L3_FAIL nack`. L6 watched on PA1 instead of PA0: oracle
+fail. L8 with the CAN1 clock gate moved to bit 26: `LW_L8_FAIL`.
+
+**Two upstream core behaviours, neither a model artifact.** Both are in WCH's
+core as pinned (arduino_core_ch32 `3820604`). Neither has been reported upstream.
+
+1. *`micros()` runs backwards inside each millisecond.* `getCurrentMicros()`
+   (cores/arduino/ch32/clock.c) returns `ms*1000 + (CMP+1-CNT)*1000/(CMP+1)`,
+   which assumes a down-counter. `hw_config.c` starts the STK with
+   `CTLR = 0xF`, and MODE (bit 4) clear means count up. L7 measured
+   t0=1999 t1=3999 t2=3929 t3=4999, and back-to-back reads gave 4985, 4851,
+   4716 … while CNT rose. The CH32V003 row has the same skip.
+2. *`%lu` prints nothing and shifts every later argument.* The toolchain's
+   `libprintf.a` `print()` treats `l` as a 64-bit size. It 8-aligns the
+   va_list, reads two words, and calls a 64-bit printer that is a stub
+   (`li a0,0; ret`). `snprintf("%lu %u %d", 1234567UL, 42, -7)` gives
+   `lu= u=42 d=1`. That is why L7's own FAIL line prints empty values.
+
+**Not modelled in this profile:** I2C2, ADC2, the USBD block
 at 0x40005C00, USBFS double buffering / isochronous / host mode / OTG, CAN2, the
 CAN interrupts (the example polls), RTC,
-the SPI2 HSCR high-speed bit (accepted, reads 0, no effect), USART1 output (configured
-by ch32fun's UART printf setup, not asserted),
+the SPI2 HSCR high-speed bit (accepted, reads 0, no effect), USART1 output in the ch32fun
+smokes (configured by ch32fun's UART printf setup, not asserted there; the
+Arduino rows assert it),
 PFIC nesting and V4 priority grouping, HSE, low-power modes, host-to-target
-debug input, and physical-board parity. The PD0/PC0 toggles in
+debug input, and physical-board parity. Exercised by nothing here, so
+unclaimed: SPI1/I2C1 DMA, TIM remapped pads, TIM input capture and
+encoder modes, ADC scan/injected groups. The PD0/PC0 toggles in
 debugprintfdemo are not asserted: on LQFP48, PD0 is OSC_IN and PC0 is not
 bonded.

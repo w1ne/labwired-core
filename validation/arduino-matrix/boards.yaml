@@ -281,6 +281,42 @@ boards:
       L8_can: "EFR32MG26 has no CAN controller"
 
 
+  - id: ch32v203
+    chip: ch32v203c8t6-ch32fun-smoke
+    system: systems/ch32v203.yaml
+    # WCH's official core (openwch/arduino_core_ch32) via the community ch32v
+    # platform, pinned to the same revisions as the ch32v003 row.
+    pio:
+      platform: https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7
+      board: genericCH32V203C8T6
+      framework: arduino
+      platform_packages:
+        - "framework-arduino-openwch-ch32 @ https://github.com/Community-PIO-CH32V/arduino_core_ch32.git#3820604346d0a9f0ee9a72cab8b7583e488e6674"
+      # The CH32V203C8 variant leaves LED_BUILTIN as PNUM_NOT_DEFINED. PB2 is
+      # the WeAct BluePill-Plus-CH32 blue user LED (active high), a board fact.
+      # PB2 has no timer channel, so L6 drives TIM2_CH1 on PA0 (variant
+      # PeripheralPins.c PinMap_TIM, reset mapping) instead.
+      build_flags: ["-DLED_BUILTIN=PB2", "-DLW_PWM_PIN=PA0"]
+    max_steps: 20000000
+    budget_reason: "144 MHz QingKe V4; L0 prints LW_L0_OK well inside 20M steps"
+    led_watch: "gpiob:2"
+    led_min_edges: 2
+    # Stock analogWrite(PA0, 128) must toggle the pad. A pin that falls back to
+    # digitalWrite (no TIM route) holds one level and fails this.
+    pwm_watch: "gpioa:0"
+    pwm_min_edges: 4
+    family: wch
+    notes: "QingKe V4 RV32IMAC + XW on WeAct BluePill-Plus-CH32; L8 bxCAN1 loopback"
+    sketches_skip: [L7_timer]
+    sketches_skip_reason:
+      # Measured 2026-11-08 (Serial.print, since the core's libprintf drops
+      # %lu): t0=1999 t1=3999 t2=3929 t3=4999, micros() falling inside each ms.
+      L7_timer: >-
+        Upstream core bug, not a model gap: getCurrentMicros() (ch32/clock.c)
+        computes (CMP+1-CNT), which assumes a down-counter, but hw_config.c
+        starts the V4 STK with CTLR=0xF, MODE (bit 4) clear = count up, so
+        micros() runs backwards inside each millisecond (same bug as ch32v003)
+
 sketches:
   - id: L0_serial_boot
     dir: sketches/L0_serial_boot

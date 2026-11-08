@@ -31,3 +31,11 @@ Checked live on 2026-11-06 UTC.
   Development Board [89 in stock]".
 - LCSC's search page did not render results for an HTTP client, so it is not
   cited.
+
+## Re-check 2026-11-08 (WCH Arduino core round)
+
+- Robosap's WeAct CH32V203C8T6 board listing: "₹311.52 incl. GST (₹264.00 +
+  GST)", "Status:18 in stock", "Add to cart" present.
+- MuseLab nanoCH32V203 on Tindie (also CH32V203C8T6): $3.00, 89 base boards in
+  stock (kits with a WCH-LinkE: 975–999). No shipping destination was
+  selected, so the page did not confirm delivery to a given country.

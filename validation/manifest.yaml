@@ -2752,7 +2752,17 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 2617085f6eb799435326ca4fa09e051293832a4113121330d323ddff823a051e
+    # 2026-11-08 (CH32V203 WCH Arduino core, hw-onboarding): changes the
+    # shared cpu/riscv.rs and decoder/riscv.rs digests. New
+    # `decode_wch_xw` (WCH XW compressed byte/halfword loads and stores, the
+    # same function and 31 pinned encodings as #1716) and a decode fallback
+    # that runs only when `core_profile.is_qingke()` AND the base RVC decoder
+    # returned Unknown. The ESP32-C3 profile never takes it, and
+    # `decode_rv32` is unchanged; esp32c3_reset_conformance (2/2) and the
+    # RISC-V firmware_survival cases pass on the branch. This is a reviewed
+    # model-drift acknowledgment, NOT a new silicon capture; no capture or
+    # ack date moves.
+    drift_ack_digest: 8f40625b5bfe775dc3c837c020c9537cab3c3a1b8ae364815f886c1d2cc60609
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs

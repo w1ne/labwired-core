@@ -49,6 +49,10 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("atsamd21g18a/wdt.yaml", packed!("atsamd21g18a/wdt.yaml")),
     ("ch32v003/exten.yaml", packed!("ch32v003/exten.yaml")),
     ("ch32v20x/exten.yaml", packed!("ch32v20x/exten.yaml")),
+    (
+        "ch32v20x/flash_chip_rev.yaml",
+        packed!("ch32v20x/flash_chip_rev.yaml"),
+    ),
     ("esp32/apb_ctrl.yaml", packed!("esp32/apb_ctrl.yaml")),
     ("esp32/dport.yaml", packed!("esp32/dport.yaml")),
     ("esp32/efuse.yaml", packed!("esp32/efuse.yaml")),
