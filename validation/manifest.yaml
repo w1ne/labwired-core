@@ -1855,7 +1855,6 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 1182d3c5336065aa5ba5631fbb2ec69979cf9fbed5bf0ebf249acbcdb22823c5
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2555,8 +2554,15 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 0b25393d311c2c3a038ce6e03ad0856e7d36776a28f151bf5a53570b044f05f4
+    # 2026-11-08 (merge of origin/main 5567cbbca into lane/new-hw-onboarding):
+    #   main's changes here were acked on main. The merge itself only combines
+    #   adc.rs (main's F1 mV sample-and-hold + VREF+ latch with the lane's
+    #   CH32V003 10-bit/SCAN path: each scan slot and CONT restart samples its
+    #   own SQx channel; a single SWSTART conversion is unchanged), and unions
+    #   rcc.rs layouts and rp2040/sio.rs methods. adc/rcc/sio lib tests pass.
+    #   ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-11-08
+    drift_ack_digest: 35536415e2062bf7db90b79c32b0e3a60149726ea9893707cd7d80c12d39f205
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -2806,7 +2812,7 @@ boards:
     # RISC-V firmware_survival cases pass on the branch. This is a reviewed
     # model-drift acknowledgment, NOT a new silicon capture; no capture or
     # ack date moves.
-    drift_ack_digest: 8f40625b5bfe775dc3c837c020c9537cab3c3a1b8ae364815f886c1d2cc60609
+    drift_ack_digest: 43347e5d0fc5b29a4f7c314b11001229072124715b2d7f4349a6b00cd64e9f34
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3690,7 +3696,14 @@ boards:
     #   SCTLR.WFITOWFE is set (CH32V003 WFE). The ESP32-C3 has no QingKe PFIC,
     #   so its `wfi` is byte-for-byte the same no-op.
     #   ACK, NOT A SILICON CAPTURE.
-    drift_ack: 2026-11-07
+    # 2026-11-08 (merge of origin/main 5567cbbca into lane/new-hw-onboarding):
+    #   main's changes here were acked on main. The merge itself only combines
+    #   adc.rs (main's F1 mV sample-and-hold + VREF+ latch with the lane's
+    #   CH32V003 10-bit/SCAN path: each scan slot and CONT restart samples its
+    #   own SQx channel; a single SWSTART conversion is unchanged), and unions
+    #   rcc.rs layouts and rp2040/sio.rs methods. adc/rcc/sio lib tests pass.
+    #   ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-11-08
     # 2026-11-07 (CH32V203 ch32fun, hw-onboarding): riscv.rs adds a QingKe V4
     # core profile (`qingke-v4b`: CORECFGR 0xBC0, the shared PFIC trap path).
     # Every new arm is gated on the QingKe profiles; the Esp32C3 profile's CSR
@@ -4234,7 +4247,6 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 977c8b5804feb07f2a92d77e8632d730be3b0d784be83eda52dd6bbfee694b6a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4931,8 +4943,15 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 983045bcaae89f1c6acf27a43248dfacbc7400cc40f841f1ec7e99ee00f0aa0f
+    # 2026-11-08 (merge of origin/main 5567cbbca into lane/new-hw-onboarding):
+    #   main's changes here were acked on main. The merge itself only combines
+    #   adc.rs (main's F1 mV sample-and-hold + VREF+ latch with the lane's
+    #   CH32V003 10-bit/SCAN path: each scan slot and CONT restart samples its
+    #   own SQx channel; a single SWSTART conversion is unchanged), and unions
+    #   rcc.rs layouts and rp2040/sio.rs methods. adc/rcc/sio lib tests pass.
+    #   ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-11-08
+    drift_ack_digest: 0451e0438c5d6847bdd856d997093f40db23fdc4867b349d9c6322e5a3734f66
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5484,7 +5503,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: b80d2e3e65890e4964818135bddd7c7ffd2eeb02190e4f2794742592aa3998bc
+    drift_ack_digest: 0b6234c72e56a1066cec316aaf0c4f80ed045c023e6647a80805cfa1c9c8550f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6088,7 +6107,14 @@ boards:
     #   rcc.rs: WchRcc (CH32V003 only) gains RSTSCKR LSION/LSIRDY and PWREN
     #   in its APB1 mask. No STM32 layout is touched.
     #   ACK, NOT A SILICON CAPTURE.
-    drift_ack: 2026-11-07
+    # 2026-11-08 (merge of origin/main 5567cbbca into lane/new-hw-onboarding):
+    #   main's changes here were acked on main. The merge itself only combines
+    #   adc.rs (main's F1 mV sample-and-hold + VREF+ latch with the lane's
+    #   CH32V003 10-bit/SCAN path: each scan slot and CONT restart samples its
+    #   own SQx channel; a single SWSTART conversion is unchanged), and unions
+    #   rcc.rs layouts and rp2040/sio.rs methods. adc/rcc/sio lib tests pass.
+    #   ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-11-08
     # 2026-11-07 (CH32V203 spidmatest, hw-onboarding): dma.rs adds a
     # `ch32v20x` profile (the CH32V003 channel semantics with PFIC 27..33),
     # selected only by `profile: ch32v20x`. Legacy/G0 DMA paths unchanged.
@@ -6722,7 +6748,6 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 69d0fa3a62928e4ed113f336b0085c906306d1a45794c45abdd8d16a4cafd0ea
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7421,8 +7446,15 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 7a043bd038ddd21849f776d1045751c51539548e502b89e513411cb5cb00bf24
+    # 2026-11-08 (merge of origin/main 5567cbbca into lane/new-hw-onboarding):
+    #   main's changes here were acked on main. The merge itself only combines
+    #   adc.rs (main's F1 mV sample-and-hold + VREF+ latch with the lane's
+    #   CH32V003 10-bit/SCAN path: each scan slot and CONT restart samples its
+    #   own SQx channel; a single SWSTART conversion is unchanged), and unions
+    #   rcc.rs layouts and rp2040/sio.rs methods. adc/rcc/sio lib tests pass.
+    #   ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-11-08
+    drift_ack_digest: 286f310ffb512b73465d8c7d77377bb7e10b3367112d8c933bc982ddb850e65a
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7995,7 +8027,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 99095c94a36c9666ae2a203f56c5a9b2889d6a72e160c0b23bab05e4a5a973c1
+    drift_ack_digest: d07b7a15ff1a3d2af3b718ace2a794450263c8e245a71aebd62757dedbb1e62d
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -8601,7 +8633,14 @@ boards:
     #   rcc.rs: WchRcc (CH32V003 only) gains RSTSCKR LSION/LSIRDY and PWREN
     #   in its APB1 mask. No STM32 layout is touched.
     #   ACK, NOT A SILICON CAPTURE.
-    drift_ack: 2026-11-07
+    # 2026-11-08 (merge of origin/main 5567cbbca into lane/new-hw-onboarding):
+    #   main's changes here were acked on main. The merge itself only combines
+    #   adc.rs (main's F1 mV sample-and-hold + VREF+ latch with the lane's
+    #   CH32V003 10-bit/SCAN path: each scan slot and CONT restart samples its
+    #   own SQx channel; a single SWSTART conversion is unchanged), and unions
+    #   rcc.rs layouts and rp2040/sio.rs methods. adc/rcc/sio lib tests pass.
+    #   ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-11-08
     # 2026-11-07 (CH32V203 spidmatest, hw-onboarding): dma.rs adds a
     # `ch32v20x` profile (the CH32V003 channel semantics with PFIC 27..33),
     # selected only by `profile: ch32v20x`. Legacy/G0 DMA paths unchanged.
@@ -9522,8 +9561,15 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-06
-    drift_ack_digest: 4a5a428d2e80d0f06c72b3b7225b64df4bbb2908bcd9a6a23f5d2a115cdf04f7
+    # 2026-11-08 (merge of origin/main 5567cbbca into lane/new-hw-onboarding):
+    #   main's changes here were acked on main. The merge itself only combines
+    #   adc.rs (main's F1 mV sample-and-hold + VREF+ latch with the lane's
+    #   CH32V003 10-bit/SCAN path: each scan slot and CONT restart samples its
+    #   own SQx channel; a single SWSTART conversion is unchanged), and unions
+    #   rcc.rs layouts and rp2040/sio.rs methods. adc/rcc/sio lib tests pass.
+    #   ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-11-08
+    drift_ack_digest: eda4ca5d77c334adb39c24ccd364c3d1ea94402156ef6e674c1673c44e0b2dfb
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
