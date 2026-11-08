@@ -109,6 +109,12 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x00,
         "litex/soc/cores/gpio.py GPIOIn `in` (Zephyr gpio_litex.c)",
     ),
+    // EOS S3 MISC IO_INPUT, GPIO k at bit k.
+    (
+        "declarative/eoss3/io_in.yaml",
+        0x00,
+        "Renode EOSS3_IntrCtrl.cs MiscRegisters.IOInput (misc region)",
+    ),
     // Window based at the port's P_m byte, so PIN_m is +0x800.
     (
         "declarative/rzg2l/port.yaml",
@@ -317,6 +323,24 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
         "r9a07g075.dtsi gpio@800a0000 base_ns + gpio_rzt2m.c PINm_OFFSET",
     ),
     (
+        "eos-s3",
+        "io_in",
+        0x4000_5100,
+        "Renode platforms/cpus/eos-s3.repl intrCtrl misc region @0x40005100",
+    ),
+    (
+        "eos-s3-qomu",
+        "io_in",
+        0x4000_5100,
+        "Renode platforms/cpus/eos-s3.repl intrCtrl misc region @0x40005100",
+    ),
+    (
+        "eos-s3-quickfeather",
+        "io_in",
+        0x4000_5100,
+        "Renode platforms/cpus/eos-s3.repl intrCtrl misc region @0x40005100",
+    ),
+    (
         "litex_vexriscv",
         "gpio_in",
         0xE000_6000,
@@ -343,13 +367,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 199;
+const COVERED: usize = 202;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 94;
+const SILICON_REGISTER: usize = 97;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 46;
+const NO_ANALOG_ENDPOINT: usize = 43;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()

@@ -1,0 +1,35 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# QuickLogic EOS S3 GPIO input, MISC IO_INPUT. The eight SoC GPIOs are read
+# in one register, GPIO k at bit k, at 0x4000_5100. Renode models the GPIO
+# inside EOSS3_IntrCtrl and maps its "misc" region there (platforms/cpus/
+# eos-s3.repl, size 0x8): IO_INPUT @0x0 (`IO_IN`, bits 7..0, read-only,
+# BaseGPIOPort State) and IO_OUTPUT @0x4 (`IO_OUT`, bits 7..0) (Renode
+# EOSS3_IntrCtrl.cs MiscRegisters). Board inputs land there: the QuickFeather
+# user button is GPIO 1 (`-> intrCtrl@31`, inputs 30..37 are GPIOs 0..7).
+#
+# Only IO_INPUT is declared, so the declarative GPIO path runs this window
+# input-only (IN with no OUT, ENABLE or gpio_mode): pins 0..7 are inputs.
+# Pad configuration lives in the IO_MUX block at 0x4000_4C00 (Renode maps it
+# as the "iomux" region and logs every access as unsupported), so there is
+# no modelled direction register. Declaring IO_OUTPUT with no direction
+# source would make every pin underivable, so it is left out. Not modelled:
+# IO_OUTPUT, the IO_MUX pad configuration, and the GPIO interrupt
+# registers at 0x4000_4800 (GPIO_INTR, GPIO_INTR_RAW, TYPE, POL, EN_*).
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: IN
+  address_offset: 0
+  size: 8
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: IO_IN
+    bit_range:
+    - 7
+    - 0
+    description: IO_INPUT, the input level of GPIO 0..7
+  side_effects: null

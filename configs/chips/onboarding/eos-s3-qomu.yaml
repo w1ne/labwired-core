@@ -13,6 +13,16 @@ ram:
   base: 1073803264
   size: 4096B
 peripherals:
+# EOS S3 GPIO 0..7 input: EOSS3_IntrCtrl's "misc" region at 0x4000_5100
+# (Renode platforms/cpus/eos-s3.repl), IO_INPUT @+0x0. The import dropped
+# that multi-region registration, so no GPIO reached this profile.
+- id: io_in
+  type: declarative
+  bus: sysbus
+  base_address: 1073762560
+  size: 4B
+  config:
+    path: ../../peripherals/eoss3/io_in.yaml
 - id: ledB
   type: led
   bus: intrCtrl
