@@ -291,9 +291,10 @@ const DEVICE_TOLERANCE: f64 = 5e-4;
 struct Differential {
     /// What the failure message calls it.
     name: &'static str,
-    /// SPICE text. Both engines parse this exact string; the in-core engine
-    /// ignores the `.model` parameters it has no term for and the analysis
-    /// cards, and ngspice ignores nothing.
+    /// SPICE text shared by both runs. These fixtures use model parameters
+    /// implemented by the in-core solver; `ngspice_series` adds analysis cards
+    /// only to ngspice's copy. The `adapter: analog` path rejects unsupported
+    /// model parameters, temperature directives, and control scripts.
     deck: &'static str,
     /// Node to compare.
     node: &'static str,

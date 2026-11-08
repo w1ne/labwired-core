@@ -59,7 +59,9 @@ concurrency:
 jobs:
   python-sdk:
     name: python-sdk (wheel + pytest, 0 skipped)
-    runs-on: ubuntu-latest
+    # Python 3.9 (the abi3 floor) is not available on the Ubuntu 26 image.
+    # Keep this job on a runner image that can still install the declared floor.
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
