@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 100000,
+    "instructions": 200000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/efm32pg1-smoke.yaml",
   "system": "configs/systems/onboarding/efm32pg1.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-08T17:29:04Z",
-  "finished_at_utc": "2026-11-08T17:29:05Z",
+  "started_at_utc": "2026-11-08T18:02:57Z",
+  "finished_at_utc": "2026-11-08T18:02:59Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1257,
+  "elapsed_ms": 1540,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.309,
-    "build_firmware": 0.63,
-    "run_smoke": 0.306
+    "build_cli": 0.313,
+    "build_firmware": 0.893,
+    "run_smoke": 0.321
   },
   "stages_ms": {
-    "build_cli": 309,
-    "build_firmware": 630,
-    "run_smoke": 306
+    "build_cli": 313,
+    "build_firmware": 893,
+    "run_smoke": 321
   }
 }

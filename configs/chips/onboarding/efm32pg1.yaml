@@ -6,9 +6,10 @@
 
 name: efm32pg1
 arch: arm
-# The imported profile is limited to its Cortex-M4F memory map and modeled
-# USART0. Other generated peripheral windows are omitted because this profile
-# does not exercise them.
+# Renode efm32xg1x/efm32pg1.repl: cpuType "cortex-m4f".
+core: cortex-m4f
+# Mapped: the memory map, USART0 and the GPIO ports, all exercised by the
+# Renode onboarding smoke. Other generated peripheral windows are omitted.
 # Flash at 0x0 as in Renode's efm32xg1x/efm32pg1.repl
 # (`flash: Memory.MappedMemory @ sysbus 0x00000000`) and the EFM32 Series 1
 # memory map.
@@ -23,3 +24,32 @@ peripherals:
   type: efm32_uart
   bus: sysbus
   base_address: 1073807360
+# Series-1 GPIO ports A..F. Renode only tags 0x4000A000-0x4000AFFF "GPIO";
+# silicon has the ports, so they are modelled here. GPIO_P_TypeDef at a
+# 0x30 stride (Gecko SDK efm32pg1b_gpio_p.h: P[6]); DOUTSET/DOUTCLR do not exist on
+# Series 1. The block head from 0x4000A400 (EXTI, ROUTE, INSENSE, EM4 wake)
+# is NOT mapped: no model behind it.
+- id: gpioa
+  type: efm32s1_gpioport
+  base_address: 0x4000A000
+  size: 48B
+- id: gpiob
+  type: efm32s1_gpioport
+  base_address: 0x4000A030
+  size: 48B
+- id: gpioc
+  type: efm32s1_gpioport
+  base_address: 0x4000A060
+  size: 48B
+- id: gpiod
+  type: efm32s1_gpioport
+  base_address: 0x4000A090
+  size: 48B
+- id: gpioe
+  type: efm32s1_gpioport
+  base_address: 0x4000A0C0
+  size: 48B
+- id: gpiof
+  type: efm32s1_gpioport
+  base_address: 0x4000A0F0
+  size: 48B

@@ -473,6 +473,10 @@ impl SystemBus {
             // the same Renode type also covers Series-1 parts, whose ports sit
             // at a 0x30 stride.
             GpioRegisterLayout::Efm32s0
+        } else if has("efm32s1") {
+            // Silicon Labs Series-1 EFM32/EFR32 (JG1/PG1/JG12/PG12): the same
+            // port struct at a 0x30 stride, DOUTSET/CLR reserved, OVTDIS @0x28.
+            GpioRegisterLayout::Efm32s1
         } else if raw == "gpio" {
             // 3a. The bare vendor-neutral "gpio" type with no profile is the
             //     dangerous case (real product chips: KW41Z / STM32 / nRF /

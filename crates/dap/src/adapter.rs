@@ -1705,9 +1705,10 @@ fn gpio_offsets_for_peripheral(
             odr_offset: 0x10,
             ra_output_packed: false,
         }),
-        // Silicon Labs Series-0 EFM32 port struct: DOUT at 0x0C, DIN at 0x1C
-        // (efm32gg_gpio_p.h, GPIO_P_TypeDef).
-        labwired_core::peripherals::gpio::GpioRegisterLayout::Efm32s0 => Some(GpioOffsets {
+        // Silicon Labs Series-0/1 EFM32 port struct: DOUT at 0x0C, DIN at 0x1C
+        // (efm32gg_gpio_p.h / efm32pg1b_gpio_p.h, GPIO_P_TypeDef).
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Efm32s0
+        | labwired_core::peripherals::gpio::GpioRegisterLayout::Efm32s1 => Some(GpioOffsets {
             idr_offset: 0x1C,
             odr_offset: 0x0C,
             ra_output_packed: false,

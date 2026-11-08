@@ -1,38 +1,23 @@
+//! EFM32JG1 (Jade Gecko, Cortex-M3) Renode-parity smoke.
+//!
+//! USART0 is the console; the Series-1 GPIO checks live in
+//! firmware-efm32jg1-smoke/src/s1.rs.
 #![no_std]
 #![no_main]
 
-use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-// This smoke uses only the EFM32 USART0 register path implemented by the
-// imported profile. The profile intentionally leaves the exact core variant
-// unspecified.
-const USART0_BASE: usize = 0x4001_0000;
-const USART0_CMD: *mut u32 = USART0_BASE as *mut u32;
-const USART0_STATUS: *const u32 = (USART0_BASE + 0x10) as *const u32;
-const USART0_TXDATA: *mut u32 = (USART0_BASE + 0x34) as *mut u32;
-
-const CMD_TXEN: u32 = 1 << 0;
-const STATUS_TXBL: u32 = 1 << 6;
-
-fn putc(byte: u8) {
-    unsafe {
-        let mut remaining = 100_000u32;
-        while read_volatile(USART0_STATUS) & STATUS_TXBL == 0 && remaining > 0 {
-            remaining -= 1;
-        }
-        write_volatile(USART0_TXDATA, byte as u32);
-    }
-}
+mod s1;
 
 #[entry]
 fn main() -> ! {
-    unsafe { write_volatile(USART0_CMD, CMD_TXEN) };
-    for byte in b"EFM32JG1 USART0 smoke\r\n" {
-        putc(*byte);
-    }
-    loop {
-        core::hint::spin_loop();
-    }
+    s1::run(&s1::Board {
+        banner: "EFM32JG1 RENODE SMOKE",
+        family: "EFM32JG1",
+        summary: 0x2000_7C00,
+        // LED0/LED1 = PF4/PF5, as on the PG1/PG12 starter kits
+        // (SLSTK3401A/SLSTK3402A).
+        led: (5, 4),
+    })
 }

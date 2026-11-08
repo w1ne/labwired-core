@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.000708">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.007842">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="faa844f435ec6b112191cf161818fcab93f6a6084d69cb627170edb5c9caa139"/>
+    <property name="firmware_hash" value="38816b9bcb55fbe08b7b338f25eab781b91b4a397a7a83c2e77e1546181b010c"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.000708">
+  <testcase classname="labwired" name="run" time="0.007842">
   </testcase>
-  <testcase classname="labwired" name="assertion 1: uart_contains: EFM32PG1 USART0 smoke" time="0.000000">
+  <testcase classname="labwired" name="assertion 1: uart_contains: EFM32PG1 RENODE SMOKE" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok&quot;, &quot;gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpiof:4 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x20007c00=0xef31003f" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

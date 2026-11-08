@@ -96,6 +96,12 @@ pub enum GpioRegisterLayout {
     /// DOUTSET/CLR/TGL @0x10/0x14/0x18, DIN @0x1C, PINLOCKN @0x20. Six ports
     /// at a 0x24 stride from 0x40006000 (Gecko SDK `efm32gg_gpio_p.h`).
     Efm32s0,
+    /// Silicon Labs EFM32/EFR32 **Series 1** (JG1/PG1/JG12/PG12, xG1/xG12/xG13)
+    /// GPIO port: GPIO_P_TypeDef — the Series-0 map with DOUTSET/DOUTCLR
+    /// (0x10/0x14) reserved and OVTDIS @0x28 added. Six ports at a 0x30
+    /// stride from 0x4000A000 (Gecko SDK `efm32pg1b_gpio_p.h`). Same port
+    /// model as [`Self::Efm32s0`], different map.
+    Efm32s1,
     /// Microchip **SAM** (SAM D21 / D51 / E5x) PORT group — DIR @0x00 with
     /// CLR/SET/TGL aliases, OUT @0x10 with the same three aliases, IN @0x20,
     /// CTRL @0x24, WRCONFIG @0x28, PMUX[16] @0x30, PINCFG[32] @0x40. Offsets
@@ -128,11 +134,12 @@ impl FromStr for GpioRegisterLayout {
             "kinetis" | "kw41z" | "nxp" => Ok(Self::Kinetis),
             "efr32s2" | "efr32_series2" | "efr32xg2" => Ok(Self::Efr32s2),
             "efm32s0" | "efm32_series0" | "efm32gg" => Ok(Self::Efm32s0),
+            "efm32s1" | "efm32_series1" => Ok(Self::Efm32s1),
             "sam" | "sam_port" | "samd" | "samd21" | "samd51" | "microchip" => Ok(Self::SamPort),
             "ra_port" | "ra4m1" | "renesas_port" => Ok(Self::RaPort),
             "imxrt" | "imxrt_gpio" => Ok(Self::Imxrt),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, efm32s0, sam_port, ra_port, imxrt",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, efm32s0, efm32s1, sam_port, ra_port, imxrt",
                 value
             )),
         }
@@ -933,6 +940,13 @@ impl Efr32s2Gpio {
 // glitch filters, PINLOCKN enforcement (stored clear-only; a locked pin's MODE
 // still accepts writes — warned), and the block head (EXTI, ROUTE, INSENSE,
 // EM4 wake), which is outside these windows and unmapped in the chip YAMLs.
+//
+// Series 1 (`series1`) is the same port with a different map — Gecko SDK
+// `efm32pg1b_gpio_p.h` / `efm32pg1b_gpio.h`: 0x10/0x14 RESERVED0 (no
+// DOUTSET/DOUTCLR), OVTDIS @0x28 (mask 0xFFFF), CTRL reset 0x00500050 and
+// mask 0x10711071 (drive strength / slew rate for both drive sets). The
+// MODEn nibble encoding is identical. Ports sit at a 0x30 stride from
+// 0x4000A000.
 #[derive(Debug, serde::Serialize)]
 pub struct Efm32s0Gpio {
     ctrl: u32,     // 0x00
@@ -941,6 +955,9 @@ pub struct Efm32s0Gpio {
     dout: u32,     // 0x0C
     din: u32,      // 0x1C — latched external (button/sensor) input
     pinlockn: u32, // 0x20
+    ovtdis: u32,   // 0x28 — Series 1 only
+    /// Series-1 register map (see the block comment). Not a register.
+    series1: bool,
     /// Pins the outside world is holding; a pull applies only where this bit
     /// is clear. Not a register.
     #[serde(skip)]
@@ -968,6 +985,8 @@ impl Default for Efm32s0Gpio {
             din: 0,
             // _GPIO_P_PINLOCKN_RESETVALUE: every pin unlocked.
             pinlockn: 0xFFFF,
+            ovtdis: 0,
+            series1: false,
             external: 0,
             cached_driven: 0,
             cached_pulled: 0,
@@ -979,6 +998,15 @@ impl Default for Efm32s0Gpio {
 }
 
 impl Efm32s0Gpio {
+    fn series1() -> Self {
+        Self {
+            // _GPIO_P_CTRL_RESETVALUE (efm32pg1b_gpio.h).
+            ctrl: 0x0050_0050,
+            series1: true,
+            ..Self::default()
+        }
+    }
+
     /// The 4-bit mode field of `pin` (MODEL for pins 0..7, MODEH for 8..15).
     fn mode_nibble(&self, pin: u32) -> u32 {
         let reg = if pin < 8 { self.model } else { self.modeh };
@@ -1044,10 +1072,12 @@ impl Efm32s0Gpio {
             0x04 => self.model,
             0x08 => self.modeh,
             0x0C => self.dout,
-            // DOUTSET/CLR/TGL are write-only command words.
+            // DOUTSET/CLR/TGL are write-only command words (Series 1:
+            // 0x10/0x14 are reserved and read 0 too).
             0x10 | 0x14 | 0x18 => 0,
             0x1C => self.effective_din(),
             0x20 => self.pinlockn,
+            0x28 if self.series1 => self.ovtdis,
             _ => {
                 crate::census_reg!("gpio:Efm32s0Gpio", offset, "read");
                 0
@@ -1057,7 +1087,12 @@ impl Efm32s0Gpio {
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
+            0x00 if self.series1 => self.ctrl = value & 0x1071_1071,
             0x00 => self.ctrl = value & 0x3,
+            0x10 | 0x14 if self.series1 => {
+                crate::census_reg!("gpio:Efm32s0Gpio", offset, "write");
+            }
+            0x28 if self.series1 => self.ovtdis = value & 0xFFFF,
             0x04 => {
                 self.model = value;
                 self.recompute();
@@ -1066,7 +1101,7 @@ impl Efm32s0Gpio {
                 self.modeh = value;
                 self.recompute();
             }
-            // DOUT is 16 bits on every Series-0 port.
+            // DOUT is 16 bits on every Series-0/1 port.
             0x0C..=0x18 => {
                 let v = value & 0xFFFF;
                 match offset {
@@ -2327,6 +2362,7 @@ impl GpioPort {
             GpioRegisterLayout::Kinetis => GpioFamily::Kinetis(KinetisGpio::default()),
             GpioRegisterLayout::Efr32s2 => GpioFamily::Efr32s2(Efr32s2Gpio::default()),
             GpioRegisterLayout::Efm32s0 => GpioFamily::Efm32s0(Efm32s0Gpio::default()),
+            GpioRegisterLayout::Efm32s1 => GpioFamily::Efm32s0(Efm32s0Gpio::series1()),
             GpioRegisterLayout::SamPort => GpioFamily::SamPort(SamGpio::default()),
             GpioRegisterLayout::RaPort => GpioFamily::RaPort(RaPortGpio::default()),
             GpioRegisterLayout::Imxrt => GpioFamily::Imxrt(ImxrtGpio::default()),
@@ -2552,6 +2588,7 @@ impl GpioPort {
             GpioFamily::Nrf52(_) => GpioRegisterLayout::Nrf52,
             GpioFamily::Kinetis(_) => GpioRegisterLayout::Kinetis,
             GpioFamily::Efr32s2(_) => GpioRegisterLayout::Efr32s2,
+            GpioFamily::Efm32s0(g) if g.series1 => GpioRegisterLayout::Efm32s1,
             GpioFamily::Efm32s0(_) => GpioRegisterLayout::Efm32s0,
             GpioFamily::SamPort(_) => GpioRegisterLayout::SamPort,
             GpioFamily::RaPort(_) => GpioRegisterLayout::RaPort,
@@ -4608,5 +4645,37 @@ mod efm32s0_tests {
         p.write_u32(PINLOCKN, 0xFFFE).unwrap();
         p.write_u32(PINLOCKN, 0xFFFF).unwrap();
         assert_eq!(p.read_u32(PINLOCKN).unwrap(), 0xFFFE);
+    }
+    /// Series 1 (efm32pg1b_gpio_p.h): 0x10/0x14 are RESERVED0, so a write
+    /// there must not move DOUT; OVTDIS lives at 0x28; CTRL resets to
+    /// 0x00500050 under mask 0x10711071. The rest is the Series-0 port.
+    #[test]
+    fn series1_map_has_no_set_clear_words_and_adds_ovtdis() {
+        let mut p = GpioPort::new_with_layout(GpioRegisterLayout::Efm32s1);
+        assert_eq!(p.register_layout(), GpioRegisterLayout::Efm32s1);
+        assert_eq!(p.odr_offset(), DOUT);
+        assert_eq!(p.idr_offset(), DIN);
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0050_0050);
+        p.write_u32(0x00, 0xFFFF_FFFF).unwrap();
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x1071_1071);
+
+        p.write_u32(MODEL, 0x4).unwrap(); // PA0 push-pull
+        p.write_u32(DOUT, 0).unwrap();
+        p.write_u32(0x10, 1).unwrap(); // reserved, not DOUTSET
+        assert_eq!(p.read_u32(DOUT).unwrap(), 0);
+        p.write_u32(DOUT, 1).unwrap();
+        p.write_u32(0x14, 1).unwrap(); // reserved, not DOUTCLR
+        assert_eq!(p.read_u32(DOUT).unwrap(), 1);
+        p.write_u32(DOUTTGL, 1).unwrap();
+        assert_eq!(p.read_u32(DOUT).unwrap(), 0);
+        assert_eq!(p.read_u32(DIN).unwrap() & 1, 0);
+
+        assert_eq!(p.read_u32(0x28).unwrap(), 0);
+        p.write_u32(0x28, 0xFFFF_FFFF).unwrap();
+        assert_eq!(p.read_u32(0x28).unwrap(), 0xFFFF);
+        // Series 0 has no OVTDIS.
+        let mut s0 = port();
+        s0.write_u32(0x28, 0xFFFF).unwrap();
+        assert_eq!(s0.read_u32(0x28).unwrap(), 0);
     }
 }

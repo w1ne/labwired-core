@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1073807376,
-      23,
-      368,
-      4294867296,
-      10,
-      4294867296,
+      16,
+      1602,
+      49,
       2147483648,
-      536903664,
       0,
-      0,
-      0,
-      0,
-      0,
-      536903664,
-      361,
-      338
+      1,
+      1073807376,
+      536902632,
+      1073783036,
+      4294867296,
+      1,
+      1,
+      4294867296,
+      536902624,
+      9197,
+      10092
     ],
-    "pc": 338,
-    "xpsr": 1627389952,
+    "pc": 10092,
+    "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 200000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 200000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 200000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,9 +59,9 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "c5af940b1c250682a8464eaa340ffdb5ea3ecc4079e2730bad9b717e5f0248b0",
+  "firmware_hash": "400f744a18d82100b3e7f3195b61932c5553b8548cb0a623bf130c8463223ef1",
   "config": {
-    "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-efm32jg1-smoke",
+    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32jg1-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32jg1.yaml",
     "script": "examples/renode-onboarding/efm32jg1-smoke.yaml"
   }

@@ -268,15 +268,24 @@ impl Rig for Efr32 {
     }
 }
 
-struct Efm32s0;
+/// One rig for both EFM32 maps: `true` builds the Series-1 port.
+struct Efm32s0(bool);
 impl Rig for Efm32s0 {
     fn name(&self) -> &'static str {
-        "GpioPort efm32s0"
+        if self.0 {
+            "GpioPort efm32s1"
+        } else {
+            "GpioPort efm32s0"
+        }
     }
     fn build(&mut self) -> Box<dyn Peripheral> {
-        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
-            crate::peripherals::gpio::GpioRegisterLayout::Efm32s0,
-        ))
+        use crate::peripherals::gpio::GpioRegisterLayout;
+        let layout = if self.0 {
+            GpioRegisterLayout::Efm32s1
+        } else {
+            GpioRegisterLayout::Efm32s0
+        };
+        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
     }
     fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
         // MODEL nibble: 1 INPUT, 2 INPUTPULL (DOUT picks the rail),
@@ -820,7 +829,8 @@ fn rigs() -> Vec<Box<dyn Rig>> {
         Box::new(Nrf52),
         Box::new(Kinetis::default()),
         Box::new(Efr32),
-        Box::new(Efm32s0),
+        Box::new(Efm32s0(false)),
+        Box::new(Efm32s0(true)),
         Box::new(Sam),
         Box::new(RaPort::default()),
         Box::new(Imxrt::default()),

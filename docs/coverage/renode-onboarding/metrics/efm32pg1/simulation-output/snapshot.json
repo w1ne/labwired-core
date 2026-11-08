@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1073807376,
-      23,
-      4294867296,
+      16,
+      1602,
+      49,
       2147483648,
       0,
-      0,
-      0,
-      536903664,
-      0,
-      0,
-      0,
-      0,
-      1204,
-      536903664,
-      10,
-      1184
+      1,
+      1073807376,
+      536902632,
+      1073783036,
+      4294867296,
+      1,
+      1,
+      4294867296,
+      536902624,
+      9197,
+      10092
     ],
-    "pc": 1184,
-    "xpsr": 1627389952,
+    "pc": 10092,
+    "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 200000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 200000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 200000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "faa844f435ec6b112191cf161818fcab93f6a6084d69cb627170edb5c9caa139",
+  "firmware_hash": "38816b9bcb55fbe08b7b338f25eab781b91b4a397a7a83c2e77e1546181b010c",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efm32pg1-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32pg1.yaml",

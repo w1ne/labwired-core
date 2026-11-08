@@ -1,10 +1,31 @@
-# Thumb-compatible USART0 smoke against the narrowed imported EFM32JG1 system.
+# Cortex-M3 smoke against the imported EFM32JG1 platform. The Series-1 GPIO
+# ports sit at a 0x30 stride from 0x4000A000 (Renode maps one EFMGPIOPort at 0x4000A000). The firmware
+# (firmware-efm32jg1-smoke, checks in firmware-efm32jg1-smoke/src/s1.rs)
+# prints over USART0: push-pull on LED0/LED1 (PF4/PF5) via DOUT/DOUTTGL,
+# the reserved 0x10/0x14 words (no DOUTSET/DOUTCLR on Series 1),
+# DISABLED/INPUTPULL/WIREDAND/WIREDOR, PINLOCKN, CTRL reset + OVTDIS. LED0
+# toggles in the idle loop. Summary word at 0x20007C00.
 schema_version: "1.0"
 inputs:
-  firmware: "../../target/thumbv6m-none-eabi/release/firmware-efm32jg1-smoke"
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-efm32jg1-smoke"
   system: "../../configs/systems/onboarding/efm32jg1.yaml"
 limits:
-  max_steps: 100000
+  max_steps: 200000
 assertions:
-  - uart_contains: "EFM32JG1 USART0 smoke"
+  - uart_contains: "EFM32JG1 RENODE SMOKE"
+  - uart_ordered:
+      - "gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok"
+      - "gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok"
+      - "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok"
+      - "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok"
+      - "gpio pa pinlockn reset=ffff after=fffe ok"
+      - "gpio pa ctrl=00500050 ovtdis=ffff ok"
+      - "EFM32JG1 PASS"
+  - gpio_edges:
+      pin: "gpiof:4"
+      min_edges: 4
+  - memory_value:
+      address: 0x20007C00
+      expected_value: 0xEF31003F
+      size: 4
   - expected_stop_reason: max_steps
