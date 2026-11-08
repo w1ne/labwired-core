@@ -241,10 +241,12 @@ fn world_rejects_nodes_whose_chip_declares_no_known_architecture() {
 fn world_rejects_non_cortex_m_arm_cores_before_constructing_a_cortex_m_machine() {
     for (name, core, expected_error) in [
         ("missing-core", None, "only Cortex-M cores are modelled"),
+        // cortex-a7/cortex-a9 have an experimental native adapter now, so a
+        // Cortex-A core without one stands in for the refusal path.
         (
-            "cortex-a9",
-            Some("cortex-a9"),
-            "unsupported ARM application core 'cortex-a9'",
+            "cortex-a15",
+            Some("cortex-a15"),
+            "unsupported ARM application core 'cortex-a15'",
         ),
     ] {
         let (dir, manifest) = temporary_arm_world(core, 0x0800_0009);

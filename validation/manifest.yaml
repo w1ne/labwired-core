@@ -10546,6 +10546,10 @@ boards:
       - crates/core/src/peripherals/cc2538/ssi.rs
       - crates/core/src/peripherals/cc2538/gptimer.rs
       - crates/core/src/peripherals/cc2538/i2cm.rs
+      - crates/core/src/peripherals/cc2538/ana_regs.rs
+      - crates/core/src/peripherals/cc2538/cctest.rs
+      - crates/core/src/peripherals/cc2538/ioc.rs
+      - crates/core/src/peripherals/cc2538/soc_adc.rs
       - crates/core/src/peripherals/ieee802154_air.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
