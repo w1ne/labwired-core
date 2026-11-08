@@ -27,7 +27,7 @@ This is the product bar beyond unit tests and UART-only CI fixtures.
 | esp32 | ✅ L0–L4 | ❌ no ESP Zephyr path yet | ✅ Arduino | L4 SPI MISO from kits; FreeRTOS dual-core |
 | esp32c3 | ✅ L0–L4 | ❌ | ✅ Arduino | L4 SPI green; RISC-V FreeRTOS |
 | esp32s3 | ✅ L0–L4 | ❌ | ✅ Arduino | L4 via spi2_s3 Esp32s3Spi; dual-core |
-| esp32c6 | ✅ L0 L1 L2 L4 L6 L7 (6 pass / 3 skip) | ❌ | ❌ L3 skip (INA219 NACK) | Arduino-ESP32 3.x (IDF 5.5, CI pins espressif32@8.0.0) on the in-tree C6 mask ROM. L2 = RGB LED_BUILTIN through RMT TX (C3 model, source 49). L6 = `analogWrite(2, 128)`: 1 kHz / 50 % pad edges on GPIO2 (LEDC on the PCR XTAL clock). Skips: L5 SAR power ctrl, L8 no TWAI |
+| esp32c6 | ✅ L0 L1 L2 L3 L4 L6 L7 (7 pass / 2 skip) | ❌ | ✅ Arduino (INA219 on GPIO23/22) | Arduino-ESP32 3.x (IDF 5.5, CI pins espressif32@8.0.0) on the in-tree C6 mask ROM. L2 = RGB LED_BUILTIN through RMT TX (C3 model, source 49). L3 = `Wire.begin(23, 22)` (variant SDA/SCL) reads the INA219 config 0x399F + bus 0x19CA. L6 = `analogWrite(2, 128)`: 1 kHz / 50 % pad edges on GPIO2 (LEDC on the PCR XTAL clock). Skips: L5 SAR power ctrl, L8 no TWAI |
 | nrf52832 | ✅ L0–L4 | ✅ | ✅ Arduino; Zephyr system+i2c0 | L4 legacy SPI; TWIM overlay Zephyr L3 |
 | nrf52840 | ✅ L0–L4 | ✅ | ✅ both | L4 legacy SPI; Zephyr L3 green |
 | nrf5340 | ❌ | ✅ | ❌ no I2C model | Add Arduino when PIO path exists |
