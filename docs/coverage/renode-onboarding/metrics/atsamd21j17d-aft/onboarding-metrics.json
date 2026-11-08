@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 100000,
+    "instructions": 400000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/atsamd21j17d-aft-smoke.yaml",
   "system": "configs/systems/onboarding/atsamd21j17d-aft.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:47:39Z",
-  "finished_at_utc": "2026-11-05T14:47:40Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1530,
+  "started_at_utc": "2026-11-08T12:04:14Z",
+  "finished_at_utc": "2026-11-08T12:04:23Z",
+  "elapsed_seconds": 10,
+  "elapsed_ms": 9200,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.286,
-    "build_firmware": 0.924,
-    "run_smoke": 0.308
+    "build_cli": 8.518,
+    "build_firmware": 0.251,
+    "run_smoke": 0.418
   },
   "stages_ms": {
-    "build_cli": 286,
-    "build_firmware": 924,
-    "run_smoke": 308
+    "build_cli": 8518,
+    "build_firmware": 251,
+    "run_smoke": 418
   }
 }

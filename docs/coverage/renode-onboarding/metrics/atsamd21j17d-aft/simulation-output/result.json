@@ -1,23 +1,23 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -36,6 +36,40 @@
     },
     {
       "assertion": {
+        "uart_ordered": [
+          "samd21 sercom0 up",
+          "portb dir=00000400 out=00000400 clr=00000000",
+          "tc4 cc0=000003e7 adv=1 flags=11 nvic19=1 cleared=00 stop=1",
+          "tc6 reset_stop=1 oneshot_stop=1 ovf=1 count=20 retrigger=1 halted=1",
+          "sercom1 ctrla=40000006 dre=1 txc=1 w1c=1",
+          "sercom3 ctrla=40000006 dre=1 txc=1 w1c=1",
+          "SAMD21 PASS"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio_a:17",
+          "min_edges": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536879104,
+          "expected_value": 1562443807,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -44,24 +78,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      125,
-      1107298328,
-      3,
-      2147483648,
       1090536456,
+      2147483648,
+      2147483648,
+      9999,
       131072,
-      70,
+      722,
+      1024,
       536887280,
       0,
       0,
       0,
       0,
       0,
-      536887256,
-      1715,
-      1728
+      536887136,
+      10549,
+      10548
     ],
-    "pc": 1728,
+    "pc": 10548,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -74,7 +108,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "d72b7bbf60f05750aee66150fe2296d8ff511f42e66fe5d8524890871f410e23",
+  "firmware_hash": "7d1a0fc19aaf4be111c4ee293a159342620b249c5ede01c8a2df4ad9cfc24286",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-samd21-j17d-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/atsamd21j17d-aft.yaml",
@@ -379,7 +413,7 @@
             "name": "APBCMASK",
             "offset": 32,
             "size": 32,
-            "value": 65540,
+            "value": 86060,
             "fields": [
               {
                 "name": "PAC2_",
@@ -411,7 +445,7 @@
                   3,
                   3
                 ],
-                "value": 0
+                "value": 1
               },
               {
                 "name": "SERCOM2_",
@@ -427,7 +461,7 @@
                   5,
                   5
                 ],
-                "value": 0
+                "value": 1
               },
               {
                 "name": "SERCOM4_",
@@ -483,7 +517,7 @@
                   12,
                   12
                 ],
-                "value": 0
+                "value": 1
               },
               {
                 "name": "TC5_",
@@ -1990,7 +2024,7 @@
             "name": "CLKCTRL",
             "offset": 2,
             "size": 16,
-            "value": 16404,
+            "value": 16413,
             "fields": [
               {
                 "name": "ID",
@@ -1998,7 +2032,7 @@
                   5,
                   0
                 ],
-                "value": 20
+                "value": 29
               },
               {
                 "name": "GEN",
@@ -2409,9 +2443,44 @@
         "artifacts": []
       },
       {
+        "name": "gpio_b",
+        "kind": "native",
+        "base": 1090536576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "usart0",
         "kind": "native",
         "base": 1107298304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sercom1",
+        "kind": "native",
+        "base": 1107299328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sercom3",
+        "kind": "native",
+        "base": 1107301376,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tc4",
+        "kind": "native",
+        "base": 1107308544,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tc6",
+        "kind": "native",
+        "base": 1107310592,
         "registers": [],
         "artifacts": []
       },
@@ -2462,6 +2531,604 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 400000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio_a",
+        "pin": 17,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 240,
+            "value": 1
+          },
+          {
+            "cycle": 58265,
+            "value": 0
+          },
+          {
+            "cycle": 63270,
+            "value": 1
+          },
+          {
+            "cycle": 68275,
+            "value": 0
+          },
+          {
+            "cycle": 73280,
+            "value": 1
+          },
+          {
+            "cycle": 78285,
+            "value": 0
+          },
+          {
+            "cycle": 83290,
+            "value": 1
+          },
+          {
+            "cycle": 88295,
+            "value": 0
+          },
+          {
+            "cycle": 93300,
+            "value": 1
+          },
+          {
+            "cycle": 98305,
+            "value": 0
+          },
+          {
+            "cycle": 103310,
+            "value": 1
+          },
+          {
+            "cycle": 108315,
+            "value": 0
+          },
+          {
+            "cycle": 113320,
+            "value": 1
+          },
+          {
+            "cycle": 118325,
+            "value": 0
+          },
+          {
+            "cycle": 123330,
+            "value": 1
+          },
+          {
+            "cycle": 128335,
+            "value": 0
+          },
+          {
+            "cycle": 133340,
+            "value": 1
+          },
+          {
+            "cycle": 138345,
+            "value": 0
+          },
+          {
+            "cycle": 143350,
+            "value": 1
+          },
+          {
+            "cycle": 148355,
+            "value": 0
+          },
+          {
+            "cycle": 153360,
+            "value": 1
+          },
+          {
+            "cycle": 158365,
+            "value": 0
+          },
+          {
+            "cycle": 163370,
+            "value": 1
+          },
+          {
+            "cycle": 168375,
+            "value": 0
+          },
+          {
+            "cycle": 173380,
+            "value": 1
+          },
+          {
+            "cycle": 178385,
+            "value": 0
+          },
+          {
+            "cycle": 183390,
+            "value": 1
+          },
+          {
+            "cycle": 188395,
+            "value": 0
+          },
+          {
+            "cycle": 193400,
+            "value": 1
+          },
+          {
+            "cycle": 198405,
+            "value": 0
+          },
+          {
+            "cycle": 203410,
+            "value": 1
+          },
+          {
+            "cycle": 208415,
+            "value": 0
+          },
+          {
+            "cycle": 213420,
+            "value": 1
+          },
+          {
+            "cycle": 218425,
+            "value": 0
+          },
+          {
+            "cycle": 223430,
+            "value": 1
+          },
+          {
+            "cycle": 228435,
+            "value": 0
+          },
+          {
+            "cycle": 233440,
+            "value": 1
+          },
+          {
+            "cycle": 238445,
+            "value": 0
+          },
+          {
+            "cycle": 243450,
+            "value": 1
+          },
+          {
+            "cycle": 248455,
+            "value": 0
+          },
+          {
+            "cycle": 253460,
+            "value": 1
+          },
+          {
+            "cycle": 258465,
+            "value": 0
+          },
+          {
+            "cycle": 263470,
+            "value": 1
+          },
+          {
+            "cycle": 268475,
+            "value": 0
+          },
+          {
+            "cycle": 273480,
+            "value": 1
+          },
+          {
+            "cycle": 278485,
+            "value": 0
+          },
+          {
+            "cycle": 283490,
+            "value": 1
+          },
+          {
+            "cycle": 288495,
+            "value": 0
+          },
+          {
+            "cycle": 293500,
+            "value": 1
+          },
+          {
+            "cycle": 298505,
+            "value": 0
+          },
+          {
+            "cycle": 303510,
+            "value": 1
+          },
+          {
+            "cycle": 308515,
+            "value": 0
+          },
+          {
+            "cycle": 313520,
+            "value": 1
+          },
+          {
+            "cycle": 318525,
+            "value": 0
+          },
+          {
+            "cycle": 323530,
+            "value": 1
+          },
+          {
+            "cycle": 328535,
+            "value": 0
+          },
+          {
+            "cycle": 333540,
+            "value": 1
+          },
+          {
+            "cycle": 338545,
+            "value": 0
+          },
+          {
+            "cycle": 343550,
+            "value": 1
+          },
+          {
+            "cycle": 348555,
+            "value": 0
+          },
+          {
+            "cycle": 353560,
+            "value": 1
+          },
+          {
+            "cycle": 358565,
+            "value": 0
+          },
+          {
+            "cycle": 363570,
+            "value": 1
+          },
+          {
+            "cycle": 368575,
+            "value": 0
+          },
+          {
+            "cycle": 373580,
+            "value": 1
+          },
+          {
+            "cycle": 378585,
+            "value": 0
+          },
+          {
+            "cycle": 383590,
+            "value": 1
+          },
+          {
+            "cycle": 388595,
+            "value": 0
+          },
+          {
+            "cycle": 393600,
+            "value": 1
+          },
+          {
+            "cycle": 398605,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 71,
+            "state": "0"
+          },
+          {
+            "cycle": 240,
+            "state": "1"
+          },
+          {
+            "cycle": 58265,
+            "state": "0"
+          },
+          {
+            "cycle": 63270,
+            "state": "1"
+          },
+          {
+            "cycle": 68275,
+            "state": "0"
+          },
+          {
+            "cycle": 73280,
+            "state": "1"
+          },
+          {
+            "cycle": 78285,
+            "state": "0"
+          },
+          {
+            "cycle": 83290,
+            "state": "1"
+          },
+          {
+            "cycle": 88295,
+            "state": "0"
+          },
+          {
+            "cycle": 93300,
+            "state": "1"
+          },
+          {
+            "cycle": 98305,
+            "state": "0"
+          },
+          {
+            "cycle": 103310,
+            "state": "1"
+          },
+          {
+            "cycle": 108315,
+            "state": "0"
+          },
+          {
+            "cycle": 113320,
+            "state": "1"
+          },
+          {
+            "cycle": 118325,
+            "state": "0"
+          },
+          {
+            "cycle": 123330,
+            "state": "1"
+          },
+          {
+            "cycle": 128335,
+            "state": "0"
+          },
+          {
+            "cycle": 133340,
+            "state": "1"
+          },
+          {
+            "cycle": 138345,
+            "state": "0"
+          },
+          {
+            "cycle": 143350,
+            "state": "1"
+          },
+          {
+            "cycle": 148355,
+            "state": "0"
+          },
+          {
+            "cycle": 153360,
+            "state": "1"
+          },
+          {
+            "cycle": 158365,
+            "state": "0"
+          },
+          {
+            "cycle": 163370,
+            "state": "1"
+          },
+          {
+            "cycle": 168375,
+            "state": "0"
+          },
+          {
+            "cycle": 173380,
+            "state": "1"
+          },
+          {
+            "cycle": 178385,
+            "state": "0"
+          },
+          {
+            "cycle": 183390,
+            "state": "1"
+          },
+          {
+            "cycle": 188395,
+            "state": "0"
+          },
+          {
+            "cycle": 193400,
+            "state": "1"
+          },
+          {
+            "cycle": 198405,
+            "state": "0"
+          },
+          {
+            "cycle": 203410,
+            "state": "1"
+          },
+          {
+            "cycle": 208415,
+            "state": "0"
+          },
+          {
+            "cycle": 213420,
+            "state": "1"
+          },
+          {
+            "cycle": 218425,
+            "state": "0"
+          },
+          {
+            "cycle": 223430,
+            "state": "1"
+          },
+          {
+            "cycle": 228435,
+            "state": "0"
+          },
+          {
+            "cycle": 233440,
+            "state": "1"
+          },
+          {
+            "cycle": 238445,
+            "state": "0"
+          },
+          {
+            "cycle": 243450,
+            "state": "1"
+          },
+          {
+            "cycle": 248455,
+            "state": "0"
+          },
+          {
+            "cycle": 253460,
+            "state": "1"
+          },
+          {
+            "cycle": 258465,
+            "state": "0"
+          },
+          {
+            "cycle": 263470,
+            "state": "1"
+          },
+          {
+            "cycle": 268475,
+            "state": "0"
+          },
+          {
+            "cycle": 273480,
+            "state": "1"
+          },
+          {
+            "cycle": 278485,
+            "state": "0"
+          },
+          {
+            "cycle": 283490,
+            "state": "1"
+          },
+          {
+            "cycle": 288495,
+            "state": "0"
+          },
+          {
+            "cycle": 293500,
+            "state": "1"
+          },
+          {
+            "cycle": 298505,
+            "state": "0"
+          },
+          {
+            "cycle": 303510,
+            "state": "1"
+          },
+          {
+            "cycle": 308515,
+            "state": "0"
+          },
+          {
+            "cycle": 313520,
+            "state": "1"
+          },
+          {
+            "cycle": 318525,
+            "state": "0"
+          },
+          {
+            "cycle": 323530,
+            "state": "1"
+          },
+          {
+            "cycle": 328535,
+            "state": "0"
+          },
+          {
+            "cycle": 333540,
+            "state": "1"
+          },
+          {
+            "cycle": 338545,
+            "state": "0"
+          },
+          {
+            "cycle": 343550,
+            "state": "1"
+          },
+          {
+            "cycle": 348555,
+            "state": "0"
+          },
+          {
+            "cycle": 353560,
+            "state": "1"
+          },
+          {
+            "cycle": 358565,
+            "state": "0"
+          },
+          {
+            "cycle": 363570,
+            "state": "1"
+          },
+          {
+            "cycle": 368575,
+            "state": "0"
+          },
+          {
+            "cycle": 373580,
+            "state": "1"
+          },
+          {
+            "cycle": 378585,
+            "state": "0"
+          },
+          {
+            "cycle": 383590,
+            "state": "1"
+          },
+          {
+            "cycle": 388595,
+            "state": "0"
+          },
+          {
+            "cycle": 393600,
+            "state": "1"
+          },
+          {
+            "cycle": 398605,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 70
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio_a",
+      "number": 17,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
   "uart_lines": {
     "lines": [
       {
@@ -2481,20 +3148,56 @@
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
+      },
+      {
+        "text": "portb dir=00000400 out=00000400 clr=00000000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "tc4 cc0=000003e7 adv=1 flags=11 nvic19=1 cleared=00 stop=1",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "tc6 reset_stop=1 oneshot_stop=1 ovf=1 count=20 retrigger=1 halted=1",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "Usercom1 ctrla=40000006 dre=1 txc=1 w1c=1",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "Usercom3 ctrla=40000006 dre=1 txc=1 w1c=1",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "SAMD21 PASS",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 1740,
+    "text_bytes": 11024,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 1740,
+    "flash_used_bytes": 11024,
     "ram_static_bytes": 0,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 1.33,
+    "flash_used_pct": 8.41,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -2504,51 +3207,56 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 16384,
-    "main_stack_high_water_bytes": 36,
-    "main_stack_free_min_bytes": 16348,
+    "main_stack_high_water_bytes": 220,
+    "main_stack_free_min_bytes": 16144,
     "main_stack_base": 536870912,
     "main_stack_top": 536887296,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 16384,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 16348,
+    "heap_free_min_bytes": 16144,
     "heap_base": 536870912,
     "heap_top": 536887296
   },
   "metrics": {
-    "cycles": 100000,
-    "instructions": 100000,
-    "steps_executed": 100000,
-    "memory_reads": 312,
-    "memory_writes": 13,
-    "peripheral_accesses": 96,
+    "cycles": 400000,
+    "instructions": 400000,
+    "steps_executed": 400000,
+    "memory_reads": 8365,
+    "memory_writes": 4103,
+    "peripheral_accesses": 8704,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1710,
-        "count": 78,
-        "symbol": "cortex_m::asm::nop"
-      },
-      {
-        "pc": 1714,
-        "count": 78,
+        "pc": 10548,
+        "count": 1367,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 1716,
-        "count": 78,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+        "pc": 4242,
+        "count": 39,
+        "symbol": "firmware_samd21_j17d_smoke::check_tc4"
       },
       {
-        "pc": 1728,
-        "count": 78,
-        "symbol": "lib::inline::__nop"
+        "pc": 4250,
+        "count": 39,
+        "symbol": "firmware_samd21_j17d_smoke::check_tc4"
       },
       {
-        "pc": 1730,
-        "count": 78,
-        "symbol": "__nop"
+        "pc": 4260,
+        "count": 39,
+        "symbol": "firmware_samd21_j17d_smoke::check_tc4"
+      },
+      {
+        "pc": 4268,
+        "count": 39,
+        "symbol": "firmware_samd21_j17d_smoke::check_tc4"
+      },
+      {
+        "pc": 4294,
+        "count": 39,
+        "symbol": "firmware_samd21_j17d_smoke::check_tc4"
       }
     ]
   }

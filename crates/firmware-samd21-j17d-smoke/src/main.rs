@@ -16,6 +16,10 @@
 //!      PAD[2]/PAD[3]) and make PA17, the Arduino Zero LED, an output.
 //!   6. SERCOM0 in USART mode: 8N1, TX+RX enabled, then ENABLE.
 //!   7. Print, then toggle the LED so a GPIO assertion has something to watch.
+//!   8. Exercise the rest of what Renode's `atsamd21j17d-aft.repl` models and
+//!      this chip profile claims: PORT group B, TC4 (16-bit MFRQ with the
+//!      IRQ 19 pend), TC6 (8-bit one-shot down-counter) and the SERCOM1 and
+//!      SERCOM3 USARTs. A summary word lands at 0x2000_2000.
 //!
 //! The register map is shared with the SAM D21 family and cross-checked against
 //! `ATSAMD21G18A.svd` (Microchip, Apache-2.0), vendored at
@@ -201,10 +205,272 @@ fn main() -> ! {
     unsafe { write_volatile(PORTA_OUTSET, 1 << LED_PIN) };
     puts("led on\n");
 
+    // 8. The rest of the surface the Renode platform models: PORT group B,
+    //    TC4 (16-bit MFRQ) and TC6 (8-bit one-shot down-counter), and the
+    //    SERCOM1/SERCOM3 USARTs. Every check feeds one bit of the summary word.
+    let mut pass = 0u32;
+    pass |= u32::from(check_portb()) << 0;
+    pass |= u32::from(check_tc4()) << 1;
+    pass |= u32::from(check_tc6()) << 2;
+    pass |= u32::from(check_usart("sercom1", SERCOM1_BASE, PM_APBCMASK_SERCOM1)) << 3;
+    pass |= u32::from(check_usart("sercom3", SERCOM3_BASE, PM_APBCMASK_SERCOM3)) << 4;
+    unsafe { write_volatile(SUMMARY, SUMMARY_TAG | pass) };
+    if pass == 0x1f {
+        puts("SAMD21 PASS\n");
+    } else {
+        puts("SAMD21 FAIL ");
+        put_hex(pass);
+        puts("\n");
+    }
+
     loop {
         unsafe { write_volatile(PORTA_OUTTGL, 1 << LED_PIN) };
         for _ in 0..1_000 {
             cortex_m::asm::nop();
         }
+    }
+}
+
+// ── Extended checks ─────────────────────────────────────────────────────────
+
+/// Summary word: `0x5D21_0000 | pass bits`, all five checks = `0x5D21_001F`.
+const SUMMARY: *mut u32 = 0x2000_2000 as *mut u32;
+const SUMMARY_TAG: u32 = 0x5D21_0000;
+
+const PORTB_BASE: u32 = 0x4100_4480;
+const PORTB_DIR: *const u32 = PORTB_BASE as *const u32;
+const PORTB_DIRSET: *mut u32 = (PORTB_BASE + 0x08) as *mut u32;
+const PORTB_OUT: *const u32 = (PORTB_BASE + 0x10) as *const u32;
+const PORTB_OUTCLR: *mut u32 = (PORTB_BASE + 0x14) as *mut u32;
+const PORTB_OUTSET: *mut u32 = (PORTB_BASE + 0x18) as *mut u32;
+
+const TC4_BASE: u32 = 0x4200_3000;
+const TC6_BASE: u32 = 0x4200_3800;
+/// `APBCMASK.TCn` = bit (n + 8): TC4 bit 12, TC6 bit 14.
+const PM_APBCMASK_TC4: u32 = 1 << 12;
+const PM_APBCMASK_TC6: u32 = 1 << 14;
+/// `CLKCTRL.ID` 0x1C = TC4_TC5, 0x1D = TC6_TC7.
+const GCLK_ID_TC4_TC5: u16 = 0x1C;
+const GCLK_ID_TC6_TC7: u16 = 0x1D;
+const TC_CTRLA_ENABLE: u16 = 1 << 1;
+const TC_CTRLA_MODE_COUNT8: u16 = 1 << 2;
+const TC_CTRLA_WAVEGEN_MFRQ: u16 = 1 << 5;
+const TC_CTRLA_PRESCALER_DIV8: u16 = 3 << 8;
+const TC_CTRLB_DIR: u8 = 1 << 0;
+const TC_CTRLB_ONESHOT: u8 = 1 << 2;
+const TC_CMD_RETRIGGER: u8 = 1 << 6;
+const TC_CMD_STOP: u8 = 2 << 6;
+const TC_INT_OVF: u8 = 1 << 0;
+const TC_INT_MC0: u8 = 1 << 4;
+const TC_STATUS_STOP: u8 = 1 << 3;
+/// TC4 is IRQ 19 on the SAM D21 interrupt line map.
+const TC4_IRQ: u32 = 19;
+const NVIC_ISPR: *const u32 = 0xE000_E200 as *const u32;
+const NVIC_ICPR: *mut u32 = 0xE000_E280 as *mut u32;
+
+const SERCOM1_BASE: u32 = 0x4200_0C00;
+const SERCOM3_BASE: u32 = 0x4200_1400;
+const PM_APBCMASK_SERCOM1: u32 = 1 << 3;
+const PM_APBCMASK_SERCOM3: u32 = 1 << 5;
+const INTFLAG_TXC: u8 = 1 << 1;
+
+fn tc_reg8(base: u32, off: u32) -> *mut u8 {
+    (base + off) as *mut u8
+}
+fn tc_reg16(base: u32, off: u32) -> *mut u16 {
+    (base + off) as *mut u16
+}
+
+fn put_hex(v: u32) {
+    for i in (0..8).rev() {
+        let n = ((v >> (i * 4)) & 0xf) as u8;
+        putc(if n < 10 { b'0' + n } else { b'a' + n - 10 });
+    }
+}
+
+fn put_hex8(v: u8) {
+    for n in [v >> 4, v & 0xf] {
+        putc(if n < 10 { b'0' + n } else { b'a' + n - 10 });
+    }
+}
+
+fn put_bit(b: bool) {
+    putc(if b { b'1' } else { b'0' });
+}
+
+fn apb_enable(bit: u32) {
+    unsafe {
+        let mask = read_volatile(PM_APBCMASK) | bit;
+        write_volatile(PM_APBCMASK, mask);
+    }
+}
+
+fn gclk_route(id: u16) {
+    unsafe { write_volatile(GCLK_CLKCTRL, id | GCLK_CLKCTRL_CLKEN) };
+    gclk_sync();
+}
+
+/// PB10 as an output: DIRSET/OUTSET/OUTCLR with DIR/OUT readback.
+fn check_portb() -> bool {
+    unsafe {
+        write_volatile(PORTB_DIRSET, 1 << 10);
+        write_volatile(PORTB_OUTSET, 1 << 10);
+        let dir = read_volatile(PORTB_DIR);
+        let set = read_volatile(PORTB_OUT);
+        write_volatile(PORTB_OUTCLR, 1 << 10);
+        let clr = read_volatile(PORTB_OUT);
+        puts("portb dir=");
+        put_hex(dir);
+        puts(" out=");
+        put_hex(set);
+        puts(" clr=");
+        put_hex(clr);
+        puts("\n");
+        dir & (1 << 10) != 0 && set & (1 << 10) != 0 && clr & (1 << 10) == 0
+    }
+}
+
+/// TC4: COUNT16, MFRQ (TOP = CC0 = 999), DIV8. The counter must advance, hit
+/// the CC0 match, wrap with OVF, pend IRQ 19 in the NVIC, and release it once
+/// INTFLAG is cleared.
+fn check_tc4() -> bool {
+    apb_enable(PM_APBCMASK_TC4);
+    gclk_route(GCLK_ID_TC4_TC5);
+    let b = TC4_BASE;
+    unsafe {
+        let ctrla = TC_CTRLA_WAVEGEN_MFRQ | TC_CTRLA_PRESCALER_DIV8;
+        write_volatile(tc_reg16(b, 0x00), ctrla);
+        write_volatile(tc_reg16(b, 0x18), 999);
+        write_volatile(tc_reg8(b, 0x0D), TC_INT_OVF | TC_INT_MC0);
+        let cc0 = read_volatile(tc_reg16(b, 0x18));
+        write_volatile(tc_reg16(b, 0x00), ctrla | TC_CTRLA_ENABLE);
+        let mut advanced = false;
+        let mut flags = 0u8;
+        for _ in 0..20_000 {
+            if read_volatile(tc_reg16(b, 0x10)) != 0 {
+                advanced = true;
+            }
+            flags = read_volatile(tc_reg8(b, 0x0E));
+            if flags & TC_INT_OVF != 0 {
+                break;
+            }
+        }
+        let pended = read_volatile(NVIC_ISPR) & (1 << TC4_IRQ) != 0;
+        write_volatile(tc_reg8(b, 0x0E), TC_INT_OVF | TC_INT_MC0);
+        write_volatile(NVIC_ICPR, 1 << TC4_IRQ);
+        let cleared = read_volatile(tc_reg8(b, 0x0E)) & (TC_INT_OVF | TC_INT_MC0);
+        // Stop it so it does not keep re-pending through the rest of the run.
+        write_volatile(tc_reg8(b, 0x05), TC_CMD_STOP);
+        let stopped = read_volatile(tc_reg8(b, 0x0F)) & TC_STATUS_STOP != 0;
+        puts("tc4 cc0=");
+        put_hex(u32::from(cc0));
+        puts(" adv=");
+        put_bit(advanced);
+        puts(" flags=");
+        put_hex8(flags);
+        puts(" nvic19=");
+        put_bit(pended);
+        puts(" cleared=");
+        put_hex8(cleared);
+        puts(" stop=");
+        put_bit(stopped);
+        puts("\n");
+        cc0 == 999
+            && advanced
+            && flags & (TC_INT_OVF | TC_INT_MC0) == (TC_INT_OVF | TC_INT_MC0)
+            && pended
+            && cleared == 0
+            && stopped
+    }
+}
+
+/// TC6: COUNT8, NFRQ (TOP = PER = 0x20), counting DOWN, ONESHOT. It must
+/// underflow once, reload PER, set OVF and stop by itself; RETRIGGER restarts
+/// it and CMD STOP halts it again.
+fn check_tc6() -> bool {
+    apb_enable(PM_APBCMASK_TC6);
+    gclk_route(GCLK_ID_TC6_TC7);
+    let b = TC6_BASE;
+    unsafe {
+        write_volatile(tc_reg16(b, 0x00), TC_CTRLA_MODE_COUNT8);
+        write_volatile(tc_reg8(b, 0x14), 0x20); // PER
+        write_volatile(tc_reg8(b, 0x05), TC_CTRLB_DIR | TC_CTRLB_ONESHOT);
+        write_volatile(tc_reg8(b, 0x10), 0x20);
+        let reset_stop = read_volatile(tc_reg8(b, 0x0F)) & TC_STATUS_STOP != 0;
+        write_volatile(tc_reg16(b, 0x00), TC_CTRLA_MODE_COUNT8 | TC_CTRLA_ENABLE);
+        let mut status = 0u8;
+        for _ in 0..20_000 {
+            status = read_volatile(tc_reg8(b, 0x0F));
+            if status & TC_STATUS_STOP != 0 {
+                break;
+            }
+        }
+        let flags = read_volatile(tc_reg8(b, 0x0E));
+        let count = read_volatile(tc_reg8(b, 0x10));
+        write_volatile(tc_reg8(b, 0x0E), TC_INT_OVF);
+        write_volatile(tc_reg8(b, 0x05), TC_CMD_RETRIGGER);
+        let rerun = read_volatile(tc_reg8(b, 0x0F)) & TC_STATUS_STOP == 0;
+        write_volatile(tc_reg8(b, 0x05), TC_CMD_STOP);
+        let halted = read_volatile(tc_reg8(b, 0x0F)) & TC_STATUS_STOP != 0;
+        puts("tc6 reset_stop=");
+        put_bit(reset_stop);
+        puts(" oneshot_stop=");
+        put_bit(status & TC_STATUS_STOP != 0);
+        puts(" ovf=");
+        put_bit(flags & TC_INT_OVF != 0);
+        puts(" count=");
+        put_hex8(count);
+        puts(" retrigger=");
+        put_bit(rerun);
+        puts(" halted=");
+        put_bit(halted);
+        puts("\n");
+        reset_stop
+            && status & TC_STATUS_STOP != 0
+            && flags & TC_INT_OVF != 0
+            && count == 0x20
+            && rerun
+            && halted
+    }
+}
+
+/// A second SERCOM in USART mode: CTRLA readback, DRE once enabled, TXC after
+/// one byte, TXC W1C.
+fn check_usart(name: &str, base: u32, apb_bit: u32) -> bool {
+    apb_enable(apb_bit);
+    unsafe {
+        let ctrla = base as *mut u32;
+        let ctrlb = (base + 0x04) as *mut u32;
+        let baud = (base + 0x0C) as *mut u16;
+        let intflag = (base + 0x18) as *mut u8;
+        let data = (base + 0x28) as *mut u16;
+        let mode = CTRLA_MODE_USART_INT_CLK | CTRLA_DORD_LSB;
+        write_volatile(ctrla, mode);
+        write_volatile(ctrlb, CTRLB_TXEN);
+        write_volatile(baud, BAUD_115200_AT_8MHZ);
+        write_volatile(ctrla, mode | CTRLA_ENABLE);
+        let readback = read_volatile(ctrla);
+        let dre = read_volatile(intflag) & INTFLAG_DRE != 0;
+        write_volatile(data, u16::from(b'U'));
+        let mut txc = false;
+        for _ in 0..20_000 {
+            if read_volatile(intflag) & INTFLAG_TXC != 0 {
+                txc = true;
+                break;
+            }
+        }
+        write_volatile(intflag, INTFLAG_TXC);
+        let txc_cleared = read_volatile(intflag) & INTFLAG_TXC == 0;
+        puts(name);
+        puts(" ctrla=");
+        put_hex(readback);
+        puts(" dre=");
+        put_bit(dre);
+        puts(" txc=");
+        put_bit(txc);
+        puts(" w1c=");
+        put_bit(txc_cleared);
+        puts("\n");
+        readback == mode | CTRLA_ENABLE && dre && txc && txc_cleared
     }
 }

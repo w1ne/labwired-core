@@ -195,6 +195,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_dmac_sercom4_tx_byte",
     "samd51_dmac_board",
     "samd51_usb_device_banks",
+    // SAM D21 TC3..TC7 (`build_samd21_tc`): fixed instance addresses.
+    "samd21_tc",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
     "sam_dmac",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
@@ -620,6 +622,27 @@ fn build_samd51_board_model(
     })
 }
 
+// SAM D21 TC3..TC7: fixed instance addresses and IRQs, no config overrides.
+#[cold]
+#[inline(never)]
+fn build_samd21_tc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::sam::tc21::{Samd21Tc, TC21_INSTANCES};
+    if !p_cfg.config.is_empty() {
+        anyhow::bail!("samd21_tc admits no config overrides");
+    }
+    let Some(instance) = TC21_INSTANCES.iter().find(|i| i.base == p_cfg.base_address) else {
+        anyhow::bail!("SAMD21 TC base must be one of TC3..TC7");
+    };
+    if p_cfg.irq != Some(instance.irq) {
+        anyhow::bail!(
+            "SAMD21 TC at {:#x} requires IRQ {}",
+            instance.base,
+            instance.irq
+        );
+    }
+    Ok(Box::new(Samd21Tc::new(*instance)))
+}
+
 /// Build a generic peripheral model for `canonical_type`, or `None` if it is not
 /// a generic type (so `from_config` falls through to the descriptor loaders).
 pub fn try_build(
@@ -905,6 +928,7 @@ pub fn try_build(
         | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm" => {
             build_samd51_board_model(canonical_type, p_cfg)?
         }
+        "samd21_tc" => build_samd21_tc(p_cfg)?,
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
             let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());

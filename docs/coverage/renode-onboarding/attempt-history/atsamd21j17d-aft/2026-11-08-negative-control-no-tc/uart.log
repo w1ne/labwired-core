@@ -1,0 +1,4 @@
+OK
+samd21 sercom0 up
+led on
+portb dir=00000400 out=00000400 clr=00000000
