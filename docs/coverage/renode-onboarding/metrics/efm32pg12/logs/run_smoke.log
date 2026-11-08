@@ -1,26 +1,6 @@
-warning: constant `STATUS` is never used
-  --> crates/core/src/peripherals/efm32/rtcc.rs:48:7
-   |
-48 | const STATUS: u64 = 0x28;
-   |       ^^^^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: constant `CMD` is never used
-  --> crates/core/src/peripherals/efm32/rtcc.rs:49:7
-   |
-49 | const CMD: u64 = 0x2C;
-   |       ^^^
-
-warning: constant `SYNCBUSY` is never used
-  --> crates/core/src/peripherals/efm32/rtcc.rs:50:7
-   |
-50 | const SYNCBUSY: u64 = 0x30;
-   |       ^^^^^^^^
-
-[2m2026-11-08T21:34:00.619012Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/efm32pg12.yaml
-[2m2026-11-08T21:34:00.621426Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
+[2m2026-11-08T23:21:59.597835Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/efm32pg12.yaml
+[2m2026-11-08T23:21:59.600473Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-[2m2026-11-08T21:34:00.623760Z[0m [33m WARN[0m [2mlabwired_core::peripherals::gpio[0m[2m:[0m EFM32 GPIO PINLOCKN 0xfffe: pin lock is stored but not enforced
+[2m2026-11-08T23:21:59.603768Z[0m [33m WARN[0m [2mlabwired_core::peripherals::gpio[0m[2m:[0m EFM32 GPIO PINLOCKN 0xfffe: pin lock is stored but not enforced
 PASS  5/5 checks · efm32pg12-smoke · 200000 steps · 0.02s

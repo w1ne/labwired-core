@@ -192,7 +192,9 @@ impl Efm32Rtcc {
                 }
             }
             RET_BASE..=0x183 => self.ret[((offset - RET_BASE) / 4) as usize],
-            // IFS, IFC, STATUS, CMD, SYNCBUSY, LOCK and reserved words.
+            // Every register syncs at once, so nothing is ever pending.
+            STATUS | CMD | SYNCBUSY => 0,
+            // IFS, IFC, LOCK and reserved words.
             _ => 0,
         }
     }
@@ -252,8 +254,10 @@ impl Efm32Rtcc {
                 }
             }
             RET_BASE..=0x183 => self.ret[((offset - RET_BASE) / 4) as usize] = value,
-            // COMBCNT, IF, STATUS and SYNCBUSY are read-only; CMD.CLRSTATUS
-            // has no status to clear.
+            // STATUS and SYNCBUSY are read-only; CMD.CLRSTATUS has no status
+            // to clear.
+            STATUS | CMD | SYNCBUSY => {}
+            // COMBCNT and IF are read-only.
             _ => {}
         }
         Ok(())
