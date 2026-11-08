@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.014682">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.019618">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="a77d10865335cde0ce25164f18072fe5a8a102cd58a2d2d3ac956a14ca83985f"/>
+    <property name="firmware_hash" value="d78a5c3d66893499859e54eed59763e6810e2f4c6af719fb5ddeef8880845156"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.014682">
+  <testcase classname="labwired" name="run" time="0.019618">
   </testcase>
   <testcase classname="labwired" name="assertion 1: memory_value: @0x10000000=0x143" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x10000004=0x12345" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x1000000c=0x3f" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x10000010=0xf0a0003f" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

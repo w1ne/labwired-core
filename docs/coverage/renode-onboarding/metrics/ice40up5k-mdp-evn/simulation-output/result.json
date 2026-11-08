@@ -41,6 +41,39 @@
     },
     {
       "assertion": {
+        "memory_value": {
+          "address": 268435460,
+          "expected_value": 74565,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 268435468,
+          "expected_value": 63,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 268435472,
+          "expected_value": 4037017663,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -54,19 +87,19 @@
       268566528,
       0,
       0,
+      1,
       0,
       0,
       0,
       0,
-      0,
-      323,
       268435456,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
+      4037017663,
+      63,
+      1,
+      1,
+      331,
+      100000,
+      1,
       0,
       0,
       0,
@@ -82,7 +115,7 @@
       0,
       0
     ],
-    "pc": 24,
+    "pc": 488,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -118,14 +151,22 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "a77d10865335cde0ce25164f18072fe5a8a102cd58a2d2d3ac956a14ca83985f",
+  "firmware_hash": "d78a5c3d66893499859e54eed59763e6810e2f4c6af719fb5ddeef8880845156",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-fomu-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/ice40up5k-mdp-evn.yaml",
     "script": "examples/renode-onboarding/ice40up5k-mdp-evn-smoke.yaml"
   },
   "inspect": {
-    "peripherals": [],
+    "peripherals": [
+      {
+        "name": "timer0",
+        "kind": "native",
+        "base": 1610622976,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
     "devices": []
   },
   "fidelity": [
@@ -139,14 +180,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 28,
+    "text_bytes": 492,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 28,
+    "flash_used_bytes": 492,
     "ram_static_bytes": 0,
     "flash_total_bytes": 8192,
     "ram_total_bytes": 131072,
-    "flash_used_pct": 0.34,
+    "flash_used_pct": 6.01,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -163,12 +204,12 @@
     "instructions": 100000,
     "steps_executed": 100000,
     "memory_reads": 100000,
-    "memory_writes": 1,
-    "peripheral_accesses": 0,
+    "memory_writes": 5,
+    "peripheral_accesses": 366,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 24,
+        "pc": 488,
         "count": 390,
         "symbol": "_start"
       }

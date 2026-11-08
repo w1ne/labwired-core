@@ -159,6 +159,7 @@ SMOKE_MAPPINGS = {
     "ice40up5k-mdp-evn": {
         "crate": "firmware-fomu-smoke",
         "target": "riscv32im-unknown-none-elf",
+        "features": "timer0",
         "script": "examples/renode-onboarding/ice40up5k-mdp-evn-smoke.yaml",
     },
     "mpfs-icicle-kit": {

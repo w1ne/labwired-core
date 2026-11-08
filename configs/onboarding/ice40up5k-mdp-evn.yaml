@@ -9,12 +9,13 @@ verified: false
 system: systems/onboarding/ice40up5k-mdp-evn.yaml
 validation:
   method: renode-onboarding-rv32im-smoke
-  reason: bounded RV32IM direct-ELF multiply and SRAM readback; whole board remains unverified
+  reason: bounded RV32IM direct-ELF multiply, SRAM readback and LiteX timer0 (CSR8) smoke; whole board remains unverified
   checks:
     system_manifest: true
     chip_descriptor: true
     rv32im_integer_smoke: true
     sram_readback: true
+    timer0_smoke: true
     board_peripherals: false
     reset_flow: false
     whole_platform: false

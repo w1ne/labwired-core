@@ -3269,24 +3269,24 @@
       "script": "examples/renode-onboarding/ice40up5k-mdp-evn-smoke.yaml",
       "system": "configs/systems/onboarding/ice40up5k-mdp-evn.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T04:04:05Z",
-      "finished_at_utc": "2026-11-06T04:04:14Z",
-      "elapsed_seconds": 9,
-      "elapsed_ms": 8553,
+      "started_at_utc": "2026-11-08T07:29:04Z",
+      "finished_at_utc": "2026-11-08T07:34:03Z",
+      "elapsed_seconds": 300,
+      "elapsed_ms": 299274,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 7.865,
-        "build_firmware": 0.397,
-        "run_smoke": 0.281
+        "build_cli": 298.649,
+        "build_firmware": 0.357,
+        "run_smoke": 0.258
       },
       "stages_ms": {
-        "build_cli": 7865,
-        "build_firmware": 397,
-        "run_smoke": 281
+        "build_cli": 298649,
+        "build_firmware": 357,
+        "run_smoke": 258
       },
       "_artifact_path": "ice40up5k-mdp-evn",
       "zero_answering_windows": [],
