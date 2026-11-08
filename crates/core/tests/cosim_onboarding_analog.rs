@@ -77,6 +77,7 @@ const CONVERTED: &[&str] = &[
     "stm32f042",
     "stm32f072",
     "stm32f072b_discovery",
+    "stm32f103",
     "stm32f4",
     "stm32f401cdu6-blackpill",
     "stm32f412",
@@ -152,6 +153,11 @@ fn millivolts(volts: f64) -> u32 {
 /// The converter families an onboarding descriptor can name.
 #[derive(Debug, Clone, Copy)]
 enum Family {
+    /// Shared `adc` model, F1 map (RM0008 §11.12): the F2/F4 register block,
+    /// but `SWSTART` is `CR2` bit 22 and starts only with `EXTSEL` = 111,
+    /// `JSWSTART` is bit 21 with `JEXTSEL` = 111, and `EOC` rises once at
+    /// the end of the regular group (no `EOCS`).
+    Stm32F1,
     /// Shared `adc` model, F2/F4/F7 map (RM0090/RM0410).
     Stm32F4,
     /// Shared `adc` model, H7 map (RM0433).
@@ -230,6 +236,9 @@ enum Family {
 /// `SINGLE.PORTPOS` value naming GPIO port A (`_IADC_SINGLE_PORTPOS_PORTA`).
 const IADC_PORTPOS_PORTA: u32 = 0x8;
 
+/// F1 `ADC_CR2.EXTTRIG` (bit 20, RM0008 §11.12.3).
+const F1_EXTTRIG: u32 = 1 << 20;
+
 /// SAM D21 PORT GROUP0 (PA). The routed AIN5..7 are pads PA05..PA07.
 const SAMD21_PORT_A: u64 = 0x4100_4400;
 
@@ -292,6 +301,7 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             }
         } else {
             match p.config.get("profile").and_then(|v| v.as_str()) {
+                Some("stm32f1") => Family::Stm32F1,
                 Some("stm32f4") => Family::Stm32F4,
                 Some("stm32h7") => Family::Stm32H7,
                 Some("stm32l4") => Family::Stm32L4,
@@ -319,7 +329,8 @@ impl Converter {
         let mv = millivolts(volts);
         match self.family {
             // 12-bit, mV * 4095 / VREF (3.3 V) truncated.
-            Family::Stm32F4
+            Family::Stm32F1
+            | Family::Stm32F4
             | Family::Stm32H7
             | Family::Stm32L4
             | Family::Stm32V2
@@ -398,6 +409,40 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Stm32F1 => {
+                const ADON: u32 = 1;
+                const RSTCAL: u32 = 1 << 3;
+                const CAL: u32 = 1 << 2;
+                // HAL_ADCEx_Calibration_Start: RSTCAL, then CAL, each polled
+                // until the hardware clears it.
+                bus.write_u32(self.base + 0x08, ADON).expect("ADON");
+                for bit in [RSTCAL, CAL] {
+                    bus.write_u32(self.base + 0x08, ADON | bit)
+                        .expect("calibration step");
+                    let mut ticks = 0;
+                    while bus.read_u32(self.base + 0x08).unwrap() & bit != 0 {
+                        assert!(ticks < 4096, "{}: calibration step {bit:#x} ends", self.id);
+                        bus.tick_peripherals_fully();
+                        ticks += 1;
+                    }
+                }
+                // The F2/F4 SWSTART (bit 30), and the F1 SWSTART with an
+                // external EXTSEL, both convert nothing on the F1 map.
+                for cr2 in [ADON | (1 << 30), ADON | F1_EXTTRIG | (1 << 22)] {
+                    bus.write_u32(self.base + 0x08, ADON).expect("ADON");
+                    bus.write_u32(self.base + 0x08, cr2)
+                        .expect("not a software start");
+                    for _ in 0..64 {
+                        bus.tick_peripherals_fully();
+                    }
+                    assert_eq!(
+                        bus.read_u32(self.base).unwrap() & (1 << 1),
+                        0,
+                        "{}: CR2 {cr2:#x} is no F1 software start",
+                        self.id
+                    );
+                }
+            }
             Family::RaAdc { adc14 } => {
                 // R_ADC_Open: ADCER.ADPRC from the resolution, right
                 // justified, then ADCSR stored without ADST. Nothing
@@ -1017,6 +1062,50 @@ impl Converter {
                 }
                 single
             }
+            Family::Stm32F1 => {
+                let single = [
+                    self.convert(bus, NTC_CHANNEL),
+                    self.convert(bus, DIODE_CHANNEL),
+                ];
+                let [ntc, diode] = single;
+                // CR1.SCAN: both sensors convert, DR passes through the first
+                // and EOC rises only once the last one lands.
+                for (order, expected) in [
+                    ([NTC_CHANNEL, DIODE_CHANNEL], [ntc, diode]),
+                    ([DIODE_CHANNEL, NTC_CHANNEL], [diode, ntc]),
+                ] {
+                    assert_eq!(
+                        self.scan_f1(bus, &order),
+                        expected,
+                        "{}: one SWSTART scans CR1.SCAN group {order:?}, EOC at its end",
+                        self.id
+                    );
+                }
+                // CR1.DISCEN over [NTC, diode, NTC], one sensor per trigger:
+                // EOC only on the trigger that reaches SQ3 (RM0008 §11.3.10).
+                let group = [NTC_CHANNEL, DIODE_CHANNEL, NTC_CHANNEL];
+                assert_eq!(
+                    self.discen_f1(bus, &group, 4),
+                    vec![(ntc, false), (diode, false), (ntc, true), (ntc, false)],
+                    "{}: DISCNUM=0 converts one routed sensor per SWSTART",
+                    self.id
+                );
+                for (ranks, expected) in [
+                    (vec![DIODE_CHANNEL], vec![diode]),
+                    (
+                        vec![NTC_CHANNEL, DIODE_CHANNEL, NTC_CHANNEL],
+                        vec![ntc, diode, ntc],
+                    ),
+                ] {
+                    assert_eq!(
+                        self.injected_f1(bus, &ranks),
+                        expected,
+                        "{}: one JSWSTART converts injected ranks {ranks:?}",
+                        self.id
+                    );
+                }
+                single
+            }
             Family::Stm32F4 => {
                 let single = [
                     self.convert(bus, NTC_CHANNEL),
@@ -1279,6 +1368,132 @@ impl Converter {
         triggers
     }
 
+    /// F1 `CR2` with software triggers selected for both groups, the way
+    /// `HAL_ADC_Start`/`HAL_ADCEx_InjectedStart` leave it: `EXTSEL` and
+    /// `JEXTSEL` = 111 (SWSTART/JSWSTART) with `EXTTRIG`/`JEXTTRIG`.
+    const F1_CR2_SOFTWARE: u32 = 1 | (0b111 << 17) | F1_EXTTRIG | (0b111 << 12) | (1 << 15);
+
+    /// Rising F1 `CR2.SWSTART` (bit 22).
+    fn f1_swstart(&self, bus: &mut SystemBus) {
+        bus.write_u32(self.base + 0x08, Self::F1_CR2_SOFTWARE)
+            .expect("ADON, software EXTSEL");
+        bus.write_u32(self.base + 0x08, Self::F1_CR2_SOFTWARE | (1 << 22))
+            .expect("SWSTART");
+    }
+
+    fn f1_wait_eoc(&self, bus: &mut SystemBus, what: &str) {
+        let mut ticks = 0;
+        while bus.read_u32(self.base).unwrap() & (1 << 1) == 0 {
+            assert!(ticks < 256, "{}: EOC after {what}", self.id);
+            bus.tick_peripherals_fully();
+            ticks += 1;
+        }
+    }
+
+    /// One software-started F1 `CR1.SCAN` group read without DMA: each
+    /// conversion lands in DR, but EOC rises only with the last
+    /// (RM0008 §11.3.8). Returns DR as each conversion lands. Leaves
+    /// CR1/SQR1 at 0.
+    fn scan_f1(&self, bus: &mut SystemBus, channels: &[u8]) -> Vec<u32> {
+        // Leave a DR that matches neither sensor (the undriven channel's
+        // fallback count), so every landing shows as a change.
+        self.convert(bus, IDLE_CHANNEL);
+        let sqr3 = channels
+            .iter()
+            .enumerate()
+            .fold(0, |w, (k, &ch)| w | (u32::from(ch) << (5 * k)));
+        bus.write_u32(self.base + 0x34, sqr3).expect("SQR3 SQ1..");
+        bus.write_u32(self.base + 0x2c, (channels.len() as u32 - 1) << 20)
+            .expect("SQR1.L");
+        bus.write_u32(self.base + 0x04, 1 << 8).expect("CR1.SCAN");
+        bus.write_u32(self.base, 0).expect("clear SR");
+        let mut landed = Vec::new();
+        let mut dr = bus.read_u32(self.base + 0x4c).unwrap();
+        self.f1_swstart(bus);
+        for _ in 0..256 * channels.len() {
+            bus.tick_peripherals_fully();
+            let now = bus.read_u32(self.base + 0x4c).unwrap();
+            let eoc = bus.read_u32(self.base).unwrap() & (1 << 1) != 0;
+            if now != dr || eoc && landed.len() < channels.len() {
+                landed.push(now);
+                dr = now;
+            }
+            assert_eq!(
+                eoc,
+                landed.len() == channels.len(),
+                "{}: EOC only once all {} conversions land (after {landed:?})",
+                self.id,
+                channels.len()
+            );
+            if eoc {
+                break;
+            }
+        }
+        bus.write_u32(self.base, 0).expect("clear EOC");
+        bus.write_u32(self.base + 0x04, 0).expect("restore CR1");
+        bus.write_u32(self.base + 0x2c, 0).expect("restore SQR1");
+        landed
+    }
+
+    /// F1 `CR1.DISCEN` with `DISCNUM` = 0 over `channels`: each SWSTART
+    /// converts the next one into DR. Returns `(DR, EOC)` per trigger.
+    /// Leaves CR1/SQR1 at 0.
+    fn discen_f1(&self, bus: &mut SystemBus, channels: &[u8], triggers: usize) -> Vec<(u32, bool)> {
+        let sqr3 = channels
+            .iter()
+            .enumerate()
+            .fold(0, |w, (k, &ch)| w | (u32::from(ch) << (5 * k)));
+        bus.write_u32(self.base + 0x34, sqr3).expect("SQR3 SQ1..");
+        bus.write_u32(self.base + 0x2c, (channels.len() as u32 - 1) << 20)
+            .expect("SQR1.L");
+        bus.write_u32(self.base + 0x04, (1 << 8) | (1 << 11))
+            .expect("CR1.DISCEN");
+        let out = (0..triggers)
+            .map(|_| {
+                bus.write_u32(self.base, 0).expect("clear SR");
+                self.f1_swstart(bus);
+                for _ in 0..256 {
+                    bus.tick_peripherals_fully();
+                }
+                (
+                    bus.read_u32(self.base + 0x4c).expect("read DR"),
+                    bus.read_u32(self.base).unwrap() & (1 << 1) != 0,
+                )
+            })
+            .collect();
+        bus.write_u32(self.base + 0x04, 0).expect("restore CR1");
+        bus.write_u32(self.base + 0x2c, 0).expect("restore SQR1");
+        out
+    }
+
+    /// F1 injected group: the F4 `JSQR` packing (rank r of n in `JSQ(4 - n +
+    /// r)`), started by `CR2.JSWSTART` (bit 21) with `JEXTSEL` = 111
+    /// (RM0008 §11.12.3). Waits for `JEOC` and returns `JDR1..JDRn`.
+    fn injected_f1(&self, bus: &mut SystemBus, channels: &[u8]) -> Vec<u32> {
+        let n = channels.len();
+        let jsqr = channels
+            .iter()
+            .enumerate()
+            .fold(((n as u32) - 1) << 20, |w, (r, &ch)| {
+                w | (u32::from(ch) << (5 * (4 - n + r)))
+            });
+        bus.write_u32(self.base + 0x38, jsqr).expect("JSQR");
+        bus.write_u32(self.base, 0).expect("clear SR");
+        bus.write_u32(self.base + 0x08, Self::F1_CR2_SOFTWARE)
+            .expect("ADON");
+        bus.write_u32(self.base + 0x08, Self::F1_CR2_SOFTWARE | (1 << 21))
+            .expect("JSWSTART");
+        let mut ticks = 0;
+        while bus.read_u32(self.base).unwrap() & (1 << 2) == 0 {
+            assert!(ticks < 256 * n, "{}: JEOC", self.id);
+            bus.tick_peripherals_fully();
+            ticks += 1;
+        }
+        (0..n)
+            .map(|k| bus.read_u32(self.base + 0x3c + 4 * k as u64).expect("JDRx"))
+            .collect()
+    }
+
     /// One software-started F2/F4/F7 `CR1.SCAN` group with `CR2.EOCS`, read
     /// by polling: wait for EOC, clear it, read DR. Leaves CR1/SQR1 at 0.
     fn scan_f4(&self, bus: &mut SystemBus, channels: &[u8]) -> Vec<u32> {
@@ -1498,6 +1713,14 @@ impl Converter {
                 let dummy = bus.read_u32(rdfifo).expect("dummy RDFIFO");
                 bus.write_u32(cmdfifo, dummy).expect("dummy command");
                 bus.read_u32(rdfifo).expect("RDFIFO") >> 4
+            }
+            Family::Stm32F1 => {
+                bus.write_u32(self.base + 0x34, u32::from(channel))
+                    .expect("select SQR3 SQ1");
+                bus.write_u32(self.base, 0).expect("clear SR");
+                self.f1_swstart(bus);
+                self.f1_wait_eoc(bus, "conversion");
+                bus.read_u32(self.base + 0x4c).expect("read DR")
             }
             Family::Stm32F4 => {
                 const ADON: u32 = 1;
@@ -1862,7 +2085,8 @@ impl Converter {
     fn held_count(&self, bus: &mut SystemBus, channel: u8) -> Option<u16> {
         if !matches!(
             self.family,
-            Family::Stm32F4
+            Family::Stm32F1
+                | Family::Stm32F4
                 | Family::Stm32H7
                 | Family::Stm32L4
                 | Family::Stm32V2
@@ -1903,7 +2127,7 @@ fn generic_netlists(adc_id: &str, [ntc_channel, diode_channel]: [u8; 2]) -> Syst
 /// The sweep drives whatever map a descriptor names, so a wrong but
 /// self-consistent `config.profile` would still convert. For profiles named
 /// `stm32<series>...`, pin the map to the one that series' reference manual
-/// gives its ADC: F0/L0 `CHSELR` (RM0091, RM0367), F2/F4/F7 (RM0033, RM0090,
+/// gives its ADC: F0/L0 `CHSELR` (RM0091, RM0367), F1 (RM0008), F2/F4/F7 (RM0033, RM0090,
 /// RM0410), H7 (RM0433), L4/L5 (RM0351, RM0438), WBA ADC4 (RM0493).
 fn assert_stm32_series_map(board: &str, converter: &Converter) {
     let Some(series) = board.strip_prefix("stm32") else {
@@ -1911,6 +2135,7 @@ fn assert_stm32_series_map(board: &str, converter: &Converter) {
     };
     let expected = match series.get(..2) {
         Some("f0" | "l0") => "Stm32V2",
+        Some("f1") => "Stm32F1",
         Some("f2" | "f4" | "f7") => "Stm32F4",
         Some("h7") => "Stm32H7",
         Some("l4" | "l5") => "Stm32L4",
@@ -2113,7 +2338,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 92,
+        instances, 95,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -2121,7 +2346,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 143,
+        without_adc, 142,
         "onboarding profiles that declare no modelled ADC"
     );
 }
