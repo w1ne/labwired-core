@@ -3,11 +3,16 @@
 Demand rank: Arduino kits rank 3 at 37% in the JetBrains State of Embedded
 survey. ATmega4809 does not have a separate chip rank in that survey.
 
-This onboarding models the ATmega4809 core memory geometry and the Nano
-Every's onboard D13 LED path: `LED_BUILTIN` is PE2, driven through VPORT E. The
-system intentionally claims no other working board peripheral. In particular,
-the USB-to-serial bridge, UART, timers, ADC, SPI, and I2C are outside this
-smoke.
+This example is the register-level LED smoke: it toggles `LED_BUILTIN` (PE2)
+through VPORT E, which the AVRxt core aliases onto the PORTE block.
+
+The chip descriptor (`configs/chips/atmega4809.yaml`) now models more than
+this example uses. Stock ArduinoCore-megaavr sketches run on it in the Arduino
+matrix (`validation/arduino-matrix`, row `arduino-nano-every`): L0/L1 serial
+through USART3, L2 blink and L7 `millis()`/`micros()` through TCB3 pass. TWI0,
+SPI0, ADC conversion and timer pad outputs are not modelled yet, so L3-L6 are
+skipped with that reason. An I/O access to anything the descriptor does not
+declare faults instead of reading zero.
 
 ## Lifecycle and hardware sources
 

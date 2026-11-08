@@ -356,6 +356,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "pic32_uart",
     // Microchip PIC32MZ 16-bit timer (TxCON/TMRx/PRx, Type A or B).
     "pic32_timer",
+    // Microchip megaAVR 0-series USART and the TCA0 + TCB0..3 timer block.
+    "megaavr_usart",
+    "megaavr_tc",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -838,8 +841,11 @@ pub fn try_build(
                         pin_count as u8,
                     ),
                 ),
+                Some("megaavr_port") => Box::new(
+                    crate::peripherals::avr_gpio::AvrGpioPort::new_megaavr_port(pin_count as u8),
+                ),
                 Some(other) => anyhow::bail!(
-                    "avr_gpio '{}': unknown config.layout '{other}' (supported: atmega, avrxt_vport)",
+                    "avr_gpio '{}': unknown config.layout '{other}' (supported: atmega, avrxt_vport, megaavr_port)",
                     p_cfg.id
                 ),
             }
@@ -1532,6 +1538,30 @@ pub fn try_build(
                 get("pbclk_hz").unwrap_or(u::DEFAULT_PBCLK_HZ),
             ))
         }
+        // `irqs`: the part's vector numbers [rxc, dre, txc].
+        "megaavr_usart" => {
+            let irqs = u32_list(p_cfg, "irqs", 3).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "megaavr_usart '{}' needs `irqs: [rxc, dre, txc]` (vector numbers)",
+                    p_cfg.id
+                )
+            })?;
+            Box::new(crate::peripherals::megaavr::usart::MegaAvrUsart::new([
+                irqs[0], irqs[1], irqs[2],
+            ]))
+        }
+        // `tcb_irqs`: the TCB0..3 vector numbers.
+        "megaavr_tc" => {
+            let irqs = u32_list(p_cfg, "tcb_irqs", 4).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "megaavr_tc '{}' needs `tcb_irqs: [tcb0, tcb1, tcb2, tcb3]` (vector numbers)",
+                    p_cfg.id
+                )
+            })?;
+            Box::new(crate::peripherals::megaavr::tc::MegaAvrTimers::new([
+                irqs[0], irqs[1], irqs[2], irqs[3],
+            ]))
+        }
         "rx_flash" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::new()),
         "rx_rtc" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::rtc()),
         // `vectors`: the two channels' CMI vectors; `clock_hz`: the CPU
@@ -2108,4 +2138,19 @@ mod registry_agreement {
             );
         }
     }
+}
+
+/// `config.<key>`: exactly `len` unsigned integers, or `None`.
+fn u32_list(p_cfg: &PeripheralConfig, key: &str, len: usize) -> Option<Vec<u32>> {
+    p_cfg
+        .config
+        .get(key)
+        .and_then(|v| v.as_sequence())
+        .map(|s| {
+            s.iter()
+                .filter_map(|v| v.as_u64())
+                .map(|v| v as u32)
+                .collect::<Vec<_>>()
+        })
+        .filter(|v| v.len() == len)
 }

@@ -121,6 +121,24 @@
         "lane": "none"
       }
     },
+    "atmega4809": {
+      "in_boards": true,
+      "uart": {
+        "state": "none",
+        "gap": "USART0..3 are megaavr_usart models and the Arduino matrix row arduino-nano-every prints through USART3 (stock ArduinoCore-megaavr L0/L1/L2/L7), but that row needs PlatformIO and runs nightly; no PR-gated firmware lane yet.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SPI0 is not modelled on the ATmega4809.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "TWI0 is not modelled on the ATmega4809.",
+        "lane": "none"
+      }
+    },
     "atmega328pb": {
       "in_boards": false,
       "uart": {
