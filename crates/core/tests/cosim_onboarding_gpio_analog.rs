@@ -115,6 +115,12 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         0x800,
         "Linux pinctrl-rzg2l.c PIN(off) = 0x0800 + off",
     ),
+    // Window based at port 0's P_m byte of the non-safety region.
+    (
+        "declarative/rzt2m/port.yaml",
+        0x800,
+        "Zephyr gpio_rzt2m.c PINm_OFFSET + m",
+    ),
     (
         "sam4s_pio",
         0x3C,
@@ -159,13 +165,14 @@ fn input_bit(kind: &str, pin: u8) -> u32 {
 /// Firmware load of the input register at the width its firmware uses. The
 /// MSP430 ports are byte (`mov.b &P1IN`) and halfword (`mov &PAIN`)
 /// registers, and the byte after P1IN is P1OUT, so a word load would read
-/// past the port. RZ/G2L `PIN_m` is a byte (`readb` in pinctrl-rzg2l.c)
-/// and the next byte is the next port's. Every other map here is word-wide.
+/// past the port. RZ/G2L and RZ/T2M `PIN_m` are bytes (`readb` in
+/// pinctrl-rzg2l.c, a `uint8_t *` in gpio_rzt2m.c) and the next byte is the
+/// next port's. Every other map here is word-wide.
 fn load_input(bus: &SystemBus, kind: &str, register: u64) -> u32 {
     match kind {
-        "declarative/msp430/port8.yaml" | "declarative/rzg2l/port.yaml" => {
-            bus.read_u8(register).map(u32::from)
-        }
+        "declarative/msp430/port8.yaml"
+        | "declarative/rzg2l/port.yaml"
+        | "declarative/rzt2m/port.yaml" => bus.read_u8(register).map(u32::from),
         "declarative/msp430/port16.yaml" => bus.read_u16(register).map(u32::from),
         _ => bus.read_u32(register),
     }
@@ -298,6 +305,18 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
         "r9a07g044.dtsi pinctrl@11030000 + pinctrl-rzg2l.c PIN(0x10)",
     ),
     (
+        "renesas_rz_t2m",
+        "p0",
+        0x800A_0800,
+        "r9a07g075.dtsi gpio@800a0000 base_ns + gpio_rzt2m.c PINm_OFFSET",
+    ),
+    (
+        "renesas-rz_t2m_rsk",
+        "p0",
+        0x800A_0800,
+        "r9a07g075.dtsi gpio@800a0000 base_ns + gpio_rzt2m.c PINm_OFFSET",
+    ),
+    (
         "litex_vexriscv",
         "gpio_in",
         0xE000_6000,
@@ -324,13 +343,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 197;
+const COVERED: usize = 199;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 92;
+const SILICON_REGISTER: usize = 94;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 48;
+const NO_ANALOG_ENDPOINT: usize = 46;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -507,12 +526,7 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
                 .expect("SIUL2 MSCR.IBE");
         }
     }
-    if declarative_path_of(chip, port).is_some_and(|p| p.ends_with("rzg2l/port.yaml")) {
-        // Linux rzg2l_gpio_direction_input writes PM_INPUT (01) into the
-        // pin's two PM bits; the window's PM_m halfword is at +0x110.
-        let pm = (1 << (2 * pins.ntc)) | (1 << (2 * pins.diode));
-        bus.write_u16(base + 0x110, pm).expect("RZ/G2L PM_m input");
-    }
+    set_gpio_mode_fields_to_input(bus, port, base, pins);
     if kind.as_deref() == Some("gpio") && profile_of(chip, port) == Some("sam_port") {
         // ASF/Arduino pinMode(INPUT) sets PINCFGn.INEN (bit 1); PINCFG is
         // one byte per pin from +0x40, so pins 0 and 1 share the first word.
@@ -522,12 +536,45 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
     }
 }
 
-fn declarative_path_of<'a>(chip: &'a ChipDescriptor, port: &str) -> Option<&'a str> {
-    chip.peripherals
+/// A port whose direction is a per-pin mode field (`gpio_mode`) gets each
+/// pin's field set to the descriptor's first `input` value, as a driver does
+/// before it reads the pad: RZ/G2L rzg2l_gpio_direction_input and RZ/T2M
+/// rzt2m_gpio_configure write PM 01, a sunxi Pn_CFG nibble is already 0
+/// (input) at reset. Read-modify-write over the field's bytes, so pins that
+/// share a register keep each other's fields; nothing here names a chip.
+fn set_gpio_mode_fields_to_input(bus: &mut SystemBus, port: &str, base: u64, pins: Pins) {
+    let Some(descriptor) = bus
+        .peripherals
         .iter()
-        .find(|p| p.id == port && p.r#type.eq_ignore_ascii_case("declarative"))
-        .and_then(|p| p.config.get("path"))
-        .and_then(|v| v.as_str())
+        .find(|p| p.name == port)
+        .and_then(|p| p.dev.peripheral_descriptor())
+    else {
+        return;
+    };
+    let Some(mode) = descriptor.gpio_mode else {
+        return;
+    };
+    let register = descriptor
+        .registers
+        .iter()
+        .find(|r| r.id == mode.register)
+        .expect("gpio_mode names a declared register");
+    let width = u32::from(mode.bits_per_pin);
+    let input = *mode.input.first().expect("gpio_mode lists an input value");
+    for pin in [pins.ntc, pins.diode] {
+        let first_bit = u32::from(pin) * width;
+        let address = base + register.address_offset + u64::from(first_bit / 8);
+        let shift = first_bit % 8;
+        let mask = ((1u32 << width) - 1) << shift;
+        // A field of at most 8 bits spans at most two bytes.
+        let old = u32::from(bus.read_u8(address).unwrap())
+            | u32::from(bus.read_u8(address + 1).unwrap()) << 8;
+        let new = (old & !mask) | (input << shift);
+        bus.write_u8(address, new as u8)
+            .expect("mode field low byte");
+        bus.write_u8(address + 1, (new >> 8) as u8)
+            .expect("mode field high byte");
+    }
 }
 
 fn profile_of<'a>(chip: &'a ChipDescriptor, port: &str) -> Option<&'a str> {

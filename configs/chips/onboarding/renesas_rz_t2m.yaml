@@ -12,7 +12,21 @@ flash:
 ram:
   base: 268435456
   size: 1572864B
+# GPIO port P0 of the non-safety controller at 0x800A_0000 (Zephyr
+# r9a07g075.dtsi gpio@800a0000 base_ns, drivers/gpio/gpio_rzt2m.c), PIN_0
+# @0x800A_0800, on configs/peripherals/rzt2m/port.yaml. Renode binds
+# GPIOPort.Renesas_GPIO at 0x800A_0000 and the safety region 0x8103_0000
+# (platforms/cpus/renesas_rz_t2m.repl); the import dropped that
+# two-address registration. The window spans the other ports' bytes, so
+# only P0 is declared.
 peripherals:
+- id: p0
+  type: declarative
+  bus: sysbus
+  base_address: 2148139008
+  size: 2049B
+  config:
+    path: ../../peripherals/rzt2m/port.yaml
 - id: timer
   type: arm_generictimer
   bus: cpu
