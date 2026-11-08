@@ -24,7 +24,9 @@
 //!   loaded, `ADST` clears (single scan) and the scan-end event fires;
 //! - the conversion code is `input_mv * (2^bits - 1) / vref_mv`, clamped,
 //!   with `bits` from `ADCER.ADPRC` (12/10/8) and left-justified when
-//!   `ADCER.ADRFMT` = 1 (the value shifted to bit 15);
+//!   `ADCER.ADRFMT` = 1 (the value shifted to bit 15). The RA4M1's ADC140
+//!   (`adc14: true`) also decodes `ADPRC` = 3 as 14 bits (FSP `r_adc_api.h`
+//!   `ADC_RESOLUTION_14_BIT = 3`; ArduinoCore-renesas always opens it so);
 //! - A/D-converted value addition / averaging (`ADADS0/1` channel bits,
 //!   `ADADC.ADC` count 1/2/3/4/16, `ADADC.AVEE`): addition sums the
 //!   (identical) samples, averaging leaves the single-sample code;
@@ -102,6 +104,9 @@ pub struct RaAdc12 {
     regs: Vec<u8>,
     data: [u16; CHANNELS],
     inputs: BTreeMap<u8, u16>,
+    /// ADC14 (RA4M1 ADC140): `ADCER.ADPRC` = 3 selects 14-bit conversion.
+    #[serde(default)]
+    adc14: bool,
     /// Cycle the running scan completes at.
     armed: Option<u64>,
     /// Bumped whenever `armed` changes; a stale scheduled event whose token
@@ -140,6 +145,7 @@ impl RaAdc12 {
             regs: vec![0; WINDOW],
             data: [0; CHANNELS],
             inputs: BTreeMap::new(),
+            adc14: false,
             armed: None,
             generation: 0,
             pending_events: Vec::new(),
@@ -147,6 +153,12 @@ impl RaAdc12 {
             links: Vec::new(),
             probes: Probes::default(),
         }
+    }
+
+    /// Decode `ADCER.ADPRC` = 3 as 14-bit conversion (the RA4M1's ADC140).
+    pub fn with_adc14(mut self, yes: bool) -> Self {
+        self.adc14 = yes;
+        self
     }
 
     /// Ask the bus to wire `channel` to output `output` of `source`.
@@ -203,6 +215,7 @@ impl RaAdc12 {
         match (self.reg16(ADCER) >> ADPRC_SHIFT) & ADPRC_MASK {
             1 => 10,
             2 => 8,
+            3 if self.adc14 => 14,
             _ => 12,
         }
     }
@@ -520,6 +533,41 @@ mod tests {
         w16(&mut a, ADCSR, ADST);
         assert_eq!(finish(&mut a, &clock), vec![EVENT]);
         assert_eq!(r16(&a, addr(16)), 4095);
+    }
+
+    #[test]
+    fn adc14_decodes_adprc_3_as_fourteen_bits() {
+        // RA4M1 ADC140: ArduinoCore-renesas opens it at ADPRC = 3. A0 tied
+        // to the UNO R4's 3V3 pin against the 5 V reference.
+        let (a, clock) = adc_at(0);
+        let mut a = a.with_adc14(true);
+        a.set_channel_input(9, 3300);
+        w16(&mut a, ADANSA0, 1 << 9);
+        w16(&mut a, ADCER, 3 << ADPRC_SHIFT);
+        let mut five_volt = RaAdc12::new(HZ, EVENT, 5000).with_adc14(true);
+        five_volt.attach_cycle_clock(clock.clone());
+        five_volt.set_channel_input(9, 3300);
+        w16(&mut five_volt, ADANSA0, 1 << 9);
+        w16(&mut five_volt, ADCER, 3 << ADPRC_SHIFT);
+        w16(&mut five_volt, ADCSR, ADST);
+        finish(&mut five_volt, &clock);
+        // 3300 * 16383 / 5000 = 10,812; Arduino maps it to 675 of 1024.
+        assert_eq!(r16(&five_volt, addr(9)), 10_812);
+        // Full scale against a 3.3 V reference.
+        w16(&mut a, ADCSR, ADST);
+        finish(&mut a, &clock);
+        assert_eq!(r16(&a, addr(9)), 0x3FFF);
+    }
+
+    #[test]
+    fn adprc_3_stays_twelve_bits_without_adc14() {
+        let (mut a, clock) = adc_at(0);
+        a.set_channel_input(0, 3300);
+        w16(&mut a, ADANSA0, 1);
+        w16(&mut a, ADCER, 3 << ADPRC_SHIFT);
+        w16(&mut a, ADCSR, ADST);
+        finish(&mut a, &clock);
+        assert_eq!(r16(&a, addr(0)), 4095);
     }
 
     #[test]

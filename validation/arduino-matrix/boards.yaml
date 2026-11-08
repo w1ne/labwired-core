@@ -411,6 +411,29 @@ boards:
     sketches_skip_reason:
       L8_can: "ATSAMD21G18A has no CAN controller"
 
+  - id: arduino-uno-r4-wifi
+    chip: r7fa4m1ab-uno-r4-wifi-smoke
+    system: systems/arduino-uno-r4-wifi.yaml
+    # ArduinoCore-renesas `unor4wifi` builds with NO_USB: Serial is SCI9 on
+    # P109/P110 (the ESP32-S3 USB bridge), not USB CDC. The sketch is linked
+    # at 0x4000 behind the bootloader; the chip's reset_vector_offset enters
+    # it there.
+    pio: { platform: renesas-ra@1.9.0, board: uno_r4_wifi, framework: arduino }
+    max_steps: 5000000
+    budget_reason: "Cortex-M4 48 MHz: L0 0.11M steps, L3 0.28M, L6 1.55M (30 ms of 490 Hz PWM); ~3x headroom"
+    # LED_BUILTIN = D13 = P102.
+    led_watch: "port1:2"
+    led_min_edges: 2
+    # L6 keeps LED_BUILTIN: D13 = P102 = GTIOC2B (GPT2, 32-bit), 490 Hz.
+    pwm_watch: "port1:2"
+    pwm_min_edges: 20
+    family: renesas
+    notes: "Arduino UNO R4 WiFi (R7FA4M1AB, ArduinoCore-renesas 1.x via renesas-ra 1.9.0)"
+    sketches_skip: [L4_spi_sensor, L8_can]
+    sketches_skip_reason:
+      L4_spi_sensor: "RA4M1 SPI0 (R_SPI0 0x40072000) is not modelled yet"
+      L8_can: "RA4M1 CAN0 (R_CAN0 0x40050000) is not modelled yet"
+
   # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────
   #
   # ⚠️ The ONLY board here that does not compile through PlatformIO. Silicon

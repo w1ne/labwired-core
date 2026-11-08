@@ -387,6 +387,7 @@ pub const MODEL_TYPES: &[&str] = &[
     // xxxCKCR handshake).
     "ra8_sysc",
     "ra6_sysc",
+    "ra4_sysc",
     // Renesas RX SYSTEM (oscillator stable flags, clock-switch handshakes).
     "rx_sysc",
     // Renesas RX FLASH control registers (0xAA-keyed word writes).
@@ -1622,6 +1623,7 @@ pub fn try_build(
         "ra_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new()),
         "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra8()),
         "ra6_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra6()),
+        "ra4_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra4()),
         "rx_sysc" => Box::new(crate::peripherals::rx_sysc::RxSysc::new()),
         // `irq`: the EVIC vector; `timer_type`: "a" (Timer1) or "b";
         // `clock_hz`: SYSCLK; `pbclk_hz`: the timer's PBCLK3; `sosc_hz`.
@@ -1834,9 +1836,6 @@ pub fn try_build(
                 get("elc_event").map_or(agt::DEFAULT_ELC_EVENT, |v| v as u32),
             ))
         }
-        // `clock_hz`: the rate the bus cycles run at; `elc_event`: the unit's
-        // scan-end event; `vref_mv`: the reference; `input_mv: { <ch>: <mV> }`:
-        // board-level static channel levels.
         // `clock_hz`: the rate the bus cycles run at; `pclkb_hz`: PCLKB, the
         // RIIC's clock; `elc_event`: the channel's RXI event (TXI/TEI/ERI
         // are +1/+2/+3).
@@ -1852,6 +1851,7 @@ pub fn try_build(
         // `channels`: GPT channel count; `clock_hz`: the rate the bus cycles
         // run at; `pclkd_hz`: PCLKD, the count clock before GTCR.TPCS;
         // `elc_event`: GPT0's capture/compare A event (nine per channel);
+        // `events_per_channel`: ELC stride (9; 8 on the RA4M1);
         // `wide_channels`: mask of the 32-bit channels; `gtioc_pads`:
         // `{ GTIOCnA: Pmnn, ... }`, the pads that carry each GTIOC line.
         "ra_gpt" => {
@@ -1880,9 +1880,14 @@ pub fn try_build(
                     get("elc_event").map_or(gpt::DEFAULT_ELC_EVENT, |v| v as u32),
                     get("wide_channels").map_or(0xFF, |v| v as u32),
                 )
-                .with_output_pads(pads),
+                .with_output_pads(pads)
+                .with_events_per_channel(get("events_per_channel").map_or(9, |v| v as u32)),
             )
         }
+        // `clock_hz`: the rate the bus cycles run at; `elc_event`: the unit's
+        // scan-end event; `vref_mv`: the reference; `adc14`: ADPRC = 3 is
+        // 14-bit (RA4M1 ADC140); `input_mv: { <ch>: <mV> }`: board-level
+        // static channel levels.
         "ra_adc12" => {
             use crate::peripherals::ra_adc12 as adc;
             let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
@@ -1890,6 +1895,13 @@ pub fn try_build(
                 get("clock_hz").unwrap_or(adc::DEFAULT_CLOCK_HZ),
                 get("elc_event").map_or(adc::DEFAULT_ELC_EVENT, |v| v as u32),
                 get("vref_mv").map_or(adc::DEFAULT_VREF_MV, |v| v as u16),
+            )
+            .with_adc14(
+                p_cfg
+                    .config
+                    .get("adc14")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
             );
             if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
                 for (k, v) in map {

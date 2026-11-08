@@ -87,6 +87,13 @@ static bool samples_ok(int v0, int v1) {
   // handed to the ADC.
   return v0 == 512 && v1 == 512;
 
+#elif defined(ARDUINO_UNOR4_WIFI)
+  // ra_adc12 (adc14): the matrix system ties A0 (P014 = AN009) to the 3V3
+  // pin. ADC140 runs at 14 bits against the 5 V AVCC0, and the core maps
+  // to 10 bits: 3.3 V / 5 V * 1024 = 675. Exact; a 0 here means no
+  // conversion.
+  return v0 == 675 && v1 == 675;
+
 #elif defined(ARDUINO_ARCH_RP2040)
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).
   return v0 == 0 && v1 == 0;

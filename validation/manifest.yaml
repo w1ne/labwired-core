@@ -1392,6 +1392,12 @@ boards:
     # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
     # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
+    # 2026-11-08: Arduino UNO R4 WiFi row changes the shared generic_factory.rs
+    # digest. It adds the `ra4_sysc` type and two opt-in config keys
+    # (`adc14` on ra_adc12, `events_per_channel` on ra_gpt) that only the RA4M1
+    # board profile sets; no STM32 construction path reads them. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture, ack date or expiry changed.
     doc: docs/boards/stm32h563.md
     chip: configs/chips/stm32h563.yaml
     tier: silicon-verified
@@ -2567,7 +2573,7 @@ boards:
     # E/F); the STM32 GPIO arms and every existing method are untouched.
     # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: e8b00401662588db89c530331c0563c6dff6dc465f487ccea9e204b2ec3788c2
+    drift_ack_digest: 9ac319dbfdd0383d08cf334aabf4e1f7a370b7c3fd33affa9526e4f7e9292b04
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -3816,6 +3822,12 @@ boards:
     # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
     # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
+    # 2026-11-08: Arduino UNO R4 WiFi row changes the shared generic_factory.rs
+    # digest. It adds the `ra4_sysc` type and two opt-in config keys
+    # (`adc14` on ra_adc12, `events_per_channel` on ra_gpt) that only the RA4M1
+    # board profile sets; no STM32 construction path reads them. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture, ack date or expiry changed.
     doc: docs/boards/nucleo-l476rg.md
     chip: configs/chips/stm32l476.yaml
     tier: silicon-verified
@@ -4969,7 +4981,7 @@ boards:
     # E/F); the STM32 GPIO arms and every existing method are untouched.
     # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: b4c16db0af7682fe244004851d6dd518487be3a8d572ad30c3d150f85878f928
+    drift_ack_digest: ffb023472e0798bbbe1fc9c82d06950946da9b278c781d1f015c5db468ec85ad
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5118,6 +5130,12 @@ boards:
     # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
     # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
+    # 2026-11-08: Arduino UNO R4 WiFi row changes the shared generic_factory.rs
+    # digest. It adds the `ra4_sysc` type and two opt-in config keys
+    # (`adc14` on ra_adc12, `events_per_channel` on ra_gpt) that only the RA4M1
+    # board profile sets; no STM32 construction path reads them. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture, ack date or expiry changed.
     doc: docs/boards/nucleo-l073rz.md
     chip: configs/chips/stm32l073.yaml
     tier: silicon-verified
@@ -5521,7 +5539,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 570905f76680e1dd247375107a728f0e6c6c64df9ee141f59355be21ab713c11
+    drift_ack_digest: a38d7bf9324e515a3f4764470c029cb915bfd715c36c665679fd94cf1cc69b64
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6314,6 +6332,12 @@ boards:
     # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
     # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
+    # 2026-11-08: Arduino UNO R4 WiFi row changes the shared generic_factory.rs
+    # digest. It adds the `ra4_sysc` type and two opt-in config keys
+    # (`adc14` on ra_adc12, `events_per_channel` on ra_gpt) that only the RA4M1
+    # board profile sets; no STM32 construction path reads them. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture, ack date or expiry changed.
     doc: docs/boards/stm32f103.md
     chip: configs/chips/stm32f103.yaml
     tier: silicon-verified
@@ -7482,7 +7506,7 @@ boards:
     # E/F); the STM32 GPIO arms and every existing method are untouched.
     # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: 113e10fe6c4053cbd23f31f13476b27f860804e7671f48cfb90202ff3076b5ee
+    drift_ack_digest: dcd99fd44bdcf91208232af6170e4dd4aa256218c538ddc7b759c3832c5f7afe
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7635,6 +7659,12 @@ boards:
     # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
     # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
+    # 2026-11-08: Arduino UNO R4 WiFi row changes the shared generic_factory.rs
+    # digest. It adds the `ra4_sysc` type and two opt-in config keys
+    # (`adc14` on ra_adc12, `events_per_channel` on ra_gpt) that only the RA4M1
+    # board profile sets; no STM32 construction path reads them. This is a
+    # reviewed model-drift acknowledgment, NOT a new silicon capture; no
+    # capture, ack date or expiry changed.
     doc: docs/boards/stm32f407.md
     chip: configs/chips/stm32f407.yaml
     tier: silicon-smoke
@@ -8055,7 +8085,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 143c08ed36104aa857818547475f2c67fcb42d9cc97e9518c25cc9e8900546cf
+    drift_ack_digest: 07eeea02df49ed1d4b10cf753cfbc1efca44f38c503e18487c6f2ebc17c71b03
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the

@@ -1,0 +1,27 @@
+# Arduino matrix system — Arduino UNO R4 WiFi (R7FA4M1AB @ 48 MHz HOCO).
+# Serial = SCI9 on P109/P110 (the ESP32-S3 USB bridge; the variant builds
+# with NO_USB); LED_BUILTIN = D13 = P102.
+# L5: A0 (P014 = AN009) wired to the 3V3 header pin. ADC140 converts at 14
+# bits against the 5 V AVCC0, so stock analogRead(A0) must return exactly
+# 675 (10-bit).
+# L3: INA219 at 0x40 on Wire = IIC1 (A4/A5 = P101 SDA1 / P100 SCL1).
+name: "arduino-matrix-arduino-uno-r4-wifi"
+chip: "../../../configs/chips/r7fa4m1ab-uno-r4-wifi-smoke.yaml"
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "iic1"
+    config:
+      i2c_address: 0x40
+peripherals:
+  - id: "adc0"
+    type: "ra_adc12"
+    base_address: 0x4005C000
+    size: "512B"
+    config:
+      clock_hz: 48000000
+      elc_event: 41
+      vref_mv: 5000
+      adc14: true
+      input_mv: { 9: 3300 }
+board_io: []

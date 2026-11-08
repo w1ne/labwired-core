@@ -143,6 +143,9 @@ pub struct RaSyscLayout {
     pub stopped_at_reset: &'static [usize],
     /// Peripheral clock control registers with the CKSREQ/CKSRDY handshake.
     pub ckcr: &'static [usize],
+    /// VBATT power switch: VBTSR.VBTRVLD (+0x4B1 bit4) reads 1 while
+    /// VBTCR1.BPWSWSTP (+0x41F bit0) is 1 (RA4M1).
+    pub vbatt_switch: bool,
 }
 
 /// RA8M1 (FSP `R7FA8M1AH.h`, 0xD80 bytes): MOSCCR/PLLCR/PLL2CR and SOSCCR
@@ -153,6 +156,7 @@ pub const RA8_SYSC: RaSyscLayout = RaSyscLayout {
     size: 0xD80,
     stopped_at_reset: &[RA_MOSCCR, RA_PLLCR, RA_PLL2CR, 0xC00],
     ckcr: &[0x55, 0x57, 0x5B, 0x5D, 0x5F, 0x74, 0x75, 0x76, 0x77, 0x78],
+    vbatt_switch: false,
 };
 
 /// RA6M5 (FSP `R7FA6M5BH.h`, 0x700 bytes: VBTBKR[512] at +0x500 is the
@@ -165,6 +169,22 @@ pub const RA6_SYSC: RaSyscLayout = RaSyscLayout {
     size: 0x700,
     stopped_at_reset: &[RA_MOSCCR, RA_PLLCR, RA_PLL2CR],
     ckcr: &[0x74, 0x75, 0x76],
+    vbatt_switch: false,
+};
+
+/// RA4M1 (FSP `R7FA4M1AB.h`, 0x700 bytes: VBTBKR[512] at +0x500 is the
+/// last member): MOSCCR/PLLCR, no PLL2 and no CKCR handshake. FSP's
+/// `SystemInit` sets VBTCR1.BPWSWSTP and then waits for VBTSR.VBTRVLD
+/// (`bsp_init_vbatt` in system.c), so the layout derives VBTRVLD from
+/// BPWSWSTP; the battery switch settles at once. +0x4A (PLL2CR on the
+/// RA6/RA8) is a reserved byte here, so it is not in `stopped_at_reset`
+/// and OSCSF bit6 always reads 0.
+pub const RA4_SYSC: RaSyscLayout = RaSyscLayout {
+    name: "ra4_sysc",
+    size: 0x700,
+    stopped_at_reset: &[RA_MOSCCR, RA_PLLCR],
+    ckcr: &[],
+    vbatt_switch: true,
 };
 
 const RA_SCKSCR: usize = 0x26;
@@ -173,6 +193,10 @@ const RA_MOSCCR: usize = 0x32;
 const RA_HOCOCR: usize = 0x36;
 const RA_OSCSF: usize = 0x3C;
 const RA_PLL2CR: usize = 0x4A;
+const RA_VBTCR1: usize = 0x41F;
+const RA_VBTSR: usize = 0x4B1;
+const RA_BPWSWSTP: u8 = 1 << 0;
+const RA_VBTRVLD: u8 = 1 << 4;
 const RA_MOSCSF: u8 = 1 << 3;
 const RA_PLLSF: u8 = 1 << 5;
 const RA_PLL2SF: u8 = 1 << 6;
@@ -197,6 +221,10 @@ impl RaSyscRegs {
         Self::new(&RA6_SYSC)
     }
 
+    pub fn ra4() -> Self {
+        Self::new(&RA4_SYSC)
+    }
+
     fn oscsf(&self) -> u8 {
         let running = |off: usize| self.regs[off] & 1 == 0;
         let mut sf = 0;
@@ -209,7 +237,7 @@ impl RaSyscRegs {
         if running(RA_PLLCR) {
             sf |= RA_PLLSF;
         }
-        if running(RA_PLL2CR) {
+        if self.layout.stopped_at_reset.contains(&RA_PLL2CR) && running(RA_PLL2CR) {
             sf |= RA_PLL2SF;
         }
         sf
@@ -234,6 +262,10 @@ impl Peripheral for RaSyscRegs {
             return Ok(self.oscsf());
         }
         let v = self.regs[off];
+        if self.layout.vbatt_switch && off == RA_VBTSR {
+            let valid = self.regs[RA_VBTCR1] & RA_BPWSWSTP != 0;
+            return Ok((v & !RA_VBTRVLD) | if valid { RA_VBTRVLD } else { 0 });
+        }
         if self.layout.ckcr.contains(&off) {
             return Ok((v & !CKSRDY) | if v & CKSREQ != 0 { CKSRDY } else { 0 });
         }
@@ -390,6 +422,29 @@ mod tests {
         // The RA8 SCICKCR offset is a plain byte here.
         sys.write(0x55, CKSREQ).unwrap();
         assert_eq!(sys.read(0x55).unwrap(), CKSREQ);
+    }
+
+    #[test]
+    fn ra4_sysc_runs_the_fsp_vbatt_and_clock_bring_up() {
+        let mut sys = RaSyscRegs::ra4();
+        // Reset: HOCO running, MOSC/PLL stopped, no PLL2 flag.
+        assert_eq!(sys.read(RA_OSCSF as u64).unwrap(), HOCOSF);
+        assert_eq!(sys.read(RA_VBTSR as u64).unwrap() & RA_VBTRVLD, 0);
+        sys.write(RA_VBTCR1 as u64, RA_BPWSWSTP).unwrap();
+        assert_eq!(sys.read(RA_VBTSR as u64).unwrap() & RA_VBTRVLD, RA_VBTRVLD);
+        sys.write(RA_PLL2CR as u64, 0).unwrap();
+        sys.write(RA_MOSCCR as u64, 0).unwrap();
+        assert_eq!(sys.read(RA_OSCSF as u64).unwrap(), HOCOSF | RA_MOSCSF);
+        // VBTRVLD is derived, not stored: clearing BPWSWSTP drops it.
+        sys.write(RA_VBTCR1 as u64, 0).unwrap();
+        assert_eq!(sys.read(RA_VBTSR as u64).unwrap() & RA_VBTRVLD, 0);
+    }
+
+    #[test]
+    fn ra6_sysc_has_no_vbatt_switch() {
+        let mut sys = RaSyscRegs::ra6();
+        sys.write(RA_VBTCR1 as u64, RA_BPWSWSTP).unwrap();
+        assert_eq!(sys.read(RA_VBTSR as u64).unwrap(), 0);
     }
 
     #[test]

@@ -1,0 +1,12 @@
+schema_version: '1.0'
+inputs:
+  firmware: /home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/arduino-uno-r4-wifi/L0_serial_boot/firmware.elf
+  system: /home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/systems/arduino-uno-r4-wifi.yaml
+limits:
+  max_steps: 5000000
+  max_uart_bytes: 65536
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000
+  stop_when_assertions_pass_min_steps: 0
+assertions:
+- uart_contains: LW_L0_OK

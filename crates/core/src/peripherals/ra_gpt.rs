@@ -46,6 +46,8 @@
 //! A, B and overflow are `elc_event` + 9n + 0, + 1 and + 6 (FSP `bsp_elc.h`:
 //! `ELC_EVENT_GPT0_CAPTURE_COMPARE_A` 0x0A1 .. `ELC_EVENT_GPT0_COUNTER_
 //! OVERFLOW` 0x0A7, nine per channel on the RA8M1; 0x0C0 on the RA6M5).
+//! The RA4M1 has no PC event, so its channels are eight apart (`ELC_EVENT_
+//! GPT0_CAPTURE_COMPARE_A` 87, GPT1 95; [`RaGpt::with_events_per_channel`]).
 //! They leave through `explicit_irqs` with
 //! [`Peripheral::explicit_irqs_are_link_events`], so the bus links them
 //! through the ICU `IELSRn` ([`super::ra_icu`]).
@@ -111,7 +113,7 @@ const CCRB_SHIFT: u32 = 18;
 const PR_SHIFT: u32 = 20;
 const CCRSWT: u32 = 1 << 22;
 
-const EVENTS_PER_CHANNEL: u32 = 9;
+const DEFAULT_EVENTS_PER_CHANNEL: u32 = 9;
 const EV_CCMPA: u32 = 0;
 const EV_CCMPB: u32 = 1;
 const EV_OVF: u32 = 6;
@@ -120,6 +122,10 @@ const EV_OVF: u32 = 6;
 pub const MAX_CHANNELS: usize = 14;
 
 /// GTIOC wire names, two per channel (A then B), in line order.
+fn default_events_per_channel() -> u32 {
+    DEFAULT_EVENTS_PER_CHANNEL
+}
+
 pub const LINE_NAMES: [&str; 2 * MAX_CHANNELS] = [
     "GTIOC0A", "GTIOC0B", "GTIOC1A", "GTIOC1B", "GTIOC2A", "GTIOC2B", "GTIOC3A", "GTIOC3B",
     "GTIOC4A", "GTIOC4B", "GTIOC5A", "GTIOC5B", "GTIOC6A", "GTIOC6B", "GTIOC7A", "GTIOC7B",
@@ -194,6 +200,9 @@ pub struct RaGpt {
     clock_hz: u64,
     pclkd_hz: u64,
     elc_event: u32,
+    /// ELC event stride between channels (9 on the RA6/RA8, 8 on the RA4M1).
+    #[serde(default = "default_events_per_channel")]
+    events_per_channel: u32,
     /// Bit n: channel n is a 32-bit GPT32 (else 16-bit).
     wide_channels: u32,
     channels: Vec<Channel>,
@@ -234,6 +243,7 @@ impl RaGpt {
             clock_hz: clock_hz.max(1),
             pclkd_hz: pclkd_hz.max(1),
             elc_event,
+            events_per_channel: DEFAULT_EVENTS_PER_CHANNEL,
             wide_channels,
             channels: (0..n)
                 .map(|ch| Channel::new(wide_channels & (1 << ch) != 0))
@@ -248,6 +258,12 @@ impl RaGpt {
             pending_events: Vec::new(),
             clock: None,
         }
+    }
+
+    /// Set the ELC event stride between channels.
+    pub fn with_events_per_channel(mut self, n: u32) -> Self {
+        self.events_per_channel = n.max(EV_OVF + 1);
+        self
     }
 
     /// Name the pads that carry GTIOC lines: `(line, port peripheral name,
@@ -411,7 +427,7 @@ impl RaGpt {
                 break;
             }
             self.channels[ch].done[kind as usize] = tick;
-            let ev = self.elc_event + EVENTS_PER_CHANNEL * ch as u32;
+            let ev = self.elc_event + self.events_per_channel * ch as u32;
             match kind {
                 Kind::Overflow => {
                     self.unsent.push(ev + EV_OVF);
@@ -1048,6 +1064,18 @@ mod tests {
         assert_eq!(r(&g, 7, GTST) & (TCFA | TCFPO), TCFA, "write 0 clears");
         let ev = walk(&mut g, &clock, 801);
         assert_eq!(ev[0], (400 + 30 * 4 - 4, base + EV_CCMPA));
+    }
+
+    #[test]
+    fn ra4m1_events_are_eight_per_channel() {
+        // FSP ra4m1 bsp_elc.h: GPT0 CCMPA 87 .. OVF 93, GPT1 CCMPA 95.
+        let clock = CycleClock::default();
+        let mut g = RaGpt::new(8, CLOCK, PCLKD, 87, 0x0F).with_events_per_channel(8);
+        g.attach_cycle_clock(clock.clone());
+        zephyr_pwm(&mut g, 2, 100, 30);
+        let ev = walk(&mut g, &clock, 401);
+        assert_eq!(ev[0].1, 87 + 2 * 8, "GPT2 CCMPA = 103");
+        assert_eq!(ev[1].1, 87 + 2 * 8 + EV_OVF, "GPT2 OVF = 109");
     }
 
     #[test]

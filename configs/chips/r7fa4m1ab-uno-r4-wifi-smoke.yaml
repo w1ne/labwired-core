@@ -1,15 +1,32 @@
-# Arduino UNO R4 WiFi (ABX00087), focused RA4M1 board profile.
+# Arduino UNO R4 WiFi (ABX00087), RA4M1 board profile.
 #
-# The chip is the Renesas R7FA4M1AB3CFM#AA0 (64-pin RA4M1). This profile
-# reuses the existing RA4M1 register models but exposes only the board pins
-# and blocks exercised by this smoke: SCI2 on D0/D1, D13 on P102, reset-clock
-# readiness, PORT1/PFS. The USBFS, ESP32-S3 radio coprocessor,
-# LED matrix, Qwiic connector, and all other RA4M1 peripherals are outside
-# this system profile; they are not replaced with zero-answering stubs.
+# The chip is the Renesas R7FA4M1AB3CFM#AA0 (64-pin RA4M1). Two firmware
+# paths run on it:
+# - the bare-metal smoke (examples/arduino-uno-r4-wifi): SCI2 on D0/D1,
+#   D13 on P102, reset-clock readiness, PORT1/PFS;
+# - stock ArduinoCore-renesas (validation/arduino-matrix row
+#   `arduino-uno-r4-wifi`, 7/9): FSP SystemInit, `Serial` = SCI9 on
+#   P109/P110, the AGT time base, Wire = IIC1, analogRead on ADC140 and
+#   analogWrite on GPT2 (GTIOC2B = D13 = P102).
 #
-# Board pin mapping: Arduino UNO R4 WiFi full pinout (ABX00087), D0/RX=P301,
-# D1/TX=P302, D13/LED_BUILTIN=P102. RA4M1 memory and register bases follow
-# R01UH0887 / the shared R7FA4M1AB descriptor.
+# Board pin mapping: Arduino UNO R4 WiFi full pinout (ABX00087) and the
+# core's variants/UNOWIFIR4 (variant.cpp, pinmux.inc): D0/RX=P301,
+# D1/TX=P302, D13/LED_BUILTIN=P102, Serial TX/RX = P109/P110 (SCI9).
+# RA4M1 memory and register bases follow R01UH0887 and FSP R7FA4M1AB.h;
+# ELC event numbers follow FSP ra4m1 bsp_elc.h.
+#
+# Modelled: SYSTEM (`ra4_sysc`: register file, OSCSF, VBTSR.VBTRVLD), ICU
+# event link (32 IELSR lines), SCI2/SCI9 (classic SCI, RXI/TXI/TEI events),
+# AGT0/1 (timer mode), IIC0/1 (master), ADC140 (`ra_adc12` with 14-bit
+# ADPRC), GPT0-7 (saw-wave PWM; only GTIOC2B is bound to a pad), PORT1/3 and
+# PFS. See each model's header for its limits.
+#
+# Declared stubs (reads 0, writes dropped): MSTP (module stop is not
+# enforced), FCACHE, the SP monitor (no stack-overflow NMI), and the reserved
+# 0x4005C200 window the core opens as an ADC unit 1. The USBFS, the
+# ESP32-S3 coprocessor, the LED matrix, SPI, CAN, DAC, DTC/DMAC, ELC, RTC,
+# WDT and every other block are NOT mapped: firmware that touches them
+# faults with a memory violation.
 
 name: "r7fa4m1ab-uno-r4-wifi-smoke"
 arch: "arm"
@@ -21,15 +38,35 @@ flash:
 ram:
   base: 0x20000000
   size: "32KB"
+
+# The UNO R4 ships with a 16 KB bootloader at the flash base, and
+# ArduinoCore-renesas links the sketch's vector table at 0x4000
+# (variants/UNOWIFIR4 memory_regions.ld, FLASH_IMAGE_START = 0x4000). The simulator does not run
+# the bootloader; when the flash-base vectors are not a valid image it enters
+# the application here, as the bootloader's jump does on silicon. The
+# bare-metal smoke linked at 0x0 is unaffected.
+reset_vector_offset: 0x4000
 pins:
   P102: { gpio: port1, bit: 2, functions: [{ type: gpio, peripheral: port1 }] }
   P301: { gpio: port3, bit: 1, functions: [{ type: uart, peripheral: sci2, role: rx }] }
   P302: { gpio: port3, bit: 2, functions: [{ type: uart, peripheral: sci2, role: tx }] }
+  P109: { gpio: port1, bit: 9, functions: [{ type: uart, peripheral: sci9, role: tx }] }
+  P110: { gpio: port1, bit: 10, functions: [{ type: uart, peripheral: sci9, role: rx }] }
 peripherals:
   - id: "ra_sysc"
-    type: "ra_sysc"
+    type: "ra4_sysc"
     base_address: 0x4001E000
-    size: "256B"
+    size: "1792B"
+  - id: "mstp"
+    type: "stub"
+    base_address: 0x40047000
+    size: "16B"
+  - id: "icu"
+    type: "ra_icu"
+    base_address: 0x40006000
+    size: "2KB"
+    config:
+      ielsr_lines: 32
   - id: "port1"
     type: "gpio"
     base_address: 0x40040020
@@ -59,3 +96,106 @@ peripherals:
     irq: 4
     config:
       profile: "sci"
+  - id: "sci9"
+    type: "uart"
+    base_address: 0x40070120
+    size: "32B"
+    config:
+      profile: "sci"
+      elc_event: 168
+      clock_hz: 48000000
+      baud: 115200
+  # R_FCACHE (0x4001C000): bsp_clock_init enables/invalidates the flash
+  # cache (FCACHEE +0x100, FCACHEIV +0x104, polled until it reads 0) and
+  # sets the flash wait states. Declared stub: reads 0, which completes the
+  # invalidate; no flash timing is modelled.
+  - id: "fcache"
+    type: "stub"
+    base_address: 0x4001C000
+    size: "512B"
+  # R_MPU_SPMON (0x40000D00): FSP's bsp_init programs the main/process
+  # stack-pointer monitor windows (MSPMPUOAD/SA/EA/CTL/PT). Declared stub:
+  # stores nothing, and a stack overflow raises no NMI/reset.
+  - id: "spmon"
+    type: "stub"
+    base_address: 0x40000D00
+    size: "256B"
+  # ADC140 (R_ADC0 0x4005C000). Same R_ADC0_Type register map as the RA6/RA8
+  # ADC12, plus ADCER.ADPRC = 3 = 14-bit (`adc14`); the core's init() opens
+  # it at 14 bits (r_adc_open_sub) before setup(). AVCC0/VREFH0 is the
+  # board's 5 V rail.
+  # Scan end is ELC_EVENT_ADC0_SCAN_END 41 (FSP ra4m1 bsp_elc.h).
+  - id: "adc0"
+    type: "ra_adc12"
+    base_address: 0x4005C000
+    size: "512B"
+    config:
+      clock_hz: 48000000
+      elc_event: 41
+      vref_mv: 5000
+      adc14: true
+  # 0x4005C200: reserved on the RA4M1 (one ADC unit). ArduinoCore-renesas
+  # still opens an ADC unit 1 here from init() (R_ADC_Open on
+  # R_ADC0_BASE + 0x200); silicon ignores the stores. Declared stub.
+  - id: "adc_rsvd"
+    type: "stub"
+    base_address: 0x4005C200
+    size: "512B"
+  # AGT0/AGT1 (R_AGT0/1 0x40084000/0x40084100, 16-bit). ArduinoCore-renesas
+  # runs millis()/micros() on an AGT. Events: AGTn INT 30 + 3n, COMPARE_A/B
+  # +1/+2 (FSP ra4m1 bsp_elc.h). The variant's bsp_clock_cfg.h runs ICLK at
+  # HOCO 48 MHz and PCLKB at /2 = 24 MHz.
+  - id: "agt0"
+    type: "ra_agt"
+    base_address: 0x40084000
+    size: "256B"
+    config:
+      elc_event: 30
+      clock_hz: 48000000
+      pclkb_hz: 24000000
+  - id: "agt1"
+    type: "ra_agt"
+    base_address: 0x40084100
+    size: "256B"
+    config:
+      elc_event: 33
+      clock_hz: 48000000
+      pclkb_hz: 24000000
+  # IIC0/IIC1 (RIIC master, `ra_iic`; R_IIC0_BASE 0x40053000 + n*0x100).
+  # Wire = IIC1 on A4/A5 (P101 SDA1 / P100 SCL1), Wire1 = IIC0 on the Qwiic
+  # connector (P401/P400). Events: IIC0 RXI 53, IIC1 RXI 58, TXI/TEI/ERI
+  # +1/+2/+3 (FSP ra4m1 bsp_elc.h). PCLKB = 24 MHz.
+  - id: "iic0"
+    type: "ra_iic"
+    base_address: 0x40053000
+    size: "256B"
+    config:
+      elc_event: 53
+      clock_hz: 48000000
+      pclkb_hz: 24000000
+  - id: "iic1"
+    type: "ra_iic"
+    base_address: 0x40053100
+    size: "256B"
+    config:
+      elc_event: 58
+      clock_hz: 48000000
+      pclkb_hz: 24000000
+  # GPT320-323 / GPT164-167 (R_GPT0_BASE 0x40078000, 0x100 per channel;
+  # channels 0-3 are 32-bit). Counts PCLKD = 48 MHz. Events: GPT0
+  # CAPTURE_COMPARE_A 87, eight per channel (FSP ra4m1 bsp_elc.h). The only
+  # pad wired here is D13 = P102 = GTIOC2B (variant pinmux.inc), the pin the
+  # matrix L6 sketch drives; the other PWM header pins carry no waveform.
+  - id: "gpt"
+    type: "ra_gpt"
+    base_address: 0x40078000
+    size: "4KB"
+    config:
+      channels: 8
+      clock_hz: 48000000
+      pclkd_hz: 48000000
+      elc_event: 87
+      events_per_channel: 8
+      wide_channels: 0x0F
+      gtioc_pads:
+        GTIOC2B: "P102"
