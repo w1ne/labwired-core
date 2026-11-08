@@ -69,6 +69,10 @@ SMOKE_MAPPINGS = {
         "cli_features": "qemu-arm",
         "cli_profile": "native-system",
     },
+    "xtensa-sample-controller": {
+        "prebuilt_firmware": "tests/fixtures/xtensa-sample-controller-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/xtensa-sample-controller-cpu-smoke.yaml",
+    },
     "lpc2294": {
         "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-uart-smoke.elf",
         "script": "examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml",
@@ -1145,7 +1149,6 @@ NO_ISA_TARGETS = {
     "mpc5567": "PowerPC e200z6",
     "litex_microwatt": "OpenPOWER (Microwatt)",
     "microwatt": "OpenPOWER (Microwatt)",
-    "xtensa-sample-controller": "Xtensa sample controller (not ESP32)",
 }
 NOT_RUN_REASONS.update(
     {

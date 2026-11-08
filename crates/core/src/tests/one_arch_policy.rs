@@ -367,7 +367,6 @@ fn imported_non_cortex_m_platforms_never_route_to_cortex_m() {
         "gr716-devboard",
         "mpc5567",
         "litex_microwatt",
-        "xtensa-sample-controller",
         "litex_common",
     ] {
         assert!(
@@ -375,6 +374,12 @@ fn imported_non_cortex_m_platforms_never_route_to_cortex_m() {
             "{name} must be refused"
         );
     }
+    // The Renode sample controller is a generic Xtensa core; it runs on the
+    // Xtensa family's non-ESP32 path, never as a Cortex-M.
+    assert_eq!(
+        machine_family(&load("xtensa-sample-controller")).unwrap(),
+        MachineFamily::Xtensa
+    );
     assert_eq!(
         machine_family(&load("a20")).unwrap(),
         MachineFamily::CortexA

@@ -5,13 +5,21 @@
 # See the LICENSE file in the project root for full license information.
 
 name: xtensa-sample-controller
-# Renode models this as a generic Xtensa sample-controller core, not an ESP32. The engine has no core for it,
-# so the chip is refused rather than run as a Cortex-M.
-arch: unknown
+# Renode `platforms/cpus/xtensa-sample-controller.repl`: a generic Cadence
+# Xtensa "sample_controller" core (not an ESP32) with rom @0x50000000 (the reset
+# vector, 64 MiB), instram0 @0x40000000 (128 KiB), dataram0 @0x3FFE0000,
+# dataram1 @0x3FFC0000, ram @0x60000000 (128 MiB) and a SIMCALL semihosting UART.
+# This profile claims only the core-ISA execution path, the rom window and
+# instram0. The two data RAMs, the 128 MiB ram, and the semihosting UART are
+# NOT mapped: the engine has a single RAM window per chip and no SIMCALL.
+# The `esp32`-less name keeps it off the ESP32 memory map
+# (`ChipDescriptor::is_espressif_xtensa`).
+arch: xtensa
 flash:
-  base: 1342177280
-  size: 67108864B
+  base: 0x50000000
+  size: 64MiB
 ram:
-  base: 1073741824
-  size: 131072B
+  base: 0x40000000
+  size: 128KiB
+flash_boot_alias: false
 peripherals: []

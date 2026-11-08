@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="2" errors="0" time="0.004545">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="bea35a2ea78043c974900415f2f1a7674a34672e46af9e5df649923845fe677f"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.004545">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x40000000=0x5a5c003f" time="0.000000">
+    <failure message="assertion failed">assertion 1: memory_value: @0x40000000=0x5a5c003f
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=100000
+stop_reason_details.observed.steps_executed=100000
+steps_executed=100000
+cycles=100000
+instructions=100000
+limits:
+  - max_steps=100000
+firmware_hash=bea35a2ea78043c974900415f2f1a7674a34672e46af9e5df649923845fe677f
+firmware=examples/renode-onboarding/../../tests/fixtures/xtensa-sample-controller-cpu-smoke.elf
+system=examples/renode-onboarding/../../configs/systems/onboarding/xtensa-sample-controller.yaml
+script=examples/renode-onboarding/xtensa-sample-controller-cpu-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073741824, expected_value: 1515978815, mask: None, size: None, node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073741828, expected_value: 5050, mask: None, size: None, node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x40000004=0x13ba" time="0.000000">
+    <failure message="assertion failed">assertion 2: memory_value: @0x40000004=0x13ba
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=100000
+stop_reason_details.observed.steps_executed=100000
+steps_executed=100000
+cycles=100000
+instructions=100000
+limits:
+  - max_steps=100000
+firmware_hash=bea35a2ea78043c974900415f2f1a7674a34672e46af9e5df649923845fe677f
+firmware=examples/renode-onboarding/../../tests/fixtures/xtensa-sample-controller-cpu-smoke.elf
+system=examples/renode-onboarding/../../configs/systems/onboarding/xtensa-sample-controller.yaml
+script=examples/renode-onboarding/xtensa-sample-controller-cpu-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073741824, expected_value: 1515978815, mask: None, size: None, node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073741828, expected_value: 5050, mask: None, size: None, node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

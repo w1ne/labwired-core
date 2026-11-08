@@ -1182,11 +1182,13 @@ pub(crate) fn run_test(
     // `build_esp32_system_from_manifest` path that calls configure + attach
     // together, before falling through to `build_system_bus` for all other
     // architectures. The parsed manifest is reused so the file is read only once.
+    // A non-Espressif Xtensa chip has its whole map in its YAML and takes the
+    // generic path, which builds it through the Xtensa family builder.
     let esp32_manifest: Option<labwired_config::SystemManifest> = resolved_system
         .as_ref()
         .filter(|s| {
             s.chip_with_plugins(&crate::plugin_chip_yaml(plugins))
-                .map(|c| c.arch == labwired_config::Arch::Xtensa)
+                .map(|c| c.is_espressif_xtensa())
                 .unwrap_or(false)
         })
         .map(|s| s.manifest.clone());
@@ -2171,6 +2173,9 @@ pub(crate) fn run_test(
         }};
     }
 
+    // Set by the generic (non-Espressif) Xtensa arm below; read inside the macro.
+    #[allow(unused_mut)]
+    let mut xtensa_entry: Option<u32> = None;
     macro_rules! setup_and_run {
         ($cpu:expr) => {{
             let mut machine = labwired_core::Machine::new($cpu, bus);
@@ -2203,6 +2208,9 @@ pub(crate) fn run_test(
                     Ok(pc) => machine.cpu.set_pc(pc),
                     Err(e) => error!("{e:#}"),
                 }
+            }
+            if let Some(pc) = xtensa_entry {
+                machine.cpu.set_pc(pc);
             }
             // MIPS starts at the reset vector 0xBFC00000 once the image's
             // boot ISA has been checked.
@@ -2819,9 +2827,26 @@ pub(crate) fn run_test(
             }
         }
         labwired_core::Arch::XtensaLx7 => {
-            // No system manifest present: plain configure path (no external devices).
-            let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
-            setup_and_run!(cpu)
+            let generic_xtensa = resolved_system
+                .as_ref()
+                .and_then(|s| {
+                    s.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))
+                        .ok()
+                })
+                .is_some_and(|c| {
+                    c.arch == labwired_config::Arch::Xtensa && !c.is_espressif_xtensa()
+                });
+            if generic_xtensa {
+                // A non-Espressif Xtensa core (the Renode sample controller):
+                // its whole map is the from_config bus; it starts at the ELF
+                // entry, which `load_firmware` does not set for Xtensa.
+                xtensa_entry = Some(program.entry_point as u32);
+                setup_and_run!(labwired_core::cpu::XtensaLx7::new())
+            } else {
+                // No system manifest present: plain configure path (no external devices).
+                let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
+                setup_and_run!(cpu)
+            }
         }
         labwired_core::Arch::Avr => {
             // AVR is Harvard: code lives in the CPU flash image, not bus.flash.

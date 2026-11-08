@@ -2,20 +2,20 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `225`
-- booted: `225/245`
-- boot_and_smoke_passed: `225/245`
-- not_run: `20`
-- pass: `225`
+- run_attempted: `226`
+- booted: `226/245`
+- boot_and_smoke_passed: `226/245`
+- not_run: `19`
+- pass: `226`
 - fail: `0`
-- pass_loading_zero_answering_windows: `0/225`
-- pass_observable_assertions: `225/225`
-- pass_stop_reason_only: `0/225`
-- pass_depth_unknown: `0/225`
-- median_elapsed_ms: `1183`
-- median_elapsed_seconds: `1.183`
+- pass_loading_zero_answering_windows: `0/226`
+- pass_observable_assertions: `226/226`
+- pass_stop_reason_only: `0/226`
+- pass_depth_unknown: `0/226`
+- median_elapsed_ms: `1211`
+- median_elapsed_seconds: `1.211`
 - threshold_seconds: `3600`
-- threshold_met: `225/225`
+- threshold_met: `226/226`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor. `Zero Windows` lists the peripherals in the chip the target's system actually loads that are allowlisted stubs (`crates/core/src/bus/known_stubs.rs`) and answer reads with zeros; a pass with zero windows did not exercise those blocks. `Smoke Depth` is `stop_reason_only` when the script asserts nothing but `expected_stop_reason` (the CPU stepped to its budget without faulting; no UART, memory or GPIO result is checked) and `observable` when it also checks a UART, memory, GPIO or fidelity result.
 
@@ -257,7 +257,7 @@
 | `vexpress` | `pass` | `True` | `yes` | `yes` | `1062` | `1.062` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `vybrid` | `pass` | `True` | `yes` | `yes` | `1044` | `1.044` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `x86` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 1: `hpet:hpet` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no IA-32 (x86) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
-| `xtensa-sample-controller` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | 0 | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no Xtensa sample controller (not ESP32) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
+| `xtensa-sample-controller` | `pass` | `True` | `yes` | `yes` | `480168` | `480.168` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `zedboard` | `pass` | `True` | `yes` | `yes` | `1906` | `1.906` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `zolertia-firefly` | `pass` | `True` | `yes` | `yes` | `1036` | `1.036` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `zynq-7000` | `pass` | `True` | `yes` | `yes` | `138530` | `138.53` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

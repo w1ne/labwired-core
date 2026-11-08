@@ -25,6 +25,10 @@
 //!   depend on `labwired-loader`); the S3 fast boot parses its own ELF.
 //! * Console attaches honour `BuildOptions::echo_uart_stdout` on the heard
 //!   console; the unheard console never echoes.
+//! * An Xtensa chip that is not an Espressif part
+//!   ([`labwired_config::ChipDescriptor::is_espressif_xtensa`], e.g. the imported
+//!   Renode sample controller) gets none of the ESP32 memory map:
+//!   its bus comes from its own descriptor and the core starts at the ELF entry.
 
 use super::{BootMode, BuildRequest, BuiltMachine, FirmwareSource, UartWires};
 use crate::boot::esp32s3_rom::RomImages;
@@ -40,6 +44,9 @@ pub(super) fn build(
     req: BuildRequest<'_>,
     plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<BuiltMachine> {
+    if !req.chip.is_espressif_xtensa() {
+        return build_generic(&req, plugins);
+    }
     if req.chip.is_esp32s3() {
         match (&req.firmware, req.boot) {
             (FirmwareSource::Elf(elf), BootMode::FastBoot) => build_esp32s3(&req, elf, plugins),
@@ -65,6 +72,51 @@ pub(super) fn build(
             )),
         }
     }
+}
+
+/// A non-Espressif Xtensa core: bus from the chip descriptor, one core, PC at
+/// the ELF entry. No ROM, no second core, no seeded stack — the firmware's own
+/// reset code sets `a1`, as it must on a part whose reset vector is its code.
+fn build_generic(
+    req: &BuildRequest<'_>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
+    let firmware = match (&req.firmware, req.boot) {
+        (FirmwareSource::Elf(elf), BootMode::FastBoot) => *elf,
+        _ => {
+            return Err(anyhow!(
+                "not supported: Xtensa chip '{}' boots only from an ELF \
+                 (FirmwareSource::Elf with BootMode::FastBoot)",
+                req.chip.name
+            ))
+        }
+    };
+    let mut bus = SystemBus::from_config_with_plugins(req.chip, req.system, plugins)
+        .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
+    let console = ConsoleCapture::for_manifest(req.system);
+    bus.attach_host_console_echo(
+        console.tapped(),
+        console.heard_sink(),
+        req.options.echo_uart_stdout,
+    )
+    .map_err(|e| anyhow!(e))?;
+    let rx = super::wire_host_streams(&mut bus, &req.options)?;
+
+    let image = parse_elf_image(firmware).map_err(|e| anyhow!("Loader Error: {e:#}"))?;
+    if image.arch != crate::Arch::XtensaLx7 {
+        return Err(anyhow!(
+            "firmware architecture {:?} is incompatible with Xtensa chip '{}'",
+            image.arch,
+            req.chip.name
+        ));
+    }
+    let boxed: Box<dyn Cpu> = Box::new(crate::cpu::XtensaLx7::new());
+    let mut machine = Machine::new(boxed, bus);
+    machine
+        .load_firmware(&image)
+        .map_err(|e| anyhow!("Simulation Error: {e}"))?;
+    machine.cpu.set_pc(image.entry_point as u32);
+    Ok(built(machine, console, rx, req.system, firmware.to_vec()))
 }
 
 /// `new_from_config_xtensa_esp32`: ESP32-classic (Xtensa LX6).
