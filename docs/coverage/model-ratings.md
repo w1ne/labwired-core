@@ -53,7 +53,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | nrf52833 | open | L1 | 48 | 1368.6 | 2.1 | ≥1× (CI) | — |
 | nrf52840 | open | L1 | 51 | 1368.6 | 2.1 | ≥1× (CI) | [doc](docs/boards/nrf52840.md) |
 | nrf5340 | open | L1 | 21 | 1324.0 | 1.9 | ≥1× (CI) | [doc](docs/boards/nrf5340.md) |
-| rp2040 | open | L1 | 22 | 905.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2040.md) |
+| rp2040 | open | L1 | 23 | 905.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2040.md) |
 | stm32f103 | open | L1 | 31 | 937.3 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f103.md) |
 | stm32f103rb | open | L0 | 32 | 935.4 | 1.6 | ≥1× (CI) | — |
 | stm32f103c4 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
