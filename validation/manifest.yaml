@@ -2518,8 +2518,14 @@ boards:
     # debug schemas) into the lane. Both sides' changes were each acked
     # separately; the digest now covers their union. No new model change.
     # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-08
-    drift_ack_digest: ad615c8a90e1a6c82dfdade20f4f5f754f6525fc695ee6376f0d732f7a2e9ecf
+    # 2026-11-09 (lane/renode-coverage, round 398): spi.rs raises RXNEIE for
+    # attached slaves on the classic and FIFO STM32 ports; i2c.rs emits the F1
+    # ER line on the scheduler path; dma.rs adds opt-in per-channel lines.
+    # This board's SPI is the H5 "SPI v3" layout and its I2C the L4 variant —
+    # neither arm changed — and no H5 config sets `channel_irqs`.
+    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: f7e42a95f60995486df385c14aede8c630a094c27a26a4797c922cec97e6c138
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -4786,8 +4792,16 @@ boards:
     # debug schemas) into the lane. Both sides' changes were each acked
     # separately; the digest now covers their union. No new model change.
     # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-08
-    drift_ack_digest: 2e095666df6fa9b0ada3def13a49fc0df22e7484ff20752fca6841ce9dfe0771
+    # 2026-11-09 (lane/renode-coverage, round 398): spi.rs now raises the SPI
+    # line for RXNE&RXNEIE when an attached slave's frame lands (FIFO port:
+    # at the FRXTH threshold) — previously only a gpio-net master did; the
+    # register file and reset/RW values are unchanged. i2c.rs touches only
+    # the F1 variant (this board's I2C is the L4 one). dma.rs per-channel
+    # lines are opt-in (`channel_irqs`); this chip does not set it.
+    # The silicon claim pins registers, not IRQ timing.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: c2131975f1f1b39ce4347cead85a8af6530c335f25ce0b852d1da65b2dc8210c
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -5891,8 +5905,16 @@ boards:
     # debug schemas) into the lane. Both sides' changes were each acked
     # separately; the digest now covers their union. No new model change.
     # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-08
-    drift_ack_digest: 7fe8c0b868a7dbe7cbea5a0294eca51daa4db8f5d05a35185fda2850d014d997
+    # 2026-11-09 (lane/renode-coverage, round 398): spi.rs now raises the SPI
+    # line for RXNE&RXNEIE when an attached slave's frame lands (FIFO port:
+    # at the FRXTH threshold) — previously only a gpio-net master did; the
+    # register file and reset/RW values are unchanged. i2c.rs touches only
+    # the F1 variant (this board's I2C is the L4 one). dma.rs per-channel
+    # lines are opt-in (`channel_irqs`); this chip does not set it.
+    # The silicon claim pins registers, not IRQ timing.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: e65478a2941a61b5eb34154441f95fd2ff3029f109d388915405e0e432273ac3
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -7149,8 +7171,18 @@ boards:
     # debug schemas) into the lane. Both sides' changes were each acked
     # separately; the digest now covers their union. No new model change.
     # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-08
-    drift_ack_digest: 57fa0dd434a74d2b01a02d8047054d07f9f6b070f8bdb78172f6c08d91d215a2
+    # 2026-11-09 (lane/renode-coverage, round 398): spi.rs now raises the SPI
+    # line for RXNE&RXNEIE when an attached slave's frame lands (RM0008
+    # §25.3.11); previously only a gpio-net master did. i2c.rs: in scheduler
+    # mode the F1 I2C event chain now pends the ER vector (`irq_error`) for
+    # AF/BERR/ARLO/OVR under ITERREN, as the legacy walk already did, and
+    # stays live while that level holds. dma.rs per-channel lines are opt-in
+    # (`channel_irqs`); this chip does not set it. Register files, reset and
+    # R/W values are unchanged; the silicon claim pins registers, not IRQ
+    # timing. Renode stm32f103 onboarding I2C smoke re-run: PASS 53/53.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: a1718b98a7472094ef4e182b10f9b5b28eeb0ad989b19e82aab3cecd1bed1951
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -8276,8 +8308,18 @@ boards:
     # debug schemas) into the lane. Both sides' changes were each acked
     # separately; the digest now covers their union. No new model change.
     # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-08
-    drift_ack_digest: 7c7055c10adcc3aafbf4afd3e8b625be479b7ff9c11716dbc00ef000227b1cfd
+    # 2026-11-09 (lane/renode-coverage, round 398): spi.rs now raises the SPI
+    # line for RXNE&RXNEIE when an attached slave's frame lands (RM0090
+    # §28.3.9); previously only a gpio-net master did. i2c.rs: in scheduler
+    # mode the F1 I2C event chain now pends the ER vector (`irq_error`) for
+    # AF/BERR/ARLO/OVR under ITERREN, as the legacy walk already did, and
+    # stays live while that level holds. dma.rs per-channel lines are opt-in
+    # (`channel_irqs`); this chip does not set it. Register files, reset and
+    # R/W values are unchanged; the silicon claim pins registers, not IRQ
+    # timing. Renode stm32f401cdu6-blackpill smoke re-run: PASS 4/4.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: 66c8c9e0c1dcb5ef77b75c7467ee77f973b78a32d0051da22671cd281c0b1128
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
