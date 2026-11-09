@@ -1714,7 +1714,19 @@ pub fn try_build(
         "imxrt_anadig" => Box::new(crate::peripherals::imxrt::anadig::ImxrtAnadig::new()),
         "imxrt_dcdc" => Box::new(crate::peripherals::imxrt::dcdc::ImxrtDcdc::new()),
         "imxrt_adc" => {
-            let mut adc = crate::peripherals::imxrt::adc::ImxrtAdc::new();
+            // `layout: vf610` selects the Vybrid VF6xx register map of the
+            // same IP (HC0/HC1, HS @0x08, R0 @0x0C, CFG @0x14 ..., Linux
+            // vf610_adc.c); the default is the i.MX RT10xx map.
+            use crate::peripherals::imxrt::adc::{AdcLayout, ImxrtAdc};
+            let layout = match p_cfg.config.get("layout").and_then(|v| v.as_str()) {
+                None | Some("imxrt") => AdcLayout::Imxrt,
+                Some("vf610") => AdcLayout::Vf610,
+                Some(other) => anyhow::bail!(
+                    "imxrt_adc '{}': unknown layout '{other}' (imxrt, vf610)",
+                    p_cfg.id
+                ),
+            };
+            let mut adc = ImxrtAdc::with_layout(layout);
             // Board-level static channel voltages: `input_mv: { <ch>: <mV> }`.
             if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
                 for (k, v) in map {

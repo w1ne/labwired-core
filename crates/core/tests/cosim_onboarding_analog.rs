@@ -45,6 +45,7 @@ const CONVERTED: &[&str] = &[
     "brd4186c",
     "brd4402a",
     "cc2538",
+    "colibri-vf61",
     "efm32g210",
     "efm32g222",
     "efm32g232",
@@ -146,6 +147,7 @@ const CONVERTED: &[&str] = &[
     "stm32l552",
     "stm32wba52",
     "ut32m0r500",
+    "vybrid",
     "zedboard",
     "zolertia-firefly",
     "zynq-7000",
@@ -225,8 +227,9 @@ enum Family {
     /// Shared `adc` model, STM32WBA ADC4 (RM0493 §21): the CHSELR block with
     /// an LDO (`CR.ADVREGEN` → `ISR.LDORDY`) and `CFGR1.RES` at [3:2].
     Stm32Adc4,
-    /// i.MX RT 12-bit SAR ADC (IMXRT1060RM §66).
-    Imxrt,
+    /// i.MX RT 12-bit SAR ADC (IMXRT1060RM §66), or the same IP on the
+    /// Vybrid VF6xx map (`layout: vf610`, Linux vf610_adc.c).
+    Imxrt { vf610: bool },
     /// nRF52840 SAADC with EasyDMA (nRF52840 PS §6.23).
     Saadc { ram: u64 },
     /// SAM4S 12-bit ADC: `CHER` channel set, `CR.START`, `CDRx`/`LCDR`
@@ -564,6 +567,12 @@ const AMS_SEQ_CH2: usize = 0x46;
 const AMS_SEQ_CH0: usize = 0x48;
 const AMS_SEQ_CH1: usize = 0x49;
 
+struct ImxrtOffsets {
+    hs: u64,
+    r0: u64,
+    cfg: u64,
+}
+
 struct Converter {
     id: String,
     base: u64,
@@ -584,7 +593,9 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             continue;
         }
         let family = if kind == "imxrt_adc" {
-            Family::Imxrt
+            Family::Imxrt {
+                vf610: p.config.get("layout").and_then(|v| v.as_str()) == Some("vf610"),
+            }
         } else if kind.contains("saadc") {
             Family::Saadc { ram: chip.ram.base }
         } else if kind == "sam4s_adc" {
@@ -681,7 +692,7 @@ impl Converter {
             | Family::Sam4s
             | Family::SamAfec => (mv * 4095 / 3300).min(4095),
             // 12-bit, rounded to nearest.
-            Family::Imxrt => (mv.min(3300) * 4095 + 1650) / 3300,
+            Family::Imxrt { .. } => (mv.min(3300) * 4095 + 1650) / 3300,
             // Gain 1/4 against VDD/4: full scale is VDD, 12-bit, 2^12 / VDD.
             Family::Saadc { .. } => (mv * 4096 / 3300).min(4095),
             // 12-bit against VREF 1.19 V, truncated, clamped to full scale.
@@ -804,6 +815,24 @@ impl Converter {
             // VAUX7: a DRP status address, not channel 7 (VCCPAUX).
             Family::ZynqmpAms => XADC_AUX0 + IDLE_CHANNEL,
             _ => IDLE_CHANNEL,
+        }
+    }
+
+    /// `HS`, `R0` and `CFG` offsets of the i.MX RT ADC IP: IMXRT1060RM §66.8,
+    /// or Linux v6.12 vf610_adc.c `VF610_REG_ADC_HS/R0/CFG`.
+    fn imxrt_offsets(&self, vf610: bool) -> ImxrtOffsets {
+        if vf610 {
+            ImxrtOffsets {
+                hs: 0x08,
+                r0: 0x0C,
+                cfg: 0x14,
+            }
+        } else {
+            ImxrtOffsets {
+                hs: 0x20,
+                r0: 0x24,
+                cfg: 0x44,
+            }
         }
     }
 
@@ -1525,9 +1554,11 @@ impl Converter {
                 // CFGR1 RES[3:2] = 00 selects 12 bits, right-aligned.
                 bus.write_u32(self.base + 0x0C, 0).expect("select 12-bit");
             }
-            Family::Imxrt => {
-                let cfg = bus.read_u32(self.base + 0x44).unwrap();
-                bus.write_u32(self.base + 0x44, (cfg & !(3 << 2)) | (2 << 2))
+            Family::Imxrt { vf610 } => {
+                let at = self.base + self.imxrt_offsets(vf610).cfg;
+                let cfg = bus.read_u32(at).unwrap();
+                assert_eq!(cfg, 0x200, "{}: CFG resets to 0x200", self.id);
+                bus.write_u32(at, (cfg & !(3 << 2)) | (2 << 2))
                     .expect("select 12-bit i.MX RT ADC mode");
             }
             Family::Saadc { ram } => {
@@ -3068,11 +3099,12 @@ impl Converter {
                 );
                 bus.read_u32(self.base + 0x40).expect("read DR")
             }
-            Family::Imxrt => {
+            Family::Imxrt { vf610 } => {
+                let ImxrtOffsets { hs, r0, .. } = self.imxrt_offsets(vf610);
                 bus.write_u32(self.base, u32::from(channel))
                     .expect("HC0 software trigger");
                 assert_eq!(
-                    bus.read_u32(self.base + 0x20).unwrap() & 1,
+                    bus.read_u32(self.base + hs).unwrap() & 1,
                     0,
                     "{}: HS.COCO0 clears when HC0 starts a conversion",
                     self.id
@@ -3083,12 +3115,12 @@ impl Converter {
                 let now = bus.current_cycle;
                 bus.set_current_cycle(now + 6_000);
                 assert_ne!(
-                    bus.read_u32(self.base + 0x20).unwrap() & 1,
+                    bus.read_u32(self.base + hs).unwrap() & 1,
                     0,
                     "{}: HS.COCO0 sets once the conversion time has elapsed",
                     self.id
                 );
-                bus.read_u32(self.base + 0x24).expect("read R0")
+                bus.read_u32(self.base + r0).expect("read R0")
             }
             Family::Sam4s => {
                 bus.write_u32(self.base + 0x10, 1 << channel).expect("CHER");
@@ -3661,7 +3693,7 @@ fn assert_converter_routes_generic_analog(
         }
         if matches!(
             converter.family,
-            Family::Imxrt
+            Family::Imxrt { .. }
                 | Family::Sam4s
                 | Family::SamAfec
                 | Family::Apollo4
@@ -3768,7 +3800,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 155,
+        instances, 159,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -3776,7 +3808,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 88,
+        without_adc, 86,
         "onboarding profiles that declare no modelled ADC"
     );
 }
