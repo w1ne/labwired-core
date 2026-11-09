@@ -456,6 +456,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "nxp_lpadc",
     // Nuvoton NPCX9 10-bit ADC (Zephyr reg_def.h/adc_npcx.c, Chromium EC).
     "npcx_adc",
+    // GR716 on-chip ADC, eight control units (GR716-DS-UM §12, Phoenix-RTOS).
+    "gr716_adc",
     // MSP430 ADC12 (F1/F2) and ADC12_A (F5) (mspsim ADC12.java, TI headers).
     "msp430_adc12",
     "msp430_adc12_a",
@@ -2025,6 +2027,14 @@ pub fn try_build(
                 .get("vref_mv")
                 .and_then(|v| v.as_u64())
                 .map_or(2816, |v| v as u32),
+        )),
+        // `vref_mv`: single-ended full scale, 2500 mV (GR716-DS-UM §12.2).
+        "gr716_adc" => Box::new(crate::peripherals::gr716_adc::Gr716Adc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(2500, |v| v as u32),
         )),
         "renesasda14_gpadc" => {
             Box::new(crate::peripherals::renesas_da14_gpadc::RenesasDa14Gpadc::new())

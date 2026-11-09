@@ -74,6 +74,8 @@ const CONVERTED: &[&str] = &[
     "ezr32hg320",
     "ezr32lg330",
     "ezr32wg330",
+    "gr716-devboard",
+    "gr716",
     "imxrt1064",
     "imxrt500",
     "mars_zx3",
@@ -337,7 +339,29 @@ enum Family {
     /// Chromium EC channel-mode read (`ASCADD`, `EOCEV`, `CHNDAT.NEW`) for one
     /// channel. 10 bits against 2816 mV.
     NpcxAdc,
+    /// Frontgrade Gaisler GR716 ADC, the Phoenix-RTOS grlib-multi flow:
+    /// `adc_configure` (ACFG = scaler | AI | AM | AE, PACFG = AB, AMASK =
+    /// IE), then `adc_convert` (ACFG |= AS, wait for ASTS bit 31, read
+    /// `ASTS & 0x7FFFF`, the ISR write-1-clears AINT.IE). Phoenix gives
+    /// control unit n pad n, so each pad converts on its own unit. 11 bits
+    /// over the 0 V to 2.5 V single-ended range.
+    Gr716Adc,
 }
+
+/// GR716 ADC control-unit offsets and bits (GR716-DS-UM v1.29 §12.3,
+/// Phoenix-RTOS grlib-multi adc.c).
+const GR716_UNIT: u64 = 0x1000;
+const GR716_ACFG: u64 = 0x00;
+const GR716_ASTS: u64 = 0x10;
+const GR716_AINT: u64 = 0x14;
+const GR716_AMASK: u64 = 0x18;
+const GR716_PACFG: u64 = 0x1C;
+const GR716_AE: u32 = 1 << 15;
+const GR716_AS: u32 = 1 << 14;
+const GR716_AM: u32 = 1 << 0;
+const GR716_AB: u32 = 1 << 2;
+const GR716_IE: u32 = 1 << 0;
+const GR716_VALID: u32 = 1 << 31;
 
 /// NPCX ADC offsets (Zephyr reg_def.h `struct adc_reg`, npcx9 soc.h) and bits.
 const NPCX_ADCSTS: u64 = 0x00;
@@ -552,6 +576,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::S32k3AdcSar
         } else if kind == "npcx_adc" {
             Family::NpcxAdc
+        } else if kind == "gr716_adc" {
+            Family::Gr716Adc
         } else if kind == "nxp_lpadc" {
             Family::NxpLpadc {
                 ctype_mode: p.config.get("layout").and_then(|v| v.as_str()) == Some("ctype_mode"),
@@ -652,6 +678,9 @@ impl Converter {
             // codes, truncated, clamped; the -10 °C divider (2.816 V) lands
             // on full scale, 25/80 °C resolve.
             Family::NpcxAdc => (mv * 1024 / 2816).min(1023),
+            // 11 bits, 2^11 / 2.5 V, truncated, clamped: the -10 °C
+            // divider (2.79 V) saturates, 25/80 °C resolve.
+            Family::Gr716Adc => (mv * 2048 / 2500).min(2047),
         }
     }
 
@@ -731,6 +760,21 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Gr716Adc => {
+                // AS without AE converts nothing on any unit.
+                let unit = self.base + GR716_UNIT * u64::from(NTC_CHANNEL);
+                bus.write_u32(
+                    unit + GR716_ACFG,
+                    (u32::from(NTC_CHANNEL) << 2) | GR716_AM | GR716_AS,
+                )
+                .expect("AS without AE");
+                assert_eq!(
+                    bus.read_u32(unit + GR716_ASTS).unwrap(),
+                    0,
+                    "{}: no conversion before ACFG.AE",
+                    self.id
+                );
+            }
             Family::NpcxAdc => {
                 // A START before ADCEN converts nothing.
                 bus.write_u16(self.base + NPCX_ASCADD, u16::from(NTC_CHANNEL))
@@ -2527,6 +2571,39 @@ impl Converter {
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {
         match self.family {
+            Family::Gr716Adc => {
+                // Phoenix-RTOS adc_configure + adc_convert on unit `channel`.
+                let unit = self.base + GR716_UNIT * u64::from(channel);
+                bus.write_u32(
+                    unit + GR716_ACFG,
+                    (12 << 16) | (u32::from(channel) << 2) | GR716_AM | GR716_AE,
+                )
+                .expect("ACFG");
+                bus.write_u32(unit + GR716_PACFG, GR716_AB)
+                    .expect("PACFG.AB");
+                bus.write_u32(unit + GR716_AMASK, GR716_IE)
+                    .expect("AMASK.IE");
+                let cfg = bus.read_u32(unit + GR716_ACFG).unwrap();
+                bus.write_u32(unit + GR716_ACFG, cfg | GR716_AS)
+                    .expect("ACFG.AS");
+                let sts = bus.read_u32(unit + GR716_ASTS).unwrap();
+                assert_ne!(
+                    sts & GR716_VALID,
+                    0,
+                    "{}: ADC{channel} conversion valid",
+                    self.id
+                );
+                assert_eq!(
+                    bus.read_u32(unit + GR716_AINT).unwrap() & GR716_IE,
+                    GR716_IE,
+                    "{}: ADC{channel} end of conversion",
+                    self.id
+                );
+                bus.write_u32(unit + GR716_AINT, GR716_IE)
+                    .expect("AINT w1c");
+                assert_eq!(bus.read_u32(unit + GR716_AINT).unwrap(), 0);
+                sts & 0x7FFFF
+            }
             Family::NpcxAdc => {
                 // Chromium EC start_single_and_wait + adc_read_channel.
                 let cnf = self.base + NPCX_ADCCNF;
@@ -3324,6 +3401,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::S32k1Adc
                 | Family::S32k3AdcSar
                 | Family::NpcxAdc
+                | Family::Gr716Adc
                 | Family::NxpLpadc { .. }
                 | Family::RaAdc { .. }
         ) {
@@ -3411,7 +3489,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 147,
+        instances, 149,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -3419,7 +3497,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 96,
+        without_adc, 94,
         "onboarding profiles that declare no modelled ADC"
     );
 }
