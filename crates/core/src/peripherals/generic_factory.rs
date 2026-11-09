@@ -448,6 +448,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "caes_adc",
     // NXP Kinetis ADC16 (MK64F12.h, K66 RM ch. 39, mcux-sdk fsl_adc16.c).
     "kinetis_adc16",
+    // NXP S32K1 12-bit ADC, 16 SC1n/Rn slots (S32K118_ADC.h, S32K144.svd).
+    "s32k1_adc",
     // NXP LPADC command/trigger SAR ADC (MIMXRT595S_cm33.h, fsl_lpadc.c).
     "nxp_lpadc",
     // MSP430 ADC12 (F1/F2) and ADC12_A (F5) (mspsim ADC12.java, TI headers).
@@ -1956,6 +1958,20 @@ pub fn try_build(
                 .get("valt_mv")
                 .and_then(|v| v.as_u64())
                 .map_or(1200, |v| v as u32),
+        )),
+        // `vref_mv`: VREFH (REFSEL 00); `valt_mv`: VALTH (REFSEL 01). Both
+        // default to the 5 V S32K118EVB supply (NXP s32k118_cookbook ADC.c).
+        "s32k1_adc" => Box::new(crate::peripherals::s32k1_adc::S32k1Adc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(5000, |v| v as u32),
+            p_cfg
+                .config
+                .get("valt_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(5000, |v| v as u32),
         )),
         // `vref_mv`: the VREFH the board ties the reference to (1.8 V on
         // the MIMXRT595-EVK); every CFG.REFSEL option converts against it.

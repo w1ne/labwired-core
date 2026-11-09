@@ -123,6 +123,19 @@ const SC3_CAL: u32 = 1 << 7;
 const OFS_RESET: u16 = 0x0004;
 const GAIN_RESET: u16 = 0x8200;
 
+/// The ADC16 compare function (K66 RM Table 39-12, the same six modes on
+/// the S32K1 ADC): `greater` is `SC2.ACFGT`, `range` is `SC2.ACREN`.
+pub(crate) fn compare_true(r: i32, cv1: i32, cv2: i32, greater: bool, range: bool) -> bool {
+    match (greater, range) {
+        (false, false) => r < cv1,
+        (true, false) => r >= cv1,
+        (false, true) if cv1 <= cv2 => r < cv1 || r > cv2,
+        (false, true) => r < cv1 && r > cv2,
+        (true, true) if cv1 <= cv2 => r >= cv1 && r <= cv2,
+        (true, true) => r >= cv1 || r <= cv2,
+    }
+}
+
 /// Kinetis ADC16 with the two `SC1A/SC1B` + `RA/RB` conversion slots.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct KinetisAdc16 {
@@ -285,16 +298,13 @@ impl KinetisAdc16 {
                 i32::from(raw)
             }
         };
-        let (r, cv1, cv2) = (value(result), value(self.cv[0]), value(self.cv[1]));
-        let greater = self.sc2 & SC2_ACFGT != 0;
-        match (greater, self.sc2 & SC2_ACREN != 0) {
-            (false, false) => r < cv1,
-            (true, false) => r >= cv1,
-            (false, true) if cv1 <= cv2 => r < cv1 || r > cv2,
-            (false, true) => r < cv1 && r > cv2,
-            (true, true) if cv1 <= cv2 => r >= cv1 && r <= cv2,
-            (true, true) => r >= cv1 || r <= cv2,
-        }
+        compare_true(
+            value(result),
+            value(self.cv[0]),
+            value(self.cv[1]),
+            self.sc2 & SC2_ACFGT != 0,
+            self.sc2 & SC2_ACREN != 0,
+        )
     }
 
     /// Complete one conversion on slot `n`: transfer and set `COCO`, unless

@@ -97,3 +97,33 @@ peripherals:
   size: 64B
   config:
     profile: kinetis
+# ADC0 (s32k1_adc): IP_ADC0_BASE 0x4003B000 (S32K118_ADC.h) and ADC0_IRQn 28
+# (S32K118_COMMON.h), both from Zephyr hal_nxp @cc9b44ae
+# s32/drivers/s32k1/BaseNXP/header. Renode's S32K118 platform has no ADC.
+# VREFH defaults to the 5 V S32K118EVB supply.
+- id: adc0
+  type: s32k1_adc
+  base_address: 0x4003B000
+  size: 4KB
+  irq: 28
+# ADC0_SE0..SE15 pads of the LQFP64 package (hal_nxp @cc9b44ae
+# dts/nxp/s32/pinctrl/S32K118_LQFP64-pinctrl.h, a delta on
+# S32K146_LQFP64-pinctrl.h that keeps every ADC0 pad except ADC0_SE8_PTB13).
+# Channel = ADCH.
+analog_pins:
+  PTA0: { peripheral: adc0, channel: 0 }
+  PTA1: { peripheral: adc0, channel: 1 }
+  PTA6: { peripheral: adc0, channel: 2 }
+  PTA7: { peripheral: adc0, channel: 3 }
+  PTB0: { peripheral: adc0, channel: 4 }
+  PTB1: { peripheral: adc0, channel: 5 }
+  PTB2: { peripheral: adc0, channel: 6 }
+  PTB3: { peripheral: adc0, channel: 7 }
+  PTC0: { peripheral: adc0, channel: 8 }
+  PTC1: { peripheral: adc0, channel: 9 }
+  PTC2: { peripheral: adc0, channel: 10 }
+  PTC3: { peripheral: adc0, channel: 11 }
+  PTC14: { peripheral: adc0, channel: 12 }
+  PTC15: { peripheral: adc0, channel: 13 }
+  PTC16: { peripheral: adc0, channel: 14 }
+  PTC17: { peripheral: adc0, channel: 15 }

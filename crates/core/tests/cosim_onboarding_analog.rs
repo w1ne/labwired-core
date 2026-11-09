@@ -103,6 +103,7 @@ const CONVERTED: &[&str] = &[
     "renesas-r7fa4m1a",
     "renesas-r7fa6m5b",
     "renesas-r7fa8m1a",
+    "s32k118",
     "sam4s",
     "sam4s16c",
     "sam4s8b",
@@ -312,6 +313,12 @@ enum Family {
     /// (`CAL_RDY`, `GCC[n].RDY`), and the chain converts at `CMDL.MODE` = 1,
     /// 16-bit `D` read directly (mcuxsdk-examples mimxrt700evk lpadc/polling).
     NxpLpadc { ctype_mode: bool },
+    /// NXP S32K1 ADC: the s32k118_cookbook `ADC_init` (`CFG1.MODE` 01,
+    /// `CFG2.SMPLTS` 12, `SC2` = `SC3` = 0) after `SC3.CAL`, then each
+    /// `convertAdcChan` writes `SC1[0].ADCH`, `adc_complete` polls `COCO` and
+    /// `read_adc_chx` reads `R[0]`, which clears it. 12 bits against VREFH
+    /// 5 V (the cookbook's `5000 * R / 0xFFF`).
+    S32k1Adc,
 }
 
 /// NXP LPADC offsets (MIMXRT595S_cm33.h `ADC_Type`) and bits.
@@ -352,6 +359,20 @@ const ADC16_MODE_12: u32 = 1 << 2;
 const ADC16_ADTRG: u32 = 1 << 6;
 const ADC16_CAL: u32 = 1 << 7;
 const ADC16_CALF: u32 = 1 << 6;
+
+/// S32K1 ADC offsets (S32K118_ADC.h `ADC_Type`) and bits.
+const S32K1_SC1_0: u64 = 0x00;
+const S32K1_CFG1: u64 = 0x40;
+const S32K1_CFG2: u64 = 0x44;
+const S32K1_R0: u64 = 0x48;
+const S32K1_SC2: u64 = 0x90;
+const S32K1_SC3: u64 = 0x94;
+const S32K1_COCO: u32 = 1 << 7;
+const S32K1_ADCH_OFF: u32 = 0x1F;
+const S32K1_ADIV: u32 = 3 << 5;
+const S32K1_MODE_12: u32 = 1 << 2;
+const S32K1_ADTRG: u32 = 1 << 6;
+const S32K1_CAL: u32 = 1 << 7;
 
 /// MSP430 ADC12 register offsets from the descriptor base, as
 /// `(CTL0, CTL1, IFG, MCTL0, MEM0)`: F1/F2 from `ADC12MCTL0` (0x0080), so
@@ -467,6 +488,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             }
         } else if kind == "kinetis_adc16" {
             Family::KinetisAdc16
+        } else if kind == "s32k1_adc" {
+            Family::S32k1Adc
         } else if kind == "nxp_lpadc" {
             Family::NxpLpadc {
                 ctype_mode: p.config.get("layout").and_then(|v| v.as_str()) == Some("ctype_mode"),
@@ -557,6 +580,9 @@ impl Converter {
             // 12-bit single-ended, 1 LSB = VREFH (1.8 V) / 4096, truncated,
             // clamped; the -10 °C divider (2.79 V) saturates.
             Family::NxpLpadc { .. } => (mv * 4096 / 1800).min(4095),
+            // 12-bit, 1 LSB = VREFH (5 V) / 4096, truncated, clamped: the
+            // 3.3 V dividers stay below full scale.
+            Family::S32k1Adc => (mv * 4096 / 5000).min(4095),
         }
     }
 
@@ -843,6 +869,44 @@ impl Converter {
                     "{}: ideal calibration offset",
                     self.id
                 );
+            }
+            Family::S32k1Adc => {
+                // ADC_init: SC1[0].ADCH = 0x1F (off), CFG1 ADIV + MODE 12-bit,
+                // CFG2 SMPLTS 12. Under ADTRG = 1 an SC1[0] write waits for
+                // a PDB trigger, which is not modelled, so nothing converts.
+                bus.write_u32(self.base + S32K1_SC1_0, S32K1_ADCH_OFF)
+                    .expect("SC1[0] off");
+                bus.write_u32(self.base + S32K1_CFG1, S32K1_ADIV | S32K1_MODE_12)
+                    .expect("CFG1");
+                bus.write_u32(self.base + S32K1_CFG2, 12).expect("CFG2");
+                bus.write_u32(self.base + S32K1_SC2, S32K1_ADTRG)
+                    .expect("ADTRG");
+                bus.write_u32(self.base + S32K1_SC1_0, u32::from(NTC_CHANNEL))
+                    .expect("SC1[0] under ADTRG");
+                assert_eq!(
+                    bus.read_u32(self.base + S32K1_SC1_0).unwrap() & S32K1_COCO,
+                    0,
+                    "{}: ADTRG = 1 needs a hardware trigger",
+                    self.id
+                );
+                // ADC_calibration_init: CAL, poll SC1[0].COCO.
+                bus.write_u32(self.base + S32K1_SC2, 0)
+                    .expect("SC2 SW trigger");
+                bus.write_u32(self.base + S32K1_SC3, S32K1_CAL)
+                    .expect("SC3.CAL");
+                assert_ne!(
+                    bus.read_u32(self.base + S32K1_SC1_0).unwrap() & S32K1_COCO,
+                    0,
+                    "{}: calibration ends with SC1[0].COCO",
+                    self.id
+                );
+                assert_eq!(
+                    bus.read_u32(self.base + S32K1_SC3).unwrap() & S32K1_CAL,
+                    0,
+                    "{}: CAL clears when done",
+                    self.id
+                );
+                bus.write_u32(self.base + S32K1_SC3, 0).expect("SC3");
             }
             Family::Msp430Adc12 { adc12_a } => {
                 // SLAU049 single-conversion example: ADC12ON + SHT0_2, then
@@ -2299,6 +2363,25 @@ impl Converter {
                 );
                 code
             }
+            Family::S32k1Adc => {
+                // convertAdcChan, adc_complete, read_adc_chx.
+                bus.write_u32(self.base + S32K1_SC1_0, u32::from(channel))
+                    .expect("SC1[0].ADCH");
+                assert_ne!(
+                    bus.read_u32(self.base + S32K1_SC1_0).unwrap() & S32K1_COCO,
+                    0,
+                    "{}: SE{channel} sets COCO",
+                    self.id
+                );
+                let code = bus.read_u32(self.base + S32K1_R0).expect("R[0]");
+                assert_eq!(
+                    bus.read_u32(self.base + S32K1_SC1_0).unwrap() & S32K1_COCO,
+                    0,
+                    "{}: the R[0] read clears COCO",
+                    self.id
+                );
+                code
+            }
             Family::Msp430Adc12 { adc12_a } => {
                 // Single channel, single conversion at CSTARTADD = channel,
                 // MCTLx = INCH with SREF_0; poll IFGx, read ADC12MEMx.
@@ -2982,6 +3065,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Efm32S0Adc
                 | Family::Msp430Adc12 { .. }
                 | Family::KinetisAdc16
+                | Family::S32k1Adc
                 | Family::NxpLpadc { .. }
                 | Family::RaAdc { .. }
         ) {
@@ -3069,7 +3153,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 138,
+        instances, 139,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -3077,7 +3161,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 101,
+        without_adc, 100,
         "onboarding profiles that declare no modelled ADC"
     );
 }
