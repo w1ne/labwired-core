@@ -63,6 +63,10 @@ fn default_region_image_path(env: &str) -> Option<PathBuf> {
     let rel = match env {
         "LABWIRED_ESP32C3_ROM" => "roms/esp32c3/esp32c3_rom.bin",
         "LABWIRED_ESP32C3_ROM_DATA" => "roms/esp32c3/esp32c3_drom.bin",
+        // Flattened esp32c6_rev0_rom.elf (roms/esp32c6/README.md). Stock
+        // Arduino-ESP32 3.x calls ROM routines from its first instructions
+        // (`esp_rom_get_reset_reason` at step 21), so a zero window wedges.
+        "LABWIRED_ESP32C6_ROM" => "roms/esp32c6/esp32c6_rom.bin",
         // Same image as `embedded_region_image`; kept so an operator can
         // still point the env var at a replacement file. Bare-metal ELFs
         // that need the Cortex-M flash boot alias at 0 (PIO onboarding) set
@@ -265,6 +269,7 @@ impl SystemBus {
         }
 
         self.resolve_clock_gates(&attached)?;
+        self.resolve_clock_selects(&attached)?;
         self.refresh_peripheral_index();
         Ok(())
     }
@@ -1419,7 +1424,7 @@ impl SystemBus {
         // are deliberately unbound — nothing drives them.
         bus.wire_esp32c3_spi_pads();
         bus.wire_esp32c3_uart_pads();
-        // …and the C3's six LEDC outputs (signals 45..50; none on the C6).
+        // …and the C3's six LEDC outputs (signals 45..50; 0..5 on the C6).
         bus.wire_esp32c3_ledc_pads();
         // Same for the S3's I²C0, whose pads reach GPIO through the S3 output
         // matrix rather than an AF nibble.
@@ -1491,6 +1496,7 @@ impl SystemBus {
         // peripheral (incl. the RCC, needed to map reg-name → offset) is on the
         // bus. Peripherals without a `clock:` field stay ungated.
         bus.resolve_clock_gates(&merged_peripherals)?;
+        bus.resolve_clock_selects(&merged_peripherals)?;
         bus.install_motor_models(manifest)?;
         // Walk-deletion decision (only consulted under the `event-scheduler`
         // feature; the legacy build always walks, so this is inert there).

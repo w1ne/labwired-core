@@ -46,6 +46,9 @@ static void wireBegin() {
   Wire.begin(4, 5);
 #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV)
   Wire.begin(8, 9);
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
+  // esp32c6 variant SDA/SCL. GPIO21 (the classic SDA below) is not the kit.
+  Wire.begin(23, 22);
 #elif defined(ARDUINO_ARCH_ESP32)
   Wire.begin(21, 22);
 #elif defined(ARDUINO_ARCH_RP2040)

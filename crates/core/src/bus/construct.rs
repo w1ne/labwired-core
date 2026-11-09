@@ -1474,6 +1474,56 @@ impl SystemBus {
         Ok(())
     }
 
+    /// Resolve every peripheral's optional `config.clock_select: { controller,
+    /// reg }`: hand the model a live mirror of the controller register that
+    /// selects its SOURCE clock (the ESP32-C6 LEDC reads
+    /// `PCR.LEDC_SCLK_CONF`). Through [`Peripheral::clock_select_cell`] and
+    /// [`Peripheral::attach_clock_select_cell`], not a downcast. A missing
+    /// controller, an unknown register, or a model that takes no mirror is a
+    /// hard config error: a silently unwired select reads as a 0 Hz source.
+    pub(crate) fn resolve_clock_selects(
+        &mut self,
+        peripherals: &[labwired_config::PeripheralConfig],
+    ) -> anyhow::Result<()> {
+        for p_cfg in peripherals {
+            let Some(sel) = p_cfg.config.get("clock_select") else {
+                continue;
+            };
+            let field = |k: &str| sel.get(k).and_then(|v| v.as_str());
+            let (Some(controller), Some(reg)) = (field("controller"), field("reg")) else {
+                return Err(anyhow::anyhow!(
+                    "peripheral '{}' config.clock_select needs string `controller` and `reg`",
+                    p_cfg.id
+                ));
+            };
+            let Some(idx) = self.find_peripheral_index_by_name(&p_cfg.id) else {
+                continue;
+            };
+            let Some(ctl_idx) = self.find_peripheral_index_by_name(controller) else {
+                return Err(anyhow::anyhow!(
+                    "peripheral '{}' config.clock_select controller '{}' is not on the bus",
+                    p_cfg.id,
+                    controller
+                ));
+            };
+            let Some(cell) = self.peripherals[ctl_idx].dev.clock_select_cell(reg) else {
+                return Err(anyhow::anyhow!(
+                    "peripheral '{}' config.clock_select: controller '{}' has no register '{}'",
+                    p_cfg.id,
+                    controller,
+                    reg
+                ));
+            };
+            if !self.peripherals[idx].dev.attach_clock_select_cell(cell) {
+                return Err(anyhow::anyhow!(
+                    "peripheral '{}' declares config.clock_select but its model takes none",
+                    p_cfg.id
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub fn signal_nvic_irq(&self, irq: u32) {
         if let Some(nvic) = &self.nvic {
             if irq >= 16 {

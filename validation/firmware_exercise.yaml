@@ -204,8 +204,8 @@ chips:
     advanced_unit_only: []
     advanced_dead: []
     shim:
-      - {p: io_mux, ev: "configs/chips/esp32c6.yaml:231 (declarative; configs/peripherals/esp32c6/io_mux.yaml)", note: "CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path."}
-      - {p: hp_sys, ev: "configs/chips/esp32c6.yaml:256 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)", note: "CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled."}
+      - {p: io_mux, ev: "configs/chips/esp32c6.yaml:491 (declarative; configs/peripherals/esp32c6/io_mux.yaml)", note: "CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path."}
+      - {p: hp_sys, ev: "configs/chips/esp32c6.yaml:516 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)", note: "CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled."}
 
   - id: esp32s3-zero
     arch: xtensa-lx7

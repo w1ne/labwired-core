@@ -180,8 +180,8 @@ _No tier1 fixture. The strict-onboarding snake lab is the only firmware: SPIM22 
 _Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its declared classes. clock and irq are real engines, not register stand-ins — the native PCR enforces CLK_EN (gated UART0 reads back 0, then recovers) and interrupt_core0+intpri route both the software doorbell and UART0's peripheral source into real mcause traps. Beyond the rubric only io_mux and hp_sys remain — SVD-derived declarative register files with no behavioural engine._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `io_mux` (configs/chips/esp32c6.yaml:231 (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path.
-- `hp_sys` (configs/chips/esp32c6.yaml:256 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)) — CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled.
+- `io_mux` (configs/chips/esp32c6.yaml:491 (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path.
+- `hp_sys` (configs/chips/esp32c6.yaml:516 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)) — CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled.
 
 ### `esp32s3-zero`
 

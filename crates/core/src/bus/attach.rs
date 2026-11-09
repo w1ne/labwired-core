@@ -735,9 +735,9 @@ impl SystemBus {
     /// 45..50), so `ledcWrite`/`analogWrite` duty is a waveform on the pad
     /// `ledc_channel_config` routed.
     ///
-    /// ⚠️ The C6 reuses both the C3 LEDC and the C3 GPIO model, but its matrix
-    /// numbers 45/46 as I²C, so a C6 GPIO layout declines the binding and no
-    /// wire cell is created.
+    /// The C6 reuses both the C3 LEDC engine and the C3 GPIO model; its GPIO
+    /// layout numbers the six outputs 0..5 (its 45/46 are I²C), so the same
+    /// pass binds them there.
     pub(crate) fn wire_esp32c3_ledc_pads(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
         use crate::peripherals::esp32c3::ledc::Esp32c3Ledc;

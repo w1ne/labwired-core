@@ -165,7 +165,7 @@ fn metering_exit_status(exit_code: &ExitCode) -> i32 {
     }
 }
 
-use super::esp32_boot_state::resolve_esp_partitions_bin;
+use super::esp32_boot_state::{esp32c6_appdesc_page_offset, resolve_esp_partitions_bin};
 
 /// True when the system manifest at `sys_path` targets the ESP32-C3. Reads the
 /// manifest and its referenced chip descriptor; any load failure → false (fall
@@ -2534,6 +2534,28 @@ pub(crate) fn run_test(
                                     );
                                     if header_slot_free && f.len() > factory_off {
                                         f[factory_off] = 0xE9;
+                                    }
+                                    // IDF 5 links rodata into the same window
+                                    // after the text, and `system_early_init`
+                                    // checks the magic at the page base of
+                                    // `_rodata_reserved_start` (the start of
+                                    // `.flash.appdesc`, VA 0x4203_0000 on an
+                                    // Arduino L0 sketch). On silicon the
+                                    // bootloader maps the image header there.
+                                    // Stamp it only into an empty header slot.
+                                    if let Some(page_off) = esp32c6_appdesc_page_offset(
+                                        std::path::Path::new(&firmware_path),
+                                    ) {
+                                        let dst = factory_off + page_off;
+                                        let src = page_off.min(irom_len);
+                                        let slot = &machine.bus.flash.data
+                                            [src..(src + 0x20).min(irom_len)];
+                                        if page_off != 0
+                                            && !flash_page_has_payload(slot)
+                                            && dst < f.len()
+                                        {
+                                            f[dst] = 0xE9;
+                                        }
                                     }
                                 }
                                 virt_pages.sort_unstable();
