@@ -84,6 +84,7 @@ pub mod jpeg_baseline;
 pub mod kinetis_adc16;
 pub mod kinetis_rnga;
 pub mod kit;
+pub mod lattice_nexus_adc;
 pub mod litex_control_status;
 pub mod litex_timer;
 pub mod lpc;

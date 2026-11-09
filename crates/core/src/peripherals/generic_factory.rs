@@ -479,6 +479,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "msp430_adc12_a",
     // Zynq-7000 PS-XADC interface (Renode Xilinx_XADC.cs, embeddedsw xadcps).
     "xilinx_xadc",
+    // Lattice Nexus hard ADC with a LabWired fabric-control bridge.
+    "lattice_nexus_adc",
     // Zynq UltraScale+ AMS: control + PS/PL SYSMON (embeddedsw sysmonpsu).
     "zynqmp_ams",
     // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
@@ -2054,6 +2056,15 @@ pub fn try_build(
             crate::peripherals::msp430_adc12::Adc12Layout::Adc12A,
         )),
         "xilinx_xadc" => Box::new(crate::peripherals::xilinx_xadc::XilinxXadc::new()),
+        "lattice_nexus_adc" => {
+            Box::new(crate::peripherals::lattice_nexus_adc::LatticeNexusAdc::new(
+                p_cfg
+                    .config
+                    .get("vref_mv")
+                    .and_then(|v| v.as_u64())
+                    .map_or(1800, |v| v as u16),
+            ))
+        }
         "zynqmp_ams" => Box::new(crate::peripherals::zynqmp_ams::ZynqmpAms::new()),
         // `vref_mv`: full scale, Zephyr npcx.dtsi `vref-mv` = 2816 by default.
         "npcx_adc" => Box::new(crate::peripherals::npcx_adc::NpcxAdc::new(

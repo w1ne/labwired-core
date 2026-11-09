@@ -6,11 +6,12 @@
 //! (`configs/systems/onboarding/*.yaml`) whose chip descriptor declares an ADC
 //! LabWired can convert, into EVERY such converter instance.
 //!
-//! Nothing here is per-board. The converter family is read from each
-//! descriptor (peripheral type plus `config.profile`), the instance base from
-//! its `base_address`, and the same two netlists — a Beta NTC divider and an
-//! unrelated Shockley diode load line — are routed to `adc.<id>.<ch>_volts`
-//! and read back through the register sequence firmware uses for that family.
+//! The converter family is read from each descriptor (peripheral type plus
+//! `config.profile`), the instance base from its `base_address`, and the same
+//! two netlists — a Beta NTC divider and unrelated Shockley diode load line —
+//! are routed into the ADC and read back through its control sequence. The
+//! CrossLink-NX fabric ADC uses its board `analog_pins` and a LabWired-only
+//! bridge because its hardware control interface is FPGA fabric signals.
 //! A new onboarding descriptor whose ADC is convertible is covered the moment
 //! it lands; one whose ADC changes family moves between the lists below and
 //! fails here until the coverage doc is updated.
@@ -48,6 +49,7 @@ const CONVERTED: &[&str] = &[
     "brd4402a",
     "cc2538",
     "colibri-vf61",
+    "crosslink-nx-evn",
     "efm32g210",
     "efm32g222",
     "efm32g232",
@@ -181,8 +183,7 @@ fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
 }
 
 /// Independent Shockley load line, including the diode's series resistance.
-fn diode_load_line_voltage() -> f64 {
-    const SUPPLY_V: f64 = 3.3;
+fn diode_load_line_voltage(supply_v: f64) -> f64 {
     const LIMIT_OHMS: f64 = 1_000.0;
     const DIODE_IS_A: f64 = 2.52e-9;
     const DIODE_N: f64 = 1.752;
@@ -192,7 +193,7 @@ fn diode_load_line_voltage() -> f64 {
         |junction_v: f64| DIODE_IS_A * ((junction_v / (DIODE_N * THERMAL_V)).exp() - 1.0);
     let residual = |junction_v: f64| {
         let current = current_at_junction_voltage(junction_v);
-        (SUPPLY_V - junction_v - current * DIODE_RS_OHMS) / LIMIT_OHMS - current
+        (supply_v - junction_v - current * DIODE_RS_OHMS) / LIMIT_OHMS - current
     };
     let (mut low, mut high) = (0.0, 1.2);
     for _ in 0..100 {
@@ -282,6 +283,10 @@ enum Family {
     /// MSB-justified against 1 V on VP/VN and VAUXn (Renode Xilinx_XADC.cs,
     /// embeddedsw xadcps.c), so the 3.3 V NTC divider saturates above 1 V.
     Xadc,
+    /// Lattice Nexus 12-bit hard ADC through LabWired's fabric bridge. The
+    /// dedicated DP0/DN0 and DP1/DN1 pairs convert together at 4096/VREF.
+    /// The bus window is a simulation wrapper, not a silicon MMIO map.
+    LatticeNexusAdc { vref_mv: u32 },
     /// Zynq UltraScale+ AMS PL SYSMON: the sequencer converts the channels
     /// `SEQ_CH0/1` enable into status registers at `DRP * 4`, 10 bits
     /// MSB-justified against 1 V on VP/VN and VAUXn (embeddedsw sysmonpsu,
@@ -778,6 +783,14 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Samd51
         } else if kind == "xilinx_xadc" {
             Family::Xadc
+        } else if kind == "lattice_nexus_adc" {
+            Family::LatticeNexusAdc {
+                vref_mv: p
+                    .config
+                    .get("vref_mv")
+                    .and_then(|v| v.as_u64())
+                    .map_or(1800, |mv| mv as u32),
+            }
         } else if kind == "zynqmp_ams" {
             Family::ZynqmpAms
         } else if kind == "efr32s2_iadc" {
@@ -920,6 +933,8 @@ impl Converter {
             Family::Caes => mv.min(1500) * 4095 / 1500,
             // Unipolar, 1 LSB = 1 V / 4096, clamped at 0xFFF.
             Family::Xadc => (mv * 4096 / 1000).min(4095),
+            // Nexus ADC: 12-bit code, 1 LSB = VREF / 4096, truncated.
+            Family::LatticeNexusAdc { vref_mv } => (mv * 4096 / vref_mv).min(4095),
             // Unipolar, 10 bits, 1 LSB = 1 V / 1024, clamped at 0x3FF.
             Family::ZynqmpAms => (mv * 1024 / 1000).min(1023),
             // 12-bit against REFCTRL.REFSEL INTVCC0 = VDDANA / 1.48
@@ -1024,6 +1039,9 @@ impl Converter {
             Family::Xadc | Family::ZynqmpAms => {
                 [XADC_AUX0 + NTC_CHANNEL, XADC_AUX0 + DIODE_CHANNEL]
             }
+            // Dedicated positive inputs on ADC0 and ADC1; the matching
+            // negative inputs remain at 0 V for single-ended measurements.
+            Family::LatticeNexusAdc { .. } => [32, 34],
             // PA3 and PA4. emlib em_gpio.h (gsdk_4.4) bonds only PA0..PA5
             // on xG1 and xG13 (`_GPIO_PORT_A_PIN_MASK` 0x003F, SDID 80/89),
             // so PA6/PA7 do not exist there.
@@ -1165,6 +1183,31 @@ impl Converter {
                 assert_eq!(bus.read_u32(self.base + OT_ADC_PD_CTL).unwrap(), 0x6_4070);
                 bus.write_u32(self.base + OT_ADC_INTR_CTL, OT_ONESHOT)
                     .expect("ONESHOT_EN");
+            }
+            Family::LatticeNexusAdc { .. } => {
+                const ENABLE: u32 = 1 << 0;
+                const RESET_N: u32 = 1 << 1;
+                const CALIBRATE: u32 = 1 << 2;
+                const CALIBRATION_READY: u32 = 1 << 2;
+                bus.write_u32(self.base, ENABLE | RESET_N)
+                    .expect("enable Nexus ADC bridge");
+                bus.write_u32(self.base, ENABLE | RESET_N | CALIBRATE)
+                    .expect("start Nexus ADC calibration");
+                assert_eq!(
+                    bus.read_u32(self.base + 0x08).unwrap() & CALIBRATION_READY,
+                    0,
+                    "{}: calibration is not immediate",
+                    self.id
+                );
+                for _ in 0..5_500 {
+                    bus.tick_peripherals();
+                }
+                assert_ne!(
+                    bus.read_u32(self.base + 0x08).unwrap() & CALIBRATION_READY,
+                    0,
+                    "{}: calibration completes after its deterministic wait",
+                    self.id
+                );
             }
             Family::SunxiLradc { .. } => {
                 // Configured but ENABLE = 0: no sample.
@@ -2722,6 +2765,49 @@ impl Converter {
                 );
                 single
             }
+            Family::LatticeNexusAdc { .. } => {
+                const CONTROL: u64 = 0x00;
+                const CHANNEL_SELECT: u64 = 0x04;
+                const STATUS: u64 = 0x08;
+                const ADC0_DATA: u64 = 0x0C;
+                const ADC1_DATA: u64 = 0x10;
+                const ENABLE: u32 = 1 << 0;
+                const RESET_N: u32 = 1 << 1;
+                const CALIBRATE: u32 = 1 << 2;
+                const SOC: u32 = 1 << 3;
+                const CONVERSION_ON_GOING: u32 = 1 << 0;
+                const END_OF_CONVERSION: u32 = 1 << 1;
+                // The board routes ADC0 and ADC1's dedicated pair B. The two
+                // SAR cores share start-of-conversion and latch together.
+                bus.write_u32(self.base + CHANNEL_SELECT, 0xBB)
+                    .expect("select both dedicated input pairs");
+                bus.write_u32(self.base + STATUS, END_OF_CONVERSION)
+                    .expect("clear previous EOC");
+                let control = ENABLE | RESET_N | CALIBRATE;
+                bus.write_u32(self.base + CONTROL, control)
+                    .expect("hold SOC low");
+                bus.write_u32(self.base + CONTROL, control | SOC)
+                    .expect("start both Nexus ADCs");
+                assert_ne!(
+                    bus.read_u32(self.base + STATUS).unwrap() & CONVERSION_ON_GOING,
+                    0,
+                    "{}: SOC starts both converters",
+                    self.id
+                );
+                for _ in 0..4 {
+                    bus.tick_peripherals();
+                }
+                assert_ne!(
+                    bus.read_u32(self.base + STATUS).unwrap() & END_OF_CONVERSION,
+                    0,
+                    "{}: both conversions reach EOC",
+                    self.id
+                );
+                [
+                    bus.read_u32(self.base + ADC0_DATA).expect("ADC0 result"),
+                    bus.read_u32(self.base + ADC1_DATA).expect("ADC1 result"),
+                ]
+            }
             _ => self
                 .routed_channels()
                 .map(|channel| self.convert(bus, channel)),
@@ -3262,6 +3348,64 @@ impl Converter {
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {
         match self.family {
+            Family::LatticeNexusAdc { .. } => {
+                const CONTROL: u64 = 0x00;
+                const CHANNEL_SELECT: u64 = 0x04;
+                const STATUS: u64 = 0x08;
+                const ADC0_DATA: u64 = 0x0C;
+                const ADC1_DATA: u64 = 0x10;
+                const ENABLE: u32 = 1 << 0;
+                const RESET_N: u32 = 1 << 1;
+                const CALIBRATE: u32 = 1 << 2;
+                const SOC: u32 = 1 << 3;
+                const CONVERSION_ON_GOING: u32 = 1 << 0;
+                const END_OF_CONVERSION: u32 = 1 << 1;
+                const CALIBRATION_READY: u32 = 1 << 2;
+                let (adc, select) = match channel {
+                    0..=7 => (0, channel),
+                    16..=23 => (1, channel - 16),
+                    32 => (0, 0xB),
+                    34 => (1, 0xB),
+                    other => panic!("{}: unsupported Nexus ADC input {other}", self.id),
+                };
+                let selects = if adc == 0 {
+                    0x70 | u32::from(select)
+                } else {
+                    (u32::from(select) << 4) | 0x7
+                };
+                bus.write_u32(self.base + CHANNEL_SELECT, selects)
+                    .expect("select Nexus ADC inputs");
+                bus.write_u32(self.base + STATUS, END_OF_CONVERSION)
+                    .expect("clear previous EOC");
+                let control = ENABLE | RESET_N | CALIBRATE;
+                bus.write_u32(self.base + CONTROL, control)
+                    .expect("hold SOC low");
+                assert_ne!(
+                    bus.read_u32(self.base + STATUS).unwrap() & CALIBRATION_READY,
+                    0,
+                    "{}: calibrated before conversion",
+                    self.id
+                );
+                bus.write_u32(self.base + CONTROL, control | SOC)
+                    .expect("start Nexus conversion");
+                assert_ne!(
+                    bus.read_u32(self.base + STATUS).unwrap() & CONVERSION_ON_GOING,
+                    0,
+                    "{}: SOC starts conversion",
+                    self.id
+                );
+                for _ in 0..4 {
+                    bus.tick_peripherals();
+                }
+                assert_ne!(
+                    bus.read_u32(self.base + STATUS).unwrap() & END_OF_CONVERSION,
+                    0,
+                    "{}: conversion reaches EOC",
+                    self.id
+                );
+                let data = if adc == 0 { ADC0_DATA } else { ADC1_DATA };
+                bus.read_u32(self.base + data).expect("Nexus ADC result")
+            }
             Family::Stm32w108Adc => {
                 // DocID16252 Rev 16 §11.1.7 steps 3-6, ADC_IER = 0.
                 bus.write_u32(self.base + W108_DMACR, 1 << 4).expect("RST");
@@ -4152,7 +4296,11 @@ impl Converter {
     }
 }
 
-fn generic_netlists(adc_id: &str, [ntc_channel, diode_channel]: [u8; 2]) -> SystemManifest {
+fn generic_netlists(
+    adc_id: &str,
+    [ntc_channel, diode_channel]: [u8; 2],
+    supply_v: f64,
+) -> SystemManifest {
     let mut analog = SystemManifest::from_file(root(
         "examples/ci-fixture-unknown-arch/analog-ntc-diode-system.yaml",
     ))
@@ -4166,6 +4314,12 @@ fn generic_netlists(adc_id: &str, [ntc_channel, diode_channel]: [u8; 2]) -> Syst
         model
             .outputs
             .insert(key.into(), format!("adc.{adc_id}.{channel}_volts"));
+        let netlist = model.config["netlist_text"]
+            .as_str()
+            .expect("analog netlist text")
+            .replace("dc 3.3", &format!("dc {supply_v:.1}"));
+        model.config.insert("netlist_text".into(), netlist.into());
+        model.config.insert("vdd".into(), supply_v.into());
     }
     analog
 }
@@ -4235,8 +4389,38 @@ fn assert_converter_routes_generic_analog(
     let tag = format!("{board}:{}", converter.id);
     let mut profile = base_profile.clone();
     let [ntc_channel, diode_channel] = converter.routed_channels();
+    let supply_v = match converter.family {
+        Family::LatticeNexusAdc { vref_mv } => f64::from(vref_mv) / 1000.0,
+        _ => 3.3,
+    };
     profile.cosim_models =
-        generic_netlists(&converter.id, [ntc_channel, diode_channel]).cosim_models;
+        generic_netlists(&converter.id, [ntc_channel, diode_channel], supply_v).cosim_models;
+    let (ntc_path, diode_path) = if matches!(converter.family, Family::LatticeNexusAdc { .. }) {
+        let pad_path = |channel| {
+            let pad = chip
+                .analog_pins
+                .iter()
+                .find(|(_, route)| route.peripheral == converter.id && route.channel == channel)
+                .map(|(pad, _)| pad)
+                .unwrap_or_else(|| panic!("{tag}: no board analog pad for ADC channel {channel}"));
+            format!("board.analog.{pad}_volts")
+        };
+        let paths = [pad_path(ntc_channel), pad_path(diode_channel)];
+        for model in &mut profile.cosim_models {
+            let (key, path) = match model.id.as_str() {
+                "ntc_divider" => ("v_sense", &paths[0]),
+                "diode_load_line" => ("v_diode", &paths[1]),
+                other => panic!("unexpected fixture model {other}"),
+            };
+            model.outputs.insert(key.into(), path.clone());
+        }
+        (paths[0].clone(), paths[1].clone())
+    } else {
+        (
+            format!("adc.{}.{ntc_channel}_volts", converter.id),
+            format!("adc.{}.{diode_channel}_volts", converter.id),
+        )
+    };
     let mut bus = SystemBus::from_config(chip, &profile).expect("build onboarding bus");
     converter.power_up(&mut bus);
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
@@ -4248,9 +4432,7 @@ fn assert_converter_routes_generic_analog(
         "{tag}: both netlists bind to ADC channels {ntc_channel}/{diode_channel}"
     );
 
-    let expected_diode_v = diode_load_line_voltage();
-    let ntc_path = format!("adc.{}.{ntc_channel}_volts", converter.id);
-    let diode_path = format!("adc.{}.{diode_channel}_volts", converter.id);
+    let expected_diode_v = diode_load_line_voltage(supply_v);
     let mut cycles = 0;
     let mut ntc_codes = Vec::new();
     for temperature_c in [-10.0_f64, 25.0, 80.0] {
@@ -4266,7 +4448,7 @@ fn assert_converter_routes_generic_analog(
 
         let ntc_v = signal_voltage(&session, &ntc_path);
         let r = ntc_resistance_ohms(temperature_c);
-        let expected_ntc_v = 3.3 * r / (10_000.0 + r);
+        let expected_ntc_v = supply_v * r / (10_000.0 + r);
         assert!(
             (ntc_v - expected_ntc_v).abs() < 1e-9,
             "{tag}: at {temperature_c} °C the Beta divider should be {expected_ntc_v} V, got {ntc_v} V"
@@ -4281,12 +4463,12 @@ fn assert_converter_routes_generic_analog(
         assert_eq!(
             ntc_code,
             converter.expected_ntc_code(ntc_v),
-            "{tag}: firmware-visible NTC conversion at {temperature_c} °C"
+            "{tag}: NTC ADC code at {temperature_c} °C"
         );
         assert_eq!(
             diode_code,
             converter.expected_code(diode_v),
-            "{tag}: firmware-visible diode conversion"
+            "{tag}: diode ADC code"
         );
         if let Some(idle) = converter.held_count(&mut bus, converter.idle_channel()) {
             assert_eq!(idle, 0xFFFF, "{tag}: unrouted channel stays undriven");
@@ -4315,6 +4497,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::RenesasAdcC { .. }
                 | Family::AlifAdc12 { .. }
                 | Family::Stm32w108Adc
+                | Family::LatticeNexusAdc { .. }
                 | Family::NxpLpadc { .. }
                 | Family::RaAdc { .. }
                 | Family::ZynqmpAms
@@ -4404,7 +4587,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 175,
+        instances, 176,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -4412,7 +4595,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 74,
+        without_adc, 73,
         "onboarding profiles that declare no modelled ADC"
     );
 }

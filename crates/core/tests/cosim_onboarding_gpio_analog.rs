@@ -549,13 +549,13 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 221;
+const COVERED: usize = 222;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
 const SILICON_REGISTER: usize = 117;
-/// Profiles whose descriptor declares no GPIO input. Three of them
-/// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
-/// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 24;
+/// Profiles outside this GPIO endpoint sweep: the three H7 profiles and
+/// CrossLink-NX have ADC coverage, while the remaining nineteen have no analog
+/// endpoint yet.
+const NO_GPIO_ENDPOINT: usize = 23;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -634,7 +634,7 @@ fn first_input_port(bus: &SystemBus) -> Option<(usize, Pins)> {
 }
 
 /// Profiles whose port reports input pads the imported board does not wire.
-/// They are counted with [`NO_ANALOG_ENDPOINT`], not covered.
+/// They are skipped by this GPIO proof; other analog endpoints may cover them.
 const UNWIRED_INPUT_PADS: &[(&str, &str)] = &[(
     "crosslink-nx-evn",
     "Renode crosslink-nx-evn.repl: only LEDs are supported on this LiteX platform's CAS",
@@ -665,8 +665,13 @@ fn input_register(chip: &ChipDescriptor, port: &str, base: u64) -> (u64, bool, S
         .get("reg_offset")
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
+    let simulation_only = cfg
+        .config
+        .get("simulation_only")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
     if let Some((_, offset, _)) = SILICON_INPUT_REGISTER.iter().find(|(t, ..)| *t == kind) {
-        return (base - window + offset, true, kind);
+        return (base - window + offset, !simulation_only, kind);
     }
     assert!(
         PLACEHOLDER_TYPES.contains(&kind.as_str()),
@@ -987,6 +992,12 @@ fn every_onboarding_profile_with_a_gpio_input_takes_routed_ntc_and_diode_levels(
         }
         let outcome =
             assert_port_routes_generic_analog(&board, &chip, &profile, port_index, pins, &probe);
+        if board == "acrn_x86_64" {
+            assert!(
+                !outcome.silicon_register,
+                "{board}: synthetic threshold endpoint must not count as a silicon register"
+            );
+        }
         silicon += usize::from(outcome.silicon_register);
         covered.push(board);
     }
@@ -1012,7 +1023,7 @@ fn every_onboarding_profile_with_a_gpio_input_takes_routed_ntc_and_diode_levels(
         "profiles read back at a silicon input register; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
-        no_endpoint, NO_ANALOG_ENDPOINT,
-        "onboarding profiles with no GPIO input"
+        no_endpoint, NO_GPIO_ENDPOINT,
+        "onboarding profiles outside GPIO analog coverage"
     );
 }
