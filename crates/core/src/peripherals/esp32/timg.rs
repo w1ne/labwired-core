@@ -553,9 +553,7 @@ impl Timg {
     }
 
     fn timer_cycles_to_alarm(&self, timer: usize) -> Option<u64> {
-        if self.alarm_source_base.is_none() {
-            return None;
-        }
+        self.alarm_source_base?;
         let config = self.word(Self::timer_config_off(timer));
         if config & (T_CONFIG_EN_BIT | T_CONFIG_ALARM_EN_BIT)
             != (T_CONFIG_EN_BIT | T_CONFIG_ALARM_EN_BIT)
@@ -574,7 +572,7 @@ impl Timg {
         }
         let period = u128::from(Self::timer_divider(config)) * u128::from(LACT_CPU_MHZ);
         let needed = u128::from(distance) * period - u128::from(self.timer_remainder(timer));
-        let cycles = (needed + u128::from(APB_MHZ) - 1) / u128::from(APB_MHZ);
+        let cycles = needed.div_ceil(u128::from(APB_MHZ));
         Some(cycles.min(u128::from(ALARM_EVENT_HORIZON)) as u64)
     }
 
@@ -586,9 +584,7 @@ impl Timg {
         if config & (LACT_EN_BIT | T_CONFIG_ALARM_EN_BIT) != (LACT_EN_BIT | T_CONFIG_ALARM_EN_BIT) {
             return None;
         }
-        let Some(divider) = self.lact_divider() else {
-            return None;
-        };
+        let divider = self.lact_divider()?;
         let alarm = (u64::from(self.word(LACT_ALARMHI)) << 32) | u64::from(self.word(LACT_ALARMLO));
         let distance = alarm.wrapping_sub(self.counter_lact);
         if distance == 0 {
@@ -596,7 +592,7 @@ impl Timg {
         }
         let period = u128::from(divider) * u128::from(LACT_CPU_MHZ);
         let needed = u128::from(distance) * period - u128::from(self.lact_rem);
-        let cycles = (needed + u128::from(APB_MHZ) - 1) / u128::from(APB_MHZ);
+        let cycles = needed.div_ceil(u128::from(APB_MHZ));
         Some(cycles.min(u128::from(ALARM_EVENT_HORIZON)) as u64)
     }
 
