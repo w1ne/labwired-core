@@ -1,7 +1,7 @@
 # Espressif ESP32-C61-DevKitC-1 v2.0, ESP32-C61-WROOM-1-N8R2.
 # UART0 TX (GPIO11/U0TXD) connects to the on-board USB-to-UART bridge; RX is
-# GPIO10/U0RXD. GPIO4/5 expose I2C0 for an external BME280 breakout, and GPIO8
-# is mapped to the onboard WS2812B RGB LED. Other pads and peripherals remain
+# GPIO10/U0RXD. GPIO4/5 expose I2C0 for BME280, GPIO6 drives an external SG90
+# signal, and GPIO8 is the onboard WS2812B RGB LED. Other pads remain
 # outside this deliberately narrow system profile.
 name: "esp32c61-devkitc"
 chip: "../chips/esp32c61.yaml"
@@ -23,3 +23,9 @@ external_devices:
       data_pin: "GPIO8"
       num_pixels: 1
       cpu_hz: 160_000_000
+  - id: "servo"
+    type: "servo"
+    connection: "gpio"
+    config:
+      signal_pin: "GPIO6"
+      model: "sg90"

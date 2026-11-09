@@ -188,13 +188,14 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("esp32c6/uart0.yaml", packed!("esp32c6/uart0.yaml")),
     ("esp32c6/uart1.yaml", packed!("esp32c6/uart1.yaml")),
     (
-        "esp32c61/gpio_gpio8.yaml",
-        packed!("esp32c61/gpio_gpio8.yaml"),
+        "esp32c61/gpio_gpio468.yaml",
+        packed!("esp32c61/gpio_gpio468.yaml"),
     ),
     (
-        "esp32c61/io_mux_gpio8.yaml",
-        packed!("esp32c61/io_mux_gpio8.yaml"),
+        "esp32c61/io_mux_gpio4568.yaml",
+        packed!("esp32c61/io_mux_gpio4568.yaml"),
     ),
+    ("esp32c61/ledc.yaml", packed!("esp32c61/ledc.yaml")),
     ("esp32p4/gpio.yaml", packed!("esp32p4/gpio.yaml")),
     ("esp32p4/io_mux.yaml", packed!("esp32p4/io_mux.yaml")),
     ("esp32s2/extmem.yaml", packed!("esp32s2/extmem.yaml")),

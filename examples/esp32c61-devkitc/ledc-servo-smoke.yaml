@@ -1,0 +1,17 @@
+# ESP32-C61-DevKitC-1 v2.0 smoke: C61 LEDC channel 0 routed to J1 GPIO6.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/ledc-servo"
+  system: "../../configs/systems/esp32c61-devkitc.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "ESP32_C61_LEDC_SERVO_OK"
+  - memory_value:
+      address: 0x60007010
+      size: 32
+      expected_value: 18992
+  - gpio_edges:
+      pin: "gpio:6"
+      min_edges: 2
+  - expected_stop_reason: max_steps

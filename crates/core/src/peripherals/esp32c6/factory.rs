@@ -43,9 +43,15 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // Its GPIO interrupt is matrix source 30 (esp32c6.svd), not the C3's 16.
         "esp32c6_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c6()),
         // The C61 GPIO block has its own register head and selector placement;
-        // this profile covers the DevKitC GPIO4/5 I2C0 route and GPIO8 RGB LED.
+        // this profile covers DevKitC GPIO4/5 I2C0, GPIO6 LEDC, and GPIO8 RGB LED.
         "esp32c61_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c61()),
         "esp32c61_io_mux" => Box::new(super::io_mux::Esp32c61IoMux::new()),
+        // C61 LEDC uses the shared waveform/timer engine with its own register
+        // field layout and reset-selected XTAL40M source.
+        "esp32c61_ledc" => {
+            let source = p_cfg.irq.unwrap_or(43);
+            Box::new(crate::peripherals::esp32c3::ledc::Esp32c3Ledc::new_esp32c61(source))
+        }
         // The H2 smoke uses only direct GPIO output on GPIO8. Espressif's
         // esp32h2.svd and esp32c6.svd agree on the GPIO base (0x6009_1000) and
         // the OUT/W1TS/W1TC, ENABLE/W1TS, and IN register offsets used here.
@@ -135,6 +141,7 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_gpio",
     "esp32c61_gpio",
     "esp32c61_io_mux",
+    "esp32c61_ledc",
     "esp32h2_gpio",
     "esp32c6_pcr",
     "esp32c61_pcr",

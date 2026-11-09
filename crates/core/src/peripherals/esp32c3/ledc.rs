@@ -19,8 +19,12 @@
 //! (TEZ wrap) and STM32 TIM1 (compare-match) tier-1 cells already rely on: a
 //! register file cannot make a counter advance, wrap, and raise an edge.
 //!
-//! ## Timer model (register offsets + fields from
-//! `configs/peripherals/esp32c3/ledc.yaml`)
+//! ## C3 timer model
+//!
+//! The C3 uses register offsets + fields from
+//! `configs/peripherals/esp32c3/ledc.yaml`. The C61 constructor selects a
+//! separate field layout from TRM chapter 32 while reusing the timer and
+//! waveform behavior below.
 //!
 //! Each of the four low-speed timers has two registers, 8 bytes apart:
 //!   - `TIMERx_CONF` (`0xA0 + x*8`): `DUTY_RES` [3:0] (period = `1 << DUTY_RES`
@@ -188,6 +192,73 @@ const CNT_MASK: u32 = 0x3FFF;
 /// All four `LSTIMERx_OVF` interrupt bits.
 const OVF_INT_MASK: u32 = 0xF;
 
+/// Register-field differences between the C3 LEDC model and the C61's
+/// compatible timer/channel bank.
+#[derive(Clone, Copy)]
+struct LedcLayout {
+    duty_res_mask: u32,
+    clk_div_shift: u32,
+    clk_div_field_mask: u32,
+    pause_bit: u32,
+    rst_bit: u32,
+    timer_para_up_bit: u32,
+    cnt_mask: u32,
+    timer_conf_reset: u32,
+    ch_sig_out_en_bit: u32,
+    ch_idle_lv_bit: u32,
+    ch_para_up_bit: u32,
+    ch_timer_sel_shift: u32,
+    ch_conf1_reset: u32,
+    ch_duty_mask: u32,
+    ch_hpoint_mask: u32,
+    ledc_conf_offset: Option<u64>,
+    fixed_src_hz: Option<u64>,
+}
+
+const C3_LAYOUT: LedcLayout = LedcLayout {
+    duty_res_mask: DUTY_RES_MASK,
+    clk_div_shift: CLK_DIV_SHIFT,
+    clk_div_field_mask: CLK_DIV_FIELD_MASK,
+    pause_bit: PAUSE_BIT,
+    rst_bit: RST_BIT,
+    timer_para_up_bit: PARA_UP_BIT,
+    cnt_mask: CNT_MASK,
+    timer_conf_reset: TIMER_CONF_RESET,
+    ch_sig_out_en_bit: 1 << 2,
+    ch_idle_lv_bit: 1 << 3,
+    ch_para_up_bit: 1 << 4,
+    ch_timer_sel_shift: 0,
+    ch_conf1_reset: CH_CONF1_RESET,
+    ch_duty_mask: DUTY_MASK,
+    ch_hpoint_mask: HPOINT_MASK,
+    ledc_conf_offset: Some(LEDC_CONF),
+    fixed_src_hz: None,
+};
+
+/// ESP32-C61 TRM ch. 32 fields. This profile keeps the reset-selected
+/// 40 MHz XTAL clock; PCR clock-source changes are outside its scope.
+const C61_LAYOUT: LedcLayout = LedcLayout {
+    duty_res_mask: 0x1F,
+    clk_div_shift: 5,
+    clk_div_field_mask: 0x3_FFFF,
+    pause_bit: 1 << 23,
+    rst_bit: 1 << 24,
+    timer_para_up_bit: 1 << 26,
+    cnt_mask: 0xF_FFFF,
+    timer_conf_reset: 1 << 24,
+    ch_sig_out_en_bit: 1 << 3,
+    ch_idle_lv_bit: 1 << 4,
+    ch_para_up_bit: 1 << 5,
+    // C61 TRM ch. 32 places the two-bit timer selector at [2:1]; bit 0 is
+    // reserved. Signal enable, idle level and PARA_UP are bits 3, 4 and 5.
+    ch_timer_sel_shift: 1,
+    ch_conf1_reset: 0,
+    ch_duty_mask: 0x1FF_FFFF,
+    ch_hpoint_mask: 0x0F_FFFF,
+    ledc_conf_offset: None,
+    fixed_src_hz: Some(40_000_000),
+};
+
 #[derive(Debug, Default, Clone)]
 struct Timer {
     /// `TIMERx_CONF` raw value (config readback).
@@ -203,34 +274,34 @@ struct Timer {
 }
 
 impl Timer {
-    fn duty_res(&self) -> u32 {
-        self.conf & DUTY_RES_MASK
+    fn duty_res(&self, layout: &LedcLayout) -> u32 {
+        self.conf & layout.duty_res_mask
     }
 
     /// Period in counts (`1 << DUTY_RES`). A `DUTY_RES` of 0 yields a period of
-    /// 1 (overflow every count); the result is clamped to the 14-bit counter.
-    fn period(&self) -> u32 {
-        (1u32 << self.duty_res()).min(CNT_MASK + 1)
+    /// 1 (overflow every count); the result is clamped to the chip's CNT width.
+    fn period(&self, layout: &LedcLayout) -> u32 {
+        (1u32 << self.duty_res(layout)).min(layout.cnt_mask + 1)
     }
 
     /// Integer part of the fixed-point `CLK_DIV` divider; at least 1.
-    fn divider(&self) -> u64 {
-        let field = (self.conf >> CLK_DIV_SHIFT) & CLK_DIV_FIELD_MASK;
+    fn divider(&self, layout: &LedcLayout) -> u64 {
+        let field = (self.conf >> layout.clk_div_shift) & layout.clk_div_field_mask;
         ((field >> 8) as u64).max(1)
     }
 
-    fn paused(&self) -> bool {
-        self.conf & PAUSE_BIT != 0
+    fn paused(&self, layout: &LedcLayout) -> bool {
+        self.conf & layout.pause_bit != 0
     }
 
-    fn in_reset(&self) -> bool {
-        self.conf & RST_BIT != 0
+    fn in_reset(&self, layout: &LedcLayout) -> bool {
+        self.conf & layout.rst_bit != 0
     }
 
     /// True while this timer is clocking (neither held in reset nor paused) —
     /// the only state in which it can advance and overflow.
-    fn running(&self) -> bool {
-        !self.in_reset() && !self.paused()
+    fn running(&self, layout: &LedcLayout) -> bool {
+        !self.in_reset(layout) && !self.paused(layout)
     }
 
     /// Advance by `cycles` CPU cycles. Returns true if the counter wrapped past
@@ -240,23 +311,23 @@ impl Timer {
     /// arbitrary elapsed window into counts in O(1), which is exactly what makes
     /// `advance_cycles(N) == N × advance_cycles(1)` (the sticky OVF latch does
     /// not care how many times it wrapped within the window).
-    fn advance_cycles(&self, cycles: u64) -> bool {
-        if self.in_reset() {
+    fn advance_cycles(&self, cycles: u64, layout: &LedcLayout) -> bool {
+        if self.in_reset(layout) {
             self.counter.set(0);
             self.accum.set(0);
             return false;
         }
-        if self.paused() {
+        if self.paused(layout) {
             return false;
         }
         let accum = self.accum.get().saturating_add(cycles);
-        let per_count = self.divider();
+        let per_count = self.divider(layout);
         let counts = accum / per_count;
         self.accum.set(accum % per_count);
         if counts == 0 {
             return false;
         }
-        let period = self.period() as u64;
+        let period = self.period(layout) as u64;
         let next = self.counter.get() as u64 + counts;
         let overflowed = next >= period;
         self.counter.set((next % period) as u32);
@@ -270,24 +341,25 @@ impl Timer {
     /// `divider` cycles net of the accumulator already banked — so the first
     /// wrap is exactly `need_counts * divider - accum` cycles away (always
     /// `>= 1`, since `accum < divider`).
-    fn cycles_to_overflow(&self) -> Option<u64> {
-        if !self.running() {
+    fn cycles_to_overflow(&self, layout: &LedcLayout) -> Option<u64> {
+        if !self.running(layout) {
             return None;
         }
-        let period = self.period() as u64;
+        let period = self.period(layout) as u64;
         let counter = self.counter.get() as u64;
         // `counter < period` in the normal case; a config write that shrinks the
         // period below the live counter overflows on the very next count (the
         // walk's `next >= period` fires immediately), so clamp `need_counts` to
         // at least 1.
         let need_counts = period.saturating_sub(counter).max(1);
-        Some(need_counts * self.divider() - self.accum.get())
+        Some(need_counts * self.divider(layout) - self.accum.get())
     }
 }
 
 pub struct Esp32c3Ledc {
     /// Interrupt-matrix source ID (`LEDC` = 23 on the C3).
     source_id: u32,
+    layout: LedcLayout,
     /// Register-backed storage for the whole window (word indexed). Channels,
     /// `CONF`, and `DATE` live here; the timer/interrupt offsets are handled
     /// out of band below.
@@ -350,21 +422,32 @@ impl std::fmt::Debug for Esp32c3Ledc {
 
 impl Esp32c3Ledc {
     pub fn new(source_id: u32) -> Self {
+        Self::with_layout(source_id, C3_LAYOUT)
+    }
+
+    /// Narrow C61 LEDC profile with C61 timer/channel fields and the
+    /// reset-selected 40 MHz XTAL function clock.
+    pub fn new_esp32c61(source_id: u32) -> Self {
+        Self::with_layout(source_id, C61_LAYOUT)
+    }
+
+    fn with_layout(source_id: u32, layout: LedcLayout) -> Self {
         // Seed the register-backed window with the silicon reset state so the
         // cold-reset readback matches the captured oracle. Channel CONF1
         // registers carry a non-zero reset value; the rest power up at 0.
         let mut regs = vec![0u32; (LEDC_SIZE / 4) as usize];
         for n in 0..NUM_CHANNELS {
             let off = 0x0C + n * 0x14;
-            regs[off / 4] = CH_CONF1_RESET;
+            regs[off / 4] = layout.ch_conf1_reset;
         }
-        // Every timer's CONF reset value holds RST (bit 23) set, matching silicon.
+        // Each layout supplies its timer-reset bit seed (C3 bit 23, C61 bit 24).
         let timers = core::array::from_fn(|_| Timer {
-            conf: TIMER_CONF_RESET,
+            conf: layout.timer_conf_reset,
             ..Default::default()
         });
         Self {
             source_id,
+            layout,
             regs,
             timers,
             int_raw: Cell::new(0),
@@ -390,12 +473,14 @@ impl Esp32c3Ledc {
     /// `(DUTY >> 4) / 2^DUTY_RES` (DUTY carries 4 fractional bits).
     pub fn channel_duty_fraction(&self, ch: u64) -> f64 {
         let base = ch * CH_STRIDE;
-        let timer = &self.timers[(self.reg(base) & CONF0_TIMER_SEL_MASK) as usize];
-        if timer.duty_res() == 0 {
+        let timer_index =
+            ((self.reg(base) >> self.layout.ch_timer_sel_shift) & CONF0_TIMER_SEL_MASK) as usize;
+        let timer = &self.timers[timer_index];
+        if timer.duty_res(&self.layout) == 0 {
             return 0.0; // unconfigured timer: no PWM
         }
         let duty = (self.reg(base + CH_DUTY) >> 4) as f64;
-        (duty / timer.period() as f64).clamp(0.0, 1.0)
+        (duty / timer.period(&self.layout) as f64).clamp(0.0, 1.0)
     }
 
     /// The six channel outputs' wire, created on first call. The C3 GPIO
@@ -414,29 +499,47 @@ impl Esp32c3Ledc {
     /// Re-derive every channel's output from the registers at `now`.
     fn redrive(&mut self, now: u64) {
         self.pads.advance_to(now);
-        let src_hz = match self.reg(LEDC_CONF) & 0b11 {
-            1 => 80_000_000,
-            2 => 17_500_000,
-            3 => 40_000_000,
-            _ => 0,
-        };
+        let src_hz = self
+            .layout
+            .fixed_src_hz
+            .unwrap_or_else(|| match self.reg(LEDC_CONF) & 0b11 {
+                1 => 80_000_000,
+                2 => 17_500_000,
+                3 => 40_000_000,
+                _ => 0,
+            });
         for ch in 0..NUM_CHANNELS {
             let base = ch as u64 * CH_STRIDE;
             let conf0 = self.reg(base + CH_CONF0);
-            let t = (conf0 & 0b11) as usize;
+            let t = ((conf0 >> self.layout.ch_timer_sel_shift) & 0b11) as usize;
             let conf = self.timers[t].conf;
+            let timer_sel_mask = CONF0_TIMER_SEL_MASK << self.layout.ch_timer_sel_shift;
+            let drive_conf0 = (conf0
+                & !(timer_sel_mask | self.layout.ch_sig_out_en_bit | self.layout.ch_idle_lv_bit))
+                | if conf0 & self.layout.ch_sig_out_en_bit != 0 {
+                    1 << 2
+                } else {
+                    0
+                }
+                | if conf0 & self.layout.ch_idle_lv_bit != 0 {
+                    1 << 3
+                } else {
+                    0
+                };
             let timer = LedcTimerState {
-                duty_res: conf & DUTY_RES_MASK,
-                div_q8: u64::from((conf >> CLK_DIV_SHIFT) & CLK_DIV_FIELD_MASK),
-                paused: conf & PAUSE_BIT != 0,
-                reset: conf & RST_BIT != 0,
+                duty_res: conf & self.layout.duty_res_mask,
+                div_q8: u64::from(
+                    (conf >> self.layout.clk_div_shift) & self.layout.clk_div_field_mask,
+                ),
+                paused: conf & self.layout.pause_bit != 0,
+                reset: conf & self.layout.rst_bit != 0,
                 src_hz,
                 origin: self.timer_origin[t],
             };
             let d = channel_drive(
-                conf0,
-                u64::from(self.reg(base + CH_HPOINT) & HPOINT_MASK),
-                u64::from((self.reg(base + CH_DUTY_R) & DUTY_MASK) >> 4),
+                drive_conf0,
+                u64::from(self.reg(base + CH_HPOINT) & self.layout.ch_hpoint_mask),
+                u64::from((self.reg(base + CH_DUTY_R) & self.layout.ch_duty_mask) >> 4),
                 &timer,
                 self.cpu_hz,
                 self.pads.level(ch),
@@ -470,7 +573,7 @@ impl Esp32c3Ledc {
         self.anchor.set(now);
         let mut raw = self.int_raw.get();
         for (i, timer) in self.timers.iter().enumerate() {
-            if timer.advance_cycles(delta) {
+            if timer.advance_cycles(delta, &self.layout) {
                 raw |= 1 << i;
             }
         }
@@ -494,7 +597,7 @@ impl Esp32c3Ledc {
     fn cycles_to_next_overflow(&self) -> Option<u64> {
         self.timers
             .iter()
-            .filter_map(|t| t.cycles_to_overflow())
+            .filter_map(|t| t.cycles_to_overflow(&self.layout))
             .min()
     }
 
@@ -522,11 +625,21 @@ impl Esp32c3Ledc {
             } else {
                 // Store the config (PARA_UP is a self-clearing commit strobe);
                 // applying DUTY_RES/CLK_DIV immediately is sufficient here.
-                self.timers[idx].conf = value & !PARA_UP_BIT;
-                if value & RST_BIT != 0 {
+                self.timers[idx].conf = value & !self.layout.timer_para_up_bit;
+                if value & self.layout.rst_bit != 0 {
                     self.timers[idx].counter.set(0);
                     self.timers[idx].accum.set(0);
                 }
+            }
+            return Ok(());
+        }
+        if off < (NUM_CHANNELS as u64) * CH_STRIDE
+            && off % CH_STRIDE == CH_CONF0
+            && self.layout.ch_para_up_bit != 0
+        {
+            let stored = value & !self.layout.ch_para_up_bit;
+            if let Some(slot) = self.regs.get_mut((off / 4) as usize) {
+                *slot = stored;
             }
             return Ok(());
         }
@@ -581,7 +694,7 @@ impl Peripheral for Esp32c3Ledc {
         let off = offset & !3;
         if let Some((idx, is_value)) = Self::timer_at(off) {
             return Ok(if is_value {
-                self.timers[idx].counter.get() & CNT_MASK
+                self.timers[idx].counter.get() & self.layout.cnt_mask
             } else {
                 self.timers[idx].conf
             });
@@ -607,21 +720,23 @@ impl Peripheral for Esp32c3Ledc {
         let now = self.wave_now();
         self.pads.advance_to(now);
         if let Some((idx, false)) = Self::timer_at(off) {
-            const COUNTING: u32 =
-                DUTY_RES_MASK | (CLK_DIV_FIELD_MASK << CLK_DIV_SHIFT) | PAUSE_BIT | RST_BIT;
-            if (self.timers[idx].conf ^ value) & COUNTING != 0 {
+            let counting = self.layout.duty_res_mask
+                | (self.layout.clk_div_field_mask << self.layout.clk_div_shift)
+                | self.layout.pause_bit
+                | self.layout.rst_bit;
+            if (self.timers[idx].conf ^ value) & counting != 0 {
                 self.timer_origin[idx] = now;
             }
         }
         let res = self.write_register(off, value);
-        if off < INT_RAW || off == LEDC_CONF {
+        if off < INT_RAW || self.layout.ledc_conf_offset == Some(off) {
             if off < (NUM_CHANNELS as u64) * CH_STRIDE
                 && off % CH_STRIDE == CH_CONF1
                 && value & CONF1_DUTY_START_BIT != 0
             {
                 // DUTY_START commits the staged DUTY into DUTY_R — the duty
                 // the output generates and `ledc_get_duty()` reads back.
-                let duty = self.reg(off - CH_CONF1 + CH_DUTY) & DUTY_MASK;
+                let duty = self.reg(off - CH_CONF1 + CH_DUTY) & self.layout.ch_duty_mask;
                 if let Some(slot) = self
                     .regs
                     .get_mut(((off - CH_CONF1 + CH_DUTY_R) / 4) as usize)
@@ -655,7 +770,7 @@ impl Peripheral for Esp32c3Ledc {
         if !self.scheduler_mode() {
             let mut raw = self.int_raw.get();
             for (i, timer) in self.timers.iter().enumerate() {
-                if timer.advance_cycles(cycles) {
+                if timer.advance_cycles(cycles, &self.layout) {
                     raw |= 1 << i;
                 }
             }
@@ -676,7 +791,7 @@ impl Peripheral for Esp32c3Ledc {
     }
 
     fn legacy_tick_active(&self) -> bool {
-        self.int_st() != 0 || self.timers.iter().any(|timer| timer.running())
+        self.int_st() != 0 || self.timers.iter().any(|timer| timer.running(&self.layout))
     }
 
     fn legacy_tick_dynamic(&self) -> bool {

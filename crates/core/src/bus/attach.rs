@@ -429,14 +429,13 @@ impl SystemBus {
         }
     }
 
-    /// The ESP32-C3 counterpart of [`Self::wire_esp32_ledc_pads`]: bind the six
-    /// LEDC channel outputs to the C3 output matrix (`LEDC_LS_SIG_OUT0..5` =
-    /// 45..50), so `ledcWrite`/`analogWrite` duty is a waveform on the pad
-    /// `ledc_channel_config` routed.
+    /// Bind the six C3/C61 LEDC channel outputs to their respective output
+    /// matrices (C3 signals 45..50; C61 signals 0..5), so committed duty is a
+    /// waveform on the pad `ledc_channel_config` routed.
     ///
-    /// ⚠️ The C6 reuses both the C3 LEDC and the C3 GPIO model, but its matrix
-    /// numbers 45/46 as I²C, so a C6 GPIO layout declines the binding and no
-    /// wire cell is created.
+    /// The C6 reuses the C3 LEDC and GPIO models, but its matrix numbers 45/46
+    /// as I²C, so its GPIO layout declines the binding and no wire cell is
+    /// created.
     pub(crate) fn wire_esp32c3_ledc_pads(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
         use crate::peripherals::esp32c3::ledc::Esp32c3Ledc;
@@ -1320,8 +1319,8 @@ impl SystemBus {
         }
     }
 
-    /// Wire the C61 GPIO4/5/8 IO_MUX words into its GPIO slice so MCU_SEL gates
-    /// the DevKitC I²C route and RGB LED output. Other pads remain outside this
+    /// Wire C61 GPIO4/5/6/8 IO_MUX words into its GPIO slice so MCU_SEL gates
+    /// the DevKitC I²C, LEDC, and RGB LED routes. Other pads remain outside this
     /// narrow model.
     pub(crate) fn wire_esp32c61_pad_controls(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;

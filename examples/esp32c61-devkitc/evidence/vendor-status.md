@@ -5,8 +5,8 @@ Adafruit BME280 breakout:
 
 - Espressif's [ESP32-C61-DevKitC-1 v2.0 guide](https://documentation.espressif.com/esp-dev-kits/en/latest/esp32c61/esp32-c61-devkitc-1/index.html)
   lists the exact `ESP32-C61-DevKitC-1-N8R2` ordering variant, says retail
-  samples can be ordered, maps J1 pin 3 to GPIO4 and J1 pin 4 to GPIO5, and
-  identifies the onboard RGB LED as GPIO8.
+  samples can be ordered, maps J1 pin 3 to GPIO4, J1 pin 4 to GPIO5, and
+  J1 pin 5 to GPIO6, and identifies the onboard RGB LED as GPIO8.
 - DigiKey's [exact N8R2 listing](https://www.digikey.com/en/products/detail/espressif-systems/ESP32-C61-DEVKITC-1-N8R2/26763163)
   returned **Part Status: Active**, **217 in stock**, and a one-unit price of
   **US$9.00**. Stock and pricing can change.
@@ -20,6 +20,14 @@ Adafruit BME280 breakout:
 
 The system uses the board's 3V3/GND headers and connects the breakout SDA/SCL
 to GPIO4/GPIO5 at J1 pins 3/4, with the model configured for I2C address `0x77`.
+
+The new GPIO6 servo example uses a TowerPro SG90 analog micro servo. The Pi
+Hut's live [TowerPro SG90 SKU 103049 listing](https://thepihut.com/collections/towerpro/products/towerpro-servo-motor-sg90-analog)
+showed **14 units left** at **£4** when checked on 2026-11-09. Its page says
+the servo uses an external adapter and maps red to battery positive, brown to
+battery negative, and orange to signal. This verifies a buyable implementation
+of the generic `sg90` device model; the board smoke does not simulate its
+power supply or mechanical load.
 
 ## Register-map source
 

@@ -1433,9 +1433,9 @@ impl SystemBus {
         // `INPUT_PULLUP` changes the floating input level. No-op for every
         // other chip.
         bus.wire_esp32c3_pad_controls();
-        // ESP32-C61: the narrow GPIO8 output profile shares its IO_MUX
-        // function-select word with GPIO so a wrong MCU_SEL disconnects the
-        // attached WS2812B model from the output pad.
+        // ESP32-C61: the narrow GPIO4/5/6/8 profile shares its IO_MUX
+        // function-select words with GPIO so a wrong MCU_SEL disconnects the
+        // modeled I2C, LEDC, or WS2812B pad route.
         bus.wire_esp32c61_pad_controls();
         // ESP32-C5: share GPIO6/GPIO10/GPIO27 IO_MUX function-select words
         // with GPIO so sensor matrix routing and the onboard LED honor MCU_SEL.
@@ -1457,7 +1457,7 @@ impl SystemBus {
         // are deliberately unbound — nothing drives them.
         bus.wire_esp32c3_spi_pads();
         bus.wire_esp32c3_uart_pads();
-        // …and the C3's six LEDC outputs (signals 45..50; none on the C6).
+        // …and C3/C61 LEDC outputs (C3 signals 45..50, C61 signals 0..5; none on C6).
         bus.wire_esp32c3_ledc_pads();
         // Same for the S3's I²C0, whose pads reach GPIO through the S3 output
         // matrix rather than an AF nibble.

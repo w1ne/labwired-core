@@ -1,0 +1,73 @@
+peripheral: ESP32-C61 LEDC (timer 2 and channel 0 slice)
+version: 0.1.0
+registers:
+  - id: CH0_CONF0
+    address_offset: 0x00
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+    fields:
+      - name: TIMER_SEL
+        bit_range: [1, 2]
+      - name: SIG_OUT_EN
+        bit_range: [3, 3]
+      - name: IDLE_LV
+        bit_range: [4, 4]
+      - name: PARA_UP
+        bit_range: [5, 5]
+  - id: CH0_HPOINT
+    address_offset: 0x04
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+    fields:
+      - name: HPOINT
+        bit_range: [0, 19]
+  - id: CH0_DUTY
+    address_offset: 0x08
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+    fields:
+      - name: DUTY
+        bit_range: [0, 24]
+  - id: CH0_CONF1
+    address_offset: 0x0C
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+    fields:
+      - name: DUTY_START
+        bit_range: [31, 31]
+  - id: CH0_DUTY_R
+    address_offset: 0x10
+    size: 32
+    access: READ_ONLY
+    reset_value: 0
+    fields:
+      - name: DUTY_R
+        bit_range: [0, 24]
+  - id: TIMER2_CONF
+    address_offset: 0xB0
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x01000000
+    fields:
+      - name: DUTY_RES
+        bit_range: [0, 4]
+      - name: CLK_DIV
+        bit_range: [5, 22]
+      - name: PAUSE
+        bit_range: [23, 23]
+      - name: RST
+        bit_range: [24, 24]
+      - name: PARA_UP
+        bit_range: [26, 26]
+  - id: TIMER2_VALUE
+    address_offset: 0xB4
+    size: 32
+    access: READ_ONLY
+    reset_value: 0
+    fields:
+      - name: CNT
+        bit_range: [0, 19]

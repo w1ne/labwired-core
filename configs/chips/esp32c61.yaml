@@ -1,5 +1,5 @@
-# ESP32-C61 HP RISC-V profile for the ESP32-C61-DevKitC-1 v2.0 UART0, GPIO4/5
-# I2C0 and GPIO8 addressable RGB LED smoke. Other pads and peripherals remain
+# ESP32-C61 HP RISC-V profile for UART0, GPIO4/5 I2C0, GPIO6 LEDC, and GPIO8
+# addressable RGB LED on the ESP32-C61-DevKitC-1 v2.0. Other pads remain
 # outside this focused board profile.
 name: "esp32c61"
 arch: "riscv"
@@ -25,6 +25,7 @@ memory_regions:
 pins:
   GPIO4: { gpio: "gpio", bit: 4 }
   GPIO5: { gpio: "gpio", bit: 5 }
+  GPIO6: { gpio: "gpio", bit: 6 }
   GPIO8: { gpio: "gpio", bit: 8 }
 peripherals:
   # C61 moves I2C_CONF/I2C_SCLK_CONF to +0x2C/+0x30 (RMT_CONF on C6), so use a
@@ -43,22 +44,32 @@ peripherals:
     clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
     config:
       debug_schema: "../peripherals/esp32c6/uart0.yaml"
+  # C61 LEDC's six output signals occupy matrix indices 0..5; its compatible
+  # timer/channel block uses the C61-specific bit layout.
+  - id: "ledc"
+    type: "esp32c61_ledc"
+    irq: 43
+    base_address: 0x60007000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "LEDC_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c61/ledc.yaml"
   # C61 GPIO differs from the C6 register head. The profile covers GPIO4/5
-  # I2C0 matrix routes and direct GPIO8 RGB output.
+  # I2C0, GPIO6 LEDC routing, and direct GPIO8 RGB output.
   - id: "gpio"
     type: "esp32c61_gpio"
     base_address: 0x60091000
     # GPIO_EXT begins at +0xE00 on C61; keep this profile's range before it.
     size: "3584"
     config:
-      debug_schema: "../peripherals/esp32c61/gpio_gpio8.yaml"
-  # IO_MUX GPIO4/5 route the I2C sensor; GPIO8 is the onboard RGB data pad.
+      debug_schema: "../peripherals/esp32c61/gpio_gpio468.yaml"
+  # IO_MUX GPIO4/5 route I2C; GPIO6 is the servo PWM pad; GPIO8 is onboard RGB.
   - id: "io_mux"
     type: "esp32c61_io_mux"
     base_address: 0x60090000
     size: "4KB"
     config:
-      debug_schema: "../peripherals/esp32c61/io_mux_gpio8.yaml"
+      debug_schema: "../peripherals/esp32c61/io_mux_gpio4568.yaml"
   # C61 I2C0 uses the same command register layout as the existing C3/C5/C6
   # model, with its own C61 clock gate and GPIO matrix signal numbering.
   - id: "i2c0"

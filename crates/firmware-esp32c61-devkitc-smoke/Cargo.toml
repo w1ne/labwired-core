@@ -15,3 +15,9 @@ name = "firmware-esp32c61-devkitc-smoke"
 path = "src/main.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "ledc-servo"
+path = "src/bin/ledc_servo.rs"
+test = false
+bench = false

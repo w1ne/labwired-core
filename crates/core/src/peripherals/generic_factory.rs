@@ -144,6 +144,7 @@ pub const MODEL_TYPES: &[&str] = &[
     // it onto the STM32 placeholder before that factory runs.
     "esp32c61_gpio",
     "esp32c61_io_mux",
+    "esp32c61_ledc",
     // C5 uses the same modern UART register map, with its own interrupt ids
     // and fixed PLL_F80M source clock for the onboarding profile.
     "esp32c5_uart",

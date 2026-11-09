@@ -187,6 +187,13 @@ jobs:
             profile_dir: release
             script: examples/esp32c61-devkitc/onboarding-smoke.yaml
             system: configs/systems/esp32c61-devkitc.yaml
+          - id: esp32c61-devkitc-ledc-servo
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32c61-devkitc-smoke
+            profile: release
+            profile_dir: release
+            script: examples/esp32c61-devkitc/ledc-servo-smoke.yaml
+            system: configs/systems/esp32c61-devkitc.yaml
           # XIAO ESP32-C3: the standalone GPIO profile tests its documented D10
           # header pin without claiming the C3's other board/chip peripherals.
           - id: seeed-xiao-esp32c3

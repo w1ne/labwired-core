@@ -142,7 +142,7 @@ pub(crate) const C6_MATRIX: MatrixLayout = MatrixLayout {
 };
 
 /// ESP32-C61 GPIO-matrix signals and input selector layout from the C61 TRM.
-/// This profile exposes GPIO4/GPIO5 I²C0 routing and GPIO8's board LED output.
+/// This profile exposes GPIO4/GPIO5 I²C0, GPIO6 LEDC, and GPIO8 board LED.
 pub(crate) const C61_MATRIX: MatrixLayout = MatrixLayout {
     i2c_scl: 46,
     i2c_sda: 47,
@@ -151,7 +151,7 @@ pub(crate) const C61_MATRIX: MatrixLayout = MatrixLayout {
     fspiq: 0,
     fspid: 0,
     fspics0: 0,
-    ledc_ls_out0: None,
+    ledc_ls_out0: Some(0),
     in_sel: crate::peripherals::esp_gpio_net::InSelLayout {
         pad_mask: 0x3F,
         sel_bit: 1 << 8,
@@ -166,6 +166,7 @@ impl MatrixLayout {
         }
         if *self == C61_MATRIX {
             return match idx {
+                0..=5 => Some(crate::peripherals::esp32c3::ledc::LEDC_LINES[idx as usize]),
                 46 => Some("I2CEXT0_SCL"),
                 47 => Some("I2CEXT0_SDA"),
                 _ => None,
@@ -204,7 +205,7 @@ const STATUS: u64 = 0x44;
 const STATUS_W1TS: u64 = 0x48;
 const STATUS_W1TC: u64 = 0x4C;
 // The C61's GPIO block moved output-enable/strap/input registers and uses
-// chip-specific GPIO4/5/8 matrix-selector addresses.
+// chip-specific GPIO4/5/6/8 matrix-selector addresses.
 const C61_STRAP: u64 = 0x00;
 const C61_ENABLE: u64 = 0x34;
 const C61_ENABLE_W1TS: u64 = 0x38;
@@ -213,6 +214,7 @@ const C61_IN: u64 = 0x64;
 const C61_PIN0: u64 = 0xD4;
 const C61_FUNC4_OUT_SEL: u64 = 0xAE4;
 const C61_FUNC5_OUT_SEL: u64 = 0xAE8;
+const C61_FUNC6_OUT_SEL: u64 = 0xAEC;
 const C61_FUNC8_OUT_SEL: u64 = 0xAF4;
 const C61_FUNC46_IN_SEL: u64 = 0x38C;
 const C61_FUNC47_IN_SEL: u64 = 0x390;
@@ -343,7 +345,7 @@ impl Esp32c3Gpio {
         }
     }
 
-    /// The ESP32-C61 GPIO4/5 I2C0 matrix route and direct DevKitC GPIO8 output.
+    /// The ESP32-C61 GPIO4/5 I2C0, GPIO6 LEDC matrix route, and GPIO8 output.
     /// The GPIO8 selector value is 256 (with OE_SEL at bit 10), and the output
     /// enable W1TS register is at +0x38 rather than the C3/C6 +0x24.
     pub fn for_esp32c61() -> Self {
@@ -352,6 +354,7 @@ impl Esp32c3Gpio {
         gpio.layout = C61_MATRIX;
         gpio.out_sel[4] = C61_SIG_GPIO_OUT;
         gpio.out_sel[5] = C61_SIG_GPIO_OUT;
+        gpio.out_sel[6] = C61_SIG_GPIO_OUT;
         gpio.out_sel[8] = C61_SIG_GPIO_OUT;
         gpio
     }
@@ -457,14 +460,14 @@ impl Esp32c3Gpio {
         }
     }
 
-    /// Whether this layout numbers LEDC outputs at all (the C3 does; the C6's
+    /// Whether this layout numbers LEDC outputs at all (C3 and C61 do; C6's
     /// 45/46 are I²C), so the bus can skip creating an LEDC wire cell.
     pub(crate) fn has_ledc_signals(&self) -> bool {
         self.layout.ledc_ls_out0.is_some()
     }
 
     /// Bind the LEDC controller's six channel outputs to every pad the output
-    /// matrix can route them to (`LEDC_LS_SIG_OUT0..5`, 45..50) — what
+    /// matrix can route them to (C3 signals 45..50; C61 signals 0..5) — what
     /// `ledc_channel_config` / `ledcAttach` programs into `FUNCn_OUT_SEL_CFG`.
     /// Which pad is live at any moment is then decided by that register,
     /// through the shared routing seam, as for SPI and UART above. A no-op on
@@ -543,7 +546,7 @@ impl Esp32c3Gpio {
     }
 
     fn gpio_output_path_selected(&self, pin: u8) -> bool {
-        if !self.esp32c61_layout || !matches!(pin, 4 | 5 | 8) {
+        if !self.esp32c61_layout || !matches!(pin, 4 | 5 | 6 | 8) {
             return true;
         }
         let iomux_selected = self.pad_controls.as_ref().is_some_and(|controls| {
@@ -556,12 +559,13 @@ impl Esp32c3Gpio {
                 })
         });
         let selector = self.out_sel[pin as usize];
-        let expected = match pin {
-            4 => self.layout.i2c_sda,
-            5 => self.layout.i2c_scl,
-            _ => C61_SIG_GPIO_OUT,
+        let selector_matches = match pin {
+            4 => selector & 0x1FF == self.layout.i2c_sda,
+            5 => selector & 0x1FF == self.layout.i2c_scl,
+            6 => selector & 0x1FF <= 5,
+            _ => selector & 0x1FF == C61_SIG_GPIO_OUT,
         };
-        iomux_selected && selector & 0x1FF == expected && selector & (1 << 10) != 0
+        iomux_selected && selector_matches && selector & (1 << 10) != 0
     }
 
     /// Clone the live GPIO-matrix route cell for the C3 I²C controller. It is
@@ -777,6 +781,7 @@ impl Esp32c3Gpio {
             return match off {
                 C61_FUNC4_OUT_SEL => Some(4),
                 C61_FUNC5_OUT_SEL => Some(5),
+                C61_FUNC6_OUT_SEL => Some(6),
                 C61_FUNC8_OUT_SEL => Some(8),
                 _ => None,
             };

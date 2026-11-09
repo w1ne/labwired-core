@@ -227,7 +227,7 @@ impl Peripheral for Esp32c6Pcr {
     }
 }
 
-/// Minimal ESP32-C61 PCR profile for the board's UART0 and I2C0 smoke.
+/// Minimal ESP32-C61 PCR profile for the board's UART0, I2C0, and LEDC smokes.
 ///
 /// The C61 moves I2C_CONF/I2C_SCLK_CONF to +0x2C/+0x30; those offsets are
 /// RMT_CONF/RMT_SCLK_CONF on the C6. Keep the C61 map separate so a chip
@@ -242,6 +242,8 @@ const C61_PCR_REGISTERS: &[(u64, &str, u32)] = &[
     (0x04, "UART0_SCLK_CONF", 0x0070_0000),
     (0x2C, "I2C_CONF", 0x0000_0001),
     (0x30, "I2C_SCLK_CONF", 0x0040_0000),
+    (0x34, "LEDC_CONF", 0x0000_0001),
+    (0x38, "LEDC_SCLK_CONF", 0x0040_0000),
 ];
 
 impl Default for Esp32c61Pcr {
