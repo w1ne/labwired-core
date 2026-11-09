@@ -1,0 +1,12 @@
+schema_version: '1.0'
+inputs:
+  firmware: /tmp/lw-l4adc-1971/stm32l476/L5_adc/firmware.elf
+  system: /home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/systems/stm32l476.yaml
+limits:
+  max_steps: 20000000
+  max_uart_bytes: 65536
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000
+  stop_when_assertions_pass_min_steps: 0
+assertions:
+- uart_contains: LW_L5_OK

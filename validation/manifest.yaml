@@ -1312,6 +1312,13 @@ boards:
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: stm32h563
+    # 2026-11-09 (L4/G4/WB ADC, hw-onboarding): changes the shared adc.rs
+    # digest. Only the `stm32l4` layout changes: CR rs bits keep written
+    # zeros (H7 mask), ADSTP/JADSTP/ADDIS complete, ADCAL self-clears when
+    # CCR.CKMODE != 0, and ADSTART converts the SQR1.SQ1 channel. With
+    # CKMODE = 0 ADCAL still latches (nucleo_l476rg_adc capture passes). The
+    # F1/F4/H7/U5/G0 layouts are unchanged. This is a reviewed model-drift
+    # acknowledgment, NOT a new silicon capture; no capture or ack date moves.
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
     # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
     # existing constructors retain their legacy profile. The bus completion
@@ -3562,6 +3569,13 @@ boards:
     drift_ack: 2026-11-06
 
   - id: nucleo-l476rg
+    # 2026-11-09 (L4/G4/WB ADC, hw-onboarding): changes the shared adc.rs
+    # digest. Only the `stm32l4` layout changes: CR rs bits keep written
+    # zeros (H7 mask), ADSTP/JADSTP/ADDIS complete, ADCAL self-clears when
+    # CCR.CKMODE != 0, and ADSTART converts the SQR1.SQ1 channel. With
+    # CKMODE = 0 ADCAL still latches (nucleo_l476rg_adc capture passes). The
+    # F1/F4/H7/U5/G0 layouts are unchanged. This is a reviewed model-drift
+    # acknowledgment, NOT a new silicon capture; no capture or ack date moves.
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
     # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
     # existing constructors retain their legacy profile. The bus completion
@@ -5805,6 +5819,13 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f103
+    # 2026-11-09 (L4/G4/WB ADC, hw-onboarding): changes the shared adc.rs
+    # digest. Only the `stm32l4` layout changes: CR rs bits keep written
+    # zeros (H7 mask), ADSTP/JADSTP/ADDIS complete, ADCAL self-clears when
+    # CCR.CKMODE != 0, and ADSTART converts the SQR1.SQ1 channel. With
+    # CKMODE = 0 ADCAL still latches (nucleo_l476rg_adc capture passes). The
+    # F1/F4/H7/U5/G0 layouts are unchanged. This is a reviewed model-drift
+    # acknowledgment, NOT a new silicon capture; no capture or ack date moves.
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
     # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
     # existing constructors retain their legacy profile. The bus completion
