@@ -75,6 +75,7 @@ const CONVERTED: &[&str] = &[
     "ezr32lg330",
     "ezr32wg330",
     "imxrt1064",
+    "imxrt500",
     "mars_zx3",
     "max32652-evkit",
     "max32652",
@@ -299,7 +300,30 @@ enum Family {
     /// and the `RA` read clears it. 12-bit single-ended (`CFG1.MODE` 01)
     /// against VREFH 3.3 V (mcux-sdk fsl_adc16.c, K66 RM ch. 39).
     KinetisAdc16,
+    /// NXP LPADC (i.MX RT500): `LPADC_Init` (`CTRL.RST` pulse, `RSTFIFOn`,
+    /// `CFG`, `FCTRLn`, `ADCEN`), one command per channel chained by
+    /// `CMDH.NEXT`, trigger 0 by `SWTRIG`, results popped from `RESFIFO0`
+    /// with `VALID` and `CMDSRC`. 12-bit single-ended in `D[14:3]` against
+    /// VREFH 1.8 V (mcux-sdk fsl_lpadc.c, Zephyr adc_mcux_lpadc.c).
+    NxpLpadc,
 }
+
+/// NXP LPADC offsets (MIMXRT595S_cm33.h `ADC_Type`) and bits.
+const LPADC_CTRL: u64 = 0x10;
+const LPADC_STAT: u64 = 0x14;
+const LPADC_CFG: u64 = 0x20;
+const LPADC_SWTRIG: u64 = 0x34;
+const LPADC_TCTRL0: u64 = 0xA0;
+const LPADC_FCTRL0: u64 = 0xE0;
+const LPADC_CMD1: u64 = 0x100;
+const LPADC_RESFIFO0: u64 = 0x300;
+const LPADC_ADCEN: u32 = 1 << 0;
+const LPADC_RST: u32 = 1 << 1;
+const LPADC_RSTFIFO0: u32 = 1 << 8;
+const LPADC_RSTFIFO1: u32 = 1 << 9;
+const LPADC_RDY0: u32 = 1 << 0;
+const LPADC_CSCALE: u32 = 1 << 13;
+const LPADC_VALID: u32 = 1 << 31;
 
 /// Kinetis ADC16 offsets (MK64F12.h `ADC_Type`) and bits.
 const ADC16_SC1A: u64 = 0x00;
@@ -429,6 +453,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             }
         } else if kind == "kinetis_adc16" {
             Family::KinetisAdc16
+        } else if kind == "nxp_lpadc" {
+            Family::NxpLpadc
         } else if kind == "ra_adc12" || kind == "ra_adc14" {
             Family::RaAdc {
                 adc14: kind == "ra_adc14",
@@ -512,6 +538,9 @@ impl Converter {
             // 12-bit single-ended, 1 LSB = VREFH / 2^12, truncated, clamped
             // (K66 RM §39.4.4); calibration leaves the ideal OFS = 0.
             Family::KinetisAdc16 => (mv * 4096 / 3300).min(4095),
+            // 12-bit single-ended, 1 LSB = VREFH (1.8 V) / 4096, truncated,
+            // clamped; the -10 °C divider (2.79 V) saturates.
+            Family::NxpLpadc => (mv * 4096 / 1800).min(4095),
         }
     }
 
@@ -548,6 +577,10 @@ impl Converter {
             // ADC1 (MK64FN1M0VLL12-pinctrl.h). AD5a..AD7a are not bonded
             // on ADC0.
             Family::KinetisAdc16 => [14, 15],
+            // CH0A (P0_5) and CH2A (P0_19), the EVK's J30-1/J30-3 pads
+            // (Zephyr mimxrt595_evk pinmux_lpadc0). The MIMXRT595SFFOC bonds
+            // only CH0A/B, CH1A/B, CH2A and CH6A.
+            Family::NxpLpadc => [0, 2],
             _ => [NTC_CHANNEL, DIODE_CHANNEL],
         }
     }
@@ -561,6 +594,8 @@ impl Converter {
             Family::Efm32S0Adc => 5,
             // AD17: PTE24 on ADC0, PTA17 on ADC1.
             Family::KinetisAdc16 => 17,
+            // CH1A (P0_12).
+            Family::NxpLpadc => 1,
             _ => IDLE_CHANNEL,
         }
     }
@@ -680,6 +715,29 @@ impl Converter {
                     "{}: SINGLEFIFOCOUNT",
                     self.id
                 );
+            }
+            Family::NxpLpadc => {
+                // LPADC_Init with the default config; nothing converts
+                // before CTRL.ADCEN.
+                for ctrl in [LPADC_RST, 0, LPADC_RSTFIFO0, LPADC_RSTFIFO1, 0] {
+                    bus.write_u32(self.base + LPADC_CTRL, ctrl).expect("CTRL");
+                }
+                bus.write_u32(self.base + LPADC_CFG, 1 << 28)
+                    .expect("CFG.PWREN");
+                bus.write_u32(self.base + LPADC_FCTRL0, 0).expect("FCTRL0");
+                bus.write_u32(self.base + LPADC_CMD1, LPADC_CSCALE)
+                    .expect("CMDL1");
+                bus.write_u32(self.base + LPADC_TCTRL0, 1 << 24)
+                    .expect("TCTRL0");
+                bus.write_u32(self.base + LPADC_SWTRIG, 1).expect("SWT0");
+                assert_eq!(
+                    bus.read_u32(self.base + LPADC_FCTRL0).unwrap() & 0x1F,
+                    0,
+                    "{}: a trigger with ADCEN clear converts nothing",
+                    self.id
+                );
+                bus.write_u32(self.base + LPADC_CTRL, LPADC_ADCEN)
+                    .expect("ADCEN");
             }
             Family::KinetisAdc16 => {
                 // ADC16_Init with kADC16_Resolution12or13Bit, REFSEL VREFH.
@@ -1081,6 +1139,59 @@ impl Converter {
     /// One firmware-style conversion per routed channel: `[ntc, diode]`.
     fn convert_routed(&self, bus: &mut SystemBus) -> [u32; 2] {
         match self.family {
+            Family::NxpLpadc => {
+                // Zephyr's chain: CMD1 (NTC) -> CMD2 (diode) -> CMD3 (the
+                // unrouted pad), started once by trigger 0.
+                let [ntc, diode] = self.routed_channels();
+                let chain = [ntc, diode, self.idle_channel()];
+                for (index, channel) in chain.iter().enumerate() {
+                    let at = self.base + LPADC_CMD1 + 8 * index as u64;
+                    let next = if index + 1 < chain.len() {
+                        index as u32 + 2
+                    } else {
+                        0
+                    };
+                    bus.write_u32(at, LPADC_CSCALE | u32::from(*channel))
+                        .expect("CMDL");
+                    bus.write_u32(at + 4, next << 24).expect("CMDH.NEXT");
+                }
+                bus.write_u32(self.base + LPADC_TCTRL0, 1 << 24)
+                    .expect("TCTRL0");
+                bus.write_u32(self.base + LPADC_SWTRIG, 1).expect("SWT0");
+                assert_ne!(
+                    bus.read_u32(self.base + LPADC_STAT).unwrap() & LPADC_RDY0,
+                    0,
+                    "{}: RDY0 once FIFO0 holds more than FWMARK",
+                    self.id
+                );
+                assert_eq!(
+                    bus.read_u32(self.base + LPADC_FCTRL0).unwrap() & 0x1F,
+                    3,
+                    "{}: one trigger runs the whole NEXT chain",
+                    self.id
+                );
+                let mut codes = [0; 3];
+                for (index, code) in codes.iter_mut().enumerate() {
+                    let entry = bus.read_u32(self.base + LPADC_RESFIFO0).expect("RESFIFO0");
+                    assert_ne!(entry & LPADC_VALID, 0, "{}: entry {index} valid", self.id);
+                    assert_eq!(
+                        (entry >> 24) & 0xF,
+                        index as u32 + 1,
+                        "{}: CMDSRC follows the chain",
+                        self.id
+                    );
+                    assert_eq!(entry & 0x7, 0, "{}: 12-bit result in D[14:3]", self.id);
+                    *code = (entry & 0xFFFF) >> 3;
+                }
+                assert_eq!(codes[2], 0, "{}: unrouted CH1A converts to zero", self.id);
+                assert_eq!(
+                    bus.read_u32(self.base + LPADC_RESFIFO0).unwrap(),
+                    0,
+                    "{}: the chain ends at CMD3",
+                    self.id
+                );
+                [codes[0], codes[1]]
+            }
             Family::Msp430Adc12 { adc12_a } => {
                 // One CONSEQ_1 sequence with MSC from CSTARTADD 0: MCTL0..2
                 // = NTC, diode, the unrouted pad, EOS on MCTL2. MCTL3 points
@@ -2089,6 +2200,19 @@ impl Converter {
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {
         match self.family {
+            Family::NxpLpadc => {
+                // fsl_lpadc polling example: one command, trigger 0, one
+                // RESFIFO0 read, D >> 3.
+                bus.write_u32(self.base + LPADC_CMD1, LPADC_CSCALE | u32::from(channel))
+                    .expect("CMDL1");
+                bus.write_u32(self.base + LPADC_CMD1 + 4, 0).expect("CMDH1");
+                bus.write_u32(self.base + LPADC_TCTRL0, 1 << 24)
+                    .expect("TCTRL0");
+                bus.write_u32(self.base + LPADC_SWTRIG, 1).expect("SWT0");
+                let entry = bus.read_u32(self.base + LPADC_RESFIFO0).expect("RESFIFO0");
+                assert_ne!(entry & LPADC_VALID, 0, "{}: CH{channel}A converts", self.id);
+                (entry & 0xFFFF) >> 3
+            }
             Family::KinetisAdc16 => {
                 // ADC16_SetChannelConfig(SC1A), poll COCO,
                 // ADC16_GetChannelConversionValue; the RA read clears COCO.
@@ -2792,6 +2916,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Efm32S0Adc
                 | Family::Msp430Adc12 { .. }
                 | Family::KinetisAdc16
+                | Family::NxpLpadc
                 | Family::RaAdc { .. }
         ) {
             assert_eq!(
@@ -2878,7 +3003,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 135,
+        instances, 136,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -2886,7 +3011,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 104,
+        without_adc, 103,
         "onboarding profiles that declare no modelled ADC"
     );
 }

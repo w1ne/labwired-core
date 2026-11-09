@@ -448,6 +448,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "caes_adc",
     // NXP Kinetis ADC16 (MK64F12.h, K66 RM ch. 39, mcux-sdk fsl_adc16.c).
     "kinetis_adc16",
+    // NXP LPADC command/trigger SAR ADC (MIMXRT595S_cm33.h, fsl_lpadc.c).
+    "nxp_lpadc",
     // MSP430 ADC12 (F1/F2) and ADC12_A (F5) (mspsim ADC12.java, TI headers).
     "msp430_adc12",
     "msp430_adc12_a",
@@ -1954,6 +1956,15 @@ pub fn try_build(
                 .get("valt_mv")
                 .and_then(|v| v.as_u64())
                 .map_or(1200, |v| v as u32),
+        )),
+        // `vref_mv`: the VREFH the board ties the reference to (1.8 V on
+        // the MIMXRT595-EVK); every CFG.REFSEL option converts against it.
+        "nxp_lpadc" => Box::new(crate::peripherals::nxp_lpadc::NxpLpadc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(1800, |v| v as u32),
         )),
         "msp430_adc12" => Box::new(crate::peripherals::msp430_adc12::Msp430Adc12::new(
             crate::peripherals::msp430_adc12::Adc12Layout::Adc12,

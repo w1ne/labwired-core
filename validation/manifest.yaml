@@ -10336,6 +10336,7 @@ boards:
       - "firmware_survival::test_mimxrt595_evk_smoke_survival"
       - "firmware_survival::test_mimxrt595_evk_zephyr_survival (stock Zephyr hello)"
       - "rt500_secure_map (secure aliases + boot-ROM OTP API)"
+      - "cosim_mimxrt595_lpadc_analog (LPADC0 converts routed NTC + diode)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -10344,6 +10345,7 @@ boards:
       - crates/core/src/peripherals/lpc/rt5xx_ctl.rs
       - crates/core/src/peripherals/lpc/ostimer.rs
       - crates/core/src/peripherals/imxrt/flexspi.rs
+      - crates/core/src/peripherals/nxp_lpadc.rs
       - crates/core/roms/rt500
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs

@@ -29,3 +29,14 @@ peripherals:
   bus: sysbus
   base_address: 0x40100000
   size: 16KB
+# LPADC0 on the `nxp_lpadc` model the promoted part runs (MIMXRT595S_cm33.h
+# ADC0_BASE_NS 0x4013A000, ADC0_IRQn 22; reset values from mcux-soc-svd
+# MIMXRT595S_cm33.xml). VREFH 1.8 V, the RT500 VDDA the EVK runs (Zephyr
+# mimxrt595_evk adc_dt overlay `zephyr,vref-mv = <1800>`).
+- id: adc0
+  type: nxp_lpadc
+  base_address: 0x4013A000
+  size: 4KB
+  irq: 22
+  config:
+    vref_mv: 1800
