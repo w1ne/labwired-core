@@ -23,6 +23,7 @@ tim12 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
 tim13 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
 tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
 spi456 irq spi4=1 spi5=1 spi6=1 ok
+spi456 TXEIE idle_pend=1 idle_release=1 ok
 dma m2m dma1_refused=1 dma2_copied=1 ok
 i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok
 i2c2 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok

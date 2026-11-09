@@ -116,20 +116,26 @@ pub fn check_geometry() -> bool {
     ok
 }
 
-/// SPI4/5/6 each send one frame with TXEIE (CR2 bit 7) set: TXE at the end
-/// of the frame raises the SPI's own NVIC line and no other SPI's. The
-/// board has no slaves on these buses, so nothing is read back.
-///
-/// The frame matters: the model raises TXEIE when a frame completes, not as
-/// the TXE & TXEIE level silicon has (setting TXEIE while TXE is already 1
-/// pends the line at once there). Both pend by the end of the frame.
+/// SPI4/5/6 each prove the idle TXEIE level asserts and releases their own
+/// NVIC line, then send a byte with TXEIE enabled and check line isolation.
+/// The board has no slaves on these buses, so nothing is read back.
 pub fn check_spi456_lines() -> bool {
     let mut ok = true;
+    let mut idle_pended_all = true;
+    let mut idle_released_all = true;
     puts("spi456 irq ");
     for &(name, base, irq, _, _, _) in &SPIS_F767 {
         unpend(irq);
         spi_enable(base);
+        wr(base + S_CR2, SPI_CR2_8BIT | (1 << 7));
+        let idle_pended = rd(base + S_SR) & SPI_SR_TXE != 0 && pending(irq);
+        wr(base + S_CR2, SPI_CR2_8BIT);
+        let idle_released = !pending(irq);
+        idle_pended_all &= idle_pended;
+        idle_released_all &= idle_released;
+        unpend(irq);
         let quiet = !pending(irq);
+
         wr(base + S_CR2, SPI_CR2_8BIT | (1 << 7));
         wr8(base + S_DR, 0xA5);
         let sent = wait(base + S_SR, SPI_SR_BSY, 0) && rd(base + S_SR) & SPI_SR_TXE != 0;
@@ -140,13 +146,17 @@ pub fn check_spi456_lines() -> bool {
             .chain(SPIS.iter().map(|s| s.2))
             .all(|other| other == irq || !pending(other));
         wr(base + S_CR2, SPI_CR2_8BIT);
-        unpend(irq);
         let released = !pending(irq);
+        unpend(irq);
         wr(base + S_CR1, 0);
-        let this = quiet && sent && pend && alone && released;
+        let this = idle_pended && idle_released && quiet && sent && pend && alone && released;
         flag(name, this);
         ok &= this;
     }
     verdict(ok);
+    puts("spi456 TXEIE ");
+    flag("idle_pend", idle_pended_all);
+    flag("idle_release", idle_released_all);
+    verdict(idle_pended_all && idle_released_all);
     ok
 }

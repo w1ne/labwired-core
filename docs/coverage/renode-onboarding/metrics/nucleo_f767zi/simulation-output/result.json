@@ -56,6 +56,7 @@
           "tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
           "tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
           "spi456 irq spi4=1 spi5=1 spi6=1 ok",
+          "spi456 TXEIE idle_pend=1 idle_release=1 ok",
           "dma m2m dma1_refused=1 dma2_copied=1 ok",
           "i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok",
           "i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok",
@@ -121,18 +122,18 @@
       4294867296,
       1073811484,
       1,
-      1,
+      65535,
       537395184,
       1,
-      1,
       1073762304,
-      84,
+      1,
+      86,
       70,
       537395136,
       70,
-      134235640
+      134236338
     ],
-    "pc": 134235640,
+    "pc": 134236338,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -145,7 +146,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "a93631caacce0ecbeb8cf80ddf3264c20ebfd8fa24492b24ac151945f9e4e632",
+  "firmware_hash": "32ab6460b99206329650cc346ab5e3916b2183133419656304af23b830b88230",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nucleo-f767zi-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nucleo_f767zi.yaml",
@@ -569,7 +570,7 @@
             "value": 1
           },
           {
-            "cycle": 2507,
+            "cycle": 2506,
             "value": 0
           },
           {
@@ -585,15 +586,15 @@
             "value": 1
           },
           {
-            "cycle": 2538,
+            "cycle": 2537,
             "value": 0
           },
           {
-            "cycle": 2549,
+            "cycle": 2547,
             "value": 1
           },
           {
-            "cycle": 2553,
+            "cycle": 2552,
             "value": 0
           }
         ],
@@ -609,7 +610,7 @@
             "state": "1"
           },
           {
-            "cycle": 2507,
+            "cycle": 2506,
             "state": "0"
           },
           {
@@ -625,15 +626,15 @@
             "state": "1"
           },
           {
-            "cycle": 2538,
+            "cycle": 2537,
             "state": "0"
           },
           {
-            "cycle": 2549,
+            "cycle": 2547,
             "state": "1"
           },
           {
-            "cycle": 2553,
+            "cycle": 2552,
             "state": "0"
           }
         ],
@@ -652,7 +653,7 @@
             "value": 1
           },
           {
-            "cycle": 2660,
+            "cycle": 2659,
             "value": 0
           },
           {
@@ -668,15 +669,15 @@
             "value": 1
           },
           {
-            "cycle": 2691,
+            "cycle": 2690,
             "value": 0
           },
           {
-            "cycle": 2702,
+            "cycle": 2700,
             "value": 1
           },
           {
-            "cycle": 2706,
+            "cycle": 2705,
             "value": 0
           }
         ],
@@ -692,7 +693,7 @@
             "state": "1"
           },
           {
-            "cycle": 2660,
+            "cycle": 2659,
             "state": "0"
           },
           {
@@ -708,15 +709,15 @@
             "state": "1"
           },
           {
-            "cycle": 2691,
+            "cycle": 2690,
             "state": "0"
           },
           {
-            "cycle": 2702,
+            "cycle": 2700,
             "state": "1"
           },
           {
-            "cycle": 2706,
+            "cycle": 2705,
             "state": "0"
           }
         ],
@@ -735,7 +736,7 @@
             "value": 1
           },
           {
-            "cycle": 2813,
+            "cycle": 2812,
             "value": 0
           },
           {
@@ -751,15 +752,15 @@
             "value": 1
           },
           {
-            "cycle": 2844,
+            "cycle": 2843,
             "value": 0
           },
           {
-            "cycle": 2855,
+            "cycle": 2853,
             "value": 1
           },
           {
-            "cycle": 2859,
+            "cycle": 2858,
             "value": 0
           }
         ],
@@ -775,7 +776,7 @@
             "state": "1"
           },
           {
-            "cycle": 2813,
+            "cycle": 2812,
             "state": "0"
           },
           {
@@ -791,15 +792,15 @@
             "state": "1"
           },
           {
-            "cycle": 2844,
+            "cycle": 2843,
             "state": "0"
           },
           {
-            "cycle": 2855,
+            "cycle": 2853,
             "state": "1"
           },
           {
-            "cycle": 2859,
+            "cycle": 2858,
             "state": "0"
           }
         ],
@@ -996,6 +997,12 @@
         "end_cycle": 630000
       },
       {
+        "text": "spi456 TXEIE idle_pend=1 idle_release=1 ok",
+        "cycle_lo": 620000,
+        "cycle": 630000,
+        "end_cycle": 630000
+      },
+      {
         "text": "dma m2m dma1_refused=1 dma2_copied=1 ok",
         "cycle_lo": 950000,
         "cycle": 960000,
@@ -1003,8 +1010,8 @@
       },
       {
         "text": "i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok",
-        "cycle_lo": 950000,
-        "cycle": 960000,
+        "cycle_lo": 960000,
+        "cycle": 970000,
         "end_cycle": 970000
       },
       {
@@ -1041,13 +1048,13 @@
         "text": "summary 0x7670FFFF",
         "cycle_lo": 970000,
         "cycle": 980000,
-        "end_cycle": 980000
+        "end_cycle": 990000
       },
       {
         "text": "DONE",
-        "cycle_lo": 970000,
-        "cycle": 980000,
-        "end_cycle": 980000
+        "cycle_lo": 980000,
+        "cycle": 990000,
+        "end_cycle": 990000
       }
     ],
     "dropped_lines": 0
@@ -1104,14 +1111,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 19164,
+    "text_bytes": 19924,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 19164,
+    "flash_used_bytes": 19924,
     "ram_static_bytes": 0,
     "flash_total_bytes": 2097152,
     "ram_total_bytes": 524288,
-    "flash_used_pct": 0.91,
+    "flash_used_pct": 0.95,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -1137,88 +1144,88 @@
     "cycles": 6000000,
     "instructions": 6000000,
     "steps_executed": 6000000,
-    "memory_reads": 6947,
-    "memory_writes": 1178,
-    "peripheral_accesses": 268629,
+    "memory_reads": 7153,
+    "memory_writes": 1203,
+    "peripheral_accesses": 268732,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134235640,
-        "count": 764,
+        "pc": 134236338,
+        "count": 726,
         "symbol": "firmware_nucleo_f767zi_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 134220298,
+        "pc": 134220302,
         "count": 157,
-        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
-      },
-      {
-        "pc": 134220222,
-        "count": 156,
-        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
-      },
-      {
-        "pc": 134220234,
-        "count": 156,
-        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
-      },
-      {
-        "pc": 134220256,
-        "count": 156,
-        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
-      },
-      {
-        "pc": 134220276,
-        "count": 156,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134220308,
-        "count": 156,
-        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
-      },
-      {
-        "pc": 134220244,
-        "count": 118,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134220266,
-        "count": 117,
-        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
-      },
-      {
-        "pc": 134220288,
-        "count": 117,
-        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
-      },
-      {
-        "pc": 134232828,
-        "count": 79,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134232944,
-        "count": 79,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134232956,
-        "count": 79,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134232822,
+        "pc": 134220216,
+        "count": 156,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220228,
+        "count": 156,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220240,
+        "count": 156,
+        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
+      },
+      {
+        "pc": 134220260,
+        "count": 156,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220282,
+        "count": 156,
+        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
+      },
+      {
+        "pc": 134220250,
+        "count": 118,
+        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
+      },
+      {
+        "pc": 134220272,
+        "count": 117,
+        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
+      },
+      {
+        "pc": 134220292,
+        "count": 117,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134232814,
+        "count": 79,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134232930,
+        "count": 79,
+        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait_level"
+      },
+      {
+        "pc": 134232942,
+        "count": 79,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134232810,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134232824,
+        "pc": 134232812,
         "count": 78,
         "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait_level"
       },
       {
-        "pc": 134232826,
+        "pc": 134232816,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       }
