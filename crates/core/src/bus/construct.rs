@@ -1261,9 +1261,14 @@ impl SystemBus {
     /// its aliases too: pico-sdk's `pio_sm_init` clears EXECCTRL bits through
     /// the `+0x3000` alias, which used to BusFault on PIO2.
     #[inline]
+    ///
+    /// The RP2040's XIP_SSI (`0x1800_0000`, AHB-Lite) has the aliases too:
+    /// stock MicroPython's RAM-resident flash code clears SSIENR through
+    /// `0x1800_3008`, which used to BusFault. Nothing else maps there.
     pub fn atomic_alias_redirect(&self, addr: u64) -> Option<(u64, AtomicAliasOp)> {
         const PERIPHERAL_WINDOW: std::ops::Range<u64> = 0x4000_0000..0x5050_0000;
-        if !PERIPHERAL_WINDOW.contains(&addr) {
+        const XIP_SSI_WINDOW: std::ops::Range<u64> = 0x1800_0000..0x1800_4000;
+        if !PERIPHERAL_WINDOW.contains(&addr) && !XIP_SSI_WINDOW.contains(&addr) {
             return None;
         }
         let op = self
