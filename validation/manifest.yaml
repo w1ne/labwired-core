@@ -1312,6 +1312,13 @@ boards:
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: stm32h563
+    # 2026-11-09 (L4/G4/WB ADC, hw-onboarding): changes the shared adc.rs
+    # digest. Only the `stm32l4` layout changes: CR rs bits keep written
+    # zeros (H7 mask), ADSTP/JADSTP/ADDIS complete, ADCAL self-clears when
+    # CCR.CKMODE != 0, and ADSTART converts the SQR1.SQ1 channel. With
+    # CKMODE = 0 ADCAL still latches (nucleo_l476rg_adc capture passes). The
+    # F1/F4/H7/U5/G0 layouts are unchanged. This is a reviewed model-drift
+    # acknowledgment, NOT a new silicon capture; no capture or ack date moves.
     # 2026-11-08 (CH32X035G8U6 Arduino core row, hw-onboarding): changes the
     # shared uart.rs/attach.rs/from_config.rs digests. The two WCH pad-map
     # bools on Uart become one private `WchPadMap` enum with a new
@@ -2573,7 +2580,7 @@ boards:
     # E/F); the STM32 GPIO arms and every existing method are untouched.
     # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: 9ac319dbfdd0383d08cf334aabf4e1f7a370b7c3fd33affa9526e4f7e9292b04
+    drift_ack_digest: 5db1394dc4db2ea38436825fb0f9ccf1857d126d477c5d043e5720421e1c4794
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -3730,6 +3737,13 @@ boards:
     # NOT a new silicon capture.
 
   - id: nucleo-l476rg
+    # 2026-11-09 (L4/G4/WB ADC, hw-onboarding): changes the shared adc.rs
+    # digest. Only the `stm32l4` layout changes: CR rs bits keep written
+    # zeros (H7 mask), ADSTP/JADSTP/ADDIS complete, ADCAL self-clears when
+    # CCR.CKMODE != 0, and ADSTART converts the SQR1.SQ1 channel. With
+    # CKMODE = 0 ADCAL still latches (nucleo_l476rg_adc capture passes). The
+    # F1/F4/H7/U5/G0 layouts are unchanged. This is a reviewed model-drift
+    # acknowledgment, NOT a new silicon capture; no capture or ack date moves.
     # 2026-11-08 (CH32X035G8U6 Arduino core row, hw-onboarding): changes the
     # shared uart.rs/attach.rs/from_config.rs digests. The two WCH pad-map
     # bools on Uart become one private `WchPadMap` enum with a new
@@ -4981,7 +4995,7 @@ boards:
     # E/F); the STM32 GPIO arms and every existing method are untouched.
     # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: ffb023472e0798bbbe1fc9c82d06950946da9b278c781d1f015c5db468ec85ad
+    drift_ack_digest: 8b91b50daa3f51cae14eed55e61102905593e072610635be0605ed1bed6609fa
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6238,6 +6252,13 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f103
+    # 2026-11-09 (L4/G4/WB ADC, hw-onboarding): changes the shared adc.rs
+    # digest. Only the `stm32l4` layout changes: CR rs bits keep written
+    # zeros (H7 mask), ADSTP/JADSTP/ADDIS complete, ADCAL self-clears when
+    # CCR.CKMODE != 0, and ADSTART converts the SQR1.SQ1 channel. With
+    # CKMODE = 0 ADCAL still latches (nucleo_l476rg_adc capture passes). The
+    # F1/F4/H7/U5/G0 layouts are unchanged. This is a reviewed model-drift
+    # acknowledgment, NOT a new silicon capture; no capture or ack date moves.
     # 2026-11-08 (CH32X035G8U6 Arduino core row, hw-onboarding): changes the
     # shared uart.rs/attach.rs/from_config.rs digests. The two WCH pad-map
     # bools on Uart become one private `WchPadMap` enum with a new
@@ -7506,7 +7527,7 @@ boards:
     # E/F); the STM32 GPIO arms and every existing method are untouched.
     # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-08
-    drift_ack_digest: dcd99fd44bdcf91208232af6170e4dd4aa256218c538ddc7b759c3832c5f7afe
+    drift_ack_digest: 1b73245ad41a14a5b4f0a4ddf54ca59eecb1a4a7dcee886a250010b55124a27e
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are

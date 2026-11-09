@@ -914,15 +914,22 @@ impl Adc {
         }
     }
 
-    /// L4 single-conversion engine. ADSTART (CR bit 2) with ADEN (bit 0) and a
-    /// ready converter (ISR.ADRDY) converts the fixed internal source: loads DR
-    /// with the code for CFGR.RES, raises ISR.EOC + EOS, and auto-clears
-    /// ADSTART. Deterministic and immediate (no analog settling to model).
+    /// L4 single-conversion engine (L4, G4, WB share this block). ADSTART
+    /// (CR bit 2) with ADEN (bit 0) and a ready converter (ISR.ADRDY)
+    /// converts the first rank of the regular sequence, `SQR1.SQ1[10:6]`: its
+    /// held input against VREF+ at `CFGR.RES`, or the fixed internal source
+    /// when the channel has no held input. Raises ISR.EOC + EOS; ADSTART
+    /// auto-clears unless `CFGR.CONT` (bit 13) is set. Deterministic and
+    /// immediate (no analog settling to model).
+    ///
+    /// Limits: right alignment only, one conversion per start (ranks after
+    /// SQ1 are not converted), no IRQ, DMA, overrun, oversampling, offset,
+    /// analog watchdog or internal channel (VREFINT, TS, VBAT).
     fn maybe_start_l4_conversion(&mut self, cr: u32) {
         let aden = cr & 0x1 != 0;
         let adstart = cr & (1 << 2) != 0;
-        let (adrdy, cfgr) = match &self.regs {
-            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr),
+        let (adrdy, cfgr, sqr1) = match &self.regs {
+            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr, r.sqr1),
             // H7 and U5 have their own engines (`maybe_start_h7_conversion`,
             // `maybe_start_u5_conversion`).
             AdcRegs::Stm32F1(_)
@@ -934,9 +941,20 @@ impl Adc {
         if !(aden && adstart && adrdy) {
             return;
         }
-        self.dr = l4_adc_code(l4_resolution_bits(cfgr));
+        let bits = l4_resolution_bits(cfgr);
+        let ch = ((sqr1 >> 6) & 0x1F) as usize;
+        self.dr = match self.channel_inputs_mv.get(ch).copied().flatten() {
+            Some(mv) => scaled_input_code(
+                Self::code_for_mv(f64::from(mv), self.reference_millivolts),
+                bits,
+            ),
+            None => l4_adc_code(bits),
+        };
+        let cont = cfgr & (1 << 13) != 0;
         if let AdcRegs::Stm32L4(r) = &mut self.regs {
-            r.cr &= !(1 << 2); // ADSTART auto-clears after a single conversion
+            if !cont {
+                r.cr &= !(1 << 2); // ADSTART auto-clears after a single conversion
+            }
             r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
         }
     }
@@ -1450,12 +1468,38 @@ impl Adc {
                 // the hang that moved stm32h563 onto the `stm32h7` profile,
                 // whose 3-bit CFGR.RES[4:2] then read the fixture's 2-bit
                 // RES[4:3] write as 16-bit and turned `TIER1 adc` red.
+                //
+                // A non-zero common `CCR.CKMODE[17:16]` selects the
+                // synchronous HCLK/1, /2 or /4 clock. That clock exists
+                // whenever the ADC bus clock is on, so calibration completes
+                // without `CCIPR`. Stock stm32duino on the NUCLEO-L476RG,
+                // G474RE and WB55 sets `ADC_CLOCK_SYNC_PCLK_DIV4` (0b11).
                 let calibrating = value & (1 << 31) != 0;
-                r.cr = if calibration_completes {
-                    value & !(1 << 31)
-                } else {
-                    value
-                };
+                let sync_clock = (r.common_ccr >> 16) & 0x3 != 0;
+                // CR[31] and CR[5:0] are rs on the L4/G4/WB too (same bits as
+                // the H7, `H7_CR_READ_SET_MASK`): a written 0 leaves them
+                // unchanged. Stock HAL `LL_ADC_REG_StartConversion` writes
+                // `MODIFY_REG(CR, ADC_CR_BITS_PROPERTY_RS, ADSTART)`, which
+                // has ADEN = 0. Storing that verbatim cleared ADEN, nothing
+                // converted, and stock analogRead returned 0.
+                let mut cr = (value & !H7_CR_READ_SET_MASK)
+                    | ((r.cr | value) & H7_CR_READ_SET_MASK);
+                if calibration_completes || sync_clock {
+                    cr &= !(1 << 31);
+                }
+                // ADSTP / JADSTP complete at once and stop the group; ADDIS
+                // completes and clears ADEN, so HAL `ADC_ConversionStop` and
+                // `ADC_Disable` (in `HAL_ADC_Stop`) return HAL_OK.
+                if cr & (1 << 4) != 0 {
+                    cr &= !((1 << 4) | (1 << 2));
+                }
+                if cr & (1 << 5) != 0 {
+                    cr &= !((1 << 5) | (1 << 3));
+                }
+                if cr & (1 << 1) != 0 {
+                    cr &= !((1 << 1) | 0x1 | (1 << 2) | (1 << 3));
+                }
+                r.cr = cr;
                 // ADEN with the voltage regulator up (ADVREGEN set, DEEPPWD
                 // clear) raises ISR.ADRDY. Silicon-verified on STM32H563
                 // ADC1 (2026-06-11): DEEPPWD=0 -> ADVREGEN=1 -> ADEN=1 reads
@@ -1752,7 +1796,11 @@ impl Peripheral for Adc {
                 }
                 // A write touching CR may have set ADSTART — try to convert.
                 if reg == 0x08 {
-                    self.maybe_start_l4_conversion(full);
+                    let cr = match &self.regs {
+                        AdcRegs::Stm32L4(r) => r.cr,
+                        _ => full,
+                    };
+                    self.maybe_start_l4_conversion(cr);
                 }
             }
             AdcRegs::Stm32H7(_) => {
@@ -2315,6 +2363,20 @@ mod tests {
         );
     }
 
+    /// `CCR.CKMODE` != 0 clocks the ADC from HCLK, so calibration runs and
+    /// ADCAL self-clears. Stock stm32duino selects HCLK/4 on L4, G4 and WB;
+    /// before this, its `HAL_ADCEx_Calibration_Start` timed out and
+    /// `analogRead` returned 0 on the NUCLEO-L476RG, G474RE and WB55.
+    #[test]
+    fn test_adc_l4_adcal_self_clears_on_the_synchronous_clock() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.write_u32(0x308, 0b11 << 16).unwrap(); // CCR.CKMODE = HCLK/4
+        adc.write_u32(0x08, 0).unwrap(); // leave deep power-down
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+        adc.write_u32(0x08, (1 << 28) | (1 << 31)).unwrap(); // ADCAL
+        assert_eq!(adc.read_u32(0x08).unwrap(), 1 << 28, "ADCAL cleared");
+    }
+
     /// The H7 clears ADCAL too, and nothing asserted it. Found by accident:
     /// a mis-aimed negative control deleted the H7's `& !(1 << 31)` and the
     /// whole ADC suite stayed green. Same defect as the L4 had, one layout
@@ -2446,6 +2508,47 @@ mod tests {
             dr10 < dr12 && dr8 < dr10,
             "code scales down with resolution"
         );
+    }
+
+    #[test]
+    fn l4_converts_the_sq1_channel_held_input() {
+        // NUCLEO-L476RG A0 = PA0 = ADC1_IN5 (stm32duino PeripheralPins.c).
+        let start = |adc: &mut Adc, sq1: u32, cfgr: u32| -> u32 {
+            adc.write_u32(0x08, 0).unwrap(); // DEEPPWD = 0
+            adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADVREGEN | ADEN
+            adc.write_u32(0x0C, cfgr).unwrap();
+            adc.write_u32(0x30, sq1 << 6).unwrap(); // SQR1.SQ1, L = 0
+            // HAL LL_ADC_REG_StartConversion: MODIFY_REG(CR,
+            // ADC_CR_BITS_PROPERTY_RS, ADSTART) writes ADEN as 0.
+            let cr = adc.read_u32(0x08).unwrap();
+            adc.write_u32(0x08, (cr & !0x8000_003F) | (1 << 2)).unwrap();
+            adc.read_u32(0x40).unwrap()
+        };
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.set_channel_input(5, 1651);
+        adc.set_channel_input(1, 825);
+        assert_eq!(start(&mut adc, 5, 0), 2048, "ch5 1651 mV at 12 bits");
+        // 825 mV sits on the 1024 code edge; the shared quantizer lands below it.
+        assert_eq!(start(&mut adc, 1, 0), 1023, "ch1 825 mV: SQ1 selects");
+        assert_eq!(start(&mut adc, 5, 1 << 3), 512, "ch5 at 10 bits");
+        assert_eq!(start(&mut adc, 7, 0), 3723, "unheld ch7: fixed source");
+        assert_eq!(adc.read_u32(0x08).unwrap() & (1 << 2), 0, "ADSTART clears");
+
+        start(&mut adc, 5, 1 << 13); // CONT
+        assert_ne!(
+            adc.read_u32(0x08).unwrap() & (1 << 2),
+            0,
+            "ADSTART stays set in continuous mode"
+        );
+        assert_ne!(adc.read_u32(0x08).unwrap() & 0x1, 0, "ADEN survives");
+
+        // HAL_ADC_Stop: ADSTP completes, then ADDIS clears ADEN.
+        let cr = adc.read_u32(0x08).unwrap();
+        adc.write_u32(0x08, (cr & !0x8000_003F) | (1 << 4)).unwrap();
+        assert_eq!(adc.read_u32(0x08).unwrap() & 0x14, 0, "ADSTP, ADSTART clear");
+        let cr = adc.read_u32(0x08).unwrap();
+        adc.write_u32(0x08, (cr & !0x8000_003F) | (1 << 1)).unwrap();
+        assert_eq!(adc.read_u32(0x08).unwrap() & 0x3, 0, "ADDIS, ADEN clear");
     }
 
     #[test]

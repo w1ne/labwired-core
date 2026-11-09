@@ -32,7 +32,7 @@
 //! deterministic — no wall-clock timeouts). Register offsets follow RM0444
 //! (STM32G0x1) and the simulator's models: rcc.rs (`stm32g0`), gpio.rs
 //! (`stm32v2`), uart.rs (`stm32v2`), timer.rs, i2c.rs (`stm32l4`),
-//! spi.rs (classic `stm32`), adc.rs (`stm32l4`), dma.rs (Dma1), rtc.rs,
+//! spi.rs (classic `stm32`), adc.rs (`stm32g0`), dma.rs (Dma1), rtc.rs,
 //! iwdg.rs and nvic.rs.
 //!
 //! Cortex-M0+ note: reading the full 32-bit status word and bit-testing it
@@ -56,7 +56,7 @@ const TIM2_BASE: u32 = 0x4000_0000; // type timer, width 32
 const TIM1_BASE: u32 = 0x4001_2C00; // type timer, advanced (id tim1_pwm)
 const I2C1_BASE: u32 = 0x4000_5400; // type i2c, profile stm32l4
 const SPI1_BASE: u32 = 0x4001_3000; // type spi, profile stm32 (FIFO-less)
-const ADC1_BASE: u32 = 0x4001_2400; // type adc, profile stm32l4
+const ADC1_BASE: u32 = 0x4001_2400; // type adc, profile stm32g0
 const DMA1_BASE: u32 = 0x4002_0000; // type dma (Dma1, 7ch)
 const IWDG_BASE: u32 = 0x4000_3000; // type iwdg
 const RTC_BASE: u32 = 0x4000_2800; // type rtc (stm32l4 layout)
@@ -482,6 +482,9 @@ fn check_spi() -> Result<(), &'static [u8]> {
 fn adc_convert(res: u32) -> Result<u32, &'static [u8]> {
     let cfgr = rd32(ADC1_BASE + 0x0C) & !(0x3 << 3);
     wr32(ADC1_BASE + 0x0C, cfgr | (res << 3));
+    // G0 CHSELR (bitmap mode): a conversion needs a selected channel. IN0 has
+    // no held input in the Tier-1 run, so it converts the fixed source.
+    wr32(ADC1_BASE + 0x28, 1 << 0);
     wr32(ADC1_BASE + 0x00, 1 << 2); // ISR rc_w1: clear any stale EOC
     wr32(ADC1_BASE + 0x08, rd32(ADC1_BASE + 0x08) | (1 << 2)); // CR.ADSTART
     let mut eoc = false;
@@ -497,7 +500,7 @@ fn adc_convert(res: u32) -> Result<u32, &'static [u8]> {
     Ok(rd32(ADC1_BASE + 0x40) & 0xFFFF)
 }
 
-/// adc: ADC1 (stm32l4 layout, APBENR2 bit20). Gated the CR reads 0. After
+/// adc: ADC1 (stm32g0 layout, APBENR2 bit20). Gated the CR reads 0. After
 /// ungating + power-up (clear DEEPPWD, ADVREGEN, ADEN → ISR.ADRDY; ADRDY
 /// must NOT assert before ADEN), prove a REAL conversion BY VALUE: ADSTART
 /// converts the fixed internal source and the code must scale when CFGR.RES

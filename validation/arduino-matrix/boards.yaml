@@ -331,8 +331,12 @@ boards:
     led_watch: "gpioa:5"
     led_min_edges: 2
     family: stm32
-    sketches_skip: [L8_can]
+    # L5 is skipped, not passed: the L0 ADC is the CHSELR block, and the
+    # `stm32l4` profile reads SQR1, so stock analogRead(A0) prints "0 0",
+    # which the generic oracle would accept. PR #1722 adds the F0/L0 model.
+    sketches_skip: [L5_adc, L8_can]
     sketches_skip_reason:
+      L5_adc: "No L0 (CHSELR) ADC model on this lane: analogRead returns 0; a pass would be vacuous (PR #1722)"
       L8_can: "No CAN peripheral on L0 series"
 
   - id: stm32l476
