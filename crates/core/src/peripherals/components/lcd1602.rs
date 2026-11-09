@@ -392,13 +392,19 @@ impl Lcd1602 {
         diffs > 0
     }
 
+    /// Prefer the variant that still has `:` when two panels differ only by blink.
+    fn prefer_colon(existing: &str, candidate: &str) -> bool {
+        candidate.contains(':') && !existing.contains(':')
+    }
+
     /// Record the current visible text when it changes and is non-blank.
     /// Entries accumulate for the whole run (a clear does not wipe them) and
     /// the ring is capped at [`Self::TEXTS_SEEN_CAP`] (32).
     ///
-    /// Progressive typing and blink-colon frames replace the ring tail instead
-    /// of pushing, so early panels (e.g. "Wrong Input", "Current Time") survive
-    /// a long run that would otherwise flood the 32-cap with single-char paints.
+    /// Progressive typing replaces the ring tail. Blink-colon frames and
+    /// clear+reprint sequences that only rebuild an existing panel (common on
+    /// HD44780 remaining-time UIs) do not grow the ring, so early panels
+    /// survive long runs.
     fn record_text_if_changed(&mut self) {
         if !self.display_on {
             return;
@@ -411,12 +417,21 @@ impl Lcd1602 {
             if prev == &text {
                 return;
             }
-            // Blink colon frames are ephemeral evidence — keep the prior
-            // panel (usually with `:`) so Acc history needles like "00:02"
-            // survive a run that ends on the space-blink frame.
-            if Self::is_blink_only(prev, &text) {
-                return;
+        }
+        // Blink or clear+reprint of a panel already on the ring: keep one slot.
+        // `is_monotonic_fill(text, existing)` catches mid-repaint prefixes after
+        // a clear (`"T…"` toward `"Time Remainig 00:02"`).
+        if let Some(i) = self
+            .texts_seen
+            .iter()
+            .position(|p| Self::is_blink_only(p, &text) || Self::is_monotonic_fill(&text, p))
+        {
+            if Self::prefer_colon(&self.texts_seen[i], &text) {
+                self.texts_seen[i] = text;
             }
+            return;
+        }
+        if let Some(prev) = self.texts_seen.back() {
             if Self::is_monotonic_fill(prev, &text) {
                 self.texts_seen.pop_back();
                 self.texts_seen.push_back(text);
@@ -724,6 +739,42 @@ mod tests {
             dev.text()
         );
     }
+
+
+    #[test]
+    fn texts_seen_clear_reprint_blink_does_not_grow_ring() {
+        let mut dev = Lcd1602::new(0x27);
+        display_on(&mut dev);
+        for ch in b"Time Remainig" {
+            data(&mut dev, *ch);
+        }
+        command(&mut dev, 0xC0);
+        for ch in b"00:02" {
+            data(&mut dev, *ch);
+        }
+        assert_eq!(dev.texts_seen.len(), 1);
+        // Simulate clear + reprint with blink-off colon (firmware remaining-time loop).
+        command(&mut dev, 0x01); // clear display
+        for ch in b"Time Remainig" {
+            data(&mut dev, *ch);
+        }
+        command(&mut dev, 0xC0);
+        for ch in b"00 02" {
+            data(&mut dev, *ch);
+        }
+        assert_eq!(
+            dev.texts_seen.len(),
+            1,
+            "clear+reprint blink must not grow the ring: {:?}",
+            dev.texts_seen
+        );
+        assert!(
+            dev.texts_seen[0].contains("00:02"),
+            "colon frame must be retained: {:?}",
+            dev.texts_seen
+        );
+    }
+
 
     #[test]
     fn set_ddram_address_0xc0_moves_to_row_one() {
