@@ -2,23 +2,26 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic MNA devices drive a GPIO input on every imported onboarding
-//! profile (`configs/systems/onboarding/*.yaml`) that models one.
+//! Generic MNA devices drive an input endpoint on every imported onboarding
+//! profile (`configs/systems/onboarding/*.yaml`) that models one. Endpoints
+//! may be real GPIO models or explicitly simulation-only input banks.
 //!
-//! The ADC sweep in `cosim_onboarding_analog.rs` reaches only the 12 profiles
-//! whose converter LabWired can run. This is the other endpoint the coverage
-//! inventory accepts, a voltage-thresholded digital input, and it is just as
+//! The descriptor-driven ADC sweep in `cosim_onboarding_analog.rs` complements
+//! this voltage-thresholded digital input endpoint. The proof is
 //! board-agnostic: the port is the first peripheral each built bus reports as
 //! a GPIO input, the same Beta NTC divider and Shockley diode load line are
 //! routed to the port's first two input pads (`board.gpio_in.<port>.0` / `.1`
 //! on most ports; the LiteX CAS block's inputs start at pad 32), the solved
 //! voltages are checked
-//! against independent references, and the levels are read back twice. Once
-//! through `Peripheral::read_gpio_input`, and once with a firmware load from
-//! the port's input register.
+//! against independent references, and the levels are read through
+//! `Peripheral::read_gpio_input`. When the endpoint has a modeled input
+//! register, the test also checks that register. A simulation-only
+//! `input_pin_bank` has no firmware-visible register and is checked only at
+//! its documented co-simulation hook.
 //!
-//! The register is where it gets honest. Most Renode-imported GPIO types have
-//! no dedicated LabWired model and run on the STM32F1 placeholder map
+//! For modeled GPIOs, register readback distinguishes silicon mappings from
+//! fallbacks. Most Renode-imported GPIO types have no dedicated LabWired model
+//! and run on the STM32F1 placeholder map
 //! (`SystemBus::gpio_layout_for`, case 3b), so their input reads back at the
 //! placeholder IDR (+0x08). That is NOT the silicon register for that IP, and
 //! [`PLACEHOLDER_TYPES`] says so. Only [`SILICON_INPUT_REGISTER`] types are
@@ -285,13 +288,13 @@ const PLACEHOLDER_TYPES: &[&str] = &[
     "xilinxgpiops",
 ];
 
-/// Profiles whose port takes the routed level (`read_gpio_input` follows it)
-/// but where a firmware load from the port's input register does not see it.
-/// Fixing one has to move it out of this list.
-///
-/// Empty: the i.MX 8M Plus profiles left it once their flash boot alias,
-/// which shadowed GPIO1 with erased flash, was turned off.
-const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[];
+/// Profiles whose routed endpoint has no firmware-visible input register.
+/// These still count as endpoint coverage through `read_gpio_input`; a new
+/// register model must remove the profile from this list.
+const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[(
+    "ice40up5k-mdp-evn",
+    "the simulation-only input_pin_bank has no firmware-visible FPGA GPIO register",
+)];
 
 /// Absolute input-register address of the covered port, from the vendor
 /// header. [`input_register`] derives the address from the descriptor's own
@@ -549,13 +552,12 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 222;
+const COVERED: usize = 223;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
 const SILICON_REGISTER: usize = 117;
-/// Profiles outside this GPIO endpoint sweep: the three H7 profiles and
-/// CrossLink-NX have ADC coverage, while the remaining nineteen have no analog
-/// endpoint yet.
-const NO_GPIO_ENDPOINT: usize = 23;
+/// Profiles outside this input endpoint sweep: the three H7 profiles and
+/// CrossLink-NX have ADC coverage; eighteen profiles have no analog endpoint.
+const NO_GPIO_ENDPOINT: usize = 22;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -640,8 +642,8 @@ const UNWIRED_INPUT_PADS: &[(&str, &str)] = &[(
     "Renode crosslink-nx-evn.repl: only LEDs are supported on this LiteX platform's CAS",
 )];
 
-/// Absolute address of the port's input register, from its declared type,
-/// whether it is the silicon register, and the type key for [`input_bit`].
+/// Input-register address when one exists, whether it is the silicon
+/// register, and the type key for [`input_bit`].
 fn input_register(chip: &ChipDescriptor, port: &str, base: u64) -> (u64, bool, String) {
     let cfg = chip
         .peripherals
@@ -658,6 +660,10 @@ fn input_register(chip: &ChipDescriptor, port: &str, base: u64) -> (u64, bool, S
         let path = path.expect("a declarative port names its descriptor");
         let key = path.rsplit_once("peripherals/").map_or(path, |(_, k)| k);
         kind = format!("declarative/{key}");
+    }
+    if kind == "input_pin_bank" {
+        // This endpoint has no register map; only its PinPort hook is live.
+        return (base, false, kind);
     }
     // A window based part-way into its block (Nordic ports at OUT) says so.
     let window = cfg
@@ -903,8 +909,13 @@ fn assert_port_routes_generic_analog(
             "{tag}: diode pin reads low below VIL"
         );
 
-        let word = load_input(&bus, &kind, register);
-        register_tracked &= (word & ntc_bit != 0) == expected_ntc_level && word & diode_bit == 0;
+        if kind == "input_pin_bank" {
+            register_tracked = false;
+        } else {
+            let word = load_input(&bus, &kind, register);
+            register_tracked &=
+                (word & ntc_bit != 0) == expected_ntc_level && word & diode_bit == 0;
+        }
     }
     if unreached {
         assert!(
@@ -975,7 +986,7 @@ fn ntc_on_the_second_input_pad_lands_at_that_pads_register_bit() {
 }
 
 #[test]
-fn every_onboarding_profile_with_a_gpio_input_takes_routed_ntc_and_diode_levels() {
+fn every_onboarding_profile_with_an_input_endpoint_takes_routed_ntc_and_diode_levels() {
     let mut covered = Vec::new();
     let mut silicon = 0;
     let mut no_endpoint = 0;
@@ -1013,6 +1024,10 @@ fn every_onboarding_profile_with_a_gpio_input_takes_routed_ntc_and_diode_levels(
             "{board} is listed as unreached but is not covered"
         );
     }
+    assert!(
+        covered.iter().any(|board| board == "ice40up5k-mdp-evn"),
+        "the next uncovered onboarding profile must have routed analog input coverage"
+    );
     assert_eq!(
         covered.len(),
         COVERED,
