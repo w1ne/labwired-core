@@ -38,6 +38,7 @@
 //! AUTOFF, oversampling (L0 `CFGR2.OVSE`), the conversion prescaler, and a
 //! calibration factor (`CALFACT`/`DR` after ADCAL read 0 unless written).
 
+use crate::cycle_clock::CycleClock;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
 use std::cell::Cell;
@@ -100,7 +101,10 @@ pub enum Stm32F0AdcFamily {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 struct Conversion {
     channel: u8,
+    /// Legacy walk: cycles left, counted down by `tick_elapsed`.
     remaining: u64,
+    /// Scheduler mode: the cycle the conversion completes on.
+    due: u64,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -131,6 +135,13 @@ pub struct Stm32F0Adc {
     reference_mv: f64,
     #[serde(skip)]
     ambient_c: f64,
+    /// Bus-published cycle clock. `Some` once attached → event-schedulable;
+    /// `None` keeps the legacy walk.
+    #[serde(skip)]
+    clock: Option<CycleClock>,
+    /// Scheduler mode: `true` while the single conversion wake is queued.
+    #[serde(skip)]
+    chain_live: bool,
 }
 
 impl Stm32F0Adc {
@@ -154,7 +165,15 @@ impl Stm32F0Adc {
             inputs_mv: [None; CHANNELS],
             reference_mv: DEFAULT_VREF_MV,
             ambient_c: DEFAULT_AMBIENT_C,
+            clock: None,
+            chain_live: false,
         }
+    }
+
+    crate::cycle_clock::scheduler_mode!();
+
+    fn now(&self) -> u64 {
+        self.clock.as_ref().map_or(0, CycleClock::now)
     }
 
     fn resolution_bits(&self) -> u32 {
@@ -238,11 +257,14 @@ impl Stm32F0Adc {
     }
 
     fn begin_next(&mut self) {
+        let now = self.now();
         self.active = self.next_channel().map(|channel| {
             self.pending &= !(1 << channel);
+            let remaining = self.conversion_cycles();
             Conversion {
                 channel,
-                remaining: self.conversion_cycles(),
+                remaining,
+                due: now + remaining,
             }
         });
     }
@@ -445,10 +467,71 @@ impl Peripheral for Stm32F0Adc {
         self.tick_elapsed(1)
     }
 
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        // One live wake: a conversion started by an MMIO write arms it; the
+        // handler re-arms itself while a sequence runs. A wake left behind by
+        // ADSTP/ADDIS is absorbed by the `due` check in `on_event`.
+        match self.active {
+            Some(conv) if self.scheduler_mode() && !self.chain_live => {
+                self.chain_live = true;
+                vec![(conv.due.saturating_sub(self.now()).saturating_sub(1), 0)]
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let mut result = crate::sched::EventResult::default();
+        if !self.scheduler_mode() {
+            return result;
+        }
+        let now = self.now();
+        let Some(conv) = self.active else {
+            self.chain_live = false;
+            return result;
+        };
+        if now < conv.due {
+            result.reschedule_delay = Some(conv.due - now);
+            return result;
+        }
+        if self.cfgr1 & CFGR1_WAIT != 0 && self.dr_unread.get() {
+            // WAIT: the result is held until DR is read.
+            result.reschedule_delay = Some(1);
+            return result;
+        }
+        if self.complete(conv.channel) {
+            result.dma_signals = vec![crate::DMA_SIGNAL_RX];
+        }
+        result.raise_own_irq = self.isr.get() & self.ier != 0;
+        result.reschedule_delay = self.active.map(|next| next.due.saturating_sub(now).max(1));
+        self.chain_live = result.reschedule_delay.is_some();
+        result
+    }
+
     /// At most one result per call: a late tick must not overrun results
     /// the firmware (or the DMA) would have read in between.
     fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
         let mut result = PeripheralTickResult::default();
+        if self.scheduler_mode() {
+            return result;
+        }
         let Some(mut conv) = self.active else {
             return result;
         };

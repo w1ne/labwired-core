@@ -5964,8 +5964,16 @@ boards:
     # the F04x CFGR1 mask (`profile: stm32f04x`); the stm32f0 mask and the
     # other SYSCFG variants are unchanged. generic_factory.rs only parses the
     # two new options. ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 406): stm32l073.yaml ADC1 moves
+    # from `profile: stm32l4` (an L4 register map on an L0 part: DEEPPWD,
+    # CR reset 0x20000000) to `profile: stm32l0`, the CHSELR model
+    # (stm32f0_adc.rs, RM0377 §14), which now also runs event-scheduled so
+    # the board stays walk-deleted. ADC is outside the asserted silicon set
+    # (RCC/GPIO/SPI1/TIM2/TIM21); the demo's ADC line stays 0 because it
+    # writes ADC_CCR at 0x40012788 (RM0377: 0x40012708). ACK, NOT A SILICON
+    # CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: bf1d16950ff4a53d64d784031ee6c5edc839121310d975e06916e608272cb555
+    drift_ack_digest: e2c27c9ff234058fe518d7404d71261e627faabe8c8b7a1fd39d3a7dd46e4d91
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
