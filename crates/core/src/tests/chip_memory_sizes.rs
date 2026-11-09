@@ -158,7 +158,8 @@ fn no_chip_declares_a_size_in_decimal_mb() {
 ///   SRAM (DS30009937C Table 1-1 and the §4.2 stack example ending at 0x09FF)
 ///   and the 08KA/16KA parts have 1536 B (DS39927C Table 1-1). The PIC18F4520
 ///   also has 1536 B (six 256 B GPR banks, DS39631E device table), and the
-///   PIC16F877A 368 B (DS39582B device table). A whole-KiB rule can express
+///   PIC16F877A 368 B (DS39582B device table), and the ATmega32U4 2560 B
+///   (DS7766 §5.2). A whole-KiB rule can express
 ///   none of these.
 ///
 /// This is the backstop for the mistake with no unit attached: `size: 4000000`
@@ -212,7 +213,8 @@ fn declared_memory_sizes_are_real_part_sizes() {
     );
 }
 
-/// Non-KiB-aligned SRAM is real on exactly these PIC24F KA, PIC18 and PIC16 parts.
+/// Non-KiB-aligned SRAM is real on exactly these PIC24F KA, PIC18, PIC16 and
+/// ATmega32U4 parts.
 /// Everywhere else a non-KiB-aligned RAM size is still a transcription error.
 const NON_KIB_RAM_PARTS: &[(&str, u64)] = &[
     ("pic24f04ka200", 512),  // DS30009937C Table 1-1, §4.2
@@ -224,6 +226,7 @@ const NON_KIB_RAM_PARTS: &[(&str, u64)] = &[
     ("pic18f4520", 1536),    // DS39631E: GPR banks 0-5
     ("pic16f877a", 368),     // DS39582B: 96 + 80 + 96 + 96 B GPR, 0x70-0x7F shared
     ("pic16f1829", 1024),    // DS40001440E: 1024 B incl. 16 B common RAM
+    ("atmega32u4", 2560),    // DS7766 §5.2: 2.5 KB SRAM at 0x0100..0x0AFF
 ];
 
 fn ram_geometry_is_valid(chip: &ChipDescriptor) -> bool {

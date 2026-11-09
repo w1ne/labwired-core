@@ -71,15 +71,46 @@ fn wave_8bit(tccra: u8, tccrb: u8) -> Waveform {
 const PORT_B: usize = 0;
 const PORT_D: usize = 1;
 
+/// `(port, bit)` of OC0A, OC0B, OC1A, OC1B, OC2A, OC2B (`None` = not bonded).
+type OcPins = [Option<(usize, u8)>; 6];
+
+/// ATmega328P (and 328PB): OC0A = PD6, OC0B = PD5, OC1A = PB1, OC1B = PB2,
+/// OC2A = PB3, OC2B = PD3 (DS40002061B, section 5.1).
+const PINS_328P: OcPins = [
+    Some((PORT_D, 6)),
+    Some((PORT_D, 5)),
+    Some((PORT_B, 1)),
+    Some((PORT_B, 2)),
+    Some((PORT_B, 3)),
+    Some((PORT_D, 3)),
+];
+
+/// ATmega32U4 (DS7766, section 10.3 "Alternate Port Functions"): OC0A = PB7,
+/// OC0B = PD0, OC1A = PB5, OC1B = PB6; there is no Timer2. On the Arduino
+/// Leonardo these are D11, D3, D9, D10. OC1C (PB7) and the Timer3/Timer4
+/// outputs are not modelled.
+const PINS_M32U4: OcPins = [
+    Some((PORT_B, 7)),
+    Some((PORT_D, 0)),
+    Some((PORT_B, 5)),
+    Some((PORT_B, 6)),
+    None,
+    None,
+];
+
 impl Avr {
     /// Pads the output-compare units own right now, as `(mask, level)` per
-    /// port (B, D). OC0A = PD6, OC0B = PD5, OC1A = PB1, OC1B = PB2,
-    /// OC2A = PB3, OC2B = PD3.
+    /// port (B, D), on this part's pins.
     fn oc_override(&self) -> ([u8; 2], [u8; 2]) {
+        let pins = if self.model == super::AvrModel::Atmega32u4 {
+            &PINS_M32U4
+        } else {
+            &PINS_328P
+        };
         let mut mask = [0u8; 2];
         let mut level = [0u8; 2];
-        let mut put = |port: usize, bit: u8, l: Option<bool>| {
-            if let Some(l) = l {
+        let mut put = |pin: Option<(usize, u8)>, l: Option<bool>| {
+            if let (Some((port, bit)), Some(l)) = (pin, l) {
                 mask[port] |= 1 << bit;
                 if l {
                     level[port] |= 1 << bit;
@@ -89,31 +120,26 @@ impl Avr {
         let w0 = wave_8bit(self.tccr0a, self.tccr0b);
         let t0 = u16::from(self.tcnt0);
         put(
-            PORT_D,
-            6,
+            pins[0],
             oc_level(w0, self.tccr0a >> 6, t0, false, u16::from(self.ocr0a), 0xFF),
         );
         put(
-            PORT_D,
-            5,
+            pins[1],
             oc_level(w0, self.tccr0a >> 4, t0, false, u16::from(self.ocr0b), 0xFF),
         );
         let (w1, top1, t1) = (self.t1.waveform(), self.t1.top(), self.t1.tcnt);
         put(
-            PORT_B,
-            1,
+            pins[2],
             oc_level(w1, self.t1.tccra >> 6, t1, self.t1.down, self.t1.ocra, top1),
         );
         put(
-            PORT_B,
-            2,
+            pins[3],
             oc_level(w1, self.t1.tccra >> 4, t1, self.t1.down, self.t1.ocrb, top1),
         );
         let w2 = wave_8bit(self.tccr2a, self.tccr2b);
         let t2 = u16::from(self.tcnt2);
         put(
-            PORT_B,
-            3,
+            pins[4],
             oc_level(
                 w2,
                 self.tccr2a >> 6,
@@ -124,8 +150,7 @@ impl Avr {
             ),
         );
         put(
-            PORT_D,
-            3,
+            pins[5],
             oc_level(
                 w2,
                 self.tccr2a >> 4,
