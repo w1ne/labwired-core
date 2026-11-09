@@ -15,7 +15,7 @@ ram:
 # The F407 also has 64 KiB of CCM at 0x10000000; this memory map currently
 # exposes only the 128 KiB main SRAM used by the firmware.
 # This onboarding profile intentionally claims only the STM32F407 surface used
-# by the exact-import smoke: F4 RCC, USART2, and GPIO A/D. The remaining
+# by the exact-import smoke: F4 RCC, USART2, SPI1, and GPIO A/D. The remaining
 # imported peripheral map is untested here and includes zero-answering stubs.
 peripherals:
 - id: usart2
@@ -23,6 +23,16 @@ peripherals:
   bus: sysbus
   base_address: 1073759232
   size: 1KB
+- id: spi1
+  type: spi
+  bus: sysbus
+  base_address: 0x40013000
+  size: 1KB
+  irq: 35
+  clock: { reg: apb2enr, bit: 12 }
+  config:
+    profile: stm32f4
+    pad_map: stm32f4
 - id: gpioPortA
   type: stm32_gpioport
   bus: sysbus
@@ -42,3 +52,5 @@ peripherals:
   bus: sysbus
   base_address: 1073887232
   size: 1KB
+  config:
+    profile: stm32f4

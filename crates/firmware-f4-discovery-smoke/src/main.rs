@@ -24,10 +24,11 @@ use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-// RCC (F4): AHB1ENR gates the GPIO ports, APB1ENR gates USART2.
+// RCC (F4): AHB1ENR gates the GPIO ports, APB1ENR gates USART2, APB2ENR gates SPI1.
 const RCC: u32 = 0x4002_3800;
 const RCC_AHB1ENR: u32 = RCC + 0x30;
 const RCC_APB1ENR: u32 = RCC + 0x40;
+const RCC_APB2ENR: u32 = RCC + 0x44;
 
 // USART2 (F4 classic block: SR/DR).
 const USART2: u32 = 0x4000_4400;
@@ -39,6 +40,20 @@ const TXE: u32 = 1 << 7;
 
 const GPIOA: u32 = 0x4002_0000;
 const GPIOD: u32 = 0x4002_0C00;
+
+// SPI1 (F4 classic block: CR1/CR2/SR/DR).
+const SPI1: u32 = 0x4001_3000;
+const SPI1_CR1: *mut u32 = SPI1 as *mut u32;
+const SPI1_CR2: *mut u32 = (SPI1 + 0x04) as *mut u32;
+const SPI1_SR: *const u32 = (SPI1 + 0x08) as *const u32;
+const SPI1_DR: *mut u32 = (SPI1 + 0x0C) as *mut u32;
+const SPI1_IRQ: u32 = 35;
+const SPI1_IRQ_BIT: u32 = 1 << (SPI1_IRQ % 32);
+const NVIC_ISPR: *const u32 = 0xE000_E200 as *const u32;
+const NVIC_ICPR: *mut u32 = 0xE000_E280 as *mut u32;
+const SPI_SR_RXNE: u32 = 1 << 0;
+const SPI_SR_TXE: u32 = 1 << 1;
+const SPI_SR_BSY: u32 = 1 << 7;
 
 /// GPIO register offsets (STM32 GPIO v2 block: MODER/ODR/BSRR).
 const MODER: u32 = 0x00;
@@ -125,8 +140,12 @@ fn main() -> ! {
     // GPIOA (USART2 pins) + GPIOD (LEDs), then USART2.
     reg_rmw(RCC_AHB1ENR, 0, (1 << 0) | (1 << 3));
     reg_rmw(RCC_APB1ENR, 0, 1 << 17);
+    reg_rmw(RCC_APB2ENR, 0, 1 << 12); // SPI1EN
     pin_af(GPIOA, 2, 7);
     pin_af(GPIOA, 3, 7);
+    pin_af(GPIOA, 5, 5); // SPI1_SCK
+    pin_af(GPIOA, 6, 5); // SPI1_MISO
+    pin_af(GPIOA, 7, 5); // SPI1_MOSI
     unsafe {
         // HSI = 16 MHz: USARTDIV 8.6875 -> mantissa 8, fraction 11 -> 0x8B.
         write_volatile(USART_BRR, 0x8B);
@@ -137,6 +156,7 @@ fn main() -> ! {
         led_drive(pin, false);
     }
     send(b"F4-DISCO SMOKE\r\n");
+    smoke_spi1_irq_and_max31855();
 
     let mut beat: u32 = 0;
     loop {
@@ -153,4 +173,91 @@ fn main() -> ! {
         beat = beat.wrapping_add(1);
         delay();
     }
+}
+
+fn smoke_spi1_irq_and_max31855() {
+    unsafe {
+        // PA4 is the GPIO chip select for the fixture MAX31855.
+        reg_rmw(GPIOA + MODER, 0b11 << (4 * 2), 0b01 << (4 * 2));
+        write_volatile((GPIOA + BSRR) as *mut u32, 1 << 4); // deselect
+
+        // SPI1 master, software NSS, fPCLK/8, mode 0, 8-bit frames.
+        write_volatile(SPI1_CR1, (1 << 9) | (1 << 8) | (0b010 << 3) | (1 << 2));
+        write_volatile(SPI1_CR1, read_volatile(SPI1_CR1) | (1 << 6)); // SPE
+        write_volatile(NVIC_ICPR.add((SPI1_IRQ / 32) as usize), SPI1_IRQ_BIT);
+
+        // Idle TXE must assert and then release the SPI1 interrupt line.
+        write_volatile(SPI1_CR2, 1 << 7); // TXEIE
+    }
+    let txe_pended =
+        unsafe { read_volatile(NVIC_ISPR.add((SPI1_IRQ / 32) as usize)) & SPI1_IRQ_BIT != 0 };
+    unsafe {
+        write_volatile(SPI1_CR2, 0);
+        write_volatile(NVIC_ICPR.add((SPI1_IRQ / 32) as usize), SPI1_IRQ_BIT);
+    }
+    let txe_released =
+        unsafe { read_volatile(NVIC_ISPR.add((SPI1_IRQ / 32) as usize)) & SPI1_IRQ_BIT == 0 };
+
+    unsafe {
+        write_volatile(SPI1_CR2, 1 << 6); // RXNEIE
+        write_volatile((GPIOA + BSRR) as *mut u32, 1 << (4 + 16)); // select PA4-low slave
+    }
+    let mut frame = 0u32;
+    let mut rxne_pended = false;
+    let mut transfer_ok = true;
+    for _ in 0..4 {
+        if !wait_spi(SPI1_SR, SPI_SR_TXE, SPI_SR_TXE) {
+            transfer_ok = false;
+            break;
+        }
+        unsafe { write_volatile(SPI1_DR, 0) };
+        if !wait_spi(SPI1_SR, SPI_SR_RXNE, SPI_SR_RXNE) {
+            transfer_ok = false;
+            break;
+        }
+        let rxne = unsafe { read_volatile(SPI1_SR) } & SPI_SR_RXNE != 0;
+        let pending =
+            unsafe { read_volatile(NVIC_ISPR.add((SPI1_IRQ / 32) as usize)) & SPI1_IRQ_BIT != 0 };
+        rxne_pended |= rxne && pending;
+        frame = (frame << 8) | (unsafe { read_volatile(SPI1_DR) } & 0xFF);
+    }
+    let idle = wait_spi(SPI1_SR, SPI_SR_BSY, 0);
+    unsafe { write_volatile((GPIOA + BSRR) as *mut u32, 1 << 4) }; // deselect
+    let rxne_released = unsafe {
+        read_volatile(NVIC_ISPR.add((SPI1_IRQ / 32) as usize)) & SPI1_IRQ_BIT == 0
+            && read_volatile(SPI1_SR) & SPI_SR_RXNE == 0
+    };
+    unsafe { write_volatile(SPI1_CR2, 0) };
+
+    send(b"SPI1 MAX31855=");
+    put_hex32(frame);
+    send(b" TXEIRQ=");
+    put_dec(if txe_pended { 1 } else { 0 });
+    send(b" REARM=");
+    put_dec(if txe_released { 0 } else { 1 });
+    send(b" RXNEIRQ=");
+    put_dec(if rxne_pended { 1 } else { 0 });
+    send(b" RELEASED=");
+    put_dec(if rxne_released { 1 } else { 0 });
+    send(b"\r\n");
+    let checks_passed = transfer_ok
+        && idle
+        && frame == 0x0190_1600
+        && txe_pended
+        && txe_released
+        && rxne_pended
+        && rxne_released;
+    send(b"SPI1 CHECKS=");
+    put_dec(if checks_passed { 1 } else { 0 });
+    send(b"\r\n");
+}
+
+fn wait_spi(addr: *const u32, mask: u32, want: u32) -> bool {
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(addr) } & mask == want {
+            return true;
+        }
+        core::hint::spin_loop();
+    }
+    false
 }
