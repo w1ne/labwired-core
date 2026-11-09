@@ -1,4 +1,4 @@
-/* Bounded smoke execution window; this does not claim a density variant. */
+/* STM32F042x6: 32 KiB flash, 6 KiB SRAM (stm32f042x6.h FLASH_BANK1_END 0x08007FFF). */
 MEMORY
 {
   FLASH : ORIGIN = 0x08000000, LENGTH = 32K

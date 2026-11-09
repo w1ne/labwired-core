@@ -1,30 +1,213 @@
-# Narrowed imported STM32F042 execution profile for the RCC/GPIOA/USART1 smoke.
-# The 32 KiB flash map is a bounded fixture window, not a density claim; the
-# imported descriptor does not resolve a package or memory-density variant.
+# STM32F042 (Cortex-M0) profile for the imported Renode platform
+# (platforms/cpus/stm32f042.repl: `using "./stm32f0.repl"` plus its own
+# flash and SRAM).
+#
+# Memory: 32 KiB flash at 0x08000000 and 6 KiB SRAM at 0x20000000 — the
+# STM32F042x6 (`stm32f042x6.h` FLASH_BANK1_END 0x08007FFF). Renode's repl maps
+# 0x18000 (96 KiB) of flash, more than any F042 has; the header wins. The
+# SRAM matches Renode (0x1800).
+#
+# Renode's stm32f0.repl is the F072 superset (USART1-4, GPIOA-F, TIM6/7/15,
+# I2C2). The F042 has none of those; bases, IRQ numbers and register layouts
+# here follow RM0091 and ST's CMSIS `stm32f042x6.h`, which lists USART1/2,
+# GPIOA/B/C/F, TIM1/2/3/14/16/17, SPI1/2, I2C1 and a 5-channel DMA1 (lines
+# DMA1_Channel1 = 9, DMA1_Channel2_3 = 10, DMA1_Channel4_5 = 11).
+#
+# Claimed and exercised by examples/renode-onboarding/stm32f042-smoke.yaml:
+# RCC (the F0 map, clock gates enforced), USART1/2 ("v2" ISR/RDR/TDR
+# layout), GPIOA/B/C/F, SYSCFG EXTICR + EXTI lines 0..15 on the grouped
+# vectors, TIM1/2/3/14/16/17 (update line; TIM2 is 32-bit), SPI1/SPI2 (the
+# FIFO SPI with CR2.DS / FRXTH, master), I2C1 (the "v2" TIMINGR/ISR I2C,
+# master), DMA1 (5 channels, SPI1 requests on 2/3) and CRC.
+#
+# Not claimed: ADC (the F0 CHSELR ADC has no engine model; Renode models
+# it), CAN, USB, CRS, RTC, SPI I2S mode, TSC, CEC, IWDG/WWDG, FLASH
+# interface, PWR and the EXTI lines 16..31.
 name: stm32f042
 arch: arm
+core: cortex-m0
+# STM32F042 maximum core clock, 48 MHz (DS10152). Without PLL setup the
+# part runs on HSI (8 MHz); the engine times everything at cpu_hz.
+cpu_hz: 48_000_000
 flash:
-  base: 134217728
-  size: 32768B
+  base: 0x08000000
+  size: 32KB
 ram:
-  base: 536870912
-  size: 6144B
+  base: 0x20000000
+  size: 6KB
 peripherals:
-- id: gpioPortA
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1207959552
-  config:
-    profile: stm32v2
+# --- RCC (RM0091 §6.4: CR/CFGR/CIR/APB2RSTR/APB1RSTR/AHBENR/APB2ENR/APB1ENR..)
 - id: rcc
   type: rcc
-  bus: sysbus
-  base_address: 1073876992
+  base_address: 0x40021000
+  size: 1KB
   config:
     profile: stm32f0
+# --- USART ("v2": CR1/CR2/CR3/BRR/.../ISR 0x1C/ICR/RDR 0x24/TDR 0x28) ------
 - id: usart1
   type: uart
-  bus: sysbus
-  base_address: 1073821696
+  base_address: 0x40013800
+  size: 1KB
+  irq: 27
+  clock: { reg: apb2enr, bit: 14 }
   config:
     profile: stm32v2
+- id: usart2
+  type: uart
+  base_address: 0x40004400
+  size: 1KB
+  irq: 28
+  clock: { reg: apb1enr, bit: 17 }
+  config:
+    profile: stm32v2
+# --- GPIO (AHB2 at 0x48000000; IOPAEN/B/C = AHBENR bits 17..19, IOPFEN 22) --
+# Ids are the port letters so EXTI can address the pads; Renode calls them
+# gpioPortA..F. The F042 bonds no port D or E. PA13/PA14 come up as SWD (AF) with pull-up/pull-down.
+- id: gpioa
+  type: gpio
+  base_address: 0x48000000
+  size: 1KB
+  clock: { reg: ahbenr, bit: 17 }
+  config:
+    profile: stm32v2
+    reset_moder: 0x28000000
+    reset_pupdr: 0x24000000
+- id: gpiob
+  type: gpio
+  base_address: 0x48000400
+  size: 1KB
+  clock: { reg: ahbenr, bit: 18 }
+  config:
+    profile: stm32v2
+- id: gpioc
+  type: gpio
+  base_address: 0x48000800
+  size: 1KB
+  clock: { reg: ahbenr, bit: 19 }
+  config:
+    profile: stm32v2
+- id: gpiof
+  type: gpio
+  base_address: 0x48001400
+  size: 1KB
+  clock: { reg: ahbenr, bit: 22 }
+  config:
+    profile: stm32v2
+# --- SYSCFG / EXTI ----------------------------------------------------------
+# CFGR1 / EXTICR1..4 / CFGR2 (peripherals/syscfg.rs Stm32F0Syscfg). The F0
+# EXTICRx port codes are by letter, A..F = 0..5 (stm32f042x6.h
+# SYSCFG_EXTICR1_EXTI0_PF = 5). `stm32f04x` keeps the F04x CFGR1 fields; the
+# DMA remap bits are register state only: DMA1 keeps the reset request table
+# below.
+- id: syscfg
+  type: syscfg
+  base_address: 0x40010000
+  size: 1KB
+  clock: { reg: apb2enr, bit: 0 }
+  config:
+    profile: stm32f04x
+# IMR/EMR/RTSR/FTSR/SWIER/PR at 0x00..0x14. The Cortex-M0 grouped vectors
+# EXTI0_1 = 5, EXTI2_3 = 6, EXTI4_15 = 7 are the `stm32l0` routing.
+- id: exti
+  type: exti
+  base_address: 0x40010400
+  size: 1KB
+  config:
+    profile: stm32l0
+    lines: 32
+# --- Timers -----------------------------------------------------------------
+# RM0091 §13..§17. `irq` is the line the update interrupt raises: TIM1 on
+# TIM1_BRK_UP_TRG_COM_IRQn = 13. TIM2 is the only 32-bit counter.
+- id: tim1
+  type: timer
+  base_address: 0x40012C00
+  size: 1KB
+  irq: 13
+  clock: { reg: apb2enr, bit: 11 }
+  config:
+    advanced: true
+- id: tim2
+  type: timer
+  base_address: 0x40000000
+  size: 1KB
+  irq: 15
+  clock: { reg: apb1enr, bit: 0 }
+  config:
+    width: 32
+- id: tim3
+  type: timer
+  base_address: 0x40000400
+  size: 1KB
+  irq: 16
+  clock: { reg: apb1enr, bit: 1 }
+- id: tim14
+  type: timer
+  base_address: 0x40002000
+  size: 1KB
+  irq: 19
+  clock: { reg: apb1enr, bit: 8 }
+- id: tim16
+  type: timer
+  base_address: 0x40014400
+  size: 1KB
+  irq: 21
+  clock: { reg: apb2enr, bit: 17 }
+- id: tim17
+  type: timer
+  base_address: 0x40014800
+  size: 1KB
+  irq: 22
+  clock: { reg: apb2enr, bit: 18 }
+# --- SPI (RM0091 §28: the FIFO SPI, CR2.DS[11:8] + FRXTH) -------------------
+# DR is 16 bits wide and packs two frames when DS <= 8 bits, so 8-bit
+# firmware must use byte accesses.
+- id: spi1
+  type: spi
+  base_address: 0x40013000
+  size: 1KB
+  irq: 25
+  clock: { reg: apb2enr, bit: 12 }
+  config:
+    profile: stm32_fifo
+- id: spi2
+  type: spi
+  base_address: 0x40003800
+  size: 1KB
+  irq: 26
+  clock: { reg: apb1enr, bit: 14 }
+  config:
+    profile: stm32_fifo
+# --- I2C ("v2" TIMINGR/ISR/ICR/RXDR/TXDR IP, RM0091 §26) --------------------
+# One combined event + error line per controller.
+- id: i2c1
+  type: i2c
+  base_address: 0x40005400
+  size: 1KB
+  irq: 23
+  clock: { reg: apb1enr, bit: 21 }
+  config:
+    profile: stm32l4
+# --- DMA1 (5 channels on the F04x, RM0091 §10.3.2) -------------------------
+# Lines DMA1_Channel1 = 9, DMA1_Channel2_3 = 10, DMA1_Channel4_5 = 11.
+# CCR6/CCR7 are reserved (`channels: 5`).
+# Default (CFGR1 remap bits clear) requests from RM0091 Table 30: SPI1_RX
+# ch2, SPI1_TX ch3, SPI2_RX ch4, SPI2_TX ch5.
+- id: dma1
+  type: dma
+  base_address: 0x40020000
+  size: 1KB
+  clock: { reg: ahbenr, bit: 0 }
+  config:
+    channels: 5
+    channel_irqs: [9, 10, 10, 11, 11]
+    requests:
+      spi1_rx: 2
+      spi1_tx: 3
+      spi2_rx: 4
+      spi2_tx: 5
+# --- CRC (DR/IDR/CR/INIT; fixed polynomial on the F04x) ---------------------
+- id: crc
+  type: crc
+  base_address: 0x40023000
+  size: 1KB
+  clock: { reg: ahbenr, bit: 6 }

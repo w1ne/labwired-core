@@ -1418,8 +1418,17 @@ pub fn try_build(
                     anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
                 }
             };
+            // `channels: 5` for the F03x/F04x/F05x DMA1 (RM0091 §10.3.2).
+            let channels = match p_cfg.config.get("channels").map(|v| v.as_u64()) {
+                None => 7,
+                Some(Some(n @ 1..=7)) => n as usize,
+                Some(_) => anyhow::bail!("dma `{}`: channels must be 1..7", p_cfg.id),
+            };
+            if channels < 7 {
+                dma = dma.with_channels(channels);
+            }
             if let Some(irqs) = p_cfg.config.get("channel_irqs") {
-                let irqs: Vec<u32> = irqs
+                let mut irqs: Vec<u32> = irqs
                     .as_sequence()
                     .map(|s| {
                         s.iter()
@@ -1428,9 +1437,16 @@ pub fn try_build(
                             .collect()
                     })
                     .unwrap_or_default();
-                let Ok(irqs) = <[u32; 7]>::try_from(irqs) else {
-                    anyhow::bail!("dma `{}`: channel_irqs must list 7 NVIC lines", p_cfg.id)
-                };
+                if irqs.len() != channels {
+                    anyhow::bail!(
+                        "dma `{}`: channel_irqs must list {channels} NVIC lines",
+                        p_cfg.id
+                    )
+                }
+                // Unimplemented channels never raise a flag; their slot only
+                // fills the array.
+                irqs.resize(7, irqs[channels - 1]);
+                let irqs: [u32; 7] = irqs.try_into().expect("resized to 7");
                 dma = dma.with_channel_irqs(irqs);
             }
             for (request, v) in dma_request_table(p_cfg) {
@@ -1645,6 +1661,11 @@ pub fn try_build(
         // by-letter A..F port codes, CFGR2 (RM0091 §9).
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f0") => {
             Box::new(crate::peripherals::syscfg::Stm32F0Syscfg::new())
+        }
+        // The F04x variant (`profile: stm32f04x`): the same map, with the F04x
+        // CFGR1 fields (PA11_PA12_RMP, no F07x/F09x remaps above bit 23).
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f04x") => {
+            Box::new(crate::peripherals::syscfg::Stm32F0Syscfg::new_f04x())
         }
         // SYSCFG elsewhere — mostly EXTI source select (harmless read-0 stub), plus the H7
         // I/O compensation cell the H7 HAL enables + polls during rcc.freeze:

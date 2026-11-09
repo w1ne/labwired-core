@@ -515,19 +515,44 @@ mod tests {
 /// engine's DMA request table is the reset (unremapped) one. `CFGR2`: the
 /// three TIM1-break lock bits (2:0) are set-once until reset, and SRAM_PEF
 /// (8) is rc_w1 and never set — this engine has no SRAM parity.
-#[derive(Debug, Default, serde::Serialize)]
+///
+/// The F04x CFGR1 ([`Self::new_f04x`], `stm32f042x6.h`) has PA11_PA12_RMP
+/// (4) and Fm+ bits up to I2C_FMP_PA10 (23), but none of the F07x DMA remap
+/// bits 13:14 / 24:30.
+#[derive(Debug, serde::Serialize)]
 pub struct Stm32F0Syscfg {
     cfgr1: u32,
     exticr: [u32; 4],
     cfgr2: u32,
+    #[serde(skip)]
+    cfgr1_mask: u32,
+}
+
+impl Default for Stm32F0Syscfg {
+    fn default() -> Self {
+        Self {
+            cfgr1: 0,
+            exticr: [0; 4],
+            cfgr2: 0,
+            cfgr1_mask: Self::CFGR1_MASK,
+        }
+    }
 }
 
 impl Stm32F0Syscfg {
     const CFGR1_MASK: u32 = 0x7F3F_7F03;
+    const CFGR1_MASK_F04X: u32 = 0x00FF_1F13;
     const CFGR2_LOCKS: u32 = 0x7;
 
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn new_f04x() -> Self {
+        Self {
+            cfgr1_mask: Self::CFGR1_MASK_F04X,
+            ..Self::default()
+        }
     }
 
     /// The GPIO port index (0 = A, by letter) `SYSCFG_EXTICRx` routes to
@@ -553,7 +578,7 @@ impl Stm32F0Syscfg {
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            0x00 => self.cfgr1 = value & Self::CFGR1_MASK,
+            0x00 => self.cfgr1 = value & self.cfgr1_mask,
             0x08 => self.exticr[0] = value & 0xFFFF,
             0x0C => self.exticr[1] = value & 0xFFFF,
             0x10 => self.exticr[2] = value & 0xFFFF,
@@ -634,6 +659,13 @@ mod f0_tests {
         assert_eq!(s.exti_line_source(1), Some(2), "code 2 is port C");
         assert_eq!(s.exti_line_source(2), Some(u8::MAX), "code 6 is no port");
         assert_eq!(s.exti_line_source(16), None);
+    }
+
+    #[test]
+    fn f04x_cfgr1_keeps_the_f04x_fields() {
+        let mut s = Stm32F0Syscfg::new_f04x();
+        s.write_u32(0x00, 0xFFFF_FFFF).unwrap();
+        assert_eq!(s.read_u32(0x00).unwrap(), 0x00FF_1F13);
     }
 
     #[test]

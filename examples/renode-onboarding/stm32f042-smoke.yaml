@@ -1,13 +1,78 @@
-# Smoke against the narrowed imported STM32F042 execution profile.
-schema_version: "1.0"
+# Cortex-M0 smoke against the imported STM32F042x6 profile: RCC reset state
+# and an enforced clock gate (GPIOF), USART1/2 TX and TXE interrupts each on
+# its own line, GPIOA/B/C/F reset values and set/reset, EXTI software and pad
+# edges through the SYSCFG port mux on the grouped vectors (PF = code 5),
+# TIM1/2/3/14/16/17 width, counting and update interrupt on the right NVIC
+# line; SPI1/SPI2 (FIFO SPI, 8-bit frames by byte access) each reading its own
+# MAX31855 frame (polled, then SPI1 again through DMA1 channels 2/3 on the
+# shared channel-2/3 line), DMA1 channels 6/7 reserved (5-channel F04x DMA)
+# while channel 5 runs, I2C1 reading a TMP102 plus RXIE and a NACK on the
+# combined line; two MAX31855s sharing SPI1 behind GPIO chip selects PA4 /
+# PB0; CRC-32 with the INIT reload; and the F04x SYSCFG_CFGR1 fields. The
+# two fixture switches (PF1, PC13) are pressed by the stimuli below; the
+# first stimuli set the SPI2 and second SPI1 thermocouples.
+# It does not claim ADC, CAN, USB, CRS, RTC or the watchdogs.
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f042-smoke"
   system: "../../configs/systems/onboarding/stm32f042.yaml"
 limits:
-  max_steps: 800000
+  max_steps: 4000000
+stimuli:
+  - target: { component: "tc_spi2", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 100.0
+  - target: { component: "tc_spi1b", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 50.0
+  - target: { component: "sw_pf1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1500000 }
+    value: 1.0
+  - target: { component: "sw_pf1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1700000 }
+    value: 0.0
+  - target: { component: "sw_pf1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2100000 }
+    value: 1.0
+  - target: { component: "sw_pf1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2300000 }
+    value: 0.0
+  - target: { component: "sw_pc13", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2700000 }
+    value: 1.0
+  - target: { component: "sw_pc13", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2900000 }
+    value: 0.0
 assertions:
-  - uart_contains: "STM32F042 profile smoke"
+  - uart_contains: "STM32F042 Cortex-M0 smoke"
+  - uart_contains: "usart2 ok"
+  - uart_ordered:
+      - "rcc reset=1 gate=1 ok"
+      - "usart irq u1=1 u2=1 ok"
+      - "gpio pa=1 reset=1 pf=1 bc=1 ok"
+      - "exti swier masked=1 routed=1 ok"
+      - "tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim16 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "exti pads idle=1 presses=1 pa_quiet=1 pf1=1 pc13=1 ok"
+      - "spi1 frame=0x01901600 ds=1 data=1 pend=1 alone=1 released=1 ok"
+      - "spi2 frame=0x06401600 ds=1 data=1 pend=1 alone=1 released=1 ok"
+      - "dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok"
+      - "dma1 channels reserved=1 idle=1 ch5=1 ok"
+      - "i2c1 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok"
+      - "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok"
+      - "crc word=0xDF8A8A2B seed=1 std=1 init=1 ok"
+      - "syscfg cfgr1=0x00FF1F10 ok"
+      - "summary 0x0427FFFF"
+      - "DONE"
+  - memory_value:
+      address: 0x20001000
+      expected_value: 0x0427FFFF
+      size: 4
   - gpio_edges:
-      pin: "gpioPortA:5"
-      min_edges: 1
+      pin: "gpiof:0"
+      min_edges: 4
   - expected_stop_reason: max_steps

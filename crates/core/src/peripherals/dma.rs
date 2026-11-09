@@ -196,6 +196,11 @@ pub struct Dma1 {
     #[serde(skip)]
     g0_pending: Option<usize>,
     observations: [DmaObservation; 7],
+    /// Channels the part implements, from the chip yaml (`config: {
+    /// channels: 5 }`): the F03x/F04x/F05x DMA1 has 5 (RM0091 §10.3.2), so
+    /// CCR6/CCR7 and their ISR/IFCR nibbles are reserved there. `None` = 7.
+    #[serde(skip)]
+    implemented_channels: Option<usize>,
 }
 
 impl Dma1 {
@@ -217,6 +222,17 @@ impl Dma1 {
     pub fn with_channel_irqs(mut self, irqs: [u32; 7]) -> Self {
         self.channel_irqs = Some(irqs);
         self
+    }
+
+    /// Implement only channels 1..`n` (`n` <= 7). The rest read as zero and
+    /// ignore writes, so they can never be enabled or raise a flag.
+    pub fn with_channels(mut self, n: usize) -> Self {
+        self.implemented_channels = Some(n.min(7));
+        self
+    }
+
+    fn channel_count(&self) -> usize {
+        self.implemented_channels.unwrap_or(7)
     }
 
     /// Observed successful MMIO/memory copies, indexed by channel 1..7.
@@ -351,7 +367,7 @@ impl Dma1 {
             _ if offset >= 0x08 => {
                 let chan_idx = ((offset - 0x08) / 20) as usize;
                 let reg_off = (offset - 0x08) % 20;
-                if chan_idx < 7 {
+                if chan_idx < self.channel_count() {
                     match reg_off {
                         0x00 => self.channels[chan_idx].ccr,
                         0x04 => self.channels[chan_idx].cndtr,
@@ -410,7 +426,7 @@ impl Dma1 {
             _ if offset >= 0x08 => {
                 let chan_idx = ((offset - 0x08) / 20) as usize;
                 let reg_off = (offset - 0x08) % 20;
-                if chan_idx < 7 {
+                if chan_idx < self.channel_count() {
                     match reg_off {
                         0x00 => {
                             let old_en = (self.channels[chan_idx].ccr & 1) != 0;
@@ -948,6 +964,21 @@ mod tests {
         assert_eq!(dma.read_reg(0x00) & 0xFF, 0x13);
         dma.write_reg(0x04, 1); // CGIF1
         assert_eq!(dma.read_reg(0x00) & 0xFF, 0x10);
+    }
+
+    /// F04x DMA1 (`channels: 5`): CCR6/CCR7 are reserved, so channel 6
+    /// cannot be programmed or enabled, while channel 5 still runs.
+    #[test]
+    fn five_channel_controller_reserves_channels_6_and_7() {
+        let mut dma = Dma1::new().with_channels(5);
+        m2m(&mut dma, 6, 1, 0x2000_0000, 0x2000_0100, 0);
+        assert_eq!(dma.read_reg(0x08 + 5 * 20), 0, "CCR6 reads zero");
+        assert_eq!(dma.read_reg(0x08 + 5 * 20 + 0x04), 0, "CNDTR6 reads zero");
+        dma.tick();
+        assert_eq!(dma.read_reg(0x00), 0, "channel 6 never flags");
+        m2m(&mut dma, 5, 1, 0x2000_0000, 0x2000_0100, 0);
+        dma.tick();
+        assert_ne!(dma.read_reg(0x00) & (1 << 17), 0, "TCIF5");
     }
 
     /// F1/L1 `DMA1_Channel1..7_IRQn`: with `channel_irqs`, a channel's

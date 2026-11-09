@@ -4821,8 +4821,14 @@ boards:
     # §13.4.2). No register address, reset or RW value changed; every
     # in-tree MEM2MEM user sets DIR=1. ACK, NOT A SILICON CAPTURE;
     # re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 402): dma.rs gains an opt-in
+    # `channels: N` (the 5-channel F04x DMA1: CCR6/CCR7 reserved, read 0);
+    # without it the controller keeps all 7 channels, as here. syscfg.rs adds
+    # the F04x CFGR1 mask (`profile: stm32f04x`); the stm32f0 mask and the
+    # other SYSCFG variants are unchanged. generic_factory.rs only parses the
+    # two new options. ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 735098e48f3b0888378e3cf9bab7ab93bf1b71ee3974438ec1675edfb3b696cb
+    drift_ack_digest: 8ee028f21c39638b47bf39daea24dcd55da917f4be808becfa346633a55bc7c3
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -5946,8 +5952,14 @@ boards:
     # §13.4.2). No register address, reset or RW value changed; every
     # in-tree MEM2MEM user sets DIR=1. ACK, NOT A SILICON CAPTURE;
     # re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 402): dma.rs gains an opt-in
+    # `channels: N` (the 5-channel F04x DMA1: CCR6/CCR7 reserved, read 0);
+    # without it the controller keeps all 7 channels, as here. syscfg.rs adds
+    # the F04x CFGR1 mask (`profile: stm32f04x`); the stm32f0 mask and the
+    # other SYSCFG variants are unchanged. generic_factory.rs only parses the
+    # two new options. ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 48db904b641aaa16c4dfcdf0c6dfda46dc3c4423e7cacd6742fef63eb42d2548
+    drift_ack_digest: bf1d16950ff4a53d64d784031ee6c5edc839121310d975e06916e608272cb555
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -7226,8 +7238,14 @@ boards:
     # §13.4.2). No register address, reset or RW value changed; every
     # in-tree MEM2MEM user sets DIR=1. ACK, NOT A SILICON CAPTURE;
     # re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 402): dma.rs gains an opt-in
+    # `channels: N` (the 5-channel F04x DMA1: CCR6/CCR7 reserved, read 0);
+    # without it the controller keeps all 7 channels, as here. syscfg.rs adds
+    # the F04x CFGR1 mask (`profile: stm32f04x`); the stm32f0 mask and the
+    # other SYSCFG variants are unchanged. generic_factory.rs only parses the
+    # two new options. ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 9c0feb6b05a2c87f3ec14a00eebf77baef2d2a21f38ecab4d5b141b7df51c28e
+    drift_ack_digest: 24d3169f899eb04b94b57ced54ef7745b9fb0e0c9bd317c05d9db49f972d26e0
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -8375,8 +8393,14 @@ boards:
     # §13.4.2). No register address, reset or RW value changed; every
     # in-tree MEM2MEM user sets DIR=1. ACK, NOT A SILICON CAPTURE;
     # re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 402): dma.rs gains an opt-in
+    # `channels: N` (the 5-channel F04x DMA1: CCR6/CCR7 reserved, read 0);
+    # without it the controller keeps all 7 channels, as here. syscfg.rs adds
+    # the F04x CFGR1 mask (`profile: stm32f04x`); the stm32f0 mask and the
+    # other SYSCFG variants are unchanged. generic_factory.rs only parses the
+    # two new options. ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 3604b81d034355a57b8c74fe760c06b412c1e90e52c585676d07e93ccc8f835e
+    drift_ack_digest: 52cc0ef4c3461da96898f8123f7e9d98be664b0b80ab2f7dd7e0889edbe8e053
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
