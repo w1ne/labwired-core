@@ -1,0 +1,7 @@
+bad@4096 got=93 want=17
+bad@4097 got=b2 want=36
+bad@4098 got=d1 want=55
+bad@4099 got=f0 want=74
+bad@4100 got=ef want=93
+bad@4101 got=0e want=b2
+N=8000 w=8000 r=8000 bad=3904 errno=0

@@ -1,0 +1,16 @@
+LW_FS_BOOT
+E (12) esp_littlefs: ./managed_components/joltwallet__littlefs/src/littlefs/lfs.c:1383:error: Corrupted dir pair at {0x0, 0x1}
+
+E (12) esp_littlefs: mount failed,  (-84)
+E (12) esp_littlefs: Failed to initialize LittleFS
+begin=1 total=1441792 used=8192
+w=15 a=12 read=[hello labwired
+second line
+]
+ren=1 old_gone=1 new=1 big_w=24576 size=24576 read=0 bad=0
+ls big.bin 24576
+ls greet.txt 27
+files=2 rm=1 rm_gone=1 remount=1 reread=[hello labwired
+second line
+]
+LW_FS_FAIL

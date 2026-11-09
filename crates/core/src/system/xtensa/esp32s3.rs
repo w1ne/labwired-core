@@ -895,6 +895,15 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     bank.register(0x4000_21d8, rom_thunks::rom_bswapsi2); // __bswapsi2
     bank.register(0x4000_2214, rom_thunks::rom_clzsi2); // __clzsi2
     bank.register(0x4000_2238, rom_thunks::rom_ctzsi2); // __ctzsi2
+
+    // libgcc bit-ops (esp32s3.rom.libgcc.ld); littlefs needs __popcountsi2.
+    bank.register(0x4000_24d8, rom_thunks::rom_popcountsi2); // __popcountsi2
+    bank.register(0x4000_24cc, rom_thunks::rom_popcountdi2); // __popcountdi2
+    bank.register(0x4000_24c0, rom_thunks::rom_paritysi2); // __paritysi2
+    bank.register(0x4000_2208, rom_thunks::rom_clzdi2); // __clzdi2
+    bank.register(0x4000_222c, rom_thunks::rom_ctzdi2); // __ctzdi2
+    bank.register(0x4000_22bc, rom_thunks::rom_ffssi2); // __ffssi2
+    bank.register(0x4000_22b0, rom_thunks::rom_ffsdi2); // __ffsdi2
     bank.register(0x4000_225c, rom_thunks::rom_divdi3); // __divdi3
     bank.register(0x4000_23d0, rom_thunks::rom_lshrdi3); // __lshrdi3
     bank.register(0x4000_23f4, rom_thunks::rom_moddi3); // __moddi3

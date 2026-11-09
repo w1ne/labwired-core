@@ -1,0 +1,15 @@
+E (12) esp_littlefs: ./managed_components/joltwallet__littlefs/src/littlefs/lfs.c:1383:error: Corrupted dir pair at {0x0, 0x1}
+
+E (12) esp_littlefs: mount failed,  (-84)
+E (12) esp_littlefs: Failed to initialize LittleFS
+begin=1
+raw 00000 00000001 f7ff0ff0 7474696c 7366656c
+raw 01000 00000002 f7ff0ff0 7474696c 7366656c
+raw bc000 64452607 e0c1a283 5c3d1eff d8b99a7b
+raw bd000 000000bc 74553617 f0d1b293 4c2d0eef
+un bd000 000000bc 74553617
+un bd004 74553617 f0d1b293
+un bd008 f0d1b293 4c2d0eef
+un bd001 17000000 93745536
+N=8000 w=8000 r=8000 bad=0 errno=0
+LW_SZ_DONE

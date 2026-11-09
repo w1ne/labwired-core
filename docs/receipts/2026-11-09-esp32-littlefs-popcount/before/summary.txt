@@ -1,0 +1,4 @@
+littlefs esp32: FAIL  0/1 checks · t-esp32 · 400000000 steps · 129.31s
+littlefs esp32s3: FAIL  0/1 checks · t-esp32s3 · 8369 steps · 0.21s
+bitops esp32: FAIL  0/1 checks · t-esp32 · 400000000 steps · 129.69s
+bitops esp32s3: FAIL  0/1 checks · t-esp32s3 · 400000000 steps · 83.95s

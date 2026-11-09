@@ -1951,6 +1951,71 @@ pub fn rom_ctzsi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     Ok(())
 }
 
+/// The u64 argument of a libgcc `*di2` helper: low word in a2, high in a3.
+fn u64_arg(cpu: &XtensaLx7) -> u64 {
+    let n = cpu.ps.callinc() * 4;
+    let lo = cpu.regs.read_logical(n + 2) as u64;
+    let hi = cpu.regs.read_logical(n + 3) as u64;
+    (hi << 32) | lo
+}
+
+/// `__popcountsi2(u32) -> i32`. GCC emits it for `__builtin_popcount`, and
+/// littlefs (`lfs_popc`) uses it to place the CTZ skip-list pointers in each
+/// file block. Without a thunk the bank's `nop_return_zero` fallback answered
+/// 0 for every input, so littlefs looked 4 bytes too far into every block
+/// after the first, and any file over one block read back shifted or corrupt.
+pub fn rom_popcountsi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let v = cpu.regs.read_logical(n + 2);
+    RomThunkBank::return_with(cpu, v.count_ones());
+    Ok(())
+}
+
+/// `__popcountdi2(u64) -> i32` — `__builtin_popcountll`.
+pub fn rom_popcountdi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let v = u64_arg(cpu);
+    RomThunkBank::return_with(cpu, v.count_ones());
+    Ok(())
+}
+
+/// `__paritysi2(u32) -> i32` — `__builtin_parity`: 1 if an odd number of bits is set.
+pub fn rom_paritysi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let v = cpu.regs.read_logical(n + 2);
+    RomThunkBank::return_with(cpu, v.count_ones() & 1);
+    Ok(())
+}
+
+/// `__clzdi2(u64) -> i32` — leading zero count; libgcc leaves 0 undefined, so
+/// answer 64 like the 32-bit thunk answers 32.
+pub fn rom_clzdi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let v = u64_arg(cpu);
+    RomThunkBank::return_with(cpu, v.leading_zeros());
+    Ok(())
+}
+
+/// `__ctzdi2(u64) -> i32` — trailing zero count (64 for 0, see `rom_clzdi2`).
+pub fn rom_ctzdi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let v = u64_arg(cpu);
+    RomThunkBank::return_with(cpu, v.trailing_zeros());
+    Ok(())
+}
+
+/// `__ffssi2(u32) -> i32` — 1 + index of the lowest set bit, 0 for 0.
+pub fn rom_ffssi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let v = cpu.regs.read_logical(n + 2);
+    RomThunkBank::return_with(cpu, if v == 0 { 0 } else { v.trailing_zeros() + 1 });
+    Ok(())
+}
+
+/// `__ffsdi2(u64) -> i32` — 1 + index of the lowest set bit, 0 for 0.
+pub fn rom_ffsdi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let v = u64_arg(cpu);
+    RomThunkBank::return_with(cpu, if v == 0 { 0 } else { v.trailing_zeros() + 1 });
+    Ok(())
+}
+
 /// ESP-IDF `heap_caps_init(void)` — initializes the heap allocator on real
 /// silicon. We model the heap via a sim-side bump allocator (see
 /// `heap_caps_malloc`), so `heap_caps_init` itself is a no-op.
@@ -2481,6 +2546,40 @@ mod tests {
         for &(addr, _) in ESP32_ROM_LIBGCC_FP {
             assert!((0x4000_0000..0x4007_0000).contains(&addr), "{addr:#x}");
         }
+    }
+
+    #[test]
+    fn libgcc_bit_op_thunks_match_the_builtins() {
+        let mut bus = SystemBus::new();
+        let call = |f: RomThunkFn, args: &[u32], bus: &mut SystemBus| -> u32 {
+            let mut cpu = XtensaLx7::new();
+            cpu.reset(bus).unwrap();
+            cpu.regs.write_logical(0, 0x4037_0010);
+            for (i, a) in args.iter().enumerate() {
+                cpu.regs.write_logical(2 + i as u8, *a);
+            }
+            f(&mut cpu, bus).unwrap();
+            assert_eq!(cpu.get_pc(), 0x4037_0010);
+            cpu.regs.read_logical(2)
+        };
+        // lfs_popc(1) must be 1: littlefs places block 1's data after one
+        // CTZ pointer, 4 bytes in.
+        assert_eq!(call(rom_popcountsi2, &[1], &mut bus), 1);
+        assert_eq!(call(rom_popcountsi2, &[0x00F0_F000], &mut bus), 8);
+        assert_eq!(call(rom_popcountsi2, &[0], &mut bus), 0);
+        let a: u64 = 0x1_2345_6789;
+        let w = [a as u32, (a >> 32) as u32];
+        assert_eq!(call(rom_popcountdi2, &w, &mut bus), 15);
+        assert_eq!(call(rom_paritysi2, &[0b111], &mut bus), 1);
+        assert_eq!(call(rom_paritysi2, &[0b11], &mut bus), 0);
+        assert_eq!(call(rom_clzdi2, &w, &mut bus), 31);
+        let s = a << 20;
+        let ws = [s as u32, (s >> 32) as u32];
+        assert_eq!(call(rom_ctzdi2, &ws, &mut bus), 20);
+        assert_eq!(call(rom_ffsdi2, &ws, &mut bus), 21);
+        assert_eq!(call(rom_ffsdi2, &[0, 0], &mut bus), 0);
+        assert_eq!(call(rom_ffssi2, &[0x00F0_F000], &mut bus), 13);
+        assert_eq!(call(rom_ffssi2, &[0], &mut bus), 0);
     }
 
     #[test]

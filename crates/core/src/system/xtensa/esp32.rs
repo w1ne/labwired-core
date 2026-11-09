@@ -453,6 +453,16 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     rom_bank.register(0x4000_d280, rom_thunks::rom_umoddi3); // __umoddi3
     rom_bank.register(0x4000_c7e8, rom_thunks::rom_clzsi2); // __clzsi2
     rom_bank.register(0x4000_c7f0, rom_thunks::rom_ctzsi2); // __ctzsi2
+                                                            // libgcc bit-ops (esp32.rom.libgcc.ld). Unregistered, they fell through
+                                                            // to nop_return_zero: __builtin_popcount was 0 for every input and stock
+                                                            // LittleFS corrupted every file larger than one 4 KiB block.
+    rom_bank.register(0x4000_2ed0, rom_thunks::rom_popcountsi2); // __popcountsi2
+    rom_bank.register(0x4000_2ef8, rom_thunks::rom_popcountdi2); // __popcountdi2
+    rom_bank.register(0x4000_2f3c, rom_thunks::rom_paritysi2); // __paritysi2
+    rom_bank.register(0x4000_ca50, rom_thunks::rom_clzdi2); // __clzdi2
+    rom_bank.register(0x4000_ca64, rom_thunks::rom_ctzdi2); // __ctzdi2
+    rom_bank.register(0x4000_c804, rom_thunks::rom_ffssi2); // __ffssi2
+    rom_bank.register(0x4000_ca2c, rom_thunks::rom_ffsdi2); // __ffsdi2
                                                             // libgcc soft-float: every double op on classic ESP32 lives in mask ROM.
     for &(addr, thunk) in rom_thunks::ESP32_ROM_LIBGCC_FP {
         rom_bank.register(addr, thunk);
