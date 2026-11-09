@@ -28,7 +28,16 @@ fn xip_ssi_ssienr_set_and_clr_aliases_reach_the_register() {
     let mut bus = labwired_core::bus::SystemBus::from_config(&chip, &manifest).expect("bus");
 
     bus.write_u32(SSIENR + SET, 1).expect("SET alias of SSIENR");
-    assert_eq!(bus.read_u32(SSIENR).unwrap() & 1, 1, "SET alias enables the SSI");
-    bus.write_u32(SSIENR + CLR, 1).expect("CLR alias of SSIENR (MicroPython)");
-    assert_eq!(bus.read_u32(SSIENR).unwrap() & 1, 0, "CLR alias disables the SSI");
+    assert_eq!(
+        bus.read_u32(SSIENR).unwrap() & 1,
+        1,
+        "SET alias enables the SSI"
+    );
+    bus.write_u32(SSIENR + CLR, 1)
+        .expect("CLR alias of SSIENR (MicroPython)");
+    assert_eq!(
+        bus.read_u32(SSIENR).unwrap() & 1,
+        0,
+        "CLR alias disables the SSI"
+    );
 }
