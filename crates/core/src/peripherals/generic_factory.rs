@@ -462,6 +462,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "stm32l1_adc",
     // NXP LPC2000 10-bit ADC, ADCR/ADDR (LPC2119..2294 UM ch. 17).
     "lpc2000_adc",
+    // Renesas RZ ADC_C, ADM0..3/ADINT/ADSTS/ADCRn (RZ/G FSP adc_c_iodefine.h).
+    "renesas_adc_c",
     // STM32W108 sigma-delta ADC + DMA channel (DocID16252 Rev 16 ch. 11).
     "stm32w108_adc",
     // MSP430 ADC12 (F1/F2) and ADC12_A (F5) (mspsim ADC12.java, TI headers).
@@ -2070,6 +2072,20 @@ pub fn try_build(
                 .map_or(3300, |v| v as u32),
         )),
         // `vref_mv`: V3A, the analog supply (3.3 V on LPC2294 boards).
+        // `channels`: 8 on RZ/G2L (9 with the RZ/G3S TSU input); `vref_mv`:
+        // the converter reference (Zephyr r9a07g044.dtsi `vref-mv` 1800).
+        "renesas_adc_c" => Box::new(crate::peripherals::renesas_adc_c::RenesasAdcC::new(
+            p_cfg
+                .config
+                .get("channels")
+                .and_then(|v| v.as_u64())
+                .map_or(8, |v| v.min(9) as u8),
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(1800, |v| v as u32),
+        )),
         "lpc2000_adc" => Box::new(crate::peripherals::lpc2000_adc::Lpc2000Adc::new(
             p_cfg
                 .config

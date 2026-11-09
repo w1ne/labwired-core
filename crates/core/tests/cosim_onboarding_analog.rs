@@ -112,6 +112,7 @@ const CONVERTED: &[&str] = &[
     "renesas-r7fa6m5b",
     "renesas-r7fa8m1a",
     "renesas-rz_t2m_rsk",
+    "renesas_rz_g2l",
     "renesas_rz_t2m",
     "ri5cy",
     "s32k118",
@@ -388,7 +389,27 @@ enum Family {
     /// 12 significant bits of `16384 * V / 1.2 V`, so above VREF it
     /// saturates.
     Stm32w108Adc,
+    /// Renesas RZ ADC_C (`renesas_adc_c`), the Linux `rzg2l_adc.c` read:
+    /// `ADM0 = SRESB`, `ADM0 |= PWDWNB`, `ADM1` select mode with the
+    /// software trigger, `ADM2.CHSEL = BIT(ch)`, `ADINT = CSEEN | BIT(ch)`,
+    /// `ADM0 |= ADCE`, then `ADSTS.INTST` and `ADCRn` [11:0]. 12 bits,
+    /// (2^12 - 1) / VREF, VREF from the descriptor's `vref_mv` (1.8 V on
+    /// RZ/G2L).
+    RenesasAdcC { vref_mv: u32 },
 }
+
+/// RZ ADC_C offsets and bits (RZ/G FSP R9A07G044L adc_c_iobitmask.h).
+const ADCC_ADM0: u64 = 0x00;
+const ADCC_ADM1: u64 = 0x04;
+const ADCC_ADM2: u64 = 0x08;
+const ADCC_ADINT: u64 = 0x20;
+const ADCC_ADSTS: u64 = 0x24;
+const ADCC_ADCR0: u64 = 0x30;
+const ADCC_ADCE: u32 = 1 << 0;
+const ADCC_PWDWNB: u32 = 1 << 2;
+const ADCC_SRESB: u32 = 1 << 15;
+const ADCC_MS: u32 = 1 << 2;
+const ADCC_CSEEN: u32 = 1 << 16;
 
 /// STM32W108 ADC offsets and bits (DocID16252 Rev 16 §11.3). `ADC_ISR` is
 /// in the shared event block, mirrored into the ADC window.
@@ -700,6 +721,14 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Stm32L1Adc
         } else if kind == "lpc2000_adc" {
             Family::Lpc2000Adc
+        } else if kind == "renesas_adc_c" {
+            Family::RenesasAdcC {
+                vref_mv: p
+                    .config
+                    .get("vref_mv")
+                    .and_then(|v| v.as_u64())
+                    .map_or(1800, |mv| mv as u32),
+            }
         } else if kind == "stm32w108_adc" {
             Family::Stm32w108Adc
         } else if kind == "nxp_lpadc" {
@@ -825,6 +854,9 @@ impl Converter {
             // 10 bits, V/V3A as a binary fraction: mV * 1024 / 3300,
             // truncated, clamped at 0x3FF.
             Family::Lpc2000Adc => (mv * 1024 / 3300).min(1023),
+            // (2^12 - 1) / VREF, truncated, clamped: at 1.8 V the -10 °C
+            // divider (2.79 V) saturates, 25/80 °C resolve.
+            Family::RenesasAdcC { vref_mv } => (mv * 4095 / vref_mv).min(4095),
             // Against GND: raw 32768 * V / 1.2 V floored and limited to
             // 32767, 12 significant bits (low 4 cleared), halved by the
             // offset/gain stage at reset OFFSET/GAIN.
@@ -973,6 +1005,24 @@ impl Converter {
                     self.id
                 );
                 bus.write_u32(self.base + W108_DMACR, 1 << 4).expect("RST");
+            }
+            Family::RenesasAdcC { .. } => {
+                // ADCE in software reset (SRESB = 0) converts nothing.
+                bus.write_u32(self.base + ADCC_ADM2, 1 << NTC_CHANNEL)
+                    .expect("CHSEL");
+                bus.write_u32(self.base + ADCC_ADM0, ADCC_PWDWNB | ADCC_ADCE)
+                    .expect("ADCE in reset");
+                assert_eq!(
+                    bus.read_u32(self.base + ADCC_ADSTS).unwrap(),
+                    0,
+                    "{}: no conversion while SRESB = 0",
+                    self.id
+                );
+                // rzg2l_adc_hw_init + runtime resume: out of reset, powered.
+                bus.write_u32(self.base + ADCC_ADM0, ADCC_SRESB)
+                    .expect("SRESB");
+                bus.write_u32(self.base + ADCC_ADM0, ADCC_SRESB | ADCC_PWDWNB)
+                    .expect("PWDWNB");
             }
             Family::Lpc2000Adc => {
                 assert_eq!(
@@ -2992,6 +3042,35 @@ impl Converter {
                 bus.write_u32(self.base + W108_CR, 0).expect("ADC off");
                 u32::from(bus.read_u16(W108_BUFFER).unwrap())
             }
+            Family::RenesasAdcC { .. } => {
+                // rzg2l_adc_conversion_setup + start + ISR.
+                let adm0 = self.base + ADCC_ADM0;
+                assert_eq!(bus.read_u32(adm0).unwrap() & 0b10, 0, "{}: ADBSY", self.id);
+                let adm1 = bus.read_u32(self.base + ADCC_ADM1).unwrap();
+                bus.write_u32(self.base + ADCC_ADM1, (adm1 & !0x3011) | ADCC_MS)
+                    .expect("ADM1 select, software trigger");
+                bus.write_u32(self.base + ADCC_ADM2, 1 << channel)
+                    .expect("CHSEL");
+                bus.write_u32(self.base + ADCC_ADINT, ADCC_CSEEN | (1 << channel))
+                    .expect("ADINT");
+                let start = bus.read_u32(adm0).unwrap() | ADCC_ADCE;
+                bus.write_u32(adm0, start).expect("ADCE");
+                let sts = bus.read_u32(self.base + ADCC_ADSTS).unwrap();
+                assert_eq!(sts & 0xFF, 1 << channel, "{}: INTST{channel}", self.id);
+                let value = bus
+                    .read_u32(self.base + ADCC_ADCR0 + 4 * u64::from(channel))
+                    .unwrap()
+                    & 0xFFF;
+                bus.write_u32(self.base + ADCC_ADSTS, sts)
+                    .expect("clear ADSTS");
+                assert_eq!(
+                    bus.read_u32(adm0).unwrap() & ADCC_ADCE,
+                    0,
+                    "{}: the single scan ended",
+                    self.id
+                );
+                value
+            }
             Family::Lpc2000Adc => {
                 // adc_init (PDN, CLKDIV 4) + adc_read: select, START, poll
                 // DONE, ADCR ^= START, deselect, read the result.
@@ -3912,6 +3991,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Gr716Adc
                 | Family::Stm32L1Adc
                 | Family::Lpc2000Adc
+                | Family::RenesasAdcC { .. }
                 | Family::Stm32w108Adc
                 | Family::NxpLpadc { .. }
                 | Family::RaAdc { .. }
@@ -4002,7 +4082,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 167,
+        instances, 168,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -4010,7 +4090,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 80,
+        without_adc, 79,
         "onboarding profiles that declare no modelled ADC"
     );
 }

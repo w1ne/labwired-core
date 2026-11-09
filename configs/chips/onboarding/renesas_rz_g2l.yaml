@@ -32,3 +32,28 @@ peripherals:
   type: arm_generictimer
   bus: cpu1
   base_address: 15
+# A/D converter (renesas_adc_c) at 0x1005_9000, the CA55 view the P0 block
+# above uses (Linux r9a07g044.dtsi adc@10059000, 0x400 bytes; the Cortex-M33
+# sees it at 0x4005_9000, Zephyr r9a07g044.dtsi). ADM0..3, ADINT, ADSTS,
+# ADIVC, ADFIL, ADCR0..7 (RZ/G FSP R9A07G044L adc_c_iodefine.h). 8 channels;
+# vref-mv 1800 (Zephyr r9a07g044.dtsi). Scan end is GIC SPI 347, but no GIC
+# is declared here, so no irq is wired.
+- id: adc
+  type: renesas_adc_c
+  bus: sysbus
+  base_address: 0x10059000
+  size: 1KB
+  config:
+    channels: 8
+    vref_mv: 1800
+# ADC_CH0..7 are dedicated analog pins (no port mux; the SMARC SoM dtsi only
+# muxes P9_0 to ADC_TRG). Pad names follow the RZ/G2L pin function names.
+analog_pins:
+  ADC_CH0: { peripheral: adc, channel: 0 }
+  ADC_CH1: { peripheral: adc, channel: 1 }
+  ADC_CH2: { peripheral: adc, channel: 2 }
+  ADC_CH3: { peripheral: adc, channel: 3 }
+  ADC_CH4: { peripheral: adc, channel: 4 }
+  ADC_CH5: { peripheral: adc, channel: 5 }
+  ADC_CH6: { peripheral: adc, channel: 6 }
+  ADC_CH7: { peripheral: adc, channel: 7 }

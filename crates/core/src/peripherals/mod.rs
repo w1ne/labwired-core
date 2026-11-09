@@ -117,6 +117,7 @@ pub mod ra_iic;
 pub mod ra_pfs;
 pub mod radio;
 pub mod rcc;
+pub mod renesas_adc_c;
 pub mod renesas_da14_gpadc;
 pub mod rf_medium;
 pub mod rng;
