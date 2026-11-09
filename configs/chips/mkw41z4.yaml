@@ -10,7 +10,7 @@
 # configs/peripherals/mkw41z4/. The radio blocks (BTLE_RF / GENFSK / ZLL /
 # XCVR) are present in the SVD but intentionally not modelled here yet — this
 # profile covers the core + sensor/peripheral path (UART, GPIO, clock, I2C/SPI,
-# timers). Memory map: 512KB flash, 128KB SRAM (Kinetis split, addressed as one
+# timers, ADC0). Memory map: 512KB flash, 128KB SRAM (Kinetis split, addressed as one
 # contiguous CPU-visible window).
 name: "mkw41z4"
 arch: "arm"
@@ -44,6 +44,16 @@ pins:
   PB6: { gpio: gpioc, bit: 2,  functions: [{ type: i2c, peripheral: i2c1, role: scl }] }
   PB7: { gpio: gpioc, bit: 3,  functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
   PC0: { gpio: gpioc, bit: 0,  functions: [{ type: gpio, peripheral: gpioc }] }
+# ADC16 pads on the MKW41Z512VHT4, from Zephyr hal_nxp @cc9b44ae3e
+# dts/nxp/kinetis/kwx/pinctrl/MKW41Z512CAT4-pinctrl.h (the VHT4 file includes
+# it and only drops PTC0). Channel = the kinetis_adc16 input index, which for
+# these single-ended pads is ADCH; SE4/SE5 are the CFG2.MUXSEL = 0 inputs.
+analog_pins:
+  PTB1:  { peripheral: adc0, channel: 1 }  # ADC0_SE1
+  PTB3:  { peripheral: adc0, channel: 2 }  # ADC0_SE2
+  PTB2:  { peripheral: adc0, channel: 3 }  # ADC0_SE3
+  PTB18: { peripheral: adc0, channel: 4 }  # ADC0_SE4 (also DAC0_OUT)
+  PTA19: { peripheral: adc0, channel: 5 }  # ADC0_SE5
 peripherals:
   # --- Console / serial ---
   # Behavioural LPUART (Kinetis layout): DATA writes hit the TX sink, STAT
@@ -219,3 +229,16 @@ peripherals:
     irq: 13
     config:
       path: "../peripherals/mkw41z4/trng0.yaml"
+  # --- Analog ---
+  # ADC16 (kinetis_adc16): mcux-sdk devices/MKW41Z4/MKW41Z4.h gives ADC0_BASE
+  # 0x4003B000, ADC0_IRQn 15 and an ADC_Type identical to the MK64F12 one;
+  # cmsis-svd-data NXP/MKW41Z4.svd gives the same reset values (SC1n 0x1F,
+  # OFS 0x4, PG/MG 0x8200, CLPx/CLMx). VREFH is VDDA (3.3 V). VALTH keeps the
+  # model's 1.2 V VREF_OUT default (the KW41Z has a VREF block, VREF_BASE in
+  # MKW41Z4.h); nothing here asserts that rail. SIM_SCGC6.ADC0 gating is not
+  # modelled.
+  - id: "adc0"
+    type: "kinetis_adc16"
+    base_address: 0x4003B000
+    size: "4KB"
+    irq: 15

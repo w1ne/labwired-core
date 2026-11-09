@@ -9363,6 +9363,9 @@ boards:
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/uart.rs
+      # 2026-11-09: ADC0 (kinetis_adc16) added to configs/chips/mkw41z4.yaml.
+      # No silicon capture, so no ack is implied.
+      - crates/core/src/peripherals/kinetis_adc16.rs
 
   - id: stm32f405
     doc: docs/boards/stm32f405.md
