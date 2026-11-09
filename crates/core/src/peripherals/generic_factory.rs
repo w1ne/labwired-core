@@ -2111,8 +2111,22 @@ pub fn try_build(
             let Some(bytes) = p_cfg.config.get("flash_bytes").and_then(|v| v.as_u64()) else {
                 anyhow::bail!("sam4s_eefc needs config.flash_bytes (the part's flash size)");
             };
-            Box::new(crate::peripherals::sam::sysc4s::Sam4sEefc::new(
+            // SAM E70 parts state their 16 KiB lock regions and nine GPNVM
+            // bits; the SAM4S geometry (8 KiB, two) is the default.
+            let lock_region = p_cfg
+                .config
+                .get("lock_region_bytes")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(crate::peripherals::sam::sysc4s::EEFC_LOCK_REGION as u64);
+            let gpnvm_bits = p_cfg
+                .config
+                .get("gpnvm_bits")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(2);
+            Box::new(crate::peripherals::sam::sysc4s::Sam4sEefc::with_geometry(
                 bytes as u32,
+                lock_region as u32,
+                gpnvm_bits as u32,
             ))
         }
         "cortex_m7_cache" => {

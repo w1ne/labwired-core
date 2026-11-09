@@ -4,11 +4,13 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# Renode imported SAM E70 system, using the narrowed execution profile in
-# configs/chips/onboarding/sam_e70.yaml. The tested scope is PMC, PIOC, and
-# USART1; unmodeled system blocks are not included in that chip profile.
+# Renode `sam_e70` platform system (configs/chips/onboarding/sam_e70.yaml:
+# USART0-2, UART0-4, CHIPID, PMC, PIOA-E, WDT, RSTC, EEFC, L1 cache).
+# Renode's repl is a bare SoC: no board LEDs or buttons are wired, so none are
+# declared here. The firmware console is USART1 (the Xplained EDBG virtual
+# COM port). No `debug_uart` is set on purpose: the test runner then captures
+# every UART, so the smoke can assert the lines USART0/2 and UART0-4 send.
 name: sam_e70
 chip: ../../chips/onboarding/sam_e70.yaml
 cpu_hz: 12000000
-debug_uart: usart1
 external_devices: []

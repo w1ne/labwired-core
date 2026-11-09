@@ -11,10 +11,10 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1280,
+    "pass_claimed_peripherals_total": 1296,
     "pass_claimed_peripherals_median": 2,
-    "median_elapsed_ms": 1385,
-    "median_elapsed_seconds": 1.385,
+    "median_elapsed_ms": 1395,
+    "median_elapsed_seconds": 1.395,
     "threshold_seconds": 3600,
     "threshold_met": 226,
     "descriptors_present": 245,
@@ -6956,24 +6956,24 @@
       "script": "examples/renode-onboarding/sam4s-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T10:18:02Z",
-      "finished_at_utc": "2026-11-09T10:18:04Z",
+      "started_at_utc": "2026-11-09T10:54:27Z",
+      "finished_at_utc": "2026-11-09T10:54:28Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1630,
+      "elapsed_ms": 1749,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.367,
-        "build_firmware": 0.31,
-        "run_smoke": 0.94
+        "build_cli": 0.369,
+        "build_firmware": 0.333,
+        "run_smoke": 1.034
       },
       "stages_ms": {
-        "build_cli": 367,
-        "build_firmware": 310,
-        "run_smoke": 940
+        "build_cli": 369,
+        "build_firmware": 333,
+        "run_smoke": 1034
       },
       "_artifact_path": "sam4s",
       "zero_answering_windows": [],
@@ -7002,24 +7002,24 @@
       "script": "examples/renode-onboarding/sam4s16c-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s16c.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T10:18:06Z",
-      "finished_at_utc": "2026-11-09T10:18:08Z",
+      "started_at_utc": "2026-11-09T10:54:18Z",
+      "finished_at_utc": "2026-11-09T10:54:20Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1663,
+      "elapsed_ms": 1772,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.384,
+        "build_cli": 0.399,
         "build_firmware": 0.279,
-        "run_smoke": 0.984
+        "run_smoke": 1.081
       },
       "stages_ms": {
-        "build_cli": 384,
+        "build_cli": 399,
         "build_firmware": 279,
-        "run_smoke": 984
+        "run_smoke": 1081
       },
       "_artifact_path": "sam4s16c",
       "zero_answering_windows": [],
@@ -7048,24 +7048,24 @@
       "script": "examples/renode-onboarding/sam4s8b-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s8b.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T10:18:10Z",
-      "finished_at_utc": "2026-11-09T10:18:12Z",
+      "started_at_utc": "2026-11-09T10:54:22Z",
+      "finished_at_utc": "2026-11-09T10:54:24Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1721,
+      "elapsed_ms": 1722,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.389,
-        "build_firmware": 0.315,
-        "run_smoke": 1.004
+        "build_cli": 0.429,
+        "build_firmware": 0.308,
+        "run_smoke": 0.97
       },
       "stages_ms": {
-        "build_cli": 389,
-        "build_firmware": 315,
-        "run_smoke": 1004
+        "build_cli": 429,
+        "build_firmware": 308,
+        "run_smoke": 970
       },
       "_artifact_path": "sam4s8b",
       "zero_answering_windows": [],
@@ -7094,24 +7094,24 @@
       "script": "examples/renode-onboarding/sam4s_xplained-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s_xplained.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T10:21:53Z",
-      "finished_at_utc": "2026-11-09T10:23:00Z",
-      "elapsed_seconds": 68,
-      "elapsed_ms": 67438,
+      "started_at_utc": "2026-11-09T10:54:12Z",
+      "finished_at_utc": "2026-11-09T10:54:16Z",
+      "elapsed_seconds": 5,
+      "elapsed_ms": 4044,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 63.037,
-        "build_firmware": 1.528,
-        "run_smoke": 2.861
+        "build_cli": 0.4,
+        "build_firmware": 0.269,
+        "run_smoke": 3.359
       },
       "stages_ms": {
-        "build_cli": 63037,
-        "build_firmware": 1528,
-        "run_smoke": 2861
+        "build_cli": 400,
+        "build_firmware": 269,
+        "run_smoke": 3359
       },
       "_artifact_path": "sam4s_xplained",
       "zero_answering_windows": [],
@@ -7141,31 +7141,31 @@
       "script": "examples/renode-onboarding/sam_e70-smoke.yaml",
       "system": "configs/systems/onboarding/sam_e70.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:49:45Z",
-      "finished_at_utc": "2026-11-05T14:49:46Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1378,
+      "started_at_utc": "2026-11-09T10:51:07Z",
+      "finished_at_utc": "2026-11-09T10:54:10Z",
+      "elapsed_seconds": 183,
+      "elapsed_ms": 182524,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.358,
-        "build_firmware": 0.714,
-        "run_smoke": 0.296
+        "build_cli": 179.995,
+        "build_firmware": 0.298,
+        "run_smoke": 2.218
       },
       "stages_ms": {
-        "build_cli": 358,
-        "build_firmware": 714,
-        "run_smoke": 296
+        "build_cli": 179995,
+        "build_firmware": 298,
+        "run_smoke": 2218
       },
       "_artifact_path": "sam_e70",
       "zero_answering_windows": [],
-      "claimed_peripherals": 3,
+      "claimed_peripherals": 19,
       "smoke_assertion_kinds": [
-        "uart_contains",
         "uart_ordered",
+        "uart_contains",
         "memory_value",
         "expected_stop_reason"
       ],

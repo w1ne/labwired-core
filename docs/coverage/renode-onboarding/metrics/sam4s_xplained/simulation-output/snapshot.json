@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "a829174b0076e366c4aacf57db9e4e5cb820c9c8286fa3457fe39b13952b06f7",
+  "firmware_hash": "3f3e6b775ee4fbd027ef993bacea8de676386aae7ed3e2899cd5b095f130eb83",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s_xplained.yaml",

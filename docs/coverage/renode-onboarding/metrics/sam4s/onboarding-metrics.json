@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/sam4s-smoke.yaml",
   "system": "configs/systems/onboarding/sam4s.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-09T10:18:02Z",
-  "finished_at_utc": "2026-11-09T10:18:04Z",
+  "started_at_utc": "2026-11-09T10:54:27Z",
+  "finished_at_utc": "2026-11-09T10:54:28Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1630,
+  "elapsed_ms": 1749,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.367,
-    "build_firmware": 0.31,
-    "run_smoke": 0.94
+    "build_cli": 0.369,
+    "build_firmware": 0.333,
+    "run_smoke": 1.034
   },
   "stages_ms": {
-    "build_cli": 367,
-    "build_firmware": 310,
-    "run_smoke": 940
+    "build_cli": 369,
+    "build_firmware": 333,
+    "run_smoke": 1034
   }
 }

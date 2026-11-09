@@ -32,13 +32,21 @@
 //! EEFC: EEFC_FMR is stored (FWS, SCOD, FAM, CLOE, FRDY interrupt enable),
 //! FSR.FRDY always reads 1 (commands complete at once). EEFC_FCR (key 0x5A)
 //! executes GETD (descriptor read back through EEFC_FRR), GLB/SLB/CLB (lock
-//! bits, one per 8 KiB region) and GGPB/SGPB/CGPB (two GPNVM bits; GPNVM1
+//! bits, one per 8 KiB region; GLB returns one FRR word per 32 regions) and
+//! GGPB/SGPB/CGPB (two GPNVM bits; GPNVM1
 //! reads 1 — this engine boots from flash). A bad key or unknown command sets
 //! FCMDE. Program/erase commands (WP, WPL, EWP, EWPL, EA, EPA, ES, the user
 //! signature and unique-ID modes, GCALB) are REFUSED with an error: CPU stores
 //! into flash commit straight to the array in this engine, so a page-buffer
 //! controller cannot be honestly claimed. FL_ID in the descriptor is 0 (the
 //! datasheet does not publish it).
+//!
+//! The same EEFC/WDT/RSTC register maps serve the SAM E70 (`sam_e70` row);
+//! its flash differs only in geometry: 16 KiB lock regions (ASF
+//! same70q21.h: IFLASH_NB_OF_LOCK_BITS 128 over IFLASH_SIZE 2 MiB — the
+//! same header's IFLASH_LOCK_REGION_SIZE 8192 contradicts that product and
+//! is not used) and nine GPNVM bits (ASF flash_efc.c GPNVM_NUM_MAX for
+//! SAME70). [`Sam4sEefc::with_geometry`] takes both.
 
 use crate::{CycleClock, Peripheral, PeripheralResetCause, PeripheralTickResult, SimResult};
 use std::cell::Cell;
@@ -410,6 +418,8 @@ pub const EEFC_LOCK_REGION: u32 = 8 * 1024;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Sam4sEefc {
     flash_size: u32,
+    lock_region: u32,
+    gpnvm_bits: u32,
     fmr: u32,
     fsr: Cell<u32>,
     /// GETD/GLB/GGPB results, consumed one word per EEFC_FRR read.
@@ -421,9 +431,18 @@ pub struct Sam4sEefc {
 
 impl Sam4sEefc {
     pub fn new(flash_size: u32) -> Self {
-        let regions = (flash_size / EEFC_LOCK_REGION).max(1) as usize;
+        Self::with_geometry(flash_size, EEFC_LOCK_REGION, 2)
+    }
+
+    /// `lock_region` bytes per lock bit, `gpnvm_bits` GPNVM bits (SAM4S:
+    /// 8 KiB and 2; SAM E70: 16 KiB and 9).
+    pub fn with_geometry(flash_size: u32, lock_region: u32, gpnvm_bits: u32) -> Self {
+        let lock_region = lock_region.max(EEFC_PAGE);
+        let regions = (flash_size / lock_region).max(1) as usize;
         Self {
             flash_size,
+            lock_region,
+            gpnvm_bits: gpnvm_bits.clamp(1, 32),
             fmr: 0,
             fsr: Cell::new(0),
             result: Vec::new(),
@@ -445,7 +464,7 @@ impl Sam4sEefc {
     }
 
     fn page_region(&self, page: u32) -> Option<usize> {
-        let index = (page * EEFC_PAGE / EEFC_LOCK_REGION) as usize;
+        let index = (page * EEFC_PAGE / self.lock_region) as usize;
         (page * EEFC_PAGE < self.flash_size).then_some(index)
     }
 
@@ -465,7 +484,7 @@ impl Sam4sEefc {
                     self.flash_size,
                     self.lock_bits.len() as u32,
                 ];
-                d.extend(std::iter::repeat_n(EEFC_LOCK_REGION, self.lock_bits.len()));
+                d.extend(std::iter::repeat_n(self.lock_region, self.lock_bits.len()));
                 self.set_result(d);
             }
             0x08 | 0x09 => match self.page_region(arg) {
@@ -473,14 +492,19 @@ impl Sam4sEefc {
                 None => self.fsr.set(self.fsr.get() | FSR_FCMDE),
             },
             0x0A => {
-                let word = self
+                // One FRR word per 32 lock bits (region 32 is word 1, bit 0).
+                let words = self
                     .lock_bits
-                    .iter()
-                    .enumerate()
-                    .fold(0u32, |w, (i, &l)| w | (u32::from(l) << (i % 32)));
-                self.set_result(vec![word]);
+                    .chunks(32)
+                    .map(|c| {
+                        c.iter()
+                            .enumerate()
+                            .fold(0u32, |w, (i, &l)| w | (u32::from(l) << i))
+                    })
+                    .collect();
+                self.set_result(words);
             }
-            0x0B | 0x0C if arg < 2 => {
+            0x0B | 0x0C if arg < self.gpnvm_bits => {
                 if cmd == 0x0B {
                     self.gpnvm |= 1 << arg;
                 } else {
@@ -552,7 +576,7 @@ impl Peripheral for Sam4sEefc {
         self.write_reg(offset & !3, value)
     }
     fn on_node_reset(&mut self) {
-        *self = Self::new(self.flash_size);
+        *self = Self::with_geometry(self.flash_size, self.lock_region, self.gpnvm_bits);
     }
     fn snapshot(&self) -> serde_json::Value {
         serde_json::json!({"peripheral": "sam4s_eefc", "fmr": self.fmr,
@@ -691,6 +715,34 @@ mod tests {
         eefc.write_u32(EEFC_FCR, 0x0000_0000).unwrap();
         assert_eq!(eefc.read_u32(EEFC_FSR).unwrap(), FSR_FRDY | FSR_FCMDE);
         assert_eq!(eefc.read_u32(EEFC_FSR).unwrap(), FSR_FRDY);
+    }
+
+    #[test]
+    fn eefc_e70_geometry_16k_regions_nine_gpnvm_and_multiword_glb() {
+        let mut eefc = Sam4sEefc::with_geometry(2 * 1024 * 1024, 16 * 1024, 9);
+        eefc.write_u32(EEFC_FCR, 0x5A00_0000).unwrap();
+        let d: Vec<u32> = (0..8).map(|_| eefc.read_u32(EEFC_FRR).unwrap()).collect();
+        assert_eq!(d, [0, 0x20_0000, 512, 1, 0x20_0000, 128, 16384, 16384]);
+        // Page 32 * 100 = 1600 KiB: region 100 = GLB word 3, bit 4.
+        eefc.write_u32(EEFC_FCR, 0x5A00_0000 | (3200 << 8) | 0x08)
+            .unwrap();
+        eefc.write_u32(EEFC_FCR, 0x5A00_000A).unwrap();
+        let glb: Vec<u32> = (0..4).map(|_| eefc.read_u32(EEFC_FRR).unwrap()).collect();
+        assert_eq!(glb, [0, 0, 0, 1 << 4]);
+        // GPNVM8 (TCM config) exists; GPNVM9 does not.
+        eefc.write_u32(EEFC_FCR, 0x5A00_000B | (8 << 8)).unwrap();
+        eefc.write_u32(EEFC_FCR, 0x5A00_000D).unwrap();
+        assert_eq!(eefc.read_u32(EEFC_FRR).unwrap(), 0x102);
+        eefc.write_u32(EEFC_FCR, 0x5A00_000B | (9 << 8)).unwrap();
+        assert_eq!(eefc.read_u32(EEFC_FSR).unwrap(), FSR_FRDY | FSR_FCMDE);
+        eefc.on_node_reset();
+        eefc.write_u32(EEFC_FCR, 0x5A00_0000).unwrap();
+        assert_eq!(eefc.read_u32(EEFC_FRR).unwrap(), 0);
+        assert_eq!(
+            eefc.read_u32(EEFC_FRR).unwrap(),
+            0x20_0000,
+            "geometry survives reset"
+        );
     }
 
     #[test]

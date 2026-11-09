@@ -4,15 +4,30 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# Renode imported `sam_e70` execution slice for ATSAME70Q21B.
+# Renode `sam_e70` platform (platforms/cpus/sam_e70.repl): ATSAME70Q21,
+# Cortex-M7, 2 MiB flash at 0x00400000, 384 KiB SRAM at 0x20400000.
 #
-# Memory geometry follows the promoted part descriptor and Zephyr's
-# samx7xx21.dtsi: 2 MiB flash at 0x00400000 and 384 KiB SRAM at 0x20400000.
-# This profile intentionally includes only the existing PMC, PIOC, and USART1
-# models. The imported Renode platform's GEM, PHY, TRNG,
-# and Python PMC_SR windows are omitted; watchdog, matrix, and other system
-# blocks are omitted because they are not modeled here. Firmware that touches
-# those addresses is outside this profile's claim.
+# Declared: what this engine models out of the Renode platform and the
+# system controller every SAM E70 boot path touches:
+# - USART0-2 (Renode SAM_USART) and UART0-4 (`sam_usart`: polled TX/RX
+#   through THR/RHR/CSR; IER/IMR interrupts are not modelled, so no IRQ is
+#   declared for them).
+# - CHIPID (CIDR 0xA1020E00, the word Renode tags; EXID 0x2).
+# - PMC (`sam4s_pmc`, PCER0/PCER1 banks) — replaces Renode's PMC_SR
+#   flip-flop.
+# - PIOA-E (`sam4s_pio`, input change interrupt on NVIC 10/11/12/16/17).
+# - WDT, RSTC, EEFC (`sam4s_wdt`/`sam4s_rstc`/`sam4s_eefc`: the SAM4S
+#   register maps; EEFC with the E70 geometry, 16 KiB lock regions and nine
+#   GPNVM bits). See crates/core/src/peripherals/sam/sysc4s.rs for what
+#   each refuses (EEFC program/erase commands among them).
+# - The Cortex-M7 L1 cache geometry and maintenance window (no contents).
+# Not declared (no model, accesses fault): Renode's GEM + PHY and TRNG, and
+# the rest of the part (TC, SPI, TWIHS, XDMAC, ...). Renode's 256 MiB
+# flash/RAM windows are not copied; the ROM at 0x1FFF0000 is not mapped.
+# cpu_hz is the 12 MHz RC oscillator the part resets on (MAINCK).
+# Sources: Zephyr hal_atmel asf/sam/include/same70/same70q21.h (bases,
+# peripheral IDs, IRQs, CHIP_CIDR, IFLASH_SIZE); avrxml/asf same70q21.h
+# (IFLASH_NB_OF_LOCK_BITS 128) and flash_efc.c (GPNVM_NUM_MAX 9).
 name: sam_e70
 arch: arm
 core: cortex-m7
@@ -26,25 +41,90 @@ ram:
   size: 384KB
 flash_boot_alias: false
 pins:
+  PA11: { gpio: pioA, bit: 11 }
   PC8: { gpio: pioC, bit: 8 }
 peripherals:
+- id: usart0
+  type: sam_usart
+  base_address: 0x40024000
+- id: usart1
+  type: sam_usart
+  base_address: 0x40028000
+- id: usart2
+  type: sam_usart
+  base_address: 0x4002C000
 - id: pmc
   type: sam4s_pmc
-  bus: sysbus
   base_address: 0x400E0600
   size: 512
   irq: 5
+- id: uart0
+  type: sam_usart
+  base_address: 0x400E0800
+- id: uart1
+  type: sam_usart
+  base_address: 0x400E0A00
+- id: chipid
+  type: declarative
+  base_address: 0x400E0940
+  size: 8B
+  config:
+    path: ../../peripherals/same70q21/chipid.yaml
+- id: eefc
+  type: sam4s_eefc
+  base_address: 0x400E0C00
+  size: 512
+  config:
+    flash_bytes: 2097152
+    lock_region_bytes: 16384
+    gpnvm_bits: 9
+- id: pioA
+  type: sam4s_pio
+  base_address: 0x400E0E00
+  size: 512
+  irq: 10
+- id: pioB
+  type: sam4s_pio
+  base_address: 0x400E1000
+  size: 512
+  irq: 11
 - id: pioC
   type: sam4s_pio
-  bus: sysbus
   base_address: 0x400E1200
   size: 512
   irq: 12
-- id: usart1
-  type: uart
-  bus: sysbus
-  base_address: 0x40028000
-  size: 256
-  irq: 14
+- id: pioD
+  type: sam4s_pio
+  base_address: 0x400E1400
+  size: 512
+  irq: 16
+- id: pioE
+  type: sam4s_pio
+  base_address: 0x400E1600
+  size: 512
+  irq: 17
+- id: rstc
+  type: sam4s_rstc
+  base_address: 0x400E1800
+  size: 16
+- id: wdt
+  type: sam4s_wdt
+  base_address: 0x400E1850
+  size: 16
+  irq: 4
+- id: uart2
+  type: sam_usart
+  base_address: 0x400E1A00
+- id: uart3
+  type: sam_usart
+  base_address: 0x400E1C00
+- id: uart4
+  type: sam_usart
+  base_address: 0x400E1E00
+- id: l1_cache
+  type: cortex_m7_cache
+  base_address: 0xE000EF50
+  size: 48
   config:
-    profile: sam
+    icache_kb: 16
+    dcache_kb: 16

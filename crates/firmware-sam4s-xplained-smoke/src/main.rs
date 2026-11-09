@@ -29,10 +29,10 @@ const PMC_PCER0: *mut u32 = 0x400E_0410 as *mut u32;
 const PMC_SR: *const u32 = 0x400E_0468 as *const u32;
 const PMC_SR_MCKRDY: u32 = 1 << 3;
 
-// PIOA @ 0x400E0E00: PER @ 0x00, PSR @ 0x08, PUER @ 0x60.
+// PIOA @ 0x400E0E00: PER @ 0x00, PSR @ 0x08, PUER @ 0x64.
 const PIOA_PER: *mut u32 = 0x400E_0E00 as *mut u32;
 const PIOA_PSR: *const u32 = 0x400E_0E08 as *const u32;
-const PIOA_PUER: *mut u32 = 0x400E_0E60 as *mut u32;
+const PIOA_PUER: *mut u32 = 0x400E_0E64 as *mut u32;
 
 // PIOC @ 0x400E1200: PER @ 0x00, OER @ 0x10, SODR @ 0x30, CODR @ 0x34,
 // ODSR @ 0x38.

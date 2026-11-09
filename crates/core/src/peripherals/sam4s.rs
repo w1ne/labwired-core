@@ -55,8 +55,10 @@ const PIO_ISR: u64 = 0x004C;
 const PIO_MDER: u64 = 0x0050;
 const PIO_MDDR: u64 = 0x0054;
 const PIO_MDSR: u64 = 0x0058;
-const PIO_PUER: u64 = 0x0060;
-const PIO_PUDR: u64 = 0x0064;
+// PUDR is the lower address (SAM4S datasheet §31.7, ASF sam4s and Zephyr
+// hal_atmel same70 component/pio.h: PUDR 0x60, PUER 0x64, PUSR 0x68).
+const PIO_PUDR: u64 = 0x0060;
+const PIO_PUER: u64 = 0x0064;
 const PIO_PUSR: u64 = 0x0068;
 /// PIO_ABCDSR1/PIO_ABCDSR2: the two peripheral-select bits per pin (A = 00,
 /// B = 01, C = 10, D = 11). The SAM4S and SAM E70 both have four functions.
