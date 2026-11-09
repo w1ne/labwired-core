@@ -1,0 +1,19 @@
+# Arduino matrix system — Arduino Leonardo (ATmega32U4 @ 16 MHz).
+# Serial is USB CDC on the CPU's USB device model; TWI/SPI on the CPU model,
+# kits park on bus i2c/spi then drain to the CPU.
+name: "arduino-matrix-arduino-leonardo"
+chip: "../../../configs/chips/atmega32u4.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on Wire (CPU TWI; Leonardo SDA/SCL = D2/D3).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c"
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on hardware SPI (CPU SPDR; CS = Arduino SS = D17 = PB0).
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi"
+    config:
+      cs_pin: "D17"
+board_io: []

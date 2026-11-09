@@ -50,6 +50,11 @@
 // TCA0 WO0 (PORTMUX.TCAROUTEA = PORTB, single-slope, 16 MHz / 64 / 256 =
 // 976.6 Hz).
 #    define LW_PWM_PIN 9
+#  elif defined(__AVR_ATmega32U4__)
+// Leonardo LED_BUILTIN is D13 = PC7 = OC4A, the 10-bit high-speed Timer4,
+// which the twin does not model. Use D9 = PB5 = OC1A (Timer1, phase-correct
+// 8-bit, 16 MHz / 64 / 510 = 490 Hz), the same unit the Uno row drives.
+#    define LW_PWM_PIN 9
 #  elif defined(LED_BUILTIN)
 #    define LW_PWM_PIN LED_BUILTIN
 #  elif defined(ARDUINO_ARCH_ESP32)
@@ -63,9 +68,10 @@
 
 static void logBegin() {
   Serial.begin(115200);
-#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
-  // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
-  // the host opens the port (DTR), on silicon and on the twin alike.
+#if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__)
+  // arduino-pico (Pico 2) and the ATmega32U4 (Leonardo): Serial is native USB
+  // CDC and drops writes until the host opens the port (DTR), on silicon and
+  // on the twin alike.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)

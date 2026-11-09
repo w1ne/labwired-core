@@ -125,9 +125,26 @@ const MAP_MEGA1281: OcMap = OcMap {
     ],
 };
 
+/// ATmega32U4 pins (DS7766, section 10.3 "Alternate Port Functions"):
+/// OC0A = PB7, OC0B = PD0, OC1A = PB5, OC1B = PB6; there is no Timer2. On
+/// the Arduino Leonardo these are D11, D3, D9, D10. OC1C (PB7) and the
+/// Timer3/Timer4 outputs are not modelled.
+const MAP_M32U4: OcMap = OcMap {
+    ports: [PORTB, PORTD, 0],
+    pins: [
+        Some((0, 7)),
+        Some((1, 0)),
+        Some((0, 5)),
+        Some((0, 6)),
+        None,
+        None,
+    ],
+};
+
 impl Avr {
     fn oc_map(&self) -> &'static OcMap {
         match self.model {
+            AvrModel::Atmega32u4 => &MAP_M32U4,
             AvrModel::Atmega2560 => &MAP_MEGA2560,
             AvrModel::Atmega1281 => &MAP_MEGA1281,
             _ => &MAP_328P,

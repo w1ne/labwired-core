@@ -400,6 +400,25 @@ boards:
     sketches_skip_reason:
       L8_can: "ATmega2560 has no CAN controller"
 
+  - id: arduino-leonardo
+    chip: atmega32u4
+    system: systems/arduino-leonardo.yaml
+    pio: { platform: atmelavr, board: leonardo, framework: arduino }
+    max_steps: 2000000
+    budget_reason: "AVR 16 MHz; the scripted host enumerates in ~13 USB frames (13 ms = 208k cycles) before while(!Serial) lets setup() print"
+    # LED_BUILTIN = D13 = PC7 on the Leonardo.
+    led_watch: "portc:7"
+    led_min_edges: 2
+    # L6 drives D9 = PB5 = OC1A (Timer1 phase-correct, 490 Hz). D13 is OC4A
+    # (high-speed Timer4), which is not modelled.
+    pwm_watch: "portb:5"
+    pwm_min_edges: 20
+    family: avr
+    notes: "Arduino Leonardo (ATmega32U4): Serial is native USB CDC on the CPU's USB device model and a scripted host"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "ATmega32U4 has no CAN controller"
+
   - id: arduino-nano-every
     chip: atmega4809
     system: systems/arduino-nano-every.yaml

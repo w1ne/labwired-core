@@ -1,0 +1,87 @@
+# ATmega32U4 (Arduino Leonardo / Micro, SparkFun Pro Micro): the ATmega328P
+# core model (cpu/avr.rs) with AvrModel::Atmega32u4: 32 KB flash, a 2-byte PC,
+# 2.5 KB SRAM at 0x0100..0x0AFF, ports B..F and the 32U4 vector table.
+#
+# Modelled on the CPU:
+# - USB device controller (cpu/avr/usb.rs): attach, bus reset, 1 ms SOF,
+#   EP0 control transfers and the bulk/interrupt endpoints, with a scripted
+#   host that enumerates the device and opens a CDC ACM port (115200 8N1,
+#   DTR+RTS). Bytes the firmware releases on a bulk IN endpoint are the
+#   console, so stock `Serial` (USB CDC) prints.
+# - PLLCSR: PLLE locks the PLL at once (PLOCK).
+# - Timer0 (millis/delay) and Timer1 at the 328P addresses; analogWrite reaches
+#   the Timer0/1 pads (OC0A PB7, OC0B PD0, OC1A PB5, OC1B PB6; avr/oc_pins.rs).
+# - SPI (SPCR/SPSR/SPDR), TWI and the 10-bit ADC (ADCSRB.MUX5 = bit 5 selects
+#   ADC8..13) at the 328P addresses.
+# - USART1 (Serial1) at 0xC8..0xCE, the 328PB USART1 layout, polled.
+#
+# Not modelled (registers stored only): Timer3, the 10-bit high-speed Timer4
+# (OC4A/OC4D: D13/D6 PWM), OC1C, INTn/PCINT (the 32U4 pins differ from the
+# 328P's), USB suspend/resume and remote wake-up, and EEPROM.
+#
+# Microchip DS7766 (ATmega16U4/32U4), 16 MHz crystal on the Arduino Leonardo.
+# Live status read 2026-11-09 from microchip.com (real Chrome): In Production.
+name: "atmega32u4"
+arch: "avr"
+core: "avr8"
+registers_count: 32
+cpu_hz: 16_000_000
+# 5 V Leonardo rail. DS7766 section 29.2 "DC Characteristics": VIL max
+# 0.2·VCC - 0.1 (taken as 0.3 like the 328P row's port inputs) and VIH min
+# 0.2·VCC + 0.9 (0.38 at 5 V; 0.6 keeps the shared CMOS threshold).
+io_voltage_v: 5.0
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.6
+
+flash:
+  base: 0x00000000
+  size: "32KB"
+ram:
+  base: 0x00000100
+  size: "2560B"
+peripherals:
+  # Parking SPI / I2C controllers for kit attach (SPDR/TWCR live on the CPU).
+  - id: "spi"
+    type: "spi"
+    base_address: 0x00010000
+    size: "16"
+  - id: "i2c"
+    type: "i2c"
+    base_address: 0x00010010
+    size: "16"
+  # Port mirrors: PINx/DDRx/PORTx at data-space base, mirrored at 0x1_0000 + base.
+  # PORTB (0x23): D8-D11, SS/RXLED PB0, SCK PB1, MOSI PB2, MISO PB3.
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010023
+    size: "3"
+  # PORTC (0x26): D5 = PC6, D13 = PC7 (LED_BUILTIN).
+  - id: "portc"
+    type: "avr_gpio"
+    base_address: 0x00010026
+    size: "3"
+  # PORTD (0x29): D3/SCL PD0, D2/SDA PD1, D0/RX1 PD2, D1/TX1 PD3, TXLED PD5.
+  - id: "portd"
+    type: "avr_gpio"
+    base_address: 0x00010029
+    size: "3"
+  # PORTE (0x2C): D7 = PE6.
+  - id: "porte"
+    type: "avr_gpio"
+    base_address: 0x0001002C
+    size: "3"
+  # PORTF (0x2F): A0..A5 = PF7, PF6, PF5, PF4, PF1, PF0.
+  - id: "portf"
+    type: "avr_gpio"
+    base_address: 0x0001002F
+    size: "3"
+  # ADC input side: millivolts on ADC0..ADC13, two bytes per channel. Past the
+  # port mirrors (the 328P window at 0x1_0030 would overlap PINF). Arduino A0
+  # is ADC7.
+  - id: "adc"
+    type: "avr_adc"
+    base_address: 0x00010200
+    size: "32"
+    config:
+      channels: 16

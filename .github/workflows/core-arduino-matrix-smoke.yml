@@ -68,6 +68,7 @@ jobs:
           - atmega2560
           - arduino-zero
           - arduino-nano-every
+          - arduino-leonardo
           - teensy41
           - ch32v203
           - ch32v307
@@ -139,7 +140,8 @@ jobs:
             # boards.yaml, so the installed package is the one PIO resolves.
             rp2350)      platform=https://github.com/maxgerhardt/platform-raspberrypi.git#5d4561a05e3b212660ac6fdd3fbfb328d1988aa1 ;;
             esp32*)      platform=espressif32@7.0.1 ;;
-            atmega328p|atmega2560) platform=atmelavr@5.3.0 ;;
+            # The Leonardo row was measured on the same pin (ArduinoCore-avr 5.4.0).
+            atmega328p|atmega2560|arduino-leonardo) platform=atmelavr@5.3.0 ;;
             # The Zero row was measured on atmelsam 9.0.0 (ArduinoCore-samd).
             arduino-zero) platform=atmelsam@9.0.0 ;;
             # The Nano Every row was measured on atmelmegaavr 1.10.0
