@@ -557,10 +557,9 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
 
     // TIMG0 / TIMG1 — ESP32-classic Timer Group (TRM §16). Per-group
     // 64-bit T0/T1 general-purpose counters, watchdog, RTC calibration.
-    // Preserves the auto-RDY-on-START behavior of the older `TimgStub`
-    // so `rtc_clk_wait_for_slow_cycle` still completes in one iteration,
-    // and adds monotonic counter reads so ESP-IDF's timer-state probes
-    // see forward progress. Interrupt firing is intentionally deferred.
+    // Models classic T0/T1 and LACT alarms, their sticky status, and DPORT
+    // interrupt-matrix levels. The C3 factory shares the peripheral type but
+    // does not opt into this classic register layout.
 
     // EFUSE — ESP32 BROM and esp-hal read BLK0 (MAC + chip_revision)
     // during reset-handler init. Returning a coherent rev3 + non-zero
