@@ -843,6 +843,29 @@ impl Avr {
 
     /// `PINx`/`DDRx`/`PORTx` of a port this model has: mirrored to the bus.
     #[inline]
+    /// Every port back to a tri-stated input, `DDRx = PORTx = 0` (ATmega328P
+    /// datasheet §14.4: both reset to 0). A watchdog reset arrives here with
+    /// the bus already running, so the bus-side port windows are cleared as
+    /// well as this I/O map; at power-on both are already 0 and nothing is
+    /// written. All DDRs go first, so an output that was high is released
+    /// rather than driven low for a moment.
+    fn reset_ports(&mut self, bus: &mut dyn Bus) {
+        for offset in [1, 2] {
+            for pin in 0x20..=0x10Bu16 {
+                if !self.is_pin_reg(pin) {
+                    continue;
+                }
+                let addr = pin + offset;
+                let reg = &mut self.io[usize::from(addr - 0x20)];
+                if *reg != 0 {
+                    *reg = 0;
+                    // Best-effort, like every port mirror write.
+                    let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + u64::from(addr), 0);
+                }
+            }
+        }
+    }
+
     fn is_port_reg(&self, addr: u16) -> bool {
         match self.model {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => {
@@ -2369,6 +2392,7 @@ impl Cpu for Avr {
             bus.set_pull_ups_disabled(false);
         }
         *mcucr = 0;
+        self.reset_ports(bus);
         self.r = [0; 32];
         self.pc = 0;
         self.sp = self.ramend;

@@ -343,6 +343,60 @@ mod tests {
         assert_eq!(cpu.wdt.wake_cycles(cpu.cycles), Some(256_000));
     }
 
+    /// Records what reaches the bus-side port windows.
+    #[derive(Default)]
+    struct MirrorBus {
+        writes: Vec<(u64, u8)>,
+        config: crate::SimulationConfig,
+    }
+
+    impl Bus for MirrorBus {
+        fn read_u8(&self, _addr: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+        fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
+            self.writes.push((addr, value));
+            Ok(())
+        }
+        fn tick_peripherals(&mut self) -> Vec<u32> {
+            Vec::new()
+        }
+        fn execute_dma(&mut self, _requests: &[crate::DmaRequest]) -> SimResult<()> {
+            Ok(())
+        }
+        fn config(&self) -> &crate::SimulationConfig {
+            &self.config
+        }
+    }
+
+    #[test]
+    fn reset_returns_the_ports_to_inputs() {
+        use crate::cpu::avr::{AVR_IO_MIRROR_BASE, AVR_PINB, AVR_PIND};
+        let mut cpu = cpu();
+        let mut bus = MirrorBus::default();
+        // PB5 an output driven high, PD2 an input with its pull-up on.
+        cpu.data_write(AVR_PINB + 1, 0x20, &mut bus).unwrap();
+        cpu.data_write(AVR_PINB + 2, 0x20, &mut bus).unwrap();
+        cpu.data_write(AVR_PIND + 2, 0x04, &mut bus).unwrap();
+        bus.writes.clear();
+        cpu.wdt_write(WDE);
+        cpu.cycles = 256_000;
+        assert!(cpu.wdt_poll(&mut bus).unwrap());
+        let mirror = |addr: u16| AVR_IO_MIRROR_BASE + u64::from(addr);
+        // DDRB first: the high output is released, never driven low.
+        assert_eq!(
+            bus.writes,
+            [
+                (mirror(AVR_PINB + 1), 0),
+                (mirror(AVR_PINB + 2), 0),
+                (mirror(AVR_PIND + 2), 0),
+            ]
+        );
+        for addr in [AVR_PINB + 1, AVR_PINB + 2, AVR_PIND + 2] {
+            assert_eq!(cpu.data_read(addr, &bus).unwrap(), 0);
+        }
+    }
+
     #[test]
     fn stopped_parts_without_wdtcsr_leave_0x60_alone() {
         let cpu = Avr::new_model(AvrModel::Attiny85);
