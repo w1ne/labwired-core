@@ -79,6 +79,11 @@ const CONVERTED: &[&str] = &[
     "max32652-evkit",
     "max32652",
     "mimxrt1064_evk",
+    "msp430f2619",
+    "mspsim-msp430f149",
+    "mspsim-msp430f1611",
+    "mspsim-msp430f2617",
+    "mspsim-msp430f5437",
     "nrf52840",
     "nrf52840dk_nrf52840",
     "nucleo_f767zi",
@@ -276,7 +281,34 @@ enum Family {
     /// VREFH0 3.3 V (FSP r_adc.c R_ADC_ScanStart/R_ADC_Read). ADC14 runs at
     /// `ADCER.ADPRC` = 11b, 14 bits (FSP ADC_RESOLUTION_14_BIT).
     RaAdc { adc14: bool },
+    /// MSP430 ADC12 (F1/F2, `msp430_adc12`, the split map from 0x0080) and
+    /// ADC12_A (F5, `msp430_adc12_a`, one block): `ADC12MCTLx.INCH` picks
+    /// the input, `ENC` + `ADC12SC` in pulse mode (`SHP`) converts, `IFGx`
+    /// rises and the `ADC12MEMx` read clears it, 12 bits against AVCC
+    /// (3.3 V) with `SREF_0` (mspsim ADC12.java, TI msp430-gcc headers).
+    Msp430Adc12 { adc12_a: bool },
 }
+
+/// MSP430 ADC12 register offsets from the descriptor base, as
+/// `(CTL0, CTL1, IFG, MCTL0, MEM0)`: F1/F2 from `ADC12MCTL0` (0x0080), so
+/// CTL0 is 0x01A0 - 0x0080; ADC12_A from `ADC12CTL0` (msp430*_symbols.ld).
+const fn msp430_adc12_regs(adc12_a: bool) -> (u64, u64, u64, u64, u64) {
+    if adc12_a {
+        (0x00, 0x02, 0x0A, 0x10, 0x20)
+    } else {
+        (0x120, 0x122, 0x124, 0x00, 0x0C0)
+    }
+}
+
+/// `ADC12CTL0`/`ADC12CTL1` bits (msp430f1611.h; ADC12_A names them ADC12*).
+const MSP430_ADC12SC: u16 = 1 << 0;
+const MSP430_ENC: u16 = 1 << 1;
+const MSP430_ADC12ON: u16 = 1 << 4;
+const MSP430_MSC: u16 = 1 << 7;
+const MSP430_SHT0_2: u16 = 0x0200;
+const MSP430_SHP: u16 = 1 << 9;
+const MSP430_CONSEQ_1: u16 = 0x0002;
+const MSP430_EOS: u8 = 1 << 7;
 
 /// `SINGLE.PORTPOS` value naming GPIO port A (`_IADC_SINGLE_PORTPOS_PORTA`).
 const IADC_PORTPOS_PORTA: u32 = 0x8;
@@ -361,6 +393,10 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Efr32S1Adc
         } else if kind == "efm32s0_adc" {
             Family::Efm32S0Adc
+        } else if kind == "msp430_adc12" || kind == "msp430_adc12_a" {
+            Family::Msp430Adc12 {
+                adc12_a: kind == "msp430_adc12_a",
+            }
         } else if kind == "ra_adc12" || kind == "ra_adc14" {
             Family::RaAdc {
                 adc14: kind == "ra_adc14",
@@ -437,6 +473,9 @@ impl Converter {
             // (2^bits - 1) / VREFH0 (3.3 V), truncated, clamped.
             Family::RaAdc { adc14: false } => (mv * 4095 / 3300).min(4095),
             Family::RaAdc { adc14: true } => (mv * 16383 / 3300).min(16383),
+            // N = 4095 (Vin - VR-) / (VR+ - VR-), SREF_0: AVCC 3.3 V / AVSS,
+            // truncated, clamped (SLAU049 §17.2.1).
+            Family::Msp430Adc12 { .. } => (mv * 4095 / 3300).min(4095),
         }
     }
 
@@ -587,6 +626,26 @@ impl Converter {
                     bus.read_u32(self.base + 0x84).unwrap(),
                     0,
                     "{}: SINGLEFIFOCOUNT",
+                    self.id
+                );
+            }
+            Family::Msp430Adc12 { adc12_a } => {
+                // SLAU049 single-conversion example: ADC12ON + SHT0_2, then
+                // SHP. Without ENC an ADC12SC converts nothing.
+                let (ctl0, ctl1, ifg, _, _) = msp430_adc12_regs(adc12_a);
+                bus.write_u16(self.base + ctl0, MSP430_SHT0_2 | MSP430_ADC12ON)
+                    .expect("ADC12CTL0");
+                bus.write_u16(self.base + ctl1, MSP430_SHP)
+                    .expect("ADC12CTL1");
+                bus.write_u16(
+                    self.base + ctl0,
+                    MSP430_SHT0_2 | MSP430_ADC12ON | MSP430_ADC12SC,
+                )
+                .expect("ADC12SC without ENC");
+                assert_eq!(
+                    bus.read_u16(self.base + ifg).unwrap(),
+                    0,
+                    "{}: ADC12SC without ENC converts nothing",
                     self.id
                 );
             }
@@ -916,6 +975,49 @@ impl Converter {
     /// One firmware-style conversion per routed channel: `[ntc, diode]`.
     fn convert_routed(&self, bus: &mut SystemBus) -> [u32; 2] {
         match self.family {
+            Family::Msp430Adc12 { adc12_a } => {
+                // One CONSEQ_1 sequence with MSC from CSTARTADD 0: MCTL0..2
+                // = NTC, diode, the unrouted pad, EOS on MCTL2. MCTL3 points
+                // at the NTC too and must stay unconverted.
+                let (ctl0, ctl1, ifg, mctl, mem) = msp430_adc12_regs(adc12_a);
+                let [ntc, diode] = self.routed_channels();
+                let on = MSP430_SHT0_2 | MSP430_ADC12ON | MSP430_MSC;
+                bus.write_u16(self.base + ctl0, on).expect("clear ENC");
+                bus.write_u16(self.base + ctl1, MSP430_SHP | MSP430_CONSEQ_1)
+                    .expect("CONSEQ_1");
+                for (slot, inch) in [ntc, diode, IDLE_CHANNEL | MSP430_EOS, ntc]
+                    .into_iter()
+                    .enumerate()
+                {
+                    bus.write_u8(self.base + mctl + slot as u64, inch)
+                        .expect("ADC12MCTLx");
+                }
+                bus.write_u16(self.base + ifg, 0).expect("clear IFG");
+                bus.write_u16(self.base + ctl0, on | MSP430_ENC | MSP430_ADC12SC)
+                    .expect("ENC + ADC12SC");
+                assert_eq!(
+                    bus.read_u16(self.base + ifg).unwrap(),
+                    0b0111,
+                    "{}: the sequence stops at EOS on MCTL2",
+                    self.id
+                );
+                let codes: Vec<u32> = (0..3)
+                    .map(|slot| u32::from(bus.read_u16(self.base + mem + 2 * slot).unwrap()))
+                    .collect();
+                assert_eq!(
+                    bus.read_u16(self.base + ifg).unwrap(),
+                    0,
+                    "{}: the ADC12MEMx reads clear IFGx",
+                    self.id
+                );
+                assert_eq!(
+                    codes[2], 0,
+                    "{}: unrouted A{IDLE_CHANNEL} converts to zero",
+                    self.id
+                );
+                bus.write_u16(self.base + ctl0, on).expect("clear ENC");
+                [codes[0], codes[1]]
+            }
             Family::Xadc => {
                 // Three pipelined DRP reads and a no-op: each command shifts
                 // the previous result into RDFIFO, so the first word is the
@@ -1840,6 +1942,29 @@ impl Converter {
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {
         match self.family {
+            Family::Msp430Adc12 { adc12_a } => {
+                // Single channel, single conversion at CSTARTADD = channel,
+                // MCTLx = INCH with SREF_0; poll IFGx, read ADC12MEMx.
+                let (ctl0, ctl1, ifg, mctl, mem) = msp430_adc12_regs(adc12_a);
+                let slot = u64::from(channel);
+                let on = MSP430_SHT0_2 | MSP430_ADC12ON;
+                bus.write_u16(self.base + ctl0, on).expect("clear ENC");
+                bus.write_u16(self.base + ctl1, (u16::from(channel) << 12) | MSP430_SHP)
+                    .expect("CSTARTADD");
+                bus.write_u8(self.base + mctl + slot, channel)
+                    .expect("ADC12MCTLx");
+                bus.write_u16(self.base + ctl0, on | MSP430_ENC | MSP430_ADC12SC)
+                    .expect("ENC + ADC12SC");
+                assert_ne!(
+                    bus.read_u16(self.base + ifg).unwrap() & (1 << channel),
+                    0,
+                    "{}: A{channel} sets ADC12IFG{channel}",
+                    self.id
+                );
+                let code = bus.read_u16(self.base + mem + 2 * slot).expect("ADC12MEMx");
+                bus.write_u16(self.base + ctl0, on).expect("clear ENC");
+                u32::from(code)
+            }
             Family::Xadc => {
                 // XAdcPs_ReadInternalReg: read command, dummy RDFIFO pop,
                 // write the dummy back (a no-op), pop the result.
@@ -2487,6 +2612,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Efr32Iadc
                 | Family::Efr32S1Adc
                 | Family::Efm32S0Adc
+                | Family::Msp430Adc12 { .. }
                 | Family::RaAdc { .. }
         ) {
             assert_eq!(
@@ -2573,7 +2699,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 126,
+        instances, 131,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -2581,7 +2707,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 111,
+        without_adc, 106,
         "onboarding profiles that declare no modelled ADC"
     );
 }

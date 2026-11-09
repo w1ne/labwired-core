@@ -61,6 +61,24 @@ peripherals:
   size: 6B
   config:
     path: ../../peripherals/msp430/port16.yaml
+# ADC12_A (msp430_adc12_a): one block at 0x0700, ADC12CTL0 @0x00 ..
+# ADC12MEM15 @0x3E (msp430f5437_symbols.ld, TI msp430-gcc support files).
+# msp430f5437.h has no REFCTL0, so ADC12REFON/ADC12REF2_5V own the reference.
+- id: adc12
+  type: msp430_adc12_a
+  base_address: 1792
+  size: 64B
+# A0..A7 are the P6.0..P6.7 pads (SLAS612 pin functions P6.x/Ax); the
+# label is the ADC12 input name, so a netlist routes board.analog.a<n>_volts.
+analog_pins:
+  A0: { peripheral: adc12, channel: 0 }
+  A1: { peripheral: adc12, channel: 1 }
+  A2: { peripheral: adc12, channel: 2 }
+  A3: { peripheral: adc12, channel: 3 }
+  A4: { peripheral: adc12, channel: 4 }
+  A5: { peripheral: adc12, channel: 5 }
+  A6: { peripheral: adc12, channel: 6 }
+  A7: { peripheral: adc12, channel: 7 }
 provenance:
   source: mspsim
   repo: https://github.com/contiki-ng/mspsim

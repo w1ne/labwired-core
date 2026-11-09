@@ -88,6 +88,7 @@ pub mod lptim;
 pub mod max32650_adc;
 pub mod mcg;
 pub mod miv;
+pub mod msp430_adc12;
 pub mod noise;
 pub mod nrf52;
 pub mod nrf54l;
