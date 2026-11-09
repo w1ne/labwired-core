@@ -72,7 +72,10 @@ fn input_capture_and_temperature_sensor_run_a_stock_sketch() {
 
     assert_eq!(field(&text, "POLL", "icf="), "1", "{text}");
     let icr: u16 = field(&text, "POLL", "icr1=").parse().unwrap();
-    assert!((400..=420).contains(&icr), "ICR1 {icr}: 200 us at clk/8 plus overhead");
+    assert!(
+        (400..=420).contains(&icr),
+        "ICR1 {icr}: 200 us at clk/8 plus overhead"
+    );
 
     assert_eq!(field(&text, "ISR", "n="), "8", "{text}");
     let periods: Vec<u16> = field(&text, "ISR", "periods_us=")
