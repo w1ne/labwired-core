@@ -3,13 +3,13 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      12767,
-      4095,
-      1073807360,
-      2147483648,
+      12846,
+      8191,
+      2,
+      49,
       1074660884,
       50,
-      8,
+      50,
       537001952,
       1074664532,
       537001472,
@@ -17,10 +17,10 @@
       1,
       8392960,
       537001952,
-      4213901,
-      4214598
+      4216097,
+      4216662
     ],
-    "pc": 4214598,
+    "pc": 4216662,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "a99bc0d5f9c55b337c6e13500ed40ef7bda6e9b3ac626ee45f062b923b14de86",
+  "firmware_hash": "91e4fe71ff49a945baf5573ddcfcf0c719561a19885ca12c7ac3d56c5e4f463b",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s8b-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s8b.yaml",

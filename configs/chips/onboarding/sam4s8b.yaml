@@ -9,7 +9,7 @@
 #
 # Declared: the blocks this engine models out of Renode's
 # platforms/cpus/sam4s.repl — PMC, UART0/1 and USART0/1 (`sam_usart`),
-# PIOA-B (input change interrupt on NVIC 11-12), both SAM_TC blocks
+# USART0 IRQ 14; PIOA-B (input change interrupt on NVIC 11-12), both SAM_TC blocks
 # (`sam4s_tc`), and the system controller's
 # WDT, RSTC and EEFC (`sam4s_wdt`/`sam4s_rstc`/`sam4s_eefc`, see
 # crates/core/src/peripherals/sam/sysc4s.rs for what each refuses).
@@ -41,6 +41,7 @@ peripherals:
 - id: usart0
   type: sam_usart
   base_address: 0x40024000
+  irq: 14
 - id: usart1
   type: sam_usart
   base_address: 0x40028000

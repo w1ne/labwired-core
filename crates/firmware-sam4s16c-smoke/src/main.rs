@@ -19,6 +19,7 @@ fn main() -> ! {
         name: "SAM4S16C",
         flash_bytes: 1024 * 1024,
         has_pioc: true,
+        check_usart0_irq: false,
         summary: 0x2001_FF00,
         board: None,
     })

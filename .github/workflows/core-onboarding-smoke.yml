@@ -1272,9 +1272,9 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/sam4s16c-smoke.yaml
             system: configs/systems/onboarding/sam4s16c.yaml
-          # SAM4S8B keeps only its exact flash/SRAM, modeled PMC and UART0
-          # execution path; generated stub and unexercised peripheral claims
-          # are omitted from this bounded profile.
+          # SAM4S8B's family smoke exercises its exact flash/SRAM, EEFC,
+          # reset/watchdog, PMC, PIO, TC, UART0 and USART0 TXRDY IRQ surface.
+          # Generated stub and unexercised peripheral claims remain omitted.
           - id: sam4s8b
             crate: firmware-sam4s8b-smoke
             target: thumbv7em-none-eabi
