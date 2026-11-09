@@ -2448,8 +2448,13 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 1cf8837b47ec1cbc8750a7d85e04f6a664821a64a6b6595d108933ec7a135f75
+    # 2026-11-09 (feat/stm32g0-adc-chselr): adc.rs adds a separate `stm32g0`
+    # layout (CHSELR, CFGR1, CALFACT) for the G0/C0 ADC, selected only by
+    # `profile: stm32g0`; `g0` no longer aliases the L4 layout. The F1, L4
+    # and H7 register maps and conversion paths are byte-for-byte unchanged.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: a6f2da07780b0039e9e985dc99eb2b835d774479fcbdcb4e183e1f24ba6ea4d1
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4663,8 +4668,13 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 522b4fc22955059d1baeb90ac01cce43945353e195371493fee02b9142c894bc
+    # 2026-11-09 (feat/stm32g0-adc-chselr): adc.rs adds a separate `stm32g0`
+    # layout (CHSELR, CFGR1, CALFACT) for the G0/C0 ADC, selected only by
+    # `profile: stm32g0`; `g0` no longer aliases the L4 layout. The F1, L4
+    # and H7 register maps and conversion paths are byte-for-byte unchanged.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: c6b6e1f608a3e5361fb9706e454acf026e8c71e794ddd5790a5c3ecea28957a1
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6917,8 +6927,13 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 2ff8315cb06b1105dc0c52eb3b6cadc903c288459b32f36eb5fe6d1618f2c834
+    # 2026-11-09 (feat/stm32g0-adc-chselr): adc.rs adds a separate `stm32g0`
+    # layout (CHSELR, CFGR1, CALFACT) for the G0/C0 ADC, selected only by
+    # `profile: stm32g0`; `g0` no longer aliases the L4 layout. The F1, L4
+    # and H7 register maps and conversion paths are byte-for-byte unchanged.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: 961d469aa9ada5103c3190e9ca899530daffed8ba68e55a5174f8c1b9dbb5174
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
