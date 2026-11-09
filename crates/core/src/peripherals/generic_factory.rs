@@ -817,6 +817,7 @@ pub fn try_build(
                 let pad_map = match p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
                     None => None,
                     Some("stm32g0") => Some("stm32g0"),
+                    Some("stm32c0") => Some("stm32c0"),
                     Some("stm32g4") => Some("stm32g4"),
                     Some("stm32l0") => Some("stm32l0"),
                     Some("stm32l4") => Some("stm32l4"),
@@ -826,7 +827,7 @@ pub fn try_build(
                     Some("stm32h5") => Some("stm32h5"),
                     Some(other) => {
                         return Err(anyhow::anyhow!(
-                            "timer '{}': unknown pad_map '{other}' (supported: stm32g0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
+                            "timer '{}': unknown pad_map '{other}' (supported: stm32g0, stm32c0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
                             p_cfg.id
                         ))
                     }

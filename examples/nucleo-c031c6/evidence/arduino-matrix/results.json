@@ -1,0 +1,4191 @@
+{
+  "generated_at": "2026-11-09T07:28:45+0000",
+  "elapsed_s": 7.0,
+  "labwired": "target/debug/labwired",
+  "sim_only": false,
+  "rows": [
+    {
+      "board": "stm32c031c6",
+      "sketch": "L0_serial_boot",
+      "status": "pass",
+      "detail": {
+        "result": {
+          "result_schema_version": "1.0",
+          "status": "pass",
+          "steps_executed": 52470,
+          "cycles": 52470,
+          "instructions": 52470,
+          "stop_reason": "assertions_passed",
+          "stop_reason_details": {
+            "triggered_stop_condition": "assertions_passed",
+            "triggered_limit": null,
+            "observed": null
+          },
+          "limits": {
+            "max_steps": 20000000,
+            "max_cycles": null,
+            "max_uart_bytes": 65536,
+            "no_progress_steps": null,
+            "wall_time_ms": null,
+            "max_vcd_bytes": null,
+            "stop_when_assertions_pass": true,
+            "stop_when_assertions_pass_settle_steps": 1000,
+            "stop_when_assertions_pass_min_steps": 0
+          },
+          "assertions": [
+            {
+              "assertion": {
+                "uart_contains": "LW_L0_OK"
+              },
+              "passed": true
+            }
+          ],
+          "cpu_state": {
+            "type": "arm",
+            "registers": [
+              10,
+              0,
+              3758153984,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              128,
+              536883184,
+              134228749,
+              134228876
+            ],
+            "pc": 134228876,
+            "xpsr": 1627389952,
+            "primask": false,
+            "pending_exceptions": 0,
+            "pending_exceptions_hi": [
+              0,
+              0,
+              0
+            ],
+            "vtor": 134217728,
+            "waiting_for_event": false,
+            "event_register": true
+          },
+          "firmware_hash": "7805f8e231f442af8d16c44e1dd3ca7c9bbd963e2345acf38ad56a760decd72c",
+          "config": {
+            "firmware": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L0_serial_boot/firmware.elf",
+            "system": "/home/andrii/worktrees/labwired-core-c031/validation/arduino-matrix/systems/stm32c031c6.yaml",
+            "script": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L0_serial_boot/test.yaml"
+          },
+          "inspect": {
+            "peripherals": [
+              {
+                "name": "rcc",
+                "kind": "native",
+                "base": 1073876992,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "pwr",
+                "kind": "native",
+                "base": 1073770496,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "flash",
+                "kind": "native",
+                "base": 1073881088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "systick",
+                "kind": "native",
+                "base": 3758153744,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioa",
+                "kind": "native",
+                "base": 1342177280,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiob",
+                "kind": "native",
+                "base": 1342178304,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioc",
+                "kind": "native",
+                "base": 1342179328,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiod",
+                "kind": "native",
+                "base": 1342180352,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiof",
+                "kind": "native",
+                "base": 1342182400,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart1",
+                "kind": "native",
+                "base": 1073821696,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart2",
+                "kind": "native",
+                "base": 1073759232,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "i2c1",
+                "kind": "i2c",
+                "base": 1073763328,
+                "registers": [],
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "i2c@0x40",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "spi1",
+                "kind": "native",
+                "base": 1073819648,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim1_pwm",
+                "kind": "native",
+                "base": 1073818624,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim3",
+                "kind": "native",
+                "base": 1073742848,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim14",
+                "kind": "native",
+                "base": 1073750016,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim16",
+                "kind": "native",
+                "base": 1073824768,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim17",
+                "kind": "native",
+                "base": 1073825792,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "adc1",
+                "kind": "native",
+                "base": 1073816576,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dma1",
+                "kind": "native",
+                "base": 1073872896,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dmamux",
+                "kind": "native",
+                "base": 1073874944,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "rtc",
+                "kind": "native",
+                "base": 1073752064,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "iwdg",
+                "kind": "native",
+                "base": 1073754112,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "wwdg",
+                "kind": "native",
+                "base": 1073753088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "crc",
+                "kind": "native",
+                "base": 1073885184,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "exti",
+                "kind": "native",
+                "base": 1073879040,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "syscfg",
+                "kind": "native",
+                "base": 1073807360,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dbgmcu",
+                "kind": "native",
+                "base": 1073829888,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "nvic",
+                "kind": "native",
+                "base": 3758153984,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "scb",
+                "kind": "native",
+                "base": 3758157056,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dwt",
+                "kind": "native",
+                "base": 3758100480,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "itm",
+                "kind": "native",
+                "base": 3758096384,
+                "registers": [],
+                "artifacts": []
+              }
+            ],
+            "devices": [
+              {
+                "id": "ina219",
+                "device_type": "ina219",
+                "declared": true,
+                "attachment": {
+                  "transport": "i2c",
+                  "bus": "i2c1",
+                  "address": 64
+                },
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "ina219",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "max31855",
+                "device_type": "max31855",
+                "declared": true,
+                "attachment": {
+                  "transport": "spi",
+                  "bus": "spi1",
+                  "cs_pin": "PB0"
+                },
+                "artifacts": []
+              }
+            ]
+          },
+          "fidelity": [
+            {
+              "kind": "derived_device_time",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "device time derived from cpu_hz (48000000 Hz); PLL reconfiguration is not tracked"
+            },
+            {
+              "kind": "unpowered_rail_assumed",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+            }
+          ],
+          "uart_lines": {
+            "lines": [
+              {
+                "text": "LW_L0_OK",
+                "cycle_lo": 50895,
+                "cycle": 50896,
+                "end_cycle": 52155
+              }
+            ],
+            "dropped_lines": 0
+          },
+          "footprint": {
+            "method": "elf_section_totals_v1",
+            "text_bytes": 12532,
+            "data_bytes": 128,
+            "bss_bytes": 2592,
+            "flash_used_bytes": 12660,
+            "ram_static_bytes": 2720,
+            "flash_total_bytes": 32768,
+            "ram_total_bytes": 12288,
+            "flash_used_pct": 38.64,
+            "ram_static_pct": 22.14,
+            "notes": [
+              "section_sum_not_bin_image",
+              "totals_from_chip_catalog"
+            ]
+          },
+          "memory": {
+            "main_stack_method": "paint",
+            "main_stack_limit_bytes": 11104,
+            "main_stack_high_water_bytes": 216,
+            "main_stack_free_min_bytes": 10888,
+            "main_stack_base": 536872096,
+            "main_stack_top": 536883200,
+            "main_stack_overflow_suspected": false,
+            "heap_method": "paint",
+            "heap_limit_bytes": 11104,
+            "heap_high_water_bytes": 0,
+            "heap_free_min_bytes": 10888,
+            "heap_base": 536872096,
+            "heap_top": 536883200
+          },
+          "metrics": {
+            "cycles": 52470,
+            "instructions": 52470,
+            "steps_executed": 52470,
+            "memory_reads": 18610,
+            "memory_writes": 8714,
+            "peripheral_accesses": 209,
+            "exceptions": 0,
+            "pc_samples": [
+              {
+                "pc": 134218576,
+                "count": 58
+              },
+              {
+                "pc": 134224896,
+                "count": 58
+              },
+              {
+                "pc": 134228866,
+                "count": 58
+              },
+              {
+                "pc": 134217942,
+                "count": 2
+              },
+              {
+                "pc": 134228786,
+                "count": 2
+              },
+              {
+                "pc": 134228790,
+                "count": 2
+              },
+              {
+                "pc": 134228794,
+                "count": 2
+              },
+              {
+                "pc": 134228940,
+                "count": 2
+              },
+              {
+                "pc": 134217948,
+                "count": 1
+              },
+              {
+                "pc": 134217950,
+                "count": 1
+              },
+              {
+                "pc": 134218098,
+                "count": 1
+              },
+              {
+                "pc": 134218712,
+                "count": 1
+              },
+              {
+                "pc": 134219974,
+                "count": 1
+              },
+              {
+                "pc": 134219976,
+                "count": 1
+              },
+              {
+                "pc": 134220398,
+                "count": 1
+              },
+              {
+                "pc": 134221208,
+                "count": 1
+              }
+            ]
+          }
+        },
+        "uart_tail": "LW_L0_OK\n",
+        "stderr": "\u001b[2m2026-11-09T07:28:38.906671Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_core::system::builder\u001b[0m\u001b[2m:\u001b[0m Loading chip descriptor: ../../../configs/chips/stm32c031c6.yaml\n\u001b[2m2026-11-09T07:28:38.985688Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_loader\u001b[0m\u001b[2m:\u001b[0m ELF Entry Point: 0x8002b11\nlabwired-cli test: idle_ff=on (event_scheduler=on)\nlabwired-cli test: hosted fast path (exact windows up to 1024 cycles)\nPASS  1/1 checks \u00b7 test \u00b7 52470 steps \u00b7 0.02s\n",
+        "compile": "cache_hit"
+      }
+    },
+    {
+      "board": "stm32c031c6",
+      "sketch": "L1_serial_loop",
+      "status": "pass",
+      "detail": {
+        "result": {
+          "result_schema_version": "1.0",
+          "status": "pass",
+          "steps_executed": 100469,
+          "cycles": 100469,
+          "instructions": 100469,
+          "stop_reason": "assertions_passed",
+          "stop_reason_details": {
+            "triggered_stop_condition": "assertions_passed",
+            "triggered_limit": null,
+            "observed": null
+          },
+          "limits": {
+            "max_steps": 20000000,
+            "max_cycles": null,
+            "max_uart_bytes": 65536,
+            "no_progress_steps": null,
+            "wall_time_ms": null,
+            "max_vcd_bytes": null,
+            "stop_when_assertions_pass": true,
+            "stop_when_assertions_pass_settle_steps": 1000,
+            "stop_when_assertions_pass_min_steps": 0
+          },
+          "assertions": [
+            {
+              "assertion": {
+                "uart_contains": "LW_L1_OK"
+              },
+              "passed": true
+            }
+          ],
+          "cpu_state": {
+            "type": "arm",
+            "registers": [
+              2,
+              0,
+              3758153984,
+              536871068,
+              1,
+              2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              128,
+              536883160,
+              134224903,
+              134218576
+            ],
+            "pc": 134218576,
+            "xpsr": 2164260864,
+            "primask": false,
+            "pending_exceptions": 0,
+            "pending_exceptions_hi": [
+              0,
+              0,
+              0
+            ],
+            "vtor": 134217728,
+            "waiting_for_event": false,
+            "event_register": true
+          },
+          "firmware_hash": "02708711576ba454169ca2faab2e9416ad5cb45502ed3571b4d5e895cfd80acc",
+          "config": {
+            "firmware": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L1_serial_loop/firmware.elf",
+            "system": "/home/andrii/worktrees/labwired-core-c031/validation/arduino-matrix/systems/stm32c031c6.yaml",
+            "script": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L1_serial_loop/test.yaml"
+          },
+          "inspect": {
+            "peripherals": [
+              {
+                "name": "rcc",
+                "kind": "native",
+                "base": 1073876992,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "pwr",
+                "kind": "native",
+                "base": 1073770496,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "flash",
+                "kind": "native",
+                "base": 1073881088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "systick",
+                "kind": "native",
+                "base": 3758153744,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioa",
+                "kind": "native",
+                "base": 1342177280,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiob",
+                "kind": "native",
+                "base": 1342178304,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioc",
+                "kind": "native",
+                "base": 1342179328,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiod",
+                "kind": "native",
+                "base": 1342180352,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiof",
+                "kind": "native",
+                "base": 1342182400,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart1",
+                "kind": "native",
+                "base": 1073821696,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart2",
+                "kind": "native",
+                "base": 1073759232,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "i2c1",
+                "kind": "i2c",
+                "base": 1073763328,
+                "registers": [],
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "i2c@0x40",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "spi1",
+                "kind": "native",
+                "base": 1073819648,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim1_pwm",
+                "kind": "native",
+                "base": 1073818624,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim3",
+                "kind": "native",
+                "base": 1073742848,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim14",
+                "kind": "native",
+                "base": 1073750016,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim16",
+                "kind": "native",
+                "base": 1073824768,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim17",
+                "kind": "native",
+                "base": 1073825792,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "adc1",
+                "kind": "native",
+                "base": 1073816576,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dma1",
+                "kind": "native",
+                "base": 1073872896,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dmamux",
+                "kind": "native",
+                "base": 1073874944,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "rtc",
+                "kind": "native",
+                "base": 1073752064,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "iwdg",
+                "kind": "native",
+                "base": 1073754112,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "wwdg",
+                "kind": "native",
+                "base": 1073753088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "crc",
+                "kind": "native",
+                "base": 1073885184,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "exti",
+                "kind": "native",
+                "base": 1073879040,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "syscfg",
+                "kind": "native",
+                "base": 1073807360,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dbgmcu",
+                "kind": "native",
+                "base": 1073829888,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "nvic",
+                "kind": "native",
+                "base": 3758153984,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "scb",
+                "kind": "native",
+                "base": 3758157056,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dwt",
+                "kind": "native",
+                "base": 3758100480,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "itm",
+                "kind": "native",
+                "base": 3758096384,
+                "registers": [],
+                "artifacts": []
+              }
+            ],
+            "devices": [
+              {
+                "id": "ina219",
+                "device_type": "ina219",
+                "declared": true,
+                "attachment": {
+                  "transport": "i2c",
+                  "bus": "i2c1",
+                  "address": 64
+                },
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "ina219",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "max31855",
+                "device_type": "max31855",
+                "declared": true,
+                "attachment": {
+                  "transport": "spi",
+                  "bus": "spi1",
+                  "cs_pin": "PB0"
+                },
+                "artifacts": []
+              }
+            ]
+          },
+          "fidelity": [
+            {
+              "kind": "derived_device_time",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "device time derived from cpu_hz (48000000 Hz); PLL reconfiguration is not tracked"
+            },
+            {
+              "kind": "unpowered_rail_assumed",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+            }
+          ],
+          "uart_lines": {
+            "lines": [
+              {
+                "text": "LW_L1_BOOT",
+                "cycle_lo": 50915,
+                "cycle": 50916,
+                "end_cycle": 52339
+              },
+              {
+                "text": "LW_L1_OK",
+                "cycle_lo": 98894,
+                "cycle": 98895,
+                "end_cycle": 100154
+              }
+            ],
+            "dropped_lines": 0
+          },
+          "footprint": {
+            "method": "elf_section_totals_v1",
+            "text_bytes": 12568,
+            "data_bytes": 128,
+            "bss_bytes": 2592,
+            "flash_used_bytes": 12696,
+            "ram_static_bytes": 2720,
+            "flash_total_bytes": 32768,
+            "ram_total_bytes": 12288,
+            "flash_used_pct": 38.75,
+            "ram_static_pct": 22.14,
+            "notes": [
+              "section_sum_not_bin_image",
+              "totals_from_chip_catalog"
+            ]
+          },
+          "memory": {
+            "main_stack_method": "paint",
+            "main_stack_limit_bytes": 11104,
+            "main_stack_high_water_bytes": 216,
+            "main_stack_free_min_bytes": 10888,
+            "main_stack_base": 536872096,
+            "main_stack_top": 536883200,
+            "main_stack_overflow_suspected": false,
+            "heap_method": "paint",
+            "heap_limit_bytes": 11104,
+            "heap_high_water_bytes": 0,
+            "heap_free_min_bytes": 10888,
+            "heap_base": 536872096,
+            "heap_top": 536883200
+          },
+          "metrics": {
+            "cycles": 100469,
+            "instructions": 100469,
+            "steps_executed": 100469,
+            "memory_reads": 34749,
+            "memory_writes": 16867,
+            "peripheral_accesses": 313,
+            "exceptions": 0,
+            "pc_samples": [
+              {
+                "pc": 134224898,
+                "count": 60
+              },
+              {
+                "pc": 134228882,
+                "count": 60
+              },
+              {
+                "pc": 134224902,
+                "count": 59
+              },
+              {
+                "pc": 134218576,
+                "count": 58
+              },
+              {
+                "pc": 134224896,
+                "count": 58
+              },
+              {
+                "pc": 134228894,
+                "count": 58
+              },
+              {
+                "pc": 134217942,
+                "count": 2
+              },
+              {
+                "pc": 134226380,
+                "count": 2
+              },
+              {
+                "pc": 134228814,
+                "count": 2
+              },
+              {
+                "pc": 134228818,
+                "count": 2
+              },
+              {
+                "pc": 134228822,
+                "count": 2
+              },
+              {
+                "pc": 134228968,
+                "count": 2
+              },
+              {
+                "pc": 134217948,
+                "count": 1
+              },
+              {
+                "pc": 134217950,
+                "count": 1
+              },
+              {
+                "pc": 134218098,
+                "count": 1
+              },
+              {
+                "pc": 134218672,
+                "count": 1
+              }
+            ]
+          }
+        },
+        "uart_tail": "LW_L1_BOOT\nLW_L1_OK\n",
+        "stderr": "\u001b[2m2026-11-09T07:28:39.027555Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_core::system::builder\u001b[0m\u001b[2m:\u001b[0m Loading chip descriptor: ../../../configs/chips/stm32c031c6.yaml\n\u001b[2m2026-11-09T07:28:39.107010Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_loader\u001b[0m\u001b[2m:\u001b[0m ELF Entry Point: 0x8002b2d\nlabwired-cli test: idle_ff=on (event_scheduler=on)\nlabwired-cli test: hosted fast path (exact windows up to 1024 cycles)\nPASS  1/1 checks \u00b7 test \u00b7 100469 steps \u00b7 0.07s\n",
+        "compile": "cache_hit"
+      }
+    },
+    {
+      "board": "stm32c031c6",
+      "sketch": "L2_blink_serial",
+      "status": "pass",
+      "detail": {
+        "result": {
+          "result_schema_version": "1.0",
+          "status": "pass",
+          "steps_executed": 148567,
+          "cycles": 148567,
+          "instructions": 148567,
+          "stop_reason": "assertions_passed",
+          "stop_reason_details": {
+            "triggered_stop_condition": "assertions_passed",
+            "triggered_limit": null,
+            "observed": null
+          },
+          "limits": {
+            "max_steps": 20000000,
+            "max_cycles": null,
+            "max_uart_bytes": 65536,
+            "no_progress_steps": null,
+            "wall_time_ms": null,
+            "max_vcd_bytes": null,
+            "stop_when_assertions_pass": true,
+            "stop_when_assertions_pass_settle_steps": 1000,
+            "stop_when_assertions_pass_min_steps": 0
+          },
+          "assertions": [
+            {
+              "assertion": {
+                "uart_contains": "LW_L2_OK"
+              },
+              "passed": true
+            }
+          ],
+          "cpu_state": {
+            "type": "arm",
+            "registers": [
+              5,
+              1,
+              0,
+              0,
+              1792,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              128,
+              536883176,
+              134228659,
+              134230422
+            ],
+            "pc": 134230422,
+            "xpsr": 2164260864,
+            "primask": false,
+            "pending_exceptions": 0,
+            "pending_exceptions_hi": [
+              0,
+              0,
+              0
+            ],
+            "vtor": 134217728,
+            "waiting_for_event": false,
+            "event_register": true
+          },
+          "firmware_hash": "32b1adaa0ccb07943fbc77b326a715bb3efea75206d7807a5151e4716bfda2b1",
+          "config": {
+            "firmware": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L2_blink_serial/firmware.elf",
+            "system": "/home/andrii/worktrees/labwired-core-c031/validation/arduino-matrix/systems/stm32c031c6.yaml",
+            "script": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L2_blink_serial/test.yaml"
+          },
+          "inspect": {
+            "peripherals": [
+              {
+                "name": "rcc",
+                "kind": "native",
+                "base": 1073876992,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "pwr",
+                "kind": "native",
+                "base": 1073770496,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "flash",
+                "kind": "native",
+                "base": 1073881088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "systick",
+                "kind": "native",
+                "base": 3758153744,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioa",
+                "kind": "native",
+                "base": 1342177280,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiob",
+                "kind": "native",
+                "base": 1342178304,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioc",
+                "kind": "native",
+                "base": 1342179328,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiod",
+                "kind": "native",
+                "base": 1342180352,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiof",
+                "kind": "native",
+                "base": 1342182400,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart1",
+                "kind": "native",
+                "base": 1073821696,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart2",
+                "kind": "native",
+                "base": 1073759232,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "i2c1",
+                "kind": "i2c",
+                "base": 1073763328,
+                "registers": [],
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "i2c@0x40",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "spi1",
+                "kind": "native",
+                "base": 1073819648,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim1_pwm",
+                "kind": "native",
+                "base": 1073818624,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim3",
+                "kind": "native",
+                "base": 1073742848,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim14",
+                "kind": "native",
+                "base": 1073750016,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim16",
+                "kind": "native",
+                "base": 1073824768,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim17",
+                "kind": "native",
+                "base": 1073825792,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "adc1",
+                "kind": "native",
+                "base": 1073816576,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dma1",
+                "kind": "native",
+                "base": 1073872896,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dmamux",
+                "kind": "native",
+                "base": 1073874944,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "rtc",
+                "kind": "native",
+                "base": 1073752064,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "iwdg",
+                "kind": "native",
+                "base": 1073754112,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "wwdg",
+                "kind": "native",
+                "base": 1073753088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "crc",
+                "kind": "native",
+                "base": 1073885184,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "exti",
+                "kind": "native",
+                "base": 1073879040,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "syscfg",
+                "kind": "native",
+                "base": 1073807360,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dbgmcu",
+                "kind": "native",
+                "base": 1073829888,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "nvic",
+                "kind": "native",
+                "base": 3758153984,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "scb",
+                "kind": "native",
+                "base": 3758157056,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dwt",
+                "kind": "native",
+                "base": 3758100480,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "itm",
+                "kind": "native",
+                "base": 3758096384,
+                "registers": [],
+                "artifacts": []
+              }
+            ],
+            "devices": [
+              {
+                "id": "ina219",
+                "device_type": "ina219",
+                "declared": true,
+                "attachment": {
+                  "transport": "i2c",
+                  "bus": "i2c1",
+                  "address": 64
+                },
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "ina219",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "max31855",
+                "device_type": "max31855",
+                "declared": true,
+                "attachment": {
+                  "transport": "spi",
+                  "bus": "spi1",
+                  "cs_pin": "PB0"
+                },
+                "artifacts": []
+              }
+            ]
+          },
+          "fidelity": [
+            {
+              "kind": "derived_device_time",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "device time derived from cpu_hz (48000000 Hz); PLL reconfiguration is not tracked"
+            },
+            {
+              "kind": "unpowered_rail_assumed",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+            }
+          ],
+          "logic_edges": {
+            "dropped": 0,
+            "now_cycle": 148567,
+            "channels": [
+              {
+                "ch": 0,
+                "channel": "CH0",
+                "peripheral": "gpioa",
+                "pin": 5,
+                "initial": 0,
+                "transitions": [
+                  {
+                    "cycle": 52754,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 98647,
+                    "value": 0
+                  }
+                ],
+                "gaps": [],
+                "initial_state": "z",
+                "states": [
+                  {
+                    "cycle": 4203,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 52754,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 98647,
+                    "state": "0"
+                  }
+                ],
+                "mode": "output",
+                "edge_count": 2
+              }
+            ]
+          },
+          "gpio_pins": [
+            {
+              "pin": "CH0",
+              "peripheral": "gpioa",
+              "number": 5,
+              "mode": "output",
+              "func": null,
+              "output": false,
+              "input": false,
+              "pad": false,
+              "drive": "0"
+            }
+          ],
+          "uart_lines": {
+            "lines": [
+              {
+                "text": "LW_L2_BOOT",
+                "cycle_lo": 51010,
+                "cycle": 51011,
+                "end_cycle": 52434
+              },
+              {
+                "text": "LW_L2_OK",
+                "cycle_lo": 146992,
+                "cycle": 146993,
+                "end_cycle": 148252
+              }
+            ],
+            "dropped_lines": 0
+          },
+          "footprint": {
+            "method": "elf_section_totals_v1",
+            "text_bytes": 15676,
+            "data_bytes": 152,
+            "bss_bytes": 2624,
+            "flash_used_bytes": 15828,
+            "ram_static_bytes": 2776,
+            "flash_total_bytes": 32768,
+            "ram_total_bytes": 12288,
+            "flash_used_pct": 48.3,
+            "ram_static_pct": 22.59,
+            "notes": [
+              "section_sum_not_bin_image",
+              "totals_from_chip_catalog"
+            ]
+          },
+          "memory": {
+            "main_stack_method": "paint",
+            "main_stack_limit_bytes": 11048,
+            "main_stack_high_water_bytes": 216,
+            "main_stack_free_min_bytes": 10832,
+            "main_stack_base": 536872152,
+            "main_stack_top": 536883200,
+            "main_stack_overflow_suspected": false,
+            "heap_method": "paint",
+            "heap_limit_bytes": 11048,
+            "heap_high_water_bytes": 0,
+            "heap_free_min_bytes": 10832,
+            "heap_base": 536872152,
+            "heap_top": 536883200
+          },
+          "metrics": {
+            "cycles": 148567,
+            "instructions": 148567,
+            "steps_executed": 148567,
+            "memory_reads": 51056,
+            "memory_writes": 24879,
+            "peripheral_accesses": 326,
+            "exceptions": 0,
+            "pc_samples": [
+              {
+                "pc": 134225594,
+                "count": 118
+              },
+              {
+                "pc": 134230528,
+                "count": 118
+              },
+              {
+                "pc": 134225590,
+                "count": 116
+              },
+              {
+                "pc": 134230538,
+                "count": 63
+              },
+              {
+                "pc": 134218574,
+                "count": 62
+              },
+              {
+                "pc": 134230532,
+                "count": 62
+              },
+              {
+                "pc": 134221446,
+                "count": 2
+              },
+              {
+                "pc": 134230154,
+                "count": 2
+              },
+              {
+                "pc": 134230158,
+                "count": 2
+              },
+              {
+                "pc": 134230162,
+                "count": 2
+              },
+              {
+                "pc": 134217958,
+                "count": 1
+              },
+              {
+                "pc": 134217960,
+                "count": 1
+              },
+              {
+                "pc": 134218186,
+                "count": 1
+              },
+              {
+                "pc": 134218486,
+                "count": 1
+              },
+              {
+                "pc": 134218744,
+                "count": 1
+              },
+              {
+                "pc": 134218780,
+                "count": 1
+              }
+            ]
+          }
+        },
+        "uart_tail": "LW_L2_BOOT\nLW_L2_OK\n",
+        "stderr": "\u001b[2m2026-11-09T07:28:39.205533Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_core::system::builder\u001b[0m\u001b[2m:\u001b[0m Loading chip descriptor: ../../../configs/chips/stm32c031c6.yaml\n\u001b[2m2026-11-09T07:28:39.313265Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_loader\u001b[0m\u001b[2m:\u001b[0m ELF Entry Point: 0x8003069\nlabwired-cli test: idle_ff=on (event_scheduler=on)\nlabwired-cli test: hosted fast path (exact windows up to 1024 cycles)\nPASS  1/1 checks \u00b7 test \u00b7 148567 steps \u00b7 0.07s\n",
+        "logic_edge_count": 2,
+        "compile": "cache_hit"
+      }
+    },
+    {
+      "board": "stm32c031c6",
+      "sketch": "L3_i2c_sensor",
+      "status": "pass",
+      "detail": {
+        "result": {
+          "result_schema_version": "1.0",
+          "status": "pass",
+          "steps_executed": 11316915,
+          "cycles": 11316915,
+          "instructions": 11316915,
+          "stop_reason": "assertions_passed",
+          "stop_reason_details": {
+            "triggered_stop_condition": "assertions_passed",
+            "triggered_limit": null,
+            "observed": null
+          },
+          "limits": {
+            "max_steps": 20000000,
+            "max_cycles": null,
+            "max_uart_bytes": 65536,
+            "no_progress_steps": null,
+            "wall_time_ms": null,
+            "max_vcd_bytes": null,
+            "stop_when_assertions_pass": true,
+            "stop_when_assertions_pass_settle_steps": 1000,
+            "stop_when_assertions_pass_min_steps": 0
+          },
+          "assertions": [
+            {
+              "assertion": {
+                "uart_contains": "LW_L3_OK"
+              },
+              "passed": true
+            }
+          ],
+          "cpu_state": {
+            "type": "arm",
+            "registers": [
+              536871700,
+              432683423,
+              3758153984,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              536883184,
+              134239541,
+              134239904
+            ],
+            "pc": 134239904,
+            "xpsr": 1627389952,
+            "primask": false,
+            "pending_exceptions": 0,
+            "pending_exceptions_hi": [
+              0,
+              0,
+              0
+            ],
+            "vtor": 134217728,
+            "waiting_for_event": false,
+            "event_register": true
+          },
+          "firmware_hash": "1a5e6e33e15609899de6126586b822fe89bca2dcb9e41c41021c760985aa2c48",
+          "config": {
+            "firmware": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L3_i2c_sensor/firmware.elf",
+            "system": "/home/andrii/worktrees/labwired-core-c031/validation/arduino-matrix/systems/stm32c031c6.yaml",
+            "script": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L3_i2c_sensor/test.yaml"
+          },
+          "inspect": {
+            "peripherals": [
+              {
+                "name": "rcc",
+                "kind": "native",
+                "base": 1073876992,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "pwr",
+                "kind": "native",
+                "base": 1073770496,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "flash",
+                "kind": "native",
+                "base": 1073881088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "systick",
+                "kind": "native",
+                "base": 3758153744,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioa",
+                "kind": "native",
+                "base": 1342177280,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiob",
+                "kind": "native",
+                "base": 1342178304,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioc",
+                "kind": "native",
+                "base": 1342179328,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiod",
+                "kind": "native",
+                "base": 1342180352,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiof",
+                "kind": "native",
+                "base": 1342182400,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart1",
+                "kind": "native",
+                "base": 1073821696,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart2",
+                "kind": "native",
+                "base": 1073759232,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "i2c1",
+                "kind": "i2c",
+                "base": 1073763328,
+                "registers": [],
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "i2c@0x40",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "spi1",
+                "kind": "native",
+                "base": 1073819648,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim1_pwm",
+                "kind": "native",
+                "base": 1073818624,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim3",
+                "kind": "native",
+                "base": 1073742848,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim14",
+                "kind": "native",
+                "base": 1073750016,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim16",
+                "kind": "native",
+                "base": 1073824768,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim17",
+                "kind": "native",
+                "base": 1073825792,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "adc1",
+                "kind": "native",
+                "base": 1073816576,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dma1",
+                "kind": "native",
+                "base": 1073872896,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dmamux",
+                "kind": "native",
+                "base": 1073874944,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "rtc",
+                "kind": "native",
+                "base": 1073752064,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "iwdg",
+                "kind": "native",
+                "base": 1073754112,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "wwdg",
+                "kind": "native",
+                "base": 1073753088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "crc",
+                "kind": "native",
+                "base": 1073885184,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "exti",
+                "kind": "native",
+                "base": 1073879040,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "syscfg",
+                "kind": "native",
+                "base": 1073807360,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dbgmcu",
+                "kind": "native",
+                "base": 1073829888,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "nvic",
+                "kind": "native",
+                "base": 3758153984,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "scb",
+                "kind": "native",
+                "base": 3758157056,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dwt",
+                "kind": "native",
+                "base": 3758100480,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "itm",
+                "kind": "native",
+                "base": 3758096384,
+                "registers": [],
+                "artifacts": []
+              }
+            ],
+            "devices": [
+              {
+                "id": "ina219",
+                "device_type": "ina219",
+                "declared": true,
+                "attachment": {
+                  "transport": "i2c",
+                  "bus": "i2c1",
+                  "address": 64
+                },
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "ina219",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "max31855",
+                "device_type": "max31855",
+                "declared": true,
+                "attachment": {
+                  "transport": "spi",
+                  "bus": "spi1",
+                  "cs_pin": "PB0"
+                },
+                "artifacts": []
+              }
+            ]
+          },
+          "fidelity": [
+            {
+              "kind": "derived_device_time",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "device time derived from cpu_hz (48000000 Hz); PLL reconfiguration is not tracked"
+            },
+            {
+              "kind": "unpowered_rail_assumed",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+            }
+          ],
+          "uart_lines": {
+            "lines": [
+              {
+                "text": "LW_L3_BOOT",
+                "cycle_lo": 51398,
+                "cycle": 51399,
+                "end_cycle": 52822
+              },
+              {
+                "text": "LW_L3_OK",
+                "cycle_lo": 11315340,
+                "cycle": 11315341,
+                "end_cycle": 11316600
+              }
+            ],
+            "dropped_lines": 0
+          },
+          "footprint": {
+            "method": "elf_section_totals_v1",
+            "text_bytes": 25512,
+            "data_bytes": 152,
+            "bss_bytes": 2880,
+            "flash_used_bytes": 25664,
+            "ram_static_bytes": 3032,
+            "flash_total_bytes": 32768,
+            "ram_total_bytes": 12288,
+            "flash_used_pct": 78.32,
+            "ram_static_pct": 24.67,
+            "notes": [
+              "section_sum_not_bin_image",
+              "totals_from_chip_catalog"
+            ]
+          },
+          "memory": {
+            "main_stack_method": "paint",
+            "main_stack_limit_bytes": 10792,
+            "main_stack_high_water_bytes": 292,
+            "main_stack_free_min_bytes": 10400,
+            "main_stack_base": 536872408,
+            "main_stack_top": 536883200,
+            "main_stack_overflow_suspected": false,
+            "heap_method": "paint",
+            "heap_limit_bytes": 10792,
+            "heap_high_water_bytes": 52,
+            "heap_free_min_bytes": 10400,
+            "heap_base": 536872408,
+            "heap_top": 536883200
+          },
+          "metrics": {
+            "cycles": 11316915,
+            "instructions": 11316915,
+            "steps_executed": 11316915,
+            "memory_reads": 3515615,
+            "memory_writes": 1150524,
+            "peripheral_accesses": 1657,
+            "exceptions": 0,
+            "pc_samples": [
+              {
+                "pc": 134236490,
+                "count": 1499
+              },
+              {
+                "pc": 134236570,
+                "count": 1481
+              },
+              {
+                "pc": 134236596,
+                "count": 1472
+              },
+              {
+                "pc": 134236572,
+                "count": 1470
+              },
+              {
+                "pc": 134236582,
+                "count": 1469
+              },
+              {
+                "pc": 134236578,
+                "count": 1464
+              },
+              {
+                "pc": 134236484,
+                "count": 1457
+              },
+              {
+                "pc": 134236574,
+                "count": 1457
+              },
+              {
+                "pc": 134236568,
+                "count": 1454
+              },
+              {
+                "pc": 134236580,
+                "count": 1453
+              },
+              {
+                "pc": 134236586,
+                "count": 1450
+              },
+              {
+                "pc": 134236588,
+                "count": 1450
+              },
+              {
+                "pc": 134236558,
+                "count": 1449
+              },
+              {
+                "pc": 134236494,
+                "count": 1448
+              },
+              {
+                "pc": 134236488,
+                "count": 1447
+              },
+              {
+                "pc": 134236492,
+                "count": 1447
+              }
+            ]
+          }
+        },
+        "uart_tail": "LW_L3_BOOT\nLW_L3_OK\n",
+        "stderr": "\u001b[2m2026-11-09T07:28:39.401353Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_core::system::builder\u001b[0m\u001b[2m:\u001b[0m Loading chip descriptor: ../../../configs/chips/stm32c031c6.yaml\n\u001b[2m2026-11-09T07:28:39.469179Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_loader\u001b[0m\u001b[2m:\u001b[0m ELF Entry Point: 0x800556d\nlabwired-cli test: idle_ff=on (event_scheduler=on)\nlabwired-cli test: hosted fast path (exact windows up to 1024 cycles)\nPASS  1/1 checks \u00b7 test \u00b7 11316915 steps \u00b7 5.24s\n",
+        "compile": "cache_hit"
+      }
+    },
+    {
+      "board": "stm32c031c6",
+      "sketch": "L4_spi_sensor",
+      "status": "pass",
+      "detail": {
+        "result": {
+          "result_schema_version": "1.0",
+          "status": "pass",
+          "steps_executed": 101691,
+          "cycles": 101691,
+          "instructions": 101691,
+          "stop_reason": "assertions_passed",
+          "stop_reason_details": {
+            "triggered_stop_condition": "assertions_passed",
+            "triggered_limit": null,
+            "observed": null
+          },
+          "limits": {
+            "max_steps": 20000000,
+            "max_cycles": null,
+            "max_uart_bytes": 65536,
+            "no_progress_steps": null,
+            "wall_time_ms": null,
+            "max_vcd_bytes": null,
+            "stop_when_assertions_pass": true,
+            "stop_when_assertions_pass_settle_steps": 1000,
+            "stop_when_assertions_pass_min_steps": 0
+          },
+          "assertions": [
+            {
+              "assertion": {
+                "uart_contains": "LW_L4_OK"
+              },
+              "passed": true
+            }
+          ],
+          "cpu_state": {
+            "type": "arm",
+            "registers": [
+              10,
+              0,
+              3758153984,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              2048,
+              536883192,
+              134231541,
+              134231970
+            ],
+            "pc": 134231970,
+            "xpsr": 1627389952,
+            "primask": false,
+            "pending_exceptions": 0,
+            "pending_exceptions_hi": [
+              0,
+              0,
+              0
+            ],
+            "vtor": 134217728,
+            "waiting_for_event": false,
+            "event_register": true
+          },
+          "firmware_hash": "2755302f068e325b44a0a584a4f9f3a8525e9ea04467a47c01b5f55792108baf",
+          "config": {
+            "firmware": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L4_spi_sensor/firmware.elf",
+            "system": "/home/andrii/worktrees/labwired-core-c031/validation/arduino-matrix/systems/stm32c031c6.yaml",
+            "script": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L4_spi_sensor/test.yaml"
+          },
+          "inspect": {
+            "peripherals": [
+              {
+                "name": "rcc",
+                "kind": "native",
+                "base": 1073876992,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "pwr",
+                "kind": "native",
+                "base": 1073770496,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "flash",
+                "kind": "native",
+                "base": 1073881088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "systick",
+                "kind": "native",
+                "base": 3758153744,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioa",
+                "kind": "native",
+                "base": 1342177280,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiob",
+                "kind": "native",
+                "base": 1342178304,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioc",
+                "kind": "native",
+                "base": 1342179328,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiod",
+                "kind": "native",
+                "base": 1342180352,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiof",
+                "kind": "native",
+                "base": 1342182400,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart1",
+                "kind": "native",
+                "base": 1073821696,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart2",
+                "kind": "native",
+                "base": 1073759232,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "i2c1",
+                "kind": "i2c",
+                "base": 1073763328,
+                "registers": [],
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "i2c@0x40",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "spi1",
+                "kind": "native",
+                "base": 1073819648,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim1_pwm",
+                "kind": "native",
+                "base": 1073818624,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim3",
+                "kind": "native",
+                "base": 1073742848,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim14",
+                "kind": "native",
+                "base": 1073750016,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim16",
+                "kind": "native",
+                "base": 1073824768,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim17",
+                "kind": "native",
+                "base": 1073825792,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "adc1",
+                "kind": "native",
+                "base": 1073816576,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dma1",
+                "kind": "native",
+                "base": 1073872896,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dmamux",
+                "kind": "native",
+                "base": 1073874944,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "rtc",
+                "kind": "native",
+                "base": 1073752064,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "iwdg",
+                "kind": "native",
+                "base": 1073754112,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "wwdg",
+                "kind": "native",
+                "base": 1073753088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "crc",
+                "kind": "native",
+                "base": 1073885184,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "exti",
+                "kind": "native",
+                "base": 1073879040,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "syscfg",
+                "kind": "native",
+                "base": 1073807360,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dbgmcu",
+                "kind": "native",
+                "base": 1073829888,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "nvic",
+                "kind": "native",
+                "base": 3758153984,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "scb",
+                "kind": "native",
+                "base": 3758157056,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dwt",
+                "kind": "native",
+                "base": 3758100480,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "itm",
+                "kind": "native",
+                "base": 3758096384,
+                "registers": [],
+                "artifacts": []
+              }
+            ],
+            "devices": [
+              {
+                "id": "ina219",
+                "device_type": "ina219",
+                "declared": true,
+                "attachment": {
+                  "transport": "i2c",
+                  "bus": "i2c1",
+                  "address": 64
+                },
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "ina219",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "max31855",
+                "device_type": "max31855",
+                "declared": true,
+                "attachment": {
+                  "transport": "spi",
+                  "bus": "spi1",
+                  "cs_pin": "PB0"
+                },
+                "artifacts": []
+              }
+            ]
+          },
+          "fidelity": [
+            {
+              "kind": "derived_device_time",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "device time derived from cpu_hz (48000000 Hz); PLL reconfiguration is not tracked"
+            },
+            {
+              "kind": "unpowered_rail_assumed",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+            }
+          ],
+          "uart_lines": {
+            "lines": [
+              {
+                "text": "LW_L4_BOOT",
+                "cycle_lo": 51208,
+                "cycle": 51209,
+                "end_cycle": 52632
+              },
+              {
+                "text": "LW_L4_OK",
+                "cycle_lo": 100116,
+                "cycle": 100117,
+                "end_cycle": 101376
+              }
+            ],
+            "dropped_lines": 0
+          },
+          "footprint": {
+            "method": "elf_section_totals_v1",
+            "text_bytes": 19212,
+            "data_bytes": 152,
+            "bss_bytes": 2752,
+            "flash_used_bytes": 19364,
+            "ram_static_bytes": 2904,
+            "flash_total_bytes": 32768,
+            "ram_total_bytes": 12288,
+            "flash_used_pct": 59.09,
+            "ram_static_pct": 23.63,
+            "notes": [
+              "section_sum_not_bin_image",
+              "totals_from_chip_catalog"
+            ]
+          },
+          "memory": {
+            "main_stack_method": "paint",
+            "main_stack_limit_bytes": 10920,
+            "main_stack_high_water_bytes": 72,
+            "main_stack_free_min_bytes": 10640,
+            "main_stack_base": 536872280,
+            "main_stack_top": 536883200,
+            "main_stack_overflow_suspected": false,
+            "heap_method": "paint",
+            "heap_limit_bytes": 10920,
+            "heap_high_water_bytes": 0,
+            "heap_free_min_bytes": 10640,
+            "heap_base": 536872280,
+            "heap_top": 536883200
+          },
+          "metrics": {
+            "cycles": 101691,
+            "instructions": 101691,
+            "steps_executed": 101691,
+            "memory_reads": 35351,
+            "memory_writes": 17001,
+            "peripheral_accesses": 579,
+            "exceptions": 0,
+            "pc_samples": [
+              {
+                "pc": 134232008,
+                "count": 59
+              },
+              {
+                "pc": 134218592,
+                "count": 58
+              },
+              {
+                "pc": 134231960,
+                "count": 58
+              },
+              {
+                "pc": 134218594,
+                "count": 57
+              },
+              {
+                "pc": 134231956,
+                "count": 57
+              },
+              {
+                "pc": 134231962,
+                "count": 57
+              },
+              {
+                "pc": 134231578,
+                "count": 3
+              },
+              {
+                "pc": 134230058,
+                "count": 2
+              },
+              {
+                "pc": 134231582,
+                "count": 2
+              },
+              {
+                "pc": 134231586,
+                "count": 2
+              },
+              {
+                "pc": 134232672,
+                "count": 2
+              },
+              {
+                "pc": 134232676,
+                "count": 2
+              },
+              {
+                "pc": 134217940,
+                "count": 1
+              },
+              {
+                "pc": 134217946,
+                "count": 1
+              },
+              {
+                "pc": 134217948,
+                "count": 1
+              },
+              {
+                "pc": 134218116,
+                "count": 1
+              }
+            ]
+          }
+        },
+        "uart_tail": "LW_L4_BOOT\nLW_L4_OK\n",
+        "stderr": "\u001b[2m2026-11-09T07:28:44.733211Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_core::system::builder\u001b[0m\u001b[2m:\u001b[0m Loading chip descriptor: ../../../configs/chips/stm32c031c6.yaml\n\u001b[2m2026-11-09T07:28:44.802604Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_loader\u001b[0m\u001b[2m:\u001b[0m ELF Entry Point: 0x80035f9\nlabwired-cli test: idle_ff=on (event_scheduler=on)\nlabwired-cli test: hosted fast path (exact windows up to 1024 cycles)\nPASS  1/1 checks \u00b7 test \u00b7 101691 steps \u00b7 0.05s\n",
+        "compile": "cache_hit"
+      }
+    },
+    {
+      "board": "stm32c031c6",
+      "sketch": "L5_adc",
+      "status": "skipped",
+      "detail": "No C0 ADC (CHSELR) model: analogRead returns 0 on every pin; a pass would be vacuous"
+    },
+    {
+      "board": "stm32c031c6",
+      "sketch": "L6_pwm",
+      "status": "pass",
+      "detail": {
+        "result": {
+          "result_schema_version": "1.0",
+          "status": "pass",
+          "steps_executed": 1492598,
+          "cycles": 1492598,
+          "instructions": 1492598,
+          "stop_reason": "assertions_passed",
+          "stop_reason_details": {
+            "triggered_stop_condition": "assertions_passed",
+            "triggered_limit": null,
+            "observed": null
+          },
+          "limits": {
+            "max_steps": 20000000,
+            "max_cycles": null,
+            "max_uart_bytes": 65536,
+            "no_progress_steps": null,
+            "wall_time_ms": null,
+            "max_vcd_bytes": null,
+            "stop_when_assertions_pass": true,
+            "stop_when_assertions_pass_settle_steps": 1000,
+            "stop_when_assertions_pass_min_steps": 0
+          },
+          "assertions": [
+            {
+              "assertion": {
+                "uart_contains": "LW_L6_OK"
+              },
+              "passed": true
+            }
+          ],
+          "cpu_state": {
+            "type": "arm",
+            "registers": [
+              0,
+              0,
+              3758153984,
+              536871104,
+              1,
+              31,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              2048,
+              536883168,
+              134234685,
+              134234684
+            ],
+            "pc": 134234684,
+            "xpsr": 2164260864,
+            "primask": false,
+            "pending_exceptions": 0,
+            "pending_exceptions_hi": [
+              0,
+              0,
+              0
+            ],
+            "vtor": 134217728,
+            "waiting_for_event": false,
+            "event_register": true
+          },
+          "firmware_hash": "b4b21ffc4b6738fc65125e10210617dea7d5091a9dac253b56a6225a561f011c",
+          "config": {
+            "firmware": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L6_pwm/firmware.elf",
+            "system": "/home/andrii/worktrees/labwired-core-c031/validation/arduino-matrix/systems/stm32c031c6.yaml",
+            "script": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L6_pwm/test.yaml"
+          },
+          "inspect": {
+            "peripherals": [
+              {
+                "name": "rcc",
+                "kind": "native",
+                "base": 1073876992,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "pwr",
+                "kind": "native",
+                "base": 1073770496,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "flash",
+                "kind": "native",
+                "base": 1073881088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "systick",
+                "kind": "native",
+                "base": 3758153744,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioa",
+                "kind": "native",
+                "base": 1342177280,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiob",
+                "kind": "native",
+                "base": 1342178304,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioc",
+                "kind": "native",
+                "base": 1342179328,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiod",
+                "kind": "native",
+                "base": 1342180352,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiof",
+                "kind": "native",
+                "base": 1342182400,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart1",
+                "kind": "native",
+                "base": 1073821696,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart2",
+                "kind": "native",
+                "base": 1073759232,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "i2c1",
+                "kind": "i2c",
+                "base": 1073763328,
+                "registers": [],
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "i2c@0x40",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "spi1",
+                "kind": "native",
+                "base": 1073819648,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim1_pwm",
+                "kind": "native",
+                "base": 1073818624,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim3",
+                "kind": "native",
+                "base": 1073742848,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim14",
+                "kind": "native",
+                "base": 1073750016,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim16",
+                "kind": "native",
+                "base": 1073824768,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim17",
+                "kind": "native",
+                "base": 1073825792,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "adc1",
+                "kind": "native",
+                "base": 1073816576,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dma1",
+                "kind": "native",
+                "base": 1073872896,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dmamux",
+                "kind": "native",
+                "base": 1073874944,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "rtc",
+                "kind": "native",
+                "base": 1073752064,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "iwdg",
+                "kind": "native",
+                "base": 1073754112,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "wwdg",
+                "kind": "native",
+                "base": 1073753088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "crc",
+                "kind": "native",
+                "base": 1073885184,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "exti",
+                "kind": "native",
+                "base": 1073879040,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "syscfg",
+                "kind": "native",
+                "base": 1073807360,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dbgmcu",
+                "kind": "native",
+                "base": 1073829888,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "nvic",
+                "kind": "native",
+                "base": 3758153984,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "scb",
+                "kind": "native",
+                "base": 3758157056,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dwt",
+                "kind": "native",
+                "base": 3758100480,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "itm",
+                "kind": "native",
+                "base": 3758096384,
+                "registers": [],
+                "artifacts": []
+              }
+            ],
+            "devices": [
+              {
+                "id": "ina219",
+                "device_type": "ina219",
+                "declared": true,
+                "attachment": {
+                  "transport": "i2c",
+                  "bus": "i2c1",
+                  "address": 64
+                },
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "ina219",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "max31855",
+                "device_type": "max31855",
+                "declared": true,
+                "attachment": {
+                  "transport": "spi",
+                  "bus": "spi1",
+                  "cs_pin": "PB0"
+                },
+                "artifacts": []
+              }
+            ]
+          },
+          "fidelity": [
+            {
+              "kind": "derived_device_time",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "device time derived from cpu_hz (48000000 Hz); PLL reconfiguration is not tracked"
+            },
+            {
+              "kind": "unpowered_rail_assumed",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+            }
+          ],
+          "logic_edges": {
+            "dropped": 0,
+            "now_cycle": 1492598,
+            "channels": [
+              {
+                "ch": 0,
+                "channel": "CH0",
+                "peripheral": "gpioa",
+                "pin": 5,
+                "initial": 0,
+                "transitions": [
+                  {
+                    "cycle": 55572,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 79678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 103584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 127678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 151584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 175678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 199584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 223678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 247584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 271678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 295584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 319678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 343584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 367678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 391584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 415678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 439584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 463678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 487584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 511678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 535584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 559678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 583584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 607678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 631584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 655678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 679584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 703678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 727584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 751678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 775584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 799678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 823584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 847678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 871584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 895678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 919584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 943678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 967584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 991678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 1015584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 1039678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 1063584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 1087678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 1111584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 1135678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 1159584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 1183678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 1207584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 1231678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 1255584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 1279678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 1303584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 1327678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 1351584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 1375678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 1399584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 1423678,
+                    "value": 0
+                  },
+                  {
+                    "cycle": 1447584,
+                    "value": 1
+                  },
+                  {
+                    "cycle": 1471678,
+                    "value": 0
+                  }
+                ],
+                "gaps": [],
+                "initial_state": "z",
+                "states": [
+                  {
+                    "cycle": 52862,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 55572,
+                    "state": "z"
+                  },
+                  {
+                    "cycle": 55573,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 79678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 103584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 127678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 151584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 175678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 199584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 223678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 247584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 271678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 295584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 319678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 343584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 367678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 391584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 415678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 439584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 463678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 487584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 511678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 535584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 559678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 583584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 607678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 631584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 655678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 679584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 703678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 727584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 751678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 775584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 799678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 823584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 847678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 871584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 895678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 919584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 943678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 967584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 991678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 1015584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 1039678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 1063584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 1087678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 1111584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 1135678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 1159584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 1183678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 1207584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 1231678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 1255584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 1279678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 1303584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 1327678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 1351584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 1375678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 1399584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 1423678,
+                    "state": "0"
+                  },
+                  {
+                    "cycle": 1447584,
+                    "state": "1"
+                  },
+                  {
+                    "cycle": 1471678,
+                    "state": "0"
+                  }
+                ],
+                "mode": "af",
+                "func": "TIM1_CH1",
+                "edge_count": 60
+              }
+            ]
+          },
+          "gpio_pins": [
+            {
+              "pin": "CH0",
+              "peripheral": "gpioa",
+              "number": 5,
+              "mode": "af",
+              "func": "TIM1_CH1",
+              "output": false,
+              "input": true,
+              "pad": false,
+              "drive": "0"
+            }
+          ],
+          "uart_lines": {
+            "lines": [
+              {
+                "text": "LW_L6_BOOT",
+                "cycle_lo": 51035,
+                "cycle": 51036,
+                "end_cycle": 52459
+              },
+              {
+                "text": "LW_L6_OK",
+                "cycle_lo": 1491023,
+                "cycle": 1491024,
+                "end_cycle": 1492283
+              }
+            ],
+            "dropped_lines": 0
+          },
+          "footprint": {
+            "method": "elf_section_totals_v1",
+            "text_bytes": 19844,
+            "data_bytes": 164,
+            "bss_bytes": 2620,
+            "flash_used_bytes": 20008,
+            "ram_static_bytes": 2784,
+            "flash_total_bytes": 32768,
+            "ram_total_bytes": 12288,
+            "flash_used_pct": 61.06,
+            "ram_static_pct": 22.66,
+            "notes": [
+              "section_sum_not_bin_image",
+              "totals_from_chip_catalog"
+            ]
+          },
+          "memory": {
+            "main_stack_method": "paint",
+            "main_stack_limit_bytes": 11040,
+            "main_stack_high_water_bytes": 268,
+            "main_stack_free_min_bytes": 10584,
+            "main_stack_base": 536872160,
+            "main_stack_top": 536883200,
+            "main_stack_overflow_suspected": false,
+            "heap_method": "paint",
+            "heap_limit_bytes": 11040,
+            "heap_high_water_bytes": 188,
+            "heap_free_min_bytes": 10584,
+            "heap_base": 536872160,
+            "heap_top": 536883200
+          },
+          "metrics": {
+            "cycles": 1492598,
+            "instructions": 1492598,
+            "steps_executed": 1492598,
+            "memory_reads": 499919,
+            "memory_writes": 249189,
+            "peripheral_accesses": 402,
+            "exceptions": 0,
+            "pc_samples": [
+              {
+                "pc": 134218572,
+                "count": 499
+              },
+              {
+                "pc": 134234736,
+                "count": 499
+              },
+              {
+                "pc": 134234688,
+                "count": 498
+              },
+              {
+                "pc": 134229440,
+                "count": 495
+              },
+              {
+                "pc": 134229446,
+                "count": 495
+              },
+              {
+                "pc": 134234680,
+                "count": 495
+              },
+              {
+                "pc": 134218576,
+                "count": 494
+              },
+              {
+                "pc": 134229442,
+                "count": 494
+              },
+              {
+                "pc": 134234692,
+                "count": 494
+              },
+              {
+                "pc": 134218574,
+                "count": 439
+              },
+              {
+                "pc": 134234690,
+                "count": 439
+              },
+              {
+                "pc": 134234684,
+                "count": 438
+              },
+              {
+                "pc": 134218796,
+                "count": 2
+              },
+              {
+                "pc": 134232870,
+                "count": 2
+              },
+              {
+                "pc": 134234076,
+                "count": 2
+              },
+              {
+                "pc": 134234080,
+                "count": 2
+              }
+            ]
+          }
+        },
+        "uart_tail": "LW_L6_BOOT\nLW_L6_OK\n",
+        "stderr": "\u001b[2m2026-11-09T07:28:44.869846Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_core::system::builder\u001b[0m\u001b[2m:\u001b[0m Loading chip descriptor: ../../../configs/chips/stm32c031c6.yaml\n\u001b[2m2026-11-09T07:28:44.941081Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_loader\u001b[0m\u001b[2m:\u001b[0m ELF Entry Point: 0x8003fb9\nlabwired-cli test: idle_ff=on (event_scheduler=on)\nlabwired-cli test: hosted fast path (exact windows up to 1024 cycles)\nPASS  1/1 checks \u00b7 test \u00b7 1492598 steps \u00b7 0.76s\n",
+        "logic_edge_count": 60,
+        "compile": "cache_hit"
+      }
+    },
+    {
+      "board": "stm32c031c6",
+      "sketch": "L7_timer",
+      "status": "pass",
+      "detail": {
+        "result": {
+          "result_schema_version": "1.0",
+          "status": "pass",
+          "steps_executed": 196547,
+          "cycles": 196547,
+          "instructions": 196547,
+          "stop_reason": "assertions_passed",
+          "stop_reason_details": {
+            "triggered_stop_condition": "assertions_passed",
+            "triggered_limit": null,
+            "observed": null
+          },
+          "limits": {
+            "max_steps": 20000000,
+            "max_cycles": null,
+            "max_uart_bytes": 65536,
+            "no_progress_steps": null,
+            "wall_time_ms": null,
+            "max_vcd_bytes": null,
+            "stop_when_assertions_pass": true,
+            "stop_when_assertions_pass_settle_steps": 1000,
+            "stop_when_assertions_pass_min_steps": 0
+          },
+          "assertions": [
+            {
+              "assertion": {
+                "uart_contains": "LW_L7_OK"
+              },
+              "passed": true
+            }
+          ],
+          "cpu_state": {
+            "type": "arm",
+            "registers": [
+              10,
+              0,
+              3758153984,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              128,
+              536883192,
+              134229025,
+              134229158
+            ],
+            "pc": 134229158,
+            "xpsr": 1627389952,
+            "primask": false,
+            "pending_exceptions": 0,
+            "pending_exceptions_hi": [
+              0,
+              0,
+              0
+            ],
+            "vtor": 134217728,
+            "waiting_for_event": false,
+            "event_register": true
+          },
+          "firmware_hash": "3c8dc98b0cfea3e98e2fee21aadf3de2874393416d7fde57163b63505d879a7b",
+          "config": {
+            "firmware": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L7_timer/firmware.elf",
+            "system": "/home/andrii/worktrees/labwired-core-c031/validation/arduino-matrix/systems/stm32c031c6.yaml",
+            "script": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L7_timer/test.yaml"
+          },
+          "inspect": {
+            "peripherals": [
+              {
+                "name": "rcc",
+                "kind": "native",
+                "base": 1073876992,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "pwr",
+                "kind": "native",
+                "base": 1073770496,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "flash",
+                "kind": "native",
+                "base": 1073881088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "systick",
+                "kind": "native",
+                "base": 3758153744,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioa",
+                "kind": "native",
+                "base": 1342177280,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiob",
+                "kind": "native",
+                "base": 1342178304,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpioc",
+                "kind": "native",
+                "base": 1342179328,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiod",
+                "kind": "native",
+                "base": 1342180352,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "gpiof",
+                "kind": "native",
+                "base": 1342182400,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart1",
+                "kind": "native",
+                "base": 1073821696,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "usart2",
+                "kind": "native",
+                "base": 1073759232,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "i2c1",
+                "kind": "i2c",
+                "base": 1073763328,
+                "registers": [],
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "i2c@0x40",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "spi1",
+                "kind": "native",
+                "base": 1073819648,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim1_pwm",
+                "kind": "native",
+                "base": 1073818624,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim3",
+                "kind": "native",
+                "base": 1073742848,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim14",
+                "kind": "native",
+                "base": 1073750016,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim16",
+                "kind": "native",
+                "base": 1073824768,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "tim17",
+                "kind": "native",
+                "base": 1073825792,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "adc1",
+                "kind": "native",
+                "base": 1073816576,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dma1",
+                "kind": "native",
+                "base": 1073872896,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dmamux",
+                "kind": "native",
+                "base": 1073874944,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "rtc",
+                "kind": "native",
+                "base": 1073752064,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "iwdg",
+                "kind": "native",
+                "base": 1073754112,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "wwdg",
+                "kind": "native",
+                "base": 1073753088,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "crc",
+                "kind": "native",
+                "base": 1073885184,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "exti",
+                "kind": "native",
+                "base": 1073879040,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "syscfg",
+                "kind": "native",
+                "base": 1073807360,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dbgmcu",
+                "kind": "native",
+                "base": 1073829888,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "nvic",
+                "kind": "native",
+                "base": 3758153984,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "scb",
+                "kind": "native",
+                "base": 3758157056,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "dwt",
+                "kind": "native",
+                "base": 3758100480,
+                "registers": [],
+                "artifacts": []
+              },
+              {
+                "name": "itm",
+                "kind": "native",
+                "base": 3758096384,
+                "registers": [],
+                "artifacts": []
+              }
+            ],
+            "devices": [
+              {
+                "id": "ina219",
+                "device_type": "ina219",
+                "declared": true,
+                "attachment": {
+                  "transport": "i2c",
+                  "bus": "i2c1",
+                  "address": 64
+                },
+                "artifacts": [
+                  {
+                    "kind": "i2c_registers",
+                    "id": "ina219",
+                    "meta": {
+                      "inputs": {
+                        "bus_voltage": 3.3,
+                        "current": 0.0
+                      },
+                      "powered": true,
+                      "registers": {
+                        "BUS_VOLTAGE": 6602,
+                        "CALIBRATION": 4096,
+                        "CONFIGURATION": 14751,
+                        "CURRENT": 0,
+                        "POWER": 0,
+                        "SHUNT_VOLTAGE": 0
+                      },
+                      "supply_generation": null
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "max31855",
+                "device_type": "max31855",
+                "declared": true,
+                "attachment": {
+                  "transport": "spi",
+                  "bus": "spi1",
+                  "cs_pin": "PB0"
+                },
+                "artifacts": []
+              }
+            ]
+          },
+          "fidelity": [
+            {
+              "kind": "derived_device_time",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "device time derived from cpu_hz (48000000 Hz); PLL reconfiguration is not tracked"
+            },
+            {
+              "kind": "unpowered_rail_assumed",
+              "address": "0x0",
+              "first_pc": "0x0",
+              "count": 1,
+              "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+            }
+          ],
+          "uart_lines": {
+            "lines": [
+              {
+                "text": "LW_L7_BOOT",
+                "cycle_lo": 50940,
+                "cycle": 50941,
+                "end_cycle": 52364
+              },
+              {
+                "text": "LW_L7_OK",
+                "cycle_lo": 194972,
+                "cycle": 194973,
+                "end_cycle": 196232
+              }
+            ],
+            "dropped_lines": 0
+          },
+          "footprint": {
+            "method": "elf_section_totals_v1",
+            "text_bytes": 15228,
+            "data_bytes": 132,
+            "bss_bytes": 2604,
+            "flash_used_bytes": 15360,
+            "ram_static_bytes": 2736,
+            "flash_total_bytes": 32768,
+            "ram_total_bytes": 12288,
+            "flash_used_pct": 46.88,
+            "ram_static_pct": 22.27,
+            "notes": [
+              "section_sum_not_bin_image",
+              "totals_from_chip_catalog"
+            ]
+          },
+          "memory": {
+            "main_stack_method": "paint",
+            "main_stack_limit_bytes": 11088,
+            "main_stack_high_water_bytes": 72,
+            "main_stack_free_min_bytes": 10812,
+            "main_stack_base": 536872112,
+            "main_stack_top": 536883200,
+            "main_stack_overflow_suspected": false,
+            "heap_method": "paint",
+            "heap_limit_bytes": 11088,
+            "heap_high_water_bytes": 0,
+            "heap_free_min_bytes": 10812,
+            "heap_base": 536872112,
+            "heap_top": 536883200
+          },
+          "metrics": {
+            "cycles": 196547,
+            "instructions": 196547,
+            "steps_executed": 196547,
+            "memory_reads": 64773,
+            "memory_writes": 32891,
+            "peripheral_accesses": 325,
+            "exceptions": 0,
+            "pc_samples": [
+              {
+                "pc": 134218596,
+                "count": 110
+              },
+              {
+                "pc": 134224988,
+                "count": 110
+              },
+              {
+                "pc": 134229150,
+                "count": 108
+              },
+              {
+                "pc": 134218592,
+                "count": 60
+              },
+              {
+                "pc": 134229196,
+                "count": 60
+              },
+              {
+                "pc": 134229146,
+                "count": 59
+              },
+              {
+                "pc": 134218594,
+                "count": 58
+              },
+              {
+                "pc": 134229142,
+                "count": 58
+              },
+              {
+                "pc": 134229148,
+                "count": 58
+              },
+              {
+                "pc": 134227500,
+                "count": 16
+              },
+              {
+                "pc": 134227504,
+                "count": 16
+              },
+              {
+                "pc": 134227508,
+                "count": 15
+              },
+              {
+                "pc": 134218228,
+                "count": 2
+              },
+              {
+                "pc": 134229064,
+                "count": 2
+              },
+              {
+                "pc": 134229068,
+                "count": 2
+              },
+              {
+                "pc": 134229072,
+                "count": 2
+              }
+            ]
+          }
+        },
+        "uart_tail": "LW_L7_BOOT\nLW_L7_OK\n",
+        "stderr": "\u001b[2m2026-11-09T07:28:45.727117Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_core::system::builder\u001b[0m\u001b[2m:\u001b[0m Loading chip descriptor: ../../../configs/chips/stm32c031c6.yaml\n\u001b[2m2026-11-09T07:28:45.829406Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mlabwired_loader\u001b[0m\u001b[2m:\u001b[0m ELF Entry Point: 0x8002c25\nlabwired-cli test: idle_ff=on (event_scheduler=on)\nlabwired-cli test: hosted fast path (exact windows up to 1024 cycles)\nPASS  1/1 checks \u00b7 test \u00b7 196547 steps \u00b7 0.09s\n",
+        "compile": "cache_hit"
+      }
+    },
+    {
+      "board": "stm32c031c6",
+      "sketch": "L8_can",
+      "status": "skipped",
+      "detail": "STM32C031C6 has no CAN peripheral"
+    }
+  ]
+}

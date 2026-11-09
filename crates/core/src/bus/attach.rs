@@ -103,6 +103,67 @@ const STM32G0_TIMER_PADS: &[TimerAfPad] = &[
     ("tim3", 'c', 9, 1, 3, "TIM3_CH4"),
 ];
 
+/// STM32C0 timer channel pads, selected by the timer's `pad_map: stm32c0`.
+/// Read off stm32duino's `PinMap_TIM` for the C031C variant
+/// (`variants/STM32C0xx/C031C(4-6)(T-U)/PeripheralPins.c`, generated from
+/// ST's open pin data), complementary (CHxN) and remapped `_R` pads omitted.
+/// The C0 moves TIM1 off the F4/G0 AF numbers (PA5 = TIM1_CH1 on AF5), so no
+/// other family's table may be reused here.
+const STM32C0_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 0, 5, 0, "TIM1_CH1"),
+    ("tim16", 'a', 0, 2, 0, "TIM16_CH1"),
+    ("tim1", 'a', 1, 5, 1, "TIM1_CH2"),
+    ("tim17", 'a', 1, 2, 0, "TIM17_CH1"),
+    ("tim1", 'a', 2, 5, 2, "TIM1_CH3"),
+    ("tim1", 'a', 3, 5, 3, "TIM1_CH4"),
+    ("tim14", 'a', 4, 4, 0, "TIM14_CH1"),
+    ("tim1", 'a', 5, 5, 0, "TIM1_CH1"),
+    ("tim3", 'a', 6, 1, 0, "TIM3_CH1"),
+    ("tim16", 'a', 6, 5, 0, "TIM16_CH1"),
+    ("tim3", 'a', 7, 1, 1, "TIM3_CH2"),
+    ("tim14", 'a', 7, 4, 0, "TIM14_CH1"),
+    ("tim17", 'a', 7, 5, 0, "TIM17_CH1"),
+    ("tim1", 'a', 8, 2, 0, "TIM1_CH1"),
+    ("tim3", 'a', 8, 11, 2, "TIM3_CH3"),
+    ("tim3", 'a', 8, 12, 3, "TIM3_CH4"),
+    ("tim14", 'a', 8, 13, 0, "TIM14_CH1"),
+    ("tim1", 'a', 9, 2, 1, "TIM1_CH2"),
+    ("tim1", 'a', 10, 2, 2, "TIM1_CH3"),
+    ("tim1", 'a', 11, 2, 3, "TIM1_CH4"),
+    ("tim1", 'a', 14, 10, 0, "TIM1_CH1"),
+    ("tim1", 'a', 15, 2, 0, "TIM1_CH1"),
+    ("tim3", 'b', 0, 1, 2, "TIM3_CH3"),
+    ("tim3", 'b', 1, 1, 3, "TIM3_CH4"),
+    ("tim14", 'b', 1, 0, 0, "TIM14_CH1"),
+    ("tim1", 'b', 3, 1, 1, "TIM1_CH2"),
+    ("tim3", 'b', 3, 3, 1, "TIM3_CH2"),
+    ("tim3", 'b', 4, 1, 0, "TIM3_CH1"),
+    ("tim3", 'b', 5, 1, 1, "TIM3_CH2"),
+    ("tim3", 'b', 5, 3, 2, "TIM3_CH3"),
+    ("tim1", 'b', 6, 11, 1, "TIM1_CH2"),
+    ("tim1", 'b', 6, 1, 2, "TIM1_CH3"),
+    ("tim3", 'b', 6, 12, 0, "TIM3_CH1"),
+    ("tim3", 'b', 6, 13, 1, "TIM3_CH2"),
+    ("tim3", 'b', 6, 3, 2, "TIM3_CH3"),
+    ("tim1", 'b', 7, 1, 3, "TIM1_CH4"),
+    ("tim3", 'b', 7, 11, 0, "TIM3_CH1"),
+    ("tim3", 'b', 7, 3, 3, "TIM3_CH4"),
+    ("tim16", 'b', 7, 10, 0, "TIM16_CH1"),
+    ("tim3", 'b', 8, 3, 0, "TIM3_CH1"),
+    ("tim16", 'b', 8, 2, 0, "TIM16_CH1"),
+    ("tim3", 'b', 9, 3, 1, "TIM3_CH2"),
+    ("tim17", 'b', 9, 2, 0, "TIM17_CH1"),
+    ("tim3", 'c', 6, 1, 0, "TIM3_CH1"),
+    ("tim3", 'c', 7, 1, 1, "TIM3_CH2"),
+    ("tim3", 'c', 14, 11, 1, "TIM3_CH2"),
+    ("tim17", 'c', 14, 10, 0, "TIM17_CH1"),
+    ("tim3", 'c', 15, 3, 2, "TIM3_CH3"),
+    ("tim16", 'd', 0, 2, 0, "TIM16_CH1"),
+    ("tim17", 'd', 1, 2, 0, "TIM17_CH1"),
+    ("tim14", 'f', 0, 2, 0, "TIM14_CH1"),
+    ("tim1", 'f', 2, 1, 3, "TIM1_CH4"),
+];
+
 /// STM32G4 timer channel pads, selected by the timer's `pad_map: stm32g4`.
 /// Read off stm32duino's `PinMap_TIM` for the G474R variant
 /// (`variants/STM32G4xx/G473R(B-C)T_G473RETx(Z)_G474R(B-C-E)T_G483RET_G484RET/PeripheralPins.c`):
@@ -3087,6 +3148,7 @@ impl SystemBus {
         for (table, family) in [
             (STM32F4_TIMER_PADS, None),
             (STM32G0_TIMER_PADS, Some("stm32g0")),
+            (STM32C0_TIMER_PADS, Some("stm32c0")),
             (STM32G4_TIMER_PADS, Some("stm32g4")),
             (STM32L0_TIMER_PADS, Some("stm32l0")),
             (STM32L4_TIMER_PADS, Some("stm32l4")),

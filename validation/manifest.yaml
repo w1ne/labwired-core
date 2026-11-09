@@ -2448,8 +2448,14 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-09 (feat/nucleo-c031c6-arduino-row): reviewed model-drift
+    # acknowledgment, NOT a new silicon capture. rcc.rs adds the no-PLL
+    # `stm32c0` flavour of the G0 RCC (reached only by profile stm32c0);
+    # bus/attach.rs and generic_factory.rs add the `pad_map: stm32c0`
+    # timer pad table, bound only for timers that declare it. No path
+    # this board takes changes.
     drift_ack: 2026-11-07
-    drift_ack_digest: 1cf8837b47ec1cbc8750a7d85e04f6a664821a64a6b6595d108933ec7a135f75
+    drift_ack_digest: 27c4967ee781bee982a6e8e137876f2dc63777580685b33f98c412237ef702e3
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4663,8 +4669,14 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-09 (feat/nucleo-c031c6-arduino-row): reviewed model-drift
+    # acknowledgment, NOT a new silicon capture. rcc.rs adds the no-PLL
+    # `stm32c0` flavour of the G0 RCC (reached only by profile stm32c0);
+    # bus/attach.rs and generic_factory.rs add the `pad_map: stm32c0`
+    # timer pad table, bound only for timers that declare it. No path
+    # this board takes changes.
     drift_ack: 2026-11-07
-    drift_ack_digest: 522b4fc22955059d1baeb90ac01cce43945353e195371493fee02b9142c894bc
+    drift_ack_digest: ca4562197c6034e6646288a698458d8d60a51bd0278cc19c3184a8aefe3dc174
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5160,7 +5172,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: ea8cc4cf06aec2383febd72a9949a7ff5af2728d14514370b5e07e91853e7f54
+    drift_ack_digest: fb556e9060f75de97097263af9c4e77bd406d2acfa041f104b59b1ea4ca15ac7
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5716,6 +5728,12 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-09 (feat/nucleo-c031c6-arduino-row): reviewed model-drift
+    # acknowledgment, NOT a new silicon capture. rcc.rs adds the no-PLL
+    # `stm32c0` flavour of the G0 RCC (reached only by profile stm32c0);
+    # bus/attach.rs and generic_factory.rs add the `pad_map: stm32c0`
+    # timer pad table, bound only for timers that declare it. No path
+    # this board takes changes.
     drift_ack: 2026-11-07
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
@@ -6917,8 +6935,14 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-09 (feat/nucleo-c031c6-arduino-row): reviewed model-drift
+    # acknowledgment, NOT a new silicon capture. rcc.rs adds the no-PLL
+    # `stm32c0` flavour of the G0 RCC (reached only by profile stm32c0);
+    # bus/attach.rs and generic_factory.rs add the `pad_map: stm32c0`
+    # timer pad table, bound only for timers that declare it. No path
+    # this board takes changes.
     drift_ack: 2026-11-07
-    drift_ack_digest: 2ff8315cb06b1105dc0c52eb3b6cadc903c288459b32f36eb5fe6d1618f2c834
+    drift_ack_digest: ed9b2b34cb89f2c3b67c7545a7c0748a4480e00c3e9c4874fa7a872d381bf7d5
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7435,7 +7459,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: c48957351eac4ba820c510649ab09854c1e6e43a277e02f35d9113ae04d4d4a6
+    drift_ack_digest: 1793cb7761619eb788c79de12f5dfd2d2f9ae5bcd5caf22c489e1f7a37c05a7f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7993,6 +8017,12 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-09 (feat/nucleo-c031c6-arduino-row): reviewed model-drift
+    # acknowledgment, NOT a new silicon capture. rcc.rs adds the no-PLL
+    # `stm32c0` flavour of the G0 RCC (reached only by profile stm32c0);
+    # bus/attach.rs and generic_factory.rs add the `pad_map: stm32c0`
+    # timer pad table, bound only for timers that declare it. No path
+    # this board takes changes.
     drift_ack: 2026-11-07
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
