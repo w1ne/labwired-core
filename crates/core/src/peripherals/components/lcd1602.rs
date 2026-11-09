@@ -659,7 +659,12 @@ mod tests {
         for ch in b"Current Time" {
             data(&mut dev, *ch);
         }
-        assert_eq!(dev.texts_seen.len(), 1, "prompt should be one slot: {:?}", dev.texts_seen);
+        assert_eq!(
+            dev.texts_seen.len(),
+            1,
+            "prompt should be one slot: {:?}",
+            dev.texts_seen
+        );
         for ch in b"08" {
             data(&mut dev, *ch);
         }
