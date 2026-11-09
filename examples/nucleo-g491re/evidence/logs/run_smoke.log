@@ -1,5 +1,22 @@
-2026-11-03T21:48:59.574602Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/stm32g491re-nucleo-smoke.yaml
-2026-11-03T21:48:59.576695Z  INFO labwired_loader: ELF Entry Point: 0x8000009
+warning: method `pad_lines_arc` is never used
+   --> crates/core/src/peripherals/esp32s3/ledc.rs:271:19
+    |
+203 | impl Esp32s3Ledc {
+    | ---------------- method in this implementation
+...
+271 |     pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+    |                   ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `default_events_per_channel` is never used
+   --> crates/core/src/peripherals/ra_gpt.rs:125:4
+    |
+125 | fn default_events_per_channel() -> u32 {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+2026-11-09T21:22:48.287200Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/stm32g491re-nucleo-smoke.yaml
+2026-11-09T21:22:48.290971Z  INFO labwired_loader: ELF Entry Point: 0x8000009
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-PASS  3/3 checks · onboarding-smoke · 1000 steps · 0.00s
+PASS  4/4 checks · onboarding-smoke · 1000 steps · 0.00s

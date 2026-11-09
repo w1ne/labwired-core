@@ -1,5 +1,6 @@
-# Focused NUCLEO-G491RE profile: the default ST-LINK virtual COM port and LD2.
-# Only modeled RCC, GPIOA, and LPUART1 are exposed; other MCU blocks are omitted.
+# Focused NUCLEO-G491RE profile: default ST-LINK VCP, LD2, and FDCAN1 loopback.
+# Only modeled RCC, GPIOA, LPUART1, and FDCAN1 are exposed; other MCU blocks
+# are omitted. The external CAN transceiver and bus are not part of this board.
 # Board routes and LED wiring follow ST UM2505 for the MB1367 G4 Nucleo-64.
 # ST DS13122 confirms PA2/PA3 LPUART1 alternate functions use AF12.
 
@@ -20,6 +21,11 @@ pins:
   PA2: { gpio: "gpioa", bit: 2, functions: [{ type: uart, peripheral: lpuart1, role: tx }] }
   PA3: { gpio: "gpioa", bit: 3, functions: [{ type: uart, peripheral: lpuart1, role: rx }] }
   PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+  # ST DS13122 Table 13: FDCAN1 AF9 is available on PA11 (RX) and PA12 (TX).
+  # The Nucleo exposes these pins on the Morpho headers; no CAN transceiver is
+  # fitted, so the smoke uses the controller's internal loopback.
+  PA11: { gpio: "gpioa", bit: 11, functions: [{ type: can, peripheral: fdcan1, role: rx }] }
+  PA12: { gpio: "gpioa", bit: 12, functions: [{ type: can, peripheral: fdcan1, role: tx }] }
 
 peripherals:
   - id: "rcc"
@@ -45,3 +51,16 @@ peripherals:
       debug_schema: "../peripherals/stm32g474re/lpuart1.yaml"
       profile: "stm32v2"
     clock: { reg: "apb1enr2", bit: 0 }
+
+  # FDCAN1 uses the Bosch M_CAN register map and fixed SRAMCAN layout shared
+  # with the G4/H5 profile. FDCAN1 @ 0x4000A400, SRAMCAN @ +0x800. The H5
+  # register schema is shared because these M_CAN registers have the same
+  # layout; HSE timing and the external CAN PHY are outside this smoke.
+  - id: "fdcan1"
+    type: "fdcan"
+    base_address: 0x4000A400
+    size: "4KB"
+    irq: 21
+    config:
+      debug_schema: "../peripherals/stm32h563/fdcan1.yaml"
+    clock: { reg: "apb1enr", bit: 25 }

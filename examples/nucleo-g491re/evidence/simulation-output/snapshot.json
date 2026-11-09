@@ -3,24 +3,24 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1207959576,
       32,
+      1207959576,
       2097152,
-      0,
-      0,
-      0,
-      0,
+      1073783832,
+      2596069104,
+      305419896,
+      209977344,
       536985592,
+      3204972544,
       0,
       0,
       0,
-      0,
-      0,
+      209977344,
       536985592,
-      134217745,
-      134218350
+      305419896,
+      134221006
     ],
-    "pc": 134218350,
+    "pc": 134221006,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "81361019dc622db01188d14a3d6e7c79323d2b4f7cfa2c414cf7f1e88748bca8",
+  "firmware_hash": "2d589c777b39c6878a16f8a9ca6b962c9207f0bf65c90443437012b85b2affb9",
   "config": {
     "firmware": "examples/nucleo-g491re/../../target/thumbv7em-none-eabi/release/firmware-nucleo-g491re-smoke",
     "system": "examples/nucleo-g491re/../../configs/systems/nucleo-g491re.yaml",

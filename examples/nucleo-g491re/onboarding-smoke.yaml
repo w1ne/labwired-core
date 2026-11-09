@@ -1,4 +1,4 @@
-# NUCLEO-G491RE: default LPUART1 VCP output and repeated LD2/PA5 GPIO edges.
+# NUCLEO-G491RE: LPUART1 VCP, LD2/PA5 GPIO, and FDCAN1 internal loopback.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-g491re-smoke"
@@ -7,6 +7,7 @@ limits:
   max_steps: 1000
 assertions:
   - uart_contains: "NUCLEO_G491RE_OK"
+  - uart_contains: "NUCLEO_G491RE_FDCAN_LOOPBACK_OK"
   - gpio_edges:
       pin: "gpioa:5"
       min_edges: 8

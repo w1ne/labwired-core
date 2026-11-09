@@ -1,8 +1,9 @@
 # NUCLEO-G491RE validation
 
 The local LabWired engine smoke builds the bare-metal firmware against the
-focused STM32G491 descriptor, then checks the default LPUART1 virtual COM path
-and repeated LD2/PA5 GPIO transitions.
+focused STM32G491 descriptor. It checks the default LPUART1 virtual COM path,
+repeated LD2/PA5 GPIO transitions, and an FDCAN1 internal-loopback frame. The
+firmware checks the received ID, DLC, and all eight data bytes.
 
 Reproduce it with:
 
@@ -16,12 +17,14 @@ scripts/onboarding_smoke.sh \
   --out-dir examples/nucleo-g491re/evidence
 ```
 
-The committed result reports `PASS 3/3 checks`. See `evidence/logs/` for the
+The committed result reports `PASS 4/4 checks`. See `evidence/logs/` for the
 build and smoke logs and `evidence/simulation-output/` for the UART capture,
 GPIO assertion, and JUnit result. The onboarding scoreboard is in
 `evidence/onboarding-scoreboard.md`.
 
-The descriptor exposes only modeled RCC, GPIOA, and LPUART1. USB, the user
-button, other MCU peripherals, and other board functions are omitted. This is
-local simulator evidence, not a hosted `labwired_verify` verdict or a hardware
-capture.
+The descriptor exposes only modeled RCC, GPIOA, LPUART1, and FDCAN1. The board
+does not include a CAN transceiver; the loopback check does not verify PA11/PA12
+pad propagation, bit timing, arbitration, or an external CAN bus. USB, the user
+button, and other MCU peripherals are omitted. This is local simulator evidence,
+not a hosted `labwired_verify` verdict or a hardware capture. The hosted board
+catalog does not currently list `nucleo-g491re`.

@@ -1,14 +1,163 @@
 {
   "summary": {
-    "targets_total": 46,
-    "pass": 46,
+    "targets_total": 197,
+    "pass": 197,
     "fail": 0,
-    "median_elapsed_ms": 2040,
+    "median_elapsed_ms": 15619,
     "threshold_seconds": 3600,
-    "threshold_met": 46,
-    "median_elapsed_seconds": 2.04
+    "threshold_met": 197,
+    "median_elapsed_seconds": 15.619
   },
   "targets": [
+    {
+      "target_id": "adafruit-esp32-s3-tft-feather",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/adafruit-esp32-s3-tft-feather/onboarding-smoke.yaml",
+      "system": "configs/systems/adafruit-esp32-s3-tft-feather.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T08:43:29Z",
+      "finished_at_utc": "2026-11-05T08:43:33Z",
+      "elapsed_seconds": 4,
+      "elapsed_ms": 3545,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 1.76,
+        "build_firmware": 0.996,
+        "run_smoke": 0.75
+      },
+      "stages_ms": {
+        "build_cli": 1760,
+        "build_firmware": 996,
+        "run_smoke": 750
+      },
+      "firmware_build_script": "examples/adafruit-esp32-s3-tft-feather/ci/build-firmware.sh",
+      "_artifact_path": "examples/adafruit-esp32-s3-tft-feather/evidence"
+    },
+    {
+      "target_id": "adafruit-feather-esp32-s3-8mb-wfl",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/adafruit-feather-esp32-s3-8mb-wfl/onboarding-smoke.yaml",
+      "system": "configs/systems/adafruit-feather-esp32-s3-8mb-wfl.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T07:32:08Z",
+      "finished_at_utc": "2026-11-06T07:32:10Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1574,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.308,
+        "build_firmware": 0.478,
+        "run_smoke": 0.75
+      },
+      "stages_ms": {
+        "build_cli": 308,
+        "build_firmware": 478,
+        "run_smoke": 750
+      },
+      "firmware_build_script": "examples/adafruit-feather-esp32-s3-8mb-wfl/ci/build-firmware.sh",
+      "_artifact_path": "examples/adafruit-feather-esp32-s3-8mb-wfl/evidence"
+    },
+    {
+      "target_id": "adafruit-feather-esp32-v2-bme280",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/adafruit-feather-esp32-v2/bme280-smoke.yaml",
+      "system": "configs/systems/adafruit-feather-esp32-v2-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T03:34:26Z",
+      "finished_at_utc": "2026-11-06T03:34:33Z",
+      "elapsed_seconds": 7,
+      "elapsed_ms": 6430,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.332,
+        "build_firmware": 4.107,
+        "run_smoke": 1.949
+      },
+      "stages_ms": {
+        "build_cli": 332,
+        "build_firmware": 4107,
+        "run_smoke": 1949
+      },
+      "firmware_build_script": "scripts/build-adafruit-feather-esp32-v2-bme280.sh",
+      "_artifact_path": "examples/adafruit-feather-esp32-v2/evidence/bme280"
+    },
+    {
+      "target_id": "adafruit-feather-esp32-v2",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/adafruit-feather-esp32-v2/io-smoke.yaml",
+      "system": "configs/systems/adafruit-feather-esp32-v2.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T03:58:46Z",
+      "finished_at_utc": "2026-11-04T03:59:03Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17128,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 12.722,
+        "build_firmware": 1.082,
+        "run_smoke": 3.313
+      },
+      "stages_ms": {
+        "build_cli": 12722,
+        "build_firmware": 1082,
+        "run_smoke": 3313
+      },
+      "firmware_build_script": "scripts/build-adafruit-feather-esp32-v2-smoke.sh",
+      "_artifact_path": "examples/adafruit-feather-esp32-v2/evidence"
+    },
+    {
+      "target_id": "adafruit-feather-nrf52840-express",
+      "status": "pass",
+      "crate": "firmware-feather-nrf52840-express-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/adafruit-feather-nrf52840-express/io-smoke.yaml",
+      "system": "configs/systems/adafruit-feather-nrf52840-express.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T09:59:56Z",
+      "finished_at_utc": "2026-11-04T09:59:57Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 903,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.321,
+        "build_firmware": 0.206,
+        "run_smoke": 0.365
+      },
+      "stages_ms": {
+        "build_cli": 321,
+        "build_firmware": 206,
+        "run_smoke": 365
+      },
+      "_artifact_path": "examples/adafruit-feather-nrf52840-express/evidence"
+    },
     {
       "target_id": "adafruit-feather-rp2040",
       "status": "pass",
@@ -37,6 +186,64 @@
         "run_smoke": 287
       },
       "_artifact_path": "examples/adafruit-feather-rp2040/evidence"
+    },
+    {
+      "target_id": "adafruit-feather-rp2350",
+      "status": "pass",
+      "crate": "firmware-adafruit-feather-rp2350-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/adafruit-feather-rp2350/io-smoke.yaml",
+      "system": "configs/systems/adafruit-feather-rp2350.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T01:21:09Z",
+      "finished_at_utc": "2026-11-04T01:21:25Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15328,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.771,
+        "build_firmware": 0.221,
+        "run_smoke": 0.326
+      },
+      "stages_ms": {
+        "build_cli": 14771,
+        "build_firmware": 221,
+        "run_smoke": 326
+      },
+      "_artifact_path": "examples/adafruit-feather-rp2350/evidence"
+    },
+    {
+      "target_id": "adafruit-itsybitsy-rp2040",
+      "status": "pass",
+      "crate": "firmware-itsybitsy-rp2040-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/adafruit-itsybitsy-rp2040/io-smoke.yaml",
+      "system": "configs/systems/adafruit-itsybitsy-rp2040.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T00:37:46Z",
+      "finished_at_utc": "2026-11-04T00:38:03Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16712,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.859,
+        "build_firmware": 0.535,
+        "run_smoke": 0.306
+      },
+      "stages_ms": {
+        "build_cli": 15859,
+        "build_firmware": 535,
+        "run_smoke": 306
+      },
+      "_artifact_path": "examples/adafruit-itsybitsy-rp2040/evidence"
     },
     {
       "target_id": "arduino-mega-2560",
@@ -69,6 +276,154 @@
       "_artifact_path": "examples/arduino-mega-2560-io/evidence"
     },
     {
+      "target_id": "arduino-mkr-wifi-1010",
+      "status": "pass",
+      "crate": "firmware-mkr-wifi-1010-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/arduino-mkr-wifi-1010/io-smoke.yaml",
+      "system": "configs/systems/arduino-mkr-wifi-1010.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T09:32:25Z",
+      "finished_at_utc": "2026-11-04T09:32:26Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1006,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.314,
+        "build_firmware": 0.362,
+        "run_smoke": 0.32
+      },
+      "stages_ms": {
+        "build_cli": 314,
+        "build_firmware": 362,
+        "run_smoke": 320
+      },
+      "_artifact_path": "examples/arduino-mkr-wifi-1010/evidence"
+    },
+    {
+      "target_id": "arduino-nano-esp32",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/arduino-nano-esp32/onboarding-smoke.yaml",
+      "system": "configs/systems/arduino-nano-esp32.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T08:57:45Z",
+      "finished_at_utc": "2026-11-05T08:57:51Z",
+      "elapsed_seconds": 6,
+      "elapsed_ms": 5742,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.476,
+        "build_firmware": 4.912,
+        "run_smoke": 0.342
+      },
+      "stages_ms": {
+        "build_cli": 476,
+        "build_firmware": 4912,
+        "run_smoke": 342
+      },
+      "firmware_build_script": "examples/arduino-nano-esp32/ci/build-firmware.sh",
+      "_artifact_path": "examples/arduino-nano-esp32/evidence"
+    },
+    {
+      "target_id": "arduino-nano-esp32-bme280",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/arduino-nano-esp32-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/arduino-nano-esp32-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T04:21:43Z",
+      "finished_at_utc": "2026-11-06T04:22:09Z",
+      "elapsed_seconds": 27,
+      "elapsed_ms": 26470,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 18.093,
+        "build_firmware": 7.69,
+        "run_smoke": 0.642
+      },
+      "stages_ms": {
+        "build_cli": 18093,
+        "build_firmware": 7690,
+        "run_smoke": 642
+      },
+      "firmware_build_script": "examples/arduino-nano-esp32-bme280/ci/build-firmware.sh",
+      "_artifact_path": "examples/arduino-nano-esp32-bme280/evidence"
+    },
+    {
+      "target_id": "arduino-nano-every-atmega4809",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/arduino-nano-every/io-smoke.yaml",
+      "system": "configs/systems/arduino-nano-every.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-08T16:34:55Z",
+      "finished_at_utc": "2026-11-08T16:40:12Z",
+      "elapsed_seconds": 317,
+      "elapsed_ms": 316646,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 315.354,
+        "build_firmware": 0.772,
+        "run_smoke": 0.479
+      },
+      "stages_ms": {
+        "build_cli": 315354,
+        "build_firmware": 772,
+        "run_smoke": 479
+      },
+      "firmware_build_script": "examples/arduino-nano-every/firmware/build.sh",
+      "_artifact_path": "examples/arduino-nano-every/evidence"
+    },
+    {
+      "target_id": "arduino-nano-r4",
+      "status": "pass",
+      "crate": "firmware-arduino-nano-r4-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/arduino-nano-r4/onboarding-smoke.yaml",
+      "system": "configs/systems/arduino-nano-r4.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T05:45:01Z",
+      "finished_at_utc": "2026-11-04T05:45:16Z",
+      "elapsed_seconds": 15,
+      "elapsed_ms": 14856,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.338,
+        "build_firmware": 0.21,
+        "run_smoke": 0.299
+      },
+      "stages_ms": {
+        "build_cli": 14338,
+        "build_firmware": 210,
+        "run_smoke": 299
+      },
+      "_artifact_path": "examples/arduino-nano-r4/evidence"
+    },
+    {
       "target_id": "arduino-nano-rp2040-connect",
       "status": "pass",
       "crate": "firmware-nano-rp2040-connect-smoke",
@@ -76,26 +431,86 @@
       "script": "examples/arduino-nano-rp2040-connect/io-smoke.yaml",
       "system": "configs/systems/arduino-nano-rp2040-connect.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-03T18:32:21Z",
-      "finished_at_utc": "2026-11-03T18:32:37Z",
-      "elapsed_seconds": 17,
-      "elapsed_ms": 16082,
+      "started_at_utc": "2026-11-06T07:57:23Z",
+      "finished_at_utc": "2026-11-06T07:57:24Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1501,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 15.307,
-        "build_firmware": 0.447,
-        "run_smoke": 0.316
+        "build_cli": 0.325,
+        "build_firmware": 0.392,
+        "run_smoke": 0.741
       },
       "stages_ms": {
-        "build_cli": 15307,
-        "build_firmware": 447,
-        "run_smoke": 316
+        "build_cli": 325,
+        "build_firmware": 392,
+        "run_smoke": 741
       },
       "_artifact_path": "examples/arduino-nano-rp2040-connect/evidence"
+    },
+    {
+      "target_id": "arduino-uno-blinky-existing",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/arduino-uno-blinky/io-smoke.yaml",
+      "system": "configs/systems/arduino-uno.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T22:08:14Z",
+      "finished_at_utc": "2026-11-05T22:08:15Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1727,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.32,
+        "build_firmware": 0.661,
+        "run_smoke": 0.736
+      },
+      "stages_ms": {
+        "build_cli": 320,
+        "build_firmware": 661,
+        "run_smoke": 736
+      },
+      "firmware_build_script": "examples/arduino-uno-blinky/build-firmware.sh",
+      "_artifact_path": "examples/arduino-uno-blinky/evidence"
+    },
+    {
+      "target_id": "arduino-uno-io-existing",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/arduino-uno-io/io-smoke.yaml",
+      "system": "examples/arduino-uno-io/system.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T22:08:20Z",
+      "finished_at_utc": "2026-11-05T22:08:21Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1903,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.296,
+        "build_firmware": 0.649,
+        "run_smoke": 0.948
+      },
+      "stages_ms": {
+        "build_cli": 296,
+        "build_firmware": 649,
+        "run_smoke": 948
+      },
+      "firmware_build_script": "examples/arduino-uno-io/build-firmware.sh",
+      "_artifact_path": "examples/arduino-uno-io/evidence"
     },
     {
       "target_id": "arduino-uno-r4-minima",
@@ -156,6 +571,1320 @@
       "_artifact_path": "examples/arduino-uno-r4-wifi/evidence"
     },
     {
+      "target_id": "atmega328pb-xplained-mini",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/atmega328pb-xplained-mini/onboarding-smoke.yaml",
+      "system": "configs/systems/atmega328pb-xplained-mini.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T16:54:36Z",
+      "finished_at_utc": "2026-11-06T16:54:37Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 738,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.322,
+        "build_firmware": 0.03,
+        "run_smoke": 0.348
+      },
+      "stages_ms": {
+        "build_cli": 322,
+        "build_firmware": 30,
+        "run_smoke": 348
+      },
+      "firmware_build_script": "examples/atmega328pb-xplained-mini/ci/build-firmware.sh",
+      "_artifact_path": "examples/atmega328pb-xplained-mini/evidence"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-adc-dma-opamp",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-adc-dma-opamp-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-adc-dma-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T15:09:22Z",
+      "finished_at_utc": "2026-11-07T15:10:03Z",
+      "elapsed_seconds": 42,
+      "elapsed_ms": 41332,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.901,
+        "build_firmware": 5.962,
+        "run_smoke": 34.434
+      },
+      "stages_ms": {
+        "build_cli": 901,
+        "build_firmware": 5962,
+        "run_smoke": 34434
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-adc-dma-opamp-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-adc-polled",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-adc-polled-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-adc-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T20:30:06Z",
+      "finished_at_utc": "2026-11-06T20:30:52Z",
+      "elapsed_seconds": 47,
+      "elapsed_ms": 46192,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.711,
+        "build_firmware": 3.016,
+        "run_smoke": 42.33
+      },
+      "stages_ms": {
+        "build_cli": 711,
+        "build_firmware": 3016,
+        "run_smoke": 42330
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-adc-polled-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-blink",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-blink-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T19:46:21Z",
+      "finished_at_utc": "2026-11-06T19:48:34Z",
+      "elapsed_seconds": 133,
+      "elapsed_ms": 132965,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 53.104,
+        "build_firmware": 1.758,
+        "run_smoke": 78.06
+      },
+      "stages_ms": {
+        "build_cli": 53104,
+        "build_firmware": 1758,
+        "run_smoke": 78060
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-blink-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-exti",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-exti-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-exti-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T23:01:32Z",
+      "finished_at_utc": "2026-11-06T23:01:50Z",
+      "elapsed_seconds": 19,
+      "elapsed_ms": 18411,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.982,
+        "build_firmware": 2.568,
+        "run_smoke": 0.821
+      },
+      "stages_ms": {
+        "build_cli": 14982,
+        "build_firmware": 2568,
+        "run_smoke": 821
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-exti-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-i2c-oled",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-i2c-oled-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-i2c-oled-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T21:27:03Z",
+      "finished_at_utc": "2026-11-06T21:29:43Z",
+      "elapsed_seconds": 161,
+      "elapsed_ms": 160408,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 74.76,
+        "build_firmware": 1.918,
+        "run_smoke": 83.688
+      },
+      "stages_ms": {
+        "build_cli": 74760,
+        "build_firmware": 1918,
+        "run_smoke": 83688
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-i2c-oled-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-input-capture",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-input-capture-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-input-capture-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T08:40:53Z",
+      "finished_at_utc": "2026-11-07T08:41:10Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16755,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.555,
+        "build_firmware": 5.381,
+        "run_smoke": 10.778
+      },
+      "stages_ms": {
+        "build_cli": 555,
+        "build_firmware": 5381,
+        "run_smoke": 10778
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-input-capture-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-iwdg",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-iwdg-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-iwdg-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T07:54:57Z",
+      "finished_at_utc": "2026-11-07T08:01:50Z",
+      "elapsed_seconds": 413,
+      "elapsed_ms": 412371,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.445,
+        "build_firmware": 5.137,
+        "run_smoke": 391.744
+      },
+      "stages_ms": {
+        "build_cli": 15445,
+        "build_firmware": 5137,
+        "run_smoke": 391744
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-iwdg-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-spi-max7219",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-spi-max7219-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-spi-max7219-smoke.yaml",
+      "profile": "dev",
+      "started_at_utc": "2026-11-07T00:21:41Z",
+      "finished_at_utc": "2026-11-07T00:23:12Z",
+      "elapsed_seconds": 92,
+      "elapsed_ms": 91184,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 3.647,
+        "build_firmware": 8.268,
+        "run_smoke": 79.192
+      },
+      "stages_ms": {
+        "build_cli": 3647,
+        "build_firmware": 8268,
+        "run_smoke": 79192
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-spi-max7219-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-spi-oled",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-spi-oled-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-spi-oled-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T11:29:29Z",
+      "finished_at_utc": "2026-11-07T11:30:17Z",
+      "elapsed_seconds": 49,
+      "elapsed_ms": 48200,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.893,
+        "build_firmware": 6.394,
+        "run_smoke": 40.872
+      },
+      "stages_ms": {
+        "build_cli": 893,
+        "build_firmware": 6394,
+        "run_smoke": 40872
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-spi-oled-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-standby-autowake",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-standby-autowake-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-standby-autowake-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T17:44:06Z",
+      "finished_at_utc": "2026-11-07T17:50:01Z",
+      "elapsed_seconds": 355,
+      "elapsed_ms": 354701,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 56.692,
+        "build_firmware": 6.113,
+        "run_smoke": 291.862
+      },
+      "stages_ms": {
+        "build_cli": 56692,
+        "build_firmware": 6113,
+        "run_smoke": 291862
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-standby-autowake-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-systick-irq",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-systick-irq-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T19:51:25Z",
+      "finished_at_utc": "2026-11-06T19:52:16Z",
+      "elapsed_seconds": 52,
+      "elapsed_ms": 51743,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.312,
+        "build_firmware": 0.97,
+        "run_smoke": 50.42
+      },
+      "stages_ms": {
+        "build_cli": 312,
+        "build_firmware": 970,
+        "run_smoke": 50420
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-systick-irq-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-tim1-complementary",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-tim1-complementary-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-tim1-complementary-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T07:02:52Z",
+      "finished_at_utc": "2026-11-07T07:04:23Z",
+      "elapsed_seconds": 91,
+      "elapsed_ms": 90642,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 72.648,
+        "build_firmware": 4.567,
+        "run_smoke": 13.386
+      },
+      "stages_ms": {
+        "build_cli": 72648,
+        "build_firmware": 4567,
+        "run_smoke": 13386
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-tim1-complementary-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-tim1-pwm",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-tim1-pwm-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-tim1-pwm-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T06:15:06Z",
+      "finished_at_utc": "2026-11-07T06:17:11Z",
+      "elapsed_seconds": 125,
+      "elapsed_ms": 124923,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 96.433,
+        "build_firmware": 4.3,
+        "run_smoke": 24.15
+      },
+      "stages_ms": {
+        "build_cli": 96433,
+        "build_firmware": 4300,
+        "run_smoke": 24150
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-tim1-pwm-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-tim1-tim2-cascade",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-tim1-tim2-cascade-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T13:01:27Z",
+      "finished_at_utc": "2026-11-07T13:06:00Z",
+      "elapsed_seconds": 274,
+      "elapsed_ms": 273331,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 137.855,
+        "build_firmware": 7.233,
+        "run_smoke": 128.205
+      },
+      "stages_ms": {
+        "build_cli": 137855,
+        "build_firmware": 7233,
+        "run_smoke": 128205
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-tim1-tim2-cascade-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-tim2-encoder",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-tim2-encoder-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-tim2-encoder-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T10:59:39Z",
+      "finished_at_utc": "2026-11-07T10:59:58Z",
+      "elapsed_seconds": 20,
+      "elapsed_ms": 19360,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.324,
+        "build_firmware": 6.007,
+        "run_smoke": 12.985
+      },
+      "stages_ms": {
+        "build_cli": 324,
+        "build_firmware": 6007,
+        "run_smoke": 12985
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-tim2-encoder-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-tim2-pwm-remap",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-tim2-pwm-remap-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-tim2-pwm-remap-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T10:56:02Z",
+      "finished_at_utc": "2026-11-07T10:56:59Z",
+      "elapsed_seconds": 57,
+      "elapsed_ms": 56800,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.499,
+        "build_firmware": 6.121,
+        "run_smoke": 50.137
+      },
+      "stages_ms": {
+        "build_cli": 499,
+        "build_firmware": 6121,
+        "run_smoke": 50137
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-tim2-pwm-remap-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-tim2-pwm",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-tim2-pwm-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-tim2-pwm-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T22:38:17Z",
+      "finished_at_utc": "2026-11-06T22:38:45Z",
+      "elapsed_seconds": 28,
+      "elapsed_ms": 27982,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.381,
+        "build_firmware": 2.143,
+        "run_smoke": 25.419
+      },
+      "stages_ms": {
+        "build_cli": 381,
+        "build_firmware": 2143,
+        "run_smoke": 25419
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-tim2-pwm-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-uart-tx-dma",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-uart-tx-dma-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T01:44:22Z",
+      "finished_at_utc": "2026-11-07T01:45:34Z",
+      "elapsed_seconds": 73,
+      "elapsed_ms": 72322,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.309,
+        "build_firmware": 3.326,
+        "run_smoke": 68.648
+      },
+      "stages_ms": {
+        "build_cli": 309,
+        "build_firmware": 3326,
+        "run_smoke": 68648
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-uart-tx-dma-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-uartdemo",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-uartdemo-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T19:48:34Z",
+      "finished_at_utc": "2026-11-06T19:48:54Z",
+      "elapsed_seconds": 21,
+      "elapsed_ms": 20060,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.316,
+        "build_firmware": 1.028,
+        "run_smoke": 18.662
+      },
+      "stages_ms": {
+        "build_cli": 316,
+        "build_firmware": 1028,
+        "run_smoke": 18662
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-uartdemo-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-usart-dma-rx",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-usart-dma-rx-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T12:19:54Z",
+      "finished_at_utc": "2026-11-07T12:20:24Z",
+      "elapsed_seconds": 31,
+      "elapsed_ms": 30622,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.053,
+        "build_firmware": 6.75,
+        "run_smoke": 8.78
+      },
+      "stages_ms": {
+        "build_cli": 15053,
+        "build_firmware": 6750,
+        "run_smoke": 8780
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-usart-dma-rx-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-ch32fun-ws2812",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/ch32fun-ws2812-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-ch32fun-ws2812.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-07T04:20:23Z",
+      "finished_at_utc": "2026-11-07T04:20:32Z",
+      "elapsed_seconds": 9,
+      "elapsed_ms": 8810,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.341,
+        "build_firmware": 4.046,
+        "run_smoke": 4.382
+      },
+      "stages_ms": {
+        "build_cli": 341,
+        "build_firmware": 4046,
+        "run_smoke": 4382
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/ch32fun-ws2812-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-gpio",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/onboarding-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-gpio-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T11:08:55Z",
+      "finished_at_utc": "2026-11-05T11:09:18Z",
+      "elapsed_seconds": 24,
+      "elapsed_ms": 23523,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 23.141,
+        "build_firmware": 0.065,
+        "run_smoke": 0.305
+      },
+      "stages_ms": {
+        "build_cli": 23141,
+        "build_firmware": 65,
+        "run_smoke": 305
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-firmware.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence"
+    },
+    {
+      "target_id": "ch32v003f4p6-pfic-smoke",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/pfic-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-pfic-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T19:29:14Z",
+      "finished_at_utc": "2026-11-06T19:30:06Z",
+      "elapsed_seconds": 53,
+      "elapsed_ms": 52067,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 47.676,
+        "build_firmware": 2.627,
+        "run_smoke": 1.721
+      },
+      "stages_ms": {
+        "build_cli": 47676,
+        "build_firmware": 2627,
+        "run_smoke": 1721
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-sdk-interrupt-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/pfic-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-wch-sdk-gpio-toggle",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/sdk-gpio-toggle-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-systick-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T18:43:21Z",
+      "finished_at_utc": "2026-11-06T18:43:36Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15273,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.315,
+        "build_firmware": 1.243,
+        "run_smoke": 13.676
+      },
+      "stages_ms": {
+        "build_cli": 315,
+        "build_firmware": 1243,
+        "run_smoke": 13676
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-sdk-gpio-toggle.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/sdk-gpio-toggle-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-wch-sdk-systick-interrupt",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/sdk-systick-interrupt-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-pfic-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T19:30:06Z",
+      "finished_at_utc": "2026-11-06T19:30:30Z",
+      "elapsed_seconds": 24,
+      "elapsed_ms": 23998,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.336,
+        "build_firmware": 2.532,
+        "run_smoke": 21.093
+      },
+      "stages_ms": {
+        "build_cli": 336,
+        "build_firmware": 2532,
+        "run_smoke": 21093
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-sdk-interrupt-examples.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/sdk-systick-interrupt-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-sht31-i2c",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/i2c-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-sht31-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T20:30:04Z",
+      "finished_at_utc": "2026-11-06T20:30:06Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1728,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.638,
+        "build_firmware": 0.174,
+        "run_smoke": 0.824
+      },
+      "stages_ms": {
+        "build_cli": 638,
+        "build_firmware": 174,
+        "run_smoke": 824
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-sht31-firmware.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/sht31-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-systick",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/systick-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-systick-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T18:41:45Z",
+      "finished_at_utc": "2026-11-06T18:43:21Z",
+      "elapsed_seconds": 96,
+      "elapsed_ms": 95747,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 95.147,
+        "build_firmware": 0.089,
+        "run_smoke": 0.47
+      },
+      "stages_ms": {
+        "build_cli": 95147,
+        "build_firmware": 89,
+        "run_smoke": 470
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-systick-firmware.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/systick-smoke"
+    },
+    {
+      "target_id": "ch32v003f4p6-usart",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/usart-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-usart-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T11:09:24Z",
+      "finished_at_utc": "2026-11-05T11:09:25Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 692,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.308,
+        "build_firmware": 0.07,
+        "run_smoke": 0.302
+      },
+      "stages_ms": {
+        "build_cli": 308,
+        "build_firmware": 70,
+        "run_smoke": 302
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-usart-firmware.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/usart-smoke"
+    },
+    {
+      "target_id": "esp-mosaico-v1-2",
+      "status": "pass",
+      "crate": "firmware-esp-mosaico-v1-2-smoke",
+      "target_triple": "riscv32imac-unknown-none-elf",
+      "script": "examples/esp-mosaico-v1-2/onboarding-smoke.yaml",
+      "system": "configs/systems/esp-mosaico-v1-2.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-09T08:40:37Z",
+      "finished_at_utc": "2026-11-09T08:40:38Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1169,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.376,
+        "build_firmware": 0.295,
+        "run_smoke": 0.445
+      },
+      "stages_ms": {
+        "build_cli": 376,
+        "build_firmware": 295,
+        "run_smoke": 445
+      },
+      "_artifact_path": "examples/esp-mosaico-v1-2/evidence"
+    },
+    {
+      "target_id": "esp32-devkitc-32e-adc",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-devkitc-32e/adc-smoke.yaml",
+      "system": "configs/systems/esp32-devkitc-32e-adc.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-09T19:35:07Z",
+      "finished_at_utc": "2026-11-09T19:35:14Z",
+      "elapsed_seconds": 7,
+      "elapsed_ms": 6588,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.429,
+        "build_firmware": 4.547,
+        "run_smoke": 1.565
+      },
+      "stages_ms": {
+        "build_cli": 429,
+        "build_firmware": 4547,
+        "run_smoke": 1565
+      },
+      "firmware_build_script": "scripts/build-esp32-devkitc-32e-adc-smoke.sh",
+      "_artifact_path": "examples/esp32-devkitc-32e/evidence/adc"
+    },
+    {
+      "target_id": "esp32-devkitc-32e-bme280",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-devkitc-32e/bme280-smoke.yaml",
+      "system": "configs/systems/esp32-devkitc-32e-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T02:57:40Z",
+      "finished_at_utc": "2026-11-06T02:57:46Z",
+      "elapsed_seconds": 6,
+      "elapsed_ms": 5608,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.346,
+        "build_firmware": 4.149,
+        "run_smoke": 1.074
+      },
+      "stages_ms": {
+        "build_cli": 346,
+        "build_firmware": 4149,
+        "run_smoke": 1074
+      },
+      "firmware_build_script": "scripts/build-esp32-devkitc-32e-bme280.sh",
+      "_artifact_path": "examples/esp32-devkitc-32e/evidence/bme280"
+    },
+    {
+      "target_id": "esp32-devkitc-32e-ledc-servo",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-devkitc-32e/ledc-smoke.yaml",
+      "system": "configs/systems/esp32-devkitc-32e-ledc-servo.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-09T19:52:08Z",
+      "finished_at_utc": "2026-11-09T19:58:47Z",
+      "elapsed_seconds": 399,
+      "elapsed_ms": 398316,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 387.681,
+        "build_firmware": 6.267,
+        "run_smoke": 4.315
+      },
+      "stages_ms": {
+        "build_cli": 387681,
+        "build_firmware": 6267,
+        "run_smoke": 4315
+      },
+      "firmware_build_script": "scripts/build-esp32-devkitc-32e-ledc-smoke.sh",
+      "_artifact_path": "examples/esp32-devkitc-32e/evidence/ledc"
+    },
+    {
+      "target_id": "esp32-devkitc-32e",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-devkitc-32e/io-smoke.yaml",
+      "system": "configs/systems/esp32-devkitc-32e-gpio-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T05:30:18Z",
+      "finished_at_utc": "2026-11-05T05:30:37Z",
+      "elapsed_seconds": 20,
+      "elapsed_ms": 19786,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.957,
+        "build_firmware": 4.049,
+        "run_smoke": 0.769
+      },
+      "stages_ms": {
+        "build_cli": 14957,
+        "build_firmware": 4049,
+        "run_smoke": 769
+      },
+      "firmware_build_script": "scripts/build-esp32-devkitc-32e-smoke.sh",
+      "_artifact_path": "examples/esp32-devkitc-32e/evidence"
+    },
+    {
+      "target_id": "esp32-devkitc-32e-rmt-neopixel",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-devkitc-32e/rmt-smoke.yaml",
+      "system": "configs/systems/esp32-devkitc-32e-rmt-neopixel.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T13:53:31Z",
+      "finished_at_utc": "2026-11-06T13:54:12Z",
+      "elapsed_seconds": 41,
+      "elapsed_ms": 40537,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 34.538,
+        "build_firmware": 4.908,
+        "run_smoke": 1.048
+      },
+      "stages_ms": {
+        "build_cli": 34538,
+        "build_firmware": 4908,
+        "run_smoke": 1048
+      },
+      "firmware_build_script": "scripts/build-esp32-devkitc-32e-rmt-smoke.sh",
+      "_artifact_path": "examples/esp32-devkitc-32e/evidence/rmt-neopixel"
+    },
+    {
+      "target_id": "esp32-s3-devkitc-1-n16r8-bme280",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-s3-devkitc-1-n16r8/bme280-smoke.yaml",
+      "system": "configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T02:13:32Z",
+      "finished_at_utc": "2026-11-06T02:13:49Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16827,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.468,
+        "build_firmware": 0.687,
+        "run_smoke": 0.633
+      },
+      "stages_ms": {
+        "build_cli": 15468,
+        "build_firmware": 687,
+        "run_smoke": 633
+      },
+      "firmware_build_script": "examples/esp32-s3-devkitc-1-n16r8/ci/build-bme280-firmware.sh",
+      "_artifact_path": "examples/esp32-s3-devkitc-1-n16r8/evidence/bme280"
+    },
+    {
+      "target_id": "esp32-s3-devkitc-1-n16r8",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-s3-devkitc-1-n16r8/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32-s3-devkitc-1-n16r8.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T12:41:44Z",
+      "finished_at_utc": "2026-11-06T12:41:46Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1471,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.365,
+        "build_firmware": 0.483,
+        "run_smoke": 0.582
+      },
+      "stages_ms": {
+        "build_cli": 365,
+        "build_firmware": 483,
+        "run_smoke": 582
+      },
+      "firmware_build_script": "examples/esp32-s3-devkitc-1-n16r8/ci/build-firmware.sh",
+      "_artifact_path": "examples/esp32-s3-devkitc-1-n16r8/evidence"
+    },
+    {
+      "target_id": "esp32-s3-devkitc-1-n16r8-v10",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-s3-devkitc-1-n16r8/v10-smoke.yaml",
+      "system": "configs/systems/esp32-s3-devkitc-1-n16r8-v10.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T16:13:29Z",
+      "finished_at_utc": "2026-11-06T16:13:31Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1477,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.384,
+        "build_firmware": 0.485,
+        "run_smoke": 0.568
+      },
+      "stages_ms": {
+        "build_cli": 384,
+        "build_firmware": 485,
+        "run_smoke": 568
+      },
+      "firmware_build_script": "examples/esp32-s3-devkitc-1-n16r8/ci/build-v10-firmware.sh",
+      "_artifact_path": "examples/esp32-s3-devkitc-1-n16r8/evidence/v10"
+    },
+    {
+      "target_id": "esp32-s3-devkitc-1-n16r8-v10-servo",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-s3-devkitc-servo/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32-s3-devkitc-1-n16r8-v10-servo.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T17:18:21Z",
+      "finished_at_utc": "2026-11-06T17:18:23Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2360,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.349,
+        "build_firmware": 0.487,
+        "run_smoke": 1.483
+      },
+      "stages_ms": {
+        "build_cli": 349,
+        "build_firmware": 487,
+        "run_smoke": 1483
+      },
+      "firmware_build_script": "examples/esp32-s3-devkitc-servo/ci/build-firmware.sh",
+      "_artifact_path": "examples/esp32-s3-devkitc-servo/evidence"
+    },
+    {
+      "target_id": "esp32c3-devkit-rust-2",
+      "status": "pass",
+      "crate": "firmware-esp32c3-rust2-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32c3-devkit-rust-2/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32c3-devkit-rust-2.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T11:53:49Z",
+      "finished_at_utc": "2026-11-06T11:53:51Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1461,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.351,
+        "build_firmware": 0.384,
+        "run_smoke": 0.684
+      },
+      "stages_ms": {
+        "build_cli": 351,
+        "build_firmware": 384,
+        "run_smoke": 684
+      },
+      "_artifact_path": "examples/esp32c3-devkit-rust-2/evidence"
+    },
+    {
+      "target_id": "esp32c3-devkitm1-n4x",
+      "status": "pass",
+      "crate": "firmware-esp32c3-devkitm1-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32c3-devkitm1-n4x/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32c3-devkitm1-n4x.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T03:00:42Z",
+      "finished_at_utc": "2026-11-05T03:02:05Z",
+      "elapsed_seconds": 83,
+      "elapsed_ms": 82948,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 80.941,
+        "build_firmware": 1.49,
+        "run_smoke": 0.506
+      },
+      "stages_ms": {
+        "build_cli": 80941,
+        "build_firmware": 1490,
+        "run_smoke": 506
+      },
+      "_artifact_path": "examples/esp32c3-devkitm1-n4x/evidence"
+    },
+    {
+      "target_id": "esp32c3-devkitm1-n4x-bme280",
+      "status": "pass",
+      "crate": "firmware-esp32c3-bme280-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32c3-devkitm1-n4x-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32c3-devkitm1-n4x-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T00:04:12Z",
+      "finished_at_utc": "2026-11-06T00:04:13Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1172,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.304,
+        "build_firmware": 0.172,
+        "run_smoke": 0.645
+      },
+      "stages_ms": {
+        "build_cli": 304,
+        "build_firmware": 172,
+        "run_smoke": 645
+      },
+      "_artifact_path": "examples/esp32c3-devkitm1-n4x-bme280/evidence"
+    },
+    {
+      "target_id": "esp32c3-lcdkit",
+      "status": "pass",
+      "crate": "firmware-esp32c3-lcdkit-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32c3-lcdkit/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32c3-lcdkit.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T01:19:09Z",
+      "finished_at_utc": "2026-11-06T01:19:25Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16968,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.987,
+        "build_firmware": 0.24,
+        "run_smoke": 0.699
+      },
+      "stages_ms": {
+        "build_cli": 15987,
+        "build_firmware": 240,
+        "run_smoke": 699
+      },
+      "_artifact_path": "examples/esp32c3-lcdkit/evidence"
+    },
+    {
+      "target_id": "esp32c5-devkitc",
+      "status": "pass",
+      "crate": "firmware-esp32c5-devkitc-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32c5-devkitc/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32c5-devkitc.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T00:44:01Z",
+      "finished_at_utc": "2026-11-06T00:44:30Z",
+      "elapsed_seconds": 30,
+      "elapsed_ms": 29060,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 27.245,
+        "build_firmware": 0.463,
+        "run_smoke": 1.312
+      },
+      "stages_ms": {
+        "build_cli": 27245,
+        "build_firmware": 463,
+        "run_smoke": 1312
+      },
+      "_artifact_path": "examples/esp32c5-devkitc/evidence"
+    },
+    {
       "target_id": "esp32c6-devkitc",
       "status": "pass",
       "crate": "firmware-esp32c6-demo",
@@ -163,26 +1892,288 @@
       "script": "examples/esp32c6-devkitc/io-smoke.yaml",
       "system": "configs/systems/esp32c6-devkitc.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-03T18:45:28Z",
-      "finished_at_utc": "2026-11-03T18:45:30Z",
+      "started_at_utc": "2026-11-09T15:03:21Z",
+      "finished_at_utc": "2026-11-09T15:03:23Z",
       "elapsed_seconds": 3,
-      "elapsed_ms": 2052,
+      "elapsed_ms": 2876,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.288,
-        "build_firmware": 1.095,
-        "run_smoke": 0.659
+        "build_cli": 0.395,
+        "build_firmware": 0.26,
+        "run_smoke": 2.175
       },
       "stages_ms": {
-        "build_cli": 288,
-        "build_firmware": 1095,
-        "run_smoke": 659
+        "build_cli": 395,
+        "build_firmware": 260,
+        "run_smoke": 2175
       },
       "_artifact_path": "examples/esp32c6-devkitc/evidence"
+    },
+    {
+      "target_id": "esp32c6-devkitc-bme280",
+      "status": "pass",
+      "crate": "firmware-esp32c6-bme280-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32c6-devkitc-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32c6-devkitc-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T11:39:51Z",
+      "finished_at_utc": "2026-11-05T11:39:53Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2174,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.336,
+        "build_firmware": 0.388,
+        "run_smoke": 1.44
+      },
+      "stages_ms": {
+        "build_cli": 336,
+        "build_firmware": 388,
+        "run_smoke": 1440
+      },
+      "_artifact_path": "examples/esp32c6-devkitc-bme280/evidence"
+    },
+    {
+      "target_id": "esp32c6-devkitm1-n4",
+      "status": "pass",
+      "crate": "firmware-esp32c6-devkitm1-n4-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32c6-devkitm1-n4/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32c6-devkitm1-n4.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T11:14:07Z",
+      "finished_at_utc": "2026-11-06T11:14:08Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1325,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.356,
+        "build_firmware": 0.231,
+        "run_smoke": 0.696
+      },
+      "stages_ms": {
+        "build_cli": 356,
+        "build_firmware": 231,
+        "run_smoke": 696
+      },
+      "_artifact_path": "examples/esp32c6-devkitm1-n4/evidence"
+    },
+    {
+      "target_id": "esp32c61-devkitc",
+      "status": "pass",
+      "crate": "firmware-esp32c61-devkitc-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32c61-devkitc/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32c61-devkitc.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T23:03:08Z",
+      "finished_at_utc": "2026-11-05T23:03:10Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1442,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.472,
+        "build_firmware": 0.241,
+        "run_smoke": 0.718
+      },
+      "stages_ms": {
+        "build_cli": 472,
+        "build_firmware": 241,
+        "run_smoke": 718
+      },
+      "_artifact_path": "examples/esp32c61-devkitc/evidence"
+    },
+    {
+      "target_id": "esp32h2-devkitm-1-n4s",
+      "status": "pass",
+      "crate": "firmware-esp32h2-demo",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32h2-devkitm-1-n4s/io-smoke.yaml",
+      "system": "configs/systems/esp32h2-devkitm-1-n4s.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T06:23:33Z",
+      "finished_at_utc": "2026-11-05T06:23:57Z",
+      "elapsed_seconds": 24,
+      "elapsed_ms": 23745,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 23.171,
+        "build_firmware": 0.186,
+        "run_smoke": 0.376
+      },
+      "stages_ms": {
+        "build_cli": 23171,
+        "build_firmware": 186,
+        "run_smoke": 376
+      },
+      "_artifact_path": "examples/esp32h2-devkitm-1-n4s/evidence"
+    },
+    {
+      "target_id": "esp32p4x-function-ev-board",
+      "status": "pass",
+      "crate": "firmware-esp32p4x-function-ev-board-smoke",
+      "target_triple": "riscv32imac-unknown-none-elf",
+      "script": "examples/esp32p4x-function-ev-board/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32p4x-function-ev-board.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T15:55:22Z",
+      "finished_at_utc": "2026-11-06T15:55:23Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1238,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.357,
+        "build_firmware": 0.396,
+        "run_smoke": 0.443
+      },
+      "stages_ms": {
+        "build_cli": 357,
+        "build_firmware": 396,
+        "run_smoke": 443
+      },
+      "_artifact_path": "examples/esp32p4x-function-ev-board/evidence"
+    },
+    {
+      "target_id": "esp32s2-devkitm1-n4r2",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32s2-devkitm1-n4r2/onboarding-smoke.yaml",
+      "system": "configs/systems/esp32s2-devkitm1-n4r2.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T04:18:17Z",
+      "finished_at_utc": "2026-11-05T04:18:31Z",
+      "elapsed_seconds": 15,
+      "elapsed_ms": 14333,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 13.678,
+        "build_firmware": 0.041,
+        "run_smoke": 0.602
+      },
+      "stages_ms": {
+        "build_cli": 13678,
+        "build_firmware": 41,
+        "run_smoke": 602
+      },
+      "firmware_build_script": "scripts/build-esp32s2-devkitm1-smoke.sh",
+      "_artifact_path": "examples/esp32s2-devkitm1-n4r2/evidence"
+    },
+    {
+      "target_id": "esp8684-devkitm-1-h4x",
+      "status": "pass",
+      "crate": "firmware-esp8684-devkitm1-h4x-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp8684-devkitm-1-h4x/onboarding-smoke.yaml",
+      "system": "configs/systems/esp8684-devkitm-1-h4x.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T09:32:40Z",
+      "finished_at_utc": "2026-11-05T09:33:17Z",
+      "elapsed_seconds": 38,
+      "elapsed_ms": 37716,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 36.819,
+        "build_firmware": 0.536,
+        "run_smoke": 0.35
+      },
+      "stages_ms": {
+        "build_cli": 36819,
+        "build_firmware": 536,
+        "run_smoke": 350
+      },
+      "_artifact_path": "examples/esp8684-devkitm-1-h4x/evidence"
+    },
+    {
+      "target_id": "feather-f405",
+      "status": "pass",
+      "crate": "firmware-feather-f405-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/feather-f405/io-smoke.yaml",
+      "system": "configs/systems/feather-f405.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T09:10:33Z",
+      "finished_at_utc": "2026-11-04T09:10:35Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2029,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.324,
+        "build_firmware": 0.372,
+        "run_smoke": 1.322
+      },
+      "stages_ms": {
+        "build_cli": 324,
+        "build_firmware": 372,
+        "run_smoke": 1322
+      },
+      "_artifact_path": "examples/feather-f405/evidence"
+    },
+    {
+      "target_id": "feather-m0-express",
+      "status": "pass",
+      "crate": "firmware-feather-m0-express-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/feather-m0-express/io-smoke.yaml",
+      "system": "configs/systems/feather-m0-express.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T12:36:00Z",
+      "finished_at_utc": "2026-11-04T12:36:16Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16081,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.234,
+        "build_firmware": 0.526,
+        "run_smoke": 0.31
+      },
+      "stages_ms": {
+        "build_cli": 15234,
+        "build_firmware": 526,
+        "run_smoke": 310
+      },
+      "_artifact_path": "examples/feather-m0-express/evidence"
     },
     {
       "target_id": "feather-m4-express",
@@ -214,6 +2205,126 @@
       "_artifact_path": "examples/feather-m4-express/evidence"
     },
     {
+      "target_id": "heltec-wifi-lora-32-v4-s3r2",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/heltec-wifi-lora-32-v4-s3r2/onboarding-smoke.yaml",
+      "system": "configs/systems/heltec-wifi-lora-32-v4-s3r2.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T08:47:01Z",
+      "finished_at_utc": "2026-11-06T08:47:02Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1225,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.343,
+        "build_firmware": 0.481,
+        "run_smoke": 0.362
+      },
+      "stages_ms": {
+        "build_cli": 343,
+        "build_firmware": 481,
+        "run_smoke": 362
+      },
+      "firmware_build_script": "examples/heltec-wifi-lora-32-v4-s3r2/ci/build-firmware.sh",
+      "_artifact_path": "examples/heltec-wifi-lora-32-v4-s3r2/evidence"
+    },
+    {
+      "target_id": "heltec-wifi-lora-32-v4-s3r2-sx1262",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/heltec-wifi-lora-32-v4-s3r2/radio-onboarding-smoke.yaml",
+      "system": "configs/systems/heltec-wifi-lora-32-v4-s3r2.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T09:17:58Z",
+      "finished_at_utc": "2026-11-06T09:18:25Z",
+      "elapsed_seconds": 27,
+      "elapsed_ms": 26928,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 25.265,
+        "build_firmware": 0.49,
+        "run_smoke": 1.132
+      },
+      "stages_ms": {
+        "build_cli": 25265,
+        "build_firmware": 490,
+        "run_smoke": 1132
+      },
+      "firmware_build_script": "examples/heltec-wifi-lora-32-v4-s3r2/ci/build-radio-firmware.sh",
+      "_artifact_path": "examples/heltec-wifi-lora-32-v4-s3r2/evidence/sx1262"
+    },
+    {
+      "target_id": "m5stack-atoms3-lite",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/m5stack-atoms3-lite/onboarding-smoke.yaml",
+      "system": "configs/systems/m5stack-atoms3-lite.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T06:58:58Z",
+      "finished_at_utc": "2026-11-06T06:59:13Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15653,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.659,
+        "build_firmware": 0.485,
+        "run_smoke": 0.469
+      },
+      "stages_ms": {
+        "build_cli": 14659,
+        "build_firmware": 485,
+        "run_smoke": 469
+      },
+      "firmware_build_script": "examples/m5stack-atoms3-lite/ci/build-firmware.sh",
+      "_artifact_path": "examples/m5stack-atoms3-lite/evidence"
+    },
+    {
+      "target_id": "m5stack-cardputer-adv",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/m5stack-cardputer-adv/onboarding-smoke.yaml",
+      "system": "configs/systems/m5stack-cardputer-adv.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T08:25:46Z",
+      "finished_at_utc": "2026-11-06T08:25:52Z",
+      "elapsed_seconds": 7,
+      "elapsed_ms": 6878,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 5.82,
+        "build_firmware": 0.487,
+        "run_smoke": 0.532
+      },
+      "stages_ms": {
+        "build_cli": 5820,
+        "build_firmware": 487,
+        "run_smoke": 532
+      },
+      "firmware_build_script": "examples/m5stack-cardputer-adv/ci/build-firmware.sh",
+      "_artifact_path": "examples/m5stack-cardputer-adv/evidence"
+    },
+    {
       "target_id": "metro-m4",
       "status": "pass",
       "crate": "firmware-atsamd51-demo",
@@ -241,6 +2352,35 @@
         "run_smoke": 312
       },
       "_artifact_path": "examples/metro-m4/evidence"
+    },
+    {
+      "target_id": "microbit-v2",
+      "status": "pass",
+      "crate": "firmware-nrf52833-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/microbit-v2/onboarding-smoke.yaml",
+      "system": "configs/systems/microbit-v2-uart-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T21:10:14Z",
+      "finished_at_utc": "2026-11-04T21:10:30Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16531,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.069,
+        "build_firmware": 0.168,
+        "run_smoke": 0.283
+      },
+      "stages_ms": {
+        "build_cli": 16069,
+        "build_firmware": 168,
+        "run_smoke": 283
+      },
+      "_artifact_path": "examples/microbit-v2/evidence"
     },
     {
       "target_id": "nrf52-dk",
@@ -272,6 +2412,210 @@
       "_artifact_path": "examples/nrf52-dk/evidence"
     },
     {
+      "target_id": "nrf52840-dk",
+      "status": "pass",
+      "crate": "firmware-nrf52840-dk-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nrf52840-dk/onboarding-smoke.yaml",
+      "system": "configs/systems/nrf52840-dk-led-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T11:47:33Z",
+      "finished_at_utc": "2026-11-04T11:47:34Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 1000,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.33,
+        "build_firmware": 0.354,
+        "run_smoke": 0.307
+      },
+      "stages_ms": {
+        "build_cli": 330,
+        "build_firmware": 354,
+        "run_smoke": 307
+      },
+      "_artifact_path": "examples/nrf52840-dk/evidence"
+    },
+    {
+      "target_id": "nrf5340dk",
+      "status": "pass",
+      "crate": "firmware-nrf5340-dk-demo",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nrf5340-dk/io-smoke.yaml",
+      "system": "configs/systems/nrf5340dk.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T06:42:37Z",
+      "finished_at_utc": "2026-11-04T06:42:39Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2109,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.321,
+        "build_firmware": 0.207,
+        "run_smoke": 1.569
+      },
+      "stages_ms": {
+        "build_cli": 321,
+        "build_firmware": 207,
+        "run_smoke": 1569
+      },
+      "_artifact_path": "examples/nrf5340-dk/evidence"
+    },
+    {
+      "target_id": "nrf54l10-on-nrf54l15-dk",
+      "status": "pass",
+      "crate": "firmware-nrf54l10-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nrf54l10/onboarding-smoke.yaml",
+      "system": "configs/systems/nrf54l10-on-nrf54l15-dk.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T12:17:25Z",
+      "finished_at_utc": "2026-11-04T12:17:26Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1065,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.392,
+        "build_firmware": 0.262,
+        "run_smoke": 0.4
+      },
+      "stages_ms": {
+        "build_cli": 392,
+        "build_firmware": 262,
+        "run_smoke": 400
+      },
+      "_artifact_path": "examples/nrf54l10/evidence"
+    },
+    {
+      "target_id": "nrf54l15-dk",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/nrf54l15-dk/io-smoke.yaml",
+      "system": "configs/systems/nrf54l15dk.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T17:13:44Z",
+      "finished_at_utc": "2026-11-04T17:13:45Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 854,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.288,
+        "build_firmware": 0.079,
+        "run_smoke": 0.477
+      },
+      "stages_ms": {
+        "build_cli": 288,
+        "build_firmware": 79,
+        "run_smoke": 477
+      },
+      "firmware_build_script": "examples/nrf54l15-dk/ci/build-firmware.sh",
+      "_artifact_path": "examples/nrf54l15-dk/evidence"
+    },
+    {
+      "target_id": "nrf54lm20dk-led-smoke",
+      "status": "pass",
+      "crate": "firmware-nrf54lm20dk-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nrf54lm20dk/onboarding-smoke.yaml",
+      "system": "configs/systems/nrf54lm20dk-led-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T20:14:23Z",
+      "finished_at_utc": "2026-11-04T20:14:24Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 896,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.288,
+        "build_firmware": 0.326,
+        "run_smoke": 0.271
+      },
+      "stages_ms": {
+        "build_cli": 288,
+        "build_firmware": 326,
+        "run_smoke": 271
+      },
+      "_artifact_path": "examples/nrf54lm20dk/evidence"
+    },
+    {
+      "target_id": "nucleo-c031c6",
+      "status": "pass",
+      "crate": "firmware-nucleo-c031c6-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-c031c6/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-c031c6.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T07:41:08Z",
+      "finished_at_utc": "2026-11-04T07:41:23Z",
+      "elapsed_seconds": 15,
+      "elapsed_ms": 14938,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.427,
+        "build_firmware": 0.206,
+        "run_smoke": 0.296
+      },
+      "stages_ms": {
+        "build_cli": 14427,
+        "build_firmware": 206,
+        "run_smoke": 296
+      },
+      "_artifact_path": "examples/nucleo-c031c6/evidence"
+    },
+    {
+      "target_id": "nucleo-c051c8",
+      "status": "pass",
+      "crate": "firmware-nucleo-c051c8-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-c051c8/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-c051c8.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T14:27:18Z",
+      "finished_at_utc": "2026-11-04T14:27:19Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1022,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.324,
+        "build_firmware": 0.364,
+        "run_smoke": 0.323
+      },
+      "stages_ms": {
+        "build_cli": 324,
+        "build_firmware": 364,
+        "run_smoke": 323
+      },
+      "_artifact_path": "examples/nucleo-c051c8/evidence"
+    },
+    {
       "target_id": "nucleo-c071rb",
       "status": "pass",
       "crate": "firmware-nucleo-c071rb-smoke",
@@ -301,6 +2645,93 @@
       "_artifact_path": "examples/nucleo-c071rb/evidence"
     },
     {
+      "target_id": "nucleo-c092rc",
+      "status": "pass",
+      "crate": "firmware-nucleo-c092rc-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-c092rc/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-c092rc.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T07:55:02Z",
+      "finished_at_utc": "2026-11-04T07:55:18Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16511,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.739,
+        "build_firmware": 0.458,
+        "run_smoke": 0.302
+      },
+      "stages_ms": {
+        "build_cli": 15739,
+        "build_firmware": 458,
+        "run_smoke": 302
+      },
+      "_artifact_path": "examples/nucleo-c092rc/evidence"
+    },
+    {
+      "target_id": "nucleo-c542rc",
+      "status": "pass",
+      "crate": "firmware-nucleo-c542rc-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-c542rc/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-c542rc-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T18:43:19Z",
+      "finished_at_utc": "2026-11-04T18:43:37Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17702,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.796,
+        "build_firmware": 0.515,
+        "run_smoke": 0.379
+      },
+      "stages_ms": {
+        "build_cli": 16796,
+        "build_firmware": 515,
+        "run_smoke": 379
+      },
+      "_artifact_path": "examples/nucleo-c542rc/evidence"
+    },
+    {
+      "target_id": "nucleo-c5a3zg",
+      "status": "pass",
+      "crate": "firmware-nucleo-c5a3zg-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-c5a3zg/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-c5a3zg.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T16:30:00Z",
+      "finished_at_utc": "2026-11-04T16:30:49Z",
+      "elapsed_seconds": 50,
+      "elapsed_ms": 49586,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 48.668,
+        "build_firmware": 0.527,
+        "run_smoke": 0.38
+      },
+      "stages_ms": {
+        "build_cli": 48668,
+        "build_firmware": 527,
+        "run_smoke": 380
+      },
+      "_artifact_path": "examples/nucleo-c5a3zg/evidence"
+    },
+    {
       "target_id": "nucleo-f030r8",
       "status": "pass",
       "crate": "firmware-nucleo-f030r8-smoke",
@@ -328,6 +2759,35 @@
         "run_smoke": 260
       },
       "_artifact_path": "examples/nucleo-f030r8/evidence"
+    },
+    {
+      "target_id": "nucleo-f070rb",
+      "status": "pass",
+      "crate": "firmware-nucleo-f070rb-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-f070rb/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-f070rb.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T00:50:01Z",
+      "finished_at_utc": "2026-11-05T00:50:19Z",
+      "elapsed_seconds": 19,
+      "elapsed_ms": 18052,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 17.177,
+        "build_firmware": 0.574,
+        "run_smoke": 0.288
+      },
+      "stages_ms": {
+        "build_cli": 17177,
+        "build_firmware": 574,
+        "run_smoke": 288
+      },
+      "_artifact_path": "examples/nucleo-f070rb/evidence"
     },
     {
       "target_id": "nucleo-f072rb",
@@ -417,6 +2877,93 @@
       "_artifact_path": "examples/nucleo-f103rb/evidence"
     },
     {
+      "target_id": "nucleo-f207zg",
+      "status": "pass",
+      "crate": "firmware-nucleo-f207zg-smoke",
+      "target_triple": "thumbv7m-none-eabi",
+      "script": "examples/nucleo-f207zg/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-f207zg-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T18:27:48Z",
+      "finished_at_utc": "2026-11-04T18:28:04Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16830,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.79,
+        "build_firmware": 0.716,
+        "run_smoke": 0.313
+      },
+      "stages_ms": {
+        "build_cli": 15790,
+        "build_firmware": 716,
+        "run_smoke": 313
+      },
+      "_artifact_path": "examples/nucleo-f207zg/evidence"
+    },
+    {
+      "target_id": "nucleo-f302r8",
+      "status": "pass",
+      "crate": "firmware-nucleo-f302r8-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f302r8/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-f302r8.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T04:40:35Z",
+      "finished_at_utc": "2026-11-04T04:40:52Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16849,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.043,
+        "build_firmware": 0.501,
+        "run_smoke": 0.295
+      },
+      "stages_ms": {
+        "build_cli": 16043,
+        "build_firmware": 501,
+        "run_smoke": 295
+      },
+      "_artifact_path": "examples/nucleo-f302r8/evidence"
+    },
+    {
+      "target_id": "nucleo-f303k8",
+      "status": "pass",
+      "crate": "firmware-nucleo-f303k8-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f303k8/io-smoke.yaml",
+      "system": "configs/systems/nucleo-f303k8.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T03:14:48Z",
+      "finished_at_utc": "2026-11-04T03:14:49Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 992,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.323,
+        "build_firmware": 0.354,
+        "run_smoke": 0.305
+      },
+      "stages_ms": {
+        "build_cli": 323,
+        "build_firmware": 354,
+        "run_smoke": 305
+      },
+      "_artifact_path": "examples/nucleo-f303k8/evidence"
+    },
+    {
       "target_id": "nucleo-f303re",
       "status": "pass",
       "crate": "firmware-nucleo-f303re-smoke",
@@ -444,6 +2991,35 @@
         "run_smoke": 252
       },
       "_artifact_path": "examples/nucleo-f303re/evidence"
+    },
+    {
+      "target_id": "nucleo-f334r8",
+      "status": "pass",
+      "crate": "firmware-nucleo-f334r8-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f334r8/io-smoke.yaml",
+      "system": "configs/systems/nucleo-f334r8.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T13:31:36Z",
+      "finished_at_utc": "2026-11-04T13:31:53Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16568,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.67,
+        "build_firmware": 0.578,
+        "run_smoke": 0.31
+      },
+      "stages_ms": {
+        "build_cli": 15670,
+        "build_firmware": 578,
+        "run_smoke": 310
+      },
+      "_artifact_path": "examples/nucleo-f334r8/evidence"
     },
     {
       "target_id": "nucleo-f401re",
@@ -475,6 +3051,93 @@
       "_artifact_path": "examples/nucleo-f401re/evidence"
     },
     {
+      "target_id": "nucleo-f407-tmp117",
+      "status": "pass",
+      "crate": "nucleo-f407-i2c",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f407-i2c/tmp117-smoke.yaml",
+      "system": "examples/nucleo-f407-i2c/tmp117-system.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T07:10:42Z",
+      "finished_at_utc": "2026-11-04T07:10:44Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1232,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.321,
+        "build_firmware": 0.389,
+        "run_smoke": 0.513
+      },
+      "stages_ms": {
+        "build_cli": 321,
+        "build_firmware": 389,
+        "run_smoke": 513
+      },
+      "_artifact_path": "examples/nucleo-f407-i2c/evidence/tmp117"
+    },
+    {
+      "target_id": "lis2dux12-nucleo-f407",
+      "status": "pass",
+      "crate": "nucleo-f407-i2c",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f407-lis2dux12/onboarding-smoke.yaml",
+      "system": "examples/nucleo-f407-lis2dux12/system.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T08:20:43Z",
+      "finished_at_utc": "2026-11-04T08:21:03Z",
+      "elapsed_seconds": 21,
+      "elapsed_ms": 20239,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 19.442,
+        "build_firmware": 0.203,
+        "run_smoke": 0.585
+      },
+      "stages_ms": {
+        "build_cli": 19442,
+        "build_firmware": 203,
+        "run_smoke": 585
+      },
+      "_artifact_path": "examples/nucleo-f407-lis2dux12/evidence"
+    },
+    {
+      "target_id": "nucleo-f410rb",
+      "status": "pass",
+      "crate": "firmware-nucleo-f410rb-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f410rb/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-f410rb.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T02:53:41Z",
+      "finished_at_utc": "2026-11-04T02:53:57Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16198,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.385,
+        "build_firmware": 0.475,
+        "run_smoke": 0.329
+      },
+      "stages_ms": {
+        "build_cli": 15385,
+        "build_firmware": 475,
+        "run_smoke": 329
+      },
+      "_artifact_path": "examples/nucleo-f410rb/evidence"
+    },
+    {
       "target_id": "nucleo-f411re",
       "status": "pass",
       "crate": "firmware-nucleo-f411re-smoke",
@@ -502,6 +3165,124 @@
         "run_smoke": 323
       },
       "_artifact_path": "examples/nucleo-f411re/evidence"
+    },
+    {
+      "target_id": "nucleo-f411re-bme280",
+      "status": "pass",
+      "crate": "examples/nucleo-f411re-bme280",
+      "target_triple": "",
+      "script": "examples/nucleo-f411re-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-f411re-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T13:15:25Z",
+      "finished_at_utc": "2026-11-04T13:15:51Z",
+      "elapsed_seconds": 27,
+      "elapsed_ms": 26632,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 17.659,
+        "build_firmware": 2.252,
+        "run_smoke": 6.709
+      },
+      "stages_ms": {
+        "build_cli": 17659,
+        "build_firmware": 2252,
+        "run_smoke": 6709
+      },
+      "firmware_build_script": "scripts/build_nucleo_f411re_bme280_smoke.sh",
+      "_artifact_path": "examples/nucleo-f411re-bme280/evidence"
+    },
+    {
+      "target_id": "nucleo-f411re-mcp9808",
+      "status": "pass",
+      "crate": "examples/nucleo-f411re-mcp9808",
+      "target_triple": "",
+      "script": "examples/nucleo-f411re-mcp9808/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-f411re-mcp9808.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T01:15:32Z",
+      "finished_at_utc": "2026-11-05T01:15:50Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17767,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.209,
+        "build_firmware": 2.047,
+        "run_smoke": 0.5
+      },
+      "stages_ms": {
+        "build_cli": 15209,
+        "build_firmware": 2047,
+        "run_smoke": 500
+      },
+      "firmware_build_script": "scripts/build_nucleo_f411re_mcp9808_smoke.sh",
+      "_artifact_path": "examples/nucleo-f411re-mcp9808/evidence"
+    },
+    {
+      "target_id": "nucleo-f412zg",
+      "status": "pass",
+      "crate": "firmware-nucleo-f412zg-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f412zg/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-f412zg.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T10:23:41Z",
+      "finished_at_utc": "2026-11-04T10:23:42Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1155,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.319,
+        "build_firmware": 0.498,
+        "run_smoke": 0.328
+      },
+      "stages_ms": {
+        "build_cli": 319,
+        "build_firmware": 498,
+        "run_smoke": 328
+      },
+      "_artifact_path": "examples/nucleo-f412zg/evidence"
+    },
+    {
+      "target_id": "nucleo-f413zh",
+      "status": "pass",
+      "crate": "firmware-nucleo-f413zh-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f413zh/io-smoke.yaml",
+      "system": "configs/systems/nucleo-f413zh.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T08:36:19Z",
+      "finished_at_utc": "2026-11-04T08:36:35Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16261,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.472,
+        "build_firmware": 0.465,
+        "run_smoke": 0.313
+      },
+      "stages_ms": {
+        "build_cli": 15472,
+        "build_firmware": 465,
+        "run_smoke": 313
+      },
+      "_artifact_path": "examples/nucleo-f413zh/evidence"
     },
     {
       "target_id": "nucleo-f439zi",
@@ -562,6 +3343,93 @@
       "_artifact_path": "examples/nucleo-f446re/evidence"
     },
     {
+      "target_id": "nucleo-f446ze",
+      "status": "pass",
+      "crate": "firmware-f446-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f446ze/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-f446ze.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T23:15:18Z",
+      "finished_at_utc": "2026-11-03T23:15:36Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17345,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.749,
+        "build_firmware": 0.307,
+        "run_smoke": 0.277
+      },
+      "stages_ms": {
+        "build_cli": 16749,
+        "build_firmware": 307,
+        "run_smoke": 277
+      },
+      "_artifact_path": "examples/nucleo-f446ze/evidence"
+    },
+    {
+      "target_id": "nucleo-f722ze",
+      "status": "pass",
+      "crate": "firmware-nucleo-f722ze-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f722ze/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-f722ze.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T00:32:11Z",
+      "finished_at_utc": "2026-11-05T00:32:26Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15183,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.499,
+        "build_firmware": 0.319,
+        "run_smoke": 0.354
+      },
+      "stages_ms": {
+        "build_cli": 14499,
+        "build_firmware": 319,
+        "run_smoke": 354
+      },
+      "_artifact_path": "examples/nucleo-f722ze/evidence"
+    },
+    {
+      "target_id": "nucleo-f756zg",
+      "status": "pass",
+      "crate": "firmware-nucleo-f756zg-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f756zg/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-f756zg.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T05:27:36Z",
+      "finished_at_utc": "2026-11-04T05:27:53Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17020,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.243,
+        "build_firmware": 0.464,
+        "run_smoke": 0.302
+      },
+      "stages_ms": {
+        "build_cli": 16243,
+        "build_firmware": 464,
+        "run_smoke": 302
+      },
+      "_artifact_path": "examples/nucleo-f756zg/evidence"
+    },
+    {
       "target_id": "nucleo-f767zi",
       "status": "pass",
       "crate": "tier1-fixture-stm32f767",
@@ -589,6 +3457,64 @@
         "run_smoke": 1670
       },
       "_artifact_path": "examples/nucleo-f767zi/evidence"
+    },
+    {
+      "target_id": "nucleo-f767zi-lsm6dsox",
+      "status": "pass",
+      "crate": "nucleo-f767zi-lsm6dsox-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-f767zi-lsm6dsox/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-f767zi-lsm6dsox.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T00:12:57Z",
+      "finished_at_utc": "2026-11-05T00:14:16Z",
+      "elapsed_seconds": 79,
+      "elapsed_ms": 78281,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 77.096,
+        "build_firmware": 0.19,
+        "run_smoke": 0.983
+      },
+      "stages_ms": {
+        "build_cli": 77096,
+        "build_firmware": 190,
+        "run_smoke": 983
+      },
+      "_artifact_path": "examples/nucleo-f767zi-lsm6dsox/evidence"
+    },
+    {
+      "target_id": "nucleo-g031k8",
+      "status": "pass",
+      "crate": "firmware-nucleo-g031k8-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-g031k8/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-g031k8.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T14:14:21Z",
+      "finished_at_utc": "2026-11-04T14:14:36Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15112,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.362,
+        "build_firmware": 0.398,
+        "run_smoke": 0.341
+      },
+      "stages_ms": {
+        "build_cli": 14362,
+        "build_firmware": 398,
+        "run_smoke": 341
+      },
+      "_artifact_path": "examples/nucleo-g031k8/evidence"
     },
     {
       "target_id": "nucleo-g070rb",
@@ -772,24 +3698,24 @@
       "script": "examples/nucleo-g491re/onboarding-smoke.yaml",
       "system": "configs/systems/nucleo-g491re.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-03T21:48:43Z",
-      "finished_at_utc": "2026-11-03T21:48:59Z",
-      "elapsed_seconds": 17,
-      "elapsed_ms": 16077,
+      "started_at_utc": "2026-11-09T21:22:47Z",
+      "finished_at_utc": "2026-11-09T21:22:48Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 968,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 15.449,
-        "build_firmware": 0.291,
-        "run_smoke": 0.326
+        "build_cli": 0.33,
+        "build_firmware": 0.2,
+        "run_smoke": 0.385
       },
       "stages_ms": {
-        "build_cli": 15449,
-        "build_firmware": 291,
-        "run_smoke": 326
+        "build_cli": 330,
+        "build_firmware": 200,
+        "run_smoke": 385
       },
       "_artifact_path": "examples/nucleo-g491re/evidence"
     },
@@ -823,6 +3749,64 @@
       "_artifact_path": "examples/nucleo-h503rb/evidence"
     },
     {
+      "target_id": "nucleo-h533re",
+      "status": "pass",
+      "crate": "firmware-nucleo-h533re-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-h533re/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-h533re.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T07:24:28Z",
+      "finished_at_utc": "2026-11-04T07:24:44Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15939,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.173,
+        "build_firmware": 0.457,
+        "run_smoke": 0.299
+      },
+      "stages_ms": {
+        "build_cli": 15173,
+        "build_firmware": 457,
+        "run_smoke": 299
+      },
+      "_artifact_path": "examples/nucleo-h533re/evidence"
+    },
+    {
+      "target_id": "nucleo-h533re-bme280",
+      "status": "pass",
+      "crate": "firmware-nucleo-h533re-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-h533re-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-h533re-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-09T19:16:59Z",
+      "finished_at_utc": "2026-11-09T19:17:40Z",
+      "elapsed_seconds": 42,
+      "elapsed_ms": 41457,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 40.575,
+        "build_firmware": 0.315,
+        "run_smoke": 0.512
+      },
+      "stages_ms": {
+        "build_cli": 40575,
+        "build_firmware": 315,
+        "run_smoke": 512
+      },
+      "_artifact_path": "examples/nucleo-h533re-bme280/evidence"
+    },
+    {
       "target_id": "nucleo-h723zg",
       "status": "pass",
       "crate": "firmware-nucleo-h723zg-smoke",
@@ -852,6 +3836,238 @@
       "_artifact_path": "examples/nucleo-h723zg/evidence"
     },
     {
+      "target_id": "nucleo-h723zg-bme280",
+      "status": "pass",
+      "crate": "firmware-nucleo-h723zg-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-h723zg-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-h723zg-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-09T20:40:42Z",
+      "finished_at_utc": "2026-11-09T20:40:44Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1726,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.53,
+        "build_firmware": 0.536,
+        "run_smoke": 0.62
+      },
+      "stages_ms": {
+        "build_cli": 530,
+        "build_firmware": 536,
+        "run_smoke": 620
+      },
+      "_artifact_path": "examples/nucleo-h723zg-bme280/evidence"
+    },
+    {
+      "target_id": "nucleo-h753zi",
+      "status": "pass",
+      "crate": "firmware-nucleo-h753zi-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-h753zi/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-h753zi.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T02:15:30Z",
+      "finished_at_utc": "2026-11-04T02:15:53Z",
+      "elapsed_seconds": 23,
+      "elapsed_ms": 22531,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 18.605,
+        "build_firmware": 3.648,
+        "run_smoke": 0.267
+      },
+      "stages_ms": {
+        "build_cli": 18605,
+        "build_firmware": 3648,
+        "run_smoke": 267
+      },
+      "_artifact_path": "examples/nucleo-h753zi/evidence"
+    },
+    {
+      "target_id": "nucleo-h755zi-q",
+      "status": "pass",
+      "crate": "firmware-nucleo-h755zi-q-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-h755zi-q/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-h755zi-q.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T22:42:04Z",
+      "finished_at_utc": "2026-11-04T22:42:05Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1118,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.419,
+        "build_firmware": 0.388,
+        "run_smoke": 0.3
+      },
+      "stages_ms": {
+        "build_cli": 419,
+        "build_firmware": 388,
+        "run_smoke": 300
+      },
+      "_artifact_path": "examples/nucleo-h755zi-q/evidence"
+    },
+    {
+      "target_id": "nucleo-h7a3zi-q",
+      "status": "pass",
+      "crate": "firmware-nucleo-h7a3zi-q-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-h7a3zi-q/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-h7a3zi-q.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T15:11:05Z",
+      "finished_at_utc": "2026-11-04T15:11:06Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1134,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.338,
+        "build_firmware": 0.481,
+        "run_smoke": 0.305
+      },
+      "stages_ms": {
+        "build_cli": 338,
+        "build_firmware": 481,
+        "run_smoke": 305
+      },
+      "_artifact_path": "examples/nucleo-h7a3zi-q/evidence"
+    },
+    {
+      "target_id": "nucleo-h7s3l8",
+      "status": "pass",
+      "crate": "firmware-nucleo-h7s3l8-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-h7s3l8/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-h7s3l8.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-09T11:30:27Z",
+      "finished_at_utc": "2026-11-09T11:35:35Z",
+      "elapsed_seconds": 308,
+      "elapsed_ms": 307810,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 306.471,
+        "build_firmware": 0.867,
+        "run_smoke": 0.428
+      },
+      "stages_ms": {
+        "build_cli": 306471,
+        "build_firmware": 867,
+        "run_smoke": 428
+      },
+      "_artifact_path": "examples/nucleo-h7s3l8/evidence"
+    },
+    {
+      "target_id": "nucleo-l010rb",
+      "status": "pass",
+      "crate": "firmware-nucleo-l010rb-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-l010rb/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-l010rb.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T13:50:45Z",
+      "finished_at_utc": "2026-11-04T13:51:03Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17655,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.609,
+        "build_firmware": 0.739,
+        "run_smoke": 0.297
+      },
+      "stages_ms": {
+        "build_cli": 16609,
+        "build_firmware": 739,
+        "run_smoke": 297
+      },
+      "_artifact_path": "examples/nucleo-l010rb/evidence"
+    },
+    {
+      "target_id": "nucleo-l011k4",
+      "status": "pass",
+      "crate": "firmware-nucleo-l011k4-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-l011k4/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-l011k4.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T02:32:28Z",
+      "finished_at_utc": "2026-11-04T02:32:44Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16177,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.33,
+        "build_firmware": 0.526,
+        "run_smoke": 0.31
+      },
+      "stages_ms": {
+        "build_cli": 15330,
+        "build_firmware": 526,
+        "run_smoke": 310
+      },
+      "_artifact_path": "examples/nucleo-l011k4/evidence"
+    },
+    {
+      "target_id": "nucleo-l031k6",
+      "status": "pass",
+      "crate": "firmware-nucleo-l031k6-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-l031k6/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-l031k6.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T11:17:09Z",
+      "finished_at_utc": "2026-11-04T11:17:26Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16886,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.046,
+        "build_firmware": 0.522,
+        "run_smoke": 0.307
+      },
+      "stages_ms": {
+        "build_cli": 16046,
+        "build_firmware": 522,
+        "run_smoke": 307
+      },
+      "_artifact_path": "examples/nucleo-l031k6/evidence"
+    },
+    {
       "target_id": "nucleo-l073rz",
       "status": "pass",
       "crate": "firmware-l073-demo",
@@ -879,6 +4095,35 @@
         "run_smoke": 629
       },
       "_artifact_path": "examples/nucleo-l073rz/evidence"
+    },
+    {
+      "target_id": "nucleo-l432kc",
+      "status": "pass",
+      "crate": "firmware-nucleo-l432kc-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-l432kc/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-l432kc.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T22:12:55Z",
+      "finished_at_utc": "2026-11-03T22:13:11Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16430,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.685,
+        "build_firmware": 0.398,
+        "run_smoke": 0.336
+      },
+      "stages_ms": {
+        "build_cli": 15685,
+        "build_firmware": 398,
+        "run_smoke": 336
+      },
+      "_artifact_path": "examples/nucleo-l432kc/evidence"
     },
     {
       "target_id": "nucleo-l452re-p",
@@ -939,6 +4184,239 @@
       "_artifact_path": "examples/nucleo-l476rg/evidence"
     },
     {
+      "target_id": "nucleo-l476rg-bme280",
+      "status": "pass",
+      "crate": "examples/nucleo-l476rg-bme280",
+      "target_triple": "nucleo_l476rg",
+      "script": "examples/nucleo-l476rg-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-l476rg-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T10:45:21Z",
+      "finished_at_utc": "2026-11-04T10:45:38Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17132,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.322,
+        "build_firmware": 2.328,
+        "run_smoke": 14.471
+      },
+      "stages_ms": {
+        "build_cli": 322,
+        "build_firmware": 2328,
+        "run_smoke": 14471
+      },
+      "firmware_build_script": "scripts/build_nucleo_l476rg_bme280_smoke.sh",
+      "_artifact_path": "examples/nucleo-l476rg-bme280/evidence"
+    },
+    {
+      "target_id": "nucleo-l496zg-p",
+      "status": "pass",
+      "crate": "firmware-nucleo-l496zg-p-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-l496zg-p/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-l496zg-p.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T22:25:43Z",
+      "finished_at_utc": "2026-11-04T22:26:01Z",
+      "elapsed_seconds": 19,
+      "elapsed_ms": 18109,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 17.173,
+        "build_firmware": 0.593,
+        "run_smoke": 0.33
+      },
+      "stages_ms": {
+        "build_cli": 17173,
+        "build_firmware": 593,
+        "run_smoke": 330
+      },
+      "_artifact_path": "examples/nucleo-l496zg-p/evidence"
+    },
+    {
+      "target_id": "nucleo-l4a6zg",
+      "status": "pass",
+      "crate": "firmware-nucleo-l4a6zg-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-l4a6zg/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-l4a6zg.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T04:18:09Z",
+      "finished_at_utc": "2026-11-04T04:18:25Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16241,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.373,
+        "build_firmware": 0.441,
+        "run_smoke": 0.417
+      },
+      "stages_ms": {
+        "build_cli": 15373,
+        "build_firmware": 441,
+        "run_smoke": 417
+      },
+      "_artifact_path": "examples/nucleo-l4a6zg/evidence"
+    },
+    {
+      "target_id": "nucleo-l552ze-q",
+      "status": "pass",
+      "crate": "firmware-l552ze-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-l552ze-q/io-smoke.yaml",
+      "system": "examples/nucleo-l552ze-q/system.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T01:58:01Z",
+      "finished_at_utc": "2026-11-04T01:58:04Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2866,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.361,
+        "build_firmware": 0.506,
+        "run_smoke": 1.986
+      },
+      "stages_ms": {
+        "build_cli": 361,
+        "build_firmware": 506,
+        "run_smoke": 1986
+      },
+      "_artifact_path": "examples/nucleo-l552ze-q/evidence"
+    },
+    {
+      "target_id": "nucleo-u031r8",
+      "status": "pass",
+      "crate": "firmware-nucleo-u031r8-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-u031r8/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-u031r8.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T19:54:09Z",
+      "finished_at_utc": "2026-11-04T19:55:01Z",
+      "elapsed_seconds": 53,
+      "elapsed_ms": 52530,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 51.566,
+        "build_firmware": 0.639,
+        "run_smoke": 0.315
+      },
+      "stages_ms": {
+        "build_cli": 51566,
+        "build_firmware": 639,
+        "run_smoke": 315
+      },
+      "_artifact_path": "examples/nucleo-u031r8/evidence"
+    },
+    {
+      "target_id": "nucleo-u083rc",
+      "status": "pass",
+      "crate": "firmware-nucleo-u083rc-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-u083rc/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-u083rc.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T17:35:48Z",
+      "finished_at_utc": "2026-11-04T17:36:44Z",
+      "elapsed_seconds": 57,
+      "elapsed_ms": 56874,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 55.916,
+        "build_firmware": 0.6,
+        "run_smoke": 0.347
+      },
+      "stages_ms": {
+        "build_cli": 55916,
+        "build_firmware": 600,
+        "run_smoke": 347
+      },
+      "_artifact_path": "examples/nucleo-u083rc/evidence"
+    },
+    {
+      "target_id": "nucleo-u385rg-q",
+      "status": "pass",
+      "crate": "firmware-nucleo-u385rg-q-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-u385rg-q/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-u385rg-q-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T19:20:11Z",
+      "finished_at_utc": "2026-11-04T19:20:28Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17499,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.759,
+        "build_firmware": 0.457,
+        "run_smoke": 0.274
+      },
+      "stages_ms": {
+        "build_cli": 16759,
+        "build_firmware": 457,
+        "run_smoke": 274
+      },
+      "_artifact_path": "examples/nucleo-u385rg-q/evidence"
+    },
+    {
+      "target_id": "nucleo-u3c5zi-q",
+      "status": "pass",
+      "crate": "firmware-nucleo-u3c5zi-q-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-u3c5zi-q/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-u3c5zi-q-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T19:00:04Z",
+      "finished_at_utc": "2026-11-04T19:00:56Z",
+      "elapsed_seconds": 52,
+      "elapsed_ms": 51614,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 50.871,
+        "build_firmware": 0.446,
+        "run_smoke": 0.284
+      },
+      "stages_ms": {
+        "build_cli": 50871,
+        "build_firmware": 446,
+        "run_smoke": 284
+      },
+      "_artifact_path": "examples/nucleo-u3c5zi-q/evidence"
+    },
+    {
       "target_id": "nucleo-u545re",
       "status": "pass",
       "crate": "firmware-nucleo-u545re-smoke",
@@ -966,6 +4444,36 @@
         "run_smoke": 287
       },
       "_artifact_path": "examples/nucleo-u545re/evidence"
+    },
+    {
+      "target_id": "nucleo-u545re-bme280",
+      "status": "pass",
+      "crate": "firmware-nucleo-u545re-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-u545re-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-u545re-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T12:10:04Z",
+      "finished_at_utc": "2026-11-05T12:10:22Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17817,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.546,
+        "build_firmware": 0.591,
+        "run_smoke": 0.669
+      },
+      "stages_ms": {
+        "build_cli": 16546,
+        "build_firmware": 591,
+        "run_smoke": 669
+      },
+      "firmware_build_script": "scripts/build_nucleo_u545re_bme280_smoke.sh",
+      "_artifact_path": "examples/nucleo-u545re-bme280/evidence"
     },
     {
       "target_id": "stm32u575-nucleo",
@@ -997,6 +4505,35 @@
       "_artifact_path": "examples/nucleo-u575zi/evidence"
     },
     {
+      "target_id": "nucleo-u5a5zj-q",
+      "status": "pass",
+      "crate": "firmware-stm32u575-demo",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-u5a5zj/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-u5a5zj.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T22:56:47Z",
+      "finished_at_utc": "2026-11-03T22:56:48Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1143,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.276,
+        "build_firmware": 0.304,
+        "run_smoke": 0.554
+      },
+      "stages_ms": {
+        "build_cli": 276,
+        "build_firmware": 304,
+        "run_smoke": 554
+      },
+      "_artifact_path": "examples/nucleo-u5a5zj/evidence"
+    },
+    {
       "target_id": "nucleo-wb55rg",
       "status": "pass",
       "crate": "firmware-nucleo-wb55rg-demo",
@@ -1024,6 +4561,35 @@
         "run_smoke": 1611
       },
       "_artifact_path": "examples/nucleo-wb55rg/evidence"
+    },
+    {
+      "target_id": "nucleo-wba25ce1",
+      "status": "pass",
+      "crate": "firmware-nucleo-wba25ce1-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-wba25ce1/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-wba25ce1-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T18:07:20Z",
+      "finished_at_utc": "2026-11-04T18:07:21Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1205,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.469,
+        "build_firmware": 0.313,
+        "run_smoke": 0.414
+      },
+      "stages_ms": {
+        "build_cli": 469,
+        "build_firmware": 313,
+        "run_smoke": 414
+      },
+      "_artifact_path": "examples/nucleo-wba25ce1/evidence"
     },
     {
       "target_id": "nucleo-wba55cg",
@@ -1091,26 +4657,55 @@
       "script": "examples/pico/io-smoke.yaml",
       "system": "configs/systems/rp2040-pico.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-03T10:59:51Z",
-      "finished_at_utc": "2026-11-03T10:59:52Z",
+      "started_at_utc": "2026-11-06T12:17:38Z",
+      "finished_at_utc": "2026-11-06T12:17:39Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1231,
+      "elapsed_ms": 1470,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.267,
-        "build_firmware": 0.497,
-        "run_smoke": 0.458
+        "build_cli": 0.346,
+        "build_firmware": 0.577,
+        "run_smoke": 0.504
       },
       "stages_ms": {
-        "build_cli": 267,
-        "build_firmware": 497,
-        "run_smoke": 458
+        "build_cli": 346,
+        "build_firmware": 577,
+        "run_smoke": 504
       },
       "_artifact_path": "examples/pico/evidence"
+    },
+    {
+      "target_id": "pico2-adc",
+      "status": "pass",
+      "crate": "firmware-pico2-adc-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/pico2/adc-smoke.yaml",
+      "system": "configs/systems/pico2-adc.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-09T20:15:27Z",
+      "finished_at_utc": "2026-11-09T20:16:06Z",
+      "elapsed_seconds": 39,
+      "elapsed_ms": 38687,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 35.743,
+        "build_firmware": 2.465,
+        "run_smoke": 0.436
+      },
+      "stages_ms": {
+        "build_cli": 35743,
+        "build_firmware": 2465,
+        "run_smoke": 436
+      },
+      "_artifact_path": "examples/pico2/evidence/adc"
     },
     {
       "target_id": "pico2",
@@ -1142,6 +4737,93 @@
       "_artifact_path": "examples/pico2/evidence"
     },
     {
+      "target_id": "pico2-pio",
+      "status": "pass",
+      "crate": "firmware-pico2-demo",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/pico2/pio-smoke.yaml",
+      "system": "configs/systems/pico2.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T09:43:58Z",
+      "finished_at_utc": "2026-11-06T09:43:59Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1475,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.323,
+        "build_firmware": 0.19,
+        "run_smoke": 0.913
+      },
+      "stages_ms": {
+        "build_cli": 323,
+        "build_firmware": 190,
+        "run_smoke": 913
+      },
+      "_artifact_path": "examples/pico2/evidence/pio"
+    },
+    {
+      "target_id": "pico2-bme280",
+      "status": "pass",
+      "crate": "firmware-pico2-bme280-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/pico2-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/pico2-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T01:51:40Z",
+      "finished_at_utc": "2026-11-06T01:51:41Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1155,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.338,
+        "build_firmware": 0.373,
+        "run_smoke": 0.403
+      },
+      "stages_ms": {
+        "build_cli": 338,
+        "build_firmware": 373,
+        "run_smoke": 403
+      },
+      "_artifact_path": "examples/pico2-bme280/evidence"
+    },
+    {
+      "target_id": "adafruit-pybadge",
+      "status": "pass",
+      "crate": "firmware-atsamd51-pybadge-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/pybadge/onboarding-smoke.yaml",
+      "system": "examples/pybadge/system.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T01:39:53Z",
+      "finished_at_utc": "2026-11-04T01:39:54Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1258,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.335,
+        "build_firmware": 0.469,
+        "run_smoke": 0.443
+      },
+      "stages_ms": {
+        "build_cli": 335,
+        "build_firmware": 469,
+        "run_smoke": 443
+      },
+      "_artifact_path": "examples/pybadge/evidence"
+    },
+    {
       "target_id": "raspberry-pi-pico-2-w",
       "status": "pass",
       "crate": "firmware-pico2-w-smoke",
@@ -1169,6 +4851,35 @@
         "run_smoke": 283
       },
       "_artifact_path": "examples/raspberry-pi-pico-2-w/evidence"
+    },
+    {
+      "target_id": "raspberry-pi-pico-2-w-bme280",
+      "status": "pass",
+      "crate": "firmware-pico2-w-bme280-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/raspberry-pi-pico-2-w-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/raspberry-pi-pico-2-w-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T05:26:07Z",
+      "finished_at_utc": "2026-11-06T05:26:08Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1289,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.326,
+        "build_firmware": 0.549,
+        "run_smoke": 0.374
+      },
+      "stages_ms": {
+        "build_cli": 326,
+        "build_firmware": 549,
+        "run_smoke": 374
+      },
+      "_artifact_path": "examples/raspberry-pi-pico-2-w-bme280/evidence"
     },
     {
       "target_id": "raspberry-pi-pico-w",
@@ -1200,6 +4911,241 @@
       "_artifact_path": "examples/raspberry-pi-pico-w/evidence"
     },
     {
+      "target_id": "raspberry-pi-pico-w-bme280",
+      "status": "pass",
+      "crate": "firmware-pico-w-bme280-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/raspberry-pi-pico-w-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/raspberry-pi-pico-w-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T03:53:38Z",
+      "finished_at_utc": "2026-11-06T03:54:12Z",
+      "elapsed_seconds": 34,
+      "elapsed_ms": 33627,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 31.549,
+        "build_firmware": 1.599,
+        "run_smoke": 0.436
+      },
+      "stages_ms": {
+        "build_cli": 31549,
+        "build_firmware": 1599,
+        "run_smoke": 436
+      },
+      "_artifact_path": "examples/raspberry-pi-pico-w-bme280/evidence"
+    },
+    {
+      "target_id": "rp2040-pio",
+      "status": "pass",
+      "crate": "firmware-rp2040-pio-onboarding",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/rp2040-pio/io-smoke.yaml",
+      "system": "examples/rp2040-pio/system.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T10:24:21Z",
+      "finished_at_utc": "2026-11-05T10:25:16Z",
+      "elapsed_seconds": 55,
+      "elapsed_ms": 54727,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 53.585,
+        "build_firmware": 0.203,
+        "run_smoke": 0.928
+      },
+      "stages_ms": {
+        "build_cli": 53585,
+        "build_firmware": 203,
+        "run_smoke": 928
+      },
+      "_artifact_path": "examples/rp2040-pio/evidence"
+    },
+    {
+      "target_id": "rp2350-zero",
+      "status": "pass",
+      "crate": "firmware-rp2350-zero-ws2812-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/rp2350-zero/uart-smoke.yaml",
+      "system": "configs/systems/rp2350-zero.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T14:43:34Z",
+      "finished_at_utc": "2026-11-06T14:44:11Z",
+      "elapsed_seconds": 37,
+      "elapsed_ms": 36750,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 36.05,
+        "build_firmware": 0.188,
+        "run_smoke": 0.472
+      },
+      "stages_ms": {
+        "build_cli": 36050,
+        "build_firmware": 188,
+        "run_smoke": 472
+      },
+      "_artifact_path": "examples/rp2350-zero/evidence"
+    },
+    {
+      "target_id": "seeed-xiao-esp32c3",
+      "status": "pass",
+      "crate": "firmware-xiao-esp32c3-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/seeed-xiao-esp32c3/onboarding-smoke.yaml",
+      "system": "configs/systems/seeed-xiao-esp32c3.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T02:27:48Z",
+      "finished_at_utc": "2026-11-05T02:27:49Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 993,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.297,
+        "build_firmware": 0.316,
+        "run_smoke": 0.368
+      },
+      "stages_ms": {
+        "build_cli": 297,
+        "build_firmware": 316,
+        "run_smoke": 368
+      },
+      "_artifact_path": "examples/seeed-xiao-esp32c3/evidence"
+    },
+    {
+      "target_id": "seeed-xiao-esp32c3-bme280",
+      "status": "pass",
+      "crate": "firmware-esp32c3-bme280-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/seeed-xiao-esp32c3-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/seeed-xiao-esp32c3-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T10:36:52Z",
+      "finished_at_utc": "2026-11-06T10:36:53Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1317,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.361,
+        "build_firmware": 0.24,
+        "run_smoke": 0.674
+      },
+      "stages_ms": {
+        "build_cli": 361,
+        "build_firmware": 240,
+        "run_smoke": 674
+      },
+      "firmware_build_script": "examples/seeed-xiao-esp32c3-bme280/build-firmware.sh",
+      "_artifact_path": "examples/seeed-xiao-esp32c3-bme280/evidence"
+    },
+    {
+      "target_id": "seeed-xiao-esp32c6",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/seeed-xiao-esp32c6/onboarding-smoke.yaml",
+      "system": "configs/systems/seeed-xiao-esp32c6.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T06:25:54Z",
+      "finished_at_utc": "2026-11-04T06:26:09Z",
+      "elapsed_seconds": 15,
+      "elapsed_ms": 14798,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.35,
+        "build_firmware": 0.087,
+        "run_smoke": 0.352
+      },
+      "stages_ms": {
+        "build_cli": 14350,
+        "build_firmware": 87,
+        "run_smoke": 352
+      },
+      "firmware_build_script": "examples/seeed-xiao-esp32c6/ci/build-firmware.sh",
+      "_artifact_path": "examples/seeed-xiao-esp32c6/evidence"
+    },
+    {
+      "target_id": "seeed-xiao-esp32c6-bme280",
+      "status": "pass",
+      "crate": "firmware-xiao-esp32c6-bme280-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/seeed-xiao-esp32c6-bme280/onboarding-smoke.yaml",
+      "system": "configs/systems/seeed-xiao-esp32c6-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T04:39:19Z",
+      "finished_at_utc": "2026-11-06T04:39:38Z",
+      "elapsed_seconds": 19,
+      "elapsed_ms": 18554,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.757,
+        "build_firmware": 0.918,
+        "run_smoke": 0.838
+      },
+      "stages_ms": {
+        "build_cli": 16757,
+        "build_firmware": 918,
+        "run_smoke": 838
+      },
+      "_artifact_path": "examples/seeed-xiao-esp32c6-bme280/evidence"
+    },
+    {
+      "target_id": "seeed-xiao-esp32s3",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/seeed-xiao-esp32s3/onboarding-smoke.yaml",
+      "system": "configs/systems/seeed-xiao-esp32s3.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T15:32:50Z",
+      "finished_at_utc": "2026-11-04T15:33:06Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16234,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.41,
+        "build_firmware": 0.484,
+        "run_smoke": 0.328
+      },
+      "stages_ms": {
+        "build_cli": 15410,
+        "build_firmware": 484,
+        "run_smoke": 328
+      },
+      "firmware_build_script": "examples/seeed-xiao-esp32s3/ci/build-firmware.sh",
+      "_artifact_path": "examples/seeed-xiao-esp32s3/evidence"
+    },
+    {
       "target_id": "seeed-xiao-rp2040",
       "status": "pass",
       "crate": "firmware-xiao-rp2040-smoke",
@@ -1229,6 +5175,238 @@
       "_artifact_path": "examples/seeed-xiao-rp2040/evidence"
     },
     {
+      "target_id": "seeed-xiao-rp2350",
+      "status": "pass",
+      "crate": "firmware-xiao-rp2350-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/seeed-xiao-rp2350/io-smoke.yaml",
+      "system": "configs/systems/seeed-xiao-rp2350.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T22:33:41Z",
+      "finished_at_utc": "2026-11-03T22:33:42Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1053,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.27,
+        "build_firmware": 0.465,
+        "run_smoke": 0.306
+      },
+      "stages_ms": {
+        "build_cli": 270,
+        "build_firmware": 465,
+        "run_smoke": 306
+      },
+      "_artifact_path": "examples/seeed-xiao-rp2350/evidence"
+    },
+    {
+      "target_id": "stm32f0-discovery",
+      "status": "pass",
+      "crate": "firmware-stm32f0-discovery-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/stm32f0-discovery/onboarding-smoke.yaml",
+      "system": "configs/systems/stm32f0-discovery.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T22:08:58Z",
+      "finished_at_utc": "2026-11-04T22:09:16Z",
+      "elapsed_seconds": 19,
+      "elapsed_ms": 18130,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 17.272,
+        "build_firmware": 0.573,
+        "run_smoke": 0.274
+      },
+      "stages_ms": {
+        "build_cli": 17272,
+        "build_firmware": 573,
+        "run_smoke": 274
+      },
+      "_artifact_path": "examples/stm32f0-discovery/evidence"
+    },
+    {
+      "target_id": "stm32f103c6t6a-gpio-smoke",
+      "status": "pass",
+      "crate": "firmware-stm32f103c6-gpio-smoke",
+      "target_triple": "thumbv7m-none-eabi",
+      "script": "examples/stm32f103c6t6a-gpio-smoke/io-smoke.yaml",
+      "system": "configs/systems/stm32f103c6t6a-gpio-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T09:51:12Z",
+      "finished_at_utc": "2026-11-05T09:51:30Z",
+      "elapsed_seconds": 19,
+      "elapsed_ms": 18048,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.838,
+        "build_firmware": 0.923,
+        "run_smoke": 0.277
+      },
+      "stages_ms": {
+        "build_cli": 16838,
+        "build_firmware": 923,
+        "run_smoke": 277
+      },
+      "_artifact_path": "examples/stm32f103c6t6a-gpio-smoke/evidence"
+    },
+    {
+      "target_id": "stm32f103c8-bluepill",
+      "status": "pass",
+      "crate": "firmware-stm32f103c8-bluepill-smoke",
+      "target_triple": "thumbv7m-none-eabi",
+      "script": "examples/stm32f103c8-bluepill/io-smoke.yaml",
+      "system": "configs/systems/stm32f103c8-bluepill.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T02:05:06Z",
+      "finished_at_utc": "2026-11-05T02:05:07Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1113,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.301,
+        "build_firmware": 0.516,
+        "run_smoke": 0.286
+      },
+      "stages_ms": {
+        "build_cli": 301,
+        "build_firmware": 516,
+        "run_smoke": 286
+      },
+      "_artifact_path": "examples/stm32f103c8-bluepill/evidence"
+    },
+    {
+      "target_id": "stm32f103r6t6a-gpio-smoke",
+      "status": "pass",
+      "crate": "firmware-stm32f103r6-gpio-smoke",
+      "target_triple": "thumbv7m-none-eabi",
+      "script": "examples/stm32f103r6t6a-gpio-smoke/io-smoke.yaml",
+      "system": "configs/systems/stm32f103r6t6a-gpio-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T10:53:45Z",
+      "finished_at_utc": "2026-11-06T10:54:04Z",
+      "elapsed_seconds": 19,
+      "elapsed_ms": 18930,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 18.109,
+        "build_firmware": 0.463,
+        "run_smoke": 0.313
+      },
+      "stages_ms": {
+        "build_cli": 18109,
+        "build_firmware": 463,
+        "run_smoke": 313
+      },
+      "_artifact_path": "examples/stm32f103r6t6a-gpio-smoke/evidence"
+    },
+    {
+      "target_id": "stm32f103r8t6-gpio-smoke",
+      "status": "pass",
+      "crate": "firmware-stm32f103r8-gpio-smoke",
+      "target_triple": "thumbv7m-none-eabi",
+      "script": "examples/stm32f103r8t6-gpio-smoke/io-smoke.yaml",
+      "system": "configs/systems/stm32f103r8t6-gpio-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T05:49:14Z",
+      "finished_at_utc": "2026-11-06T05:49:31Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16792,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.006,
+        "build_firmware": 0.456,
+        "run_smoke": 0.288
+      },
+      "stages_ms": {
+        "build_cli": 16006,
+        "build_firmware": 456,
+        "run_smoke": 288
+      },
+      "_artifact_path": "examples/stm32f103r8t6-gpio-smoke/evidence"
+    },
+    {
+      "target_id": "stm32f3-discovery",
+      "status": "pass",
+      "crate": "firmware-stm32f3-discovery-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/stm32f3-discovery/io-smoke.yaml",
+      "system": "configs/systems/stm32f3-discovery.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T21:31:52Z",
+      "finished_at_utc": "2026-11-04T21:32:10Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17652,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.858,
+        "build_firmware": 0.501,
+        "run_smoke": 0.284
+      },
+      "stages_ms": {
+        "build_cli": 16858,
+        "build_firmware": 501,
+        "run_smoke": 284
+      },
+      "_artifact_path": "examples/stm32f3-discovery/evidence"
+    },
+    {
+      "target_id": "stm32f3348-disco",
+      "status": "pass",
+      "crate": "firmware-stm32f3348-disco-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/stm32f3348-disco/onboarding-smoke.yaml",
+      "system": "configs/systems/stm32f3348-disco.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T23:08:43Z",
+      "finished_at_utc": "2026-11-04T23:08:45Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1199,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.454,
+        "build_firmware": 0.404,
+        "run_smoke": 0.331
+      },
+      "stages_ms": {
+        "build_cli": 454,
+        "build_firmware": 404,
+        "run_smoke": 331
+      },
+      "_artifact_path": "examples/stm32f3348-disco/evidence"
+    },
+    {
       "target_id": "stm32f4-discovery",
       "status": "pass",
       "crate": "firmware-f4-discovery-smoke",
@@ -1256,6 +5434,64 @@
         "run_smoke": 1665
       },
       "_artifact_path": "examples/stm32f4-discovery/evidence"
+    },
+    {
+      "target_id": "stm32f411ceu6-blackpill-led-smoke",
+      "status": "pass",
+      "crate": "firmware-stm32f411-blackpill-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/stm32f411ceu6-blackpill/led-onboarding-smoke.yaml",
+      "system": "configs/systems/stm32f411ceu6-blackpill-led-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T20:36:52Z",
+      "finished_at_utc": "2026-11-04T20:37:12Z",
+      "elapsed_seconds": 21,
+      "elapsed_ms": 20116,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 19.053,
+        "build_firmware": 0.644,
+        "run_smoke": 0.403
+      },
+      "stages_ms": {
+        "build_cli": 19053,
+        "build_firmware": 644,
+        "run_smoke": 403
+      },
+      "_artifact_path": "examples/stm32f411ceu6-blackpill/evidence/led-smoke"
+    },
+    {
+      "target_id": "stm32f429i-disc1",
+      "status": "pass",
+      "crate": "firmware-stm32f429i-disc1-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/stm32f429i-disc1/onboarding-smoke.yaml",
+      "system": "configs/systems/stm32f429i-disc1.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T23:28:59Z",
+      "finished_at_utc": "2026-11-04T23:29:21Z",
+      "elapsed_seconds": 23,
+      "elapsed_ms": 22579,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 21.723,
+        "build_firmware": 0.566,
+        "run_smoke": 0.278
+      },
+      "stages_ms": {
+        "build_cli": 21723,
+        "build_firmware": 566,
+        "run_smoke": 278
+      },
+      "_artifact_path": "examples/stm32f429i-disc1/evidence"
     },
     {
       "target_id": "stm32f746-discovery",
@@ -1316,6 +5552,181 @@
       "_artifact_path": "examples/stm32g071b-disco/evidence"
     },
     {
+      "target_id": "stm32h573i-dk",
+      "status": "pass",
+      "crate": "firmware-stm32h573i-dk-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/stm32h573i-dk/onboarding-smoke.yaml",
+      "system": "configs/systems/stm32h573i-dk-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T19:34:48Z",
+      "finished_at_utc": "2026-11-04T19:35:04Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16336,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.515,
+        "build_firmware": 0.482,
+        "run_smoke": 0.326
+      },
+      "stages_ms": {
+        "build_cli": 15515,
+        "build_firmware": 482,
+        "run_smoke": 326
+      },
+      "_artifact_path": "examples/stm32h573i-dk/evidence"
+    },
+    {
+      "target_id": "stm32h735g-dk",
+      "status": "pass",
+      "crate": "firmware-stm32h735g-dk-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/stm32h735g-dk/onboarding-smoke.yaml",
+      "system": "configs/systems/stm32h735g-dk.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T05:06:55Z",
+      "finished_at_utc": "2026-11-04T05:06:56Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1004,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.332,
+        "build_firmware": 0.357,
+        "run_smoke": 0.304
+      },
+      "stages_ms": {
+        "build_cli": 332,
+        "build_firmware": 357,
+        "run_smoke": 304
+      },
+      "_artifact_path": "examples/stm32h735g-dk/evidence"
+    },
+    {
+      "target_id": "teensy-40",
+      "status": "pass",
+      "crate": "firmware-teensy4-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/teensy-40/onboarding-smoke.yaml",
+      "system": "configs/systems/teensy-40.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T00:12:22Z",
+      "finished_at_utc": "2026-11-04T00:12:23Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1001,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.287,
+        "build_firmware": 0.429,
+        "run_smoke": 0.276
+      },
+      "stages_ms": {
+        "build_cli": 287,
+        "build_firmware": 429,
+        "run_smoke": 276
+      },
+      "_artifact_path": "examples/teensy-40/evidence"
+    },
+    {
+      "target_id": "teensy-41",
+      "status": "pass",
+      "crate": "firmware-teensy4-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/teensy-41/onboarding-smoke.yaml",
+      "system": "configs/systems/teensy-41.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T00:12:23Z",
+      "finished_at_utc": "2026-11-04T00:12:24Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 727,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.287,
+        "build_firmware": 0.153,
+        "run_smoke": 0.277
+      },
+      "stages_ms": {
+        "build_cli": 287,
+        "build_firmware": 153,
+        "run_smoke": 277
+      },
+      "_artifact_path": "examples/teensy-41/evidence"
+    },
+    {
+      "target_id": "waveshare-esp32c3-zero",
+      "status": "pass",
+      "crate": "firmware-esp32c3-waveshare-c3-zero-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/waveshare-esp32c3-zero/onboarding-smoke.yaml",
+      "system": "configs/systems/waveshare-esp32c3-zero.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T14:17:30Z",
+      "finished_at_utc": "2026-11-06T14:17:49Z",
+      "elapsed_seconds": 19,
+      "elapsed_ms": 18623,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 17.486,
+        "build_firmware": 0.586,
+        "run_smoke": 0.508
+      },
+      "stages_ms": {
+        "build_cli": 17486,
+        "build_firmware": 586,
+        "run_smoke": 508
+      },
+      "_artifact_path": "examples/waveshare-esp32c3-zero/evidence"
+    },
+    {
+      "target_id": "ch32v203c8t6-bluepill-plus",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/weact-bluepill-plus-ch32v203/onboarding-smoke.yaml",
+      "system": "configs/systems/weact-bluepill-plus-ch32v203-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T17:35:12Z",
+      "finished_at_utc": "2026-11-06T17:35:13Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1341,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.862,
+        "build_firmware": 0.083,
+        "run_smoke": 0.357
+      },
+      "stages_ms": {
+        "build_cli": 862,
+        "build_firmware": 83,
+        "run_smoke": 357
+      },
+      "firmware_build_script": "examples/weact-bluepill-plus-ch32v203/build-firmware.sh",
+      "_artifact_path": "examples/weact-bluepill-plus-ch32v203/evidence"
+    },
+    {
       "target_id": "xiao-nrf54l15",
       "status": "pass",
       "crate": "firmware-xiao-nrf54l15-smoke",
@@ -1343,6 +5754,35 @@
         "run_smoke": 254
       },
       "_artifact_path": "examples/xiao-nrf54l15/evidence"
+    },
+    {
+      "target_id": "xiao-nrf54l15-sense",
+      "status": "pass",
+      "crate": "firmware-xiao-nrf54l15-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/xiao-nrf54l15-sense/onboarding-smoke.yaml",
+      "system": "configs/systems/xiao-nrf54l15-sense.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T16:00:28Z",
+      "finished_at_utc": "2026-11-04T16:00:44Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16775,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.884,
+        "build_firmware": 0.565,
+        "run_smoke": 0.315
+      },
+      "stages_ms": {
+        "build_cli": 15884,
+        "build_firmware": 565,
+        "run_smoke": 315
+      },
+      "_artifact_path": "examples/xiao-nrf54l15-sense/evidence"
     }
   ]
 }
