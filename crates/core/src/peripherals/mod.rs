@@ -6,6 +6,7 @@
 
 pub mod adc;
 pub mod afio;
+pub mod alif_adc12;
 pub mod apollo4;
 pub mod apollo4_adc;
 pub mod armv7;

@@ -464,6 +464,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "lpc2000_adc",
     // Renesas RZ ADC_C, ADM0..3/ADINT/ADSTS/ADCRn (RZ/G FSP adc_c_iodefine.h).
     "renesas_adc_c",
+    // Alif Ensemble/Balletto ADC12 (alif_ensemble-cmsis-dfp ADC_Type, adc.h).
+    "alif_adc12",
     // STM32W108 sigma-delta ADC + DMA channel (DocID16252 Rev 16 ch. 11).
     "stm32w108_adc",
     // MSP430 ADC12 (F1/F2) and ADC12_A (F5) (mspsim ADC12.java, TI headers).
@@ -2080,6 +2082,14 @@ pub fn try_build(
                 .get("channels")
                 .and_then(|v| v.as_u64())
                 .map_or(8, |v| v.min(9) as u8),
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(1800, |v| v as u32),
+        )),
+        // `vref_mv`: the ADC12 reference (no public source; 1800 assumed).
+        "alif_adc12" => Box::new(crate::peripherals::alif_adc12::AlifAdc12::new(
             p_cfg
                 .config
                 .get("vref_mv")

@@ -31,6 +31,7 @@ const IDLE_CHANNEL: u8 = 7;
 
 /// Onboarding profiles whose ADC is converted end to end here.
 const CONVERTED: &[&str] = &[
+    "alif_ae822fa0e5597bs0",
     "ambiq-apollo4",
     "arduino_nano_33_ble",
     "arduino_uno_r4_minima",
@@ -396,7 +397,30 @@ enum Family {
     /// (2^12 - 1) / VREF, VREF from the descriptor's `vref_mv` (1.8 V on
     /// RZ/G2L).
     RenesasAdcC { vref_mv: u32 },
+    /// Alif ADC12 (`alif_adc12`), the Zephyr `adc_alif.c` single-shot read:
+    /// e1.dtsi defaults (`ADC_AVG_NUM` 256, shift 8 right), fixed scan,
+    /// channel masks `~BIT(ch) & 0x1FF`, initial channel `ch`, `ENA` then
+    /// `ADC_CONTROL` bit 0, DONE1, `ADC_SAMPLE_REG_[ADC_SEL]`. 12 bits,
+    /// (2^12 - 1) / VREF, VREF from the descriptor's `vref_mv`.
+    AlifAdc12 { vref_mv: u32 },
 }
+
+/// Alif ADC12 offsets and bits (alif_ensemble-cmsis-dfp soc.h `ADC_Type`,
+/// drivers/include/adc.h).
+const ALIF_START_SRC: u64 = 0x00;
+const ALIF_INTERRUPT: u64 = 0x10;
+const ALIF_INTERRUPT_MASK: u64 = 0x14;
+const ALIF_AVG_NUM: u64 = 0x20;
+const ALIF_SHIFT_CONTROL: u64 = 0x24;
+const ALIF_CONTROL: u64 = 0x30;
+const ALIF_SEQUENCER_CTRL: u64 = 0x34;
+const ALIF_SEL: u64 = 0x3C;
+const ALIF_SAMPLE_REG0: u64 = 0x50;
+const ALIF_ENA: u32 = 1 << 7;
+const ALIF_SINGLE_SHOT: u32 = 1 << 0;
+const ALIF_DONE1: u32 = 1 << 1;
+const ALIF_FIXED_SCAN: u32 = 1 << 16;
+const ALIF_SHIFT_RIGHT: u32 = 1 << 16;
 
 /// RZ ADC_C offsets and bits (RZ/G FSP R9A07G044L adc_c_iobitmask.h).
 const ADCC_ADM0: u64 = 0x00;
@@ -721,6 +745,14 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Stm32L1Adc
         } else if kind == "lpc2000_adc" {
             Family::Lpc2000Adc
+        } else if kind == "alif_adc12" {
+            Family::AlifAdc12 {
+                vref_mv: p
+                    .config
+                    .get("vref_mv")
+                    .and_then(|v| v.as_u64())
+                    .map_or(1800, |mv| mv as u32),
+            }
         } else if kind == "renesas_adc_c" {
             Family::RenesasAdcC {
                 vref_mv: p
@@ -857,6 +889,8 @@ impl Converter {
             // (2^12 - 1) / VREF, truncated, clamped: at 1.8 V the -10 °C
             // divider (2.79 V) saturates, 25/80 °C resolve.
             Family::RenesasAdcC { vref_mv } => (mv * 4095 / vref_mv).min(4095),
+            // The same scale after 256 accumulated samples shifted right 8.
+            Family::AlifAdc12 { vref_mv } => (mv * 4095 / vref_mv).min(4095),
             // Against GND: raw 32768 * V / 1.2 V floored and limited to
             // 32767, 12 significant bits (low 4 cleared), halved by the
             // offset/gain stage at reset OFFSET/GAIN.
@@ -893,6 +927,9 @@ impl Converter {
             // on xG1 and xG13 (`_GPIO_PORT_A_PIN_MASK` 0x003F, SDID 80/89),
             // so PA6/PA7 do not exist there.
             Family::Efr32S1Adc => [3, 4],
+            // ANA_S3/S4 (P0_3/P0_4 on ADC120): channels 6 and 7 are the
+            // internal temperature sensor and VREF (sdk-alif adc.rst).
+            Family::AlifAdc12 { .. } => [3, 4],
             // CH6 on PD6 and CH7 on PD7, the pads the vendor series0/adc
             // examples name on every Series-0 family. emlib em_gpio.h bonds
             // PD4..PD7 on Happy Gecko (`_GPIO_PORT_D_PIN_MASK` 0x00F0).
@@ -927,6 +964,8 @@ impl Converter {
         match self.family {
             // PA5, the last port-A pad on every Series-1 die.
             Family::Efr32S1Adc => 5,
+            // ANA_S5 (P0_5 on ADC120), the last external input.
+            Family::AlifAdc12 { .. } => 5,
             // CH5 (PD5): inside the HG PD4..PD7 mask too.
             Family::Efm32S0Adc => 5,
             // AD17: PTE24 on ADC0, PTA17 on ADC1.
@@ -1005,6 +1044,25 @@ impl Converter {
                     self.id
                 );
                 bus.write_u32(self.base + W108_DMACR, 1 << 4).expect("RST");
+            }
+            Family::AlifAdc12 { .. } => {
+                // CONTROL bit 0 without START_SRC.ENA converts nothing.
+                bus.write_u32(self.base + ALIF_CONTROL, ALIF_SINGLE_SHOT)
+                    .expect("start without ENA");
+                assert_eq!(
+                    bus.read_u32(self.base + ALIF_INTERRUPT).unwrap(),
+                    0,
+                    "{}: no conversion without ENA",
+                    self.id
+                );
+                bus.write_u32(self.base + ALIF_CONTROL, 0).expect("CONTROL");
+                // adc_hw_init with the e1.dtsi defaults, fixed scan.
+                bus.write_u32(self.base + ALIF_AVG_NUM, 256)
+                    .expect("AVG_NUM");
+                bus.write_u32(self.base + ALIF_SHIFT_CONTROL, 8 | ALIF_SHIFT_RIGHT)
+                    .expect("shift 8 right");
+                bus.write_u32(self.base + ALIF_SEQUENCER_CTRL, ALIF_FIXED_SCAN)
+                    .expect("fixed scan");
             }
             Family::RenesasAdcC { .. } => {
                 // ADCE in software reset (SRESB = 0) converts nothing.
@@ -3042,6 +3100,38 @@ impl Converter {
                 bus.write_u32(self.base + W108_CR, 0).expect("ADC off");
                 u32::from(bus.read_u16(W108_BUFFER).unwrap())
             }
+            Family::AlifAdc12 { .. } => {
+                // adc_channel_select + adc_start_read + the DONE1 ISR + stop.
+                let seq = self.base + ALIF_SEQUENCER_CTRL;
+                let init = bus.read_u32(seq).unwrap() & !(0xF << 12);
+                bus.write_u32(seq, init | (u32::from(channel) << 12))
+                    .expect("initial channel");
+                let masks = bus.read_u32(seq).unwrap() & !0x1FF;
+                bus.write_u32(seq, masks | (!(1u32 << channel) & 0x1FF))
+                    .expect("mask the other channels");
+                bus.write_u32(self.base + ALIF_INTERRUPT_MASK, !0b11 & 0xF)
+                    .expect("unmask DONE0/DONE1");
+                let src = bus.read_u32(self.base + ALIF_START_SRC).unwrap();
+                bus.write_u32(self.base + ALIF_START_SRC, src | ALIF_ENA)
+                    .expect("ENA");
+                let ctl = bus.read_u32(self.base + ALIF_CONTROL).unwrap();
+                bus.write_u32(self.base + ALIF_CONTROL, ctl | ALIF_SINGLE_SHOT)
+                    .expect("single shot");
+                let irq = bus.read_u32(self.base + ALIF_INTERRUPT).unwrap();
+                assert_ne!(irq & ALIF_DONE1, 0, "{}: DONE1", self.id);
+                bus.write_u32(self.base + ALIF_INTERRUPT, 0xF)
+                    .expect("clear");
+                let sel = bus.read_u32(self.base + ALIF_SEL).unwrap();
+                assert_eq!(sel, u32::from(channel), "{}: ADC_SEL", self.id);
+                let value = bus
+                    .read_u32(self.base + ALIF_SAMPLE_REG0 + 4 * u64::from(sel))
+                    .unwrap();
+                bus.write_u32(self.base + ALIF_START_SRC, src & !ALIF_ENA)
+                    .expect("disable ENA");
+                bus.write_u32(self.base + ALIF_CONTROL, ctl & !ALIF_SINGLE_SHOT)
+                    .expect("disable single shot");
+                value
+            }
             Family::RenesasAdcC { .. } => {
                 // rzg2l_adc_conversion_setup + start + ISR.
                 let adm0 = self.base + ADCC_ADM0;
@@ -3992,6 +4082,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Stm32L1Adc
                 | Family::Lpc2000Adc
                 | Family::RenesasAdcC { .. }
+                | Family::AlifAdc12 { .. }
                 | Family::Stm32w108Adc
                 | Family::NxpLpadc { .. }
                 | Family::RaAdc { .. }
@@ -4082,7 +4173,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 168,
+        instances, 171,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -4090,7 +4181,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 79,
+        without_adc, 78,
         "onboarding profiles that declare no modelled ADC"
     );
 }
