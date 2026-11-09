@@ -1,6 +1,7 @@
 //! UT32M0R500 (Frontgrade/CAES, Cortex-M0+) smoke on the Renode
 //! platform surface: UART0 + UART1 (Gaisler APBUART) and the three Arm
-//! CMSDK AHB GPIO banks with the UT32 pull registers.
+//! CMSDK AHB GPIO banks with the UT32 pull registers, plus both ARM SP804
+//! dual-timer windows.
 //!
 //! GPIO register map: Frontgrade application note "UT32M0R500 Enable the
 //! GPIO" (12/21/2017) and Renode `ARM_AHB_GPIO`. GPIO number = 16 * bank + n.
@@ -17,7 +18,9 @@
 //!   8 outenclr OUTENCLR releases pin 0; DATA follows its pull-down
 //!   9 intedge  GPIO1 pin 1 rising-edge INTSTATUS latches; write 1 clears
 //!  10 sram     a pattern at the top of the 96 KiB SRAM reads back
-//! The summary word 0x5E32_0000 | pass mask (all pass: 0x5E32_03FF) goes to
+//!  11 timer    SP804 timer0 channel 1 and timer1 channel 2 count down, set
+//!              RIS/MIS, and clear their interrupt latches
+//! The summary word 0x5E32_0000 | pass mask (all pass: 0x5E32_07FF) goes to
 //! 0x2001_7F00. GPIO2 pin 13 (GPIO 45, the app note's output) then pulses
 //! three times, and UART1 prints one line last.
 
@@ -39,6 +42,13 @@ const UART_TX_READY: u32 = 0x06; // TS | TE
 const GPIO0: u32 = 0x4002_0000;
 const GPIO1: u32 = 0x4002_1000;
 const GPIO2: u32 = 0x4002_2000;
+const TIMER0: u32 = 0x4000_1000;
+const TIMER1: u32 = 0x4000_2000;
+const TIMER_LOAD: u32 = 0x00;
+const TIMER_CONTROL: u32 = 0x08;
+const TIMER_INTCLR: u32 = 0x0C;
+const TIMER_RIS: u32 = 0x10;
+const TIMER_MIS: u32 = 0x14;
 const DATA: u32 = 0x00;
 const DATAOUT: u32 = 0x04;
 const OUTENSET: u32 = 0x10;
@@ -149,6 +159,36 @@ fn check_sram_top() -> bool {
     ok && rd(SRAM_TOP_WORD) == !0x5A5A_C3C3
 }
 
+fn check_sp804() -> bool {
+    // Exercise one channel in each SP804 block. The control value selects
+    // enabled, periodic, 32-bit operation with its interrupt output enabled.
+    for (base, channel) in [(TIMER0, 0), (TIMER1, 1)] {
+        let load = base + channel * 0x20 + TIMER_LOAD;
+        let control = base + channel * 0x20 + TIMER_CONTROL;
+        let intclr = base + channel * 0x20 + TIMER_INTCLR;
+        let ris = base + channel * 0x20 + TIMER_RIS;
+        let mis = base + channel * 0x20 + TIMER_MIS;
+        wr(intclr, 0);
+        wr(load, 32);
+        wr(control, (1 << 7) | (1 << 6) | (1 << 5) | (1 << 1));
+        let mut fired = false;
+        for _ in 0..256 {
+            if rd(ris) & 1 != 0 {
+                fired = true;
+                break;
+            }
+        }
+        let masked = rd(mis) & 1 != 0;
+        wr(intclr, 0);
+        let cleared = rd(ris) & 1 == 0 && rd(mis) & 1 == 0;
+        wr(control, 0x20);
+        if !(fired && masked && cleared) {
+            return false;
+        }
+    }
+    true
+}
+
 #[entry]
 fn main() -> ! {
     puts(UART0, b"UT32M0R500 Cortex-M0+ UART0 smoke\n");
@@ -164,6 +204,7 @@ fn main() -> ! {
         check_outen_clear(),
         check_int_edge(),
         check_sram_top(),
+        check_sp804(),
     ];
 
     let mut mask = 0u32;

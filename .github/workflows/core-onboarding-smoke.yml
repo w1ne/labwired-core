@@ -479,8 +479,8 @@ jobs:
             script: examples/renode-onboarding/s32k118-smoke.yaml
             system: configs/systems/onboarding/s32k118.yaml
           # UT32M0R500 is bounded to its sourced M0+ core, code flash, SRAM,
-          # and modeled Gaisler UART0. The other imported peripheral windows
-          # are omitted from this profile.
+          # and modeled Gaisler UARTs, CMSDK GPIO banks and SP804 timers. Other
+          # imported peripheral windows are omitted from this profile.
           - id: ut32m0r500
             crate: firmware-ut32m0r500-smoke
             target: thumbv6m-none-eabi

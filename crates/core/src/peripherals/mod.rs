@@ -7,6 +7,7 @@
 pub mod adc;
 pub mod afio;
 pub mod apollo4;
+pub mod arm_sp804;
 pub mod armv7;
 pub mod avr_adc;
 pub mod avr_gpio;

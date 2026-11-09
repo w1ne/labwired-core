@@ -177,7 +177,7 @@ impl SystemBus {
         if t.contains("rcc") || t.contains("cmu") {
             return "rcc".to_string();
         }
-        if t == "arm_generictimer" || t == "arm_globaltimer" || t == "arm_sp804_timer" {
+        if t == "arm_generictimer" || t == "arm_globaltimer" {
             return "systick".to_string();
         }
         if t.contains("timer") || t.ends_with("_gpt") || t.ends_with("_agt") {
