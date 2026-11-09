@@ -292,8 +292,10 @@ peripherals:
     type: "rtc_f1"
     base_address: 0x40002800
     size: "1KB"
+    irq: 3  # RTC global (SECF/ALRF/OWF)
     config:
       debug_schema: "../peripherals/stm32f103/rtc.yaml"
+      alarm_irq: 41  # RTC_Alarm via EXTI line 17
   - id: "crc"
     type: "crc"
     base_address: 0x40023000

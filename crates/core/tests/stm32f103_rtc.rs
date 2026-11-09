@@ -112,3 +112,75 @@ fn counter_advances_one_second_per_72m_cycles() {
     bus.set_current_cycle(start + 3 * 72_000_000);
     assert_eq!(cnt(bus), 45_299);
 }
+
+/// SECIE and ALRIE through the shipped chip config: the scheduler event at
+/// each counter second pends RTC_IRQn (3) and, at the alarm match,
+/// RTC_Alarm_IRQn (41). The NVIC lines stay disabled, so the pends stay
+/// visible in ISPR.
+#[cfg(feature = "event-scheduler")]
+#[test]
+fn second_and_alarm_interrupts_pend_their_nvic_lines() {
+    const RTC_CRH: u64 = 0x4000_2800;
+    const RTC_ALRH: u64 = 0x4000_2820;
+    const RTC_ALRL: u64 = 0x4000_2824;
+    const NVIC_ISPR0: u64 = 0xE000_E200;
+    const NVIC_ICPR0: u64 = 0xE000_E280;
+    const NVIC_ISPR1: u64 = 0xE000_E204;
+    const SECF: u32 = 1 << 0;
+    const ALRF: u32 = 1 << 1;
+    let mut machine = idle_machine();
+    {
+        let bus = &mut machine.bus;
+        enable_rtc_clock(bus);
+        // PRL = 7: one counter second is 8 RTCCLK ticks (~17.6 k cycles).
+        bus.write_u32(RTC_CRL, CNF).unwrap();
+        bus.write_u32(RTC_PRLL, 7).unwrap();
+        bus.write_u32(RTC_CNTH, 0).unwrap();
+        bus.write_u32(RTC_CNTL, 10).unwrap();
+        bus.write_u32(RTC_ALRH, 0).unwrap();
+        bus.write_u32(RTC_ALRL, 12).unwrap();
+        bus.write_u32(RTC_CRL, RSF).unwrap();
+        bus.write_u32(RTC_CRH, 0b011).unwrap(); // SECIE | ALRIE
+    }
+    let step_until = |machine: &mut Machine<_>, count: u32| {
+        let mut steps = 0;
+        while cnt(&mut machine.bus) < count {
+            machine.step().unwrap();
+            steps += 1;
+            assert!(steps < 1_000_000, "counter stuck below {count}");
+        }
+        // Let the scheduler drain the event at the edge.
+        for _ in 0..64 {
+            machine.step().unwrap();
+        }
+    };
+    step_until(&mut machine, 11);
+    let bus = &mut machine.bus;
+    assert_ne!(
+        bus.read_u32(NVIC_ISPR0).unwrap() & (1 << 3),
+        0,
+        "RTC_IRQn on SECF"
+    );
+    assert_eq!(
+        bus.read_u32(NVIC_ISPR1).unwrap() & (1 << 9),
+        0,
+        "no alarm at CNT 11"
+    );
+    // The handler: clear SECF and the pend.
+    bus.write_u32(RTC_CRL, RSF | ALRF).unwrap();
+    bus.write_u32(NVIC_ICPR0, 1 << 3).unwrap();
+    assert_eq!(bus.read_u32(RTC_CRL).unwrap() & SECF, 0);
+    step_until(&mut machine, 12);
+    let bus = &mut machine.bus;
+    assert_ne!(bus.read_u32(RTC_CRL).unwrap() & ALRF, 0, "ALRF at CNT 12");
+    assert_ne!(
+        bus.read_u32(NVIC_ISPR1).unwrap() & (1 << 9),
+        0,
+        "RTC_Alarm_IRQn"
+    );
+    assert_ne!(
+        bus.read_u32(NVIC_ISPR0).unwrap() & (1 << 3),
+        0,
+        "RTC_IRQn again"
+    );
+}

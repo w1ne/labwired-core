@@ -37,8 +37,19 @@
 //! CNT/PRL/ALR writes take effect only in configuration mode (CRL.CNF=1),
 //! as on silicon; RTOFF always reads 1 (writes complete at once).
 //!
-//! NOT modelled: the SECIE/ALRIE/OWIE interrupts (flags set, no IRQ), the
-//! RTCSEL clock source (LSI or HSE/128 run at the LSE rate), RCC_BDCR.RTCEN
+//! ## Interrupts
+//!
+//! With the event scheduler, while any CRH enable bit is set the model
+//! schedules one event per counter second. The event latches the flags and
+//! pends the RTC global interrupt (the entry's own `irq`, RTC_IRQn 3 on F1)
+//! for each newly set flag whose enable bit is set (SECF/SECIE, ALRF/ALRIE,
+//! OWF/OWIE). A new ALRF with ALRIE set also pends `alarm_irq`
+//! (RTC_Alarm_IRQn 41, which silicon routes through EXTI line 17). Setting
+//! an enable bit while its flag is already latched pends at once.
+//!
+//! NOT modelled: EXTI line 17 itself (its IMR does not gate `alarm_irq` and
+//! EXTI_PR bit 17 never sets), the level behaviour of a flag that firmware
+//! leaves set (one pend per raised flag), the RTCSEL clock source (LSI or HSE/128 run at the LSE rate), RCC_BDCR.RTCEN
 //! gating (cold silicon reads CRL as 0; this model reads the 0x0020 reset
 //! value), backup-domain reset, and any skew when firmware moves the CPU
 //! clock away from `clock_hz`.
@@ -86,6 +97,16 @@ pub struct RtcF1 {
     rsf_due: Option<u64>,
     /// Set by the first write: the RTC is clocked and the time base runs.
     running: bool,
+    /// NVIC line of the RTC alarm interrupt (EXTI line 17), if wired.
+    alarm_irq: Option<u32>,
+    /// Bumped on every reschedule; an event whose token no longer matches
+    /// was superseded and is dropped.
+    generation: u32,
+    /// Flags raised (or newly enabled while latched) since the last
+    /// event: the next event pends an interrupt for the enabled ones.
+    undelivered: u32,
+    #[serde(skip)]
+    pending_events: Vec<(u64, u32)>,
     #[serde(skip)]
     clock: Option<CycleClock>,
 }
@@ -109,8 +130,18 @@ impl RtcF1 {
             // registers resynchronise.
             rsf_due: Some(u64::MAX),
             running: false,
+            alarm_irq: None,
+            generation: 0,
+            undelivered: 0,
+            pending_events: Vec::new(),
             clock: None,
         }
+    }
+
+    /// Wire the RTC alarm interrupt (RTC_Alarm_IRQn) to NVIC line `irq`.
+    pub fn with_alarm_irq(mut self, irq: u32) -> Self {
+        self.alarm_irq = Some(irq);
+        self
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -126,6 +157,39 @@ impl RtcF1 {
     /// RTCCLK ticks elapsed at CPU cycle `cycle`.
     fn ticks_at(&self, cycle: u64) -> u64 {
         (u128::from(cycle) * u128::from(RTCCLK_HZ) / u128::from(self.clock_hz)) as u64
+    }
+
+    /// First CPU cycle at which `ticks` RTCCLK ticks have elapsed.
+    fn cycle_of_tick(&self, ticks: u64) -> u64 {
+        (u128::from(ticks) * u128::from(self.clock_hz)).div_ceil(u128::from(RTCCLK_HZ)) as u64
+    }
+
+    /// CPU cycles from now to the next counter increment. Call after
+    /// [`Self::rebase`], so the anchor is the current cycle.
+    fn cycles_to_next_second(&self) -> u64 {
+        let period = u64::from(self.prl) + 1;
+        let now = self.now_cycle();
+        let edge = self.ticks_at(self.anchor_cycle) + (period - self.anchor_phase);
+        self.cycle_of_tick(edge).saturating_sub(now).max(1)
+    }
+
+    /// Cancel any scheduled event and, while an interrupt is enabled, arm
+    /// one for the next counter second (or at once for an undelivered
+    /// enabled flag).
+    fn reschedule(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.pending_events.clear();
+        if !self.scheduler_mode() || !self.running || self.crh & 0x7 == 0 {
+            return;
+        }
+        self.rebase();
+        // The bus adds one cycle to every write-scheduled delay.
+        let delay = if self.undelivered & self.crl & self.crh != 0 {
+            0
+        } else {
+            self.cycles_to_next_second() - 1
+        };
+        self.pending_events.push((delay, self.generation));
     }
 
     /// CPU cycles in one RTCCLK period (at least 1).
@@ -166,6 +230,7 @@ impl RtcF1 {
     fn rebase(&mut self) {
         let s = self.state();
         self.crl |= s.flags;
+        self.undelivered |= s.flags;
         self.anchor_cnt = s.cnt;
         self.anchor_phase = s.phase;
         self.anchor_cycle = self.now_cycle();
@@ -211,7 +276,12 @@ impl RtcF1 {
         }
         let cnf = self.crl & CNF != 0;
         match offset {
-            0x00 => self.crh = value & 0x7,
+            0x00 => {
+                self.rebase();
+                let enabled = value & 0x7 & !self.crh;
+                self.undelivered |= self.crl & enabled;
+                self.crh = value & 0x7;
+            }
             0x04 => {
                 self.rebase();
                 // SECF/ALRF/OWF/RSF are rc_w0: writing 0 clears, 1 keeps.
@@ -257,8 +327,10 @@ impl RtcF1 {
             0x08 | 0x0C | 0x18 | 0x1C | 0x20 | 0x24 => {}
             _ => {
                 crate::census_reg!("rtc_f1:RtcF1", offset, "write");
+                return;
             }
         }
+        self.reschedule();
     }
 }
 
@@ -305,6 +377,35 @@ impl crate::Peripheral for RtcF1 {
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
         self.clock = Some(clock);
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        std::mem::take(&mut self.pending_events)
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if event_token != self.generation || self.crh & 0x7 == 0 {
+            return crate::sched::EventResult::default();
+        }
+        self.rebase();
+        // A flag firmware has cleared since it was raised pends nothing.
+        let fire = std::mem::take(&mut self.undelivered) & self.crl & self.crh;
+        let alarm = fire & ALRF != 0;
+        crate::sched::EventResult {
+            raise_own_irq: fire != 0,
+            explicit_irqs: self.alarm_irq.filter(|_| alarm).into_iter().collect(),
+            reschedule_delay: Some(self.cycles_to_next_second()),
+            ..Default::default()
+        }
     }
 
     fn snapshot(&self) -> serde_json::Value {
@@ -467,6 +568,105 @@ mod tests {
             clock.publish(3 * HZ);
             assert_ne!(read32(&r, 0x04) & SECF, 0, "next second");
             assert_eq!(cnt(&r), 13);
+        }
+
+        /// Deliver the scheduled event at cycle `at`.
+        fn fire(
+            r: &mut RtcF1,
+            clock: &CycleClock,
+            token: u32,
+            at: u64,
+        ) -> crate::sched::EventResult {
+            clock.publish(at);
+            let mut sched = crate::sched::EventScheduler::new();
+            sched.advance_to(at);
+            let mut bus = crate::bus::SystemBus::new();
+            r.on_event(token, &mut sched, &mut bus)
+        }
+
+        #[test]
+        fn no_event_until_an_interrupt_is_enabled() {
+            let (mut r, _clock) = clocked();
+            init(&mut r, 10, 12);
+            assert!(r.take_scheduled_events().is_empty());
+        }
+
+        #[test]
+        fn secie_pends_the_global_irq_once_per_second() {
+            let (mut r, clock) = clocked();
+            init(&mut r, 10, 0xFFFF_FFFF);
+            w(&mut r, 0x00, 1); // SECIE
+            let ev = r.take_scheduled_events();
+            assert_eq!(ev.len(), 1);
+            let (delay, token) = ev[0];
+            // The bus adds one cycle: the event lands on the second edge.
+            assert_eq!(delay + 1, HZ);
+            let res = fire(&mut r, &clock, token, HZ);
+            assert!(res.raise_own_irq, "SECF raised with SECIE set");
+            assert!(res.explicit_irqs.is_empty(), "no alarm line");
+            assert_eq!(res.reschedule_delay, Some(HZ));
+            // The handler clears SECF: that write supersedes the chain.
+            w(&mut r, 0x04, RSF | ALRF | OWF);
+            let (delay, token2) = r.take_scheduled_events()[0];
+            assert_ne!(token, token2);
+            assert_eq!(delay + 1, HZ);
+            assert!(!fire(&mut r, &clock, token, 2 * HZ).raise_own_irq, "stale");
+            assert!(fire(&mut r, &clock, token2, 2 * HZ).raise_own_irq);
+            assert_eq!(cnt(&r), 12);
+        }
+
+        #[test]
+        fn alrie_pends_global_and_alarm_irq_at_the_match_only() {
+            let (mut r, clock) = clocked();
+            r.alarm_irq = Some(41);
+            init(&mut r, 10, 12);
+            w(&mut r, 0x00, 2); // ALRIE
+            let token = r.take_scheduled_events()[0].1;
+            let res = fire(&mut r, &clock, token, HZ);
+            assert!(!res.raise_own_irq, "CNT 11: no alarm yet");
+            let res = fire(&mut r, &clock, token, 2 * HZ);
+            assert!(res.raise_own_irq);
+            assert_eq!(res.explicit_irqs, vec![41], "RTC_Alarm line");
+        }
+
+        #[test]
+        fn a_flag_latched_by_a_write_still_pends() {
+            // The second passes, then firmware writes before the event drains:
+            // the write latches SECF, and the event must still pend it.
+            let (mut r, clock) = clocked();
+            init(&mut r, 0, 0xFFFF_FFFF);
+            w(&mut r, 0x00, 1);
+            let _ = r.take_scheduled_events();
+            clock.publish(HZ + 10);
+            w(&mut r, 0x00, 1);
+            let (delay, token) = r.take_scheduled_events()[0];
+            assert_eq!(delay, 0, "undelivered SECF fires at once");
+            assert!(fire(&mut r, &clock, token, HZ + 11).raise_own_irq);
+        }
+
+        #[test]
+        fn enabling_an_interrupt_on_a_latched_flag_pends_at_once() {
+            let (mut r, clock) = clocked();
+            init(&mut r, 0, 0xFFFF_FFFF);
+            clock.publish(3 * HZ);
+            assert_ne!(read32(&r, 0x04) & SECF, 0);
+            w(&mut r, 0x00, 1);
+            let (delay, token) = r.take_scheduled_events()[0];
+            assert_eq!(delay, 0);
+            assert!(fire(&mut r, &clock, token, 3 * HZ + 1).raise_own_irq);
+        }
+
+        #[test]
+        fn a_cleared_flag_pends_nothing() {
+            let (mut r, clock) = clocked();
+            init(&mut r, 0, 0xFFFF_FFFF);
+            w(&mut r, 0x00, 1);
+            let token = r.take_scheduled_events()[0].1;
+            clock.publish(HZ);
+            // Disabling SECIE cancels the chain.
+            w(&mut r, 0x00, 0);
+            assert!(r.take_scheduled_events().is_empty());
+            assert!(!fire(&mut r, &clock, token, HZ).raise_own_irq);
         }
 
         #[test]

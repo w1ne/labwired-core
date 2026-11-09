@@ -6926,7 +6926,7 @@ boards:
     # still 0x0020 at reset (CRL stays unpinned). ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 8898c25fceb5fb07dbf4e82fb162d33125311980d3eb72cb50deefc5176bc15d
+    drift_ack_digest: 770bb7485ed5c6e5bc031cf0017564f4704873da13194c0119390ac927e77ff0
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
