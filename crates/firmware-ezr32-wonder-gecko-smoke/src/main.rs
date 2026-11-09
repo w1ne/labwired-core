@@ -14,12 +14,12 @@ use panic_halt as _;
 #[path = "../../firmware-efm32gg995-smoke/src/s0.rs"]
 mod s0;
 
-#[path = "../../firmware-ezr32-330-smoke/src/ezr32_uarts.rs"]
-mod ezr32_uarts;
+#[path = "../../firmware-efm32gg995-smoke/src/s0_uarts.rs"]
+mod s0_uarts;
 
 #[entry]
 fn main() -> ! {
-    ezr32_uarts::announce(&[
+    s0_uarts::announce(&[
         ("uart1", 0x4000_E400),
         ("usart1", 0x4000_C400),
         ("usart2", 0x4000_C800),

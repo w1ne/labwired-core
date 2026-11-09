@@ -6,18 +6,10 @@
 
 name: stk3700
 arch: arm
-# Cortex-M3 execution profile narrowed to the imported memory windows and the
-# model-backed UART0 path exercised by the onboarding smoke. Other imported
-# peripherals are omitted until they have model-backed checks.
-core: cortex-m3
-flash:
-  base: 134217728
-  size: 1048576B
-ram:
-  base: 536870912
-  size: 131072B
-peripherals:
-- id: uart0
-  type: efm32_uart
-  bus: sysbus
-  base_address: 1073799168
+# EFM32GG-STK3700 (Giant Gecko starter kit, EFM32GG990F1024). Renode
+# platforms/boards/silabs/stk3700.repl is
+# cpus/silabs/efm32xg/efm32gg995.repl plus two LEDs, two buttons and a
+# deviceInformation override, so the chip surface is the efm32gg995
+# onboarding profile, included whole. The deviceInformation block
+# (0x0FE081B0) is not declared: no model behind it.
+include: efm32gg995.yaml

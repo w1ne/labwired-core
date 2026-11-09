@@ -6,32 +6,32 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 100000,
+    "instructions": 400000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
-  "crate": "firmware-efm32-stk-m3-smoke",
+  "crate": "firmware-efm32lg995-smoke",
   "target_triple": "thumbv7m-none-eabi",
   "script": "examples/renode-onboarding/stk3600-smoke.yaml",
   "system": "configs/systems/onboarding/stk3600.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:49:56Z",
-  "finished_at_utc": "2026-11-05T14:49:58Z",
+  "started_at_utc": "2026-11-09T11:56:54Z",
+  "finished_at_utc": "2026-11-09T11:56:55Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1303,
+  "elapsed_ms": 1171,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.337,
-    "build_firmware": 0.644,
-    "run_smoke": 0.308
+    "build_cli": 0.41,
+    "build_firmware": 0.311,
+    "run_smoke": 0.437
   },
   "stages_ms": {
-    "build_cli": 337,
-    "build_firmware": 644,
-    "run_smoke": 308
+    "build_cli": 410,
+    "build_firmware": 311,
+    "run_smoke": 437
   }
 }

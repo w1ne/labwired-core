@@ -18,9 +18,9 @@
       536870912,
       536899520,
       1073799168,
-      19674
+      18512
     ],
-    "pc": 19674,
+    "pc": 18512,
     "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "5f7933c30faecce91564c5dff01d04342ec7b958f9bbf0f8905de344d6ed7e18",
+  "firmware_hash": "2d72911c94923aec44ee28c4833981f1550995edb37f837603b08e490b74ef9b",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-ezr32-wonder-gecko-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/slwstk6220a.yaml",

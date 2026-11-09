@@ -18,9 +18,9 @@
       536870912,
       536899520,
       1073799168,
-      20578
+      19416
     ],
-    "pc": 20578,
+    "pc": 19416,
     "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "0402cb7319150d426b98a40df7203f43e0f9722cbdec7cc87a66bd27b777cd4d",
+  "firmware_hash": "a2f02f1911885aa37dc75af5391430e312fc5cbf0afc8c329f4b7894fef31f80",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-ezr32-330-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/ezr32wg330.yaml",

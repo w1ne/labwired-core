@@ -1,3 +1,7 @@
+uart0 status=40 ok
+uart1 status=40 ok
+usart1 status=40 ok
+usart2 status=40 ok
 EFM32LG995 RENODE SMOKE
 gpio pe2/pe3 pushpull set=1 tgl=1 clr=1 wo=1 ok
 gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok

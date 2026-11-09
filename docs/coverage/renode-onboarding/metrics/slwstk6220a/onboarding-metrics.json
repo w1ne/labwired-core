@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/slwstk6220a-smoke.yaml",
   "system": "configs/systems/onboarding/slwstk6220a.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-09T11:31:47Z",
-  "finished_at_utc": "2026-11-09T11:34:10Z",
-  "elapsed_seconds": 144,
-  "elapsed_ms": 143641,
+  "started_at_utc": "2026-11-09T11:57:24Z",
+  "finished_at_utc": "2026-11-09T11:57:26Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2318,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 142.099,
-    "build_firmware": 0.637,
-    "run_smoke": 0.864
+    "build_cli": 0.412,
+    "build_firmware": 1.418,
+    "run_smoke": 0.477
   },
   "stages_ms": {
-    "build_cli": 142099,
-    "build_firmware": 637,
-    "run_smoke": 864
+    "build_cli": 412,
+    "build_firmware": 1418,
+    "run_smoke": 477
   }
 }

@@ -6,3 +6,22 @@
 
 name: stk3600
 chip: ../../chips/onboarding/stk3600.yaml
+# Board LEDs. Renode led0/led1 @ gpioPort 66/67 = PE2/PE3; Gecko SDK
+# hardware/kit/EFM32LG_STK3600/config/bspconfig.h BSP_GPIO_LED0/1 = E2/E3;
+# no BSP_LED_POLARITY override, so hardware/kit/common/bsp/bsp_stk_leds.c
+# default 1 = active high. Renode wires the buttons to gpioPort 64/65
+# (PE0/PE1); the Gecko SDK BSP puts PB0/PB1 on PB9/PB10. The two sources
+# disagree, so no button is declared.
+board_io:
+  - id: "led0"
+    kind: "led"
+    peripheral: "gpioe"
+    pin: 2
+    signal: "output"
+    active_high: true
+  - id: "led1"
+    kind: "led"
+    peripheral: "gpioe"
+    pin: 3
+    signal: "output"
+    active_high: true

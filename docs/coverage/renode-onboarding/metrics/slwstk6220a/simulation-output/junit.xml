@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.047329">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.046280">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="5f7933c30faecce91564c5dff01d04342ec7b958f9bbf0f8905de344d6ed7e18"/>
+    <property name="firmware_hash" value="2d72911c94923aec44ee28c4833981f1550995edb37f837603b08e490b74ef9b"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.047329">
+  <testcase classname="labwired" name="run" time="0.046280">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: SLWSTK6220A RENODE SMOKE" time="0.000000">
   </testcase>

@@ -37,6 +37,11 @@
     {
       "assertion": {
         "uart_ordered": [
+          "uart0 status=40 ok",
+          "uart1 status=40 ok",
+          "usart1 status=40 ok",
+          "usart2 status=40 ok",
+          "EFM32GG995 RENODE SMOKE",
           "gpio pe2/pe3 pushpull set=1 tgl=1 clr=1 wo=1 ok",
           "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok",
           "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok",
@@ -95,9 +100,9 @@
       536870912,
       536997824,
       1073790976,
-      18268
+      18326
     ],
-    "pc": 18268,
+    "pc": 18326,
     "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
@@ -110,7 +115,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "d998bcfd6e64a8476a7e10754a85de16dfae20bee0c2dd8ba4c9558bfa293fec",
+  "firmware_hash": "29f06b4536da082757e106f888bc83e5780770370dbc3fb5cdbaa0836601ed16",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32gg995-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32gg995.yaml",
@@ -122,6 +127,34 @@
         "name": "usart0",
         "kind": "native",
         "base": 1073790976,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1073799168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 1073800192,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073792000,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073793024,
         "registers": [],
         "artifacts": []
       },
@@ -247,311 +280,311 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 270,
+            "cycle": 964,
             "value": 1
           },
           {
-            "cycle": 273,
+            "cycle": 967,
             "value": 0
           },
           {
-            "cycle": 13773,
+            "cycle": 14464,
             "value": 1
           },
           {
-            "cycle": 15978,
+            "cycle": 16658,
             "value": 0
           },
           {
-            "cycle": 21180,
+            "cycle": 21856,
             "value": 1
           },
           {
-            "cycle": 26388,
+            "cycle": 27079,
             "value": 0
           },
           {
-            "cycle": 31596,
+            "cycle": 32298,
             "value": 1
           },
           {
-            "cycle": 36825,
+            "cycle": 37506,
             "value": 0
           },
           {
-            "cycle": 42028,
+            "cycle": 42714,
             "value": 1
           },
           {
-            "cycle": 47241,
+            "cycle": 47938,
             "value": 0
           },
           {
-            "cycle": 52449,
+            "cycle": 53156,
             "value": 1
           },
           {
-            "cycle": 57678,
+            "cycle": 58364,
             "value": 0
           },
           {
-            "cycle": 62892,
+            "cycle": 63567,
             "value": 1
           },
           {
-            "cycle": 68105,
+            "cycle": 68791,
             "value": 0
           },
           {
-            "cycle": 73313,
+            "cycle": 74009,
             "value": 1
           },
           {
-            "cycle": 78542,
+            "cycle": 79222,
             "value": 0
           },
           {
-            "cycle": 83755,
+            "cycle": 84430,
             "value": 1
           },
           {
-            "cycle": 88968,
+            "cycle": 89649,
             "value": 0
           },
           {
-            "cycle": 94176,
+            "cycle": 94873,
             "value": 1
           },
           {
-            "cycle": 99400,
+            "cycle": 100081,
             "value": 0
           },
           {
-            "cycle": 104613,
+            "cycle": 105289,
             "value": 1
           },
           {
-            "cycle": 109827,
+            "cycle": 110497,
             "value": 0
           },
           {
-            "cycle": 115035,
+            "cycle": 115726,
             "value": 1
           },
           {
-            "cycle": 120253,
+            "cycle": 120939,
             "value": 0
           },
           {
-            "cycle": 125477,
+            "cycle": 126152,
             "value": 1
           },
           {
-            "cycle": 130685,
+            "cycle": 131360,
             "value": 0
           },
           {
-            "cycle": 135898,
+            "cycle": 136594,
             "value": 1
           },
           {
-            "cycle": 141117,
+            "cycle": 141802,
             "value": 0
           },
           {
-            "cycle": 146346,
+            "cycle": 147016,
             "value": 1
           },
           {
-            "cycle": 151554,
+            "cycle": 152224,
             "value": 0
           },
           {
-            "cycle": 156762,
+            "cycle": 157458,
             "value": 1
           },
           {
-            "cycle": 161975,
+            "cycle": 162671,
             "value": 0
           },
           {
-            "cycle": 167204,
+            "cycle": 167884,
             "value": 1
           },
           {
-            "cycle": 172412,
+            "cycle": 173087,
             "value": 0
           },
           {
-            "cycle": 177625,
+            "cycle": 178321,
             "value": 1
           },
           {
-            "cycle": 182833,
+            "cycle": 183529,
             "value": 0
           },
           {
-            "cycle": 188062,
+            "cycle": 188737,
             "value": 1
           },
           {
-            "cycle": 193270,
+            "cycle": 193945,
             "value": 0
           },
           {
-            "cycle": 198483,
+            "cycle": 199174,
             "value": 1
           },
           {
-            "cycle": 203691,
+            "cycle": 204393,
             "value": 0
           },
           {
-            "cycle": 208920,
+            "cycle": 209606,
             "value": 1
           },
           {
-            "cycle": 214128,
+            "cycle": 214814,
             "value": 0
           },
           {
-            "cycle": 219342,
+            "cycle": 220033,
             "value": 1
           },
           {
-            "cycle": 224550,
+            "cycle": 225256,
             "value": 0
           },
           {
-            "cycle": 229784,
+            "cycle": 230459,
             "value": 1
           },
           {
-            "cycle": 234997,
+            "cycle": 235672,
             "value": 0
           },
           {
-            "cycle": 240205,
+            "cycle": 240896,
             "value": 1
           },
           {
-            "cycle": 245418,
+            "cycle": 246120,
             "value": 0
           },
           {
-            "cycle": 250642,
+            "cycle": 251328,
             "value": 1
           },
           {
-            "cycle": 255861,
+            "cycle": 256541,
             "value": 0
           },
           {
-            "cycle": 261069,
+            "cycle": 261754,
             "value": 1
           },
           {
-            "cycle": 266277,
+            "cycle": 266983,
             "value": 0
           },
           {
-            "cycle": 271506,
+            "cycle": 272191,
             "value": 1
           },
           {
-            "cycle": 276724,
+            "cycle": 277405,
             "value": 0
           },
           {
-            "cycle": 281932,
+            "cycle": 282613,
             "value": 1
           },
           {
-            "cycle": 287145,
+            "cycle": 287842,
             "value": 0
           },
           {
-            "cycle": 292364,
+            "cycle": 293050,
             "value": 1
           },
           {
-            "cycle": 297588,
+            "cycle": 298263,
             "value": 0
           },
           {
-            "cycle": 302796,
+            "cycle": 303471,
             "value": 1
           },
           {
-            "cycle": 308009,
+            "cycle": 308705,
             "value": 0
           },
           {
-            "cycle": 313227,
+            "cycle": 313913,
             "value": 1
           },
           {
-            "cycle": 318456,
+            "cycle": 319126,
             "value": 0
           },
           {
-            "cycle": 323659,
+            "cycle": 324334,
             "value": 1
           },
           {
-            "cycle": 328872,
+            "cycle": 329569,
             "value": 0
           },
           {
-            "cycle": 334086,
+            "cycle": 334782,
             "value": 1
           },
           {
-            "cycle": 339315,
+            "cycle": 339990,
             "value": 0
           },
           {
-            "cycle": 344523,
+            "cycle": 345198,
             "value": 1
           },
           {
-            "cycle": 349736,
+            "cycle": 350427,
             "value": 0
           },
           {
-            "cycle": 354949,
+            "cycle": 355640,
             "value": 1
           },
           {
-            "cycle": 360173,
+            "cycle": 360843,
             "value": 0
           },
           {
-            "cycle": 365386,
+            "cycle": 366056,
             "value": 1
           },
           {
-            "cycle": 370594,
+            "cycle": 371285,
             "value": 0
           },
           {
-            "cycle": 375807,
+            "cycle": 376504,
             "value": 1
           },
           {
-            "cycle": 381031,
+            "cycle": 381712,
             "value": 0
           },
           {
-            "cycle": 386244,
+            "cycle": 386925,
             "value": 1
           },
           {
-            "cycle": 391452,
+            "cycle": 392143,
             "value": 0
           },
           {
-            "cycle": 396666,
+            "cycle": 397362,
             "value": 1
           }
         ],
@@ -559,315 +592,315 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 266,
+            "cycle": 960,
             "state": "0"
           },
           {
-            "cycle": 270,
+            "cycle": 964,
             "state": "1"
           },
           {
-            "cycle": 273,
+            "cycle": 967,
             "state": "0"
           },
           {
-            "cycle": 13773,
+            "cycle": 14464,
             "state": "1"
           },
           {
-            "cycle": 15978,
+            "cycle": 16658,
             "state": "0"
           },
           {
-            "cycle": 21180,
+            "cycle": 21856,
             "state": "1"
           },
           {
-            "cycle": 26388,
+            "cycle": 27079,
             "state": "0"
           },
           {
-            "cycle": 31596,
+            "cycle": 32298,
             "state": "1"
           },
           {
-            "cycle": 36825,
+            "cycle": 37506,
             "state": "0"
           },
           {
-            "cycle": 42028,
+            "cycle": 42714,
             "state": "1"
           },
           {
-            "cycle": 47241,
+            "cycle": 47938,
             "state": "0"
           },
           {
-            "cycle": 52449,
+            "cycle": 53156,
             "state": "1"
           },
           {
-            "cycle": 57678,
+            "cycle": 58364,
             "state": "0"
           },
           {
-            "cycle": 62892,
+            "cycle": 63567,
             "state": "1"
           },
           {
-            "cycle": 68105,
+            "cycle": 68791,
             "state": "0"
           },
           {
-            "cycle": 73313,
+            "cycle": 74009,
             "state": "1"
           },
           {
-            "cycle": 78542,
+            "cycle": 79222,
             "state": "0"
           },
           {
-            "cycle": 83755,
+            "cycle": 84430,
             "state": "1"
           },
           {
-            "cycle": 88968,
+            "cycle": 89649,
             "state": "0"
           },
           {
-            "cycle": 94176,
+            "cycle": 94873,
             "state": "1"
           },
           {
-            "cycle": 99400,
+            "cycle": 100081,
             "state": "0"
           },
           {
-            "cycle": 104613,
+            "cycle": 105289,
             "state": "1"
           },
           {
-            "cycle": 109827,
+            "cycle": 110497,
             "state": "0"
           },
           {
-            "cycle": 115035,
+            "cycle": 115726,
             "state": "1"
           },
           {
-            "cycle": 120253,
+            "cycle": 120939,
             "state": "0"
           },
           {
-            "cycle": 125477,
+            "cycle": 126152,
             "state": "1"
           },
           {
-            "cycle": 130685,
+            "cycle": 131360,
             "state": "0"
           },
           {
-            "cycle": 135898,
+            "cycle": 136594,
             "state": "1"
           },
           {
-            "cycle": 141117,
+            "cycle": 141802,
             "state": "0"
           },
           {
-            "cycle": 146346,
+            "cycle": 147016,
             "state": "1"
           },
           {
-            "cycle": 151554,
+            "cycle": 152224,
             "state": "0"
           },
           {
-            "cycle": 156762,
+            "cycle": 157458,
             "state": "1"
           },
           {
-            "cycle": 161975,
+            "cycle": 162671,
             "state": "0"
           },
           {
-            "cycle": 167204,
+            "cycle": 167884,
             "state": "1"
           },
           {
-            "cycle": 172412,
+            "cycle": 173087,
             "state": "0"
           },
           {
-            "cycle": 177625,
+            "cycle": 178321,
             "state": "1"
           },
           {
-            "cycle": 182833,
+            "cycle": 183529,
             "state": "0"
           },
           {
-            "cycle": 188062,
+            "cycle": 188737,
             "state": "1"
           },
           {
-            "cycle": 193270,
+            "cycle": 193945,
             "state": "0"
           },
           {
-            "cycle": 198483,
+            "cycle": 199174,
             "state": "1"
           },
           {
-            "cycle": 203691,
+            "cycle": 204393,
             "state": "0"
           },
           {
-            "cycle": 208920,
+            "cycle": 209606,
             "state": "1"
           },
           {
-            "cycle": 214128,
+            "cycle": 214814,
             "state": "0"
           },
           {
-            "cycle": 219342,
+            "cycle": 220033,
             "state": "1"
           },
           {
-            "cycle": 224550,
+            "cycle": 225256,
             "state": "0"
           },
           {
-            "cycle": 229784,
+            "cycle": 230459,
             "state": "1"
           },
           {
-            "cycle": 234997,
+            "cycle": 235672,
             "state": "0"
           },
           {
-            "cycle": 240205,
+            "cycle": 240896,
             "state": "1"
           },
           {
-            "cycle": 245418,
+            "cycle": 246120,
             "state": "0"
           },
           {
-            "cycle": 250642,
+            "cycle": 251328,
             "state": "1"
           },
           {
-            "cycle": 255861,
+            "cycle": 256541,
             "state": "0"
           },
           {
-            "cycle": 261069,
+            "cycle": 261754,
             "state": "1"
           },
           {
-            "cycle": 266277,
+            "cycle": 266983,
             "state": "0"
           },
           {
-            "cycle": 271506,
+            "cycle": 272191,
             "state": "1"
           },
           {
-            "cycle": 276724,
+            "cycle": 277405,
             "state": "0"
           },
           {
-            "cycle": 281932,
+            "cycle": 282613,
             "state": "1"
           },
           {
-            "cycle": 287145,
+            "cycle": 287842,
             "state": "0"
           },
           {
-            "cycle": 292364,
+            "cycle": 293050,
             "state": "1"
           },
           {
-            "cycle": 297588,
+            "cycle": 298263,
             "state": "0"
           },
           {
-            "cycle": 302796,
+            "cycle": 303471,
             "state": "1"
           },
           {
-            "cycle": 308009,
+            "cycle": 308705,
             "state": "0"
           },
           {
-            "cycle": 313227,
+            "cycle": 313913,
             "state": "1"
           },
           {
-            "cycle": 318456,
+            "cycle": 319126,
             "state": "0"
           },
           {
-            "cycle": 323659,
+            "cycle": 324334,
             "state": "1"
           },
           {
-            "cycle": 328872,
+            "cycle": 329569,
             "state": "0"
           },
           {
-            "cycle": 334086,
+            "cycle": 334782,
             "state": "1"
           },
           {
-            "cycle": 339315,
+            "cycle": 339990,
             "state": "0"
           },
           {
-            "cycle": 344523,
+            "cycle": 345198,
             "state": "1"
           },
           {
-            "cycle": 349736,
+            "cycle": 350427,
             "state": "0"
           },
           {
-            "cycle": 354949,
+            "cycle": 355640,
             "state": "1"
           },
           {
-            "cycle": 360173,
+            "cycle": 360843,
             "state": "0"
           },
           {
-            "cycle": 365386,
+            "cycle": 366056,
             "state": "1"
           },
           {
-            "cycle": 370594,
+            "cycle": 371285,
             "state": "0"
           },
           {
-            "cycle": 375807,
+            "cycle": 376504,
             "state": "1"
           },
           {
-            "cycle": 381031,
+            "cycle": 381712,
             "state": "0"
           },
           {
-            "cycle": 386244,
+            "cycle": 386925,
             "state": "1"
           },
           {
-            "cycle": 391452,
+            "cycle": 392143,
             "state": "0"
           },
           {
-            "cycle": 396666,
+            "cycle": 397362,
             "state": "1"
           }
         ],
@@ -891,6 +924,30 @@
   ],
   "uart_lines": {
     "lines": [
+      {
+        "text": "uart0 status=40 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "uart1 status=40 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "usart1 status=40 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "usart2 status=40 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
       {
         "text": "EFM32GG995 RENODE SMOKE",
         "cycle_lo": 0,
@@ -956,14 +1013,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 18956,
+    "text_bytes": 20356,
     "data_bytes": 0,
     "bss_bytes": 4,
-    "flash_used_bytes": 18956,
+    "flash_used_bytes": 20356,
     "ram_static_bytes": 4,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 131072,
-    "flash_used_pct": 1.81,
+    "flash_used_pct": 1.94,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -989,88 +1046,88 @@
     "cycles": 400000,
     "instructions": 400000,
     "steps_executed": 400000,
-    "memory_reads": 3611,
-    "memory_writes": 53,
-    "peripheral_accesses": 76703,
+    "memory_reads": 3851,
+    "memory_writes": 62,
+    "peripheral_accesses": 76743,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 18296,
+        "pc": 18356,
+        "count": 79,
+        "symbol": "firmware_efm32gg995_smoke::s0::run"
+      },
+      {
+        "pc": 18358,
         "count": 79,
         "symbol": "core::ptr::write_volatile"
-      },
-      {
-        "pc": 18300,
-        "count": 79,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 18268,
-        "count": 78,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 18272,
-        "count": 78,
-        "symbol": "firmware_efm32gg995_smoke::s0::run"
-      },
-      {
-        "pc": 18274,
-        "count": 78,
-        "symbol": "core::ptr::write_volatile"
-      },
-      {
-        "pc": 18276,
-        "count": 78,
-        "symbol": "core::ptr::write_volatile"
-      },
-      {
-        "pc": 18284,
-        "count": 78,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 18288,
-        "count": 78,
-        "symbol": "firmware_efm32gg995_smoke::s0::run"
-      },
-      {
-        "pc": 18290,
-        "count": 78,
-        "symbol": "core::ptr::write_volatile"
-      },
-      {
-        "pc": 18304,
-        "count": 78,
-        "symbol": "firmware_efm32gg995_smoke::s0::run"
-      },
-      {
-        "pc": 18308,
-        "count": 78,
-        "symbol": "core::ptr::write_volatile"
-      },
-      {
-        "pc": 18312,
-        "count": 78,
-        "symbol": "core::ptr::write_volatile"
-      },
-      {
-        "pc": 18316,
-        "count": 78,
-        "symbol": "core::ptr::read_volatile"
       },
       {
         "pc": 18320,
         "count": 78,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 18324,
+        "count": 78,
         "symbol": "firmware_efm32gg995_smoke::s0::run"
       },
       {
-        "pc": 18322,
+        "pc": 18326,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 18324,
+        "pc": 18328,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 18332,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 18336,
+        "count": 78,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 18342,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 18344,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 18348,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 18360,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 18368,
+        "count": 78,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 18372,
+        "count": 78,
+        "symbol": "firmware_efm32gg995_smoke::s0::run"
+      },
+      {
+        "pc": 18374,
+        "count": 78,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 18376,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       }

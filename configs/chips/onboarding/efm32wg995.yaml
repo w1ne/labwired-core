@@ -6,9 +6,10 @@
 
 name: efm32wg995
 arch: arm
-# Measured onboarding profile: Cortex-M4, imported flash/RAM, and the modeled
-# UART0 console, Series-0 GPIO ports and TIMER0..3 exercised by the smoke.
-# Other generated blocks (I2C, USART, LEUART, CMU) are not claimed here because the engine has no model-backed coverage for them.
+# Measured onboarding profile: Cortex-M4, imported flash/RAM, the UART0
+# console, UART1 and USART0..2, the Series-0 GPIO ports and TIMER0..3, all
+# exercised by the smoke. Other generated blocks (I2C, LEUART, CMU) are not
+# claimed here because the engine has no model-backed coverage for them.
 core: cortex-m4
 flash:
   # EFM32WG main flash is mapped at 0x00000000 (Renode efm32wg995.repl;
@@ -23,6 +24,26 @@ peripherals:
   type: efm32_uart
   bus: sysbus
   base_address: 1073799168
+# Secondary (U)SART/UART instances (Renode efm32gg942.repl usart0-2 and
+# efm32*995.repl uart0/uart1; EFM32 USART register map CMD 0x0C,
+# STATUS 0x10, TXDATA 0x34). Polled only: the efm32 UART profile has no
+# RX/TX interrupt lines, so Renode's ReceiveIRQ/TransmitIRQ are not declared.
+- id: uart1
+  type: efm32_uart
+  base_address: 0x4000e400
+  size: 1KB
+- id: usart0
+  type: efm32_uart
+  base_address: 0x4000c000
+  size: 1KB
+- id: usart1
+  type: efm32_uart
+  base_address: 0x4000c400
+  size: 1KB
+- id: usart2
+  type: efm32_uart
+  base_address: 0x4000c800
+  size: 1KB
 # Series-0 GPIO ports A..F (Renode: one `GPIOPort.EFMGPIOPort` at
 # 0x40006000). GPIO_P_TypeDef at a 0x24 stride (Gecko SDK efm32gg_gpio_p.h).
 # The block head from 0x40006100 (EXTI, ROUTE, INSENSE, EM4 wake) is NOT

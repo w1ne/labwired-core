@@ -18,9 +18,9 @@
       536870912,
       536997824,
       1073790976,
-      18268
+      18326
     ],
-    "pc": 18268,
+    "pc": 18326,
     "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "d998bcfd6e64a8476a7e10754a85de16dfae20bee0c2dd8ba4c9558bfa293fec",
+  "firmware_hash": "29f06b4536da082757e106f888bc83e5780770370dbc3fb5cdbaa0836601ed16",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32gg995-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32gg995.yaml",

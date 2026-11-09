@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
+      0,
+      1073807372,
+      1073766496,
+      4294867296,
+      1024,
+      1073807376,
       1073792016,
-      33,
-      368,
-      4294867296,
-      10,
-      4294867296,
-      2147483648,
-      536874992,
+      536873960,
       0,
       0,
       0,
       0,
       0,
-      536874992,
-      361,
-      328
+      536873800,
+      9385,
+      10280
     ],
-    "pc": 328,
-    "xpsr": 1627389952,
+    "pc": 10280,
+    "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,9 +59,9 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "885a3de00671de1f39e6b61ea296dad0ab26fb5ad10ce4304ed1c8a0fb039a7b",
+  "firmware_hash": "9558d0ed308541a6103d471dc55b0c62fcd1cd20aa1cc3538c8a2c199004fabf",
   "config": {
-    "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stk3200-smoke",
+    "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-efm32zg222-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stk3200.yaml",
     "script": "examples/renode-onboarding/stk3200-smoke.yaml"
   }

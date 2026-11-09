@@ -6,17 +6,9 @@
 
 name: stk3200
 arch: arm
-# Renode's STK3200 platform inherits the EFM32ZG222 map. Keep only its M0+
-# core, physical execution memory, and the modeled USART1 exercised by smoke.
-core: cortex-m0+
-flash:
-  base: 0
-  size: 32768B
-ram:
-  base: 536870912
-  size: 4096B
-peripherals:
-- id: usart1
-  type: efm32_uart
-  bus: sysbus
-  base_address: 1073792000
+# EFM32ZG-STK3200 (Zero Gecko starter kit, EFM32ZG222F32). Renode
+# platforms/boards/silabs/stk3200.repl is
+# cpus/silabs/efm32xg/efm32zg222.repl plus two LEDs and two buttons, so the
+# chip surface is the efm32zg222 onboarding profile, included whole. The
+# deviceInformation block (0x0FE081B0) is not declared: no model behind it.
+include: efm32zg222.yaml

@@ -99,9 +99,9 @@
       536870912,
       536899520,
       1073799168,
-      20578
+      19416
     ],
-    "pc": 20578,
+    "pc": 19416,
     "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
@@ -114,7 +114,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "0402cb7319150d426b98a40df7203f43e0f9722cbdec7cc87a66bd27b777cd4d",
+  "firmware_hash": "a2f02f1911885aa37dc75af5391430e312fc5cbf0afc8c329f4b7894fef31f80",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-ezr32-330-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/ezr32lg330.yaml",
@@ -999,14 +999,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 21356,
+    "text_bytes": 21388,
     "data_bytes": 0,
     "bss_bytes": 4,
-    "flash_used_bytes": 21356,
+    "flash_used_bytes": 21388,
     "ram_static_bytes": 4,
     "flash_total_bytes": 262144,
     "ram_total_bytes": 32768,
-    "flash_used_pct": 8.15,
+    "flash_used_pct": 8.16,
     "ram_static_pct": 0.01,
     "notes": [
       "section_sum_not_bin_image",
@@ -1038,82 +1038,82 @@
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 20540,
+        "pc": 19378,
         "count": 79,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 20542,
+        "pc": 19380,
         "count": 79,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 20518,
+        "pc": 19356,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 20522,
+        "pc": 19360,
         "count": 78,
         "symbol": "firmware_ezr32_330_smoke::s0::run"
       },
       {
-        "pc": 20526,
+        "pc": 19364,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 20530,
+        "pc": 19368,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 20534,
+        "pc": 19372,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 20546,
+        "pc": 19384,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 20554,
+        "pc": 19392,
         "count": 78,
         "symbol": "firmware_ezr32_330_smoke::s0::run"
       },
       {
-        "pc": 20556,
+        "pc": 19394,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 20558,
+        "pc": 19396,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 20562,
+        "pc": 19400,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 20566,
+        "pc": 19404,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 20570,
+        "pc": 19408,
         "count": 78,
         "symbol": "firmware_ezr32_330_smoke::s0::run"
       },
       {
-        "pc": 20572,
+        "pc": 19410,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 20574,
+        "pc": 19412,
         "count": 78,
         "symbol": "core::ptr::write_volatile"
       }

@@ -8,21 +8,44 @@ name: efm32lg995
 arch: arm
 # The imported platform listed several peripheral windows that are stubs in
 # this engine. This execution profile measures memory, the USART0 console,
-# the Series-0 GPIO ports and TIMER0..3; it does not claim the remaining
-# Leopard Gecko peripherals (I2C, LEUART, CMU, EBI, LCD).
+# USART1/USART2 and UART0/UART1, the Series-0 GPIO ports and TIMER0..3; it
+# does not claim the remaining Leopard Gecko peripherals (I2C, LEUART, CMU,
+# EBI, LCD).
+core: cortex-m3
 flash:
-  # EFM32LG main flash is mapped at 0x00000000 (Renode efm32lg995.repl, which includes efm32gg942.repl;
-  # EFM32LG reference manual memory map).
+  # EFM32LG main flash is mapped at 0x00000000. Size 256 KiB and SRAM 32 KiB:
+  # Renode efm32lg995.repl overrides the 1 MiB / 128 KiB of the
+  # efm32gg942.repl it includes (EFM32LG995F256).
   base: 0
-  size: 1048576B
+  size: 262144B
 ram:
   base: 536870912
-  size: 131072B
+  size: 32768B
 peripherals:
 - id: usart0
   type: efm32_uart
   bus: sysbus
   base_address: 1073790976
+# Secondary (U)SART/UART instances (Renode efm32gg942.repl usart0-2 and
+# efm32*995.repl uart0/uart1; EFM32 USART register map CMD 0x0C,
+# STATUS 0x10, TXDATA 0x34). Polled only: the efm32 UART profile has no
+# RX/TX interrupt lines, so Renode's ReceiveIRQ/TransmitIRQ are not declared.
+- id: uart0
+  type: efm32_uart
+  base_address: 0x4000e000
+  size: 1KB
+- id: uart1
+  type: efm32_uart
+  base_address: 0x4000e400
+  size: 1KB
+- id: usart1
+  type: efm32_uart
+  base_address: 0x4000c400
+  size: 1KB
+- id: usart2
+  type: efm32_uart
+  base_address: 0x4000c800
+  size: 1KB
 # Series-0 GPIO ports A..F (Renode: one `GPIOPort.EFMGPIOPort` at
 # 0x40006000). GPIO_P_TypeDef at a 0x24 stride (Gecko SDK efm32gg_gpio_p.h).
 # The block head from 0x40006100 (EXTI, ROUTE, INSENSE, EM4 wake) is NOT

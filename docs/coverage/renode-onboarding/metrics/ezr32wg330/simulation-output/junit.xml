@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.045849">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.055771">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="0402cb7319150d426b98a40df7203f43e0f9722cbdec7cc87a66bd27b777cd4d"/>
+    <property name="firmware_hash" value="a2f02f1911885aa37dc75af5391430e312fc5cbf0afc8c329f4b7894fef31f80"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.045849">
+  <testcase classname="labwired" name="run" time="0.055771">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: EZR32 330 RENODE SMOKE" time="0.000000">
   </testcase>

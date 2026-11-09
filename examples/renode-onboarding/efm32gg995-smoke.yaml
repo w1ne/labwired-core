@@ -1,13 +1,15 @@
 # Cortex-M3 smoke against the imported EFM32GG995 (Giant Gecko) platform.
 # Bare-register firmware (firmware-efm32gg995-smoke) checks what Renode's
-# efm32gg942.repl maps and the chip descriptor claims: USART0 as the console,
-# the Series-0 GPIO ports (`efm32s0_gpioport`: DOUTSET/CLR/TGL, DIN reading
-# push-pull outputs, DISABLED reading 0, INPUTPULL rails, open-drain
-# WIREDANDPULLUP and open-source WIREDOR, clear-only PINLOCKN) and
-# TIMER0..TIMER3 (`efm32s0_timer`: UP overflow pending NVIC line 2 and IFC
-# releasing it, DOWN one-shot underflow, CC0 output compare + TOPB buffer
-# load, UP/DOWN turning at TOP and 0). PE2 (STK3700 LED0) toggles in the
-# idle loop on TIMER0 overflows. Summary word at 0x2001FF00.
+# efm32gg995.repl (+ efm32gg942.repl) maps and the chip descriptor claims:
+# UART0/UART1/USART1/USART2 each send one line with STATUS.TXBL set, then
+# USART0 is the console for the Series-0 GPIO ports (`efm32s0_gpioport`:
+# DOUTSET/CLR/TGL, DIN reading push-pull outputs, DISABLED reading 0,
+# INPUTPULL rails, open-drain WIREDANDPULLUP and open-source WIREDOR,
+# clear-only PINLOCKN) and TIMER0..TIMER3 (`efm32s0_timer`: UP overflow
+# pending NVIC line 2 and IFC releasing it, DOWN one-shot underflow, CC0
+# output compare + TOPB buffer load, UP/DOWN turning at TOP and 0). PE2
+# (STK3700 LED0) toggles in the idle loop on TIMER0 overflows. Summary word
+# at 0x2001FF00.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-efm32gg995-smoke"
@@ -17,6 +19,11 @@ limits:
 assertions:
   - uart_contains: "EFM32GG995 RENODE SMOKE"
   - uart_ordered:
+      - "uart0 status=40 ok"
+      - "uart1 status=40 ok"
+      - "usart1 status=40 ok"
+      - "usart2 status=40 ok"
+      - "EFM32GG995 RENODE SMOKE"
       - "gpio pe2/pe3 pushpull set=1 tgl=1 clr=1 wo=1 ok"
       - "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok"
       - "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok"

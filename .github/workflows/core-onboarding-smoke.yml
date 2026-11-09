@@ -94,7 +94,6 @@ on:
       - "crates/firmware-ezr32-330-smoke/**"
       - "crates/firmware-ezr32-wonder-gecko-smoke/**"
       - "examples/renode-onboarding/slwstk6220a-smoke.yaml"
-      - "crates/firmware-efm32-stk-m3-smoke/**"
       - "crates/firmware-efm32pg12-smoke/**"
       - "crates/firmware-efm32pg1-smoke/**"
       - "crates/firmware-eos-s3-smoke/**"
@@ -817,28 +816,26 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/slwstk6220a-smoke.yaml
             system: configs/systems/onboarding/slwstk6220a.yaml
-          # STK3600 and STK3700 are narrowed to their imported Cortex-M3 memory
-          # windows and the modeled UART0 surface exercised by the shared smoke.
+          # The STK3600/3700/3800/3200 starter kits include their chip
+          # descriptors whole and run the chip smoke firmware.
           - id: stk3600
-            crate: firmware-efm32-stk-m3-smoke
+            crate: firmware-efm32lg995-smoke
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/stk3600-smoke.yaml
             system: configs/systems/onboarding/stk3600.yaml
           - id: stk3700
-            crate: firmware-efm32-stk-m3-smoke
+            crate: firmware-efm32gg995-smoke
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/stk3700-smoke.yaml
             system: configs/systems/onboarding/stk3700.yaml
-          # STK3200/STK3800 retain only the Renode EFM32ZG222/EFM32WG995
-          # execution memory and the existing UART models exercised by smoke.
           - id: stk3200
-            crate: firmware-stk3200-smoke
+            crate: firmware-efm32zg222-smoke
             target: thumbv6m-none-eabi
             script: examples/renode-onboarding/stk3200-smoke.yaml
             system: configs/systems/onboarding/stk3200.yaml
           - id: stk3800
-            crate: firmware-stk3800-smoke
-            target: thumbv7em-none-eabi
+            crate: firmware-efm32wg995-smoke
+            target: thumbv7m-none-eabi
             script: examples/renode-onboarding/stk3800-smoke.yaml
             system: configs/systems/onboarding/stk3800.yaml
           # The PG12 profile is limited to its Cortex-M4F memory and USART0 path.

@@ -1,4 +1,5 @@
-//! Secondary (U)SART probe shared by the EZR32 smokes (`#[path]`-included).
+//! Secondary (U)SART/UART probe shared by the EFM32/EZR32 Series-0 smokes
+//! (`#[path]`-included from `firmware-efm32gg995-smoke/src/s0_uarts.rs`).
 //!
 //! For each instance: STATUS reads TXBL (bit 6) out of reset, CMD.TXEN is
 //! set, and one line "<name> status=<hex> ok" is sent on that instance.

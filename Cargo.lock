@@ -1251,14 +1251,6 @@ name = "firmware-cv32e40p-smoke"
 version = "0.1.0"
 
 [[package]]
-name = "firmware-efm32-stk-m3-smoke"
-version = "0.1.0"
-dependencies = [
- "cortex-m-rt",
- "panic-halt",
-]
-
-[[package]]
 name = "firmware-efm32g210-smoke"
 version = "0.1.0"
 dependencies = [
@@ -2357,22 +2349,6 @@ version = "0.1.0"
 dependencies = [
  "panic-halt",
  "riscv-rt",
-]
-
-[[package]]
-name = "firmware-stk3200-smoke"
-version = "0.1.0"
-dependencies = [
- "cortex-m-rt",
- "panic-halt",
-]
-
-[[package]]
-name = "firmware-stk3800-smoke"
-version = "0.1.0"
-dependencies = [
- "cortex-m-rt",
- "panic-halt",
 ]
 
 [[package]]

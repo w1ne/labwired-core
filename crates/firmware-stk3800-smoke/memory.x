@@ -1,6 +1,0 @@
-/* Renode EFM32WG995 map: 256 KiB flash at zero and 32 KiB SRAM. */
-MEMORY
-{
-  FLASH : ORIGIN = 0x00000000, LENGTH = 256K
-  RAM   : ORIGIN = 0x20000000, LENGTH = 32K
-}
