@@ -733,6 +733,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // walk-vs-scheduler differential, no silicon oracle — there is no F411
         // bench part). Promote to SHIPPED only when both of those exist.
         "stm32f411ceu6",
+        // NUCLEO-F446RE full-chip profile. Runs the stock stm32duino Arduino
+        // matrix row (L0-L8) on the shared stm32f4 models plus PWR over-drive
+        // and PLLI2S/PLLSAI, but it is not a bundled-configs.ts catalog board
+        // and has no silicon oracle or executing-fidelity differential of its
+        // own. Same bar as stm32f411ceu6 above.
+        "stm32f446re",
         "stm32g474re", // G4 peripheral models in progress, not shipped
         "stm32wb55",   // BLE not modelled, not shipped
         "stm32wba52",  // WBA early onboarding, not shipped
