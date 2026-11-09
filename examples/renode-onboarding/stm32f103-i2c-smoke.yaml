@@ -7,6 +7,7 @@ limits:
   max_steps: 50000000
 assertions:
   - uart_contains: "F103 I2C"
+  - uart_contains: "USART2 TXEIRQ=1 REARM=0"
   - uart_contains: "I2C_NACK_OK"
   - uart_contains: "I2C_IDLE_OK"
   - uart_contains: "TMP102=00001900"

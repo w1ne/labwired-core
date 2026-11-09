@@ -46,6 +46,10 @@ const USART2_SR: u32 = USART2_BASE + 0x00;
 const USART2_DR: u32 = USART2_BASE + 0x04;
 const USART2_BRR: u32 = USART2_BASE + 0x08;
 const USART2_CR1: u32 = USART2_BASE + 0x0C;
+const NVIC_ISPR: *const u32 = 0xE000_E200 as *const u32;
+const NVIC_ICPR: *mut u32 = 0xE000_E280 as *mut u32;
+const USART2_IRQ: u32 = 38;
+const USART2_IRQ_BIT: u32 = 1 << (USART2_IRQ % 32);
 
 const I2C1_BASE: u32 = 0x4000_5400;
 const I2C1_CR1: u32 = I2C1_BASE + 0x00;
@@ -200,6 +204,7 @@ fn main() -> ! {
         usart2_init();
     }
     putline(b"F103 I2C");
+    smoke_usart2_txe_irq();
     unsafe {
         i2c1_init();
     }
@@ -592,6 +597,46 @@ unsafe fn usart2_init() {
     write_volatile(USART2_BRR as *mut u32, 0x45);
     // CR1: UE (13) | TE (3).
     write_volatile(USART2_CR1 as *mut u32, (1 << 13) | (1 << 3));
+}
+
+fn smoke_usart2_txe_irq() {
+    // TXE is set at idle. With TXEIE enabled, USART2 must pend its shared
+    // external IRQ (IRQ 38, RM0008 vector table). Leave NVIC disabled so the
+    // smoke observes ISPR without taking the default handler.
+    unsafe {
+        write_volatile(
+            USART2_CR1 as *mut u32,
+            (1 << 13) | (1 << 3) | (1 << 7), // UE | TE | TXEIE
+        );
+    }
+
+    let bank = (USART2_IRQ / 32) as usize;
+    let mut pended = false;
+    for _ in 0..64 {
+        if unsafe { read_volatile(NVIC_ISPR.add(bank)) } & USART2_IRQ_BIT != 0 {
+            pended = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+
+    unsafe {
+        write_volatile(
+            USART2_CR1 as *mut u32,
+            (1 << 13) | (1 << 3), // UE | TE, TXEIE off
+        );
+        write_volatile(NVIC_ICPR.add(bank), USART2_IRQ_BIT);
+    }
+    for _ in 0..64 {
+        core::hint::spin_loop();
+    }
+    let released = unsafe { read_volatile(NVIC_ISPR.add(bank)) } & USART2_IRQ_BIT == 0;
+
+    if pended && released {
+        putline(b"USART2 TXEIRQ=1 REARM=0");
+    } else {
+        putline(b"USART2 TXEIRQ=0 REARM=1");
+    }
 }
 
 unsafe fn i2c1_init() {

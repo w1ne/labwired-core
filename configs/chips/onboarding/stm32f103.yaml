@@ -40,6 +40,8 @@ peripherals:
   bus: sysbus
   base_address: 0x40004400
   size: 1KB
+  # STM32F103 USART2_IRQn, per ST's cmsis-device-f1 header.
+  irq: 38
   clock: { reg: apb1enr, bit: 17 }
   config:
     profile: stm32f1
