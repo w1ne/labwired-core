@@ -1,0 +1,6 @@
+2026-11-09T22:11:17.129869Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sam4s.yaml
+2026-11-09T22:11:17.131918Z  INFO labwired_loader: ELF Entry Point: 0x400401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-09T22:11:18.042137Z ERROR labwired_cli::execute: Memory assertion failed at 0x2000ff00 (size 4): expected 0x5a400fff, got 0x5a401fff (mask 0xffffffff)
+2026-11-09T22:11:18.042173Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536936192, expected_value: 1514147839, mask: None, size: Some(4), node: None } }) (captured len=468)
+FAIL  2/3 checks · sam4s-smoke · 1500000 steps · 0.91s

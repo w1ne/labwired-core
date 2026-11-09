@@ -1,8 +1,8 @@
 # SAM4S smoke over three boots (firmware-sam4s-smoke/src/family.rs):
 # power-on EEFC (FMR, GETD, GPNVM/lock bits, FCMDE) + RSTC/WDT reset state,
 # an RSTC software reset, a WDT_MR-armed watchdog reset, then the WDT window
-# error interrupt, write-once WDT_MR, PMC clocks, PIO latches and TC0's RC
-# compare. Summary word 0x5A400FFF = all twelve checks.
+# error interrupt, write-once WDT_MR, PMC clocks, PIO latches, TC0's RC compare,
+# and USART0 TXRDY interrupt. Summary word 0x5A401FFF = all thirteen checks.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam4s-smoke"
@@ -28,9 +28,10 @@ assertions:
       - "pmc pcsr0="
       - "pio ports=3 ok"
       - "tc0 rc pend=1 ok"
+      - "usart0 txrdy imr=2 pend=1 released=1 ok"
       - "SAM4S PASS"
   - memory_value:
       address: 0x2000FF00
-      expected_value: 0x5A400FFF
+      expected_value: 0x5A401FFF
       size: 4
   - expected_stop_reason: max_steps

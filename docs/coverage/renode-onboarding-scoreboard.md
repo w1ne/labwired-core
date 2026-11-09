@@ -174,7 +174,7 @@
 | `riscv_verilated_uartlite` | `pass` | `True` | `yes` | `yes` | `787` | `0.787` | `True` | `observable` | `1` | `memory_value`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `riscv_virt` | `pass` | `True` | `yes` | `yes` | `1408` | `1.408` | `True` | `observable` | `1` | `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `s32k118` | `pass` | `True` | `yes` | `yes` | `1432` | `1.432` | `True` | `observable` | `6` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `sam4s` | `pass` | `True` | `yes` | `yes` | `1794` | `1.794` | `True` | `observable` | `13` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `sam4s` | `pass` | `True` | `yes` | `yes` | `1620` | `1.62` | `True` | `observable` | `13` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sam4s16c` | `pass` | `True` | `yes` | `yes` | `1823` | `1.823` | `True` | `observable` | `13` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sam4s8b` | `pass` | `True` | `yes` | `yes` | `5353` | `5.353` | `True` | `observable` | `12` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sam4s_xplained` | `pass` | `True` | `yes` | `yes` | `5148` | `5.148` | `True` | `observable` | `13` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |

@@ -15,7 +15,8 @@
 # WDT, RSTC and EEFC (`sam4s_wdt`/`sam4s_rstc`/`sam4s_eefc`, see
 # crates/core/src/peripherals/sam/sysc4s.rs for what each refuses).
 # Renode's ADC, DACC, CRCCU, SPI and TWI0/1 have no model here and are not
-# declared. cpu_hz is the 4 MHz fast-RC clock the part resets on.
+# declared. USART0 uses NVIC IRQ 14. cpu_hz is the 4 MHz fast-RC clock the
+# part resets on.
 # Sources: Atmel-11100 SAM4S datasheet (memory map, peripheral identifiers,
 # configuration summary); Renode platforms/cpus/sam4s.repl.
 name: sam4s
@@ -42,6 +43,7 @@ peripherals:
 - id: usart0
   type: sam_usart
   base_address: 0x40024000
+  irq: 14
 - id: usart1
   type: sam_usart
   base_address: 0x40028000

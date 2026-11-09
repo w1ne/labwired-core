@@ -18,7 +18,7 @@ fn main() -> ! {
         name: "SAM4S",
         flash_bytes: 128 * 1024,
         has_pioc: true,
-        check_usart0_irq: false,
+        check_usart0_irq: true,
         summary: 0x2000_FF00,
         board: None,
     })
