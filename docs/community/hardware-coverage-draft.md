@@ -30,7 +30,7 @@ NRND. The page remains unpublished pending Andrii's approval.
 | **#2 ATmega328 family, 30%** | [ATmega328PB Xplained Mini](../../examples/atmega328pb-xplained-mini/README.md) (active sibling; the survey does not separate PB) | USART0 CDC transcript and the board's D200/PB5 LED transitions. ATmega328P remains excluded because it is NRND. | [Live MCU status and board stock, checked 2026-11-06](../../examples/atmega328pb-xplained-mini/evidence/vendor-status.md) |
 | **#3 STM32F103, 17%** | [NUCLEO-F103RB](../../examples/nucleo-f103rb/README.md) | USART2 output and LD2 on PA5 | [ST status and stock, checked 2026-11-03](../../examples/nucleo-f103rb/evidence/vendor-status.md) |
 | **#4 other STM32, 13%** | [STM32G071B-DISCO](../../examples/stm32g071b-disco/README.md) | USART3 output on the ST-LINK virtual COM route | [ST status and stock, checked 2026-11-03](../../examples/stm32g071b-disco/evidence/vendor-status.md) |
-| **#5 RP2040, 12%** | [Raspberry Pi Pico](../../examples/pico/README.md) | UART0, GP25 LED edges, and a non-zero internal temperature ADC result | [Raspberry Pi status and availability, checked 2026-11-06](../../examples/pico/evidence/vendor-status.md) |
+| **#5 RP2040, 12%; RP2350 is the current successor in target #2** | [Raspberry Pi Pico](../../examples/pico/README.md); [Pico 2 / RP2350](../../examples/pico2/README.md) | Pico: UART0, GP25 LED, and internal temperature ADC. Pico 2: UART0, GP25 LED, and GP26/ADC0 conversion from a modeled potentiometer. RP2350 was not a separate survey row. | [Pico availability checked 2026-11-06](../../examples/pico/evidence/vendor-status.md); [Pico 2 checked 2026-11-09](../../examples/pico2/evidence/adc/vendor-status.md) |
 
 ### #1 — ESP32: ESP-Mosaico V1.2 / ESP32-S31
 
@@ -296,6 +296,33 @@ as the current successor alongside RP2040. [Waveshare RP2350-Zero](../../example
 has a copy-paste Arduino NeoPixel sketch and a local smoke that checks UART0,
 GP16 edges, and the decoded onboard WS2812. Its USB CDC console is not modeled;
 see its [availability receipt, checked 2026-11-06](../../examples/rp2350-zero/evidence/vendor-status.md).
+
+[Raspberry Pi Pico 2](../../examples/pico2/README.md) adds an ADC0 smoke
+example: GP26 reads a potentiometer wiper at the modeled 50% midpoint and
+reports 2048 counts, while GP25 drives the onboard LED. Its copy-paste
+bare-metal reference and smoke command are in the board guide. The smoke does
+not validate Pico SDK ADC calls, USB, or physical hardware. The official
+product page says **Available now from $5** and guarantees production through
+January 2040; see the [exact-SKU availability receipt](../../examples/pico2/evidence/adc/vendor-status.md).
+
+For a physical setup, connect the potentiometer wiper to GP26 (header pin 31),
+its high terminal to ADC_VREF (pin 35), and its low terminal to AGND (pin 33).
+
+This is the GP26/ADC0 sampling core used by the committed bare-metal example:
+
+```rust
+const ADC_CS: *mut u32 = 0x400A_0000 as *mut u32;
+const ADC_RESULT: *const u32 = 0x400A_0004 as *const u32;
+
+unsafe fn read_gp26_adc0() -> u16 {
+    core::ptr::write_volatile(ADC_CS, 1 | (1 << 2)); // EN | START_ONCE
+    (core::ptr::read_volatile(ADC_RESULT) & 0x0fff) as u16
+}
+```
+
+The [Pico 2 board guide](../../examples/pico2/README.md) contains the complete
+firmware, wiring, and copy-paste smoke command. The model uses an ideal 3.3 V
+reference; it does not model ADC offset, noise, or calibration.
 
 ```cpp
 #include <Adafruit_NeoPixel.h>

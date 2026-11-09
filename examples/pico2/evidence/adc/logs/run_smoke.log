@@ -1,0 +1,22 @@
+warning: method `pad_lines_arc` is never used
+   --> crates/core/src/peripherals/esp32s3/ledc.rs:271:19
+    |
+203 | impl Esp32s3Ledc {
+    | ---------------- method in this implementation
+...
+271 |     pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+    |                   ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `default_events_per_channel` is never used
+   --> crates/core/src/peripherals/ra_gpt.rs:125:4
+    |
+125 | fn default_events_per_channel() -> u32 {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+2026-11-09T20:16:06.177155Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/rp2350-pico2-smoke.yaml
+2026-11-09T20:16:06.253358Z  INFO labwired_loader: ELF Entry Point: 0x10000801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  4/4 checks · adc-smoke · 300000 steps · 0.02s

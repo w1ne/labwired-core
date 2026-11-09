@@ -1,0 +1,24 @@
+# Raspberry Pi Pico 2 with a potentiometer wiper on GP26 / ADC0.
+# The potentiometer is an external analog input fixture, not a fitted board part.
+name: "pico2-adc"
+chip: "../chips/rp2350-pico2-smoke.yaml"
+external_devices:
+  - id: "pot"
+    type: "potentiometer"
+    connection: "adc"
+    config:
+      channel: 0
+board_io:
+  - id: "led_gp25"
+    kind: "led"
+    peripheral: "sio"
+    pin: 25
+    signal: "output"
+    active_high: true
+  - id: "pot"
+    kind: "adc_input"
+    peripheral: "adc"
+    pin: 0
+    signal: "input"
+    active_high: true
+    device_type: "potentiometer"

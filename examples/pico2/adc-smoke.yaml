@@ -1,0 +1,15 @@
+# Raspberry Pi Pico 2 (RP2350A): ADC0 on GP26, external potentiometer, UART,
+# and the onboard GP25 LED.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-pico2-adc-smoke"
+  system: "../../configs/systems/pico2-adc.yaml"
+limits:
+  max_steps: 300000
+assertions:
+  - uart_contains: "PICO2_ADC0=2048"
+  - uart_contains: "PICO2_ADC_SMOKE_OK"
+  - gpio_edges:
+      pin: "sio:25"
+      min_edges: 8
+  - expected_stop_reason: max_steps

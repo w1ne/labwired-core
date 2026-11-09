@@ -8,6 +8,14 @@ core: "cortex-m33"
 cpu_hz: 150_000_000
 reset_vector_offset: 0x0
 
+# Pico 2 brings the RP2350A's external ADC pads to the headers. GP29 is tied
+# into the board's VSYS monitor, so only the three general-purpose inputs are
+# exposed as user analog pins here.
+analog_pins:
+  GP26: { peripheral: "adc", channel: 0 }
+  GP27: { peripheral: "adc", channel: 1 }
+  GP28: { peripheral: "adc", channel: 2 }
+
 flash:
   base: 0x10000000
   size: "2048KB"
@@ -43,3 +51,13 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/rp2350/sio.yaml"
+
+  # RP2350 ADC is on its own address map; the shared model has the same
+  # 12-bit conversion interface and maps external inputs 0..3 to GP26..29.
+  - id: "adc"
+    type: "rp2040_adc"
+    base_address: 0x400A0000
+    size: "4KB"
+    irq: 35
+    config:
+      debug_schema: "../peripherals/rp2350/adc.yaml"
