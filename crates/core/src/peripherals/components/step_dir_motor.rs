@@ -102,6 +102,8 @@ impl Default for StepDirConfig {
 #[derive(Debug, Default)]
 struct State {
     step_level: bool,
+    /// Whether the driver STEP input has a physical copper connection.
+    step_connected: bool,
     dir_level: bool,
     en_level: bool,
     /// Signed step accumulator.
@@ -161,7 +163,10 @@ impl StepDirMotor {
             dir_pin,
             en_pin,
             cfg: StepDirConfig::default(),
-            state: Mutex::new(State::default()),
+            state: Mutex::new(State {
+                step_connected: true,
+                ..State::default()
+            }),
             id: id.into(),
             // Kit attach always overrides via with_device_type(ctx.device_type()).
             // Default is the canonical kit id for hand-built test twins.
@@ -341,6 +346,21 @@ impl StepDirMotor {
     }
 
     /// True while the driver is currently enabled (EN active).
+    /// Model an open/repaired STEP trace at the driver input. MCU GPIO still
+    /// emits its real edges; only driver-side reception is disabled. The motor
+    /// and its accumulated physical position remain the same object.
+    pub fn set_step_connected(&self, connected: bool) {
+        let mut state = self.state.lock().unwrap();
+        state.step_connected = connected;
+        if !connected {
+            state.step_level = false;
+        }
+    }
+
+    pub fn step_connected(&self) -> bool {
+        self.state.lock().unwrap().step_connected
+    }
+
     pub fn is_enabled(&self) -> bool {
         let s = self.state.lock().unwrap();
         Self::enabled_level(&self.cfg, s.en_level, self.en_pin.is_some())
@@ -369,6 +389,11 @@ impl StepDirMotor {
             return;
         }
         let mut s = self.state.lock().unwrap();
+        // Copper disconnection is distinct from GPIO inactivity: the MCU
+        // waveform is observable, but the driver cannot receive STEP edges.
+        if pin == self.step_pin && !s.step_connected {
+            return;
+        }
         let limits = self.timing_limits();
         if limits.is_some() {
             let last_cycle = s.last_cycle;
@@ -752,6 +777,30 @@ impl crate::bus::ObservedDevice for StepDirMotor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn physically_open_step_input_preserves_position_and_repair_accepts_new_edges() {
+        let motor = StepDirMotor::new("test-x", 2, 3, Some(4));
+        motor.on_gpio_edge(3, true, 1); // positive direction
+        motor.set_step_connected(false);
+        assert!(!motor.step_connected());
+        for t in [2, 4, 6] {
+            motor.on_gpio_edge(2, true, t);
+            motor.on_gpio_edge(2, false, t + 1);
+        }
+        // The MCU output toggles, but this *same* driver never receives STEP.
+        assert_eq!(motor.steps(), 0);
+        motor.set_step_connected(true);
+        assert!(motor.step_connected());
+        motor.on_gpio_edge(2, true, 10);
+        motor.on_gpio_edge(2, false, 11);
+        assert_eq!(motor.steps(), 1);
+        motor.set_step_connected(false);
+        assert_eq!(motor.steps(), 1); // Disconnect never resets the shaft.
+        motor.set_step_connected(true);
+        motor.on_gpio_edge(2, true, 14);
+        assert_eq!(motor.steps(), 2);
+    }
 
     #[test]
     fn steps_increment_on_rising_edge_when_dir_high() {

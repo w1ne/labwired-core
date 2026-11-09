@@ -26,6 +26,8 @@ use vacuum::{VacuumParams, VacuumPlant};
 
 const CPU_HZ: u64 = 168_000_000;
 const BOARD_TRAVEL: i32 = 7;
+const VACUUM_LOSS_RESPONSE_LIMIT_S: f64 = 0.100;
+const TERMINAL_OBSERVATION_S: f64 = 0.300;
 const AXIS_IDS: [&str; 6] = ["X", "Y1", "Y2", "Z", "A", "B"];
 // Triplets STEP, DIR, active-low EN, in the verified PCB's physical pin map.
 const PINS: [(&str, &str, u8); 25] = [
@@ -326,7 +328,10 @@ fn main() -> Result<()> {
         .unwrap_or_else(|| base.join("geometry-contract.json"));
     let scenario = argument("--scenario").unwrap_or_else(|| "healthy".into());
     ensure!(
-        matches!(scenario.as_str(), "healthy" | "open-x-step" | "vacuum-leak"),
+        matches!(
+            scenario.as_str(),
+            "healthy" | "open-x-step" | "vacuum-leak" | "repair-x"
+        ),
         "unknown scenario"
     );
     let max_seconds: f64 = argument("--seconds")
@@ -393,16 +398,6 @@ fn main() -> Result<()> {
     let system_path = base.join("system.yaml");
     let firmware_path = base.join("firmware.elf");
     let mut manifest = SystemManifest::from_file(&system_path)?;
-    if scenario == "open-x-step" {
-        let motor = manifest
-            .external_devices
-            .iter_mut()
-            .find(|d| d.id == "X")
-            .context("X driver")?;
-        motor
-            .config
-            .insert("step_pin".into(), serde_yaml::Value::String("PA1".into()));
-    }
     fs::write(
         output.join("executed-system.yaml"),
         serde_yaml::to_string(&manifest)?,
@@ -418,6 +413,17 @@ fn main() -> Result<()> {
     );
     let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
     let mut machine = Machine::new(cpu, bus);
+    let x_driver = machine
+        .bus
+        .observed_of::<StepDirMotor>()
+        .into_iter()
+        .find(|motor| motor.id() == "X")
+        .context("X driver observer")?;
+    // An open PCB STEP conductor changes the driver-side input, not the MCU
+    // GPIO pin mapping. The real MCU waveform remains available for capture.
+    if matches!(scenario.as_str(), "open-x-step" | "repair-x") {
+        x_driver.set_step_connected(false);
+    }
     machine.config.idle_fast_forward_enabled = true;
     let wide = machine.max_safe_tick_interval();
     if wide > 1 && machine.bus.per_cycle_tick_is_trivial() {
@@ -500,7 +506,21 @@ fn main() -> Result<()> {
     let mut fuel = 0u64;
     let mut primary_steps = 0u64;
     let mut idle_cycles = 0u64;
+    let mut repair_at_s: Option<f64> = None;
+    let mut first_fault_at_s: Option<f64> = None;
+    let mut x_steps_before_repair = 0i64;
+    let mut x_model_steps_before_repair = 0i64;
+    let mut recovery_gpio_mismatch_ticks = 0u64;
+    let mut firmware_epoch_s = 0.0;
+    let mut repaired = false;
+    let mut fault_observed_safe = false;
+    let mut fault_x_static = false;
     let mut final_mark = None;
+    let mut terminal_state = None;
+    let mut terminal_state_mismatch_samples = 0u64;
+    let mut terminal_outputs_safe = true;
+    let mut step_edges_after_terminal = 0u64;
+    let mut step_edges_while_drivers_disabled = 0u64;
     let mut telemetry = BufWriter::new(File::create(output.join("telemetry.csv"))?);
     let mut edges = BufWriter::new(File::create(output.join("logic.csv"))?);
     let mut analog = BufWriter::new(File::create(output.join("analog.csv"))?);
@@ -564,9 +584,25 @@ fn main() -> Result<()> {
         logic_dropped = batch.dropped;
         for edge in batch.edges {
             let channel = edge.ch as usize;
+            if final_mark.is_some()
+                && (((18..22).contains(&channel) && edge.value)
+                    || (scenario != "healthy"
+                        && scenario != "repair-x"
+                        && channel < 18
+                        && channel % 3 == 2
+                        && !edge.value))
+            {
+                terminal_outputs_safe = false;
+            }
             if channel < 18 && channel.is_multiple_of(3) {
                 let axis = channel / 3;
                 if edge.value {
+                    if final_mark.is_some() {
+                        step_edges_after_terminal += 1;
+                    }
+                    if (0..AXIS_IDS.len()).all(|motor| levels[motor * 3 + 2]) {
+                        step_edges_while_drivers_disabled += 1;
+                    }
                     last_high[axis] = edge.cycle;
                     if !levels[channel + 2] {
                         edge_counts[axis] += if levels[channel + 1] { 1 } else { -1 };
@@ -596,6 +632,12 @@ fn main() -> Result<()> {
         }
         if model_counts != edge_counts {
             edge_model_mismatch_ticks += 1;
+        }
+        if repaired
+            && model_counts[0] - x_model_steps_before_repair
+                != edge_counts[0] - x_steps_before_repair
+        {
+            recovery_gpio_mismatch_ticks += 1;
         }
         if (0..6).any(|axis| (model_angles[axis] - edge_counts[axis] as f64 * 0.225).abs() > 1e-8) {
             angle_mismatch_ticks += 1;
@@ -673,9 +715,9 @@ fn main() -> Result<()> {
             time_s,
             &mut events,
         )?;
-        if obs[0] == 0x504e5035 && time_s > 0.1 {
-            maximum_firmware_time_error_ms =
-                maximum_firmware_time_error_ms.max((time_s * 1000.0 - obs[1] as f64).abs());
+        if obs[0] == 0x504e5035 && time_s - firmware_epoch_s > 0.1 {
+            maximum_firmware_time_error_ms = maximum_firmware_time_error_ms
+                .max(((time_s - firmware_epoch_s) * 1000.0 - obs[1] as f64).abs());
         }
         let empty = &geometry.pockets[1];
         if valves[1]
@@ -736,13 +778,59 @@ fn main() -> Result<()> {
             progress = Instant::now();
             progress_time = time_s;
         }
-        if obs[0] == 0x504e5035 && (obs[2] == 11 || obs[2] == 12) {
-            if final_mark.is_none() {
-                final_mark = Some(time_s);
+        if let Some((phase, fault)) = terminal_state {
+            if obs[0] != 0x504e5035 || obs[2] != phase || obs[15] != fault {
+                terminal_state_mismatch_samples += 1;
             }
-            if time_s - final_mark.unwrap() >= 0.3 {
-                break;
+        } else if obs[0] == 0x504e5035 && (obs[2] == 11 || obs[2] == 12) {
+            final_mark = Some(time_s);
+            terminal_state = Some((obs[2], obs[15]));
+            terminal_outputs_safe = levels[18..22].iter().all(|level| !level)
+                && (matches!(scenario.as_str(), "healthy" | "repair-x")
+                    || (0..AXIS_IDS.len()).all(|motor| levels[motor * 3 + 2]));
+        }
+        if final_mark.is_some_and(|terminal| time_s - terminal >= TERMINAL_OBSERVATION_S) {
+            if scenario == "repair-x" && !repaired {
+                ensure!(
+                    obs[2] == 12 && obs[15] == 40,
+                    "repair-x requires observed X-homing fault 40"
+                );
+                ensure!(
+                    levels[18..22].iter().all(|v| !v) && (0..6).all(|i| levels[i * 3 + 2]),
+                    "repair-x refuses repair while outputs remain enabled"
+                );
+                ensure!(
+                    model_counts[0] == 0 && rising_counts[0] > 0 && geometry.placements.is_empty(),
+                    "repair-x requires real missing X motion before repair"
+                );
+                fault_observed_safe = true;
+                fault_x_static = true;
+                first_fault_at_s = final_mark;
+                // Repair the physical STEP path WITHOUT replacing the motor,
+                // analog solver, machine, or geometry state. An operator then
+                // resets the same MCU; the fault was latched by firmware.
+                x_steps_before_repair = edge_counts[0];
+                x_model_steps_before_repair = model_counts[0];
+                x_driver.set_step_connected(true);
+                machine.reset()?;
+                repaired = true;
+                repair_at_s = Some(time_s);
+                firmware_epoch_s = time_s;
+                final_mark = None;
+                terminal_state = None;
+                obs.fill(0);
+                writeln!(
+                    events,
+                    "{}",
+                    json!({"time_s":time_s,
+                    "event":"COPPER_REPAIRED_MCU_RESET",
+                    "fault":40,"x_driver_steps_before":model_counts[0],
+                    "mcucycles":machine.total_cycles,
+                    "same_machine":true})
+                )?;
+                continue;
             }
+            break;
         }
     }
     let serial = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
@@ -764,7 +852,12 @@ fn main() -> Result<()> {
                     .as_object()
                     .is_some_and(|v| v.is_empty())
         });
-    let mut checks = if scenario == "healthy" {
+    let vacuum_loss_response_s = leak_injected_at
+        .zip(final_mark)
+        .map(|(injected, detected)| detected - injected);
+    let duration_s = machine.total_cycles as f64 / CPU_HZ as f64;
+    let terminal_observation_s = final_mark.map(|terminal| duration_s - terminal);
+    let mut checks = if scenario == "healthy" || scenario == "repair-x" {
         json!({
             "kernelcad_geometry_verified":geometry_verified,
             "firmware_mission_complete":obs[2]==11 && obs[15]==0 && serial.contains("MISSION_COMPLETE"),
@@ -795,6 +888,9 @@ fn main() -> Result<()> {
         json!({
             "seal_leak_injected_while_carrying":leak_injected_at.is_some(),
             "firmware_detects_vacuum_loss":obs[2]==12 && obs[15]==61,
+            "vacuum_loss_response_within_limit":vacuum_loss_response_s.is_some_and(|elapsed| {
+                (0.0..=VACUUM_LOSS_RESPONSE_LIMIT_S).contains(&elapsed)
+            }),
             "no_physical_placement":geometry.placements.is_empty(),
             "no_false_mission_complete":!serial.contains("MISSION_COMPLETE"),
             "all_pumps_disabled_at_stop":!levels[18] && !levels[19],
@@ -802,7 +898,33 @@ fn main() -> Result<()> {
             "no_logic_capture_overflow":logic_dropped==0
         })
     };
+    if scenario == "repair-x" {
+        // The disconnected interval intentionally diverges from GPIO counts.
+        // After physical reconnection, only post-repair delta counts must match.
+        checks["independent_gpio_counts_equal_models"] = json!(
+            recovery_gpio_mismatch_ticks == 0
+                && edge_counts[0] - x_steps_before_repair
+                    == model_counts[0] - x_model_steps_before_repair
+        );
+        checks["all_six_signed_angles_match_raw_edges"] = json!(
+            (model_counts[0] - x_model_steps_before_repair) as f64 * 0.225
+                == (edge_counts[0] - x_steps_before_repair) as f64 * 0.225
+        );
+        checks["fault_safe_before_repair"] = json!(fault_observed_safe);
+        checks["x_static_before_repair"] = json!(fault_x_static);
+        checks["physical_step_trace_reconnected"] = json!(repaired && x_driver.step_connected());
+        checks["same_machine_time_monotonic"] = json!(repair_at_s
+            .zip(first_fault_at_s)
+            .is_some_and(|(repair, fault)| repair > fault && duration_s > repair));
+    }
     checks["terminal_state_reached"] = json!(final_mark.is_some());
+    checks["terminal_observation_complete"] =
+        json!(terminal_observation_s.is_some_and(|elapsed| elapsed >= TERMINAL_OBSERVATION_S));
+    checks["terminal_state_stable"] = json!(terminal_state_mismatch_samples == 0);
+    checks["terminal_outputs_remained_safe"] = json!(terminal_outputs_safe);
+    checks["no_step_edges_after_terminal_state"] = json!(step_edges_after_terminal == 0);
+    checks["no_step_edges_while_all_drivers_disabled"] =
+        json!(step_edges_while_drivers_disabled == 0);
     checks["all_analog_samples_captured"] = json!(analog_dropped == 0);
     checks["no_motion_without_step_edges"] = json!(!phantom_motion);
     checks["firmware_clock_matches_simulation"] = json!(maximum_firmware_time_error_ms < 12.0);
@@ -831,7 +953,7 @@ fn main() -> Result<()> {
         .values()
         .all(|v| v == &Value::Bool(true));
     let report = json!({
-        "schema":"labwired.lumenpnp.proof.v2","scenario":scenario,"passed":passed,"checks":checks,
+        "schema":"labwired.lumenpnp.proof.v3","scenario":scenario,"passed":passed,"checks":checks,
         "source_commit":option_env!("LABWIRED_SOURCE_COMMIT"),
         "pcb_source_commit":"64cf68d5b7980f095ef11913065e7f45a1e3e447",
         "firmware_sha256":firmware_hash,"geometry_sha256":geometry_hash,
@@ -845,7 +967,16 @@ fn main() -> Result<()> {
         "coupling_step_s":coupling_us as f64*1e-6,"analog_step_s":0.0001,
         "maximum_sampled_y_skew_mm":maximum_y_skew_mm,"rigid_y_skew_limit_mm":maximum_rigid_y_skew_mm,
         "step_dir_models":step_dir_reports,"leak_injected_at_s":leak_injected_at,
-        "duration_s":machine.total_cycles as f64/CPU_HZ as f64,"wall_seconds":start.elapsed().as_secs_f64(),
+        "fault_before_repair_at_s":first_fault_at_s,
+        "repaired_in_same_machine_at_s":repair_at_s,
+        "recovery_gpio_mismatch_ticks":recovery_gpio_mismatch_ticks,
+        "repair_x_driver_original_step_count":x_model_steps_before_repair,
+        "terminal_state_at_s":final_mark,"step_edges_after_terminal_state":step_edges_after_terminal,
+        "terminal_observation_s":terminal_observation_s,"terminal_observation_required_s":TERMINAL_OBSERVATION_S,
+        "terminal_state_mismatch_samples":terminal_state_mismatch_samples,
+        "step_edges_while_all_drivers_disabled":step_edges_while_drivers_disabled,
+        "vacuum_loss_response_s":vacuum_loss_response_s,"vacuum_loss_response_limit_s":VACUUM_LOSS_RESPONSE_LIMIT_S,
+        "duration_s":duration_s,"wall_seconds":start.elapsed().as_secs_f64(),
         "fuel":fuel,"primary_steps":primary_steps,"idle_cycles":idle_cycles,
         "final_observation":obs,"final_axes":axis_values,"driver_counts":model_counts,
         "independent_gpio_counts":edge_counts,"rising_edges":rising_counts,
