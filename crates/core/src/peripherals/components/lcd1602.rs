@@ -692,7 +692,7 @@ mod tests {
     }
 
     #[test]
-    fn texts_seen_blink_colon_replaces_tail() {
+    fn texts_seen_blink_colon_keeps_prior_panel() {
         let mut dev = Lcd1602::new(0x27);
         display_on(&mut dev);
         for ch in b"Time Remainig" {
