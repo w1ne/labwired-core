@@ -120,6 +120,9 @@ pub fn attach_esp32_external_devices(
     // `SystemBus::from_config` makes after its attach loop. Without it, Xtensa
     // playground/WASM builds would claim the motor and never install it.
     bus.install_motor_models(manifest)?;
+    // Board wires from an analog output to an ADC input (`analog_links` on a
+    // `peripherals:` entry), e.g. a DAC pad jumpered to an ADC1 pad.
+    bus.wire_manifest_analog_links(manifest)?;
     Ok(())
 }
 
@@ -621,6 +624,9 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // …and the other direction: the 32 PCNT input signals, so a pad routed
     // to a pulse counter with `gpio_matrix_in` counts its edges.
     bus.wire_esp32_pcnt_inputs();
+    // …and the DAC1/DAC2 outputs onto SAR ADC2_CH8/CH9, their own pads, so
+    // `analogRead(25)` after `dacWrite(25, v)` reads the level the DAC drives.
+    bus.wire_esp32_dac_adc();
     // AHB TX FIFO alias registered after wifi_mac_phy (see below).
 
     // SYSCON (TRM §13.2) — system controller. Owns SYSCLK_CONF, TICK_CONF,
@@ -1164,5 +1170,88 @@ mod board_io_tests {
             matches!(err, crate::sim_input::SimInputError::NoDevice(_)),
             "expected NoDevice, got {err:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod dac_tests {
+    use super::*;
+    use crate::Bus;
+    use labwired_config::{PeripheralConfig, SystemManifest};
+
+    const PAD_DAC1: u64 = 0x3FF4_8484;
+    const SAR_DAC_CTRL2: u64 = 0x3FF4_889C;
+    const SAR_MEAS_START1: u64 = 0x3FF4_8854;
+    const SAR_MEAS_START2: u64 = 0x3FF4_8894;
+
+    /// `dacWrite(25, code)` as IDF 4.4 does it: power on, CW_EN1 off, code.
+    fn dac_write(bus: &mut crate::bus::SystemBus, code: u32) {
+        bus.write_u32(PAD_DAC1, 0x8000_0000 | (code << 19) | (1 << 18) | (1 << 10))
+            .unwrap();
+        bus.write_u32(SAR_DAC_CTRL2, 1 << 25).unwrap();
+    }
+
+    fn convert(bus: &mut crate::bus::SystemBus, start: u64, channel: u32) -> u32 {
+        bus.write_u32(start, ((1 << channel) << 19) | (1 << 18) | (1 << 17))
+            .unwrap();
+        bus.read_u32(start).unwrap() & 0xFFFF
+    }
+
+    fn manifest(links: &str) -> SystemManifest {
+        let peripheral: PeripheralConfig = serde_yaml::from_str(&format!(
+            "{{ id: sens_sar_adc, type: esp32_sar_adc, base_address: 0x3FF48800, \
+             config: {{ analog_links: {links} }} }}"
+        ))
+        .unwrap();
+        SystemManifest {
+            schema_version: "1.0".to_string(),
+            name: "esp32-dac-jumper".to_string(),
+            chip: "esp32.yaml".to_string(),
+            peripherals: vec![peripheral],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn dac1_reaches_its_own_pad_on_adc2_ch8() {
+        let mut bus = crate::bus::SystemBus::new();
+        let _cpu = configure_xtensa_esp32(&mut bus);
+        dac_write(&mut bus, 200);
+        assert_eq!(
+            convert(&mut bus, SAR_MEAS_START2, 8),
+            200 * 3300 / 255 * 4095 / 3300
+        );
+    }
+
+    #[test]
+    fn a_manifest_jumper_takes_dac1_to_adc1_ch6() {
+        let mut bus = crate::bus::SystemBus::new();
+        let _cpu = configure_xtensa_esp32(&mut bus);
+        attach_esp32_external_devices(&mut bus, &manifest("{ 6: \"sens_sar_adc:0\" }"))
+            .expect("jumper binds");
+        let before = convert(&mut bus, SAR_MEAS_START1, 6);
+        dac_write(&mut bus, 128);
+        let level = convert(&mut bus, SAR_MEAS_START1, 6);
+        assert_eq!(level, 128 * 3300 / 255 * 4095 / 3300);
+        assert_ne!(before, level);
+        dac_write(&mut bus, 255);
+        assert_eq!(convert(&mut bus, SAR_MEAS_START1, 6), 4095);
+    }
+
+    #[test]
+    fn a_jumper_that_cannot_bind_is_an_error() {
+        for links in [
+            "{ 6: \"nope:0\" }",
+            "{ 6: \"sens_sar_adc:5\" }",
+            "{ 12: \"sens_sar_adc:0\" }",
+            "{ 6: \"sens_sar_adc\" }",
+        ] {
+            let mut bus = crate::bus::SystemBus::new();
+            let _cpu = configure_xtensa_esp32(&mut bus);
+            assert!(
+                attach_esp32_external_devices(&mut bus, &manifest(links)).is_err(),
+                "{links} must not attach"
+            );
+        }
     }
 }

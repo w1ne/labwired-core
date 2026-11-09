@@ -730,6 +730,25 @@ impl SystemBus {
         }
     }
 
+    /// Bind classic SAR ADC2_CH8 / CH9 to the DAC1 / DAC2 outputs: they are
+    /// the same pads (GPIO25 / GPIO26), so a conversion of either reads what
+    /// the DAC drives there. No-op without both blocks.
+    pub(crate) fn wire_esp32_dac_adc(&mut self) {
+        let (Some(rtc_idx), Some(sens_idx)) = (
+            self.find_peripheral_index_by_name("rtcio"),
+            self.find_peripheral_index_by_name("sens_sar_adc"),
+        ) else {
+            return;
+        };
+        for (dac, channel) in [(0u8, 8u8), (1, 9)] {
+            if let Some(probe) = self.peripherals[rtc_idx].dev.analog_output_probe(dac) {
+                self.peripherals[sens_idx]
+                    .dev
+                    .bind_adc_channel_probe(channel, probe);
+            }
+        }
+    }
+
     /// The ESP32-C3 counterpart of [`Self::wire_esp32_ledc_pads`]: bind the six
     /// LEDC channel outputs to the C3 output matrix (`LEDC_LS_SIG_OUT0..5` =
     /// 45..50), so `ledcWrite`/`analogWrite` duty is a waveform on the pad
@@ -3249,6 +3268,68 @@ impl SystemBus {
                 }
             }
         }
+    }
+
+    /// Bind the `analog_links` a manifest declares on its `peripherals:`
+    /// entries (`config: { analog_links: { <ch>: "<peripheral>:<output>" } }`)
+    /// on a bus the Xtensa builders made in Rust. Those never run
+    /// `from_config`'s per-type factory, which is where
+    /// [`Self::wire_analog_links`] gets its links from on every other part.
+    /// A link that cannot be bound is an error, not a warning: a jumper that
+    /// silently is not there reads as a model fault.
+    pub(crate) fn wire_manifest_analog_links(
+        &mut self,
+        manifest: &labwired_config::SystemManifest,
+    ) -> anyhow::Result<()> {
+        for p in &manifest.peripherals {
+            let Some(links) = p.config.get("analog_links") else {
+                continue;
+            };
+            let links = links.as_mapping().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "'{}': analog_links must be a map of <channel>: \"<peripheral>:<output>\"",
+                    p.id
+                )
+            })?;
+            let adc_idx = self.find_peripheral_index_by_name(&p.id).ok_or_else(|| {
+                anyhow::anyhow!("analog_links on '{}', which is not on the bus", p.id)
+            })?;
+            for (k, v) in links {
+                let parsed = k.as_u64().zip(
+                    v.as_str()
+                        .and_then(|s| s.rsplit_once(':'))
+                        .and_then(|(src, out)| Some((src, out.parse::<u8>().ok()?))),
+                );
+                let Some((channel, (source, output))) = parsed else {
+                    anyhow::bail!(
+                        "'{}': analog_links entry {k:?}: {v:?} not understood \
+                         (expected <channel>: \"<peripheral>:<output>\")",
+                        p.id
+                    );
+                };
+                let src_idx = self.find_peripheral_index_by_name(source).ok_or_else(|| {
+                    anyhow::anyhow!("'{}': analog_links channel {channel} names '{source}', which is not on the bus", p.id)
+                })?;
+                let probe = self.peripherals[src_idx]
+                    .dev
+                    .analog_output_probe(output)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("'{}': analog_links channel {channel} names {source}:{output}, which is not an analog output", p.id)
+                    })?;
+                let channel = u8::try_from(channel).ok().filter(|&ch| {
+                    self.peripherals[adc_idx]
+                        .dev
+                        .bind_adc_channel_probe(ch, probe)
+                });
+                if channel.is_none() {
+                    anyhow::bail!(
+                        "'{}': analog_links channel {k:?} is not an input it has",
+                        p.id
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Bind each ADC channel a board wires to an analog output (the ADC's

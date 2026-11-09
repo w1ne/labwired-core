@@ -8905,8 +8905,12 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
+    # 2026-11-08 (feat/esp32-dac): watched esp_rtc_io.rs. Adds the classic
+    # ESP32 PAD_DAC1/2 output probe; the S3 layout has no DAC and returns
+    # None. No S3 register map, reset value or captured window changes.
+    # ACK, NOT A CAPTURE.
     drift_ack: 2026-11-06
-    drift_ack_digest: 688e14f97c4f031e6adceca987640b45b5f96d450292dd4c8ab7201429f55d38
+    drift_ack_digest: 764180d0d498938a0728b015bd6e5a6ade2adc032981ee37801acf0c98d06455
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
