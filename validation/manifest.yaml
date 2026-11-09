@@ -8905,8 +8905,14 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-06
-    drift_ack_digest: 688e14f97c4f031e6adceca987640b45b5f96d450292dd4c8ab7201429f55d38
+    # 2026-11-09 (#1780 fix/esp32c3-rom-boot-flash-size): watched
+    # spi_mem_flash.rs. Dedicated FLASH_PP/SE/BE now decode the 24-bit address
+    # and take the PP byte count from ADDR[31:24] (ESP-IDF HAL layout), so
+    # dedicated program/erase land in flash instead of past its end. Command
+    # semantics only: no register map, reset value or captured reset-state
+    # window changes. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-09
+    drift_ack_digest: c14e0828a3aa42866f930317ba858406847acd2d702deec796920894139c1eff
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
