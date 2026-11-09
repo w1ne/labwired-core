@@ -20,6 +20,19 @@
 use crate::{Peripheral, SimResult};
 use std::any::Any;
 
+/// The port index (0 = A, by letter) the 4-bit `EXTICRx` field of `line`
+/// selects, through the family's code→port table `ports` (code `n` selects
+/// `ports[n]`). A code past the table selects no port — `Some(u8::MAX)`,
+/// which matches no port, so the line stays quiet as on silicon. `None` only
+/// for lines 16+, which have no mux.
+fn exticr_port(exticr: &[u32; 4], line: u8, ports: &[u8]) -> Option<u8> {
+    if line >= 16 {
+        return None;
+    }
+    let code = (exticr[usize::from(line / 4)] >> (u32::from(line % 4) * 4)) & 0xF;
+    Some(ports.get(code as usize).copied().unwrap_or(u8::MAX))
+}
+
 /// STM32F4 SYSCFG register file.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct Stm32F4Syscfg {
@@ -152,12 +165,10 @@ impl Stm32L0Syscfg {
     }
 
     /// The GPIO port index (0 = A) `SYSCFG_EXTICRx` routes to EXTI `line`.
+    /// The L0 numbers its ports A..E = 0..4 and H = 5 (`stm32l073xx.h`
+    /// `SYSCFG_EXTICR1_EXTI0_PH = 5`); the other codes select no port.
     pub fn exti_port(&self, line: u8) -> Option<u8> {
-        if line >= 16 {
-            return None;
-        }
-        let word = self.exticr[usize::from(line / 4)];
-        Some(((word >> (u32::from(line % 4) * 4)) & 0xF) as u8)
+        exticr_port(&self.exticr, line, &[0, 1, 2, 3, 4, 7])
     }
 
     /// CFGR3 with the ready flags its enables imply: VREFINT_RDYF (30) from
@@ -261,6 +272,150 @@ impl Peripheral for Stm32L0Syscfg {
     }
 }
 
+/// STM32L1 SYSCFG (RM0038 §8, `stm32l151xd.h` SYSCFG_TypeDef): MEMRMP @0x00,
+/// PMC @0x04 and the `SYSCFG_EXTICR1..4` line-source mux at 0x08..0x14 — the
+/// F4 offsets, but NOT the F4 port numbering. The L1 codes are A..E = 0..4,
+/// **H = 5, F = 6, G = 7** (`SYSCFG_EXTICR1_EXTI0_PH = 5`, `_PF = 6`,
+/// `_PG = 7`): port H came before F/G on the first L1 parts and kept its
+/// code. Routing L1 EXTICR through the F4 model would send a PH edge to the
+/// line only when firmware asked for PG.
+///
+/// `MEMRMP`: MEM_MODE (1:0) sticks; BOOT_MODE (9:8) reads 00, main Flash, the
+/// only boot this model has. `PMC`: USB_PU (0) — the only PMC bit the
+/// STM32L151xD header defines — sticks.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct Stm32L1Syscfg {
+    memrmp: u32,
+    pmc: u32,
+    exticr: [u32; 4],
+}
+
+impl Stm32L1Syscfg {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The GPIO port index (0 = A, by letter) `SYSCFG_EXTICRx` routes to
+    /// EXTI `line`.
+    pub fn exti_port(&self, line: u8) -> Option<u8> {
+        exticr_port(&self.exticr, line, &[0, 1, 2, 3, 4, 7, 5, 6])
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.memrmp,
+            0x04 => self.pmc,
+            0x08 => self.exticr[0],
+            0x0C => self.exticr[1],
+            0x10 => self.exticr[2],
+            0x14 => self.exticr[3],
+            _ => {
+                crate::census_reg!("syscfg:Stm32L1Syscfg", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // MEM_MODE[1:0]; BOOT_MODE is read-only.
+            0x00 => self.memrmp = value & 0x3,
+            0x04 => self.pmc = value & 0x1,
+            0x08 => self.exticr[0] = value & 0xFFFF,
+            0x0C => self.exticr[1] = value & 0xFFFF,
+            0x10 => self.exticr[2] = value & 0xFFFF,
+            0x14 => self.exticr[3] = value & 0xFFFF,
+            _ => {
+                crate::census_reg!("syscfg:Stm32L1Syscfg", offset, "write");
+            }
+        }
+    }
+}
+
+impl Peripheral for Stm32L1Syscfg {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = self.read_reg(offset & !3);
+        Ok(((reg >> ((offset % 4) * 8)) & 0xFF) as u8)
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg_offset = offset & !3;
+        let shift = (offset % 4) * 8;
+        let mut reg = self.read_reg(reg_offset);
+        reg &= !(0xFF << shift);
+        reg |= u32::from(value) << shift;
+        self.write_reg(reg_offset, reg);
+        Ok(())
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_reg(offset & !3))
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write_reg(offset & !3, value);
+        Ok(())
+    }
+
+    fn exti_line_source(&self, line: u8) -> Option<u8> {
+        self.exti_port(line)
+    }
+
+    /// A configuration register bank: no `tick`, nothing to walk.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
+        Some(self)
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod l1_tests {
+    use super::Stm32L1Syscfg;
+    use crate::Peripheral;
+
+    #[test]
+    fn exticr_codes_follow_the_l1_port_numbering() {
+        let mut s = Stm32L1Syscfg::new();
+        assert_eq!(s.exti_line_source(0), Some(0), "reset: port A");
+        // EXTICR1: line 0 -> code 5, line 1 -> code 6, line 2 -> code 7,
+        // line 3 -> code 2.
+        s.write_u32(0x08, 5 | (6 << 4) | (7 << 8) | (2 << 12))
+            .unwrap();
+        assert_eq!(s.exti_line_source(0), Some(7), "code 5 is port H");
+        assert_eq!(s.exti_line_source(1), Some(5), "code 6 is port F");
+        assert_eq!(s.exti_line_source(2), Some(6), "code 7 is port G");
+        assert_eq!(s.exti_line_source(3), Some(2), "code 2 is port C");
+        // A reserved code selects no port at all.
+        s.write_u32(0x14, 0x8 << 4).unwrap();
+        assert_eq!(s.exti_line_source(13), Some(u8::MAX));
+        assert_eq!(s.exti_line_source(16), None);
+    }
+
+    #[test]
+    fn registers_keep_only_their_fields() {
+        let mut s = Stm32L1Syscfg::new();
+        s.write_u32(0x00, 0xFFFF_FFFF).unwrap();
+        assert_eq!(s.read_u32(0x00).unwrap(), 0x3, "BOOT_MODE reads 00");
+        s.write_u32(0x04, 0xFFFF_FFFF).unwrap();
+        assert_eq!(s.read_u32(0x04).unwrap(), 0x1);
+        s.write_u32(0x10, 0xFFFF_FFFF).unwrap();
+        assert_eq!(s.read_u32(0x10).unwrap(), 0xFFFF);
+        // A byte store reaches one field only.
+        s.write(0x11, 0x00).unwrap();
+        assert_eq!(s.read_u32(0x10).unwrap(), 0x00FF);
+    }
+}
+
 #[cfg(test)]
 mod l0_tests {
     use super::Stm32L0Syscfg;
@@ -275,6 +430,11 @@ mod l0_tests {
         assert_eq!(s.exti_line_source(13), Some(2));
         assert_eq!(s.exti_line_source(12), Some(0));
         assert_eq!(s.exti_line_source(16), None);
+        // EXTICR1 line 0 -> code 5 is port H (index 7 by letter); code 6 is
+        // reserved on the L0 and selects nothing.
+        s.write_u32(0x08, 5 | (6 << 4)).unwrap();
+        assert_eq!(s.exti_line_source(0), Some(7));
+        assert_eq!(s.exti_line_source(1), Some(u8::MAX));
     }
 
     #[test]

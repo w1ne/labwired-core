@@ -1,10 +1,58 @@
-# Cortex-M3 USART smoke against the narrowed imported STM32L151 profile.
-schema_version: "1.0"
+# Cortex-M3 smoke against the imported STM32L151xD profile: USART1/2/3 TX,
+# GPIOA..H reset values and set/reset, EXTI software and pad edges through
+# the SYSCFG port mux (L1 codes: PH = 5, PG = 7), and TIM2..TIM7/TIM9..TIM11
+# width, counting and update interrupt on the right NVIC line. The two
+# fixture switches (PH1, PC13) are pressed by the stimuli below. It does not
+# claim RCC, SPI, I2C, DMA, RTC or ADC.
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32l151-smoke"
   system: "../../configs/systems/onboarding/stm32l151.yaml"
 limits:
-  max_steps: 200000
+  max_steps: 4000000
+stimuli:
+  - target: { component: "sw_ph1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1500000 }
+    value: 1.0
+  - target: { component: "sw_ph1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1700000 }
+    value: 0.0
+  - target: { component: "sw_ph1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2100000 }
+    value: 1.0
+  - target: { component: "sw_ph1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2300000 }
+    value: 0.0
+  - target: { component: "sw_pc13", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2700000 }
+    value: 1.0
+  - target: { component: "sw_pc13", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2900000 }
+    value: 0.0
 assertions:
   - uart_contains: "STM32L151 Cortex-M3 smoke"
+  - uart_contains: "usart2 ok"
+  - uart_contains: "usart3 ok"
+  - uart_ordered:
+      - "gpio pa=1 pb=1 pc=1 ph=1 fg=1 ok"
+      - "exti swier masked=1 routed=1 ok"
+      - "tim2 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim4 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim9 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim10 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim11 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "exti pads idle=1 presses=1 pg_quiet=1 ph1=1 pc13=1 ok"
+      - "summary 0x15100FFF"
+      - "DONE"
+  - memory_value:
+      address: 0x20008000
+      expected_value: 0x15100FFF
+      size: 4
+  - gpio_edges:
+      pin: "gpioh:0"
+      min_edges: 4
   - expected_stop_reason: max_steps

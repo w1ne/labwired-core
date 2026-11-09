@@ -1,18 +1,191 @@
-# Bounded STM32L151 Cortex-M3 profile for the imported USART1 smoke.
-# These memory windows are sized for this fixture; they are not a full
-# density claim for the STM32L151 family. Unexercised imported peripherals,
-# including zero-answering Python windows, are omitted.
+# STM32L151 (Cortex-M3) profile for the imported Renode platform
+# (platforms/cpus/stm32l151.repl).
+#
+# Memory: Renode maps 384 KiB flash at 0x08000000 and 48 KiB SRAM at
+# 0x20000000 — the STM32L151xD density. Bases, IRQ numbers and register
+# layouts follow ST's CMSIS `stm32l151xd.h` (cmsis-device-l1). Where the
+# Renode .repl and the header disagree, the header wins: Renode wires timer5
+# to NVIC 45, which is SDIO_IRQn; TIM5_IRQn is 46.
+#
+# Claimed and exercised by examples/renode-onboarding/stm32l151-smoke.yaml:
+# USART1/2/3, GPIOA..H (with the RM0038 reset values of PA/PB), SYSCFG
+# EXTICR + EXTI lines 0..15, TIM2..TIM7 and TIM9..TIM11.
+#
+# Not claimed: RCC (Renode does not model it either, so on both engines the
+# blocks below are clocked from reset — firmware that polls RCC ready bits
+# will fault here on an unmapped access instead of reading Renode's zeros),
+# PWR, FLASH interface, SPI1..3, I2C1, DMA1, RTC, ADC/DAC/COMP, USB, LCD and
+# the EXTI lines 16..23. Renode's bit-band aliases are the engine's own
+# Cortex-M3 bit-band, not a peripheral entry.
 name: stm32l151
 arch: arm
 core: cortex-m3
+# STM32L1 maximum core clock, 32 MHz (DS STM32L151xD). With no RCC the
+# timers count at this rate.
+cpu_hz: 32_000_000
 flash:
-  base: 134217728
-  size: 65536B
+  base: 0x08000000
+  size: 384KB
 ram:
-  base: 536870912
-  size: 8192B
+  base: 0x20000000
+  size: 48KB
 peripherals:
+# --- USART (classic SR/DR/BRR/CR1 layout, F1/F4 IP) -------------------------
 - id: usart1
-  type: stm32_uart
-  bus: sysbus
-  base_address: 1073821696
+  type: uart
+  base_address: 0x40013800
+  size: 1KB
+  irq: 37
+  config:
+    profile: stm32f1
+    cr3_mask: 0xFFF
+- id: usart2
+  type: uart
+  base_address: 0x40004400
+  size: 1KB
+  irq: 38
+  config:
+    profile: stm32f1
+    cr3_mask: 0xFFF
+- id: usart3
+  type: uart
+  base_address: 0x40004800
+  size: 1KB
+  irq: 39
+  config:
+    profile: stm32f1
+    cr3_mask: 0xFFF
+
+# --- GPIO (AHB, MODER/OTYPER/OSPEEDR/PUPDR/IDR/ODR/BSRR/LCKR/AFR/BRR) -------
+# Ids are the port letters so EXTI can address the pads; Renode calls them
+# gpioPortA..H. Note the L1 address order: H sits at 0x40021400, before F and G.
+# PA/PB reset values are RM0038 §7.4 (and Renode's): PA13/14/15 and PB3/4 come
+# up in the JTAG/SWD alternate function.
+- id: gpioa
+  type: gpio
+  base_address: 0x40020000
+  size: 1KB
+  config:
+    profile: stm32v2
+    reset_moder: 0xA8000000
+    reset_pupdr: 0x64000000
+- id: gpiob
+  type: gpio
+  base_address: 0x40020400
+  size: 1KB
+  config:
+    profile: stm32v2
+    reset_moder: 0x00000280
+    reset_ospeedr: 0x000000C0
+    reset_pupdr: 0x00000100
+- id: gpioc
+  type: gpio
+  base_address: 0x40020800
+  size: 1KB
+  config:
+    profile: stm32v2
+- id: gpiod
+  type: gpio
+  base_address: 0x40020C00
+  size: 1KB
+  config:
+    profile: stm32v2
+- id: gpioe
+  type: gpio
+  base_address: 0x40021000
+  size: 1KB
+  config:
+    profile: stm32v2
+- id: gpioh
+  type: gpio
+  base_address: 0x40021400
+  size: 1KB
+  config:
+    profile: stm32v2
+- id: gpiof
+  type: gpio
+  base_address: 0x40021800
+  size: 1KB
+  config:
+    profile: stm32v2
+- id: gpiog
+  type: gpio
+  base_address: 0x40021C00
+  size: 1KB
+  config:
+    profile: stm32v2
+
+# --- SYSCFG / EXTI ----------------------------------------------------------
+# SYSCFG_EXTICR picks the port of EXTI lines 0..15, with the L1 port codes
+# (H = 5, F = 6, G = 7) — see peripherals/syscfg.rs Stm32L1Syscfg.
+- id: syscfg
+  type: syscfg
+  base_address: 0x40010000
+  size: 1KB
+  config:
+    profile: stm32l1
+# IMR/EMR/RTSR/FTSR/SWIER/PR at 0x00..0x14, 24 lines on the xD
+# (EXTI_IMR_MR23). Vectors EXTI0..4 = 6..10, EXTI9_5 = 23, EXTI15_10 = 40.
+- id: exti
+  type: exti
+  base_address: 0x40010400
+  size: 1KB
+  config:
+    lines: 24
+
+# --- Timers -----------------------------------------------------------------
+# RM0038 §16: TIM2/3/4 are 16-bit, TIM5 is the 32-bit one. (Renode gives
+# timer2 a 0xFFFFFFFF limit; RM0038 does not.)
+- id: tim2
+  type: timer
+  base_address: 0x40000000
+  size: 1KB
+  irq: 28
+- id: tim3
+  type: timer
+  base_address: 0x40000400
+  size: 1KB
+  irq: 29
+- id: tim4
+  type: timer
+  base_address: 0x40000800
+  size: 1KB
+  irq: 30
+- id: tim5
+  type: timer
+  base_address: 0x40000C00
+  size: 1KB
+  irq: 46
+  config:
+    width: 32
+# TIM6/TIM7: basic timers, counter + UIF only.
+- id: tim6
+  type: timer
+  base_address: 0x40001000
+  size: 1KB
+  irq: 43
+  config:
+    basic: true
+- id: tim7
+  type: timer
+  base_address: 0x40001400
+  size: 1KB
+  irq: 44
+  config:
+    basic: true
+# TIM9 (2 channels), TIM10/TIM11 (1 channel), 16-bit.
+- id: tim9
+  type: timer
+  base_address: 0x40010800
+  size: 1KB
+  irq: 25
+- id: tim10
+  type: timer
+  base_address: 0x40010C00
+  size: 1KB
+  irq: 26
+- id: tim11
+  type: timer
+  base_address: 0x40011000
+  size: 1KB
+  irq: 27

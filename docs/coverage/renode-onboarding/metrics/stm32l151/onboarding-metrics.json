@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 200000,
+    "instructions": 4000000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/stm32l151-smoke.yaml",
   "system": "configs/systems/onboarding/stm32l151.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:50:30Z",
-  "finished_at_utc": "2026-11-05T14:50:31Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1070,
+  "started_at_utc": "2026-11-08T23:54:49Z",
+  "finished_at_utc": "2026-11-09T00:00:27Z",
+  "elapsed_seconds": 338,
+  "elapsed_ms": 337606,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.303,
-    "build_firmware": 0.481,
-    "run_smoke": 0.274
+    "build_cli": 336.483,
+    "build_firmware": 0.288,
+    "run_smoke": 0.822
   },
   "stages_ms": {
-    "build_cli": 303,
-    "build_firmware": 481,
-    "run_smoke": 274
+    "build_cli": 336483,
+    "build_firmware": 288,
+    "run_smoke": 822
   }
 }

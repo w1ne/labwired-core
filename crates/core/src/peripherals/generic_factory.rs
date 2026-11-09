@@ -1617,6 +1617,11 @@ pub fn try_build(
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32l0") => {
             Box::new(crate::peripherals::syscfg::Stm32L0Syscfg::new())
         }
+        // SYSCFG on STM32L1 (`profile: stm32l1`): the F4 offsets with the L1
+        // EXTICR port codes (H = 5, F = 6, G = 7; RM0038 §8).
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32l1") => {
+            Box::new(crate::peripherals::syscfg::Stm32L1Syscfg::new())
+        }
         // SYSCFG elsewhere — mostly EXTI source select (harmless read-0 stub), plus the H7
         // I/O compensation cell the H7 HAL enables + polls during rcc.freeze:
         // CCCSR @ 0x20, READY = bit 8. Seed it so the poll exits (EN is a

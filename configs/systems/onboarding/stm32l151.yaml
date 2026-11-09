@@ -6,3 +6,19 @@
 
 name: stm32l151
 chip: ../../chips/onboarding/stm32l151.yaml
+# Smoke fixture inputs, not a board: Renode's stm32l151.repl is a bare CPU
+# platform. Two switches to ground on PH1 and PC13 (pressed = low, against
+# the GPIO pull-up) give the EXTI port mux real pad edges to route.
+board_io:
+  - id: "sw_ph1"
+    kind: "button"
+    peripheral: "gpioh"
+    pin: 1
+    signal: "input"
+    active_high: false
+  - id: "sw_pc13"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false
