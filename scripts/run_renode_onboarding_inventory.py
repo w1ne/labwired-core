@@ -844,7 +844,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/stm32f7_discovery-bb-smoke.yaml",
     },
     "stm32f777": {
-        "crate": "firmware-stm32f746-demo",
+        "crate": "firmware-stm32f767-smoke",
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/stm32f777-smoke.yaml",
     },
@@ -924,7 +924,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/stm32f412-smoke.yaml",
     },
     "nucleo_f767zi": {
-        "crate": "firmware-stm32f746-demo",
+        "crate": "firmware-stm32f767-smoke",
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/nucleo_f767zi-smoke.yaml",
     },

@@ -1669,6 +1669,11 @@ pub fn try_build(
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f7") => {
             Box::new(crate::peripherals::syscfg::Stm32F4Syscfg::new_f7())
         }
+        // SYSCFG on STM32F76x/F77x (`profile: stm32f76x`): the F7 file with
+        // MEMRMP.SWP_FB (RM0410 §7).
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f76x") => {
+            Box::new(crate::peripherals::syscfg::Stm32F4Syscfg::new_f76x())
+        }
         // SYSCFG on STM32L0 (`profile: stm32l0`): the same EXTICR line-source
         // mux, among the L0's own configuration words (RM0367 §10).
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32l0") => {

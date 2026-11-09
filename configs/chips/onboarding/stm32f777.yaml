@@ -4,32 +4,86 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# STM32F76x/F77x (Cortex-M7), from Renode's platforms/cpus/stm32f777.repl.
+# That repl is the F746 platform with the F76x additions (CAN3, SPI4..6,
+# I2C4 and the DFSDM/JPEG/MDIOS lines), so the F746 silicon profile is
+# included whole and only what RM0410 / `stm32f767xx.h` / `stm32f777xx.h`
+# change is overridden here:
+#
+# - geometry: 2 MiB flash (FLASH_END 0x081FFFFF) and 512 KiB SRAM (DTCM 128K
+#   + SRAM1 368K + SRAM2 16K, contiguous at 0x20000000; SRAM2_BASE
+#   0x2007C000). The repl maps 256 MiB of "sram".
+# - RCC ENR masks: every *EN bit the F767 header defines (APB1 adds CAN3EN,
+#   APB2 adds SPI4/5/6, SAI2, DFSDM1, MDIO; AHB1 is unchanged). AHB2ENR is
+#   not masked by the model; on the F777 it carries CRYP/HASH, which are
+#   not modelled.
+# - SYSCFG `profile: stm32f76x`: MEMRMP also keeps SWP_FB (stored; the bank
+#   swap is not modelled and only acts in dual-bank mode).
+# - EXTI: 25 lines (line 24 = MDIO slave).
+# - SPI4/5/6 (FIFO SPI, APB2ENR bits 13/20/21, NVIC 84/85/86). They have no
+#   pad routing: only SPI1..3 publish pads to the GPIO wires.
+#
+# Everything else (USART/UART, GPIOA..K, TIM1..14, SPI1..3, I2C1..4,
+# DMA1/2, CRC, RNG) is the F746 block set, identical on the F76x/F77x; see
+# stm32f746.yaml. Each block is exercised by crates/firmware-stm32f767-smoke.
+#
+# Not claimed: ADC1..3, DAC, CAN1..3, Ethernet, LTDC, DMA2D, JPEG, DFSDM1,
+# MDIOS, SDMMC1/2, RTC, PWR, the flash interface, QUADSPI, FMC, USB OTG,
+# SAI1/2, SPDIFRX, HDMI-CEC, LPTIM1, DCMI, CRYP/HASH (F777), the watchdogs,
+# and the RCC PLLSAI/PLLI2S/DCKCFGR1/2 clock muxing.
+include: stm32f746.yaml
 name: stm32f777
-arch: arm
 flash:
-  base: 134217728
-  size: 2097152B
+  base: 0x08000000
+  size: 2048KB
 ram:
-  base: 536870912
-  # Only the 128 KiB DTCM region at 0x20000000 is modeled in this smoke profile.
-  # The imported 256 MiB span was not a real SRAM map; SRAM1, ITCM, and backup
-  # SRAM are outside this profile.
-  size: 131072B
-# This profile is limited to existing models exercised by the exact-import
-# Cortex-M7 smoke. Other imported peripherals include zero-answering stubs and
-# are not claimed here.
+  base: 0x20000000
+  size: 512KB
 peripherals:
-- id: usart1
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073811456
-- id: gpioPortI
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1073881088
-  config:
-    profile: stm32v2
 - id: rcc
-  type: stm32f4_rcc
-  bus: sysbus
-  base_address: 1073887232
+  type: rcc
+  base_address: 0x40023800
+  size: 1KB
+  config:
+    profile: stm32f4
+    rcc_ahb1enr_mask: 0x7EF417FF
+    rcc_apb1enr_mask: 0xFFFFEFFF
+    rcc_apb2enr_mask: 0x64F77FB3
+    rcc_ahb1enr_reset: 0x00100000
+- id: syscfg
+  type: syscfg
+  base_address: 0x40013800
+  size: 1KB
+  clock: { reg: apb2enr, bit: 14 }
+  config:
+    profile: stm32f76x
+- id: exti
+  type: exti
+  base_address: 0x40013C00
+  size: 1KB
+  config:
+    lines: 25
+- id: spi4
+  type: spi
+  base_address: 0x40013400
+  size: 1KB
+  irq: 84
+  clock: { reg: apb2enr, bit: 13 }
+  config:
+    profile: stm32_fifo
+- id: spi5
+  type: spi
+  base_address: 0x40015000
+  size: 1KB
+  irq: 85
+  clock: { reg: apb2enr, bit: 20 }
+  config:
+    profile: stm32_fifo
+- id: spi6
+  type: spi
+  base_address: 0x40015400
+  size: 1KB
+  irq: 86
+  clock: { reg: apb2enr, bit: 21 }
+  config:
+    profile: stm32_fifo

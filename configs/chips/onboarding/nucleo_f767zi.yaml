@@ -1,29 +1,12 @@
-# Bounded imported NUCLEO-F767ZI profile for the Cortex-M7 USART1/GPIO smoke.
-# Memory follows the Renode STM32F746 CPU map; the wider F767 TCM/backup map
-# and unexercised peripherals are not represented by this onboarding profile.
+# NUCLEO-F767ZI (platforms/boards/nucleo_f767zi.repl). Renode builds the board
+# as `using "platforms/cpus/stm32f777.repl"` plus three LEDs, the user button
+# and an Ethernet PHY; the board's part is the STM32F767ZIT6. The silicon is
+# the imported stm32f777 profile (the F76x/F77x surface), included whole so
+# the two rows cannot drift: 2 MiB / 512 KiB, RCC, USART1/2/3/6 +
+# UART4/5/7/8, GPIOA..K, SYSCFG + EXTI, TIM1..TIM14, SPI1..6, I2C1..4,
+# DMA1/DMA2, CRC and RNG. See stm32f777.yaml for what it does not claim.
+#
+# The board-level parts (LD1/LD2/LD3 on PB0/PB7/PB14, B1 on PC13) live in the
+# system file. The Ethernet PHY is not declared (no Ethernet MAC model).
+include: stm32f777.yaml
 name: nucleo_f767zi
-arch: arm
-core: cortex-m7
-flash:
-  base: 0x08000000
-  size: 2097152B
-ram:
-  base: 0x20000000
-  size: 393216B
-peripherals:
-- id: usart1
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 0x40011000
-- id: gpioPortI
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 0x40022000
-  config:
-    profile: stm32v2
-- id: rcc
-  type: stm32f4_rcc
-  bus: sysbus
-  base_address: 0x40023800
-provenance:
-  generated_by: scripts/onboard_hw_targets.py

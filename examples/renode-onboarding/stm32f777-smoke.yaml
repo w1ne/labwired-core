@@ -1,15 +1,122 @@
-# Cortex-M7 register smoke against the imported STM32F777 profile.
-# The shared STM32F746 binary uses only the common F7 RCC, USART1, and GPIOI
-# register sequence; its 64 KiB linker region fits inside this profile's DTCM.
-schema_version: "1.0"
+# Cortex-M7 smoke against the imported STM32F76x/F77x profile (the F746
+# surface plus the F76x changes): RCC reset state, an enforced clock gate
+# and the F767 APB1ENR/APB2ENR write masks; SRAM2 and the last word of the
+# 512 KiB SRAM, the last word of the 2 MiB flash; USART1/2/3/6 and
+# UART4/5/7/8 TX and TXE interrupts each on its own line; GPIOA..K reset
+# values and set/reset; the F7 SYSCFG fields; EXTI software and pad edges
+# through the SYSCFG port mux (PK = code 10) on EXTI3 / EXTI9_5 / EXTI15_10;
+# TIM1..TIM14 width, counting and the update interrupt on the right
+# (shared) NVIC line; SPI1..6 (FIFO SPI) each reading its own MAX31855
+# frame, polled and under RXNEIE; two MAX31855s sharing SPI1 behind GPIO
+# chip selects PA4 / PB0; SPI1 through DMA2 streams 0/3 and SPI2 through
+# DMA1 streams 3/4, each first with the wrong SxCR.CHSEL (nothing moves);
+# memory-to-memory on DMA2 only; I2C1 reading a TMP102 with RXIE on the
+# event line, and a NACK on each of I2C1..4's own event line; CRC-32, INIT,
+# the 8-bit IDR and a 16-bit polynomial over bytes; RNG draws.
+# The fixture switches (PK3, PC13) are pressed by the stimuli below; the
+# first stimuli set the SPI2..6 and second SPI1 thermocouples.
+# It does not claim ADC, DAC, CAN, Ethernet, LTDC, DMA2D, SDMMC, RTC, USB,
+# QUADSPI, FMC, SAI, JPEG, DFSDM, MDIOS, CRYP/HASH, the RNG interrupt or
+# the watchdogs.
+schema_version: "1.2"
 inputs:
-  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f746-demo"
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f767-smoke"
   system: "../../configs/systems/onboarding/stm32f777.yaml"
 limits:
-  max_steps: 800000
+  max_steps: 8000000
+stimuli:
+  - target: { component: "tc_spi2", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 100.0
+  - target: { component: "tc_spi3", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 75.0
+  - target: { component: "tc_spi1b", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 50.0
+  - target: { component: "tc_spi4", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 60.0
+  - target: { component: "tc_spi5", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 125.0
+  - target: { component: "tc_spi6", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 200.0
+  - target: { component: "sw_pk3", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1500000 }
+    value: 1.0
+  - target: { component: "sw_pk3", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1700000 }
+    value: 0.0
+  - target: { component: "sw_pk3", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2100000 }
+    value: 1.0
+  - target: { component: "sw_pk3", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2300000 }
+    value: 0.0
+  - target: { component: "sw_pc13", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2700000 }
+    value: 1.0
+  - target: { component: "sw_pc13", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2900000 }
+    value: 0.0
 assertions:
-  - uart_contains: "OK"
+  - uart_contains: "STM32F767 Cortex-M7 smoke"
+  - uart_contains: "usart2 ok"
+  - uart_contains: "usart3 ok"
+  - uart_contains: "uart4 ok"
+  - uart_contains: "uart5 ok"
+  - uart_contains: "usart6 ok"
+  - uart_contains: "uart7 ok"
+  - uart_contains: "uart8 ok"
+  - uart_ordered:
+      - "rcc reset=1 gate=1 mask=1 ok"
+      - "geometry flash_last=0xFFFFFFFF sram2=1 ok"
+      - "usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok"
+      - "gpio pa=1 pb=1 reset=1 pi1=1 jk=1 ok"
+      - "syscfg memrmp=0x00000D00 pmc=0x008700FF fields=1 cmpcr=1 ok"
+      - "exti swier masked=1 routed=1 ok"
+      - "exti lines imr=0x01FFFFFF line24=1 ok"
+      - "tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim4 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim8 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim9 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim10 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim11 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim12 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim13 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "exti pads idle=1 presses=1 pa_quiet=1 pk3=1 pc13=1 ok"
+      - "spi1 frame=0x01901600 ds=1 data=1 pend=1 alone=1 released=1 ok"
+      - "spi2 frame=0x06401600 ds=1 data=1 pend=1 alone=1 released=1 ok"
+      - "spi3 frame=0x04B01600 ds=1 data=1 pend=1 alone=1 released=1 ok"
+      - "spi4 frame=0x03C01600 ds=1 data=1 pend=1 alone=1 released=1 ok"
+      - "spi5 frame=0x07D01600 ds=1 data=1 pend=1 alone=1 released=1 ok"
+      - "spi6 frame=0x0C801600 ds=1 data=1 pend=1 alone=1 released=1 ok"
+      - "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok"
+      - "dma2 spi1 frame=0x01901600 unselected=1 data=1 flags=1 pend=1 alone=1 released=1 ok"
+      - "dma1 spi2 frame=0x06401600 unselected=1 data=1 flags=1 pend=1 alone=1 released=1 ok"
+      - "dma m2m dma1_refused=1 dma2_copied=1 ok"
+      - "i2c1 tmp102=0x00001900 data=1 rx_pend=1 ok"
+      - "i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok"
+      - "i2c2 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok"
+      - "i2c3 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok"
+      - "i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok"
+      - "crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok"
+      - "rng off=1 ready=1 draws=1 stopped=1 ok"
+      - "summary 0x767FFFFF"
+      - "DONE"
+  - memory_value:
+      address: 0x20003000
+      expected_value: 0x767FFFFF
+      size: 4
   - gpio_edges:
-      pin: "gpioPortI:1"
-      min_edges: 1
+      pin: "gpioi:1"
+      min_edges: 4
   - expected_stop_reason: max_steps

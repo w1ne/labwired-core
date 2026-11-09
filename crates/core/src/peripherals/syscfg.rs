@@ -43,6 +43,9 @@ pub struct Stm32F4Syscfg {
     /// The F74x/F75x field set (`profile: stm32f7`) instead of the F4 one.
     #[serde(skip)]
     f7: bool,
+    /// The F76x/F77x `MEMRMP` (`profile: stm32f76x`) also keeps SWP_FB.
+    #[serde(skip)]
+    swp_fb: bool,
 }
 
 /// F4 `MEMRMP`: MEM_MODE[1:0].
@@ -52,6 +55,10 @@ const F4_PMC_MASK: u32 = (1 << 16) | (1 << 23);
 /// F74x `MEMRMP` (RM0385 §7.2.1, `stm32f746xx.h`): SWP_FMC[11:10]. MEM_BOOT
 /// (bit 0) is read-only and reads 0, the BOOT_ADD0 boot this model has.
 const F7_MEMRMP_MASK: u32 = 0x3 << 10;
+/// F76x/F77x `MEMRMP` SWP_FB (RM0410 §7.2.1, `stm32f767xx.h`). The bit is
+/// stored; the bank swap itself is not modelled. It only acts in dual-bank
+/// mode (option bit nDBANK = 0), and the parts ship single-bank.
+const F76X_MEMRMP_SWP_FB: u32 = 1 << 8;
 /// F74x `PMC` (RM0385 §7.2.2): I2C1..4_FMP and PB6..PB9_FMP (bits 0..7),
 /// ADC1..3DC2 (bits 16..18), MII_RMII_SEL (bit 23).
 const F7_PMC_MASK: u32 = 0xFF | (0x7 << 16) | (1 << 23);
@@ -67,6 +74,16 @@ impl Stm32F4Syscfg {
     pub fn new_f7() -> Self {
         Self {
             f7: true,
+            ..Self::default()
+        }
+    }
+
+    /// The STM32F76x/F77x SYSCFG (RM0410 §7): the F74x register file with
+    /// SWP_FB added to `MEMRMP`; `PMC` has the same fields.
+    pub fn new_f76x() -> Self {
+        Self {
+            f7: true,
+            swp_fb: true,
             ..Self::default()
         }
     }
@@ -101,10 +118,10 @@ impl Stm32F4Syscfg {
         match offset {
             0x00 => {
                 self.memrmp = value
-                    & if self.f7 {
-                        F7_MEMRMP_MASK
-                    } else {
-                        F4_MEMRMP_MASK
+                    & match (self.f7, self.swp_fb) {
+                        (true, true) => F7_MEMRMP_MASK | F76X_MEMRMP_SWP_FB,
+                        (true, false) => F7_MEMRMP_MASK,
+                        _ => F4_MEMRMP_MASK,
                     }
             }
             0x04 => self.pmc = value & if self.f7 { F7_PMC_MASK } else { F4_PMC_MASK },
@@ -522,6 +539,17 @@ mod tests {
         s.write_u32(0x0C, 0x1234).unwrap();
         s.write(0x0D, 0x05).unwrap();
         assert_eq!(s.read_u32(0x0C).unwrap(), 0x0534);
+    }
+
+    #[test]
+    fn f76x_profile_adds_swp_fb_to_memrmp() {
+        let mut f76x = Stm32F4Syscfg::new_f76x();
+        f76x.write_u32(0x00, 0xFFFF_FFFF).unwrap();
+        f76x.write_u32(0x04, 0xFFFF_FFFF).unwrap();
+        assert_eq!(f76x.read_u32(0x00).unwrap(), 0x0D00);
+        assert_eq!(f76x.read_u32(0x04).unwrap(), 0x0087_00FF);
+        f76x.write_u32(0x14, 2 << 4).unwrap();
+        assert_eq!(f76x.exti_line_source(13), Some(2));
     }
 
     #[test]

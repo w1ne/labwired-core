@@ -12,10 +12,10 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1057`
+- pass_claimed_peripherals_total: `1151`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1357`
-- median_elapsed_seconds: `1.357`
+- median_elapsed_ms: `1366`
+- median_elapsed_seconds: `1.366`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -141,7 +141,7 @@
 | `murax_vexriscv_verilated_uart` | `pass` | `True` | `yes` | `yes` | `754` | `0.754` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `nrf52840` | `pass` | `True` | `yes` | `yes` | `2757` | `2.757` | `True` | `observable` | `49` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `nrf52840dk_nrf52840` | `pass` | `True` | `yes` | `yes` | `113847` | `113.847` | `True` | `observable` | `2` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `10204` | `10.204` | `True` | `observable` | `3` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `2937` | `2.937` | `True` | `observable` | `50` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_h753zi` | `pass` | `True` | `yes` | `yes` | `2349` | `2.349` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_wba52cg` | `pass` | `True` | `yes` | `yes` | `2299` | `2.299` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nuvoton_npcx9` | `pass` | `True` | `yes` | `yes` | `1314` | `1.314` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
@@ -235,7 +235,7 @@
 | `stm32f4_discovery` | `pass` | `True` | `yes` | `yes` | `162959` | `162.959` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `stm32f4_discovery-kit` | `pass` | `True` | `yes` | `yes` | `1961` | `1.961` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `stm32f746` | `pass` | `True` | `yes` | `yes` | `1989` | `1.989` | `True` | `observable` | `47` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `stm32f777` | `pass` | `True` | `yes` | `yes` | `764` | `0.764` | `True` | `observable` | `3` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `stm32f777` | `pass` | `True` | `yes` | `yes` | `2063` | `2.063` | `True` | `observable` | `50` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32f7_discovery-bb` | `pass` | `True` | `yes` | `yes` | `1213` | `1.213` | `True` | `observable` | `47` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32h7` | `pass` | `True` | `yes` | `yes` | `1943` | `1.943` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32h743` | `pass` | `True` | `yes` | `yes` | `1917` | `1.917` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |

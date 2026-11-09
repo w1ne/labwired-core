@@ -6,32 +6,32 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 800000,
+    "instructions": 6000000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
-  "crate": "firmware-stm32f746-demo",
+  "crate": "firmware-stm32f767-smoke",
   "target_triple": "thumbv7em-none-eabi",
   "script": "examples/renode-onboarding/nucleo_f767zi-smoke.yaml",
   "system": "configs/systems/onboarding/nucleo_f767zi.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T05:48:58Z",
-  "finished_at_utc": "2026-11-06T05:49:08Z",
-  "elapsed_seconds": 11,
-  "elapsed_ms": 10204,
+  "started_at_utc": "2026-11-09T08:25:14Z",
+  "finished_at_utc": "2026-11-09T08:25:17Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2937,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 7.245,
-    "build_firmware": 2.681,
-    "run_smoke": 0.268
+    "build_cli": 0.368,
+    "build_firmware": 1.712,
+    "run_smoke": 0.838
   },
   "stages_ms": {
-    "build_cli": 7245,
-    "build_firmware": 2681,
-    "run_smoke": 268
+    "build_cli": 368,
+    "build_firmware": 1712,
+    "run_smoke": 838
   }
 }

@@ -6,3 +6,32 @@
 
 name: nucleo_f767zi
 chip: ../../chips/onboarding/nucleo_f767zi.yaml
+# NUCLEO-F767ZI board IO (UM1974 §6.5/§6.6). LD1 (green) PB0, LD2 (blue) PB7,
+# LD3 (red) PB14, each active high. B1 USER on PC13 is active high: ST's
+# BSP (stm32f7xx_nucleo_144.c) sets it pull-down with a rising-edge EXTI.
+# The repl marks the button `invert: true`; this row follows the BSP.
+board_io:
+  - id: "ld1"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true
+  - id: "ld2"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "ld3"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 14
+    signal: "output"
+    active_high: true
+  - id: "b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true
