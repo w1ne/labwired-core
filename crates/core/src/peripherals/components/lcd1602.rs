@@ -359,9 +359,46 @@ impl Lcd1602 {
 
     const TEXTS_SEEN_CAP: usize = 32;
 
+    /// True when `next` only fills former whitespace in `prev` (keypad typing,
+    /// progressive `print` of a prompt). Callers replace the ring tail instead
+    /// of pushing so a 6-digit HH:MM:SS entry costs one slot, not twelve.
+    fn is_monotonic_fill(prev: &str, next: &str) -> bool {
+        if prev.len() != next.len() {
+            return false;
+        }
+        prev.chars()
+            .zip(next.chars())
+            .all(|(a, b)| a == b || a.is_whitespace())
+            && prev != next
+    }
+
+    /// True when the only cells that differ flip between `:` and ` ` — the
+    /// pet-feeder-style blink colon. Replace the ring tail; do not grow.
+    fn is_blink_only(prev: &str, next: &str) -> bool {
+        if prev.len() != next.len() {
+            return false;
+        }
+        let mut diffs = 0usize;
+        for (a, b) in prev.chars().zip(next.chars()) {
+            if a == b {
+                continue;
+            }
+            diffs += 1;
+            let blink = (a == ':' && b == ' ') || (a == ' ' && b == ':');
+            if !blink {
+                return false;
+            }
+        }
+        diffs > 0
+    }
+
     /// Record the current visible text when it changes and is non-blank.
     /// Entries accumulate for the whole run (a clear does not wipe them) and
     /// the ring is capped at [`Self::TEXTS_SEEN_CAP`] (32).
+    ///
+    /// Progressive typing and blink-colon frames replace the ring tail instead
+    /// of pushing, so early panels (e.g. "Wrong Input", "Current Time") survive
+    /// a long run that would otherwise flood the 32-cap with single-char paints.
     fn record_text_if_changed(&mut self) {
         if !self.display_on {
             return;
@@ -370,8 +407,15 @@ impl Lcd1602 {
         if text.chars().all(|c| c.is_whitespace()) {
             return;
         }
-        if self.texts_seen.back().map(|s| s.as_str()) == Some(text.as_str()) {
-            return;
+        if let Some(prev) = self.texts_seen.back() {
+            if prev == &text {
+                return;
+            }
+            if Self::is_monotonic_fill(prev, &text) || Self::is_blink_only(prev, &text) {
+                self.texts_seen.pop_back();
+                self.texts_seen.push_back(text);
+                return;
+            }
         }
         if self.texts_seen.len() >= Self::TEXTS_SEEN_CAP {
             self.texts_seen.pop_front();
@@ -606,6 +650,62 @@ mod tests {
         assert!(texts
             .iter()
             .any(|v| v.as_str().unwrap_or("").starts_with("Yo")));
+    }
+
+    #[test]
+    fn texts_seen_collapses_typing_into_one_slot() {
+        let mut dev = Lcd1602::new(0x27);
+        display_on(&mut dev);
+        for ch in b"Current Time" {
+            data(&mut dev, *ch);
+        }
+        assert_eq!(dev.texts_seen.len(), 1, "prompt should be one slot: {:?}", dev.texts_seen);
+        for ch in b"08" {
+            data(&mut dev, *ch);
+        }
+        data(&mut dev, b':');
+        for ch in b"00" {
+            data(&mut dev, *ch);
+        }
+        assert_eq!(
+            dev.texts_seen.len(),
+            1,
+            "typing must replace tail, not grow: {:?}",
+            dev.texts_seen
+        );
+        assert!(
+            dev.texts_seen[0].contains("Current Time") && dev.texts_seen[0].contains("08"),
+            "collapsed panel must keep prompt+digits: {:?}",
+            dev.texts_seen
+        );
+    }
+
+    #[test]
+    fn texts_seen_blink_colon_replaces_tail() {
+        let mut dev = Lcd1602::new(0x27);
+        display_on(&mut dev);
+        for ch in b"Time Remainig" {
+            data(&mut dev, *ch);
+        }
+        command(&mut dev, 0xC0); // line 1
+        for ch in b"00:02" {
+            data(&mut dev, *ch);
+        }
+        assert_eq!(dev.texts_seen.len(), 1);
+        // Overwrite the colon on line 1 col 2 with a space (blink off).
+        command(&mut dev, 0xC0 + 2);
+        data(&mut dev, b' ');
+        assert_eq!(
+            dev.texts_seen.len(),
+            1,
+            "blink must not grow the ring: {:?}",
+            dev.texts_seen
+        );
+        let tail = &dev.texts_seen[0];
+        assert!(
+            tail.contains("Time Remainig") && tail.contains("00") && !tail.contains(':'),
+            "tail should reflect blink-off frame: {tail:?}"
+        );
     }
 
     #[test]
