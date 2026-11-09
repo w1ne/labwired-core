@@ -233,6 +233,13 @@ pub enum AdcRegisterLayout {
     /// 4-bit ranks under `CFGR1.CHSELRMOD`), one `SMPR`, `AWDxTR` pairs at
     /// 0x20/0x24/0x2C, `CALFACT` @ 0xB4, and the `ISR.EOCAL`/`ISR.CCRDY`
     /// flags. No `DEEPPWD`: CR resets to 0.
+    ///
+    /// The STM32L0 block (RM0367 §14.12; `stm32l073` debug schema) is a
+    /// subset at the same offsets: ISR/IER/CR/CFGR1/CFGR2/SMPR, one `TR` at
+    /// 0x20 (reset 0x0FFF_0000), the `CHSELR` bitmap at 0x28, `DR`, `CALFACT`
+    /// and `CCR` at 0x308. It has no `CHSELRMOD`, `CCRDY` or second and
+    /// third watchdogs, so L0 firmware never touches them, and `stm32l0`
+    /// shares this layout.
     Stm32G0,
 }
 
@@ -256,12 +263,12 @@ impl FromStr for AdcRegisterLayout {
             // read the G0 sequencer from SQR1 (which the G0 does not have),
             // never completed ADCAL or ADDIS, and stock analogRead() on the
             // NUCLEO-G071RB returned 0.
-            "stm32g0" | "g0" | "stm32c0" | "c0" => Ok(Self::Stm32G0),
+            "stm32g0" | "g0" | "stm32c0" | "c0" | "stm32l0" | "l0" => Ok(Self::Stm32G0),
             "stm32h7" | "h7" => Ok(Self::Stm32H7),
             "stm32h5" | "h5" => Ok(Self::Stm32H5),
             "stm32u5" | "u5" => Ok(Self::Stm32U5),
             _ => Err(format!(
-                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32g0, stm32h5, stm32h7, stm32u5",
+                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32g0, stm32l0, stm32h5, stm32h7, stm32u5",
                 value
             )),
         }
@@ -2347,7 +2354,7 @@ mod tests {
 
     #[test]
     fn g0_layout_is_selected_by_name_and_is_not_the_l4() {
-        for name in ["stm32g0", "g0", "stm32c0", "c0"] {
+        for name in ["stm32g0", "g0", "stm32c0", "c0", "stm32l0", "l0"] {
             assert_eq!(
                 name.parse::<AdcRegisterLayout>().unwrap(),
                 AdcRegisterLayout::Stm32G0,

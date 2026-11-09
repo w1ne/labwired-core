@@ -40,7 +40,7 @@ const TIM2_BASE: u32 = 0x4000_0000; // type timer, width 32
 const DMA1_BASE: u32 = 0x4002_0000; // type dma (Dma1, 7ch)
 const I2C1_BASE: u32 = 0x4000_5400; // type i2c, profile stm32l4
 const SPI1_BASE: u32 = 0x4001_3000; // type spi, profile stm32 (classic)
-const ADC1_BASE: u32 = 0x4001_2400; // type adc, profile stm32l4
+const ADC1_BASE: u32 = 0x4001_2400; // type adc, profile stm32l0
 const RTC_BASE: u32 = 0x4000_2800; // type rtc (stm32l4 layout)
 const IWDG_BASE: u32 = 0x4000_3000; // type iwdg
 
@@ -366,20 +366,21 @@ fn adc_convert(res: u32) -> Result<u32, &'static [u8]> {
     Ok(rd32(ADC1_BASE + 0x40) & 0xFFFF)
 }
 
-/// adc: ADC1 (stm32l4 model). Power up (clear DEEPPWD, ADVREGEN, ADEN ->
-/// ISR.ADRDY; ADRDY must NOT assert before ADEN), then prove a REAL conversion
-/// BY VALUE: ADSTART converts the fixed internal source and the code must scale
-/// when CFGR.RES narrows. Fails if the model returned a constant.
+/// adc: ADC1 (stm32l0 model, the G0 CHSELR block). Power up (ADVREGEN, ADEN
+/// -> ISR.ADRDY; ADRDY must NOT assert before ADEN), select IN0 in the CHSELR
+/// bitmap (RM0367 §14.12.10; with no channel selected the L0 converts
+/// nothing), then prove a REAL conversion BY VALUE: ADSTART converts the fixed
+/// internal source and the code must scale when CFGR1.RES narrows. Fails if
+/// the model returned a constant.
 fn check_adc() -> Result<(), &'static [u8]> {
     // clock-gating: ADC1 (RCC_APB2ENR.ADCEN bit 9, ENR @ 0x34) is unclocked out
-    // of reset, so CR reads 0 (not its 0x20000000 DEEPPWD clocked reset). Prove
-    // the dead state, then enable the bus clock.
+    // of reset, so CR reads 0. Prove the dead state, then enable the bus
+    // clock.
     if rd32(ADC1_BASE + 0x08) != 0 {
         return Err(b"adc-gated");
     }
     wr32(RCC_BASE + 0x34, rd32(RCC_BASE + 0x34) | (1 << 9)); // APB2ENR.ADCEN
-    wr32(ADC1_BASE + 0x08, 0); // CR: clear DEEPPWD
-    wr32(ADC1_BASE + 0x08, 1 << 28); // CR: ADVREGEN
+    wr32(ADC1_BASE + 0x08, 1 << 28); // CR: ADVREGEN (the L0 has no DEEPPWD)
     if rd32(ADC1_BASE + 0x00) & 0x1 != 0 {
         return Err(b"adc-adrdy-early");
     }
@@ -387,6 +388,7 @@ fn check_adc() -> Result<(), &'static [u8]> {
     if rd32(ADC1_BASE + 0x00) & 0x1 == 0 {
         return Err(b"adc-adrdy");
     }
+    wr32(ADC1_BASE + 0x28, 1 << 0); // CHSELR: IN0 (no held input: fixed source)
     let code12 = adc_convert(0)?;
     if code12 != 3723 {
         return Err(b"adc-code12");
