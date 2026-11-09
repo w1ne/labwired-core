@@ -89,6 +89,7 @@ const CONVERTED: &[&str] = &[
     "nucleo_f767zi",
     "nucleo_h753zi",
     "nucleo_wba52cg",
+    "nxp-k6xf",
     "ramn",
     "renesas-ck_ra6m5",
     "renesas-da14592",
@@ -287,7 +288,27 @@ enum Family {
     /// rises and the `ADC12MEMx` read clears it, 12 bits against AVCC
     /// (3.3 V) with `SREF_0` (mspsim ADC12.java, TI msp430-gcc headers).
     Msp430Adc12 { adc12_a: bool },
+    /// NXP Kinetis ADC16: `ADC16_Init` then `ADC16_DoAutoCalibration`
+    /// (`SC3.CAL`, poll `SC1A.COCO`, dummy `R[0]` read, `PG/MG`), then a
+    /// write to `SC1A.ADCH` converts in software-trigger mode, `COCO` rises
+    /// and the `RA` read clears it. 12-bit single-ended (`CFG1.MODE` 01)
+    /// against VREFH 3.3 V (mcux-sdk fsl_adc16.c, K66 RM ch. 39).
+    KinetisAdc16,
 }
+
+/// Kinetis ADC16 offsets (MK64F12.h `ADC_Type`) and bits.
+const ADC16_SC1A: u64 = 0x00;
+const ADC16_CFG1: u64 = 0x08;
+const ADC16_RA: u64 = 0x10;
+const ADC16_SC2: u64 = 0x20;
+const ADC16_SC3: u64 = 0x24;
+const ADC16_OFS: u64 = 0x28;
+const ADC16_PG: u64 = 0x2C;
+const ADC16_COCO: u32 = 1 << 7;
+const ADC16_MODE_12: u32 = 1 << 2;
+const ADC16_ADTRG: u32 = 1 << 6;
+const ADC16_CAL: u32 = 1 << 7;
+const ADC16_CALF: u32 = 1 << 6;
 
 /// MSP430 ADC12 register offsets from the descriptor base, as
 /// `(CTL0, CTL1, IFG, MCTL0, MEM0)`: F1/F2 from `ADC12MCTL0` (0x0080), so
@@ -397,6 +418,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Msp430Adc12 {
                 adc12_a: kind == "msp430_adc12_a",
             }
+        } else if kind == "kinetis_adc16" {
+            Family::KinetisAdc16
         } else if kind == "ra_adc12" || kind == "ra_adc14" {
             Family::RaAdc {
                 adc14: kind == "ra_adc14",
@@ -476,6 +499,9 @@ impl Converter {
             // N = 4095 (Vin - VR-) / (VR+ - VR-), SREF_0: AVCC 3.3 V / AVSS,
             // truncated, clamped (SLAU049 §17.2.1).
             Family::Msp430Adc12 { .. } => (mv * 4095 / 3300).min(4095),
+            // 12-bit single-ended, 1 LSB = VREFH / 2^12, truncated, clamped
+            // (K66 RM §39.4.4); calibration leaves the ideal OFS = 0.
+            Family::KinetisAdc16 => (mv * 4096 / 3300).min(4095),
         }
     }
 
@@ -508,6 +534,10 @@ impl Converter {
             // examples name on every Series-0 family. emlib em_gpio.h bonds
             // PD4..PD7 on Happy Gecko (`_GPIO_PORT_D_PIN_MASK` 0x00F0).
             Family::Efm32S0Adc => [6, 7],
+            // ADxx14/15: PTC0/PTC1 on ADC0, PTB10/PTB11 (Arduino A2/A3) on
+            // ADC1 (MK64FN1M0VLL12-pinctrl.h). AD5a..AD7a are not bonded
+            // on ADC0.
+            Family::KinetisAdc16 => [14, 15],
             _ => [NTC_CHANNEL, DIODE_CHANNEL],
         }
     }
@@ -519,6 +549,8 @@ impl Converter {
             Family::Efr32S1Adc => 5,
             // CH5 (PD5): inside the HG PD4..PD7 mask too.
             Family::Efm32S0Adc => 5,
+            // AD17: PTE24 on ADC0, PTA17 on ADC1.
+            Family::KinetisAdc16 => 17,
             _ => IDLE_CHANNEL,
         }
     }
@@ -626,6 +658,60 @@ impl Converter {
                     bus.read_u32(self.base + 0x84).unwrap(),
                     0,
                     "{}: SINGLEFIFOCOUNT",
+                    self.id
+                );
+            }
+            Family::KinetisAdc16 => {
+                // ADC16_Init with kADC16_Resolution12or13Bit, REFSEL VREFH.
+                bus.write_u32(self.base + ADC16_CFG1, ADC16_MODE_12)
+                    .expect("CFG1");
+                // Hardware trigger mode: no PDB is modelled, so an SC1A
+                // write only stores the channel, and CAL fails with CALF.
+                bus.write_u32(self.base + ADC16_SC2, ADC16_ADTRG)
+                    .expect("ADTRG");
+                bus.write_u32(self.base + ADC16_SC1A, u32::from(NTC_CHANNEL))
+                    .expect("SC1A under ADTRG");
+                assert_eq!(
+                    bus.read_u32(self.base + ADC16_SC1A).unwrap() & ADC16_COCO,
+                    0,
+                    "{}: ADTRG = 1 needs a hardware trigger",
+                    self.id
+                );
+                bus.write_u32(self.base + ADC16_SC3, ADC16_CAL | ADC16_CALF)
+                    .expect("CAL under ADTRG");
+                assert_eq!(
+                    bus.read_u32(self.base + ADC16_SC3).unwrap() & (ADC16_CAL | ADC16_CALF),
+                    ADC16_CALF,
+                    "{}: CAL with ADTRG = 1 sets CALF",
+                    self.id
+                );
+                // ADC16_DoAutoCalibration in software-trigger mode.
+                bus.write_u32(self.base + ADC16_SC2, 0).expect("SC2");
+                bus.write_u32(self.base + ADC16_SC3, ADC16_CAL | ADC16_CALF)
+                    .expect("SC3.CAL");
+                assert_ne!(
+                    bus.read_u32(self.base + ADC16_SC1A).unwrap() & ADC16_COCO,
+                    0,
+                    "{}: calibration ends with SC1A.COCO",
+                    self.id
+                );
+                assert_eq!(
+                    bus.read_u32(self.base + ADC16_SC3).unwrap() & (ADC16_CAL | ADC16_CALF),
+                    0,
+                    "{}: calibration passed",
+                    self.id
+                );
+                let _ = bus.read_u32(self.base + ADC16_RA).expect("dummy R[0]");
+                let plus: u32 = (0x38..=0x4C)
+                    .step_by(4)
+                    .map(|o| bus.read_u32(self.base + o).unwrap())
+                    .sum();
+                bus.write_u32(self.base + ADC16_PG, 0x8000 | (plus >> 1))
+                    .expect("PG");
+                assert_eq!(
+                    bus.read_u32(self.base + ADC16_OFS).unwrap(),
+                    0,
+                    "{}: ideal calibration offset",
                     self.id
                 );
             }
@@ -1942,6 +2028,26 @@ impl Converter {
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {
         match self.family {
+            Family::KinetisAdc16 => {
+                // ADC16_SetChannelConfig(SC1A), poll COCO,
+                // ADC16_GetChannelConversionValue; the RA read clears COCO.
+                bus.write_u32(self.base + ADC16_SC1A, u32::from(channel))
+                    .expect("SC1A.ADCH");
+                assert_ne!(
+                    bus.read_u32(self.base + ADC16_SC1A).unwrap() & ADC16_COCO,
+                    0,
+                    "{}: AD{channel} sets COCO",
+                    self.id
+                );
+                let code = bus.read_u32(self.base + ADC16_RA).expect("RA");
+                assert_eq!(
+                    bus.read_u32(self.base + ADC16_SC1A).unwrap() & ADC16_COCO,
+                    0,
+                    "{}: the RA read clears COCO",
+                    self.id
+                );
+                code
+            }
             Family::Msp430Adc12 { adc12_a } => {
                 // Single channel, single conversion at CSTARTADD = channel,
                 // MCTLx = INCH with SREF_0; poll IFGx, read ADC12MEMx.
@@ -2613,6 +2719,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Efr32S1Adc
                 | Family::Efm32S0Adc
                 | Family::Msp430Adc12 { .. }
+                | Family::KinetisAdc16
                 | Family::RaAdc { .. }
         ) {
             assert_eq!(
@@ -2699,7 +2806,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 131,
+        instances, 133,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -2707,7 +2814,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 106,
+        without_adc, 105,
         "onboarding profiles that declare no modelled ADC"
     );
 }

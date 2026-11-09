@@ -444,6 +444,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "renesasda14_gpadc",
     // CAES UT32M0R500 delta-sigma ADC (Renode CAES_ADC.cs, CAES app notes).
     "caes_adc",
+    // NXP Kinetis ADC16 (MK64F12.h, K66 RM ch. 39, mcux-sdk fsl_adc16.c).
+    "kinetis_adc16",
     // MSP430 ADC12 (F1/F2) and ADC12_A (F5) (mspsim ADC12.java, TI headers).
     "msp430_adc12",
     "msp430_adc12_a",
@@ -1929,6 +1931,20 @@ pub fn try_build(
                 .map_or(1220, |v| v as u32),
         )),
         "caes_adc" => Box::new(crate::peripherals::caes_adc::CaesAdc::new()),
+        // `vref_mv`: VREFH (REFSEL 00); `valt_mv`: VALTH (REFSEL 01), the
+        // 1.2 V VREF_OUT on K6x (RM §39.1.7).
+        "kinetis_adc16" => Box::new(crate::peripherals::kinetis_adc16::KinetisAdc16::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(3300, |v| v as u32),
+            p_cfg
+                .config
+                .get("valt_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(1200, |v| v as u32),
+        )),
         "msp430_adc12" => Box::new(crate::peripherals::msp430_adc12::Msp430Adc12::new(
             crate::peripherals::msp430_adc12::Adc12Layout::Adc12,
         )),
