@@ -18,10 +18,12 @@
 # layout), GPIOA/B/C/F, SYSCFG EXTICR + EXTI lines 0..15 on the grouped
 # vectors, TIM1/2/3/14/16/17 (update line; TIM2 is 32-bit), SPI1/SPI2 (the
 # FIFO SPI with CR2.DS / FRXTH, master), I2C1 (the "v2" TIMINGR/ISR I2C,
-# master), DMA1 (5 channels, SPI1 requests on 2/3) and CRC.
+# master), DMA1 (5 channels, SPI1 requests on 2/3) and CRC. Also the ADC
+# (the CHSELR block, `profile: stm32f0`: calibration, single sequence in
+# both scan directions, 12/8-bit, EOC/EOS/OVR/AWD on ADC1_IRQn = 12, DMA1
+# channel 1, the internal TS on IN16 and V_REFINT on IN17).
 #
-# Not claimed: ADC (the F0 CHSELR ADC has no engine model; Renode models
-# it), CAN, USB, CRS, RTC, SPI I2S mode, TSC, CEC, IWDG/WWDG, FLASH
+# Not claimed: ADC hardware triggers (EXTSEL), auto-off/wait modes, CAN, USB, CRS, RTC, SPI I2S mode, TSC, CEC, IWDG/WWDG, FLASH
 # interface, PWR and the EXTI lines 16..31.
 name: stm32f042
 arch: arm
@@ -201,6 +203,7 @@ peripherals:
     channels: 5
     channel_irqs: [9, 10, 10, 11, 11]
     requests:
+      adc_rx: 1
       spi1_rx: 2
       spi1_tx: 3
       spi2_rx: 4
@@ -211,3 +214,13 @@ peripherals:
   base_address: 0x40023000
   size: 1KB
   clock: { reg: ahbenr, bit: 6 }
+# --- ADC (RM0091 §13; ADC1_IRQn = 12 in stm32f042x6.h, no COMP on the F042).
+# DMA1 channel 1 without the SYSCFG ADC_DMA_RMP remap.
+- id: adc
+  type: adc
+  base_address: 0x40012400
+  size: 1KB
+  irq: 12
+  clock: { reg: apb2enr, bit: 9 }
+  config:
+    profile: stm32f0

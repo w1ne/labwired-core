@@ -22,5 +22,6 @@ dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok
 i2c1 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok
 spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok
 crc word=0xDF8A8A2B seed=1 std=1 init=1 ok
-summary 0x072FFFFF
+adc in1=0x000007FF ts=0x00000709 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 dma=1 ovr=1 awd=1 off=1 ok
+summary 0x073FFFFF
 DONE

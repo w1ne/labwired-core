@@ -3,7 +3,8 @@
 # a button on PA0; the board's part is the STM32F072RBT6. The silicon is the
 # imported stm32f072 profile, included whole rather than copied so the two
 # rows cannot drift: 128 KiB / 16 KiB, RCC, USART1..4, GPIOA..F, SYSCFG +
-# EXTI, TIM1/2/3/6/7/14/15/16/17, SPI1/2, I2C1, DMA1 (7 channels) and CRC.
+# EXTI, TIM1/2/3/6/7/14/15/16/17, SPI1/2, I2C1, DMA1 (7 channels), CRC and
+# the CHSELR ADC.
 # See stm32f072.yaml for the per-block sources and what it does not claim.
 #
 # The board-level parts (LD3..LD6 on PC6/PC8/PC9/PC7, B1 on PA0) live in the

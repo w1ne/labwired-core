@@ -12,7 +12,19 @@ chip: ../../chips/onboarding/stm32f072.yaml
 # MAX31855 on each SPI (CS on PA4 / PB12; the smoke scenario sets SPI2's
 # thermocouple to 100 °C), a second MAX31855 on SPI1 behind its own CS on
 # PB0 (50 °C) and a TMP102 on I2C1 give the serial blocks real slaves.
+# Two potentiometers on ADC IN1 (PA1, centred: 1.65 V) and IN9 (PB1; the
+# scenario turns it to 25 %: 0.825 V) give the ADC real pad voltages.
 external_devices:
+  - id: "pot_in1"
+    type: "potentiometer"
+    connection: "adc"
+    config:
+      channel: 1
+  - id: "pot_in9"
+    type: "potentiometer"
+    connection: "adc"
+    config:
+      channel: 9
   - id: "tc_spi1"
     type: "max31855"
     connection: "spi1"

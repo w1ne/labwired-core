@@ -8,10 +8,13 @@
 # shared channel-2/3 line), DMA1 channels 6/7 reserved (5-channel F04x DMA)
 # while channel 5 runs, I2C1 reading a TMP102 plus RXIE and a NACK on the
 # combined line; two MAX31855s sharing SPI1 behind GPIO chip selects PA4 /
-# PB0; CRC-32 with the INIT reload; and the F04x SYSCFG_CFGR1 fields. The
+# PB0; CRC-32 with the INIT reload; the F04x SYSCFG_CFGR1 fields; and the
+# ADC (calibration, a 12-bit sequence over two pots, TS and V_REFINT with
+# EOS on line 12, 8-bit descending through DMA1 channel 1, overrun,
+# watchdog, off). The
 # two fixture switches (PF1, PC13) are pressed by the stimuli below; the
 # first stimuli set the SPI2 and second SPI1 thermocouples.
-# It does not claim ADC, CAN, USB, CRS, RTC or the watchdogs.
+# It does not claim ADC triggers, CAN, USB, CRS, RTC or the watchdogs.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f042-smoke"
@@ -19,6 +22,9 @@ inputs:
 limits:
   max_steps: 4000000
 stimuli:
+  - target: { component: "pot_in9", channel: "position" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 25.0
   - target: { component: "tc_spi2", channel: "temperature" }
     trigger: !after_cycles { cycles: 1000 }
     value: 100.0
@@ -66,11 +72,12 @@ assertions:
       - "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok"
       - "crc word=0xDF8A8A2B seed=1 std=1 init=1 ok"
       - "syscfg cfgr1=0x00FF1F10 ok"
-      - "summary 0x0427FFFF"
+      - "adc in1=0x000007FF ts=0x00000709 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 dma=1 ovr=1 awd=1 off=1 ok"
+      - "summary 0x042FFFFF"
       - "DONE"
   - memory_value:
       address: 0x20001000
-      expected_value: 0x0427FFFF
+      expected_value: 0x042FFFFF
       size: 4
   - gpio_edges:
       pin: "gpiof:0"

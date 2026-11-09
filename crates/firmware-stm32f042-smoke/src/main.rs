@@ -3,12 +3,14 @@
 
 //! STM32F042x6 smoke for the imported Renode platform: RCC clock gates,
 //! USART1/2, GPIOA/B/C/F, SYSCFG EXTICR + EXTI, TIM1/2/3/14/16/17, SPI1/SPI2
-//! (FIFO SPI), I2C1 ("v2" I2C), the 5-channel DMA1 and CRC. Register
-//! offsets, bases and IRQ numbers are RM0091 and ST's CMSIS `stm32f042x6.h`.
+//! (FIFO SPI), I2C1 ("v2" I2C), the 5-channel DMA1, CRC and the CHSELR ADC.
+//! Register offsets, bases and IRQ numbers are RM0091 and ST's CMSIS
+//! `stm32f042x6.h`.
 //!
 //! The fixture system puts a MAX31855 on each SPI (thermocouple 25 and
 //! 100 °C, so each bus answers with its own frame), a second MAX31855 on SPI1
-//! behind its own chip select (PB0, 50 °C) and a TMP102 at 0x48 on I2C1.
+//! behind its own chip select (PB0, 50 °C), a TMP102 at 0x48 on I2C1 and
+//! potentiometers on ADC IN1 (1.65 V) and IN9 (0.825 V).
 //!
 //! Interrupts stay disabled in the NVIC: each check reads the line's
 //! ISPR bit, which proves the block reaches the right NVIC input without a
@@ -30,8 +32,8 @@ const RCC_APB2ENR: u32 = RCC + 0x18;
 const RCC_APB1ENR: u32 = RCC + 0x1C;
 // DMA1, SRAM, FLITF, CRC, IOPA/B/C, IOPF.
 const AHB_ON: u32 = (1 << 0) | (1 << 2) | (1 << 4) | (1 << 6) | (0b111 << 17) | (1 << 22);
-// SYSCFG, TIM1, SPI1, USART1, TIM16/17.
-const APB2_ON: u32 = (1 << 0) | (1 << 11) | (1 << 12) | (1 << 14) | (0b11 << 17);
+// SYSCFG, ADC, TIM1, SPI1, USART1, TIM16/17.
+const APB2_ON: u32 = (1 << 0) | (1 << 9) | (1 << 11) | (1 << 12) | (1 << 14) | (0b11 << 17);
 // TIM2/3/14, SPI2, USART2, I2C1.
 const APB1_ON: u32 = 0b11 | (1 << 8) | (1 << 14) | (1 << 17) | (1 << 21);
 
@@ -155,6 +157,41 @@ const CRC: u32 = 0x4002_3000;
 const CRC_DR: u32 = CRC;
 const CRC_CR: u32 = CRC + 0x08;
 const CRC_INIT: u32 = CRC + 0x10;
+
+// ADC (RM0091 §13.12).
+const ADC: u32 = 0x4001_2400;
+const ADC_ISR: u32 = ADC;
+const ADC_IER: u32 = ADC + 0x04;
+const ADC_CR: u32 = ADC + 0x08;
+const ADC_CFGR1: u32 = ADC + 0x0C;
+const ADC_SMPR: u32 = ADC + 0x14;
+const ADC_TR: u32 = ADC + 0x20;
+const ADC_CHSELR: u32 = ADC + 0x28;
+const ADC_DR: u32 = ADC + 0x40;
+const ADC_CCR: u32 = ADC + 0x308;
+const ADC_LINE: u32 = 12;
+const ADC_ISR_ADRDY: u32 = 1 << 0;
+const ADC_ISR_EOC: u32 = 1 << 2;
+const ADC_ISR_EOS: u32 = 1 << 3;
+const ADC_ISR_OVR: u32 = 1 << 4;
+const ADC_ISR_AWD: u32 = 1 << 7;
+const ADC_CR_ADEN: u32 = 1 << 0;
+const ADC_CR_ADDIS: u32 = 1 << 1;
+const ADC_CR_ADSTART: u32 = 1 << 2;
+const ADC_CR_ADCAL: u32 = 1 << 31;
+const ADC_CFGR1_DMAEN: u32 = 1 << 0;
+const ADC_CFGR1_SCANDIR: u32 = 1 << 2;
+const ADC_CFGR1_RES_8: u32 = 0b10 << 3;
+const ADC_CFGR1_AWDSGL: u32 = 1 << 22;
+const ADC_CFGR1_AWDEN: u32 = 1 << 23;
+const ADC_CCR_VREFEN: u32 = 1 << 22;
+const ADC_CCR_TSEN: u32 = 1 << 23;
+// IN1 (pot, 1.65 V), IN9 (pot, 0.825 V), IN16 (TS), IN17 (V_REFINT).
+const ADC_SEQ: u32 = (1 << 1) | (1 << 9) | (1 << 16) | (1 << 17);
+// 12-bit codes at V_DDA = 3.3 V: TS at 25 °C is 1.43 V + 5 K * 4.3 mV/K
+// (DS9826 V_30 / Avg_Slope), V_REFINT 1.23 V.
+const ADC_WANT: [u32; 4] = [2047, 1023, 1801, 1526];
+const DMA_LINES: [u32; 3] = [9, 10, 11];
 
 const NVIC_ISPR0: u32 = 0xE000_E200;
 const NVIC_ICPR0: u32 = 0xE000_E280;
@@ -783,6 +820,113 @@ fn check_crc() -> bool {
     ok
 }
 
+/// The CHSELR ADC: calibration, ADRDY, a polled 12-bit sequence (two pots,
+/// TS, V_REFINT) with EOS on ADC1_IRQn, then 8-bit descending through
+/// DMA1 channel 1, an overrun that keeps the first result, the single-
+/// channel watchdog and ADDIS.
+fn check_adc() -> bool {
+    // PA1 and PB1 analog.
+    wr(GPIOA + G_MODER, rd(GPIOA + G_MODER) | (0b11 << 2));
+    wr(GPIOB + G_MODER, rd(GPIOB + G_MODER) | (0b11 << 2));
+
+    wr(ADC_CR, ADC_CR_ADCAL);
+    let cal = wait(ADC_CR, ADC_CR_ADCAL, 0);
+    wr(ADC_CCR, ADC_CCR_VREFEN | ADC_CCR_TSEN);
+    wr(ADC_CR, ADC_CR_ADEN);
+    let ready = wait(ADC_ISR, ADC_ISR_ADRDY, ADC_ISR_ADRDY);
+    wr(ADC_ISR, ADC_ISR_ADRDY);
+    // 239.5-clock sampling: what the internal channels need on silicon.
+    wr(ADC_SMPR, 7);
+    wr(ADC_CHSELR, ADC_SEQ);
+    unpend(ADC_LINE);
+
+    // Polled 12-bit sequence, EOSIE on.
+    wr(ADC_IER, ADC_ISR_EOS);
+    wr(ADC_CFGR1, 0);
+    wr(ADC_CR, ADC_CR_ADEN | ADC_CR_ADSTART);
+    let mut got = [0u32; 4];
+    let mut eoc = true;
+    for slot in got.iter_mut() {
+        eoc &= wait(ADC_ISR, ADC_ISR_EOC, ADC_ISR_EOC);
+        *slot = rd(ADC_DR);
+    }
+    let seq = eoc && got == ADC_WANT;
+    let eos = wait(ADC_ISR, ADC_ISR_EOS, ADC_ISR_EOS)
+        && rd(ADC_CR) & ADC_CR_ADSTART == 0
+        && rd(ADC_ISR) & (ADC_ISR_EOC | ADC_ISR_OVR) == 0;
+    let pend = pending(ADC_LINE);
+    wr(ADC_ISR, ADC_ISR_EOS);
+    wr(ADC_IER, 0);
+    unpend(ADC_LINE);
+    let released = !pending(ADC_LINE);
+
+    // 8-bit, descending, through DMA1 channel 1.
+    let buf = DMA_BUF;
+    for i in 0..4 {
+        wr(buf + 4 * i, 0xFFFF_FFFF);
+    }
+    wr(DMA1 + D_IFCR, 0x0FFF_FFFF);
+    let ch1 = dma_ch(1);
+    wr(ch1 + C_CPAR, ADC_DR);
+    wr(ch1 + C_CMAR, buf);
+    wr(ch1 + C_CNDTR, 4);
+    // MSIZE = PSIZE = 32 | MINC | EN, peripheral -> memory.
+    wr(ch1 + C_CCR, (0b10 << 10) | (0b10 << 8) | (1 << 7) | 1);
+    wr(
+        ADC_CFGR1,
+        ADC_CFGR1_DMAEN | ADC_CFGR1_SCANDIR | ADC_CFGR1_RES_8,
+    );
+    wr(ADC_CR, ADC_CR_ADEN | ADC_CR_ADSTART);
+    let moved = wait(DMA1 + D_ISR, 0b10, 0b10);
+    let dma_vals = [rd(buf), rd(buf + 4), rd(buf + 8), rd(buf + 12)];
+    let want8 = [
+        ADC_WANT[3] >> 4,
+        ADC_WANT[2] >> 4,
+        ADC_WANT[1] >> 4,
+        ADC_WANT[0] >> 4,
+    ];
+    let dma = moved && dma_vals == want8 && rd(ADC_ISR) & ADC_ISR_OVR == 0;
+    wr(ch1 + C_CCR, 0);
+    wr(DMA1 + D_IFCR, 0x0FFF_FFFF);
+    for &irq in &DMA_LINES {
+        unpend(irq);
+    }
+
+    // Nobody reads DR: the second result overruns and the first stays.
+    // The watchdog guards IN1 only, with HT = 0x700.
+    wr(ADC_ISR, 0xFFF);
+    wr(ADC_CHSELR, (1 << 1) | (1 << 9));
+    wr(ADC_TR, 0x0700 << 16);
+    wr(ADC_CFGR1, ADC_CFGR1_AWDEN | ADC_CFGR1_AWDSGL | (1 << 26));
+    wr(ADC_CR, ADC_CR_ADEN | ADC_CR_ADSTART);
+    let _ = wait(ADC_ISR, ADC_ISR_EOS, ADC_ISR_EOS);
+    let isr = rd(ADC_ISR);
+    let ovr = isr & ADC_ISR_OVR != 0 && rd(ADC_DR) == ADC_WANT[0];
+    let awd = isr & ADC_ISR_AWD != 0;
+    wr(ADC_ISR, 0xFFF);
+    wr(ADC_CR, ADC_CR_ADEN | ADC_CR_ADDIS);
+    let off = wait(ADC_CR, ADC_CR_ADEN, 0);
+
+    puts("adc in1=");
+    hex(got[0]);
+    puts(" ts=");
+    hex(got[2]);
+    puts(" ");
+    flag("cal", cal);
+    flag("ready", ready);
+    flag("seq", seq);
+    flag("eos", eos);
+    flag("pend", pend);
+    flag("released", released);
+    flag("dma", dma);
+    flag("ovr", ovr);
+    flag("awd", awd);
+    flag("off", off);
+    let ok = cal && ready && seq && eos && pend && released && dma && ovr && awd && off;
+    verdict(ok);
+    ok
+}
+
 #[entry]
 fn main() -> ! {
     let (rcc_reset, rcc_gate) = rcc_bringup();
@@ -817,6 +961,7 @@ fn main() -> ! {
     mark(16, check_spi1_shared_cs());
     mark(17, check_crc());
     mark(18, check_syscfg());
+    mark(19, check_adc());
     let summary = summary | 0x0420_0000;
     wr(SUMMARY, summary);
     puts("summary ");

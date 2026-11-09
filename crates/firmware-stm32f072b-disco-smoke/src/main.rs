@@ -15,7 +15,8 @@
 //! `stm32f072.repl`), so besides the board IO this checks that the board row
 //! loads that surface: RCC clock gates, USART2..4 lines, the B1 edge through
 //! SYSCFG EXTICR into EXTI on the grouped vector, all nine timers on their own
-//! lines, DMA1 memory-to-memory on channel 1 and CRC. SPI1/2 and I2C1 have no
+//! lines, DMA1 memory-to-memory on channel 1, CRC and the ADC on its internal
+//! channels (the board wires no analog source). SPI1/2 and I2C1 have no
 //! on-board slave and are proven by the stm32f072 fixture smoke instead.
 //! Bases and IRQ numbers are RM0091 and ST's CMSIS `stm32f072xb.h`.
 //!
@@ -41,8 +42,8 @@ const RCC_APB2ENR: u32 = RCC + 0x18;
 const RCC_APB1ENR: u32 = RCC + 0x1C;
 // DMA, SRAM, FLITF, CRC, IOPA..IOPF.
 const AHB_ON: u32 = (1 << 0) | (1 << 2) | (1 << 4) | (1 << 6) | (0x3F << 17);
-// SYSCFG, TIM1, SPI1, USART1, TIM15/16/17.
-const APB2_ON: u32 = (1 << 0) | (1 << 11) | (1 << 12) | (1 << 14) | (0b111 << 16);
+// SYSCFG, ADC, TIM1, SPI1, USART1, TIM15/16/17.
+const APB2_ON: u32 = (1 << 0) | (1 << 9) | (1 << 11) | (1 << 12) | (1 << 14) | (0b111 << 16);
 // TIM2/3, TIM6/7, TIM14, SPI2, USART2/3/4, I2C1.
 const APB1_ON: u32 = 0b11 | (0b11 << 4) | (1 << 8) | (1 << 14) | (0b111 << 17) | (1 << 21);
 
@@ -131,6 +132,30 @@ const DMA_LINES: [u32; 3] = [9, 10, 11];
 const CRC: u32 = 0x4002_3000;
 const CRC_DR: u32 = CRC;
 const CRC_CR: u32 = CRC + 0x08;
+
+// ADC (RM0091 §13.12).
+const ADC: u32 = 0x4001_2400;
+const ADC_ISR: u32 = ADC;
+const ADC_IER: u32 = ADC + 0x04;
+const ADC_CR: u32 = ADC + 0x08;
+const ADC_SMPR: u32 = ADC + 0x14;
+const ADC_CHSELR: u32 = ADC + 0x28;
+const ADC_DR: u32 = ADC + 0x40;
+const ADC_CCR: u32 = ADC + 0x308;
+/// ADC1_COMP_IRQn.
+const ADC_LINE: u32 = 12;
+const ADC_ISR_ADRDY: u32 = 1 << 0;
+const ADC_ISR_EOC: u32 = 1 << 2;
+const ADC_ISR_EOS: u32 = 1 << 3;
+const ADC_CR_ADEN: u32 = 1 << 0;
+const ADC_CR_ADDIS: u32 = 1 << 1;
+const ADC_CR_ADSTART: u32 = 1 << 2;
+const ADC_CR_ADCAL: u32 = 1 << 31;
+const ADC_CCR_VREFEN: u32 = 1 << 22;
+const ADC_CCR_TSEN: u32 = 1 << 23;
+/// 12-bit TS (IN16, 25 °C: 1.43 V + 5 K * 4.3 mV/K) and V_REFINT (IN17,
+/// 1.23 V) at V_DDA = 3.3 V (DS9826).
+const ADC_WANT: [u32; 2] = [1801, 1526];
 
 const NVIC_ISPR0: u32 = 0xE000_E200;
 const NVIC_ICPR0: u32 = 0xE000_E280;
@@ -450,6 +475,69 @@ fn check_crc() -> bool {
     ok
 }
 
+/// The ADC on its internal channels: calibration, ADRDY, then TS and
+/// V_REFINT as one 12-bit sequence with EOS on ADC1_COMP_IRQn = 12, and the
+/// internal channels reading 0 again once CCR switches them off.
+fn check_adc() -> bool {
+    wr(ADC_CR, ADC_CR_ADCAL);
+    let cal = wait_clear(ADC_CR, ADC_CR_ADCAL);
+    wr(ADC_CCR, ADC_CCR_VREFEN | ADC_CCR_TSEN);
+    wr(ADC_CR, ADC_CR_ADEN);
+    let ready = wait_set(ADC_ISR, ADC_ISR_ADRDY);
+    wr(ADC_ISR, ADC_ISR_ADRDY);
+    wr(ADC_SMPR, 7);
+    wr(ADC_CHSELR, (1 << 16) | (1 << 17));
+    unpend(ADC_LINE);
+    wr(ADC_IER, ADC_ISR_EOS);
+    wr(ADC_CR, ADC_CR_ADEN | ADC_CR_ADSTART);
+    let mut got = [0u32; 2];
+    let mut eoc = true;
+    for slot in got.iter_mut() {
+        eoc &= wait_set(ADC_ISR, ADC_ISR_EOC);
+        *slot = rd(ADC_DR);
+    }
+    let seq = eoc && got == ADC_WANT;
+    let eos = wait_set(ADC_ISR, ADC_ISR_EOS);
+    let pend = pending(ADC_LINE);
+    wr(ADC_ISR, ADC_ISR_EOS);
+    wr(ADC_IER, 0);
+    unpend(ADC_LINE);
+    let released = !pending(ADC_LINE);
+
+    wr(ADC_CCR, 0);
+    wr(ADC_CHSELR, 1 << 17);
+    wr(ADC_CR, ADC_CR_ADEN | ADC_CR_ADSTART);
+    let gated = wait_set(ADC_ISR, ADC_ISR_EOC) && rd(ADC_DR) == 0;
+    wr(ADC_ISR, 0xFFF);
+    wr(ADC_CR, ADC_CR_ADEN | ADC_CR_ADDIS);
+    let off = wait_clear(ADC_CR, ADC_CR_ADEN);
+
+    puts("adc ts=");
+    hex(got[0]);
+    puts(" vref=");
+    hex(got[1]);
+    puts(" ");
+    flag("cal", cal);
+    flag("ready", ready);
+    flag("seq", seq);
+    flag("eos", eos);
+    flag("pend", pend);
+    flag("released", released);
+    flag("gated", gated);
+    flag("off", off);
+    let ok = cal && ready && seq && eos && pend && released && gated && off;
+    verdict(ok);
+    ok
+}
+
+fn wait_set(addr: u32, mask: u32) -> bool {
+    (0..100_000).any(|_| rd(addr) & mask != 0)
+}
+
+fn wait_clear(addr: u32, mask: u32) -> bool {
+    (0..100_000).any(|_| rd(addr) & mask == 0)
+}
+
 #[entry]
 fn main() -> ! {
     let (rcc_reset, rcc_gate) = rcc_bringup();
@@ -476,6 +564,7 @@ fn main() -> ! {
     }
     mark(13, check_dma_m2m());
     mark(14, check_crc());
+    mark(15, check_adc());
     let summary = summary | 0x0DC0_0000;
     wr(SUMMARY, summary);
     puts("summary ");

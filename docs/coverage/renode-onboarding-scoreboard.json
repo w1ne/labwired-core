@@ -11,7 +11,7 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 966,
+    "pass_claimed_peripherals_total": 969,
     "pass_claimed_peripherals_median": 2,
     "median_elapsed_ms": 1354,
     "median_elapsed_seconds": 1.354,
@@ -9297,28 +9297,28 @@
       "script": "examples/renode-onboarding/stm32f042-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f042.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T04:18:10Z",
-      "finished_at_utc": "2026-11-09T04:23:05Z",
-      "elapsed_seconds": 295,
-      "elapsed_ms": 294710,
+      "started_at_utc": "2026-11-09T06:12:18Z",
+      "finished_at_utc": "2026-11-09T06:12:21Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2964,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 293.43,
-        "build_firmware": 0.334,
-        "run_smoke": 0.936
+        "build_cli": 0.343,
+        "build_firmware": 0.24,
+        "run_smoke": 2.368
       },
       "stages_ms": {
-        "build_cli": 293430,
-        "build_firmware": 334,
-        "run_smoke": 936
+        "build_cli": 343,
+        "build_firmware": 240,
+        "run_smoke": 2368
       },
       "_artifact_path": "stm32f042",
       "zero_answering_windows": [],
-      "claimed_peripherals": 20,
+      "claimed_peripherals": 21,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -9345,28 +9345,28 @@
       "script": "examples/renode-onboarding/stm32f072-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f072.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T03:03:23Z",
-      "finished_at_utc": "2026-11-09T03:09:36Z",
-      "elapsed_seconds": 374,
-      "elapsed_ms": 373569,
+      "started_at_utc": "2026-11-09T06:05:19Z",
+      "finished_at_utc": "2026-11-09T06:11:34Z",
+      "elapsed_seconds": 375,
+      "elapsed_ms": 374783,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 372.333,
-        "build_firmware": 0.253,
-        "run_smoke": 0.971
+        "build_cli": 185.467,
+        "build_firmware": 0.228,
+        "run_smoke": 189.07
       },
       "stages_ms": {
-        "build_cli": 372333,
-        "build_firmware": 253,
-        "run_smoke": 971
+        "build_cli": 185467,
+        "build_firmware": 228,
+        "run_smoke": 189070
       },
       "_artifact_path": "stm32f072",
       "zero_answering_windows": [],
-      "claimed_peripherals": 27,
+      "claimed_peripherals": 28,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -9393,28 +9393,28 @@
       "script": "examples/renode-onboarding/stm32f072b_discovery-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f072b_discovery.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T03:37:19Z",
-      "finished_at_utc": "2026-11-09T03:43:25Z",
-      "elapsed_seconds": 367,
-      "elapsed_ms": 366084,
+      "started_at_utc": "2026-11-09T06:12:13Z",
+      "finished_at_utc": "2026-11-09T06:12:16Z",
+      "elapsed_seconds": 4,
+      "elapsed_ms": 3557,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 351.397,
-        "build_firmware": 0.299,
-        "run_smoke": 14.374
+        "build_cli": 1.138,
+        "build_firmware": 0.261,
+        "run_smoke": 2.146
       },
       "stages_ms": {
-        "build_cli": 351397,
-        "build_firmware": 299,
-        "run_smoke": 14374
+        "build_cli": 1138,
+        "build_firmware": 261,
+        "run_smoke": 2146
       },
       "_artifact_path": "stm32f072b_discovery",
       "zero_answering_windows": [],
-      "claimed_peripherals": 27,
+      "claimed_peripherals": 28,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
