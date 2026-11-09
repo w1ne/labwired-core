@@ -146,3 +146,77 @@ def test_boards_argument_limits_coverage_and_measurement(monkeypatch, tmp_path):
     assert br.main() == 0
     assert seen_coverage == [{"keep"}]
     assert seen_measurements == ["keep"] * 3
+
+
+# --- realistic workload RTF (board_rtf.py) ---------------------------------
+
+import json
+
+import board_rtf as rtf
+
+
+def _row(workload="uno_feeder", chip="atmega328p", value=0.1):
+    return {"workload": workload, "chip": chip, "rtf": value}
+
+
+def test_rtf_is_guest_seconds_over_wall_seconds():
+    assert rtf.rtf(16_000_000, 16_000_000, 4.0) == pytest.approx(0.25)
+    for hz, wall in ((0, 1.0), (16_000_000, 0.0)):
+        with pytest.raises(ValueError):
+            rtf.rtf(1, hz, wall)
+
+
+def test_rtf_workloads_have_committed_inputs():
+    assert {w.chip for w in rtf.WORKLOADS} >= {"atmega328p", "rp2040", "esp32c3", "stm32f411ceu6"}
+    for w in rtf.WORKLOADS:
+        for name in ("firmware.elf", "system.yaml", f"{w.id}.ino"):
+            assert (w.dir / name).is_file(), f"{w.id}: missing {name}"
+
+
+def test_rtf_refuses_a_run_that_stopped_early():
+    w = rtf.WORKLOADS[0]
+    ok = rtf.parse_result(w, {"status": "pass", "stop_reason": "max_cycles"}, 2.0, 0)
+    assert ok["cycles"] == round(w.cpu_hz * w.guest_s)
+    for result, code in (
+        ({"status": "pass", "stop_reason": "assertions_passed"}, 0),
+        ({"status": "fail", "stop_reason": "max_cycles"}, 1),
+    ):
+        with pytest.raises(RuntimeError):
+            rtf.parse_result(w, result, 2.0, code)
+
+
+def test_rtf_gate_is_host_independent_and_flags_a_20_percent_slowdown():
+    base = {"uno_feeder": {"index": 0.1}}
+    # Same engine on a host twice as fast: both RTF and spin RTx double.
+    assert rtf.judge([_row(value=0.2)], {"atmega328p": 2.0}, base, 0.10) == []
+    # Synthetic 20% slowdown of the workload alone marks the gate red at a
+    # 10% tolerance, and a 30% slowdown at the default one.
+    assert rtf.judge([_row(value=0.07)], {"atmega328p": 1.0}, base, rtf.DEFAULT_TOLERANCE)
+    rows = [_row(value=0.08)]
+    failures = rtf.judge(rows, {"atmega328p": 1.0}, base, 0.10)
+    assert len(failures) == 1 and "uno_feeder" in failures[0]
+    assert rows[0]["index"] == pytest.approx(0.08)
+    # Within tolerance, or no baseline / no spin figure: no failure.
+    assert rtf.judge([_row(value=0.095)], {"atmega328p": 1.0}, base, 0.10) == []
+    assert rtf.judge([_row(workload="new")], {"atmega328p": 1.0}, base, 0.10) == []
+    assert rtf.judge([_row()], {}, base, 0.10) == []
+
+
+def test_rtf_report_schema():
+    row = {
+        "board": "Arduino Uno", "chip": "atmega328p", "workload": "uno_feeder",
+        "guest_s": 2.0, "wall_s": 1.0, "mcycles_per_s": 32.0, "rtf": 2.0,
+    }
+    doc = json.loads(json.dumps(rtf.report([row], [], 0.1)))
+    for key in ("schema", "generated_at", "commit", "runner", "ok", "boards"):
+        assert key in doc
+    assert doc["ok"] is True
+    for key in ("board", "workload", "guest_s", "wall_s", "rtf"):
+        assert key in doc["boards"][0]
+
+
+def test_rtf_baselines_name_known_workloads():
+    known = {w.id for w in rtf.WORKLOADS}
+    baselines = json.loads(rtf.BASELINES.read_text())
+    assert set(baselines) <= known
+    assert all(v["index"] > 0 for v in baselines.values())
