@@ -5,22 +5,22 @@
     "registers": [
       10,
       3221225472,
-      3221225472,
       4294867296,
       4294867296,
+      1,
       1,
       1,
       536920048,
       1,
       1,
-      1,
+      0,
       1073821696,
       70,
-      536920016,
+      536920008,
       70,
-      134224292
+      134229740
     ],
-    "pc": 134224292,
+    "pc": 134229740,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "37cf7a08e1b682fe93bca4a7e43b6ff96405386128df71b7975af815c36029a9",
+  "firmware_hash": "ddc7ba6d100aa0df227bba08f7179ac10473675f9fc835f7e15b6b9689f2e7e0",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32l151-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l151.yaml",

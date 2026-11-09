@@ -473,6 +473,8 @@ impl F1I2c {
             || self.stop_requested
             // Level EV must keep walking while ITEVTEN/ITBUFEN flags are live.
             || self.irq_level()
+            // So must the ER level while ITERREN and an error flag are.
+            || self.error_irqs().is_some()
     }
 
     /// Set the ERROR-line NVIC vector for this instance.
@@ -2926,6 +2928,9 @@ impl crate::Peripheral for I2c {
                 i.chain_live = active;
                 crate::sched::EventResult {
                     raise_own_irq: irq,
+                    // Errors ride the ER vector, exactly as `tick_legacy` pends
+                    // them on the walk.
+                    explicit_irqs: i.error_irqs().unwrap_or_default(),
                     reschedule_delay: active.then_some(1),
                     ..Default::default()
                 }

@@ -1402,8 +1402,9 @@ pub fn try_build(
             ))
         }
         "afio" => Box::new(crate::peripherals::afio::Afio::new()),
-        // Channel-based DMA (F1/L0/L4/G0). `config: { requests: { spi1_tx: 3,
-        // spi1_rx: [2, 1] } }` hard-wires a peripheral request to a channel
+        // Channel-based DMA (F1/L0/L4/G0). `config: { channel_irqs: [11, ...,
+        // 17] }` gives each channel its own NVIC line (F1/L1); `requests: {
+        // spi1_tx: 3, spi1_rx: [2, 1] } }` hard-wires a peripheral request to a channel
         // (F1), or — `[channel, selector]` — to a channel while its L4
         // `CSELR` nibble holds the selector.
         "dma" | "stm32dma" => {
@@ -1414,6 +1415,21 @@ pub fn try_build(
                     anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
                 }
             };
+            if let Some(irqs) = p_cfg.config.get("channel_irqs") {
+                let irqs: Vec<u32> = irqs
+                    .as_sequence()
+                    .map(|s| {
+                        s.iter()
+                            .filter_map(|n| n.as_u64())
+                            .map(|n| n as u32)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let Ok(irqs) = <[u32; 7]>::try_from(irqs) else {
+                    anyhow::bail!("dma `{}`: channel_irqs must list 7 NVIC lines", p_cfg.id)
+                };
+                dma = dma.with_channel_irqs(irqs);
+            }
             for (request, v) in dma_request_table(p_cfg) {
                 let pair = v.as_sequence().map(|s| {
                     s.iter()

@@ -187,6 +187,11 @@ pub struct Dma1 {
     /// Opt-in G0 DMA1 semantics. Other families retain their existing model.
     #[serde(skip)]
     g0_channel_irqs: Option<[u32; 7]>,
+    /// Per-channel NVIC lines for the classic (F1/L1) controller, from the
+    /// chip yaml (`config: { channel_irqs: [11, ..., 17] }`). `None` keeps the
+    /// single shared line (`irq:`). G0 semantics are not implied.
+    #[serde(skip)]
+    channel_irqs: Option<[u32; 7]>,
     /// G0 count/flags commit only after the bus reports a successful copy.
     #[serde(skip)]
     g0_pending: Option<usize>,
@@ -207,13 +212,22 @@ impl Dma1 {
         }
     }
 
+    /// Route channel `n` (1..7) interrupts to NVIC line `irqs[n - 1]`
+    /// instead of one shared line: STM32F1/L1 `DMA1_Channel1..7_IRQn`.
+    pub fn with_channel_irqs(mut self, irqs: [u32; 7]) -> Self {
+        self.channel_irqs = Some(irqs);
+        self
+    }
+
     /// Observed successful MMIO/memory copies, indexed by channel 1..7.
     pub fn transfer_observation(&self) -> serde_json::Value {
         serde_json::json!({"profile": if self.g0_channel_irqs.is_some() {"stm32g0"} else {"legacy"}, "channels": self.observations})
     }
 
-    fn g0_irq_levels(&self) -> Vec<(u32, bool)> {
-        let Some(irqs) = self.g0_channel_irqs else {
+    /// Each per-channel line's level: some channel on it has a flag
+    /// (TEIF/HTIF/TCIF) whose enable is set.
+    fn channel_irq_levels(&self) -> Vec<(u32, bool)> {
+        let Some(irqs) = self.g0_channel_irqs.or(self.channel_irqs) else {
             return Vec::new();
         };
         let mut levels: Vec<(u32, bool)> = Vec::new();
@@ -229,11 +243,34 @@ impl Dma1 {
         levels
     }
 
-    fn g0_pending_irqs(&self) -> Vec<u32> {
-        self.g0_irq_levels()
+    fn channel_pending_irqs(&self) -> Vec<u32> {
+        self.channel_irq_levels()
             .into_iter()
             .filter_map(|(irq, high)| high.then_some(irq))
             .collect()
+    }
+
+    fn g0_pending_irqs(&self) -> Vec<u32> {
+        if self.g0_channel_irqs.is_none() {
+            return Vec::new();
+        }
+        self.channel_irq_levels()
+            .into_iter()
+            .filter_map(|(irq, high)| high.then_some(irq))
+            .collect()
+    }
+
+    /// The per-channel lines a slot pends: on G0 every live level, every
+    /// slot; on a classic controller with `channel_irqs`, the live levels
+    /// when the slot raised an interrupt (the shared-line event, routed).
+    fn slot_explicit_irqs(&self, irq: bool) -> Option<Vec<u32>> {
+        if self.g0_channel_irqs.is_some() {
+            Some(self.g0_pending_irqs())
+        } else if self.channel_irqs.is_some() && irq {
+            Some(self.channel_pending_irqs())
+        } else {
+            None
+        }
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -283,12 +320,12 @@ impl Dma1 {
     fn tick_channels_once(&mut self) -> PeripheralTickResult {
         let (req, irq) = self.run_slot();
         PeripheralTickResult {
-            irq: irq && self.g0_channel_irqs.is_none(),
+            irq: irq && self.g0_channel_irqs.is_none() && self.channel_irqs.is_none(),
             // B4 tick-cost normalization: charge zero in every state so the
             // walk-on reference and scheduler path agree cycle-for-cycle.
             cycles: 0,
             dma_requests: req.map(|r| vec![r]),
-            explicit_irqs: self.g0_channel_irqs.map(|_| self.g0_pending_irqs()),
+            explicit_irqs: self.slot_explicit_irqs(irq),
             ..Default::default()
         }
     }
@@ -682,8 +719,8 @@ impl Peripheral for Dma1 {
         let reschedule = self.has_work();
         self.arbiter_live = reschedule;
         crate::sched::EventResult {
-            raise_own_irq: irq && self.g0_channel_irqs.is_none(),
-            explicit_irqs: self.g0_pending_irqs(),
+            raise_own_irq: irq && self.g0_channel_irqs.is_none() && self.channel_irqs.is_none(),
+            explicit_irqs: self.slot_explicit_irqs(irq).unwrap_or_default(),
             reschedule_delay: reschedule.then_some(1),
             dma_requests: req.into_iter().collect(),
             ..Default::default()
@@ -746,7 +783,7 @@ impl Peripheral for Dma1 {
     }
 
     fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
-        for (irq, high) in self.g0_irq_levels() {
+        for (irq, high) in self.channel_irq_levels() {
             report(irq, high);
         }
     }
@@ -866,6 +903,28 @@ mod tests {
         assert_eq!(reqs[0].addr, 0x2000_0010);
         // CH1 TCIF is bit 1.
         assert_ne!(dma.read_reg(0x00) & (1 << 1), 0);
+    }
+
+    /// F1/L1 `DMA1_Channel1..7_IRQn`: with `channel_irqs`, a channel's
+    /// interrupt pends its own line, not the shared one, and only once its
+    /// enable is set.
+    #[test]
+    fn channel_irqs_route_each_channel_to_its_own_line() {
+        let mut dma = Dma1::new().with_channel_irqs([11, 12, 13, 14, 15, 16, 17]);
+        m2m(&mut dma, 3, 1, 0x2000_0000, 0x2000_0100, 0);
+        let res = dma.tick();
+        assert!(!res.irq && res.explicit_irqs.is_none(), "TCIE clear");
+        assert_ne!(dma.read_reg(0x00) & (1 << 9), 0, "TCIF3");
+        dma.write_reg(0x04, 0xF << 8);
+        // Channel 5, TCIE set.
+        m2m(&mut dma, 5, 1, 0x2000_0000, 0x2000_0100, 0);
+        dma.write_reg(0x08 + 4 * 20, dma.read_reg(0x08 + 4 * 20) | (1 << 1));
+        let res = dma.tick();
+        assert!(!res.irq, "the shared line stays quiet");
+        assert_eq!(res.explicit_irqs, Some(vec![15]));
+        let mut levels = Vec::new();
+        dma.irq_line_levels(&mut |l, h| levels.push((l, h)));
+        assert!(levels.contains(&(15, true)) && levels.contains(&(13, false)));
     }
 
     /// Program channel `ch` (1..7) for a memory-to-memory copy of `n` bytes

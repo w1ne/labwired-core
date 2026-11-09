@@ -8,7 +8,34 @@ name: stm32l151
 chip: ../../chips/onboarding/stm32l151.yaml
 # Smoke fixture inputs, not a board: Renode's stm32l151.repl is a bare CPU
 # platform. Two switches to ground on PH1 and PC13 (pressed = low, against
-# the GPIO pull-up) give the EXTI port mux real pad edges to route.
+# the GPIO pull-up) give the EXTI port mux real pad edges to route. A
+# MAX31855 on each SPI (CS on PA4 / PB12 / PA15; the smoke scenario sets
+# their thermocouples to 25 / 100 / -25 °C, so every bus has its own frame)
+# and a TMP102 on I2C1 give the serial blocks real slaves. Known engine gap:
+# the STM32 SPI model does not yet deliver `cs_pin` edges to its slaves, so a
+# MAX31855 here re-frames every four bytes rather than on CS↓; the smoke
+# clocks whole frames only and claims nothing about chip-select.
+external_devices:
+  - id: "tc_spi1"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+  - id: "tc_spi2"
+    type: "max31855"
+    connection: "spi2"
+    config:
+      cs_pin: "PB12"
+  - id: "tc_spi3"
+    type: "max31855"
+    connection: "spi3"
+    config:
+      cs_pin: "PA15"
+  - id: "tmp102"
+    type: "tmp102"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x48
 board_io:
   - id: "sw_ph1"
     kind: "button"

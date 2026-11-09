@@ -101,7 +101,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "7c5caf90b2a9a89e559909a953ca76d936ffc01e06078c4c1d9c6eccffa0c846",
+  "firmware_hash": "fa10d833272e9ff94520e869119a7d4ce5c7f25bd37c90edc27068c2da2b905c",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",

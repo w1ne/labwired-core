@@ -2,8 +2,12 @@
 #![no_main]
 
 //! STM32L151xD smoke for the imported Renode platform: USART1/2/3, GPIOA..H,
-//! SYSCFG EXTICR + EXTI, TIM2..TIM7 and TIM9..TIM11. Register offsets, bases
-//! and IRQ numbers are ST's CMSIS `stm32l151xd.h`.
+//! SYSCFG EXTICR + EXTI, TIM2..TIM7 and TIM9..TIM11, SPI1..3, I2C1 and DMA1.
+//! Register offsets, bases and IRQ numbers are ST's CMSIS `stm32l151xd.h`.
+//!
+//! The fixture system puts a MAX31855 on each SPI (thermocouple 25, 100 and
+//! -25 °C, so each bus answers with its own frame) and a TMP102 at 0x48 on
+//! I2C1.
 //!
 //! Interrupts stay disabled in the NVIC: each check reads the line's
 //! ISPR bit, which proves the block reaches the right NVIC input without a
@@ -62,6 +66,57 @@ const T_SR: u32 = 0x10;
 const T_CNT: u32 = 0x24;
 const T_PSC: u32 = 0x28;
 const T_ARR: u32 = 0x2C;
+
+// SPIx (classic CR1/CR2/SR/DR).
+const S_CR1: u32 = 0x00;
+const S_CR2: u32 = 0x04;
+const S_SR: u32 = 0x08;
+const S_DR: u32 = 0x0C;
+const SPI_SR_RXNE: u32 = 1 << 0;
+const SPI_SR_TXE: u32 = 1 << 1;
+const SPI_SR_BSY: u32 = 1 << 7;
+const SPI1: u32 = 0x4001_3000;
+
+/// (name, base, NVIC line, CS port, CS pin, expected MAX31855 frame).
+/// Frames: thermocouple << 18 (0.25 °C/LSB) | internal 22 °C << 4.
+const SPIS: [(&str, u32, u32, u32, u32, u32); 3] = [
+    ("spi1", SPI1, 35, GPIOA, 4, 0x0190_1600),
+    ("spi2", 0x4000_3800, 36, GPIOB, 12, 0x0640_1600),
+    ("spi3", 0x4000_3C00, 47, GPIOA, 15, 0xFE70_1600),
+];
+
+// DMA1: ISR, IFCR, then channel n at 0x08 + 20 * (n - 1).
+const DMA1: u32 = 0x4002_6000;
+const D_ISR: u32 = 0x00;
+const D_IFCR: u32 = 0x04;
+const fn dma_ch(n: u32) -> u32 {
+    DMA1 + 0x08 + 20 * (n - 1)
+}
+const C_CCR: u32 = 0x00;
+const C_CNDTR: u32 = 0x04;
+const C_CPAR: u32 = 0x08;
+const C_CMAR: u32 = 0x0C;
+const DMA_BUF: u32 = 0x2000_8100;
+
+// I2C1 (F1/F4 "v1" IP).
+const I2C1: u32 = 0x4000_5400;
+const I_CR1: u32 = 0x00;
+const I_CR2: u32 = 0x04;
+const I_OAR1: u32 = 0x08;
+const I_DR: u32 = 0x10;
+const I_SR1: u32 = 0x14;
+const I_SR2: u32 = 0x18;
+const I_CCR: u32 = 0x1C;
+const I_TRISE: u32 = 0x20;
+const I2C_SR1_SB: u32 = 1 << 0;
+const I2C_SR1_ADDR: u32 = 1 << 1;
+const I2C_SR1_BTF: u32 = 1 << 2;
+const I2C_SR1_RXNE: u32 = 1 << 6;
+const I2C_SR1_AF: u32 = 1 << 10;
+const I2C_CR1_START: u32 = 1 << 8;
+const I2C_CR1_STOP: u32 = 1 << 9;
+const I2C_CR1_ACK: u32 = 1 << 10;
+const TMP102: u32 = 0x48;
 
 const NVIC_ISPR0: u32 = 0xE000_E200;
 const NVIC_ICPR0: u32 = 0xE000_E280;
@@ -297,6 +352,246 @@ fn check_timer(name: &str, base: u32, irq: u32, width: u32) -> bool {
     ok
 }
 
+fn wait(addr: u32, mask: u32, want: u32) -> bool {
+    for _ in 0..100_000 {
+        if rd(addr) & mask == want {
+            return true;
+        }
+    }
+    false
+}
+
+fn cs(port: u32, pin: u32, low: bool) {
+    wr(port + G_BSRR, if low { 1 << (pin + 16) } else { 1 << pin });
+}
+
+fn cs_output(port: u32, pin: u32) {
+    cs(port, pin, false);
+    let moder = rd(port + G_MODER) & !(0b11 << (2 * pin));
+    wr(port + G_MODER, moder | (0b01 << (2 * pin)));
+}
+
+/// Master, software NSS (SSM | SSI), fPCLK/8, mode 0, 8-bit frames.
+fn spi_enable(base: u32) {
+    wr(base + S_CR1, (1 << 9) | (1 << 8) | (0b010 << 3) | (1 << 2));
+    wr(base + S_CR1, rd(base + S_CR1) | (1 << 6)); // SPE
+}
+
+fn spi_xfer(base: u32, out: u8) -> Option<u8> {
+    if !wait(base + S_SR, SPI_SR_TXE, SPI_SR_TXE) {
+        return None;
+    }
+    wr(base + S_DR, u32::from(out));
+    if !wait(base + S_SR, SPI_SR_RXNE, SPI_SR_RXNE) {
+        return None;
+    }
+    Some(rd(base + S_DR) as u8)
+}
+
+/// One 32-bit MAX31855 frame under CS, by polling.
+fn max31855_frame(base: u32, port: u32, pin: u32) -> Option<u32> {
+    cs(port, pin, true);
+    let mut word = 0u32;
+    for _ in 0..4 {
+        match spi_xfer(base, 0) {
+            Some(b) => word = (word << 8) | u32::from(b),
+            None => {
+                cs(port, pin, false);
+                return None;
+            }
+        }
+    }
+    let idle = wait(base + S_SR, SPI_SR_BSY, 0);
+    cs(port, pin, false);
+    idle.then_some(word)
+}
+
+/// Each SPI reads its own device's frame twice — polled, then with RXNEIE,
+/// which must pend the SPI's own NVIC line and no other SPI's. Whole 4-byte
+/// frames only: the engine does not deliver GPIO chip-select edges to STM32
+/// SPI slaves, so the MAX31855 frames itself every four bytes.
+fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) -> bool {
+    cs_output(port, pin);
+    spi_enable(base);
+    let frame = max31855_frame(base, port, pin).unwrap_or(0xDEAD_BEEF);
+    let quiet = !pending(irq);
+
+    unpend(irq);
+    wr(base + S_CR2, 1 << 6); // RXNEIE
+    let again = max31855_frame(base, port, pin);
+    let data = frame == want && again == Some(want);
+    let pend = quiet && pending(irq);
+    let alone = SPIS
+        .iter()
+        .all(|&(_, _, other, _, _, _)| other == irq || !pending(other));
+    wr(base + S_CR2, 0);
+    unpend(irq);
+    let released = !pending(irq) && rd(base + S_SR) & SPI_SR_RXNE == 0;
+
+    puts(name);
+    puts(" frame=");
+    hex(frame);
+    puts(" ");
+    flag("data", data);
+    flag("pend", pend);
+    flag("alone", alone);
+    flag("released", released);
+    let ok = data && pend && alone && released;
+    verdict(ok);
+    ok
+}
+
+/// SPI1 full duplex through DMA1: channel 3 (SPI1_TX) feeds four zero
+/// bytes, channel 2 (SPI1_RX) stores the frame. Only channel 2 has TCIE, so
+/// only DMA1_Channel2_IRQn (12) pends — not 11, not 13.
+fn check_dma_spi1() -> bool {
+    let rx = DMA_BUF;
+    let tx = DMA_BUF + 0x10;
+    wr(rx, 0xFFFF_FFFF);
+    wr(tx, 0);
+    wr(DMA1 + D_IFCR, 0x0FFF_FFFF);
+    for irq in 11..=17 {
+        unpend(irq);
+    }
+    let ch2 = dma_ch(2);
+    let ch3 = dma_ch(3);
+    wr(ch2 + C_CPAR, SPI1 + S_DR);
+    wr(ch2 + C_CMAR, rx);
+    wr(ch2 + C_CNDTR, 4);
+    wr(ch2 + C_CCR, (1 << 7) | (1 << 1) | 1); // MINC | TCIE | EN, P->M
+    wr(ch3 + C_CPAR, SPI1 + S_DR);
+    wr(ch3 + C_CMAR, tx);
+    wr(ch3 + C_CNDTR, 4);
+    wr(ch3 + C_CCR, (1 << 7) | (1 << 4) | 1); // MINC | DIR | EN, M->P
+
+    cs(GPIOA, 4, true);
+    wr(SPI1 + S_CR2, (1 << 1) | 1); // TXDMAEN | RXDMAEN
+    let done = wait(DMA1 + D_ISR, 1 << 5, 1 << 5); // TCIF2
+    let _ = wait(SPI1 + S_SR, SPI_SR_BSY, 0);
+    cs(GPIOA, 4, false);
+    wr(SPI1 + S_CR2, 0);
+
+    let b = rd(rx).to_le_bytes();
+    let frame = u32::from_be_bytes(b);
+    let data = frame == SPIS[0].5;
+    let isr = rd(DMA1 + D_ISR);
+    // GIF | TCIF | HTIF (four items cross the half-way mark) on both channels.
+    let flags = isr & 0xFF0 == 0x770 && rd(ch2 + C_CNDTR) == 0 && rd(ch3 + C_CNDTR) == 0;
+    let pend = done && pending(12);
+    let alone = !pending(11) && !pending(13) && (14..=17).all(|i| !pending(i));
+    wr(DMA1 + D_IFCR, 0xFF0);
+    unpend(12);
+    let released = !pending(12) && rd(DMA1 + D_ISR) == 0;
+    wr(ch2 + C_CCR, 0);
+    wr(ch3 + C_CCR, 0);
+
+    puts("dma1 spi1 frame=");
+    hex(frame);
+    puts(" ");
+    flag("data", data);
+    flag("flags", flags);
+    flag("pend", pend);
+    flag("alone", alone);
+    flag("released", released);
+    let ok = data && flags && pend && alone && released;
+    verdict(ok);
+    ok
+}
+
+fn i2c_clear_addr() {
+    let _ = rd(I2C1 + I_SR1);
+    let _ = rd(I2C1 + I_SR2);
+}
+
+fn i2c_stop() -> bool {
+    wr(I2C1 + I_CR1, rd(I2C1 + I_CR1) | I2C_CR1_STOP);
+    wait(I2C1 + I_SR2, 0x0002, 0) // BUSY released
+}
+
+/// TMP102 temperature register (pointer 0): write pointer, repeated START,
+/// two bytes with the final-byte NACK.
+fn tmp102_read() -> Option<u16> {
+    let sr1 = I2C1 + I_SR1;
+    wr(I2C1 + I_CR1, rd(I2C1 + I_CR1) | I2C_CR1_START);
+    if !wait(sr1, I2C_SR1_SB, I2C_SR1_SB) {
+        return None;
+    }
+    wr(I2C1 + I_DR, TMP102 << 1);
+    if !wait(sr1, I2C_SR1_ADDR, I2C_SR1_ADDR) {
+        return None;
+    }
+    i2c_clear_addr();
+    wr(I2C1 + I_DR, 0);
+    if !wait(sr1, I2C_SR1_BTF, I2C_SR1_BTF) {
+        return None;
+    }
+    wr(I2C1 + I_CR1, rd(I2C1 + I_CR1) | I2C_CR1_START | I2C_CR1_ACK);
+    if !wait(sr1, I2C_SR1_SB, I2C_SR1_SB) {
+        return None;
+    }
+    wr(I2C1 + I_DR, (TMP102 << 1) | 1);
+    if !wait(sr1, I2C_SR1_ADDR, I2C_SR1_ADDR) {
+        return None;
+    }
+    i2c_clear_addr();
+    if !wait(sr1, I2C_SR1_RXNE, I2C_SR1_RXNE) {
+        return None;
+    }
+    let msb = rd(I2C1 + I_DR) as u8;
+    wr(I2C1 + I_CR1, rd(I2C1 + I_CR1) & !I2C_CR1_ACK);
+    if !wait(sr1, I2C_SR1_RXNE, I2C_SR1_RXNE) {
+        return None;
+    }
+    let lsb = rd(I2C1 + I_DR) as u8;
+    i2c_stop().then(|| u16::from_be_bytes([msb, lsb]))
+}
+
+/// I2C1 master: OAR1 readback, a TMP102 read (25 °C = 0x1900), the event
+/// line (ITEVTEN + SB -> 31) and an absent address NACKing onto the error
+/// line (ITERREN + AF -> 32), not the event line.
+fn check_i2c1() -> bool {
+    wr(I2C1 + I_OAR1, (1 << 14) | 0xAA);
+    let oar = rd(I2C1 + I_OAR1) & 0xFFFF == 0x40AA;
+    wr(I2C1 + I_CR2, 16); // FREQ = 16 MHz
+    wr(I2C1 + I_CCR, 80); // 100 kHz
+    wr(I2C1 + I_TRISE, 17);
+    wr(I2C1 + I_CR1, 1); // PE
+    let temp = tmp102_read();
+    let data = temp == Some(0x1900);
+
+    unpend(31);
+    unpend(32);
+    wr(I2C1 + I_CR2, 16 | (1 << 9) | (1 << 8)); // ITEVTEN | ITERREN
+    wr(I2C1 + I_CR1, rd(I2C1 + I_CR1) | I2C_CR1_START);
+    let ev = wait(I2C1 + I_SR1, I2C_SR1_SB, I2C_SR1_SB) && pending(31);
+    wr(I2C1 + I_DR, 0x50 << 1); // nothing at 0x50
+    let af = wait(I2C1 + I_SR1, I2C_SR1_AF, I2C_SR1_AF);
+    let er_pend = pending(32);
+    unpend(31);
+    let ev_quiet = !pending(31);
+    let er = af && er_pend && ev_quiet;
+    let stopped = i2c_stop();
+    wr(I2C1 + I_SR1, !I2C_SR1_AF & 0xFFFF); // rc_w0
+    unpend(32);
+    let released = rd(I2C1 + I_SR1) & I2C_SR1_AF == 0 && !pending(32);
+    wr(I2C1 + I_CR2, 16);
+
+    puts("i2c1 tmp102=");
+    hex(u32::from(temp.unwrap_or(0xFFFF)));
+    puts(" ");
+    flag("oar", oar);
+    flag("data", data);
+    flag("ev", ev);
+    flag("af", af);
+    flag("er_pend", er_pend);
+    flag("ev_quiet", ev_quiet);
+    flag("stop", stopped);
+    flag("released", released);
+    let ok = oar && data && ev && er && stopped && released;
+    verdict(ok);
+    ok
+}
+
 #[entry]
 fn main() -> ! {
     uart_init(USART1);
@@ -318,6 +613,11 @@ fn main() -> ! {
         mark(2 + i as u32, check_timer(name, base, irq, width));
     }
     mark(11, check_exti_pads());
+    for (i, &(name, base, irq, port, pin, want)) in SPIS.iter().enumerate() {
+        mark(12 + i as u32, check_spi(name, base, irq, port, pin, want));
+    }
+    mark(15, check_dma_spi1());
+    mark(16, check_i2c1());
     let summary = summary | 0x1510_0000;
     wr(SUMMARY, summary);
     puts("summary ");

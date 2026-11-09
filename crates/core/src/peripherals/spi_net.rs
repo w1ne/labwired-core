@@ -446,14 +446,6 @@ impl Spi {
         }
     }
 
-    /// RXNEIE on a net master's completed frame (the net exchange is the only
-    /// place a master receives a real MISO word, so it is the only place this
-    /// interrupt is raised from the master side).
-    pub(super) fn net_master_rx_irq(&self) -> bool {
-        let (_, cr2) = self.net_cr();
-        cr2 & CR2_RXNEIE != 0
-    }
-
     /// Frames a net-mode slave has received (diagnostics and tests).
     pub fn net_slave_frames(&self) -> u64 {
         self.net_frames

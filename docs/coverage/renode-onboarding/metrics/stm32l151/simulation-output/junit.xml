@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="8" failures="0" errors="0" time="0.458715">
+<testsuite name="labwired" tests="8" failures="0" errors="0" time="0.504478">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="37cf7a08e1b682fe93bca4a7e43b6ff96405386128df71b7975af815c36029a9"/>
+    <property name="firmware_hash" value="ddc7ba6d100aa0df227bba08f7179ac10473675f9fc835f7e15b6b9689f2e7e0"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.458715">
+  <testcase classname="labwired" name="run" time="0.504478">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: STM32L151 Cortex-M3 smoke" time="0.000000">
   </testcase>
@@ -15,7 +15,7 @@
   </testcase>
   <testcase classname="labwired" name="assertion 4: uart_ordered: [&quot;gpio pa=1 pb=1 pc=1 ph=1 fg=1 ok&quot;, &quot;exti swier masked=1 routed=1 ok&quot;, &quot;tim2 arr=0x0000FFFF width=1 coun…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 5: memory_value: @0x20008000=0x15100fff" time="0.000000">
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x20008000=0x1511ffff" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 6: gpio_edges: gpioh:0 &gt;= 4 edges" time="0.000000">
   </testcase>

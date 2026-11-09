@@ -1650,3 +1650,28 @@ fn nrf54l_spim_prescaler_resets_to_0x40() {
         "PSEL.SCK resets DISCONNECTED"
     );
 }
+
+/// Classic STM32 SPI: the line is TXE&TXEIE | RXNE&RXNEIE (RM0008 §25.3.11).
+/// RXNEIE alone raises it when a slave's frame lands in DR — before, only a
+/// gpio-net master did, so a slave on `external_devices` never interrupted.
+#[test]
+fn rxneie_raises_the_line_when_a_slave_frame_lands() {
+    fn frame_irq(cr2: u8) -> bool {
+        let mut spi = Spi::new();
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
+        spi.write(0x00, 0x44).unwrap(); // MSTR | SPE
+        spi.write(0x04, cr2).unwrap();
+        spi.write(0x0C, 0xA5).unwrap();
+        let mut irq = false;
+        for _ in 0..1_000_000 {
+            if !spi.transfer_active() {
+                break;
+            }
+            irq |= spi.tick_elapsed(8).irq;
+        }
+        assert_ne!(spi.read(0x08).unwrap() & 0x01, 0, "RXNE");
+        irq
+    }
+    assert!(!frame_irq(0), "no enable, no line");
+    assert!(frame_irq(1 << 6), "RXNEIE");
+}

@@ -9,13 +9,14 @@
 #
 # Claimed and exercised by examples/renode-onboarding/stm32l151-smoke.yaml:
 # USART1/2/3, GPIOA..H (with the RM0038 reset values of PA/PB), SYSCFG
-# EXTICR + EXTI lines 0..15, TIM2..TIM7 and TIM9..TIM11.
+# EXTICR + EXTI lines 0..15, TIM2..TIM7 and TIM9..TIM11, SPI1..3 (master,
+# full duplex), I2C1 (master) and DMA1 (SPI1 requests, per-channel lines).
 #
 # Not claimed: RCC (Renode does not model it either, so on both engines the
 # blocks below are clocked from reset — firmware that polls RCC ready bits
 # will fault here on an unmapped access instead of reading Renode's zeros),
-# PWR, FLASH interface, SPI1..3, I2C1, DMA1, RTC, ADC/DAC/COMP, USB, LCD and
-# the EXTI lines 16..23. Renode's bit-band aliases are the engine's own
+# PWR, FLASH interface, I2S on SPI2/3, I2C2, DMA2, RTC, ADC/DAC/COMP, USB,
+# LCD and the EXTI lines 16..23. Renode's bit-band aliases are the engine's own
 # Cortex-M3 bit-band, not a peripheral entry.
 name: stm32l151
 arch: arm
@@ -189,3 +190,58 @@ peripherals:
   base_address: 0x40011000
   size: 1KB
   irq: 27
+
+# --- SPI (classic SR/DR/CR1/CR2 layout, RM0038 §28) -------------------------
+# CR2 carries FRF (bit 4, TI mode) on the xD: SPI_CR2_FRF in stm32l151xd.h,
+# so the writable mask is 0xF7 (bit 3 reserved). The I2S half of SPI2/SPI3
+# (I2SCFGR/I2SPR) is not claimed.
+- id: spi1
+  type: spi
+  base_address: 0x40013000
+  size: 1KB
+  irq: 35
+  config:
+    cr2_mask: 0xF7
+- id: spi2
+  type: spi
+  base_address: 0x40003800
+  size: 1KB
+  irq: 36
+  config:
+    cr2_mask: 0xF7
+- id: spi3
+  type: spi
+  base_address: 0x40003C00
+  size: 1KB
+  irq: 47
+  config:
+    cr2_mask: 0xF7
+
+# --- I2C1 (F1/F4 "v1" I2C IP, RM0038 §26) -----------------------------------
+# Two NVIC lines: EV = 31 (below) and ER = 32 (AF/BERR/ARLO/OVR under
+# CR2.ITERREN). Renode's stm32l151.repl maps I2C1 only; the xD's I2C2 at
+# 0x40005800 is not claimed.
+- id: i2c1
+  type: i2c
+  base_address: 0x40005400
+  size: 1KB
+  irq: 31
+  config:
+    irq_error: 32
+
+# --- DMA1 (7-channel ISR/IFCR/CCRx layout, RM0038 §11) ----------------------
+# Each channel has its own line, DMA1_Channel1..7_IRQn = 11..17. Hard-wired
+# requests from RM0038 Table 54: SPI1_RX ch2, SPI1_TX ch3, SPI2_RX ch4,
+# SPI2_TX ch5. (SPI3 requests go to DMA2, which is not claimed; Renode's
+# repl has no DMA2 either.)
+- id: dma1
+  type: dma
+  base_address: 0x40026000
+  size: 1KB
+  config:
+    channel_irqs: [11, 12, 13, 14, 15, 16, 17]
+    requests:
+      spi1_rx: 2
+      spi1_tx: 3
+      spi2_rx: 4
+      spi2_tx: 5

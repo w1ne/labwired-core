@@ -13,5 +13,10 @@ tim9 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
 tim10 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
 tim11 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
 exti pads idle=1 presses=1 pg_quiet=1 ph1=1 pc13=1 ok
-summary 0x15100FFF
+spi1 frame=0x01901600 data=1 pend=1 alone=1 released=1 ok
+spi2 frame=0x06401600 data=1 pend=1 alone=1 released=1 ok
+spi3 frame=0xFE701600 data=1 pend=1 alone=1 released=1 ok
+dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok
+i2c1 tmp102=0x00001900 oar=1 data=1 ev=1 af=1 er_pend=1 ev_quiet=1 stop=1 released=1 ok
+summary 0x1511FFFF
 DONE

@@ -1,9 +1,12 @@
 # Cortex-M3 smoke against the imported STM32L151xD profile: USART1/2/3 TX,
 # GPIOA..H reset values and set/reset, EXTI software and pad edges through
 # the SYSCFG port mux (L1 codes: PH = 5, PG = 7), and TIM2..TIM7/TIM9..TIM11
-# width, counting and update interrupt on the right NVIC line. The two
-# fixture switches (PH1, PC13) are pressed by the stimuli below. It does not
-# claim RCC, SPI, I2C, DMA, RTC or ADC.
+# width, counting and update interrupt on the right NVIC line; SPI1..3 each
+# reading its own MAX31855 frame (polled, then SPI1 again through DMA1
+# channels 2/3 with the channel-2 line), and I2C1 reading a TMP102 plus a
+# NACK on the error line. The two fixture switches (PH1, PC13) are pressed
+# by the stimuli below; the first stimuli set the SPI2/SPI3 thermocouples.
+# It does not claim RCC, I2S, I2C2, DMA2, RTC or ADC.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32l151-smoke"
@@ -11,6 +14,12 @@ inputs:
 limits:
   max_steps: 4000000
 stimuli:
+  - target: { component: "tc_spi2", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 100.0
+  - target: { component: "tc_spi3", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: -25.0
   - target: { component: "sw_ph1", channel: "pressed" }
     trigger: !after_cycles { cycles: 1500000 }
     value: 1.0
@@ -46,11 +55,16 @@ assertions:
       - "tim10 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
       - "tim11 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
       - "exti pads idle=1 presses=1 pg_quiet=1 ph1=1 pc13=1 ok"
-      - "summary 0x15100FFF"
+      - "spi1 frame=0x01901600 data=1 pend=1 alone=1 released=1 ok"
+      - "spi2 frame=0x06401600 data=1 pend=1 alone=1 released=1 ok"
+      - "spi3 frame=0xFE701600 data=1 pend=1 alone=1 released=1 ok"
+      - "dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok"
+      - "i2c1 tmp102=0x00001900 oar=1 data=1 ev=1 af=1 er_pend=1 ev_quiet=1 stop=1 released=1 ok"
+      - "summary 0x1511FFFF"
       - "DONE"
   - memory_value:
       address: 0x20008000
-      expected_value: 0x15100FFF
+      expected_value: 0x1511FFFF
       size: 4
   - gpio_edges:
       pin: "gpioh:0"

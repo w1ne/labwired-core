@@ -514,6 +514,7 @@ const FIFO_CR2_LDMA_TX: u16 = 1 << 14;
 /// CR2.RXDMAEN / TXDMAEN (bits 0/1 on the classic and FIFO ports alike).
 const CR2_RXDMAEN: u16 = 1 << 0;
 const CR2_TXDMAEN: u16 = 1 << 1;
+const CR2_RXNEIE: u16 = 1 << 6;
 /// SR.FRLVL[1:0] (bits 10:9) and SR.FTLVL[1:0] (bits 12:11).
 const FIFO_SR_FRLVL_SHIFT: u16 = 9;
 const FIFO_SR_FTLVL_SHIFT: u16 = 11;
@@ -3662,9 +3663,11 @@ impl Spi {
                 // Classic F1/F4 port: no FIFO, RXNE on every frame.
                 r.sr |= 0x0001;
                 self.stm32_rxne.set(true);
-            }
-            if net_rx.is_some() && self.net_master_rx_irq() {
-                *irq = true;
+                // RXNEIE: the SPI line is TXE&TXEIE | RXNE&RXNEIE | errors
+                // (RM0008 §25.3.11), whatever drives MISO.
+                if r.cr2 & CR2_RXNEIE != 0 {
+                    *irq = true;
+                }
             }
         } else {
             // FIFO port: the frame enters the RX FIFO and RXNE follows the
@@ -3682,7 +3685,8 @@ impl Spi {
             }
             if driven {
                 self.fifo_rx_push(word);
-                if net_rx.is_some() && self.net_master_rx_irq() && self.stm32_rxne.get() {
+                let rxneie = matches!(&self.regs, SpiRegs::Stm32(r) if r.cr2 & CR2_RXNEIE != 0);
+                if rxneie && self.stm32_rxne.get() {
                     *irq = true;
                 }
             }
