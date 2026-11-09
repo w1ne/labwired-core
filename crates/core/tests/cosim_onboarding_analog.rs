@@ -146,6 +146,7 @@ const CONVERTED: &[&str] = &[
     "stm32l072",
     "stm32l151",
     "stm32l552",
+    "stm32w108",
     "stm32wba52",
     "ut32m0r500",
     "vybrid",
@@ -370,7 +371,26 @@ enum Family {
     /// `ADDR.DONE`, `ADCR ^= START`, result `(ADDR >> 6) & 0x3FF`. 10 bits,
     /// the fraction of V3A (3.3 V).
     Lpc2000Adc,
+    /// STM32W108 sigma-delta ADC (`stm32w108_adc`), the datasheet's polled
+    /// procedure (DocID16252 Rev 16 §11.1.7): `ADC_DMACR = RST`, a one-sample
+    /// buffer in RAM, `ADC_CR` with the pad on CHSELP and GND on CHSELN
+    /// (the ST HAL's `ADC_SOURCE_ADCx_GND`), clear `DMABF`, `AUTOWRAP |
+    /// LOAD`, wait for `ADC_ISR.DMABF`, read the sample, `ADC_CR = 0`.
+    /// 12 significant bits of `16384 * V / 1.2 V`, so above VREF it
+    /// saturates.
+    Stm32w108Adc,
 }
+
+/// STM32W108 ADC offsets and bits (DocID16252 Rev 16 §11.3). `ADC_ISR` is
+/// in the shared event block, mirrored into the ADC window.
+const W108_CR: u64 = 0x04;
+const W108_DMACR: u64 = 0x10;
+const W108_DMAMSAR: u64 = 0x18;
+const W108_DMANDTR: u64 = 0x1C;
+const W108_ISR: u64 = 0x4000_A810;
+const W108_DMABF: u32 = 1 << 2;
+/// The one-sample DMA buffer, a half-word in RAM.
+const W108_BUFFER: u64 = 0x2000_1F00;
 
 /// LPC2000 A/D offsets and bits (LPC2119/2129/2194/2292/2294 UM ch. 17).
 const LPC_ADCR: u64 = 0x00;
@@ -659,6 +679,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Stm32L1Adc
         } else if kind == "lpc2000_adc" {
             Family::Lpc2000Adc
+        } else if kind == "stm32w108_adc" {
+            Family::Stm32w108Adc
         } else if kind == "nxp_lpadc" {
             Family::NxpLpadc {
                 ctype_mode: p.config.get("layout").and_then(|v| v.as_str()) == Some("ctype_mode"),
@@ -768,6 +790,10 @@ impl Converter {
             // 10 bits, V/V3A as a binary fraction: mV * 1024 / 3300,
             // truncated, clamped at 0x3FF.
             Family::Lpc2000Adc => (mv * 1024 / 3300).min(1023),
+            // Against GND: raw 32768 * V / 1.2 V floored and limited to
+            // 32767, 12 significant bits (low 4 cleared), halved by the
+            // offset/gain stage at reset OFFSET/GAIN.
+            Family::Stm32w108Adc => ((mv * 32768 / 1200).min(32767) & !0xF) >> 1,
         }
     }
 
@@ -790,6 +816,8 @@ impl Converter {
             // AIN0 and AIN1: the two pads with a divide-by-5 channel.
             // DA1459x: SEL_P 0/1 are pads P1_0/P1_1.
             Family::Eoss3 | Family::Max32650 | Family::Da14Gpadc => [0, 1],
+            // ADC4 (PA4) and ADC5 (PA5): the W108 has ADC0..5 only.
+            Family::Stm32w108Adc => [4, 5],
             // VAUX5 and VAUX6: the DRP channel is 0x10 + n.
             Family::Xadc | Family::ZynqmpAms => {
                 [XADC_AUX0 + NTC_CHANNEL, XADC_AUX0 + DIODE_CHANNEL]
@@ -832,6 +860,8 @@ impl Converter {
             Family::NxpLpadc { ctype_mode: true } => 2,
             // VAUX7: a DRP status address, not channel 7 (VCCPAUX).
             Family::ZynqmpAms => XADC_AUX0 + IDLE_CHANNEL,
+            // ADC0 (PB5).
+            Family::Stm32w108Adc => 0,
             _ => IDLE_CHANNEL,
         }
     }
@@ -869,6 +899,27 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Stm32w108Adc => {
+                assert_eq!(
+                    bus.read_u32(self.base + W108_CR).unwrap(),
+                    0x1800,
+                    "{}: ADC_CR reset (ADON = 0)",
+                    self.id
+                );
+                // A loaded DMA with ADON = 0 receives nothing.
+                bus.write_u32(self.base + W108_DMAMSAR, W108_BUFFER as u32)
+                    .expect("MSAR");
+                bus.write_u32(self.base + W108_DMANDTR, 1).expect("NDTR");
+                bus.write_u32(self.base + W108_DMACR, 1).expect("LOAD");
+                bus.tick_peripherals();
+                assert_eq!(
+                    bus.read_u32(W108_ISR).unwrap() & W108_DMABF,
+                    0,
+                    "{}: no conversion while ADON = 0",
+                    self.id
+                );
+                bus.write_u32(self.base + W108_DMACR, 1 << 4).expect("RST");
+            }
             Family::Lpc2000Adc => {
                 assert_eq!(
                     bus.read_u32(self.base + LPC_ADCR).unwrap(),
@@ -2856,6 +2907,29 @@ impl Converter {
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {
         match self.family {
+            Family::Stm32w108Adc => {
+                // DocID16252 Rev 16 §11.1.7 steps 3-6, ADC_IER = 0.
+                bus.write_u32(self.base + W108_DMACR, 1 << 4).expect("RST");
+                bus.write_u32(self.base + W108_DMAMSAR, W108_BUFFER as u32)
+                    .expect("MSAR");
+                bus.write_u32(self.base + W108_DMANDTR, 1).expect("NDTR");
+                bus.write_u16(W108_BUFFER, 0xDEAD)
+                    .expect("poison the buffer");
+                // SMP 7 (12 bits), CHSELP = pad, CHSELN = 8 (GND), 1 MHz, ADON.
+                let cr = (7 << 13) | (u32::from(channel) << 7) | (8 << 3) | (1 << 2) | 1;
+                bus.write_u32(self.base + W108_CR, cr).expect("ADC_CR");
+                bus.write_u32(W108_ISR, W108_DMABF).expect("clear DMABF");
+                bus.write_u32(self.base + W108_DMACR, 0b11)
+                    .expect("AUTOWRAP | LOAD");
+                let mut polls = 0;
+                while bus.read_u32(W108_ISR).unwrap() & W108_DMABF == 0 {
+                    bus.tick_peripherals();
+                    polls += 1;
+                    assert!(polls < 16, "{}: ADC{channel} DMABF", self.id);
+                }
+                bus.write_u32(self.base + W108_CR, 0).expect("ADC off");
+                u32::from(bus.read_u16(W108_BUFFER).unwrap())
+            }
             Family::Lpc2000Adc => {
                 // adc_init (PDN, CLKDIV 4) + adc_read: select, START, poll
                 // DONE, ADCR ^= START, deselect, read the result.
@@ -3637,7 +3711,8 @@ fn generic_netlists(adc_id: &str, [ntc_channel, diode_channel]: [u8; 2]) -> Syst
 /// self-consistent `config.profile` would still convert. For profiles named
 /// `stm32<series>...`, pin the map to the one that series' reference manual
 /// gives its ADC: F0/L0 `CHSELR` (RM0091, RM0367), F1 (RM0008), F2/F4/F7 (RM0033, RM0090,
-/// RM0410), H7 (RM0433), L4/L5 (RM0351, RM0438), WBA ADC4 (RM0493).
+/// RM0410), H7 (RM0433), L4/L5 (RM0351, RM0438), WBA ADC4 (RM0493), W108
+/// (the EM357-derived sigma-delta ADC, DocID16252 ch. 11).
 fn assert_stm32_series_map(board: &str, converter: &Converter) {
     let Some(series) = board.strip_prefix("stm32") else {
         return;
@@ -3650,6 +3725,7 @@ fn assert_stm32_series_map(board: &str, converter: &Converter) {
         Some("l1") => "Stm32L1Adc",
         Some("l4" | "l5") => "Stm32L4",
         Some("wb") if series.starts_with("wba") => "Stm32Adc4",
+        Some("w1") if series.starts_with("w108") => "Stm32w108Adc",
         _ => panic!("{board}: no reference-manual ADC map recorded for this STM32 series"),
     };
     assert_eq!(
@@ -3773,6 +3849,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Gr716Adc
                 | Family::Stm32L1Adc
                 | Family::Lpc2000Adc
+                | Family::Stm32w108Adc
                 | Family::NxpLpadc { .. }
                 | Family::RaAdc { .. }
                 | Family::ZynqmpAms
@@ -3788,10 +3865,10 @@ fn assert_converter_routes_generic_analog(
     // The NTC sits on the low side: hotter means lower resistance, lower volts.
     if matches!(
         converter.family,
-        Family::Apollo4 | Family::Eoss3 | Family::Xadc | Family::ZynqmpAms
+        Family::Apollo4 | Family::Eoss3 | Family::Xadc | Family::ZynqmpAms | Family::Stm32w108Adc
     ) {
-        // Above the 1.19 V (Apollo4), 1.4 V (EOS S3) or 1 V (XADC, ZynqMP
-        // AMS) full scale the -10 and 25 °C dividers (2.79 V, 1.65 V) both
+        // Above the 1.19 V (Apollo4), 1.4 V (EOS S3), 1.2 V (STM32W108) or
+        // 1 V (XADC, ZynqMP AMS) full scale the -10 and 25 °C dividers (2.79 V, 1.65 V) both
         // saturate; only 80 °C (0.37 V) is in range.
         let full_scale = converter.expected_code(3.3);
         assert_eq!(
@@ -3862,7 +3939,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 160,
+        instances, 161,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -3870,7 +3947,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 85,
+        without_adc, 84,
         "onboarding profiles that declare no modelled ADC"
     );
 }

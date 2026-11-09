@@ -57,3 +57,37 @@ peripherals:
   size: 1KB
   config:
     profile: stm32f1
+# General-purpose ADC (stm32w108_adc): ADC_CR @0x4000D004, OFFSETR, GAINR and
+# the DMA channel registers up to ADC_DMACNDTR @0x4000D024 (ST DocID16252
+# Rev 16 §11.3; Contiki stm32w108 regs.h BLOCK_ADC 0x4000D000..0x4000D024).
+# The result reaches firmware only through the ADC DMA into RAM. NVIC IRQ 11
+# is the ADC (regs.h INT_ADC = bit 11 of INT_CFGSET). VREF is the internal
+# 1.2 V reference.
+- id: adc
+  type: stm32w108_adc
+  bus: sysbus
+  base_address: 0x4000D000
+  size: 4KB
+  irq: 11
+# ADC_ISR (0x4000A810) and ADC_IER (0x4000A850) live in the shared event
+# block, next to the timer and serial flags that are not modelled. Each is a
+# 4-byte mirror onto offsets 0x810/0x850 of the ADC window above, so only
+# those two words of the event block are mapped.
+memory_regions:
+- name: adc_isr
+  base: 0x4000A810
+  size: 4B
+  alias_of: 0x4000D810
+- name: adc_ier
+  base: 0x4000A850
+  size: 4B
+  alias_of: 0x4000D850
+# External ADC inputs (DocID16252 Rev 16 Table 37 and §11.3.3 CHSELP: ADC0..5
+# = PB5, PB6, PB7, PC1, PA4, PA5; the ST HAL halGetADCChannelFromGPIO agrees).
+analog_pins:
+  PB5: { peripheral: adc, channel: 0 }
+  PB6: { peripheral: adc, channel: 1 }
+  PB7: { peripheral: adc, channel: 2 }
+  PC1: { peripheral: adc, channel: 3 }
+  PA4: { peripheral: adc, channel: 4 }
+  PA5: { peripheral: adc, channel: 5 }

@@ -462,6 +462,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "stm32l1_adc",
     // NXP LPC2000 10-bit ADC, ADCR/ADDR (LPC2119..2294 UM ch. 17).
     "lpc2000_adc",
+    // STM32W108 sigma-delta ADC + DMA channel (DocID16252 Rev 16 ch. 11).
+    "stm32w108_adc",
     // MSP430 ADC12 (F1/F2) and ADC12_A (F5) (mspsim ADC12.java, TI headers).
     "msp430_adc12",
     "msp430_adc12_a",
@@ -2070,6 +2072,13 @@ pub fn try_build(
                 .get("vref_mv")
                 .and_then(|v| v.as_u64())
                 .map_or(3300, |v| v as u32),
+        )),
+        "stm32w108_adc" => Box::new(crate::peripherals::stm32w108_adc::Stm32w108Adc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(1200, |v| v as u32),
         )),
         "renesasda14_gpadc" => {
             Box::new(crate::peripherals::renesas_da14_gpadc::RenesasDa14Gpadc::new())
