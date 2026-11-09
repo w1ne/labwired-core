@@ -674,14 +674,22 @@ impl BusResidentDevice for DeclarativeGpioDevice {
     /// `max_safe_tick_interval()` to 1.
     ///
     /// ⚠️ A `gpio_device` with `timers:` MUST NOT say false — its clock only
-    /// advances on the tick. The HX711 answers `true` through this expression
-    /// (timer + driven pad) rather than through an override somebody has to
-    /// remember.
+    /// advances on the tick. Exact-timing schedules (DHT) also stay true:
+    /// `has_grid_schedules()` is false for them. The HX711 answers `true`
+    /// through timers rather than an override somebody has to remember.
     // Grid-only finite schedules are serviced by resident deadlines when every
     // other action is synchronous with a host pad write. The bus separately
     // gates batching on its scheduler, timer, and live-cycle capabilities.
     fn needs_per_cycle_service(&self) -> bool {
-        !self.timers.is_empty() || !(self.driven.is_empty() || self.grid_eligible)
+        // Exact-timing schedules (DHT22 `timing: exact`) still need the tick —
+        // their bitbang clock is not a PeripheralTickGrid resident deadline.
+        // Empty schedules (keypad) or all-grid schedules may opt out when the
+        // part is otherwise pin/input-clocked: edge_service_addrs + set_input
+        // flush cover every change.
+        !self.timers.is_empty()
+            || !(self.driven.is_empty()
+                || self.grid_eligible
+                    && (self.schedules.is_empty() || self.has_grid_schedules()))
     }
 
     /// No timers and only pad/input rules (`grid_eligible`) means every change
