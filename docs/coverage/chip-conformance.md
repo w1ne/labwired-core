@@ -9,7 +9,7 @@ This page covers the public models. For every chip we model — public and priva
 | Chip | Level | Estate | Peripherals | Reg match (verifiable) | Excluded | Behavior gate |
 |------|-------|--------|-------------|------------------------|----------|---------------|
 | esp32c3 | **L2** | ✓ | 40 | 380/402 (94%) | 190 | firmware_survival::test_esp32c3_demo_survival |
-| esp32c6 | **L1** | ✓ | 68 | — | — | firmware_survival::test_esp32c6_demo_survival |
+| esp32c6 | **L1** | ✓ | 69 | — | — | firmware_survival::test_esp32c6_demo_survival |
 | litex-vexriscv | **L1** | ✓ | 5 | — | — | firmware_survival::test_litex_vexriscv_smoke_survival |
 | arty-litex-vexriscv | **L1** | ✓ | 6 | — | — | firmware_survival::test_arty_litex_smoke_survival |
 | vegaboard-ri5cy | **L1** | ✓ | 9 | — | — | firmware_survival::test_vegaboard_ri5cy_smoke_survival |
@@ -51,8 +51,8 @@ This page covers the public models. For every chip we model — public and priva
 | nrf52832 | **L1** | ✓ | 17 | — | — | firmware_survival::test_nrf52832_demo_survival |
 | nrf52833 | **L1** | ✓ | 48 | — | — | firmware_survival::test_nrf52833_microbit_v2_smoke_survival |
 | nrf52840 | **L1** | ✓ | 51 | — | — | firmware_survival::test_nrf52840_demo_survival |
-| nrf5340 | **L1** | ✓ | 21 | — | — | firmware_survival::test_nrf5340_zephyr_survival |
-| rp2040 | **L1** | ✓ | 22 | — | — | firmware_survival::test_rp2040_demo_survival |
+| nrf5340 | **L1** | ✓ | 22 | — | — | firmware_survival::test_nrf5340_zephyr_survival |
+| rp2040 | **L1** | ✓ | 23 | — | — | firmware_survival::test_rp2040_demo_survival |
 | stm32f103 | **L1** | ✓ | 31 | — | — | stm32f1_exec_oracle |
 | stm32f103rb | **L0** | ✓ | 32 | — | — | — |
 | stm32f103c4 | **L0** | ✓ | 31 | — | — | — |
@@ -79,7 +79,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f401ve | **L0** | ✓ | 24 | — | — | — |
 | stm32f405 | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32f405_tier1_survival |
 | stm32f767 | **L1** | ✓ | 36 | — | — | firmware_survival::test_stm32f767_tier1_survival |
-| rp2350 | **L1** | ✓ | 26 | — | — | firmware_survival::test_rp2350_demo_survival |
+| rp2350 | **L1** | ✓ | 27 | — | — | firmware_survival::test_rp2350_demo_survival |
 | stm32f407 | **L1** | ✓ | 34 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
 | stm32f407ie | **L0** | ✓ | 34 | — | — | — |
 | stm32f407ig | **L0** | ✓ | 34 | — | — | — |

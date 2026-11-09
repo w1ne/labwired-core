@@ -2449,7 +2449,7 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: 0b25393d311c2c3a038ce6e03ad0856e7d36776a28f151bf5a53570b044f05f4
+    drift_ack_digest: 1cf8837b47ec1cbc8750a7d85e04f6a664821a64a6b6595d108933ec7a135f75
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -2680,7 +2680,16 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 1b66043f16a4f5b4aa270889ae766e40e74e7fa94dfdf2995d27ed0ce91342e0
+    # Re-stamped 2026-11-08 for the C6 LEDC split (shared esp32c3/ledc.rs +
+    # gpio.rs): the C3 decodes with C3_LAYOUT, which is the previous constants,
+    # and its LEDC unit/waveform tests are unchanged. Ack, not a recapture.
+    # 2026-11-08 (round 342): twai0 moved from `declarative` to the S3 TWAI
+    # behavioural model (esp32s3/twai.rs, irq 25), so the Arduino L8 self-RX
+    # cell runs. esp32c3_reset_values_match_silicon asserts no TWAI register;
+    # the live capture reads the clock-gated window as bus junk (0x0008fe10).
+    # This acknowledges model drift, NOT a recapture.
+    # Re-stamped 2026-11-08 (round 347) over both changes above after merging main.
+    drift_ack_digest: ed30d3aceb28d77159219fbdba22d2cb1e926aafbd16261cacbb4e46c254777b
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2696,6 +2705,9 @@ boards:
       # this entry a change to the C3's real UART layout could not trip drift.
       - crates/core/src/peripherals/esp_uart.rs
       - crates/core/src/peripherals/esp_systimer.rs
+      # TWAI0 is `type: "esp32s3_twai"` since round 342: the S3 model reused
+      # (twai_struct.h identical on C3/S3). The drift gate must see it.
+      - crates/core/src/peripherals/esp32s3/twai.rs
       # RISC-V core: listed at the top of this models list (cpu/riscv.rs +
       # decoder/riscv.rs) so the digest sees the core, not only peripherals.
       - configs/chips/esp32c3.yaml
@@ -4652,7 +4664,7 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: 983045bcaae89f1c6acf27a43248dfacbc7400cc40f841f1ec7e99ee00f0aa0f
+    drift_ack_digest: 522b4fc22955059d1baeb90ac01cce43945353e195371493fee02b9142c894bc
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5148,7 +5160,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: b80d2e3e65890e4964818135bddd7c7ffd2eeb02190e4f2794742592aa3998bc
+    drift_ack_digest: ea8cc4cf06aec2383febd72a9949a7ff5af2728d14514370b5e07e91853e7f54
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6906,7 +6918,7 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: 7a043bd038ddd21849f776d1045751c51539548e502b89e513411cb5cb00bf24
+    drift_ack_digest: 2ff8315cb06b1105dc0c52eb3b6cadc903c288459b32f36eb5fe6d1618f2c834
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7423,7 +7435,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 99095c94a36c9666ae2a203f56c5a9b2889d6a72e160c0b23bab05e4a5a973c1
+    drift_ack_digest: c48957351eac4ba820c510649ab09854c1e6e43a277e02f35d9113ae04d4d4a6
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -9229,6 +9241,7 @@ boards:
       - crates/core/src/peripherals/rp2040/adc.rs
       - crates/core/src/peripherals/rp2040/dma.rs
       - crates/core/src/peripherals/rp2040/i2c.rs
+      - crates/core/src/peripherals/rp2040/io_bank0.rs
       - crates/core/src/peripherals/rp2040/pwm.rs
       - crates/core/src/peripherals/rp2040/sio.rs
       - crates/core/src/peripherals/rp2040/spi.rs
@@ -9251,10 +9264,10 @@ boards:
     doc: docs/boards/nrf5340.md
     chip: configs/chips/nrf5340.yaml
     tier: sim-validated
-    note: "Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival, with the ELF-independent clock/alias twin in tests/nrf5340_clock_boot.rs. Reuses the shared Nordic CLOCK/UARTE/RTC behavioural models at the 0x5000_0000 non-secure peripheral alias; the whole boot is bus-violation-free (LABWIRED_TRACE_VIOLATIONS=1). Network core, radio, TrustZone/SPU enforcement, and analog trims are not modeled (FICR/UICR/regulator/trim blocks are benign stubs). No nRF5340 silicon diff — no bench board."
+    note: "Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival. The ELF-independent nrf5340_clock_boot gate checks the secure cpuapp 0x5000_0000 mapping, HFCLK/LFCLK polls, and a TWIM1 EasyDMA repeated-START read of BMI270 CHIP_ID 0x24 on SDA P1.02 / SCL P1.03. Network core, radio, TrustZone/SPU enforcement, physical I²C edge narration, and analog trims are not modeled. No nRF5340 silicon diff — no bench board."
     offline_tests:
       - "firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)"
-      - "nrf5340_clock_boot (HFCLK/LFCLK started-event polls + non-secure alias mapping)"
+      - "nrf5340_clock_boot (secure cpuapp mapping + HFCLK/LFCLK polls + TWIM1/BMI270 EasyDMA read)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9683,6 +9696,9 @@ boards:
       - crates/core/src/peripherals/esp32/i2c.rs
       - crates/core/src/peripherals/esp32/ledc.rs
       - crates/core/src/peripherals/esp32/mcpwm.rs
+      # 2026-11-08: the PCNT pulse counter (was a round-trip stub), inputs from
+      # the GPIO input matrix. No silicon capture on this board.
+      - crates/core/src/peripherals/esp32/pcnt.rs
       - crates/core/src/peripherals/esp32/sar_adc.rs
       - crates/core/src/peripherals/esp32/sdio_stub.rs
       - crates/core/src/peripherals/esp32/sha.rs
@@ -10228,6 +10244,7 @@ boards:
       # 2026-10-29 (#1526): USB Serial/JTAG now registered on C6 via shared
       # UsbSerialJtag::new_esp32c6. SIM-DERIVED board — no silicon ack implied.
       - crates/core/src/peripherals/esp32s3/usb_serial_jtag.rs
+      - crates/core/src/peripherals/esp32s3/twai.rs
       - crates/core/src/peripherals/esp32/timg.rs
       - crates/core/src/peripherals/esp32c3/apb_saradc.rs
       - crates/core/src/peripherals/esp32c3/gpio.rs
@@ -10277,6 +10294,9 @@ boards:
       - crates/core/src/peripherals/esp32c6/modem_lpcon.rs
       - crates/core/src/peripherals/esp_systimer.rs
       - crates/core/src/peripherals/stub.rs
+      # 2026-11-07: RMT is the shared C3 model at C6 source 49 (`esp32c6_rmt`).
+      # SIM-DERIVED — no silicon ack implied.
+      - crates/core/src/peripherals/esp32c3/rmt.rs
   - id: litex-vexriscv
     # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
     # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity

@@ -1,10 +1,10 @@
 {
   "esp32": {
-    "modeled": 2735,
+    "modeled": 2711,
     "total": 2997
   },
   "esp32c3": {
-    "modeled": 2522,
+    "modeled": 2516,
     "total": 2606
   },
   "esp32c6": {

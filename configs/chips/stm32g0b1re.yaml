@@ -179,6 +179,9 @@ peripherals:
   irq: 15
   config:
     width: 32
+    # Channel outputs reach the pads through the G0 AF table (TIM2 AF2; the
+    # G0B1R PinMap_TIM matches the G071R one; bus/attach.rs STM32G0_TIMER_PADS).
+    pad_map: stm32g0
   clock:
     reg: apbenr1
     bit: 0
