@@ -1416,7 +1416,25 @@ pub fn try_build(
         "adc" => {
             let layout: crate::peripherals::adc::AdcRegisterLayout =
                 SystemBus::parse_profile_or_default(p_cfg, "ADC")?;
-            Box::new(crate::peripherals::adc::Adc::new_with_layout(layout))
+            let mut adc = crate::peripherals::adc::Adc::new_with_layout(layout);
+            // `config: { input_mv: { <channel>: <mV> } }` holds a fixed level
+            // on a channel (a board divider, or a matrix kit's A0 source).
+            if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                for (k, v) in map {
+                    match (k.as_u64(), v.as_u64()) {
+                        (Some(ch), Some(mv))
+                            if ch < u64::from(adc.channel_count()) && mv < 0xFFFF =>
+                        {
+                            adc.set_channel_input(ch as u8, mv as u16)
+                        }
+                        _ => anyhow::bail!(
+                            "ADC input_mv wants {{ <channel 0..{}>: <mV> }}",
+                            adc.channel_count() - 1
+                        ),
+                    }
+                }
+            }
+            Box::new(adc)
         }
         "pio" => {
             let mut pio = crate::peripherals::pio::Pio::new();

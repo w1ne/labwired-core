@@ -54,6 +54,12 @@ static bool samples_ok(int v0, int v1) {
   // avr.rs ADC mid-scale 512 (10-bit). Exact.
   return v0 == 512 && v1 == 512;
 
+#elif defined(ARDUINO_NUCLEO_G071RB) || defined(ARDUINO_NUCLEO_G0B1RE)
+  // adc profile stm32g0: the matrix system holds A0 (PA0 = ADC1_IN0) at
+  // 1651 mV. 12-bit against 3.3 V is 2048; stm32duino returns 10 bits: 512.
+  // Exact; the unheld fixed source (3.0 V) reads 930, no conversion 0.
+  return v0 == 512 && v1 == 512;
+
 #elif defined(ARDUINO_ARCH_RP2040)
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).
   return v0 == 0 && v1 == 0;

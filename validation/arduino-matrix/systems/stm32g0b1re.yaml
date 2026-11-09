@@ -16,4 +16,14 @@ external_devices:
     connection: "spi1"
     config:
       cs_pin: "PA4"
+# Matrix L5_adc: A0 (PA0 = ADC1_IN0, variant PeripheralPins.c) held at
+# 1651 mV. 12-bit against VREF+ = 3.3 V is 2048, and stm32duino returns the
+# 10-bit Arduino default, so stock analogRead(A0) on the NUCLEO-G0B1RE must
+# return exactly 512. The unheld fixed source would read 930; no conversion 0.
+peripherals:
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    config:
+      input_mv: { 0: 1651 }
 board_io: []
