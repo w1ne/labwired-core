@@ -1489,8 +1489,8 @@ impl Adc {
                 // `MODIFY_REG(CR, ADC_CR_BITS_PROPERTY_RS, ADSTART)`, which
                 // has ADEN = 0. Storing that verbatim cleared ADEN, nothing
                 // converted, and stock analogRead returned 0.
-                let mut cr = (value & !H7_CR_READ_SET_MASK)
-                    | ((r.cr | value) & H7_CR_READ_SET_MASK);
+                let mut cr =
+                    (value & !H7_CR_READ_SET_MASK) | ((r.cr | value) & H7_CR_READ_SET_MASK);
                 if calibration_completes || sync_clock {
                     cr &= !(1 << 31);
                 }
@@ -2525,8 +2525,8 @@ mod tests {
             adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADVREGEN | ADEN
             adc.write_u32(0x0C, cfgr).unwrap();
             adc.write_u32(0x30, sq1 << 6).unwrap(); // SQR1.SQ1, L = 0
-            // HAL LL_ADC_REG_StartConversion: MODIFY_REG(CR,
-            // ADC_CR_BITS_PROPERTY_RS, ADSTART) writes ADEN as 0.
+                                                    // HAL LL_ADC_REG_StartConversion: MODIFY_REG(CR,
+                                                    // ADC_CR_BITS_PROPERTY_RS, ADSTART) writes ADEN as 0.
             let cr = adc.read_u32(0x08).unwrap();
             adc.write_u32(0x08, (cr & !0x8000_003F) | (1 << 2)).unwrap();
             adc.read_u32(0x40).unwrap()
@@ -2552,7 +2552,11 @@ mod tests {
         // HAL_ADC_Stop: ADSTP completes, then ADDIS clears ADEN.
         let cr = adc.read_u32(0x08).unwrap();
         adc.write_u32(0x08, (cr & !0x8000_003F) | (1 << 4)).unwrap();
-        assert_eq!(adc.read_u32(0x08).unwrap() & 0x14, 0, "ADSTP, ADSTART clear");
+        assert_eq!(
+            adc.read_u32(0x08).unwrap() & 0x14,
+            0,
+            "ADSTP, ADSTART clear"
+        );
         let cr = adc.read_u32(0x08).unwrap();
         adc.write_u32(0x08, (cr & !0x8000_003F) | (1 << 1)).unwrap();
         assert_eq!(adc.read_u32(0x08).unwrap() & 0x3, 0, "ADDIS, ADEN clear");

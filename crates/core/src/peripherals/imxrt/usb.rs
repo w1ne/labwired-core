@@ -262,7 +262,9 @@ impl ImxrtUsb {
             let ctrl_off = GPTIMER0CTRL + 8 * n as u32;
             let ctrl = self.reg(ctrl_off);
             if ctrl & GPT_MODE_REPEAT != 0 {
-                let period = self.time.us((self.reg(GPTIMER0LD + 8 * n as u32) & GPT_CNT) as u64 + 1);
+                let period = self
+                    .time
+                    .us((self.reg(GPTIMER0LD + 8 * n as u32) & GPT_CNT) as u64 + 1);
                 // Catch up without drifting: next expiry on the period grid.
                 let missed = (now - t) / period.max(1);
                 self.gpt_deadline[n] = Some(t + (missed + 1) * period);
@@ -1067,10 +1069,9 @@ mod tests {
         assert!(!u.script.iter().any(is_open));
         // SET_CONFIGURATION is appended to `script` later; it still runs first.
         u.script.push_back(HostStep::Wait { us: 1 });
-        let order: Vec<HostStep> = std::iter::from_fn(|| {
-            u.script.pop_front().or_else(|| u.after_enum.pop_front())
-        })
-        .collect();
+        let order: Vec<HostStep> =
+            std::iter::from_fn(|| u.script.pop_front().or_else(|| u.after_enum.pop_front()))
+                .collect();
         assert!(order.last().is_some_and(is_open));
         assert!(matches!(order[order.len() - 2], HostStep::Wait { us: 1 }));
     }
