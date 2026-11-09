@@ -464,6 +464,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "lpc2000_adc",
     // Allwinner sunxi LRADC, CTRL/INTC/INTS/DATA0/1 (Linux sun4i-lradc-keys.c).
     "sunxi_lradc",
+    // OpenTitan adc_ctrl + AST ADC (lowRISC adc_ctrl.hjson, adc_ctrl_fsm.sv).
+    "opentitan_adc_ctrl",
     // Renesas RZ ADC_C, ADM0..3/ADINT/ADSTS/ADCRn (RZ/G FSP adc_c_iodefine.h).
     "renesas_adc_c",
     // Alif Ensemble/Balletto ADC12 (alif_ensemble-cmsis-dfp ADC_Type, adc.h).
@@ -2117,6 +2119,16 @@ pub fn try_build(
         )),
         // `supply_mv`: the `vref-supply` rail (3.0 V on A10/A20 boards);
         // `vref_num`/`vref_den`: the internal divider (2/3 A10 variant).
+        // `vref_mv`: the AST ADC full scale (0..2.2 V, adc_ctrl doc).
+        "opentitan_adc_ctrl" => Box::new(
+            crate::peripherals::opentitan_adc_ctrl::OpentitanAdcCtrl::new(
+                p_cfg
+                    .config
+                    .get("vref_mv")
+                    .and_then(|v| v.as_u64())
+                    .map_or(2200, |v| v as u32),
+            ),
+        ),
         "sunxi_lradc" => {
             let get = |key: &str, default: u32| {
                 p_cfg

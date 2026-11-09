@@ -104,6 +104,8 @@ const CONVERTED: &[&str] = &[
     "nxp-k6xf",
     "nxp-s32k388",
     "nxp-s32k388evb",
+    "opentitan-earlgrey-cw310",
+    "opentitan-earlgrey",
     "ramn",
     "renesas-ck_ra6m5",
     "renesas-da14592",
@@ -420,7 +422,22 @@ enum Family {
     /// `CHANn_DATA`, takes `DATAn & 0x3f` and writes `INTS` back. 6 bits,
     /// 63 / VREF, VREF = supply * 2 / 3 (2 V from the 3.0 V rail).
     SunxiLradc { vref_mv: u32 },
+    /// OpenTitan `adc_ctrl` (`opentitan_adc_ctrl`), the `dif_adc_ctrl`
+    /// oneshot: `dif_adc_ctrl_reset` (`adc_fsm_rst` 1 then 0),
+    /// `adc_en_ctl = oneshot_mode | adc_enable`, wait for
+    /// `adc_intr_status.oneshot`, read `adc_chn_val[n]` [11:2], clear the
+    /// status. 10 bits, mV * 1023 / VREF (Earl Grey integration: 2.3 V).
+    OpentitanAdcCtrl { vref_mv: u32 },
 }
+
+/// OpenTitan `adc_ctrl` offsets and bits (`adc_ctrl.hjson`).
+const OT_ADC_EN_CTL: u64 = 0x10;
+const OT_ADC_PD_CTL: u64 = 0x14;
+const OT_ADC_FSM_RST: u64 = 0x20;
+const OT_ADC_CHN_VAL: u64 = 0x64;
+const OT_ADC_INTR_CTL: u64 = 0x74;
+const OT_ADC_INTR_STATUS: u64 = 0x78;
+const OT_ONESHOT: u32 = 1 << 9;
 
 /// sunxi LRADC offsets and bits (Linux `sun4i-lradc-keys.c`).
 const LRADC_CTRL: u64 = 0x00;
@@ -803,6 +820,14 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
                     .and_then(|v| v.as_u64())
                     .map_or(5000, |mv| mv as u32),
             }
+        } else if kind == "opentitan_adc_ctrl" {
+            Family::OpentitanAdcCtrl {
+                vref_mv: p
+                    .config
+                    .get("vref_mv")
+                    .and_then(|v| v.as_u64())
+                    .map_or(2200, |mv| mv as u32),
+            }
         } else if kind == "sunxi_lradc" {
             let get = |key: &str, default: u64| {
                 p.config
@@ -957,6 +982,10 @@ impl Converter {
             // 6 bits, 63 / VREF (2 V), truncated, clamped: the -10 °C
             // divider (2.79 V) saturates, 25/80 °C resolve.
             Family::SunxiLradc { vref_mv } => (mv * 63 / vref_mv).min(63),
+            // 10 bits, 1023 / VREF (Earl Grey integration: 2.3 V), truncated,
+            // clamped: the -10 °C
+            // divider (2.79 V) saturates, 25/80 °C resolve.
+            Family::OpentitanAdcCtrl { vref_mv } => (mv * 1023 / vref_mv).min(1023),
             // Against GND: raw 32768 * V / 1.2 V floored and limited to
             // 32767, 12 significant bits (low 4 cleared), halved by the
             // offset/gain stage at reset OFFSET/GAIN.
@@ -983,9 +1012,12 @@ impl Converter {
             // AIN0 and AIN1: the two pads with a divide-by-5 channel.
             // DA1459x: SEL_P 0/1 are pads P1_0/P1_1.
             // LRADC0/LRADC1: the LRADC has only two channels.
-            Family::Eoss3 | Family::Max32650 | Family::Da14Gpadc | Family::SunxiLradc { .. } => {
-                [0, 1]
-            }
+            // CC1/CC2: the AST ADC has two channels.
+            Family::Eoss3
+            | Family::Max32650
+            | Family::Da14Gpadc
+            | Family::SunxiLradc { .. }
+            | Family::OpentitanAdcCtrl { .. } => [0, 1],
             // ADC4 (PA4) and ADC5 (PA5): the W108 has ADC0..5 only.
             Family::Stm32w108Adc => [4, 5],
             // VAUX5 and VAUX6: the DRP channel is 0x10 + n.
@@ -1113,6 +1145,26 @@ impl Converter {
                     self.id
                 );
                 bus.write_u32(self.base + W108_DMACR, 1 << 4).expect("RST");
+            }
+            Family::OpentitanAdcCtrl { .. } => {
+                // Oneshot configured but adc_enable = 0: the FSM stays in
+                // PWRDN and samples nothing.
+                bus.write_u32(self.base + OT_ADC_EN_CTL, 1 << 1)
+                    .expect("oneshot_mode without adc_enable");
+                for _ in 0..16 {
+                    bus.tick_peripherals();
+                }
+                assert_eq!(
+                    bus.read_u32(self.base + OT_ADC_INTR_STATUS).unwrap()
+                        | bus.read_u32(self.base + OT_ADC_CHN_VAL).unwrap(),
+                    0,
+                    "{}: no sample while adc_enable = 0",
+                    self.id
+                );
+                // Reset pwrup_time 7 and wakeup_time; ONESHOT_EN.
+                assert_eq!(bus.read_u32(self.base + OT_ADC_PD_CTL).unwrap(), 0x6_4070);
+                bus.write_u32(self.base + OT_ADC_INTR_CTL, OT_ONESHOT)
+                    .expect("ONESHOT_EN");
             }
             Family::SunxiLradc { .. } => {
                 // Configured but ENABLE = 0: no sample.
@@ -3233,6 +3285,28 @@ impl Converter {
                 bus.write_u32(self.base + W108_CR, 0).expect("ADC off");
                 u32::from(bus.read_u16(W108_BUFFER).unwrap())
             }
+            Family::OpentitanAdcCtrl { .. } => {
+                bus.write_u32(self.base + OT_ADC_FSM_RST, 1)
+                    .expect("dif_adc_ctrl_reset");
+                bus.write_u32(self.base + OT_ADC_FSM_RST, 0)
+                    .expect("dif_adc_ctrl_reset");
+                bus.write_u32(self.base + OT_ADC_EN_CTL, 0b11)
+                    .expect("oneshot_mode | adc_enable");
+                let status = self.base + OT_ADC_INTR_STATUS;
+                let mut ticks = 0;
+                while bus.read_u32(status).unwrap() & OT_ONESHOT == 0 {
+                    bus.tick_peripherals();
+                    ticks += 1;
+                    assert!(ticks < 64, "{}: oneshot done", self.id);
+                }
+                let value = (bus
+                    .read_u32(self.base + OT_ADC_CHN_VAL + 4 * u64::from(channel))
+                    .unwrap()
+                    >> 2)
+                    & 0x3FF;
+                bus.write_u32(status, OT_ONESHOT).expect("clear oneshot");
+                value
+            }
             Family::SunxiLradc { .. } => {
                 let ints = self.base + LRADC_INTS;
                 let data = 1u32 << (8 * channel);
@@ -4330,7 +4404,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 173,
+        instances, 175,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -4338,7 +4412,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 76,
+        without_adc, 74,
         "onboarding profiles that declare no modelled ADC"
     );
 }
