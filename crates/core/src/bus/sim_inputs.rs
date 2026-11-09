@@ -352,11 +352,14 @@ impl SystemBus {
         if result.is_ok() {
             self.sync_analog_inputs();
             self.sync_button_inputs();
-            // Keypad-class gpio_devices drive pads from rules that fire on
-            // `input:` events. `SimInput::set_input` only updates the rule
-            // machine; without a service pass the driven IDR bits stay stale
-            // until the next MMIO edge. Flush here so a stimulus takes effect
-            // even when the device has opted out of per-cycle service.
+            // Edge/stimulus-clocked gpio_devices (pybadge buttons, displays with
+            // input rules) drive pads from `input:` events. `SimInput::set_input`
+            // only updates the rule machine; without a service pass the driven
+            // IDR bits stay stale until the next MMIO edge. Flush here so a
+            // stimulus takes effect when the device has opted out of per-cycle
+            // service. Grid-schedule parts (HC-SR04) must NOT be flushed: their
+            // first service would publish pin_defaults onto ECHO and collapse
+            // the four-state HighZ until the first real echo edge.
             self.flush_gpio_device_inputs(component, channel);
         }
         result
@@ -407,7 +410,12 @@ impl SystemBus {
                     Self::component_matches(component, name, si)
                 }
             };
-            if hit {
+            // Only flush residents that opted out of the tick *and* are not
+            // schedule-driven. A grid-schedule part (HC-SR04) opts out because
+            // resident deadlines cover its waveform; servicing it here would
+            // drain construction-time pin_defaults onto the bus before any
+            // trigger edge and break four-state HighZ.
+            if hit && !device.needs_per_cycle_service() && !device.has_grid_schedules() {
                 device.service(self, now);
             }
         }
