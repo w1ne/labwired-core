@@ -2939,30 +2939,39 @@ impl crate::Peripheral for GpioPort {
         fits
     }
 
-    /// F1 only: the timer channel outputs share their DEFAULT pads with
-    /// SPI1/USART/I²C, so the route is conditional — see
-    /// [`crate::peripherals::pad_routing::PadRoutes::bind_when_driving`].
+    /// STM32: conditional — see
+    /// [`crate::peripherals::pad_routing::PadRoutes::bind_when_driving`]. On
+    /// F1 the timer channel outputs share their DEFAULT pads with
+    /// SPI1/USART/I²C. On V2 the AFR nibble already picks the timer, but a
+    /// channel in input-capture mode (or with `CCxE = 0`) must leave the pad
+    /// to its capture route / the outside world, so it is conditional too.
     fn bind_timer_output_pad(
         &mut self,
         cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
         pin: u8,
+        af: Option<u8>,
         line: usize,
         func: &'static str,
     ) -> bool {
-        match self.family {
-            GpioFamily::Stm32F1(_) if pin < 16 => {
+        match (&self.family, af) {
+            (GpioFamily::Stm32F1(_), None) if pin < 16 => {
                 self.pad_routes
                     .bind_when_driving(cell, pin, None, line, func);
                 true
             }
+            (GpioFamily::Stm32V2(_), Some(af)) if pin < 16 && af < 16 => {
+                self.pad_routes
+                    .bind_when_driving(cell, pin, Some(u32::from(af)), line, func);
+                true
+            }
             // SAM TC waveform outputs are PMUX function E (DS60001507F 6.1).
-            GpioFamily::SamPort(_) if pin < 32 => {
+            (GpioFamily::SamPort(_), None) if pin < 32 => {
                 self.pad_routes.bind(cell, pin, Some(4), line, func);
                 true
             }
             // RA GPT GTIOCnA/B are PmnPFS PSEL 00011 (Zephyr
             // `RA_PSEL_GPT1`, the EK-RA8M1/EK-RA6M5 pinctrl's GTIOC pads).
-            GpioFamily::RaPort(_) if pin < 16 => {
+            (GpioFamily::RaPort(_), None) if pin < 16 => {
                 self.pad_routes
                     .bind(cell, pin, Some(RA_PSEL_GPT), line, func);
                 true
