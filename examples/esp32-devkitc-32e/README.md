@@ -1,9 +1,9 @@
-# ESP32-DevKitC-32E GPIO, UART0, BME280 I2C, RMT, and ADC smokes
+# ESP32-DevKitC-32E GPIO, UART0, BME280 I2C, RMT, ADC, and LEDC smokes
 
 **Demand rank:** ESP32 is rank 1 in the standing list (38% of reported MCU
-use). The current ADC smoke adds the stock `analogRead(36)` path to the
-existing board coverage; it is peripheral depth on the highest-demand family,
-not a new MCU target or board variant.
+use). The current LEDC smoke adds the stock `ledcAttach` / `ledcWrite` servo
+path to the existing board coverage. This is peripheral depth on the
+highest-demand family, not a new MCU target or board variant.
 
 ## Board and modeled scope
 
@@ -19,6 +19,7 @@ with a resistor from GPIO23 to GND.
 | UART0 output | Serial console capture | Base smoke asserts `ESP32_DEVKITC32E_UART0_OK` |
 | J2 GPIO21/GPIO22 | I2C0 SDA/SCL | BME280 smoke reads sensor ID and temperature ADC data |
 | J2 pin 3 / VP (GPIO36) | ADC1 channel 0 | ADC smoke reads a 1650 mV potentiometer through `analogRead(36)` and expects 2047 at 12-bit resolution |
+| J3 pin 2 (GPIO23) | LEDC high-speed channel 0 PWM output | LEDC smoke runs 50 Hz, 14-bit PWM to an external SG90-class servo twin and requires committed duty plus GPIO edges |
 | GPIO23 header | RMT channel 0 TX matrix output | RMT smoke sends red to an external WS2812 pixel and waits for TX_END |
 | GPIO18 header | RMT channel 1 TX matrix output | RMT smoke sends green to a second pixel and waits for TX_END |
 
@@ -35,6 +36,14 @@ fitted to the board. The default midpoint supplies 1650 mV and produces code
 calibration, or the analog attenuation curve, so this is a simulator input
 check rather than a physical accuracy claim.
 
+The LEDC profile uses GPIO23 / J3 pin 2, also used by the separate GPIO and
+RMT profiles. `ledcAttach(23, 50, 14)` plus `ledcWrite(23, 1187)` produces a
+near-50 Hz frame with a roughly 1.45 ms command pulse in the model. The system
+attaches an external SG90 fixture; the smoke asserts the channel-0 duty shadow
+and GPIO23 edges, not servo angle telemetry. Power a physical servo from a
+separate 5 V supply and share ground with the board. The twin does not model
+servo current, torque, gearing, or mechanical load.
+
 The RMT model implements per-channel TX control/status offsets, RMTMEM symbol
 RAM, independent TX timing for channels 0 and 1, GPIO-matrix output routing,
 and per-channel TX_END after the stream's reset interval. It does not model RX,
@@ -44,7 +53,8 @@ external generic WS2812-compatible fixtures, not onboard DevKitC LEDs. The
 UART0 controller is modeled. The board's USB-to-UART bridge and the pin-level
 UART TX/RX waveforms are not, so console capture does not prove USB serial
 behavior or a signal at the board header. Wi-Fi/Bluetooth, SPI, timers, flash
-boot behavior, and the 5 V power LED are outside these profiles. I2S0/1,
+boot behavior, and the 5 V power LED are outside these profiles. The LEDC
+profile does not claim general-purpose timer coverage. I2S0/1,
 UHCI0, PCNT, APB_CTRL and DPORT analog-AHB retain fallback windows.
 
 ## Copy-paste firmware example
@@ -123,6 +133,14 @@ starts both channels, and waits for both timed TX_END bits. External pixel
 models independently decode GPIO23 and GPIO18, and the smoke requires both
 colors.
 
+The LEDC servo acceptance firmware is
+[`firmware/src/ledc_servo_smoke.cpp`](firmware/src/ledc_servo_smoke.cpp). It
+uses the Arduino 3.x `ledcAttach` and `ledcWrite` APIs on GPIO23. The committed
+smoke requires the channel-0 duty register value, at least two GPIO23 edges,
+and the success marker printed after the PWM setup returns successfully. A
+separate hosted `labwired_verify` result checks the same duty register and at
+least two GPIO23 edges; it does not assert servo angle.
+
 ## Reproduce
 
 From the repository root:
@@ -140,6 +158,20 @@ The build log, local simulator output, and generated metrics are committed
 under `evidence/bme280/`. This is deterministic digital-twin evidence, not a
 physical-board run. The classic ESP32 hosted verifier does not support its
 serial oracle; the committed local CLI smoke is the acceptance evidence.
+
+Run the LEDC servo smoke from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-devkitc-32e-ledc-servo \
+  --script examples/esp32-devkitc-32e/ledc-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-ledc-servo.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/ledc \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-ledc-smoke.sh
+```
+
+The current board availability check for this profile is in
+[`evidence/ledc/vendor-status.md`](evidence/ledc/vendor-status.md).
 
 Run the RMT + pixel smoke from the repository root:
 

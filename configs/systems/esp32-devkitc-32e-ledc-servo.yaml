@@ -1,0 +1,14 @@
+# ESP32-DevKitC-32E with an SG90-class servo signal fixture on GPIO23.
+# For physical wiring, power the servo from a separate 5 V supply and share GND.
+name: "esp32-devkitc-32e-ledc-servo"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "servo"
+    type: "servo"
+    connection: "gpio"
+    config:
+      signal_pin: "GPIO23"
+      model: "sg90"
+board_io: []

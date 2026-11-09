@@ -10,10 +10,11 @@ reviewed before publication.
 ### ESP32-DevKitC-32E / ESP32-WROOM-32E
 
 The board profile boots Arduino firmware and exercises UART0, GPIO, I2C with a
-BME280, RMT output, and ADC1 channel 0. This round adds `analogRead(36)` on
-GPIO36 / ADC1_CH0 with a potentiometer fixture connected at the board header.
-The local simulator smoke passes 1/1: a 1650 mV input returns 2047 at 12-bit
-resolution.
+BME280, RMT output, ADC1 channel 0, and LEDC PWM. The preceding ADC smoke
+checks `analogRead(36)` on GPIO36 / ADC1_CH0 with a potentiometer fixture; a
+1650 mV input returns 2047 at 12-bit resolution. This round adds stock
+`ledcAttach` / `ledcWrite` output on GPIO23 / J3 pin 2 for an external
+SG90-class servo fixture.
 
 Espressif's [current DevKitC V4 guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32/esp32-devkitc/user_guide.html)
 lists the exact 32E board and maps J2 pin 3 / VP to GPIO36 / ADC1_CH0. The
@@ -37,6 +38,37 @@ void setup() {
 
 void loop() {}
 ```
+
+Copy-paste Arduino example for a servo signal on J3 pin 2 / GPIO23. Power the
+physical servo separately from 5 V and connect its ground to the board ground:
+
+```cpp
+#include <Arduino.h>
+
+void setup() {
+  constexpr uint8_t servo_pin = 23;
+  if (!ledcAttach(servo_pin, 50, 14)) return;
+  ledcWrite(servo_pin, 1187);  // about 1.45 ms per 49.92 Hz frame
+}
+
+void loop() {}
+```
+
+Run it against the committed board profile with:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-devkitc-32e-ledc-servo \
+  --script examples/esp32-devkitc-32e/ledc-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-ledc-servo.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/ledc \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-ledc-smoke.sh
+```
+
+The live board status and in-stock check is in
+[`vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/ledc/vendor-status.md).
+The smoke asserts the channel-0 duty shadow and GPIO23 edges. The SG90 twin is
+not evidence of physical servo torque, current draw, or mechanical motion.
 
 Run it against the committed board profile with:
 

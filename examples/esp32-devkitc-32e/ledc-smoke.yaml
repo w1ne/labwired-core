@@ -1,0 +1,18 @@
+# Classic ESP32 DevKitC-32E: stock Arduino LEDC PWM on GPIO23, with an SG90
+# servo twin on that header pin.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/devkitc32e_ledc/firmware.elf"
+  system: "../../configs/systems/esp32-devkitc-32e-ledc-servo.yaml"
+limits:
+  max_steps: 9000000
+assertions:
+  - uart_contains: "ESP32_DEVKITC32E_LEDC_SERVO_OK"
+  - memory_value:
+      address: 0x3FF59010
+      size: 32
+      expected_value: 18992
+  - gpio_edges:
+      pin: "gpio:23"
+      min_edges: 2
+  - expected_stop_reason: max_steps
