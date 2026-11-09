@@ -6,3 +6,43 @@
 
 name: stm32f072
 chip: ../../chips/onboarding/stm32f072.yaml
+# Smoke fixture inputs, not a board: Renode's stm32f072.repl is a bare CPU
+# platform. Two switches to ground on PF1 and PC13 (pressed = low, against
+# the GPIO pull-up) give the EXTI port mux real pad edges to route. A
+# MAX31855 on each SPI (CS on PA4 / PB12; the smoke scenario sets SPI2's
+# thermocouple to 100 °C), a second MAX31855 on SPI1 behind its own CS on
+# PB0 (50 °C) and a TMP102 on I2C1 give the serial blocks real slaves.
+external_devices:
+  - id: "tc_spi1"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+  - id: "tc_spi1b"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PB0"
+  - id: "tc_spi2"
+    type: "max31855"
+    connection: "spi2"
+    config:
+      cs_pin: "PB12"
+  - id: "tmp102"
+    type: "tmp102"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x48
+board_io:
+  - id: "sw_pf1"
+    kind: "button"
+    peripheral: "gpiof"
+    pin: 1
+    signal: "input"
+    active_high: false
+  - id: "sw_pc13"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false

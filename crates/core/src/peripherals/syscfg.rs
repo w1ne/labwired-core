@@ -503,3 +503,153 @@ mod tests {
         assert_eq!(s.read_u32(0x20).unwrap(), 0x101);
     }
 }
+
+/// STM32F0 SYSCFG (RM0091 §9, `stm32f072xb.h` SYSCFG_TypeDef): CFGR1 @0x00,
+/// a reserved word @0x04, the `SYSCFG_EXTICR1..4` line-source mux at
+/// 0x08..0x14 and CFGR2 @0x18. The F0 port codes are by letter, A..F = 0..5
+/// (`SYSCFG_EXTICR1_EXTI0_PF = 5`); 6..15 select no port.
+///
+/// `CFGR1`: MEM_MODE (1:0), the DMA remap bits (14:8, 30:24) and the I2C
+/// Fm+ drive bits (21:16) stick; MEM_MODE resets to 00, main Flash, the only
+/// boot this model has. The DMA remap bits are register state only: the
+/// engine's DMA request table is the reset (unremapped) one. `CFGR2`: the
+/// three TIM1-break lock bits (2:0) are set-once until reset, and SRAM_PEF
+/// (8) is rc_w1 and never set — this engine has no SRAM parity.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct Stm32F0Syscfg {
+    cfgr1: u32,
+    exticr: [u32; 4],
+    cfgr2: u32,
+}
+
+impl Stm32F0Syscfg {
+    const CFGR1_MASK: u32 = 0x7F3F_7F03;
+    const CFGR2_LOCKS: u32 = 0x7;
+
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The GPIO port index (0 = A, by letter) `SYSCFG_EXTICRx` routes to
+    /// EXTI `line`.
+    pub fn exti_port(&self, line: u8) -> Option<u8> {
+        exticr_port(&self.exticr, line, &[0, 1, 2, 3, 4, 5])
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cfgr1,
+            0x08 => self.exticr[0],
+            0x0C => self.exticr[1],
+            0x10 => self.exticr[2],
+            0x14 => self.exticr[3],
+            0x18 => self.cfgr2,
+            _ => {
+                crate::census_reg!("syscfg:Stm32F0Syscfg", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.cfgr1 = value & Self::CFGR1_MASK,
+            0x08 => self.exticr[0] = value & 0xFFFF,
+            0x0C => self.exticr[1] = value & 0xFFFF,
+            0x10 => self.exticr[2] = value & 0xFFFF,
+            0x14 => self.exticr[3] = value & 0xFFFF,
+            // Lock bits only ever go 0 -> 1.
+            0x18 => self.cfgr2 |= value & Self::CFGR2_LOCKS,
+            _ => {
+                crate::census_reg!("syscfg:Stm32F0Syscfg", offset, "write");
+            }
+        }
+    }
+}
+
+impl Peripheral for Stm32F0Syscfg {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = self.read_reg(offset & !3);
+        Ok(((reg >> ((offset % 4) * 8)) & 0xFF) as u8)
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg_offset = offset & !3;
+        let shift = (offset % 4) * 8;
+        // CFGR2 is set-once: merge only the byte written, never the read-back.
+        if reg_offset == 0x18 {
+            self.write_reg(reg_offset, u32::from(value) << shift);
+            return Ok(());
+        }
+        let mut reg = self.read_reg(reg_offset);
+        reg &= !(0xFF << shift);
+        reg |= u32::from(value) << shift;
+        self.write_reg(reg_offset, reg);
+        Ok(())
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_reg(offset & !3))
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write_reg(offset & !3, value);
+        Ok(())
+    }
+
+    fn exti_line_source(&self, line: u8) -> Option<u8> {
+        self.exti_port(line)
+    }
+
+    /// A configuration register bank: no `tick`, nothing to walk.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
+        Some(self)
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod f0_tests {
+    use super::Stm32F0Syscfg;
+    use crate::Peripheral;
+
+    #[test]
+    fn exticr_codes_follow_the_f0_port_letters() {
+        let mut s = Stm32F0Syscfg::new();
+        assert_eq!(s.exti_line_source(0), Some(0), "reset: port A");
+        // EXTICR1: line 0 -> code 5 (PF), line 1 -> code 2 (PC),
+        // line 2 -> code 6 (reserved).
+        s.write_u32(0x08, 5 | (2 << 4) | (6 << 8)).unwrap();
+        assert_eq!(s.exti_line_source(0), Some(5), "code 5 is port F");
+        assert_eq!(s.exti_line_source(1), Some(2), "code 2 is port C");
+        assert_eq!(s.exti_line_source(2), Some(u8::MAX), "code 6 is no port");
+        assert_eq!(s.exti_line_source(16), None);
+    }
+
+    #[test]
+    fn registers_keep_only_their_fields() {
+        let mut s = Stm32F0Syscfg::new();
+        s.write_u32(0x00, 0xFFFF_FFFF).unwrap();
+        assert_eq!(s.read_u32(0x00).unwrap(), 0x7F3F_7F03);
+        assert_eq!(s.read_u32(0x04).unwrap(), 0, "reserved word");
+        s.write_u32(0x10, 0xFFFF_FFFF).unwrap();
+        assert_eq!(s.read_u32(0x10).unwrap(), 0xFFFF);
+        // CFGR2 lock bits are set-once; SRAM_PEF never sets.
+        s.write_u32(0x18, 0xFFFF_FFFF).unwrap();
+        assert_eq!(s.read_u32(0x18).unwrap(), 0x7);
+        s.write_u32(0x18, 0).unwrap();
+        assert_eq!(s.read_u32(0x18).unwrap(), 0x7, "locks survive a clear");
+        s.write(0x18, 0).unwrap();
+        assert_eq!(s.read_u32(0x18).unwrap(), 0x7, "byte store too");
+    }
+}
