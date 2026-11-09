@@ -1,0 +1,116 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# LPC2294 system control block subset at 0xE01FC000 (RTEMS
+# bsps/arm/rtl22xx/include/lpc22xx.h): MAM, MEMMAP, PLL, PCONP, VPBDIV.
+# Storage only. Not modelled: the MAM cache, MEMMAP vector remapping, the
+# PLL feed sequence and clock change (the CPU runs at the system's cpu_hz
+# whatever PLLCFG/VPBDIV say), power gating by PCONP.
+# PLLSTAT reads PLOCK (bit 10) = 1 at all times, so the RTEMS rtl22xx
+# bspstart.c lock loop `while ((PLLSTAT & (1 << 10)) == 0);` exits. Its
+# MSEL/PSEL/PLLE/PLLC fields read 0 — they do not mirror PLLCFG/PLLCON.
+# Renode lpc2294.repl tags PLLSTAT as a constant 0xFFFFFFFF.
+# Reset values other than PLLSTAT are 0 here; they were not verified
+# against UM10114.
+peripheral: LPC2294_SCB
+version: 0.1.0
+registers:
+- id: MAMCR
+  address_offset: 0x0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: MAM_MODE
+    bit_range: [0, 1]
+    description: "MAM mode control (stored only)"
+  side_effects: null
+- id: MAMTIM
+  address_offset: 0x4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: MAM_FETCH
+    bit_range: [0, 2]
+    description: "MAM fetch cycles (stored only)"
+  side_effects: null
+- id: MEMMAP
+  address_offset: 0x40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: MAP
+    bit_range: [0, 1]
+    description: "Interrupt vector source (stored only, no remap)"
+  side_effects: null
+- id: PLLCON
+  address_offset: 0x80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: PLLE
+    bit_range: [0, 0]
+    description: "PLL enable (stored only)"
+  - name: PLLC
+    bit_range: [1, 1]
+    description: "PLL connect (stored only)"
+  side_effects: null
+- id: PLLCFG
+  address_offset: 0x84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: MSEL
+    bit_range: [0, 4]
+    description: "PLL multiplier value minus 1 (stored only)"
+  - name: PSEL
+    bit_range: [5, 6]
+    description: "PLL divider (stored only)"
+  side_effects: null
+- id: PLLSTAT
+  address_offset: 0x88
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x400
+  fields:
+  - name: PLOCK
+    bit_range: [10, 10]
+    description: "PLL lock status; reads 1 in this model"
+  side_effects: null
+- id: PLLFEED
+  address_offset: 0x8C
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0x0
+  fields:
+  - name: PLLFEED
+    bit_range: [0, 7]
+    description: "Feed sequence 0xAA, 0x55 (not modelled)"
+  side_effects: null
+- id: PCONP
+  address_offset: 0xC4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: PCONP
+    bit_range: [0, 31]
+    description: "Peripheral power control (stored only, no gating)"
+  side_effects: null
+- id: VPBDIV
+  address_offset: 0x100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: VPBDIV
+    bit_range: [0, 1]
+    description: "VPB clock divider (stored only)"
+  side_effects: null

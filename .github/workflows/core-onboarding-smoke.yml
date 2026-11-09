@@ -314,8 +314,8 @@ jobs:
             cli_profile: native-system
             script: examples/renode-onboarding/a20-a7-uart-smoke.yaml
             system: configs/systems/onboarding/a20.yaml
-          # ARM7TDMI CPU execution plus only the imported UART0 TX write path;
-          # no other LPC2294 peripheral registers are claimed by this smoke.
+          # ARM7TDMI with the declared LPC2294 surface: SCB/PLL lock, PINSEL0,
+          # UART0/UART1 (polled 16550) and the four legacy GPIO ports.
           - id: lpc2294
             prebuilt_firmware: tests/fixtures/lpc2294-arm7-uart-smoke.elf
             cli_features: qemu-arm-system

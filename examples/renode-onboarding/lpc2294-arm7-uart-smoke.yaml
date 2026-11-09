@@ -1,5 +1,7 @@
-# ARM7TDMI execution and the offset-zero TX write path of the imported UART0
-# window. The custom UART profile deliberately exposes no other registers.
+# LPC2294 declared surface: SCB/PLL lock, PINSEL0, UART0 and UART1 (16550 at
+# a 4-byte stride, polled), and the four legacy GPIO ports. One letter per
+# check on UART0 (see lpc2294-arm7-uart-smoke.S). The system declares no
+# debug_uart, so the capture holds both UARTs.
 schema_version: "1.0"
 inputs:
   firmware: "../../tests/fixtures/lpc2294-arm7-uart-smoke.elf"
@@ -7,5 +9,6 @@ inputs:
 limits:
   max_steps: 100000
 assertions:
-  - uart_contains: "LPC2294_UART0_TX_OK"
+  - uart_contains: "LPC2294 checks PPPPPPPP DONE"
+  - uart_contains: "LPC2294_UART1_OK"
   - expected_stop_reason: max_steps

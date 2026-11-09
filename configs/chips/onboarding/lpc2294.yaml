@@ -4,24 +4,79 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# Bounded ARM7TDMI profile for the imported LPC2294 CPU and UART0 TX path.
-# Only the imported UART0 window's offset-zero transmit write is modeled here;
-# other UART registers, UART1, CAN, timer, and ADC remain outside this profile.
+# NXP LPC2294 (ARM7TDMI-S). Memory map: 256 KiB on-chip flash at 0x0 and
+# 16 KiB on-chip SRAM at 0x40000000 (RTEMS bsps/arm/rtl22xx/start/linkcmds:
+# SRAM ORIGIN 0x40000000 LENGTH 16k). Renode platforms/cpus/lpc2294.repl
+# maps one 64 KiB internal_sram at both 0x0 and 0x40000000 and has no flash;
+# that is a Renode shortcut, not the silicon map. The earlier import placed
+# flash at 0x08000000 and RAM at 0x20000000 (the STM32 default); neither
+# address decodes to memory on this part.
+#
+# Register addresses: RTEMS bsps/arm/rtl22xx/include/lpc22xx.h.
+# Claimed:
+# - uart0, uart1: 16550 register set at a 4-byte stride (RBR/THR/DLL 0x00,
+#   IER/DLM 0x04, IIR/FCR 0x08, LCR 0x0C, LSR 0x14; Renode NS16550 with
+#   wideRegisters). Polled only: no VIC model, so no UART interrupts.
+# - port0..port3: legacy GPIO ports (IOPIN/IOSET/IODIR/IOCLR).
+# - pinsel, scb: register storage (see configs/peripherals/lpc2294/).
+# Not declared (no model in this engine): VIC (PL190), timers 0/1, CAN1-4,
+# I2C, SPI, ADC, RTC, watchdog, PWM, external memory controller (BCFG) and
+# the external memory windows.
 name: lpc2294
 arch: arm
 core: arm7tdmi-s
 flash:
-  base: 134217728
-  size: 65536B
+  base: 0x0
+  size: 256KB
 ram:
-  base: 536870912
-  size: 65536B
+  base: 0x40000000
+  size: 16KB
 peripherals:
 - id: uart0
   type: uart
-  bus: sysbus
-  base_address: 3758145536
-  size: 4
+  base_address: 0xE000C000
+  size: 32B
   config:
-    profile: custom
-    tx_offset: 0
+    profile: dw_apb_uart
+- id: uart1
+  type: uart
+  base_address: 0xE0010000
+  size: 32B
+  config:
+    profile: dw_apb_uart
+- id: port0
+  type: gpio
+  base_address: 0xE0028000
+  size: 16B
+  config:
+    profile: lpc2xxx
+- id: port1
+  type: gpio
+  base_address: 0xE0028010
+  size: 16B
+  config:
+    profile: lpc2xxx
+- id: port2
+  type: gpio
+  base_address: 0xE0028020
+  size: 16B
+  config:
+    profile: lpc2xxx
+- id: port3
+  type: gpio
+  base_address: 0xE0028030
+  size: 16B
+  config:
+    profile: lpc2xxx
+- id: pinsel
+  type: declarative
+  base_address: 0xE002C000
+  size: 24B
+  config:
+    path: ../../peripherals/lpc2294/pinsel.yaml
+- id: scb
+  type: declarative
+  base_address: 0xE01FC000
+  size: 260B
+  config:
+    path: ../../peripherals/lpc2294/scb.yaml

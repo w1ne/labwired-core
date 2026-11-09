@@ -1725,6 +1725,13 @@ fn gpio_offsets_for_peripheral(
             odr_offset: 0x00,
             ra_output_packed: false,
         }),
+        // NXP LPC21xx/LPC22xx legacy GPIO: IOSET (reads the output latch)
+        // @0x4, IOPIN @0x0 (lpc22xx.h).
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Lpc2xxx => Some(GpioOffsets {
+            idr_offset: 0x00,
+            odr_offset: 0x04,
+            ra_output_packed: false,
+        }),
         // nRF52 GPIO register layout isn't mapped for DAP board-IO bindings;
         // skip it gracefully (callers use `?`, so None drops the binding).
         labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf52 => None,

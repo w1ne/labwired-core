@@ -1,0 +1,384 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 0,
+  "cycles": 0,
+  "instructions": 0,
+  "stop_reason": "memory_violation",
+  "stop_reason_details": {
+    "triggered_stop_condition": "memory_violation",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "LPC2294 checks PPPPPPPP DONE"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "LPC2294_UART1_OK"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": false
+    }
+  ],
+  "cpu_state": {
+    "type": "arm7_tdmi",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 0,
+    "cpsr": 1073742291
+  },
+  "firmware_hash": "13972dbe283d1c79b118233ca7af99ddb7fea49f73a413d88ffcc901b8cbb0d5",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/lpc2294-arm7-uart-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/lpc2294.yaml",
+    "script": "examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 3758145536,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 3758161920,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pinsel",
+        "kind": "declarative",
+        "base": 3758276608,
+        "registers": [
+          {
+            "name": "PINSEL0",
+            "offset": 0,
+            "size": 32,
+            "value": 327685,
+            "fields": [
+              {
+                "name": "P0_0_15",
+                "bits": [
+                  0,
+                  31
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PINSEL1",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "P0_16_31",
+                "bits": [
+                  0,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PINSEL2",
+            "offset": 20,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PORT1_2_3",
+                "bits": [
+                  0,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "declarative",
+        "base": 3760177152,
+        "registers": [
+          {
+            "name": "MAMCR",
+            "offset": 0,
+            "size": 32,
+            "value": 2,
+            "fields": [
+              {
+                "name": "MAM_MODE",
+                "bits": [
+                  0,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MAMTIM",
+            "offset": 4,
+            "size": 32,
+            "value": 3,
+            "fields": [
+              {
+                "name": "MAM_FETCH",
+                "bits": [
+                  0,
+                  2
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MEMMAP",
+            "offset": 64,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "MAP",
+                "bits": [
+                  0,
+                  1
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PLLCON",
+            "offset": 128,
+            "size": 32,
+            "value": 3,
+            "fields": [
+              {
+                "name": "PLLE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "PLLC",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PLLCFG",
+            "offset": 132,
+            "size": 32,
+            "value": 36,
+            "fields": [
+              {
+                "name": "MSEL",
+                "bits": [
+                  0,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "PSEL",
+                "bits": [
+                  5,
+                  6
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PLLSTAT",
+            "offset": 136,
+            "size": 32,
+            "value": 1024,
+            "fields": [
+              {
+                "name": "PLOCK",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 1
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "PLLFEED",
+            "offset": 140,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PLLFEED",
+                "bits": [
+                  0,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "PCONP",
+            "offset": 196,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PCONP",
+                "bits": [
+                  0,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "VPBDIV",
+            "offset": 256,
+            "size": 32,
+            "value": 1,
+            "fields": [
+              {
+                "name": "VPBDIV",
+                "bits": [
+                  0,
+                  1
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0xe0028018",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "write"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "LPC2294 checks PPPP",
+        "cycle_lo": 0,
+        "cycle": 0
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 849,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 849,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 262144,
+    "ram_total_bytes": 16384,
+    "flash_used_pct": 0.32,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "stack_ram_region_unknown",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 0,
+    "instructions": 0,
+    "steps_executed": 0,
+    "memory_reads": 136,
+    "memory_writes": 0,
+    "peripheral_accesses": 66,
+    "exceptions": 0
+  }
+}

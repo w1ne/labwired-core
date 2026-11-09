@@ -2559,8 +2559,13 @@ boards:
     # (every in-tree capture) give the same result; hw-oracle sim diffs
     # re-run green.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 416): gpio.rs gains the
+    # opt-in `lpc2xxx` layout (LPC21xx/22xx IOPIN/IOSET/IODIR/IOCLR), a new
+    # GpioFamily variant with its own match arms. No register, mask or reset
+    # value of this chip's GPIO layout changed.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: e7f824f9ef1c5613bde4078e7222cb2695efe75fcaccef069556bf28c98736e5
+    drift_ack_digest: 0e365495b608f7b5df18fdda3cb244cedf8a2d144997eaf15ea901f398eea9a8
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -4867,8 +4872,13 @@ boards:
     # (every in-tree capture) give the same result; hw-oracle sim diffs
     # re-run green.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 416): gpio.rs gains the
+    # opt-in `lpc2xxx` layout (LPC21xx/22xx IOPIN/IOSET/IODIR/IOCLR), a new
+    # GpioFamily variant with its own match arms. No register, mask or reset
+    # value of this chip's GPIO layout changed.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 9add330bfb72025a15c9f38a66d7cf475a4cf0a93a4b2ddc91c2d72344a13a2e
+    drift_ack_digest: 08082a8197dc7fd7a2e724c86cde17f654fab051532a2d785d00b9b9bde4f557
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -6016,8 +6026,13 @@ boards:
     # (every in-tree capture) give the same result; hw-oracle sim diffs
     # re-run green.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 416): gpio.rs gains the
+    # opt-in `lpc2xxx` layout (LPC21xx/22xx IOPIN/IOSET/IODIR/IOCLR), a new
+    # GpioFamily variant with its own match arms. No register, mask or reset
+    # value of this chip's GPIO layout changed.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 636d92329d17b94ec5d9fffb24abb71f0ead2af709080d515ea7a50676637d7f
+    drift_ack_digest: c28616db52558e87ead80c7d5ee81ccfdad8f6b081e61d6f723e8e4cd6fd5281
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -7307,8 +7322,13 @@ boards:
     # DTCMRAMEN); without the key the reset stays 0, as here. No register,
     # mask or reset value of this chip changed.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 416): gpio.rs gains the
+    # opt-in `lpc2xxx` layout (LPC21xx/22xx IOPIN/IOSET/IODIR/IOCLR), a new
+    # GpioFamily variant with its own match arms. No register, mask or reset
+    # value of this chip's GPIO layout changed.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 548df192135dabe0e7cbcaf601b4f132446f7905481ef8308e2fcb418a5398f8
+    drift_ack_digest: bc640a76a730b38aea49c911c2317b9ee86f5819fb4f460db8a7043435827ed9
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -8467,8 +8487,13 @@ boards:
     # DTCMRAMEN); without the key the reset stays 0, as here. No register,
     # mask or reset value of this chip changed.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 416): gpio.rs gains the
+    # opt-in `lpc2xxx` layout (LPC21xx/22xx IOPIN/IOSET/IODIR/IOCLR), a new
+    # GpioFamily variant with its own match arms. No register, mask or reset
+    # value of this chip's GPIO layout changed.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: b04e2719a5d747bfeb3747a9ef5bd9173b5d1df60662a67d417dcef2ad88488d
+    drift_ack_digest: 0bb31fdcf09d09b94c2fc5e09c35f7cbbaa698e6f2097767c01d76e748e9007c
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other

@@ -118,6 +118,10 @@ pub enum GpioRegisterLayout {
     /// NXP i.MX RT GPIO: DR@0x00, GDIR@0x04, PSR@0x08,
     /// DR_SET@0x84, DR_CLEAR@0x88, DR_TOGGLE@0x8C (IMXRT1060RM).
     Imxrt,
+    /// NXP LPC21xx/LPC22xx legacy (slow) GPIO port: IOPIN @0x0, IOSET @0x4,
+    /// IODIR @0x8, IOCLR @0xC. One instance = one port; LPC2294 has four at a
+    /// 0x10 stride from 0xE0028000 (RTEMS `bsps/arm/rtl22xx/include/lpc22xx.h`).
+    Lpc2xxx,
 }
 
 impl FromStr for GpioRegisterLayout {
@@ -138,6 +142,7 @@ impl FromStr for GpioRegisterLayout {
             "sam" | "sam_port" | "samd" | "samd21" | "samd51" | "microchip" => Ok(Self::SamPort),
             "ra_port" | "ra4m1" | "renesas_port" => Ok(Self::RaPort),
             "imxrt" | "imxrt_gpio" => Ok(Self::Imxrt),
+            "lpc2xxx" | "lpc21xx" | "lpc22xx" => Ok(Self::Lpc2xxx),
             _ => Err(format!(
                 "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, efm32s0, efm32s1, sam_port, ra_port, imxrt",
                 value
@@ -1527,6 +1532,55 @@ impl RaPortGpio {
 
 /// The per-family register set of a [`GpioPort`]. Register sets are fully
 /// isolated — a register from one family cannot exist on another.
+// ── NXP LPC21xx/LPC22xx legacy GPIO ──────────────────────────────────────────
+// One port of the APB ("slow") GPIO block: IOPIN @0x0, IOSET @0x4, IODIR @0x8,
+// IOCLR @0xC (RTEMS `bsps/arm/rtl22xx/include/lpc22xx.h`, LPC22xx registers).
+// IOSET reads the output latch, a write sets its 1 bits; IOCLR clears its 1
+// bits and reads 0; IODIR 1 = output; IOPIN reads the pin level whatever the
+// direction. Not modelled: a write to IOPIN (ignored and counted by the
+// census), the PINSEL function mux (a pin given to a peripheral still reads
+// its GPIO view), and any pin pull — an undriven input reads 0.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct Lpc2xxxGpio {
+    ioset: u32, // output latch
+    iodir: u32,
+    /// Input latch (host/button injection). Not a register.
+    pin_in: u32,
+    /// Pins the outside world is holding. Not a register.
+    #[serde(skip)]
+    external: u32,
+}
+
+impl Lpc2xxxGpio {
+    fn iopin_view(&self) -> u32 {
+        (self.ioset & self.iodir) | (self.pin_in & !self.iodir)
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x0 => self.iopin_view(),
+            0x4 => self.ioset,
+            0x8 => self.iodir,
+            0xC => 0, // IOCLR is write-only
+            _ => {
+                crate::census_reg!("gpio:Lpc2xxxGpio", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x4 => self.ioset |= value,
+            0x8 => self.iodir = value,
+            0xC => self.ioset &= !value,
+            _ => {
+                crate::census_reg!("gpio:Lpc2xxxGpio", offset, "write");
+            }
+        }
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 pub enum GpioFamily {
     Stm32F1(F1Gpio),
@@ -1538,6 +1592,7 @@ pub enum GpioFamily {
     SamPort(SamGpio),
     RaPort(RaPortGpio),
     Imxrt(ImxrtGpio),
+    Lpc2xxx(Lpc2xxxGpio),
 }
 
 impl GpioFamily {
@@ -1552,6 +1607,7 @@ impl GpioFamily {
             Self::SamPort(g) => g.read_reg(offset),
             Self::RaPort(g) => g.read_reg(offset),
             Self::Imxrt(g) => g.read_reg(offset),
+            Self::Lpc2xxx(g) => g.read_reg(offset),
         }
     }
 
@@ -1566,6 +1622,7 @@ impl GpioFamily {
             Self::SamPort(g) => g.write_reg(offset, value),
             Self::RaPort(g) => g.write_reg(offset, value),
             Self::Imxrt(g) => g.write_reg(offset, value),
+            Self::Lpc2xxx(g) => g.write_reg(offset, value),
         }
     }
 
@@ -1643,6 +1700,10 @@ impl GpioFamily {
                 let after = g.psr_view();
                 g.latch_interrupts(before, after);
             }
+            Self::Lpc2xxx(g) => {
+                apply(&mut g.pin_in);
+                g.external |= bit;
+            }
         }
         true
     }
@@ -1671,6 +1732,7 @@ impl GpioFamily {
                 let after = g.psr_view();
                 g.latch_interrupts(before, after);
             }
+            Self::Lpc2xxx(g) => g.external &= !bit,
         }
     }
 
@@ -1824,6 +1886,7 @@ impl GpioFamily {
             } else {
                 bit(g.psr_view())
             }),
+            Self::Lpc2xxx(g) => Some(bit(g.iopin_view())),
         }
     }
 }
@@ -2013,6 +2076,15 @@ impl GpioPort {
                     GpioMode::Input
                 }
             }
+            // LPC2xxx: IODIR only. PINSEL (the function mux) is a separate
+            // block this port does not see, so no AF verdict.
+            GpioFamily::Lpc2xxx(g) => {
+                if (g.iodir & (1u32 << pin)) != 0 {
+                    GpioMode::Output
+                } else {
+                    GpioMode::Input
+                }
+            }
             // Series-2 EFR32: 4-bit mode nibble per pin (MODEL/MODEH).
             // 0 DISABLED is a hi-Z pin — closest to Analog here; 1..3 are the
             // input modes; >= 4 the output modes. No AF verdict: the ROUTE
@@ -2168,6 +2240,8 @@ impl GpioPort {
             GpioFamily::Kinetis(_) | GpioFamily::RaPort(_) | GpioFamily::Imxrt(_) => {
                 self.family.config_pull(pin).level()
             }
+            // LPC2xxx pull resistors are not modelled.
+            GpioFamily::Lpc2xxx(_) => None,
         }
     }
 
@@ -2366,6 +2440,7 @@ impl GpioPort {
             GpioRegisterLayout::SamPort => GpioFamily::SamPort(SamGpio::default()),
             GpioRegisterLayout::RaPort => GpioFamily::RaPort(RaPortGpio::default()),
             GpioRegisterLayout::Imxrt => GpioFamily::Imxrt(ImxrtGpio::default()),
+            GpioRegisterLayout::Lpc2xxx => GpioFamily::Lpc2xxx(Lpc2xxxGpio::default()),
         })
     }
 
@@ -2522,7 +2597,8 @@ impl GpioPort {
             GpioFamily::SamPort(_) => 0x10, // OUT
             // PCNTR1 holds PODR in [31:16]; consumers sample bit (pin+16).
             GpioFamily::RaPort(_) => 0x00,
-            GpioFamily::Imxrt(_) => 0x00, // DR
+            GpioFamily::Imxrt(_) => 0x00,   // DR
+            GpioFamily::Lpc2xxx(_) => 0x04, // IOSET reads the output latch
         };
         family.saturating_sub(self.window_offset)
     }
@@ -2542,6 +2618,7 @@ impl GpioPort {
             GpioFamily::SamPort(_) => 0x20, // IN
             GpioFamily::RaPort(_) => 0x04,  // PCNTR2 PIDR[15:0]
             GpioFamily::Imxrt(_) => 0x08,   // PSR
+            GpioFamily::Lpc2xxx(_) => 0x00, // IOPIN
         };
         family.saturating_sub(self.window_offset)
     }
@@ -2608,6 +2685,7 @@ impl GpioPort {
             GpioFamily::SamPort(_) => GpioRegisterLayout::SamPort,
             GpioFamily::RaPort(_) => GpioRegisterLayout::RaPort,
             GpioFamily::Imxrt(_) => GpioRegisterLayout::Imxrt,
+            GpioFamily::Lpc2xxx(_) => GpioRegisterLayout::Lpc2xxx,
         }
     }
 
@@ -3371,6 +3449,7 @@ impl crate::Peripheral for GpioPort {
             GpioFamily::SamPort(g) => serde_json::to_value(g),
             GpioFamily::RaPort(g) => serde_json::to_value(g),
             GpioFamily::Imxrt(g) => serde_json::to_value(g),
+            GpioFamily::Lpc2xxx(g) => serde_json::to_value(g),
         }
         .unwrap_or(serde_json::Value::Null)
     }
@@ -3545,6 +3624,34 @@ mod routing_tests {
         assert_eq!(g.read_gpio_pad(13), Some(true));
         g.write_u32(0x50C, 1 << 13).unwrap(); // OUTCLR
         assert_eq!(g.read_gpio_pad(13), Some(false));
+    }
+
+    /// LPC21xx/22xx legacy GPIO: IOSET/IOCLR act on the latch, IOSET reads
+    /// it back, IOCLR reads 0, IOPIN mixes the latch through IODIR with the
+    /// external input, and a write to IOPIN is ignored.
+    #[test]
+    fn lpc2xxx_ioset_ioclr_iodir_iopin() {
+        let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Lpc2xxx);
+        g.write_u32(0x4, (1 << 10) | (1 << 11)).unwrap(); // IOSET
+        g.write_u32(0xC, 1 << 11).unwrap(); // IOCLR
+        assert_eq!(g.read_u32(0x4).unwrap(), 1 << 10);
+        assert_eq!(g.read_u32(0xC).unwrap(), 0);
+        assert_eq!(
+            g.read_u32(0x0).unwrap(),
+            0,
+            "latch is not on a pad while IODIR = 0"
+        );
+        g.write_u32(0x8, 1 << 10).unwrap(); // IODIR
+        assert_eq!(g.read_u32(0x0).unwrap(), 1 << 10);
+        assert_eq!(g.read_gpio_pad(10), Some(true));
+        assert_eq!(g.gpio_routing(10).unwrap().mode, GpioMode::Output);
+        assert_eq!(g.gpio_routing(5).unwrap().mode, GpioMode::Input);
+        assert!(g.set_gpio_input(5, true));
+        assert_eq!(g.read_u32(0x0).unwrap(), (1 << 10) | (1 << 5));
+        g.write_u32(0x0, 0).unwrap(); // IOPIN write: not modelled
+        assert_eq!(g.read_u32(0x4).unwrap(), 1 << 10);
+        assert_eq!(g.odr_offset(), 0x4);
+        assert_eq!(g.idr_offset(), 0x0);
     }
 
     #[test]

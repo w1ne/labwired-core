@@ -337,6 +337,31 @@ impl Rig for Sam {
     }
 }
 
+struct Lpc2xxx;
+impl Rig for Lpc2xxx {
+    fn name(&self) -> &'static str {
+        "GpioPort lpc2xxx"
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
+            crate::peripherals::gpio::GpioRegisterLayout::Lpc2xxx,
+        ))
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        // IOSET @0x4 / IOCLR @0xC are write-one; IODIR @0x8. No pulls and no
+        // open drain in the model.
+        match mode {
+            Mode::Input(Pull::None) => bit_to(port, 0x08, pin, false),
+            Mode::PushPull(level) => {
+                w32(port, if level { 0x04 } else { 0x0C }, 1 << pin);
+                bit_to(port, 0x08, pin, true);
+            }
+            Mode::Input(_) | Mode::OpenDrain(_) => return false,
+        }
+        true
+    }
+}
+
 #[derive(Default)]
 struct RaPort {
     pfs: Option<crate::peripherals::ra_pfs::RaPfs>,
@@ -834,6 +859,7 @@ fn rigs() -> Vec<Box<dyn Rig>> {
         Box::new(Sam),
         Box::new(RaPort::default()),
         Box::new(Imxrt::default()),
+        Box::new(Lpc2xxx),
         Box::new(Avr),
         Box::new(Pic24),
         Box::new(Rp2040),

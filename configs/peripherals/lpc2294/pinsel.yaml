@@ -1,0 +1,46 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# LPC2294 pin connect block: PINSEL0 @0xE002C000, PINSEL1 @+0x04,
+# PINSEL2 @+0x14 (RTEMS bsps/arm/rtl22xx/include/lpc22xx.h). Storage only:
+# the selected function is NOT routed to the GPIO pads or to the UART pins,
+# so a pin handed to UART0 still reads its GPIO view.
+# Reset values are 0 here. PINSEL1 and PINSEL2 reset values on silicon depend
+# on the part and on the boot pins (UM10114); they were not verified for this
+# model, so firmware that reads them before writing sees 0.
+peripheral: PINSEL
+version: 0.1.0
+registers:
+- id: PINSEL0
+  address_offset: 0x0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: P0_0_15
+    bit_range: [0, 31]
+    description: "Function select, P0.0..P0.15 (2 bits per pin)"
+  side_effects: null
+- id: PINSEL1
+  address_offset: 0x4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: P0_16_31
+    bit_range: [0, 31]
+    description: "Function select, P0.16..P0.31 (2 bits per pin)"
+  side_effects: null
+- id: PINSEL2
+  address_offset: 0x14
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: PORT1_2_3
+    bit_range: [0, 31]
+    description: "Port 1/2/3 debug, trace and external memory pin configuration"
+  side_effects: null
