@@ -2071,8 +2071,12 @@ pub(crate) fn run_test(
             // the same as the per-instruction run; only `cycles` in
             // result.json changes, to the machine clock. Opt out with
             // LABWIRED_HOSTED_FAST=0.
+            // AVR (and peers) join when the bus is walk-free and no gpio_device
+            // needs per-cycle service — same gate as Arm. Opt out with
+            // LABWIRED_HOSTED_FAST=0.
             let hosted_fast = !jit_eligible
                 && (program.arch == labwired_core::Arch::Arm
+                    || program.arch == labwired_core::Arch::Avr
                     || program.arch == labwired_core::Arch::Rx
                     || program.arch == labwired_core::Arch::Mips
                     || program.arch == labwired_core::Arch::Aarch64
@@ -2088,6 +2092,7 @@ pub(crate) fn run_test(
                 let wide = machine.max_safe_tick_interval();
                 if wide > 1 && machine.bus.per_cycle_tick_is_trivial() {
                     machine.config.peripheral_tick_interval = wide;
+                    machine.bus.config.peripheral_tick_interval = wide;
                     machine.exact_batch_boundaries = true;
                     crate::log_ts::eventln!(
                         "labwired-cli test: hosted fast path (exact windows up to {wide} cycles)"
