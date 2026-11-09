@@ -111,6 +111,8 @@ const CONVERTED: &[&str] = &[
     "renesas-r7fa4m1a",
     "renesas-r7fa6m5b",
     "renesas-r7fa8m1a",
+    "renesas-rz_t2m_rsk",
+    "renesas_rz_t2m",
     "ri5cy",
     "s32k118",
     "sam4s",
@@ -312,9 +314,10 @@ enum Family {
     /// Renesas RA ADC12/ADC14 (`ra_adc12`/`ra_adc14`): group-A channels in
     /// `ADANSA0`, a software `ADCSR.ADST` write runs one scan that takes
     /// time, `ADST` clears at scan end and `ADDRn` holds each result, against
-    /// VREFH0 3.3 V (FSP r_adc.c R_ADC_ScanStart/R_ADC_Read). ADC14 runs at
+    /// the descriptor's `vref_mv` (VREFH0 3.3 V on RA, 1.8 V on the RZ/T2M
+    /// ADC12; FSP r_adc.c R_ADC_ScanStart/R_ADC_Read). ADC14 runs at
     /// `ADCER.ADPRC` = 11b, 14 bits (FSP ADC_RESOLUTION_14_BIT).
-    RaAdc { adc14: bool },
+    RaAdc { adc14: bool, vref_mv: u32 },
     /// MSP430 ADC12 (F1/F2, `msp430_adc12`, the split map from 0x0080) and
     /// ADC12_A (F5, `msp430_adc12_a`, one block): `ADC12MCTLx.INCH` picks
     /// the input, `ENC` + `ADC12SC` in pulse mode (`SHP`) converts, `IFGx`
@@ -707,6 +710,11 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
         } else if kind == "ra_adc12" || kind == "ra_adc14" {
             Family::RaAdc {
                 adc14: kind == "ra_adc14",
+                vref_mv: p
+                    .config
+                    .get("vref_mv")
+                    .and_then(|v| v.as_u64())
+                    .map_or(3300, |mv| mv as u32),
             }
         } else {
             match p.config.get("profile").and_then(|v| v.as_str()) {
@@ -781,9 +789,17 @@ impl Converter {
             Family::Efr32S1Adc => (mv * 4096 / 3300).min(4095),
             // Same transfer function on Series 0 (em_adc.h, efm32gg_adc.h).
             Family::Efm32S0Adc => (mv * 4096 / 3300).min(4095),
-            // (2^bits - 1) / VREFH0 (3.3 V), truncated, clamped.
-            Family::RaAdc { adc14: false } => (mv * 4095 / 3300).min(4095),
-            Family::RaAdc { adc14: true } => (mv * 16383 / 3300).min(16383),
+            // (2^bits - 1) / VREFH0 (the descriptor's `vref_mv`), truncated,
+            // clamped: 3.3 V on RA, 1.8 V on the RZ/T2M, where the -10 C
+            // divider (2.79 V) saturates.
+            Family::RaAdc {
+                adc14: false,
+                vref_mv,
+            } => (mv * 4095 / vref_mv).min(4095),
+            Family::RaAdc {
+                adc14: true,
+                vref_mv,
+            } => (mv * 16383 / vref_mv).min(16383),
             // N = 4095 (Vin - VR-) / (VR+ - VR-), SREF_0: AVCC 3.3 V / AVSS,
             // truncated, clamped (SLAU049 §17.2.1).
             Family::Msp430Adc12 { .. } => (mv * 4095 / 3300).min(4095),
@@ -1131,7 +1147,7 @@ impl Converter {
                     );
                 }
             }
-            Family::RaAdc { adc14 } => {
+            Family::RaAdc { adc14, .. } => {
                 // R_ADC_Open: ADCER.ADPRC from the resolution, right
                 // justified, then ADCSR stored without ADST. Nothing
                 // converts until R_ADC_ScanStart.
@@ -3788,7 +3804,7 @@ fn assert_stm32_series_map(board: &str, converter: &Converter) {
 /// RA2L1, RA6M5 and RA8M1 report 12. The Arduino UNO R4 Minima carries an
 /// R7FA4M1AB3CFM.
 fn assert_ra_resolution(board: &str, converter: &Converter) {
-    let Family::RaAdc { adc14 } = converter.family else {
+    let Family::RaAdc { adc14, .. } = converter.family else {
         return;
     };
     let ra4m1 =
@@ -3986,7 +4002,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 163,
+        instances, 167,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -3994,7 +4010,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 82,
+        without_adc, 80,
         "onboarding profiles that declare no modelled ADC"
     );
 }

@@ -55,3 +55,57 @@ peripherals:
   type: renesas_sci
   bus: sysbus
   base_address: 2164264960
+# ADC12 unit 0 (safety area) and unit 1, the RA ADC12 register block
+# (R_ADC121_Type, 0xF0 bytes: ADCSR +0x00, ADANSA0 +0x04, ADADS0 +0x08, ADADC
+# +0x0C, ADCER +0x0E, ADDRn +0x20). R_ADC120_BASE 0x90004000 and
+# R_ADC121_BASE 0x80045000 in rzt-fsp @06f30509 R9A07G075.h; unit 0 has
+# AN000..AN007, unit 1 AN100..AN115 (rzt2m bsp_feature.h
+# BSP_FEATURE_ADC_UNIT_0/1_CHANNELS 0x00FF/0xFFFF, max resolution 12 bits).
+# The reference is 1.8 V: Zephyr r9a07g075.dtsi adc0/adc1 `vref-mv = <1800>`.
+# Scan end is GIC SPI 345 (adc0) / 350 (adc1); the profile declares no GIC,
+# so no irq. clock_hz is the 800 MHz CPU0 clock (rzt-fsp bsp_clocks.c
+# BSP_PRV_CPU_FREQ_800_MHZ) and only sets the nominal 1 us per channel.
+- id: adc0
+  type: ra_adc12
+  bus: sysbus
+  base_address: 0x90004000
+  size: 512B
+  config:
+    clock_hz: 800000000
+    vref_mv: 1800
+- id: adc1
+  type: ra_adc12
+  bus: sysbus
+  base_address: 0x80045000
+  size: 512B
+  config:
+    clock_hz: 800000000
+    vref_mv: 1800
+# The AN pins are dedicated analog inputs, not port functions: the Zephyr
+# RZ/T2M RSK adc_dt/adc_sequence overlays enable adc0/adc1 channels with no
+# pinctrl. ANunn is unit u, channel nn.
+analog_pins:
+  AN000: { peripheral: adc0, channel: 0 }
+  AN001: { peripheral: adc0, channel: 1 }
+  AN002: { peripheral: adc0, channel: 2 }
+  AN003: { peripheral: adc0, channel: 3 }
+  AN004: { peripheral: adc0, channel: 4 }
+  AN005: { peripheral: adc0, channel: 5 }
+  AN006: { peripheral: adc0, channel: 6 }
+  AN007: { peripheral: adc0, channel: 7 }
+  AN100: { peripheral: adc1, channel: 0 }
+  AN101: { peripheral: adc1, channel: 1 }
+  AN102: { peripheral: adc1, channel: 2 }
+  AN103: { peripheral: adc1, channel: 3 }
+  AN104: { peripheral: adc1, channel: 4 }
+  AN105: { peripheral: adc1, channel: 5 }
+  AN106: { peripheral: adc1, channel: 6 }
+  AN107: { peripheral: adc1, channel: 7 }
+  AN108: { peripheral: adc1, channel: 8 }
+  AN109: { peripheral: adc1, channel: 9 }
+  AN110: { peripheral: adc1, channel: 10 }
+  AN111: { peripheral: adc1, channel: 11 }
+  AN112: { peripheral: adc1, channel: 12 }
+  AN113: { peripheral: adc1, channel: 13 }
+  AN114: { peripheral: adc1, channel: 14 }
+  AN115: { peripheral: adc1, channel: 15 }
