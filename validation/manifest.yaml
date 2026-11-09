@@ -465,7 +465,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 43d1e01e16661caa76c823abde1d3e3b70d83d27d1906c8630715a4efb46b1b4
+    drift_ack_digest: 7bcf3005734d54e969bebde192253ed763e4c31cb2d5b97ead009a99db5ab76b
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -698,6 +698,13 @@ boards:
     # every asserted silicon block are unchanged; unit tests + nRF52840 DK
     # Renode smoke cover it. ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -1060,7 +1067,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 43d1e01e16661caa76c823abde1d3e3b70d83d27d1906c8630715a4efb46b1b4
+    drift_ack_digest: 7bcf3005734d54e969bebde192253ed763e4c31cb2d5b97ead009a99db5ab76b
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1293,6 +1300,13 @@ boards:
     # every asserted silicon block are unchanged; unit tests + nRF52840 DK
     # Renode smoke cover it. ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -2596,7 +2610,14 @@ boards:
     # the new path. ACK, NOT A SILICON CAPTURE; live re-capture remains
     # pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 9ea94c47a9102c4849b8ba4b38d77a6c93411e5f09a7c99d2b20999b3f4550e6
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack_digest: 4123713429958ff824f732ead2e504b190bc0011bfdea803b167ca5173816357
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -4947,7 +4968,14 @@ boards:
     # the new path. ACK, NOT A SILICON CAPTURE; live re-capture remains
     # pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: a87681f1da20062a2455170f80c469397677e7c201bfc29dd59d3b23cbda6df3
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack_digest: 4448f0a07e1219ccd7c8f0aed7028bdccc0d4dcea9b3801f26f4969157141c55
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -6132,7 +6160,14 @@ boards:
     # the new path. ACK, NOT A SILICON CAPTURE; live re-capture remains
     # pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: c279ebdcf59c4af11f26a90c5d1ac590f88b788443f0a724a6523e4555a52a5d
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack_digest: bac129e32c0f61944503158c1478aa37fb8128bd06a85b77f95073a0d53827e7
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -7459,7 +7494,14 @@ boards:
     # the new path. ACK, NOT A SILICON CAPTURE; live re-capture remains
     # pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 658c1bb9fc5b63d5f6fd907b94cd0235678b1fa5400b1f923100f605cc46b602
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack_digest: c0f50e58d5005860e5abcee85e53586f734894c381b1cead6b8212e7352790b0
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -8655,7 +8697,14 @@ boards:
     # the new path. ACK, NOT A SILICON CAPTURE; live re-capture remains
     # pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 49ea790f1b4bf7eba8304047db3047b9877fba8128475d76f0d126f5ae7c9512
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack_digest: 87231ca8f51ee045dd839f221ef0738b732fcb3434119f6b18034440a8c07547
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
