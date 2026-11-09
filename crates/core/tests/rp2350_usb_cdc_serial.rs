@@ -64,7 +64,7 @@ fn serial_println_observed_over_usb_cdc() {
             break;
         }
         steps += 1;
-        if steps % 500_000 == 0 {
+        if steps.is_multiple_of(500_000) {
             let guard = uart.lock().unwrap();
             if !guard.is_empty() {
                 let text = String::from_utf8_lossy(&guard);
