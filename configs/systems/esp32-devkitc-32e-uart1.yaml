@@ -1,0 +1,6 @@
+# ESP32-DevKitC-32E with UART1 TX remapped to J3 pin 12 / GPIO16.
+name: "esp32-devkitc-32e-uart1"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+board_io: []

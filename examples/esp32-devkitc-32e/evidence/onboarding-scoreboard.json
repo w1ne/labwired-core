@@ -1,14 +1,44 @@
 {
   "summary": {
-    "targets_total": 3,
-    "pass": 3,
+    "targets_total": 7,
+    "pass": 7,
     "fail": 0,
-    "median_elapsed_ms": 19786,
+    "median_elapsed_ms": 37367,
     "threshold_seconds": 3600,
-    "threshold_met": 3,
-    "median_elapsed_seconds": 19.786
+    "threshold_met": 7,
+    "median_elapsed_seconds": 37.367
   },
   "targets": [
+    {
+      "target_id": "esp32-devkitc-32e-adc",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-devkitc-32e/adc-smoke.yaml",
+      "system": "configs/systems/esp32-devkitc-32e-adc.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-09T19:35:07Z",
+      "finished_at_utc": "2026-11-09T19:35:14Z",
+      "elapsed_seconds": 7,
+      "elapsed_ms": 6588,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.429,
+        "build_firmware": 4.547,
+        "run_smoke": 1.565
+      },
+      "stages_ms": {
+        "build_cli": 429,
+        "build_firmware": 4547,
+        "run_smoke": 1565
+      },
+      "firmware_build_script": "scripts/build-esp32-devkitc-32e-adc-smoke.sh",
+      "_artifact_path": "examples/esp32-devkitc-32e/evidence/adc"
+    },
     {
       "target_id": "esp32-devkitc-32e-bme280",
       "status": "pass",
@@ -38,6 +68,66 @@
       },
       "firmware_build_script": "scripts/build-esp32-devkitc-32e-bme280.sh",
       "_artifact_path": "examples/esp32-devkitc-32e/evidence/bme280"
+    },
+    {
+      "target_id": "esp32-devkitc-32e-dac",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-devkitc-32e/dac-smoke.yaml",
+      "system": "configs/systems/esp32-devkitc-32e-dac.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-09T23:20:23Z",
+      "finished_at_utc": "2026-11-09T23:26:18Z",
+      "elapsed_seconds": 356,
+      "elapsed_ms": 355538,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 271.602,
+        "build_firmware": 3.611,
+        "run_smoke": 80.235
+      },
+      "stages_ms": {
+        "build_cli": 271602,
+        "build_firmware": 3611,
+        "run_smoke": 80235
+      },
+      "firmware_build_script": "scripts/build-esp32-devkitc-32e-dac-smoke.sh",
+      "_artifact_path": "examples/esp32-devkitc-32e/evidence/dac"
+    },
+    {
+      "target_id": "esp32-devkitc-32e-ledc-servo",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-devkitc-32e/ledc-smoke.yaml",
+      "system": "configs/systems/esp32-devkitc-32e-ledc-servo.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-09T19:52:08Z",
+      "finished_at_utc": "2026-11-09T19:58:47Z",
+      "elapsed_seconds": 399,
+      "elapsed_ms": 398316,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 387.681,
+        "build_firmware": 6.267,
+        "run_smoke": 4.315
+      },
+      "stages_ms": {
+        "build_cli": 387681,
+        "build_firmware": 6267,
+        "run_smoke": 4315
+      },
+      "firmware_build_script": "scripts/build-esp32-devkitc-32e-ledc-smoke.sh",
+      "_artifact_path": "examples/esp32-devkitc-32e/evidence/ledc"
     },
     {
       "target_id": "esp32-devkitc-32e",
@@ -77,27 +167,57 @@
       "script": "examples/esp32-devkitc-32e/rmt-smoke.yaml",
       "system": "configs/systems/esp32-devkitc-32e-rmt-neopixel.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T13:34:11Z",
-      "finished_at_utc": "2026-11-06T13:34:45Z",
-      "elapsed_seconds": 34,
-      "elapsed_ms": 33675,
+      "started_at_utc": "2026-11-06T13:53:31Z",
+      "finished_at_utc": "2026-11-06T13:54:12Z",
+      "elapsed_seconds": 41,
+      "elapsed_ms": 40537,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 31.024,
-        "build_firmware": 1.349,
-        "run_smoke": 1.247
+        "build_cli": 34.538,
+        "build_firmware": 4.908,
+        "run_smoke": 1.048
       },
       "stages_ms": {
-        "build_cli": 31024,
-        "build_firmware": 1349,
-        "run_smoke": 1247
+        "build_cli": 34538,
+        "build_firmware": 4908,
+        "run_smoke": 1048
       },
       "firmware_build_script": "scripts/build-esp32-devkitc-32e-rmt-smoke.sh",
       "_artifact_path": "examples/esp32-devkitc-32e/evidence/rmt-neopixel"
+    },
+    {
+      "target_id": "esp32-devkitc-32e-uart1",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-devkitc-32e/uart1-smoke.yaml",
+      "system": "configs/systems/esp32-devkitc-32e-uart1.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-09T23:53:59Z",
+      "finished_at_utc": "2026-11-09T23:54:36Z",
+      "elapsed_seconds": 38,
+      "elapsed_ms": 37367,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 31.929,
+        "build_firmware": 3.321,
+        "run_smoke": 2.08
+      },
+      "stages_ms": {
+        "build_cli": 31929,
+        "build_firmware": 3321,
+        "run_smoke": 2080
+      },
+      "firmware_build_script": "scripts/build-esp32-devkitc-32e-uart1-smoke.sh",
+      "_artifact_path": "examples/esp32-devkitc-32e/evidence/uart1"
     }
   ]
 }

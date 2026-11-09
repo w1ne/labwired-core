@@ -1,10 +1,10 @@
 # Narrow ESP32-DevKitC-32E onboarding profile.
 #
-# The profiles exercise classic ESP32 GPIO23, UART0 console output, I2C0 with
-# an external BME280, ADC1 channel 0 on GPIO36, DAC1/2 on GPIO25/26, and LEDC
-# PWM on GPIO23. The
-# USB-to-UART bridge and pin-level UART TX/RX signals, Wi-Fi/Bluetooth, general
-# timers, SPI, and the 5 V power LED are outside this profile.
+# The profiles exercise classic ESP32 GPIO23, UART0 console output, remapped
+# UART1 TX on GPIO16, I2C0 with an external BME280, ADC1 channel 0 on GPIO36,
+# DAC1/2 on GPIO25/26, and LEDC PWM on GPIO23. UART RX, the USB-to-UART bridge,
+# Wi-Fi/Bluetooth, general timers, SPI, and the 5 V power LED are outside this
+# profile.
 name: "esp32-devkitc-32e-gpio-smoke"
 arch: "xtensa-lx6"
 cpu_hz: 240000000
@@ -25,7 +25,12 @@ pins:
   # matrix when firmware calls ledcAttachPin/ledcAttach.
   GPIO23: { gpio: "gpio", bit: 23, functions: [{ type: gpio, peripheral: gpio }] }
   GPIO21: { gpio: "gpio", bit: 21 }
-  GPIO22: { gpio: "gpio", bit: 22 }
+  # J3 pin 12. GPIO16 is available on this WROOM board and does not collide
+  # with the I2C BME280 smoke on GPIO21/GPIO22.
+  GPIO16:
+    gpio: "gpio"
+    bit: 16
+    functions: [{ type: uart, peripheral: "uart1", role: tx }]
   # J2 pin 3 / VP, SENSOR_VP, ADC1_CH0.
   GPIO36: { gpio: "gpio", bit: 36 }
   # J2 pins 9/10: GPIO25/DAC1 and GPIO26/DAC2. The analog outputs live in
@@ -50,6 +55,15 @@ peripherals:
     size: "256B"
     config:
       debug_schema: "../peripherals/esp32/uart0.yaml"
+
+  - id: "uart1"
+    type: "esp32_uart"
+    base_address: 0x3FF50000
+    size: "256B"
+    irq: 35
+    config:
+      echo_stdout: false
+      debug_schema: "../peripherals/esp32/uart1.yaml"
 
   - id: "gpio"
     type: "esp32_gpio"

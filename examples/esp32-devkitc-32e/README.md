@@ -1,22 +1,23 @@
-# ESP32-DevKitC-32E GPIO, UART0, BME280 I2C, RMT, ADC, DAC, and LEDC smokes
+# ESP32-DevKitC-32E GPIO, UART, BME280 I2C, RMT, ADC, DAC, and LEDC smokes
 
 **Demand rank:** ESP32 is rank 1 in the standing list (38% of reported MCU
-use). The current DAC smoke adds the stock `dacWrite` direct-output path to
-the existing board coverage. This is peripheral depth on the
-highest-demand family, not a new MCU target or board variant.
+use). This round adds the stock Arduino `Serial1` TX path, remapped to GPIO16 /
+J3 pin 12, to the exact DevKitC-32E board coverage. This is peripheral depth
+on the highest-demand family, not a new MCU target or board variant.
 
 ## Board and modeled scope
 
 The board is Espressif's exact **ESP32-DevKitC-32E** with an ESP32-WROOM-32E
 module and 4 MB flash. The narrow board profile exposes classic ESP32 GPIO,
-UART0 console, I2C0, and ADC1 channel 0. GPIO23 maps to J3 pin 2; it is a
-header pin, not a built-in LED. For a physical blink, connect an LED in series
-with a resistor from GPIO23 to GND.
+UART0 console, UART1 TX routed to GPIO16, I2C0, and ADC1 channel 0. GPIO23 maps
+to J3 pin 2; it is a header pin, not a built-in LED. For a physical blink,
+connect an LED in series with a resistor from GPIO23 to GND.
 
 | Board connection | MCU behavior | Smoke |
 | --- | --- | --- |
 | J3 pin 2 | GPIO23 | Base smoke toggles the output and requires at least 16 edges |
 | UART0 output | Serial console capture | Base smoke asserts `ESP32_DEVKITC32E_UART0_OK` |
+| J3 pin 12 | UART1 TX routed to GPIO16 | UART1 smoke sends `UUUUUUUU` at 115200 baud and requires GPIO16 edges |
 | J2 GPIO21/GPIO22 | I2C0 SDA/SCL | BME280 smoke reads sensor ID and temperature ADC data |
 | J2 pin 3 / VP (GPIO36) | ADC1 channel 0 | ADC smoke reads a 1650 mV potentiometer through `analogRead(36)` and expects 2047 at 12-bit resolution |
 | J3 pin 2 (GPIO23) | LEDC high-speed channel 0 PWM output | LEDC smoke runs 50 Hz, 14-bit PWM to an external SG90-class servo twin and requires committed duty plus GPIO edges |
@@ -51,9 +52,10 @@ and per-channel TX_END after the stream's reset interval. It does not model RX,
 or advancing APB FIFO pointers. This smoke exercises channels 0 and 1; channels
 2–7 use the same transmit path but do not have a smoke here. The pixels are
 external generic WS2812-compatible fixtures, not onboard DevKitC LEDs. The
-UART0 controller is modeled. The board's USB-to-UART bridge and the pin-level
-UART TX/RX waveforms are not, so console capture does not prove USB serial
-behavior or a signal at the board header. Wi-Fi/Bluetooth, SPI, timers, flash
+UART0 and UART1 TX controllers are modeled. UART1 RX and the board's
+USB-to-UART bridge are outside this profile; the UART1 test proves routed TX
+edges on GPIO16, while console capture does not prove USB serial behavior.
+Wi-Fi/Bluetooth, SPI, timers, flash
 boot behavior, and the 5 V power LED are outside these profiles. The LEDC
 profile does not claim general-purpose timer coverage. The base ESP32 descriptor
 still has zero-answering system stubs for I2S0, I2S1, and UHCI0; this board
@@ -149,6 +151,12 @@ smoke requires the channel-0 duty register value, at least two GPIO23 edges,
 and the success marker printed after the PWM setup returns successfully. A
 separate hosted `labwired_verify` result checks the same duty register and at
 least two GPIO23 edges; it does not assert servo angle.
+
+The UART1 acceptance firmware is
+[`firmware/src/uart1_smoke.cpp`](firmware/src/uart1_smoke.cpp). It remaps the
+UART1 TX output to GPIO16 / J3 pin 12 and sends repeated `U` bytes. The local
+test checks the console marker and at least 32 GPIO16 edges; the hosted
+verifier separately model-verifies GPIO16 transitions.
 
 ## Reproduce
 
@@ -255,3 +263,34 @@ void loop() {}
 GPIO26 / DAC2 is on J2 pin 10. The model drives the selected pin only when
 firmware enables the DAC channel. Smoke logs and model-verification evidence
 are committed under `evidence/dac/`.
+
+Run the UART1 TX smoke from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-devkitc-32e-uart1 \
+  --script examples/esp32-devkitc-32e/uart1-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-uart1.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/uart1 \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-uart1-smoke.sh
+```
+
+Copy-paste Arduino example for a UART sensor or module whose RX connects to J3
+pin 12 / GPIO16 (connect grounds; this profile tests UART1 TX only):
+
+```cpp
+#include <Arduino.h>
+
+void setup() {
+  Serial1.begin(115200, SERIAL_8N1, -1, 16);  // RX unused, TX=GPIO16
+  Serial1.println("sensor request");
+}
+
+void loop() {}
+```
+
+The model covers UART1 TX output routed to GPIO16. It does not model an
+external UART receiver or UART1 RX. The exact board availability check is in
+[`evidence/uart1/vendor-status.md`](evidence/uart1/vendor-status.md).
+Hosted oracle details, including the non-blocking assumed-power gap, are in
+[`evidence/uart1/hosted-verification.md`](evidence/uart1/hosted-verification.md).

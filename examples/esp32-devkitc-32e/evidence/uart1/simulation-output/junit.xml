@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="1.608368">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="28f882db3b4c06296f811d2d3046d0fdde25ca271f58c55a3332a3b09c846350"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="1.608368">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: ESP32_DEVKITC32E_UART1_TX_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpio:16 &gt;= 32 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

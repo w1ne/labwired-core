@@ -1,0 +1,61 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      2148486301,
+      1073469424,
+      0,
+      181,
+      3007315967,
+      1061159244,
+      0,
+      181,
+      2148384302,
+      1073469360,
+      0,
+      0,
+      1073472788,
+      0,
+      262176,
+      1073469391
+    ],
+    "pc": 1074288582,
+    "ps": 262176,
+    "window_base": 14,
+    "window_start": 22008,
+    "vecbase": 1074266112
+  },
+  "steps_executed": 9000000,
+  "cycles": 9000000,
+  "instructions": 9000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 9000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 9000000
+    }
+  },
+  "limits": {
+    "max_steps": 9000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "28f882db3b4c06296f811d2d3046d0fdde25ca271f58c55a3332a3b09c846350",
+  "config": {
+    "firmware": "examples/esp32-devkitc-32e/firmware/.pio/build/devkitc32e_uart1/firmware.elf",
+    "system": "examples/esp32-devkitc-32e/../../configs/systems/esp32-devkitc-32e-uart1.yaml",
+    "script": "examples/esp32-devkitc-32e/uart1-smoke.yaml"
+  }
+}

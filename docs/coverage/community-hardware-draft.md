@@ -9,12 +9,14 @@ reviewed before publication.
 
 ### ESP32-DevKitC-32E / ESP32-WROOM-32E
 
-The board profile boots Arduino firmware and exercises UART0, GPIO, I2C with a
-BME280, RMT output, ADC1 channel 0, and LEDC PWM. The preceding ADC smoke
+The board profile boots Arduino firmware and exercises UART0, UART1 TX, GPIO,
+I2C with a BME280, RMT output, ADC1 channel 0, DAC, and LEDC PWM. The ADC smoke
 checks `analogRead(36)` on GPIO36 / ADC1_CH0 with a potentiometer fixture; a
-1650 mV input returns 2047 at 12-bit resolution. This round adds stock
+1650 mV input returns 2047 at 12-bit resolution. The LEDC smoke uses stock
 `ledcAttach` / `ledcWrite` output on GPIO23 / J3 pin 2 for an external
-SG90-class servo fixture.
+SG90-class servo fixture. This round adds stock `Serial1` TX routed to GPIO16 /
+J3 pin 12 at 115200 baud; it sends `UUUUUUUU` and the smoke requires signal
+edges on that header pin.
 
 Espressif's [current DevKitC V4 guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32/esp32-devkitc/user_guide.html)
 lists the exact 32E board and maps J2 pin 3 / VP to GPIO36 / ADC1_CH0. The
@@ -69,6 +71,24 @@ The live board status and in-stock check is in
 [`vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/ledc/vendor-status.md).
 The smoke asserts the channel-0 duty shadow and GPIO23 edges. The SG90 twin is
 not evidence of physical servo torque, current draw, or mechanical motion.
+
+Copy-paste Arduino example for a UART sensor or module whose RX connects to J3
+pin 12 / GPIO16 (connect grounds; this profile tests UART1 TX only):
+
+```cpp
+#include <Arduino.h>
+
+void setup() {
+  Serial1.begin(115200, SERIAL_8N1, -1, 16);  // RX unused, TX=GPIO16
+  Serial1.println("sensor request");
+}
+
+void loop() {}
+```
+
+The smoke sends repeated `U` bytes and checks GPIO16 edges. The exact board
+availability check for this round is in
+[`vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/uart1/vendor-status.md).
 
 Run it against the committed board profile with:
 
