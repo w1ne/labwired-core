@@ -740,7 +740,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn texts_seen_clear_reprint_blink_does_not_grow_ring() {
         let mut dev = Lcd1602::new(0x27);
@@ -774,7 +773,6 @@ mod tests {
             dev.texts_seen
         );
     }
-
 
     #[test]
     fn set_ddram_address_0xc0_moves_to_row_one() {
