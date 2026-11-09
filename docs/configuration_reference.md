@@ -543,6 +543,7 @@ canonical `type:`; the table below is rendered from that file by
 | `mq-6` | Analog | Hanwei MQ-6 LPG/propane semiconductor gas sensor module (AOUT on ADC) |
 | `ntc-thermistor` | Analog | 10 kΩ NTC + voltage divider on an ADC channel |
 | `potentiometer` | Analog | 3-pin linear potentiometer on an ADC channel (rotary or slide) |
+| `rain-sensor` | Analog | Rain drop plate + LM393 module (AO on ADC; wetter → lower voltage) |
 | `soil-moisture` | Analog | Capacitive soil moisture probe module (AOUT on ADC; wetter → lower voltage) |
 | `sound-sensor` | Analog | Analog microphone sound-level module (A0 on ADC) |
 | `tmp36` | Analog | Analog temperature sensor, 10 mV/°C with 500 mV at 0 °C |

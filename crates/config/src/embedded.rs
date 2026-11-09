@@ -329,6 +329,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/soil_moisture.yaml"),
     ),
     (
+        &["rain-sensor", "rain_sensor"],
+        include_str!("../../../configs/devices/rain_sensor.yaml"),
+    ),
+    (
         &["lm393-moisture", "lm393_moisture"],
         include_str!("../../../configs/devices/lm393_moisture.yaml"),
     ),
