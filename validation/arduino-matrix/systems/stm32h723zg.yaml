@@ -1,0 +1,30 @@
+# Arduino matrix system — NUCLEO-H723ZG (MB1364). INA219 on Wire for L3,
+# MAX31855 on SPI for L4; L0–L2 ignore them.
+# L5: A0 (PA3 = ADC1_INP15, variant PeripheralPins.c) held at 1651 mV. The H7
+# ADC runs at 16 bits against VREF+ = 3.3 V and stm32duino maps to the 10-bit
+# Arduino default, so stock analogRead(A0) must return exactly 512.
+name: "arduino-matrix-stm32h723zg"
+chip: "../../../configs/chips/stm32h723zg.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on stm32duino's Wire = I2C1
+  # (Arduino D15/D14 = PB8/PB9 on the NUCLEO_H723ZG variant).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on stm32duino's SPI = SPI1 (Arduino
+  # D13/D12/D11 = PA5/PA6/PB5). Single-device bus: CS soft-ignored by
+  # SpiDevice v1 broadcast.
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PD14"
+peripherals:
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40022000
+    config:
+      input_mv: { 15: 1651 }
+board_io: []

@@ -23,6 +23,10 @@
 // (SOC_GPIO_PIN_COUNT + 18), and stock analogWrite ignores pins
 // >= SOC_GPIO_PIN_COUNT. Use a plain header GPIO so LEDC really runs.
 #    define LW_PWM_PIN 2
+#  elif defined(ARDUINO_NUCLEO_H723ZG)
+// NUCLEO-H723ZG LD1 is PB0 = TIM1_CH2N, whose H7 complementary output is not
+// routed yet. Exercise TIM2_CH1 on PA0, a board header pin with AF1.
+#    define LW_PWM_PIN PA0
 #  elif defined(ARDUINO_NUCLEO_F446RE)
 // NUCLEO-F446RE LD2 is PA5 = DAC_OUT2 too; stock analogWrite would take the
 // DAC path (not modelled). Use TIM2_CH1 on PA0 (AF1).

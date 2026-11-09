@@ -126,6 +126,110 @@ impl Peripheral for Stm32F4Syscfg {
     }
 }
 
+/// STM32H7 SYSCFG registers needed by reset-clock setup and EXTI routing.
+///
+/// RM0468 §12.4: PMCR is at 0x04, EXTICR1..4 at 0x08..0x14, and CCCSR at
+/// 0x20. The compensation cell's READY flag follows EN immediately in this
+/// digital model; the analog calibration settling and CCVR values are not
+/// simulated. Unimplemented register offsets read as zero and are censused.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct Stm32H7Syscfg {
+    pmcr: u32,
+    exticr: [u32; 4],
+    cccsr: u32,
+}
+
+impl Stm32H7Syscfg {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The GPIO port index (0 = A) `SYSCFG_EXTICRx` routes to EXTI `line`.
+    pub fn exti_port(&self, line: u8) -> Option<u8> {
+        if line >= 16 {
+            return None;
+        }
+        let word = self.exticr[usize::from(line / 4)];
+        Some(((word >> (u32::from(line % 4) * 4)) & 0xF) as u8)
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x04 => self.pmcr,
+            0x08 => self.exticr[0],
+            0x0C => self.exticr[1],
+            0x10 => self.exticr[2],
+            0x14 => self.exticr[3],
+            // CCCSR.EN/CS/HSLV are writable; READY is the modelled status bit.
+            0x20 => self.cccsr | (((self.cccsr & 1) != 0) as u32) << 8,
+            _ => {
+                crate::census_reg!("syscfg:Stm32H7Syscfg", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // PMCR: FMP[7:0], BOOSTE[8], EPIS[23:21], PA0SO..PC3SO[27:24].
+            0x04 => self.pmcr = value & 0x0FE0_01FF,
+            0x08 => self.exticr[0] = value & 0xFFFF,
+            0x0C => self.exticr[1] = value & 0xFFFF,
+            0x10 => self.exticr[2] = value & 0xFFFF,
+            0x14 => self.exticr[3] = value & 0xFFFF,
+            // READY is read-only and follows EN without analog settling time.
+            0x20 => self.cccsr = value & ((1 << 0) | (1 << 1) | (1 << 16)),
+            _ => crate::census_reg!("syscfg:Stm32H7Syscfg", offset, "write"),
+        }
+    }
+}
+
+impl Peripheral for Stm32H7Syscfg {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = self.read_reg(offset & !3);
+        Ok(((reg >> ((offset % 4) * 8)) & 0xFF) as u8)
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg_offset = offset & !3;
+        let shift = (offset % 4) * 8;
+        // READY is read-only; don't feed its derived read value into CCCSR.
+        let mut reg = self.read_reg(reg_offset) & !(1 << 8);
+        reg &= !(0xFF << shift);
+        reg |= u32::from(value) << shift;
+        self.write_reg(reg_offset, reg);
+        Ok(())
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_reg(offset & !3))
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write_reg(offset & !3, value);
+        Ok(())
+    }
+
+    fn exti_line_source(&self, line: u8) -> Option<u8> {
+        self.exti_port(line)
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
+        Some(self)
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 /// STM32L0 SYSCFG (RM0367 §10; the COMP CSRs share the window): the same
 /// `SYSCFG_EXTICR1..4` line-source mux as the F4, at the same offsets
 /// (0x08..0x14), around L0-specific configuration words.
@@ -308,7 +412,7 @@ mod l0_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::Stm32F4Syscfg;
+    use super::{Stm32F4Syscfg, Stm32H7Syscfg};
     use crate::Peripheral;
 
     #[test]
@@ -341,5 +445,23 @@ mod tests {
         assert_eq!(s.read_u32(0x20).unwrap() & (1 << 8), 0);
         s.write_u32(0x20, 1).unwrap();
         assert_eq!(s.read_u32(0x20).unwrap(), 0x101);
+    }
+
+    #[test]
+    fn h7_compensation_ready_tracks_enable_and_exti_mux_is_live() {
+        let mut s = Stm32H7Syscfg::new();
+        assert_eq!(s.read_u32(0x20).unwrap(), 0, "reset CCCSR");
+        s.write_u32(0x20, 1 << 8).unwrap(); // READY is read-only
+        assert_eq!(s.read_u32(0x20).unwrap(), 0, "software cannot set READY");
+        s.write_u32(0x20, 1).unwrap(); // EN; digital model settles immediately
+        assert_eq!(s.read_u32(0x20).unwrap(), 0x101, "EN + READY");
+        s.write_u32(0x20, 0).unwrap();
+        assert_eq!(s.read_u32(0x20).unwrap(), 0, "disable clears READY");
+
+        // EXTICR2 line 5 -> GPIOC.
+        s.write_u32(0x0C, 2 << 4).unwrap();
+        assert_eq!(s.exti_line_source(5), Some(2));
+        assert_eq!(s.exti_line_source(4), Some(0));
+        assert_eq!(s.exti_line_source(16), None);
     }
 }
