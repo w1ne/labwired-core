@@ -19,6 +19,7 @@
 //! family, so those headers are the authoritative machine-readable source and
 //! the reason this chip has no `debug_schema` entries.
 
+pub mod adc_s0;
 pub mod adc_s1;
 pub mod busalloc;
 pub mod cmu;

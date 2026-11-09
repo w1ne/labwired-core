@@ -81,3 +81,13 @@ peripherals:
   type: pythonperipheral
   bus: sysbus
   base_address: 1073741832
+# Series-0 ADC0 (EFM32LG), declared by the gecko_sdk gsdk_4.4 device header
+# efm32lg995f256.h: ADC0_BASE 0x40002000, ADC0_IRQn 7. The import dropped it
+# because Renode has no Series-0 ADC model. SINGLECTRL.INPUTSEL CHn picks
+# the channel; the vendor series0/adc examples put CH6/CH7 on PD6/PD7. The
+# CMU here is a stub, so there is no clock gate.
+- id: adc0
+  type: efm32s0_adc
+  base_address: 0x40002000
+  size: 1KB
+  irq: 7
