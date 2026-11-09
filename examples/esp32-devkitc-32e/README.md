@@ -64,7 +64,7 @@ The model scales the code against a 3.3 V reference and exposes the voltage
 through its analog output probe; code 128 is 1656 mV. DMA stream output and the
 cosine generator remain outside this profile. The firmware smoke programs DAC1
 with Arduino's `dacWrite` API and checks its RTC_IO DAC register bits. A focused
-model unit test checks voltage scaling and disabled-channel behavior.
+model unit test asserts voltage scaling and disabled-channel behavior.
 
 ## Copy-paste firmware example
 
