@@ -830,8 +830,8 @@ pub trait Peripheral: std::fmt::Debug + Send {
 
     /// GPIO capability: bind pad `pin` to `line` of a timer's output wire
     /// `cell`, live while the pad selects peripheral function `function`
-    /// (SAM PMUX: E = 4, F = 5). A port without that selector refuses it and
-    /// returns `false`.
+    /// (SAM PMUX: E = 4, F = 5; STM32 V2 AFRx nibble, live while MODER = AF).
+    /// A port without that selector refuses it and returns `false`.
     fn bind_timer_output_pad_function(
         &mut self,
         _cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,

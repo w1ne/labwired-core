@@ -77,7 +77,8 @@ store gates TIMER0 off and `millis()` stops.
 | Oracle depth | ~~ACK-only L3 / weak L5–L6 / TWAI STATUS cosplay~~ | **Hardened 2026-08-12** — L3 exact INA219 regs (where RX works); L5 deterministic pairs; L6 mid duty left on; L8 TWAI ID+data |
 | L3 STM32 master-RX | Partial on some cores | INA219 `start()` + RP2040 I2C START/STOP; F407 may still take ACK-only path |
 | L5 fixed-source | Many HAL paths still return 0 or DR+1 | Prefer Arduino→ADC model wiring for 3.0/3.3 → 3723; current oracle requires deterministic pairs |
-| L6 PWM edges | Not gated fleet-wide | TIM/LEDC→pad routing incomplete; `pwm_watch` opt-in only |
+| L6 PWM edges | Not gated fleet-wide | TIM/LEDC→pad routing incomplete; `pwm_watch` opt-in only. STM32 F1 and F4 (`input_capture: stm32f4`) timers drive their AF pads; F401/F407/F411/F446 gate L6 (2026-11-09) |
+| STM32 timer kernel clock | PWM frequency wrong where APB1 timers ≠ CPU clock | The timer model counts CPU cycles. F407 (168 MHz, APB1 timers 84 MHz) and F446 (180 MHz, 90 MHz) run stock `analogWrite` at 2 kHz instead of 1 kHz; needs an RCC-derived kernel divider |
 | _(fleet)_ | Arduino **L0–L8** **133 pass / 11 skip / 0 fail** | Zephyr L4+; C3 TWAI model; WBA ADC |
 
 

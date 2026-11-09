@@ -1,0 +1,21 @@
+# Arduino matrix system — NUCLEO-F446RE (MB1136). INA219 on Wire for L3,
+# MAX31855 on SPI for L4; L0–L2 ignore them.
+name: "arduino-matrix-stm32f446re"
+chip: "examples/nucleo-f446re/evidence/arduino-matrix/controls/no_pllsai/chip.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on stm32duino's Wire = I2C1
+  # (Arduino D15/D14 = PB8/PB9 on the NUCLEO_F446RE variant).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on stm32duino's SPI = SPI1 (Arduino
+  # D13/D12/D11 = PA5/PA6/PA7). Single-device bus: CS soft-ignored by
+  # SpiDevice v1 broadcast.
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PB6"
+board_io: []

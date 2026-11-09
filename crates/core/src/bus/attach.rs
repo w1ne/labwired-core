@@ -2896,53 +2896,6 @@ impl SystemBus {
             ("tim4", 'b', 8, 2, "TIM4_CH3"),
             ("tim4", 'b', 9, 3, "TIM4_CH4"),
         ];
-        // (timer, port, pin, AF, channel 0-based, func)
-        const F4: &[(&str, char, u8, u8, u8, &str)] = &[
-            ("tim1", 'a', 8, 1, 0, "TIM1_CH1"),
-            ("tim1", 'a', 9, 1, 1, "TIM1_CH2"),
-            ("tim1", 'a', 10, 1, 2, "TIM1_CH3"),
-            ("tim1", 'a', 11, 1, 3, "TIM1_CH4"),
-            ("tim1", 'e', 9, 1, 0, "TIM1_CH1"),
-            ("tim1", 'e', 11, 1, 1, "TIM1_CH2"),
-            ("tim1", 'e', 13, 1, 2, "TIM1_CH3"),
-            ("tim1", 'e', 14, 1, 3, "TIM1_CH4"),
-            ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
-            ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
-            ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),
-            ("tim2", 'a', 1, 1, 1, "TIM2_CH2"),
-            ("tim2", 'b', 3, 1, 1, "TIM2_CH2"),
-            ("tim2", 'a', 2, 1, 2, "TIM2_CH3"),
-            ("tim2", 'b', 10, 1, 2, "TIM2_CH3"),
-            ("tim2", 'a', 3, 1, 3, "TIM2_CH4"),
-            ("tim3", 'a', 6, 2, 0, "TIM3_CH1"),
-            ("tim3", 'b', 4, 2, 0, "TIM3_CH1"),
-            ("tim3", 'c', 6, 2, 0, "TIM3_CH1"),
-            ("tim3", 'a', 7, 2, 1, "TIM3_CH2"),
-            ("tim3", 'b', 5, 2, 1, "TIM3_CH2"),
-            ("tim3", 'c', 7, 2, 1, "TIM3_CH2"),
-            ("tim3", 'b', 0, 2, 2, "TIM3_CH3"),
-            ("tim3", 'c', 8, 2, 2, "TIM3_CH3"),
-            ("tim3", 'b', 1, 2, 3, "TIM3_CH4"),
-            ("tim3", 'c', 9, 2, 3, "TIM3_CH4"),
-            ("tim4", 'b', 6, 2, 0, "TIM4_CH1"),
-            ("tim4", 'd', 12, 2, 0, "TIM4_CH1"),
-            ("tim4", 'b', 7, 2, 1, "TIM4_CH2"),
-            ("tim4", 'd', 13, 2, 1, "TIM4_CH2"),
-            ("tim4", 'b', 8, 2, 2, "TIM4_CH3"),
-            ("tim4", 'd', 14, 2, 2, "TIM4_CH3"),
-            ("tim4", 'b', 9, 2, 3, "TIM4_CH4"),
-            ("tim4", 'd', 15, 2, 3, "TIM4_CH4"),
-            ("tim5", 'a', 0, 2, 0, "TIM5_CH1"),
-            ("tim5", 'a', 1, 2, 1, "TIM5_CH2"),
-            ("tim5", 'a', 2, 2, 2, "TIM5_CH3"),
-            ("tim5", 'a', 3, 2, 3, "TIM5_CH4"),
-            ("tim9", 'a', 2, 3, 0, "TIM9_CH1"),
-            ("tim9", 'a', 3, 3, 1, "TIM9_CH2"),
-            ("tim9", 'e', 5, 3, 0, "TIM9_CH1"),
-            ("tim9", 'e', 6, 3, 1, "TIM9_CH2"),
-            ("tim10", 'b', 8, 3, 0, "TIM10_CH1"),
-            ("tim11", 'b', 9, 3, 0, "TIM11_CH1"),
-        ];
 
         use crate::peripherals::timer::TimerInputStage;
         // Timer by name (`tim1_pwm`: several chip yamls suffix the advanced
@@ -2975,7 +2928,7 @@ impl SystemBus {
                     }
                 }
             }
-            for &(tim, p, pin, af, ch, func) in F4 {
+            for &(tim, p, pin, af, ch, func) in STM32F4_TIMER_AF_PADS {
                 if p == port {
                     if let Some((t_idx, TimerInputStage::F4)) = timer(self, tim) {
                         routes.push((t_idx, pin, Some(af), ch, func));
@@ -3058,7 +3011,7 @@ impl SystemBus {
     /// output reads — and the logic analyzer records — the PWM / output-compare
     /// waveform the timer generates, instead of the idle output latch.
     ///
-    /// F1 only: the pads are the fixed DEFAULT map (RM0008 Rev 21 §9.3.7
+    /// F1: the pads are the fixed DEFAULT map (RM0008 Rev 21 §9.3.7
     /// Tables 43-46, `AFIO_MAPR` remaps not decoded — the same honest gap the
     /// SPI/I²C/USART/capture tables carry): TIM1 CH1-4 = PA8-PA11, TIM2 CH1-4
     /// = PA0-PA3, TIM3 CH1-4 = PA6/PA7/PB0/PB1, TIM4 CH1-4 = PB6-PB9. A pad
@@ -3156,6 +3109,42 @@ impl SystemBus {
             if bound {
                 // A pad can carry it: the timer starts generating its outputs.
                 self.peripherals[t_idx].dev.timer_output_lines(true);
+            }
+        }
+        // F4: an F2/F4-generation timer (`input_capture: stm32f4`) reaches
+        // its pads through the GPIO AF mux ([`STM32F4_TIMER_AF_PADS`]); the
+        // pad carries the channel while MODER = AF and AFRx selects the
+        // timer's AF number (RM0390 §7.3.2 / RM0368 §8.3.2).
+        if remap.is_none() {
+            for &(tim, port, pin, af, ch, func) in STM32F4_TIMER_AF_PADS {
+                let Some(t_idx) = self
+                    .find_peripheral_index_by_name(tim)
+                    .or_else(|| self.find_peripheral_index_by_name(&format!("{tim}_pwm")))
+                else {
+                    continue;
+                };
+                if self.peripherals[t_idx].dev.timer_input_stage() != Some(TimerInputStage::F4) {
+                    continue;
+                }
+                let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}"))
+                else {
+                    continue;
+                };
+                let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
+                    continue;
+                };
+                if self.peripherals[gpio_idx]
+                    .dev
+                    .bind_timer_output_pad_function(
+                        &lines,
+                        pin,
+                        u32::from(af),
+                        usize::from(ch),
+                        func,
+                    )
+                {
+                    self.peripherals[t_idx].dev.timer_output_lines(true);
+                }
             }
         }
     }
@@ -4457,6 +4446,59 @@ fn edge_sampling_unsupported(controller: &str, engine: &str) -> anyhow::Error {
          implements it (STM32 classic/FIFO SPI)."
     )
 }
+
+/// STM32F4 timer channel pads by alternate function: (timer, port, pin, AF,
+/// channel 0-based, func). STM32F401 DS9716 / F411 DS10314 / F405-7 DS8626 /
+/// F446 DS10693 "Alternate function mapping": AF1 = TIM1/TIM2, AF2 =
+/// TIM3/TIM4/TIM5, AF3 = TIM9/TIM10/TIM11. Bound only for a timer whose chip
+/// yaml declares `input_capture: stm32f4` — V2 GPIO registers alone do NOT
+/// imply this map (L4/G4/H5/U5 move several of these pads).
+const STM32F4_TIMER_AF_PADS: &[(&str, char, u8, u8, u8, &str)] = &[
+    ("tim1", 'a', 8, 1, 0, "TIM1_CH1"),
+    ("tim1", 'a', 9, 1, 1, "TIM1_CH2"),
+    ("tim1", 'a', 10, 1, 2, "TIM1_CH3"),
+    ("tim1", 'a', 11, 1, 3, "TIM1_CH4"),
+    ("tim1", 'e', 9, 1, 0, "TIM1_CH1"),
+    ("tim1", 'e', 11, 1, 1, "TIM1_CH2"),
+    ("tim1", 'e', 13, 1, 2, "TIM1_CH3"),
+    ("tim1", 'e', 14, 1, 3, "TIM1_CH4"),
+    ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 1, 1, 1, "TIM2_CH2"),
+    ("tim2", 'b', 3, 1, 1, "TIM2_CH2"),
+    ("tim2", 'a', 2, 1, 2, "TIM2_CH3"),
+    ("tim2", 'b', 10, 1, 2, "TIM2_CH3"),
+    ("tim2", 'a', 3, 1, 3, "TIM2_CH4"),
+    ("tim3", 'a', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'b', 4, 2, 0, "TIM3_CH1"),
+    ("tim3", 'c', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'a', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 5, 2, 1, "TIM3_CH2"),
+    ("tim3", 'c', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 0, 2, 2, "TIM3_CH3"),
+    ("tim3", 'c', 8, 2, 2, "TIM3_CH3"),
+    ("tim3", 'b', 1, 2, 3, "TIM3_CH4"),
+    ("tim3", 'c', 9, 2, 3, "TIM3_CH4"),
+    ("tim4", 'b', 6, 2, 0, "TIM4_CH1"),
+    ("tim4", 'd', 12, 2, 0, "TIM4_CH1"),
+    ("tim4", 'b', 7, 2, 1, "TIM4_CH2"),
+    ("tim4", 'd', 13, 2, 1, "TIM4_CH2"),
+    ("tim4", 'b', 8, 2, 2, "TIM4_CH3"),
+    ("tim4", 'd', 14, 2, 2, "TIM4_CH3"),
+    ("tim4", 'b', 9, 2, 3, "TIM4_CH4"),
+    ("tim4", 'd', 15, 2, 3, "TIM4_CH4"),
+    ("tim5", 'a', 0, 2, 0, "TIM5_CH1"),
+    ("tim5", 'a', 1, 2, 1, "TIM5_CH2"),
+    ("tim5", 'a', 2, 2, 2, "TIM5_CH3"),
+    ("tim5", 'a', 3, 2, 3, "TIM5_CH4"),
+    ("tim9", 'a', 2, 3, 0, "TIM9_CH1"),
+    ("tim9", 'a', 3, 3, 1, "TIM9_CH2"),
+    ("tim9", 'e', 5, 3, 0, "TIM9_CH1"),
+    ("tim9", 'e', 6, 3, 1, "TIM9_CH2"),
+    ("tim10", 'b', 8, 3, 0, "TIM10_CH1"),
+    ("tim11", 'b', 9, 3, 0, "TIM11_CH1"),
+];
 
 // WCH CH32V003 timer pads, shared by the output and input-capture
 // routers. The register block is the F1 timer; only the pads differ, and AFIO_PCFR1 moves them, so every row names the remap

@@ -3091,6 +3091,12 @@ impl crate::Peripheral for GpioPort {
                 self.pad_routes.bind(cell, pin, Some(function), line, func);
                 true
             }
+            // STM32 V2 port (F4 AF table): live while MODER = AF and the
+            // pad's AFRx nibble selects `function`.
+            GpioFamily::Stm32V2(_) if pin < 16 && function < 16 => {
+                self.pad_routes.bind(cell, pin, Some(function), line, func);
+                true
+            }
             _ => false,
         }
     }

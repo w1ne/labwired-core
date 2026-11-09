@@ -170,6 +170,10 @@ boards:
     budget_reason: "Nucleo L0~0.84M L2~0.26M; LD2=PA5"
     led_watch: "gpioa:5"
     led_min_edges: 2
+    # L6: analogWrite(LED_BUILTIN = PA5) is TIM2_CH1 on AF1 (F401 has no
+    # DAC), 1 kHz on the pad: 84,000 cycles at 84 MHz, measured 2026-11-09.
+    pwm_watch: "gpioa:5"
+    pwm_min_edges: 20
     family: stm32
     sketches_skip: [L8_can]
     sketches_skip_reason:
@@ -184,13 +188,32 @@ boards:
     led_watch: "gpioc:13"
     led_min_edges: 2
     # L6 drives TIM2_CH1 on PA0 (PC13 has no timer channel, so analogWrite
-    # would fall back to digitalWrite). TIM2 reaches PWM1/CC1E with PA0 on
-    # AF1, but no pwm_watch: there is no STM32 TIM OC->pad routing on main
-    # yet (PROBLEMS.md "L6 PWM edges"), so PA0 shows one edge, not a wave.
+    # would fall back to digitalWrite). TIM2_CH1 reaches PA0 on AF1: 1 kHz,
+    # 96,000 cycles at 96 MHz, measured 2026-11-09.
+    pwm_watch: "gpioa:0"
+    pwm_min_edges: 20
     family: stm32
     sketches_skip: [L8_can]
     sketches_skip_reason:
       L8_can: "STM32F411 has no CAN peripheral"
+
+  - id: stm32f446re
+    chip: stm32f446re
+    system: systems/stm32f446re.yaml
+    # Pinned like CI (core-arduino-matrix-smoke maps stm32* to 19.7.1):
+    # ststm32 20.0.0 makes SPI.begin() a no-op and L4 spins on a null SPI.
+    pio: { platform: ststm32@19.7.1, board: nucleo_f446re, framework: arduino }
+    max_steps: 10000000
+    budget_reason: "NUCLEO-F446RE 180 MHz, measured 2026-11-09: L0 0.18M, L2 0.54M, L3 0.73M, L7 0.72M, L6 5.58M"
+    # LD2 = PA5 (UM1724 §6.4).
+    led_watch: "gpioa:5"
+    led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0 (AF1), not LD2/PA5: PA5 is DAC_OUT2 as well,
+    # and stock analogWrite prefers the DAC, which this chip does not model.
+    pwm_watch: "gpioa:0"
+    pwm_min_edges: 20
+    family: stm32
+    notes: "Stock stm32duino NUCLEO_F446RE (HSI PLL 180 MHz + over-drive); L8 bxCAN1 loopback"
 
   - id: stm32f407
     chip: stm32f407
@@ -200,6 +223,12 @@ boards:
     budget_reason: "Disco L0~1.7M L2~0.5M; green LED PD12"
     led_watch: "gpiod:12"
     led_min_edges: 2
+    # L6: analogWrite(LED_BUILTIN = PD12) is TIM4_CH1 on AF2. The pad toggles
+    # at 50 % duty but at 2 kHz, not 1 kHz (84,000 cycles at 168 MHz,
+    # measured 2026-11-09): the timer model counts at the CPU clock, and
+    # TIM4 really runs at 2 x APB1 = 84 MHz. Edges gated, frequency not.
+    pwm_watch: "gpiod:12"
+    pwm_min_edges: 20
     family: stm32
     # L8_can: bxCAN1 loopback (chip yaml + RM0090 APB1ENR bit 25)
 

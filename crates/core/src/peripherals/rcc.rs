@@ -482,21 +482,57 @@ impl RccModel for F0Rcc {
 #[derive(Debug, Default, serde::Serialize)]
 pub struct F4Rcc {
     cr: u32,
-    pllcfgr: u32,  // 0x04
-    cfgr: u32,     // 0x08
-    cir: u32,      // 0x0C
-    ahbenr: u32,   // AHB1ENR 0x30
-    ahb2enr: u32,  // 0x34
-    apb1enr: u32,  // 0x40
-    apb2enr: u32,  // 0x44
-    ahbrstr: u32,  // AHB1RSTR 0x10
-    apb1rstr: u32, // 0x20
-    apb2rstr: u32, // 0x24
-    csr: u32,      // 0x74 — LSION bit0 → LSIRDY bit1
+    pllcfgr: u32,    // 0x04
+    cfgr: u32,       // 0x08
+    cir: u32,        // 0x0C
+    ahbenr: u32,     // AHB1ENR 0x30
+    ahb2enr: u32,    // 0x34
+    apb1enr: u32,    // 0x40
+    apb2enr: u32,    // 0x44
+    ahbrstr: u32,    // AHB1RSTR 0x10
+    apb1rstr: u32,   // 0x20
+    apb2rstr: u32,   // 0x24
+    csr: u32,        // 0x74 — LSION bit0 → LSIRDY bit1
+    plli2scfgr: u32, // 0x84
+    // F42x/F446 only (`pllsai: true`): PLLSAICFGR 0x88, DCKCFGR 0x8C,
+    // DCKCFGR2 0x94 (RM0390 §6.3.24/25/28).
+    pllsaicfgr: u32,
+    dckcfgr: u32,
+    dckcfgr2: u32,
     // Per-part ENR writable masks (silicon-pinned); 0xFFFF_FFFF = unmasked.
     ahb1_mask: u32,
     apb1_mask: u32,
     apb2_mask: u32,
+    pllsai: bool,
+}
+
+/// RCC_CR.PLLI2SON (bit 26) → PLLI2SRDY (bit 27), on every F4 (RM0368 §6.3.1,
+/// RM0090 §6.3.1, RM0390 §6.3.1).
+const F4_CR_PLLI2S: (u32, u32) = (26, 27);
+/// RCC_CR.PLLSAION (bit 28) → PLLSAIRDY (bit 29), F42x/F446 only (RM0390
+/// §6.3.1); reserved on F401/F405/F407.
+const F4_CR_PLLSAI: (u32, u32) = (28, 29);
+
+impl F4Rcc {
+    /// The classic HSI/HSE/PLL ready rule plus the F4 PLLI2S (and, on a part
+    /// that has it, PLLSAI) lock: each ON bit auto-sets its RDY bit.
+    fn cr_ready(&self, value: u32) -> u32 {
+        let mut cr = classic_cr_ready(value);
+        let mut plls = vec![F4_CR_PLLI2S];
+        if self.pllsai {
+            plls.push(F4_CR_PLLSAI);
+        } else {
+            cr &= !(1 << F4_CR_PLLSAI.0 | 1 << F4_CR_PLLSAI.1);
+        }
+        for (on, rdy) in plls {
+            if cr & (1 << on) != 0 {
+                cr |= 1 << rdy;
+            } else {
+                cr &= !(1 << rdy);
+            }
+        }
+        cr
+    }
 }
 
 impl F4Rcc {
@@ -509,6 +545,10 @@ impl F4Rcc {
             // PLLCFGR reset = 0x24003010 (RM0090 §6.3.2) — the factory default
             // PLL config word; firmware reads it back before reconfiguring.
             pllcfgr: 0x2400_3010,
+            // PLLI2SCFGR / PLLSAICFGR resets per ST's STM32F401x / STM32F446x
+            // SVDs (resetValue 0x20003000 / 0x24003000).
+            plli2scfgr: 0x2000_3000,
+            pllsaicfgr: 0x2400_3000,
             ahb1_mask: 0xFFFF_FFFF,
             apb1_mask: 0xFFFF_FFFF,
             apb2_mask: 0xFFFF_FFFF,
@@ -558,6 +598,10 @@ impl RccModel for F4Rcc {
             0x40 => self.apb1enr,
             0x44 => self.apb2enr,
             0x74 => self.csr,
+            0x84 => self.plli2scfgr,
+            0x88 if self.pllsai => self.pllsaicfgr,
+            0x8C if self.pllsai => self.dckcfgr,
+            0x94 if self.pllsai => self.dckcfgr2,
             _ => {
                 crate::census_reg!("rcc:F4Rcc", offset, "read");
                 0
@@ -566,7 +610,7 @@ impl RccModel for F4Rcc {
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            0x00 => self.cr = classic_cr_ready(value),
+            0x00 => self.cr = self.cr_ready(value),
             // PLLCFGR writable = PLLM/PLLN/PLLP/PLLSRC/PLLQ = 0x7F43_7FFF
             // (silicon-confirmed on F407). Reserved bits read 0.
             0x04 => self.pllcfgr = value & 0x7F43_7FFF,
@@ -611,6 +655,13 @@ impl RccModel for F4Rcc {
                 };
                 self.csr = flags | control;
             }
+            // Stored as written: the I2S/SAI kernel clocks they select are not
+            // modelled, so the field layouts differ per part but nothing
+            // downstream reads them.
+            0x84 => self.plli2scfgr = value,
+            0x88 if self.pllsai => self.pllsaicfgr = value,
+            0x8C if self.pllsai => self.dckcfgr = value,
+            0x94 if self.pllsai => self.dckcfgr2 = value,
             _ => {
                 crate::census_reg!("rcc:F4Rcc", offset, "write");
             }
@@ -3412,6 +3463,14 @@ impl Rcc {
         }
     }
 
+    /// Declare the F42x/F446 PLLSAI (CR.PLLSAION → PLLSAIRDY, PLLSAICFGR,
+    /// DCKCFGR, DCKCFGR2). No-op for non-F4 layouts.
+    pub fn set_f4_pllsai(&mut self, present: bool) {
+        if let Self::Stm32F4(r) = self {
+            r.pllsai = present;
+        }
+    }
+
     /// Set the F4 clock-enable (ENR) writable masks — the per-part delta (which
     /// peripherals the device has). No-op for non-F4 layouts. `0xFFFF_FFFF`
     /// leaves a register unmasked.
@@ -4239,6 +4298,36 @@ mod tests {
         assert_eq!(rcc.read(0x30).unwrap(), 0x12);
         assert_eq!(rcc.read(0x44).unwrap(), 0x34);
         assert_eq!(rcc.read(0x40).unwrap(), 0x56);
+    }
+
+    #[test]
+    fn test_rcc_f4_plli2s_and_pllsai_lock() {
+        // Every F4: PLLI2SON (26) → PLLI2SRDY (27), PLLI2SCFGR @0x84 stored.
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32F4);
+        assert_eq!(rcc.read_u32(0x84).unwrap(), 0x2000_3000, "PLLI2SCFGR reset");
+        let cr = rcc.read_u32(0x00).unwrap();
+        rcc.write_u32(0x00, cr | 1 << 26).unwrap();
+        assert_ne!(rcc.read_u32(0x00).unwrap() & 1 << 27, 0, "PLLI2SRDY");
+        rcc.write_u32(0x00, cr).unwrap();
+        assert_eq!(rcc.read_u32(0x00).unwrap() & 1 << 27, 0, "PLLI2S off");
+        rcc.write_u32(0x84, 0x2200_3000).unwrap();
+        assert_eq!(rcc.read_u32(0x84).unwrap(), 0x2200_3000);
+        // No PLLSAI unless declared (F401/F407: bits 28/29 and 0x88+ reserved).
+        rcc.write_u32(0x00, cr | 1 << 28).unwrap();
+        assert_eq!(rcc.read_u32(0x00).unwrap() & 3 << 28, 0, "no PLLSAI");
+        rcc.write_u32(0x8C, 0x1).unwrap();
+        assert_eq!(rcc.read_u32(0x8C).unwrap(), 0, "no DCKCFGR");
+
+        // F446 (`pllsai: true`): PLLSAION (28) → PLLSAIRDY (29), DCKCFGR/2.
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32F4);
+        rcc.set_f4_pllsai(true);
+        assert_eq!(rcc.read_u32(0x88).unwrap(), 0x2400_3000, "PLLSAICFGR reset");
+        rcc.write_u32(0x00, cr | 1 << 28).unwrap();
+        assert_ne!(rcc.read_u32(0x00).unwrap() & 1 << 29, 0, "PLLSAIRDY");
+        rcc.write_u32(0x8C, 0x0100_0000).unwrap();
+        rcc.write_u32(0x94, 0x0000_0001).unwrap();
+        assert_eq!(rcc.read_u32(0x8C).unwrap(), 0x0100_0000, "DCKCFGR");
+        assert_eq!(rcc.read_u32(0x94).unwrap(), 0x0000_0001, "DCKCFGR2");
     }
 
     #[test]
