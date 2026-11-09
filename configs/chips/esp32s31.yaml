@@ -1,0 +1,45 @@
+# Focused ESP32-S31 model for the ESP-Mosaico V1.2 GPIO7/GPIO8 onboarding path.
+# One high-performance RISC-V core boots directly from internal HP SRAM. The
+# low-power CPU, second HP core, ROM boot flow and board peripherals are omitted.
+name: "esp32s31"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 320_000_000
+
+flash:
+  # The module's flash is memory-mapped in the S31 IROM window. This profile's
+  # smoke links to HP SRAM and does not model the flash controller or boot path.
+  base: 0x40000000
+  size: "16384KB"
+ram:
+  base: 0x2F000000
+  size: "512KB"
+memory_regions:
+  - name: "rom"
+    base: 0x2F800000
+    size: "320KB"
+  - name: "lp_sram"
+    base: 0x2E000000
+    size: "32KB"
+  - name: "psram"
+    base: 0x50000000
+    size: "16MB"
+
+pins:
+  GPIO7: { gpio: "gpio", bit: 7 }
+  GPIO8: { gpio: "gpio", bit: 8 }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32s31_gpio"
+    base_address: 0x20583000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s31/gpio.yaml"
+  - id: "io_mux"
+    type: "esp32s31_io_mux"
+    base_address: 0x20582000
+    size: "256B"
+    config:
+      debug_schema: "../peripherals/esp32s31/io_mux.yaml"

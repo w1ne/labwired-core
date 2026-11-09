@@ -1,0 +1,28 @@
+{
+  "target_id": "esp-mosaico-v1-2",
+  "status": "pass",
+  "crate": "firmware-esp-mosaico-v1-2-smoke",
+  "target_triple": "riscv32imac-unknown-none-elf",
+  "script": "examples/esp-mosaico-v1-2/onboarding-smoke.yaml",
+  "system": "configs/systems/esp-mosaico-v1-2.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-09T08:40:37Z",
+  "finished_at_utc": "2026-11-09T08:40:38Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1169,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.376,
+    "build_firmware": 0.295,
+    "run_smoke": 0.445
+  },
+  "stages_ms": {
+    "build_cli": 376,
+    "build_firmware": 295,
+    "run_smoke": 445
+  }
+}

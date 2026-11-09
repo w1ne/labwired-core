@@ -151,6 +151,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c5_gpio",
     "esp32c5_io_mux",
     "esp32p4_gpio",
+    // S31's narrow GPIO7/GPIO8 board slice is built by the Espressif family
+    // factory; keep these canonical so generic GPIO heuristics cannot claim it.
+    "esp32s31_gpio",
+    "esp32s31_io_mux",
     // P4 IO MUX and the RMT TX models are built by the Espressif family
     // factories; canonical so the fuzzy fallbacks never coerce them first.
     "esp32p4_io_mux",

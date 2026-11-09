@@ -1,0 +1,19 @@
+# GPIO7 function-button stimulus controls the GPIO8 haptic-control output.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/riscv32imac-unknown-none-elf/release/firmware-esp-mosaico-v1-2-smoke"
+  system: "../../configs/systems/esp-mosaico-v1-2.yaml"
+limits:
+  max_cycles: 500000
+  max_steps: 100000
+stimuli:
+  - target: { component: function_button_gpio7, channel: pressed }
+    trigger: !after_cycles { cycles: 10000 }
+    value: 1.0
+  - target: { component: function_button_gpio7, channel: pressed }
+    trigger: !after_cycles { cycles: 20000 }
+    value: 0.0
+assertions:
+  - gpio_edges: { pin: "gpio:8", min_edges: 2 }
+  - memory_value: { address: 0x20583064, size: 32, mask: 0x80, expected_value: 0x80 }
+  - memory_value: { address: 0x20583004, size: 32, mask: 0x100, expected_value: 0 }

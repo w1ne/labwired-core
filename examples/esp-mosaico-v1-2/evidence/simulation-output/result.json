@@ -1,0 +1,486 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 225968,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": 500000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:8",
+          "min_edges": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 542650468,
+          "expected_value": 128,
+          "mask": 128,
+          "size": 32
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 542650372,
+          "expected_value": 0,
+          "mask": 256,
+          "size": 32
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      788529464,
+      789053424,
+      788924416,
+      0,
+      0,
+      789053440,
+      0,
+      789053440,
+      0,
+      256,
+      542650380,
+      542650376,
+      542650376,
+      128,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 788529832,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 788529464,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 100000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "568a76da97c5cbc5cdfcb86ffd5d2948b5c4ed66d5aecf204b544d0c65a8d984",
+  "config": {
+    "firmware": "examples/esp-mosaico-v1-2/../../target/riscv32imac-unknown-none-elf/release/firmware-esp-mosaico-v1-2-smoke",
+    "system": "examples/esp-mosaico-v1-2/../../configs/systems/esp-mosaico-v1-2.yaml",
+    "script": "examples/esp-mosaico-v1-2/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 542650368,
+        "registers": [
+          {
+            "name": "GPIO_OUT",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_OUT_W1TS",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "GPIO_OUT_W1TC",
+            "offset": 12,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "GPIO_ENABLE",
+            "offset": 52,
+            "size": 32,
+            "value": 256,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_ENABLE_W1TS",
+            "offset": 56,
+            "size": 32,
+            "value": 256,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "GPIO_ENABLE_W1TC",
+            "offset": 60,
+            "size": 32,
+            "value": 256,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "GPIO_IN",
+            "offset": 100,
+            "size": 32,
+            "value": 128,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "GPIO_FUNC7_OUT_SEL_CFG",
+            "offset": 2832,
+            "size": 32,
+            "value": 256,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  0,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_FUNC8_OUT_SEL_CFG",
+            "offset": 2836,
+            "size": 32,
+            "value": 1280,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  0,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OEN_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "io_mux",
+        "kind": "native",
+        "base": 542646272,
+        "registers": [
+          {
+            "name": "IO_MUX_GPIO7",
+            "offset": 28,
+            "size": 32,
+            "value": 6912,
+            "fields": [
+              {
+                "name": "FUN_PU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  10,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  12,
+                  14
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "IO_MUX_GPIO8",
+            "offset": 32,
+            "size": 32,
+            "value": 6144,
+            "fields": [
+              {
+                "name": "FUN_PU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  10,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  12,
+                  14
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "function_button_gpio7",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 100000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio",
+        "pin": 8,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 10008,
+            "value": 1
+          },
+          {
+            "cycle": 20012,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "mode": "output",
+        "edge_count": 2
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio",
+      "number": 8,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": null
+    }
+  ],
+  "stimuli": [
+    {
+      "channel": "pressed",
+      "component": "function_button_gpio7",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 10000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 10000
+    },
+    {
+      "channel": "pressed",
+      "component": "function_button_gpio7",
+      "value": 0.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 20000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 20000
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 830,
+    "data_bytes": 0,
+    "bss_bytes": 131072,
+    "flash_used_bytes": 830,
+    "ram_static_bytes": 131072,
+    "flash_total_bytes": 16777216,
+    "ram_total_bytes": 524288,
+    "flash_used_pct": 0.0,
+    "ram_static_pct": 25.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 225968,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 100000,
+    "memory_writes": 1,
+    "peripheral_accesses": 25814,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 788529832,
+        "count": 325,
+        "symbol": "main"
+      },
+      {
+        "pc": 788529836,
+        "count": 39,
+        "symbol": "main"
+      },
+      {
+        "pc": 788529822,
+        "count": 13,
+        "symbol": "main"
+      },
+      {
+        "pc": 788529826,
+        "count": 13,
+        "symbol": "main"
+      }
+    ]
+  }
+}

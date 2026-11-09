@@ -1433,6 +1433,40 @@ impl SystemBus {
         }
     }
 
+    /// Share S31 GPIO7/GPIO8 IO_MUX words with its focused GPIO model.
+    pub(crate) fn wire_esp32s31_pad_controls(&mut self) {
+        use crate::peripherals::esp32s31::gpio::Esp32s31Gpio;
+        use crate::peripherals::esp32s31::io_mux::Esp32s31IoMux;
+
+        let io_mux_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|any| any.is::<Esp32s31IoMux>()));
+        let gpio_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|any| any.is::<Esp32s31Gpio>()));
+        let (Some(io_mux_idx), Some(gpio_idx)) = (io_mux_idx, gpio_idx) else {
+            return;
+        };
+
+        let controls = self.peripherals[io_mux_idx]
+            .dev
+            .as_any()
+            .and_then(|any| any.downcast_ref::<Esp32s31IoMux>())
+            .map(|mux| (mux.gpio7_pad_control(), mux.gpio8_pad_control()));
+        if let (Some((gpio7, gpio8)), Some(gpio)) = (
+            controls,
+            self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32s31Gpio>()),
+        ) {
+            gpio.set_io_mux_gpio7(gpio7);
+            gpio.set_io_mux_gpio8(gpio8);
+        }
+    }
+
     /// Does this bus have either peripheral the pad brackets exist for?
     ///
     /// The brackets run at the MMIO write choke, and before this they cost four

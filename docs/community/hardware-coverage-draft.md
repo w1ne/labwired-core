@@ -26,11 +26,49 @@ NRND. The page remains unpublished pending Andrii's approval.
 
 | Survey position | Representative board | What the local smoke exercises | Availability receipt |
 | --- | --- | --- | --- |
-| **#1 ESP32, 38%** | [Espressif ESP32-P4X Function EV](../../examples/esp32p4x-function-ev-board/README.md); [Waveshare ESP32-C3-Zero](../../examples/waveshare-esp32c3-zero/README.md); [ESP32-S3-DevKitC-1 N16R8 v1.0](../../examples/esp32-s3-devkitc-1-n16r8/README.md); [ESP32-S3-DevKitC-1 LEDC servo system](../../examples/esp32-s3-devkitc-servo/README.md) | P4X GPIO8 transitions at J1 pin 5; C3-Zero GPIO10 waveform decoded as a red WS2812 pixel; DevKitC v1.0 RMT drives the GPIO48 pixel; the servo profile captures a 49.92 Hz LEDC waveform on GPIO4 and decodes a lit RGB pixel | [P4X listing, checked 2026-11-06](../../examples/esp32p4x-function-ev-board/evidence/vendor-status.md); [Waveshare listing, checked 2026-11-06](../../examples/waveshare-esp32c3-zero/evidence/vendor-status.md); [Espressif status, checked 2026-11-06](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/vendor-status.md); [N16R8 stock, checked 2026-11-06](../../examples/esp32-s3-devkitc-servo/evidence/vendor-status.md) |
+| **#1 ESP32, 38%** | [ESP-Mosaico V1.2 / ESP32-S31](../../examples/esp-mosaico-v1-2/README.md); [Espressif ESP32-P4X Function EV](../../examples/esp32p4x-function-ev-board/README.md); [Waveshare ESP32-C3-Zero](../../examples/waveshare-esp32c3-zero/README.md); [ESP32-S3-DevKitC-1 N16R8 v1.0](../../examples/esp32-s3-devkitc-1-n16r8/README.md); [ESP32-S3-DevKitC-1 LEDC servo system](../../examples/esp32-s3-devkitc-servo/README.md) | S31 GPIO7 function-button input drives GPIO8 haptic-control transitions; P4X GPIO8 transitions at J1 pin 5; C3-Zero GPIO10 waveform decoded as a red WS2812 pixel; DevKitC v1.0 RMT drives the GPIO48 pixel; the servo profile captures a 49.92 Hz LEDC waveform on GPIO4 and decodes a lit RGB pixel | [S31 preorder listing, checked 2026-11-09](../../examples/esp-mosaico-v1-2/evidence/vendor-status.md); [P4X listing, checked 2026-11-06](../../examples/esp32p4x-function-ev-board/evidence/vendor-status.md); [Waveshare listing, checked 2026-11-06](../../examples/waveshare-esp32c3-zero/evidence/vendor-status.md); [Espressif status, checked 2026-11-06](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/vendor-status.md); [N16R8 stock, checked 2026-11-06](../../examples/esp32-s3-devkitc-servo/evidence/vendor-status.md) |
 | **#2 ATmega328 family, 30%** | [ATmega328PB Xplained Mini](../../examples/atmega328pb-xplained-mini/README.md) (active sibling; the survey does not separate PB) | USART0 CDC transcript and the board's D200/PB5 LED transitions. ATmega328P remains excluded because it is NRND. | [Live MCU status and board stock, checked 2026-11-06](../../examples/atmega328pb-xplained-mini/evidence/vendor-status.md) |
 | **#3 STM32F103, 17%** | [NUCLEO-F103RB](../../examples/nucleo-f103rb/README.md) | USART2 output and LD2 on PA5 | [ST status and stock, checked 2026-11-03](../../examples/nucleo-f103rb/evidence/vendor-status.md) |
 | **#4 other STM32, 13%** | [STM32G071B-DISCO](../../examples/stm32g071b-disco/README.md) | USART3 output on the ST-LINK virtual COM route | [ST status and stock, checked 2026-11-03](../../examples/stm32g071b-disco/evidence/vendor-status.md) |
 | **#5 RP2040, 12%** | [Raspberry Pi Pico](../../examples/pico/README.md) | UART0, GP25 LED edges, and a non-zero internal temperature ADC result | [Raspberry Pi status and availability, checked 2026-11-06](../../examples/pico/evidence/vendor-status.md) |
+
+### #1 — ESP32: ESP-Mosaico V1.2 / ESP32-S31
+
+This board is currently orderable as Espressif's Vision Combo Kit preorder.
+Use the S31 target and drive the GPIO8 vibration-motor control from the active-low
+GPIO7 function button:
+
+```c
+#include <stdbool.h>
+#include "esp_err.h"
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+void app_main(void) {
+    const gpio_config_t button = {
+        .pin_bit_mask = 1ULL << GPIO_NUM_7,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    ESP_ERROR_CHECK(gpio_config(&button));
+    ESP_ERROR_CHECK(gpio_reset_pin(GPIO_NUM_8));
+    ESP_ERROR_CHECK(gpio_set_direction(GPIO_NUM_8, GPIO_MODE_OUTPUT));
+    for (;;) {
+        ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_8,
+                                       gpio_get_level(GPIO_NUM_7) == 0));
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+```
+
+The local smoke presses/releases GPIO7 and checks transitions on GPIO8. It
+models the control pin only; it does not simulate vibration. See the
+[quickstart](../../examples/esp-mosaico-v1-2/README.md),
+[live purchase receipt](../../examples/esp-mosaico-v1-2/evidence/vendor-status.md),
+and [committed evidence](../../examples/esp-mosaico-v1-2/evidence/).
 
 ### #1 — ESP32: Espressif ESP32-P4X Function EV Board
 

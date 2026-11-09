@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      788529464,
+      789053424,
+      788924416,
+      0,
+      0,
+      789053440,
+      0,
+      789053440,
+      0,
+      256,
+      542650380,
+      542650376,
+      542650376,
+      128,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 788529832,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 788529464,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 100000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 100000,
+  "cycles": 225968,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": 500000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "568a76da97c5cbc5cdfcb86ffd5d2948b5c4ed66d5aecf204b544d0c65a8d984",
+  "config": {
+    "firmware": "examples/esp-mosaico-v1-2/../../target/riscv32imac-unknown-none-elf/release/firmware-esp-mosaico-v1-2-smoke",
+    "system": "examples/esp-mosaico-v1-2/../../configs/systems/esp-mosaico-v1-2.yaml",
+    "script": "examples/esp-mosaico-v1-2/onboarding-smoke.yaml"
+  }
+}

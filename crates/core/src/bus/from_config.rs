@@ -620,6 +620,9 @@ impl SystemBus {
                 .or_else(|| crate::peripherals::esp32c6::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c5::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32p4::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| {
+                    crate::peripherals::esp32s31::factory::try_build(&canonical_type, p_cfg)
+                })
                 // ESP32-classic was missing from this chain. Its factory has
                 // always existed with all 14 `esp32_*` types, but only the
                 // Xtensa builder called it, so a plain `from_config` bus --
@@ -1415,6 +1418,9 @@ impl SystemBus {
         }
 
         bus.rebuild_peripheral_ranges();
+        // S31's board button needs the default IO_MUX function route before
+        // its initial released level is attached below.
+        bus.wire_esp32s31_pad_controls();
         // Buttons/switches declared in `board_io` become bus-resident stimulus
         // devices. They are the one input family the canvas emits WITHOUT an
         // external_devices entry (a passive contact needs no device block), so
@@ -1716,6 +1722,16 @@ impl SystemBus {
                 .dev
                 .as_any_mut()
                 .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::gpio::Esp32Gpio>())
+            {
+                gpio.add_observer(observer);
+                return true;
+            }
+        }
+        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+            if let Some(gpio) = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32s31::gpio::Esp32s31Gpio>())
             {
                 gpio.add_observer(observer);
                 return true;

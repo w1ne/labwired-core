@@ -1,0 +1,14 @@
+# ESP-Mosaico V1.2 board paths modeled: GPIO7 function button and GPIO8
+# vibration-motor control. Motor mechanics and all other peripherals are out of
+# scope; see the matching example's KNOWN_LIMITATIONS.md.
+name: "esp-mosaico-v1-2"
+chip: "../chips/esp32s31.yaml"
+cpu_hz: 320_000_000
+external_devices: []
+board_io:
+  - id: "function_button_gpio7"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 7
+    signal: "input"
+    active_high: false
