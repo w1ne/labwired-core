@@ -688,8 +688,7 @@ impl BusResidentDevice for DeclarativeGpioDevice {
         // flush cover every change.
         !self.timers.is_empty()
             || !(self.driven.is_empty()
-                || self.grid_eligible
-                    && (self.schedules.is_empty() || self.has_grid_schedules()))
+                || self.grid_eligible && (self.schedules.is_empty() || self.has_grid_schedules()))
     }
 
     /// No timers and only pad/input rules (`grid_eligible`) means every change
