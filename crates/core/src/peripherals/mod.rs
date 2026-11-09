@@ -133,6 +133,7 @@ pub mod scb;
 pub mod scs_debug;
 pub mod sdmmc;
 pub mod segger_rtt;
+pub mod sifive_gpio;
 pub mod simctl;
 pub mod spi;
 pub(crate) mod spi_bitbus;

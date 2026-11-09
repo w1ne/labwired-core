@@ -3,8 +3,8 @@
 # Renode's platforms/cpus/sifive-fe310.repl identifies the RV32IMAC CPU,
 # QSPI XIP at 0x20000000, DTIM at 0x80000000, and uart0 at 0x10013000.
 # The imported YAML had an ARM label and mistook mask ROM/OTP for flash/RAM.
-# Keep the runnable HiFive1 Rev B memory ranges and the UART used by the smoke;
-# unexercised uart1, GPIO, PLIC, CLINT, mask ROM and OTP are not claimed here.
+# Keep the runnable HiFive1 Rev B memory ranges, UART0 and the software GPIO
+# path used by the smoke. UART1, PLIC, CLINT, mask ROM and OTP are not claimed.
 
 name: "sifive-fe310"
 arch: "riscv"
@@ -19,3 +19,7 @@ peripherals:
     base_address: 0x10013000
     size: "4KB"
     irq: 3
+  - id: "gpio"
+    type: "sifive_gpio"
+    base_address: 0x10012000
+    size: "4KB"

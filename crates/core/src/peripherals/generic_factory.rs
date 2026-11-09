@@ -47,6 +47,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "arm_sp804_timer",
     "lpc2294_timer",
     "arm_pl190_vic",
+    "sifive_gpio",
     "timer",
     "i2c",
     "spi",
@@ -762,6 +763,7 @@ pub fn try_build(
     _bus_trace: &crate::bus::bus_trace::BusTrace,
 ) -> anyhow::Result<Option<Box<dyn Peripheral>>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
+        "sifive_gpio" => Box::new(crate::peripherals::sifive_gpio::SifiveGpio::new()),
         "systick" | "arm_generictimer" => {
             // CALIB is implementation-defined per chip; the yaml can
             // supply the silicon value via `config: { calib: ... }`.

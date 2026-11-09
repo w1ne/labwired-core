@@ -12,10 +12,10 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1462`
+- pass_claimed_peripherals_total: `1463`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1395`
-- median_elapsed_seconds: `1.395`
+- median_elapsed_ms: `1406`
+- median_elapsed_seconds: `1.406`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -179,7 +179,7 @@
 | `sam4s8b` | `pass` | `True` | `yes` | `yes` | `1508` | `1.508` | `True` | `observable` | `12` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sam4s_xplained` | `pass` | `True` | `yes` | `yes` | `3452` | `3.452` | `True` | `observable` | `13` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sam_e70` | `pass` | `True` | `yes` | `yes` | `2556` | `2.556` | `True` | `observable` | `19` | `uart_ordered`, `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `sifive-fe310` | `pass` | `True` | `yes` | `yes` | `1355` | `1.355` | `True` | `observable` | `1` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
+| `sifive-fe310` | `pass` | `True` | `yes` | `yes` | `295568` | `295.568` | `True` | `observable` | `2` | `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `sifive-fu540` | `pass` | `True` | `yes` | `yes` | `1354` | `1.354` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `sifive-fu740` | `pass` | `True` | `yes` | `yes` | `1456` | `1.456` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `simavr-at90usb162` | `pass` | `True` | `yes` | `yes` | `220040` | `220.04` | `True` | `observable` | `1` | `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |

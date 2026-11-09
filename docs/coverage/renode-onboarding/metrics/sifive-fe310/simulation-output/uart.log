@@ -1,3 +1,4 @@
 SIFIVE FE310 SMOKE
 cpu=rv32im uart=sifive
 mul=00000143
+gpio=PASS input_en=00080000 output_en=00080000 output_val=00080000 input_val=00080000
