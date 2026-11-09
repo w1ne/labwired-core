@@ -522,6 +522,7 @@ canonical `type:`; the table below is rendered from that file by
 | `l298n` | GPIO | L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort) |
 | `led-matrix-mux` | GPIO | Row/column LED matrix (micro:bit 5x5, bare 8x8) multiplexed by GPIO row and column lines, with per-pixel brightness |
 | `limit-switch` | GPIO | Mechanical end-stop with common, normally-open and normally-closed contacts |
+| `lm393-moisture` | GPIO | Resistive soil/moisture module with LM393 comparator DOUT (LOW=wet, HIGH=dry) |
 | `logic_level_shifter_4ch` | GPIO | BSS138-class 4-channel bidirectional shifter; DIR is a sim strap (not on the PCB) |
 | `neopixel` | GPIO | Addressable RGB LED strip on one data pin (edge-timed bit stream) |
 | `pybadge_buttons` | GPIO | Eight active-low buttons through the board's SN74HC165 |
@@ -542,6 +543,7 @@ canonical `type:`; the table below is rendered from that file by
 | `mq-6` | Analog | Hanwei MQ-6 LPG/propane semiconductor gas sensor module (AOUT on ADC) |
 | `ntc-thermistor` | Analog | 10 kΩ NTC + voltage divider on an ADC channel |
 | `potentiometer` | Analog | 3-pin linear potentiometer on an ADC channel (rotary or slide) |
+| `rain-sensor` | Analog | Rain drop plate + LM393 module (AO on ADC; wetter → lower voltage) |
 | `soil-moisture` | Analog | Capacitive soil moisture probe module (AOUT on ADC; wetter → lower voltage) |
 | `sound-sensor` | Analog | Analog microphone sound-level module (A0 on ADC) |
 | `tmp36` | Analog | Analog temperature sensor, 10 mV/°C with 500 mV at 0 °C |
