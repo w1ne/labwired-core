@@ -16,4 +16,5 @@ pmc pcsr0=1f80db00 ok
 pio ports=2 ok
 tc0 rc pend=1 ok
 usart0 txrdy imr=2 pend=1 released=1 ok
+usart1 txrdy imr=2 pend=1 released=1 ok
 SAM4S8B PASS

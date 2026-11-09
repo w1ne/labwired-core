@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/sam4s8b-smoke.yaml",
   "system": "configs/systems/onboarding/sam4s8b.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-09T21:58:05Z",
-  "finished_at_utc": "2026-11-09T21:58:11Z",
-  "elapsed_seconds": 6,
-  "elapsed_ms": 5353,
+  "started_at_utc": "2026-11-09T22:30:06Z",
+  "finished_at_utc": "2026-11-09T22:30:17Z",
+  "elapsed_seconds": 11,
+  "elapsed_ms": 10582,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.582,
-    "build_firmware": 2.758,
-    "run_smoke": 1.99
+    "build_cli": 8.648,
+    "build_firmware": 1.02,
+    "run_smoke": 0.903
   },
   "stages_ms": {
-    "build_cli": 582,
-    "build_firmware": 2758,
-    "run_smoke": 1990
+    "build_cli": 8648,
+    "build_firmware": 1020,
+    "run_smoke": 903
   }
 }
