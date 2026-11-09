@@ -4,64 +4,16 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# SAM4S Xplained (platforms/boards/sam4s_xplained.repl). Renode builds the
+# board as `using "platforms/cpus/sam4s.repl"` plus an LED on pioC pin 10 and
+# a button on pioA pin 5; the board's part is the ATSAM4S16C (Atmel SAM4S
+# Xplained user guide). The silicon is the imported sam4s16c profile,
+# included whole rather than copied so the two rows cannot drift: 1 MiB /
+# 128 KiB, PMC, UART0/1, USART0/1, PIOA-C with their input change
+# interrupts, both SAM_TC blocks, and the WDT, RSTC and EEFC. See
+# sam4s16c.yaml for the per-block sources and what it does not claim.
+#
+# The LED and the button are board I/O in the system file, not bus
+# peripherals.
+include: sam4s16c.yaml
 name: sam4s_xplained
-arch: arm
-flash:
-  base: 4194304
-  size: 1048576B
-ram:
-  base: 536870912
-  size: 131072B
-peripherals:
-# Narrowed to the blocks this engine models: PMC, the SAM UART/USART and
-# PIOA-C. Renode's LED (pioC pin 10) and Button (pioA pin 5) are GPIO pin
-# connections, not bus peripherals; imported they became 4 KiB zero windows
-# at sysbus 0xA and 0x5. Board I/O is modelled through board_io. DWT is
-# installed by the Cortex-M core and bit-banding by the bus, so their entries
-# were inert. Renode's two SAM_TC blocks (TC0-2, TC3-5) map to `sam4s_tc`
-# (UP/UP_RC waveform and capture-as-counter; see tc4s.rs for what it
-# refuses). ADC, DACC, EEFC, RSTC, WDT, CRCCU, SPI and TWI0/1 have no model
-# here and only answered reads with zeros, so they are not declared.
-- id: tc0_1_2
-  type: sam4s_tc
-  base_address: 1073807360
-  size: 256
-  irq: 23
-- id: tc3_4_5
-  type: sam4s_tc
-  base_address: 1073823744
-  size: 256
-  irq: 26
-- id: usart0
-  type: sam_usart
-  bus: sysbus
-  base_address: 1073889280
-- id: usart1
-  type: sam_usart
-  bus: sysbus
-  base_address: 1073905664
-- id: pmc
-  type: sam4s_pmc
-  bus: sysbus
-  base_address: 1074660352
-  size: 512
-- id: uart0
-  type: sam_usart
-  bus: sysbus
-  base_address: 1074660864
-- id: uart1
-  type: sam_usart
-  bus: sysbus
-  base_address: 1074661376
-- id: pioA
-  type: sam4s_pio
-  bus: sysbus
-  base_address: 1074662912
-- id: pioB
-  type: sam4s_pio
-  bus: sysbus
-  base_address: 1074663424
-- id: pioC
-  type: sam4s_pio
-  bus: sysbus
-  base_address: 1074663936

@@ -5,9 +5,10 @@
 //! SAM4S Xplained smoke for the imported Renode platform (`sam4s_xplained`).
 //!
 //! The demo bin (`src/main.rs`) prints a banner and the LED/button state; this
-//! one checks what Renode's `sam4s.repl` models and the chip descriptor
-//! claims: PMC peripheral clocks (PCER0/PCDR0/PCSR0), the PC10 LED toggling
-//! through PIO_SODR/CODR, and both `SAM_TC` blocks:
+//! one first runs the SAM4S16C family smoke (`firmware-sam4s-smoke/src/
+//! family.rs`: EEFC, RSTC software reset, WDT reset and window interrupt,
+//! PMC, PIO latches, TC0 — three boots, summary 0x5A400FFF at 0x2001FF00),
+//! then the board checks below on the watchdog boot:
 //!
 //! * TC0 — UP_RC waveform, MCK/8, RC compare pends NVIC line 23 (IMR.CPCS);
 //!   reading TC_SR clears CPCS and lets the pend be cleared.
@@ -17,9 +18,14 @@
 //! * TC4/TC5 — CLKEN alone does not count; BCR.SYNC on the second block
 //!   starts both. TC5 runs in capture mode with CPCTRG, where RA ignores
 //!   stores, and stops counting once PMC_PCDR0 gates its clock off.
+//! * LEDs D9 (PC10) and D10 (PC17) — configured as ASF does
+//!   (PIO_OUTPUT_1, i.e. off on this active-low board).
+//! * BP2 (PA5) — ASF's PIO_PULLUP | PIO_IT_RISE_EDGE: the press (falling)
+//!   does not pend PIOA's line 11, the release (rising) does, and the
+//!   PIO_ISR read releases it. The stimuli press and release the button.
 //!
-//! Every check sets a bit in a summary word at 0x2001FF00; 0x5A45007F means
-//! all seven passed.
+//! Every board check sets a bit in a second summary word at 0x2001FF04;
+//! 0x5A4501FF means all nine passed. PC10 then toggles in the idle loop.
 
 #![no_std]
 #![no_main]
@@ -28,34 +34,44 @@ use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-const PMC_PCER0: *mut u32 = 0x400E_0410 as *mut u32;
+#[path = "../../firmware-sam4s-smoke/src/family.rs"]
+mod family;
+
 const PMC_PCDR0: *mut u32 = 0x400E_0414 as *mut u32;
-const PMC_PCSR0: *const u32 = 0x400E_0418 as *const u32;
-const PMC_SR: *const u32 = 0x400E_0468 as *const u32;
-const PMC_SR_MCKRDY: u32 = 1 << 3;
+const PMC_PCSR0: *mut u32 = 0x400E_0418 as *mut u32;
 
-const PIOC_PER: *mut u32 = 0x400E_1200 as *mut u32;
-const PIOC_OER: *mut u32 = 0x400E_1210 as *mut u32;
-const PIOC_SODR: *mut u32 = 0x400E_1230 as *mut u32;
-const PIOC_CODR: *mut u32 = 0x400E_1234 as *mut u32;
-const PIOC_ODSR: *const u32 = 0x400E_1238 as *const u32;
-const LED_PIN: u32 = 1 << 10;
+const PIOA: u32 = 0x400E_0E00;
+const PIOC: u32 = 0x400E_1200;
+const PIO_PER: u32 = 0x00;
+const PIO_OER: u32 = 0x10;
+const PIO_ODR: u32 = 0x14;
+const PIO_SODR: u32 = 0x30;
+const PIO_CODR: u32 = 0x34;
+const PIO_ODSR: u32 = 0x38;
+const PIO_PDSR: u32 = 0x3C;
+const PIO_IER: u32 = 0x40;
+const PIO_IDR: u32 = 0x44;
+const PIO_IMR: u32 = 0x48;
+const PIO_ISR: u32 = 0x4C;
+const PIO_PUER: u32 = 0x60;
+const PIO_AIMER: u32 = 0xB0;
+const PIO_ESR: u32 = 0xC0;
+const PIO_REHLSR: u32 = 0xD4;
+const LED_D9: u32 = 1 << 10;
+const LED_D10: u32 = 1 << 17;
+const BP2: u32 = 1 << 5;
 
-const UART0_CR: *mut u32 = 0x400E_0600 as *mut u32;
-const UART0_MR: *mut u32 = 0x400E_0604 as *mut u32;
 const UART0_SR: *const u32 = 0x400E_0614 as *const u32;
 const UART0_THR: *mut u32 = 0x400E_061C as *mut u32;
-const UART0_BRGR: *mut u32 = 0x400E_0620 as *mut u32;
 
 const NVIC_ISPR0: *const u32 = 0xE000_E200 as *const u32;
 const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
 
 /// Peripheral ids (= NVIC lines = PMC_PCSR0 bits).
-const ID_UART0: u32 = 8;
-const ID_PIOC: u32 = 13;
+const ID_PIOA: u32 = 11;
 const ID_TC0: u32 = 23;
 
-const SUMMARY: *mut u32 = 0x2001_FF00 as *mut u32;
+const BOARD_SUMMARY: *mut u32 = 0x2001_FF04 as *mut u32;
 
 // TC channel n of the device: block n / 3 at 0x40010000 + 0x4000 * block,
 // channel registers every 0x40.
@@ -84,6 +100,10 @@ const CMR_CPCTRG: u32 = 1 << 14;
 const MCK_2: u32 = 0;
 const MCK_8: u32 = 1;
 const MCK_128: u32 = 3;
+
+fn pio(port: u32, reg: u32) -> *mut u32 {
+    (port + reg) as *mut u32
+}
 
 fn tc(n: u32, reg: u32) -> *mut u32 {
     (0x4001_0000 + 0x4000 * (n / 3) + 0x40 * (n % 3) + reg) as *mut u32
@@ -153,27 +173,36 @@ fn finish(label: &str, ok: bool, bit: u32, summary: &mut u32) {
 
 #[entry]
 fn main() -> ! {
-    let mut summary = 0u32;
-    let tc_ids = 0x3F << ID_TC0;
-    unsafe {
-        write_volatile(PMC_PCER0, (1 << ID_UART0) | (1 << ID_PIOC) | tc_ids);
-        while read_volatile(PMC_SR) & PMC_SR_MCKRDY == 0 {}
-        write_volatile(UART0_MR, 0x8C0);
-        write_volatile(UART0_BRGR, 65);
-        write_volatile(UART0_CR, (1 << 4) | (1 << 6));
-        write_volatile(PIOC_PER, LED_PIN);
-        write_volatile(PIOC_OER, LED_PIN);
+    family::run(&family::Part {
+        name: "SAM4S XPLAINED",
+        flash_bytes: 1024 * 1024,
+        has_pioc: true,
+        summary: 0x2001_FF00,
+        board: Some(board),
+    })
+}
+
+/// Bounded wait for `ready`; false on time-out.
+fn wait(ready: impl Fn() -> bool) -> bool {
+    for _ in 0..2_000_000 {
+        if ready() {
+            return true;
+        }
     }
-    puts("SAM4S XPLAINED RENODE SMOKE\n");
+    false
+}
 
-    // 1. PMC: the enabled ids read back in PCSR0.
-    let pcsr = unsafe { read_volatile(PMC_PCSR0) };
-    puts("pmc pcsr0=");
-    put_hex(pcsr, 8);
-    let want = (1 << ID_UART0) | (1 << ID_PIOC) | tc_ids;
-    finish("", pcsr & want == want, 0, &mut summary);
+fn pioa_pended() -> bool {
+    (unsafe { read_volatile(NVIC_ISPR0) } & (1 << ID_PIOA)) != 0
+}
 
-    // 2. TC0: UP_RC at MCK/8, RC compare pends NVIC 23; SR read releases it.
+fn board() -> ! {
+    let mut summary = 0u32;
+    puts("SAM4S XPLAINED BOARD\n");
+    // The family smoke enabled UART0/1, USART0/1, PIOA-C and TC0-5 in
+    // PMC_PCER0; the counters below run on MCK = the 4 MHz reset clock.
+
+    // 1. TC0: UP_RC at MCK/8, RC compare pends NVIC 23; SR read releases it.
     wr(tc(0, TC_CMR), CMR_WAVE | CMR_UP_RC | MCK_8);
     wr(tc(0, TC_RC), 1000);
     wr(tc(0, TC_IER), SR_CPCS);
@@ -212,11 +241,11 @@ fn main() -> ! {
     finish(
         "",
         imr == SR_CPCS && pends == 3 && released == 3 && cv <= 1000,
-        1,
+        0,
         &mut summary,
     );
 
-    // 3. TC1: free-running UP at MCK/2 advances and latches COVFS.
+    // 2. TC1: free-running UP at MCK/2 advances and latches COVFS.
     wr(tc(1, TC_CMR), CMR_WAVE | MCK_2);
     wr(tc(1, TC_CCR), CCR_CLKEN | CCR_SWTRG);
     let a = rd(tc(1, TC_CV));
@@ -231,11 +260,11 @@ fn main() -> ! {
     finish(
         "",
         b != a && sr & SR_COVFS != 0 && again & SR_COVFS == 0,
-        2,
+        1,
         &mut summary,
     );
 
-    // 4. TC2: CPCSTOP stops the counter at RC with the clock still enabled.
+    // 3. TC2: CPCSTOP stops the counter at RC with the clock still enabled.
     wr(tc(2, TC_CMR), CMR_WAVE | CMR_CPCSTOP | MCK_128);
     wr(tc(2, TC_RC), 50);
     wr(tc(2, TC_CCR), CCR_CLKEN | CCR_SWTRG);
@@ -249,11 +278,11 @@ fn main() -> ! {
     finish(
         "",
         sr & SR_CPCS != 0 && held == later && sr & SR_CLKSTA != 0,
-        3,
+        2,
         &mut summary,
     );
 
-    // 5. TC3 (second block): CPCDIS clears CLKSTA on the RC compare.
+    // 4. TC3 (second block): CPCDIS clears CLKSTA on the RC compare.
     wr(tc(3, TC_CMR), CMR_WAVE | CMR_CPCDIS | MCK_8);
     wr(tc(3, TC_RC), 300);
     wr(tc(3, TC_CCR), CCR_CLKEN | CCR_SWTRG);
@@ -265,11 +294,11 @@ fn main() -> ! {
     finish(
         "",
         running && sr & SR_CPCS != 0 && sr & SR_CLKSTA == 0,
-        4,
+        3,
         &mut summary,
     );
 
-    // 6. TC4/TC5: CLKEN alone holds CV at 0; BCR.SYNC starts both.
+    // 5. TC4/TC5: CLKEN alone holds CV at 0; BCR.SYNC starts both.
     wr(tc(4, TC_CMR), CMR_WAVE | MCK_8);
     wr(tc(5, TC_CMR), CMR_CPCTRG | MCK_2);
     wr(tc(5, TC_RC), 0xFFFF);
@@ -289,38 +318,99 @@ fn main() -> ! {
     finish(
         "",
         idle == 0 && c4 != 0 && c5 != 0 && ra == 0,
-        5,
+        4,
         &mut summary,
     );
 
-    // 7. PMC_PCDR0 gates TC5 off: its counter stops; TC4 keeps counting.
-    unsafe { write_volatile(PMC_PCDR0, 1 << (ID_TC0 + 5)) };
+    // 6. PMC_PCDR0 gates TC5 off: its counter stops; TC4 keeps counting.
+    wr(PMC_PCDR0, 1 << (ID_TC0 + 5));
     spin(50);
     let g0 = rd(tc(5, TC_CV));
     let t0 = rd(tc(4, TC_CV));
     spin(500);
     let g1 = rd(tc(5, TC_CV));
     let t1 = rd(tc(4, TC_CV));
-    let gated = unsafe { read_volatile(PMC_PCSR0) } & (1 << (ID_TC0 + 5)) == 0;
+    let gated = rd(PMC_PCSR0) & (1 << (ID_TC0 + 5)) == 0;
     put_flag("tc5 pmc gated=", gated);
     put_flag(" held=", g0 == g1);
     put_flag(" tc4_runs=", t1 != t0);
-    finish("", gated && g0 == g1 && t1 != t0, 6, &mut summary);
+    finish("", gated && g0 == g1 && t1 != t0, 5, &mut summary);
 
     wr(tc(4, TC_CCR), CCR_CLKDIS);
     wr(tc(5, TC_CCR), CCR_CLKDIS);
-    unsafe { write_volatile(SUMMARY, 0x5A45_0000 | summary) };
-    puts(if summary == 0x7F {
-        "SAM4S PASS\n"
+
+    // 7. LEDs as ASF configures them: PIO_OUTPUT_1 = off (active low).
+    wr(pio(PIOC, PIO_SODR), LED_D9 | LED_D10);
+    wr(pio(PIOC, PIO_PER), LED_D9 | LED_D10);
+    wr(pio(PIOC, PIO_OER), LED_D9 | LED_D10);
+    let off = rd(pio(PIOC, PIO_PDSR)) & (LED_D9 | LED_D10);
+    wr(pio(PIOC, PIO_CODR), LED_D10);
+    let lit = rd(pio(PIOC, PIO_ODSR)) & (LED_D9 | LED_D10);
+    wr(pio(PIOC, PIO_SODR), LED_D10);
+    puts("leds off=");
+    put_hex(off >> 10, 2);
+    puts(" d10 lit=");
+    put_hex(lit >> 10, 2);
+    finish(
+        "",
+        off == LED_D9 | LED_D10 && lit == LED_D9,
+        6,
+        &mut summary,
+    );
+
+    // 8. BP2: pull-up input, rising-edge interrupt (ASF PIN_PUSHBUTTON_1).
+    wr(pio(PIOA, PIO_ODR), BP2);
+    wr(pio(PIOA, PIO_PER), BP2);
+    wr(pio(PIOA, PIO_PUER), BP2);
+    wr(pio(PIOA, PIO_AIMER), BP2);
+    wr(pio(PIOA, PIO_ESR), BP2);
+    wr(pio(PIOA, PIO_REHLSR), BP2);
+    let _ = rd(pio(PIOA, PIO_ISR));
+    unsafe { write_volatile(NVIC_ICPR0, 1 << ID_PIOA) };
+    wr(pio(PIOA, PIO_IER), BP2);
+    let imr = rd(pio(PIOA, PIO_IMR));
+    let idle = rd(pio(PIOA, PIO_PDSR)) & BP2 != 0 && !pioa_pended();
+    puts("bp2 wait\n");
+    let pressed = wait(|| rd(pio(PIOA, PIO_PDSR)) & BP2 == 0);
+    let quiet_on_press = !pioa_pended();
+    puts("bp2 pressed\n");
+    let released = wait(pioa_pended);
+    let isr = rd(pio(PIOA, PIO_ISR));
+    unsafe { write_volatile(NVIC_ICPR0, 1 << ID_PIOA) };
+    let cleared = !pioa_pended() && rd(pio(PIOA, PIO_ISR)) == 0;
+    wr(pio(PIOA, PIO_IDR), BP2);
+    puts("bp2 imr=");
+    put_hex(imr, 2);
+    put_flag(" idle=", idle);
+    put_flag(" pressed=", pressed);
+    put_flag(" quiet=", quiet_on_press);
+    put_flag(" release_pend=", released);
+    puts(" isr=");
+    put_hex(isr, 2);
+    put_flag(" cleared=", cleared);
+    finish(
+        "",
+        imr == BP2 && idle && pressed && quiet_on_press && released && isr == BP2 && cleared,
+        7,
+        &mut summary,
+    );
+
+    // 9. The button reads back released.
+    let level = rd(pio(PIOA, PIO_PDSR)) & BP2 != 0;
+    put_flag("bp2 released level=", level);
+    finish("", level, 8, &mut summary);
+
+    unsafe { write_volatile(BOARD_SUMMARY, 0x5A45_0000 | summary) };
+    puts(if summary == 0x1FF {
+        "SAM4S XPLAINED BOARD PASS\n"
     } else {
-        "SAM4S FAIL\n"
+        "SAM4S XPLAINED BOARD FAIL\n"
     });
 
     loop {
-        unsafe { write_volatile(PIOC_SODR, LED_PIN) };
+        wr(pio(PIOC, PIO_CODR), LED_D9);
         spin(20_000);
-        unsafe { write_volatile(PIOC_CODR, LED_PIN) };
-        let _ = unsafe { read_volatile(PIOC_ODSR) };
+        wr(pio(PIOC, PIO_SODR), LED_D9);
         spin(20_000);
     }
 }

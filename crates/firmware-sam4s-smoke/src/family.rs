@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! SAM4S family smoke shared by the `sam4s`, `sam4s16c` and `sam4s8b` rows
-//! (the latter two include this file by `#[path]`).
+//! SAM4S family smoke shared by the `sam4s`, `sam4s16c`, `sam4s8b` and
+//! `sam4s_xplained` rows (the others include this file by `#[path]`).
 //!
 //! The run spans three boots, told apart by RSTC_SR.RSTTYP:
 //!
@@ -31,6 +31,9 @@ pub struct Part {
     pub has_pioc: bool,
     /// RAM end - 0x100.
     pub summary: u32,
+    /// Board-level checks, run after the family summary on the watchdog
+    /// boot (the SAM4S Xplained row). Never returns.
+    pub board: Option<fn() -> !>,
 }
 
 const PMC_PCER0: u32 = 0x400E_0410;
@@ -321,6 +324,9 @@ pub fn run(part: &Part) -> ! {
     wr(part.summary, 0x5A40_0000 | bits);
     puts(part.name);
     puts(if bits == 0xFFF { " PASS\n" } else { " FAIL\n" });
+    if let (Some(board), 2) = (part.board, (rd(RSTC_SR) >> 8) & 7) {
+        board();
+    }
     loop {
         spin(20_000);
     }

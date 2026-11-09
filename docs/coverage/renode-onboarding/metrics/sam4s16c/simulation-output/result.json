@@ -83,15 +83,15 @@
       8,
       537001952,
       0,
-      537001472,
       1074664532,
+      537001472,
       1,
-      8,
+      3758154240,
       537001952,
-      4214021,
-      4214722
+      4214027,
+      4214726
     ],
-    "pc": 4214722,
+    "pc": 4214726,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -104,7 +104,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "9a5bece42d16d3942603a913d3200137593a54469f81107470454b672a981039",
+  "firmware_hash": "4418e09fad13052ab362a54c717a49f207d7cea5c560080567fd61cb8bc7bbbf",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s16c-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s16c.yaml",
@@ -365,10 +365,10 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 20436,
+    "text_bytes": 20444,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 20436,
+    "flash_used_bytes": 20444,
     "ram_static_bytes": 0,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 131072,
@@ -398,23 +398,23 @@
     "cycles": 1500000,
     "instructions": 1500000,
     "steps_executed": 1500000,
-    "memory_reads": 3523,
+    "memory_reads": 3525,
     "memory_writes": 90,
-    "peripheral_accesses": 6251,
+    "peripheral_accesses": 6252,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 4214718,
+        "pc": 4214724,
         "count": 1953,
         "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 4214720,
+        "pc": 4214726,
         "count": 1953,
         "symbol": "firmware_sam4s16c_smoke::family::spin"
       },
       {
-        "pc": 4214722,
+        "pc": 4214728,
         "count": 1953,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       }

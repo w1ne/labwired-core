@@ -83,15 +83,15 @@
       8,
       536936416,
       0,
-      536935936,
       1074664532,
+      536935936,
       1,
-      8,
+      3758154240,
       536936416,
-      4213841,
-      4214542
+      4213847,
+      4214546
     ],
-    "pc": 4214542,
+    "pc": 4214546,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -104,7 +104,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "1d0c7a73338083c018e39746653d81d42317f571e9f328b2274b98a0612b75a8",
+  "firmware_hash": "87078de86de40fa4b07451504474a08fd8d40f00596567d0789d2481f983ffe1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s.yaml",
@@ -365,14 +365,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 20256,
+    "text_bytes": 20264,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 20256,
+    "flash_used_bytes": 20264,
     "ram_static_bytes": 0,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 65536,
-    "flash_used_pct": 15.45,
+    "flash_used_pct": 15.46,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -398,23 +398,23 @@
     "cycles": 1500000,
     "instructions": 1500000,
     "steps_executed": 1500000,
-    "memory_reads": 3463,
+    "memory_reads": 3465,
     "memory_writes": 90,
-    "peripheral_accesses": 6227,
+    "peripheral_accesses": 6228,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 4214538,
+        "pc": 4214544,
         "count": 1953,
         "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 4214540,
+        "pc": 4214546,
         "count": 1953,
         "symbol": "firmware_sam4s_smoke::family::spin"
       },
       {
-        "pc": 4214542,
+        "pc": 4214548,
         "count": 1953,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       }

@@ -12,15 +12,15 @@
       8,
       537001952,
       0,
-      537001472,
       1074664532,
+      537001472,
       1,
-      8,
+      3758154240,
       537001952,
-      4214021,
-      4214722
+      4214027,
+      4214726
     ],
-    "pc": 4214722,
+    "pc": 4214726,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "9a5bece42d16d3942603a913d3200137593a54469f81107470454b672a981039",
+  "firmware_hash": "4418e09fad13052ab362a54c717a49f207d7cea5c560080567fd61cb8bc7bbbf",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s16c-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s16c.yaml",

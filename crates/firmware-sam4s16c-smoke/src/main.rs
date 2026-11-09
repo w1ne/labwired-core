@@ -20,5 +20,6 @@ fn main() -> ! {
         flash_bytes: 1024 * 1024,
         has_pioc: true,
         summary: 0x2001_FF00,
+        board: None,
     })
 }

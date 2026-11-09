@@ -57,11 +57,11 @@ The models column is a content digest over everything that board's `models` list
 | `amap42kp` | 🟡 smoke-manual | — | `0b8cb8f4eaa77177` | no silicon capture |
 | `r7fa6m5bh` | 🟡 smoke-manual | — | `b1387d0008ac74a7` | no silicon capture |
 | `r7fa8m1ah` | 🟡 smoke-manual | — | `5992ecb0858ab613` | no silicon capture |
-| `same70q21b` | 🟡 smoke-manual | — | `208cfae652f3131a` | no silicon capture |
+| `same70q21b` | 🟡 smoke-manual | — | `4b384f5f051c0e07` | no silicon capture |
 | `mk64f12` | 🟡 smoke-manual | — | `ce43429f7515fd5b` | no silicon capture |
 | `s32k388` | 🟡 smoke-manual | — | `451bdca2a67d66c1` | no silicon capture |
 | `mimxrt595s` | 🟡 smoke-manual | — | `9edc1eab1d5784b8` | no silicon capture |
-| `sam4s16c` | 🟡 smoke-manual | — | `89ef71e929e23a59` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `671b9ce6617de5ce` | no silicon capture |
 | `stm32f072` | 🟡 smoke-manual | — | `46f05aeae6dc5b3b` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `87a64ebcaf94b7a7` | no silicon capture |
 | `vegaboard-ri5cy` | 🟡 smoke-manual | — | `c402ee3acb6a4b87` | no silicon capture |

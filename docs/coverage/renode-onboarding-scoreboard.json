@@ -11,7 +11,7 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1277,
+    "pass_claimed_peripherals_total": 1280,
     "pass_claimed_peripherals_median": 2,
     "median_elapsed_ms": 1385,
     "median_elapsed_seconds": 1.385,
@@ -6956,24 +6956,24 @@
       "script": "examples/renode-onboarding/sam4s-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T09:32:46Z",
-      "finished_at_utc": "2026-11-09T09:36:37Z",
-      "elapsed_seconds": 231,
-      "elapsed_ms": 230788,
+      "started_at_utc": "2026-11-09T10:18:02Z",
+      "finished_at_utc": "2026-11-09T10:18:04Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1630,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 229.255,
-        "build_firmware": 0.299,
-        "run_smoke": 1.216
+        "build_cli": 0.367,
+        "build_firmware": 0.31,
+        "run_smoke": 0.94
       },
       "stages_ms": {
-        "build_cli": 229255,
-        "build_firmware": 299,
-        "run_smoke": 1216
+        "build_cli": 367,
+        "build_firmware": 310,
+        "run_smoke": 940
       },
       "_artifact_path": "sam4s",
       "zero_answering_windows": [],
@@ -7002,24 +7002,24 @@
       "script": "examples/renode-onboarding/sam4s16c-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s16c.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T09:36:40Z",
-      "finished_at_utc": "2026-11-09T09:36:42Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2314,
+      "started_at_utc": "2026-11-09T10:18:06Z",
+      "finished_at_utc": "2026-11-09T10:18:08Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1663,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.535,
-        "build_firmware": 0.361,
-        "run_smoke": 1.403
+        "build_cli": 0.384,
+        "build_firmware": 0.279,
+        "run_smoke": 0.984
       },
       "stages_ms": {
-        "build_cli": 535,
-        "build_firmware": 361,
-        "run_smoke": 1403
+        "build_cli": 384,
+        "build_firmware": 279,
+        "run_smoke": 984
       },
       "_artifact_path": "sam4s16c",
       "zero_answering_windows": [],
@@ -7048,24 +7048,24 @@
       "script": "examples/renode-onboarding/sam4s8b-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s8b.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T09:36:44Z",
-      "finished_at_utc": "2026-11-09T09:36:47Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2502,
+      "started_at_utc": "2026-11-09T10:18:10Z",
+      "finished_at_utc": "2026-11-09T10:18:12Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1721,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.417,
-        "build_firmware": 0.275,
-        "run_smoke": 1.794
+        "build_cli": 0.389,
+        "build_firmware": 0.315,
+        "run_smoke": 1.004
       },
       "stages_ms": {
-        "build_cli": 417,
-        "build_firmware": 275,
-        "run_smoke": 1794
+        "build_cli": 389,
+        "build_firmware": 315,
+        "run_smoke": 1004
       },
       "_artifact_path": "sam4s8b",
       "zero_answering_windows": [],
@@ -7085,7 +7085,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 4000000,
+        "instructions": 3000000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -7094,30 +7094,29 @@
       "script": "examples/renode-onboarding/sam4s_xplained-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s_xplained.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-08T14:05:50Z",
-      "finished_at_utc": "2026-11-08T14:06:55Z",
-      "elapsed_seconds": 66,
-      "elapsed_ms": 65301,
+      "started_at_utc": "2026-11-09T10:21:53Z",
+      "finished_at_utc": "2026-11-09T10:23:00Z",
+      "elapsed_seconds": 68,
+      "elapsed_ms": 67438,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 62.981,
-        "build_firmware": 0.157,
-        "run_smoke": 2.15
+        "build_cli": 63.037,
+        "build_firmware": 1.528,
+        "run_smoke": 2.861
       },
       "stages_ms": {
-        "build_cli": 62981,
-        "build_firmware": 157,
-        "run_smoke": 2150
+        "build_cli": 63037,
+        "build_firmware": 1528,
+        "run_smoke": 2861
       },
       "_artifact_path": "sam4s_xplained",
       "zero_answering_windows": [],
-      "claimed_peripherals": 10,
+      "claimed_peripherals": 13,
       "smoke_assertion_kinds": [
-        "uart_contains",
         "uart_ordered",
         "gpio_edges",
         "memory_value",

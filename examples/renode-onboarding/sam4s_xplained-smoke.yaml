@@ -1,34 +1,68 @@
-# Cortex-M4 smoke against the imported SAM4S Xplained platform descriptor.
-# Bare-register firmware (firmware-sam4s-xplained-renode-smoke) checks what
-# Renode's sam4s.repl models and the chip descriptor claims: PMC PCER0/PCDR0/
-# PCSR0 peripheral clocks, UART0 as the console, PC10 (LED) toggling in the
-# idle loop, and both SAM_TC blocks (`sam4s_tc`): TC0 UP_RC with the RC
-# compare pending NVIC line 23 and the TC_SR read-to-clear releasing it, TC1
-# UP overflow (COVFS), TC2 CPCSTOP, TC3 CPCDIS (CLKSTA clears), TC4/TC5 held
-# by CLKEN alone and started by BCR.SYNC, TC5 capture mode (RA ignores
-# stores) stopping when PMC_PCDR0 gates it. Summary word at 0x2001FF00.
-schema_version: "1.0"
+# SAM4S Xplained smoke (firmware-sam4s-xplained-renode-smoke). The board's
+# ATSAM4S16C runs the SAM4S family smoke first over three boots (EEFC, RSTC
+# software reset, WDT reset and window interrupt, write-once WDT_MR, PMC,
+# PIO latches, TC0 RC compare; summary 0x5A400FFF at 0x2001FF00). On the
+# watchdog boot the board checks follow: both SAM_TC blocks (TC0 UP_RC pends
+# NVIC 23 and the TC_SR read releases it, TC1 COVFS, TC2 CPCSTOP, TC3
+# CPCDIS, TC4/TC5 started by BCR.SYNC, TC5 gated off by PMC_PCDR0), LEDs D9
+# (PC10) and D10 (PC17) off at ASF's PIO_OUTPUT_1 (active low), and BP2
+# (PA5) on ASF's pull-up + rising-edge interrupt: the stimuli press it (no
+# pend) and release it (PIOA line 11 pends, the PIO_ISR read releases it).
+# Board summary 0x5A4501FF at 0x2001FF04. PC10 toggles in the idle loop.
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-renode-smoke"
   system: "../../configs/systems/onboarding/sam4s_xplained.yaml"
 limits:
-  max_steps: 4000000
+  max_steps: 3000000
+stimuli:
+  - target: { component: "bp2", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2000000 }
+    value: 1.0
+  - target: { component: "bp2", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2200000 }
+    value: 0.0
 assertions:
-  - uart_contains: "SAM4S XPLAINED RENODE SMOKE"
   - uart_ordered:
-      - "pmc pcsr0=1f802100 ok"
+      - "SAM4S XPLAINED RENODE SMOKE"
+      - "eefc fmr=00000500 ok"
+      - "eefc getd size=00100000"
+      - "eefc gpnvm=2 set=3 glb=2 clb=0 ok"
+      - "eefc fsr badkey=3 after=1 ok"
+      - "rstc sr=00010000 wdt mr=3fff2fff ok"
+      - "rstc software reset"
+      - "SAM4S XPLAINED RENODE SMOKE"
+      - "rstc rsttyp=3 ok"
+      - "wdt arm wdv=2"
+      - "SAM4S XPLAINED RENODE SMOKE"
+      - "wdt rsttyp=2 mr=3fff2fff ok"
+      - "wdt window sr=2 pended released ok"
+      - "wdt mr once=00801100 ok"
+      - "pio ports=3 ok"
+      - "tc0 rc pend=1 ok"
+      - "SAM4S XPLAINED PASS"
+      - "SAM4S XPLAINED BOARD"
       - "tc0 up_rc imr=10 pends=3 released=3 cv<=rc=1 ok"
       - "tc1 up adv=1 covfs=1 cleared=1 ok"
       - "tc2 cpcstop cpcs=1 held=1 clksta=1 ok"
       - "tc3 cpcdis running=1 cpcs=1 clksta=0 ok"
       - "tc4 tc5 idle=1 sync=1 ra=0000 ok"
       - "tc5 pmc gated=1 held=1 tc4_runs=1 ok"
-      - "SAM4S PASS"
+      - "leds off=81 d10 lit=01 ok"
+      - "bp2 wait"
+      - "bp2 pressed"
+      - "bp2 imr=20 idle=1 pressed=1 quiet=1 release_pend=1 isr=20 cleared=1 ok"
+      - "bp2 released level=1 ok"
+      - "SAM4S XPLAINED BOARD PASS"
   - gpio_edges:
       pin: "pioC:10"
       min_edges: 4
   - memory_value:
       address: 0x2001FF00
-      expected_value: 0x5A45007F
+      expected_value: 0x5A400FFF
+      size: 4
+  - memory_value:
+      address: 0x2001FF04
+      expected_value: 0x5A4501FF
       size: 4
   - expected_stop_reason: max_steps

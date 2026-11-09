@@ -12,9 +12,14 @@
 //!
 //! Modelled: pin enable, output enable, the output set/clear latch with its
 //! ODSR read-back, PSR/PDSR pin levels, the input glitch filter registers
-//! (stored) and the interrupt mask/status storage. Not modelled: the write
-//! protection, the peripheral A-D mux side effects (`ABCDSR1/2` are stored), the
-//! multi-drive/open-drain/PIO clock outputs, the debounce/schmitt controls and
+//! (stored) and the input change interrupt (§31.5.10): every change of a pad
+//! level latches PIO_ISR (both edges by default; PIO_AIMMR + PIO_ELSR +
+//! PIO_FRLHSR select a single edge or a level), reading PIO_ISR clears it, and
+//! the controller line is `ISR & IMR`, a level source on the declared `irq`.
+//! Not modelled: the write protection, the peripheral A-D mux side effects
+//! (`ABCDSR1/2` are stored), the multi-drive/open-drain/PIO clock outputs, the
+//! debounce/schmitt controls, the glitch filter timing, the PMC gate on input
+//! change detection (a PIO whose peripheral clock is off still latches) and
 //! the programmable clock (everything reads back what was written, or zero).
 //! The PMC models the master-clock-ready status the boot path polls plus the
 //! system and peripheral clock-enable/status banks.
@@ -24,7 +29,8 @@
 //! `same70q21b` chip reuses both models.
 
 use crate::pins::{External, InputChange, PadDriver, PinPort};
-use crate::{Peripheral, SimResult};
+use crate::{Peripheral, PeripheralTickResult, SimResult};
+use std::cell::Cell;
 
 const PINS: usize = 32;
 
@@ -56,6 +62,16 @@ const PIO_PUSR: u64 = 0x0068;
 /// B = 01, C = 10, D = 11). The SAM4S and SAM E70 both have four functions.
 const PIO_ABSR: u64 = 0x0070;
 const PIO_ABSR2: u64 = 0x0074;
+// Additional interrupt modes (§31.7.36-31.7.44).
+const PIO_AIMER: u64 = 0x00B0;
+const PIO_AIMDR: u64 = 0x00B4;
+const PIO_AIMMR: u64 = 0x00B8;
+const PIO_ESR: u64 = 0x00C0;
+const PIO_LSR: u64 = 0x00C4;
+const PIO_ELSR: u64 = 0x00C8;
+const PIO_FELLSR: u64 = 0x00D0;
+const PIO_REHLSR: u64 = 0x00D4;
+const PIO_FRLHSR: u64 = 0x00D8;
 
 fn bit(word: u32, index: usize) -> bool {
     word & (1 << index) != 0
@@ -74,8 +90,17 @@ pub struct Sam4sPio {
     input_filter: u32,
     /// PIO_IER: interrupt mask.
     irq_enable: u32,
-    /// PIO_ISR: latched edge status (W1C via a read).
-    irq_status: u32,
+    /// PIO_ISR: latched input changes, cleared by a read (hence the `Cell`).
+    irq_status: Cell<u32>,
+    /// PIO_AIMMR: pins using the additional interrupt modes.
+    #[serde(default)]
+    aim: u32,
+    /// PIO_ELSR: 1 = level detection, 0 = edge detection (AIM pins only).
+    #[serde(default)]
+    level_select: u32,
+    /// PIO_FRLHSR: 1 = rising edge / high level, 0 = falling edge / low level.
+    #[serde(default)]
+    rising_high: u32,
     /// PIO_ABCDSR1: peripheral-select bit 0.
     ab_select: u32,
     /// PIO_ABCDSR2: peripheral-select bit 1.
@@ -97,7 +122,10 @@ impl Sam4sPio {
             output: 0,
             input_filter: 0,
             irq_enable: 0,
-            irq_status: 0,
+            irq_status: Cell::new(0),
+            aim: 0,
+            level_select: 0,
+            rising_high: 0,
             ab_select: 0,
             ab_select2: 0,
             pull_up: 0,
@@ -119,7 +147,7 @@ impl Sam4sPio {
         }
     }
 
-    fn read_reg(&self, offset: u64) -> u32 {
+    fn read_reg(&self, offset: u64, consume: bool) -> u32 {
         match offset {
             PIO_PER | PIO_PSR => self.enabled,
             PIO_OER | PIO_OSR => self.output_enable,
@@ -127,11 +155,19 @@ impl Sam4sPio {
             PIO_ODSR => self.output,
             // PSR/PDSR are the live pin levels; the SAM4S reports the pads,
             // not the latch, so an input follows the outside world.
-            PIO_PDSR => (0..PINS)
-                .filter(|&p| self.pad_level(p))
-                .fold(0u32, |word, p| word | (1 << p)),
+            PIO_PDSR => self.levels(),
             PIO_IER | PIO_IMR => self.irq_enable,
-            PIO_ISR => self.irq_status,
+            PIO_ISR => {
+                let status = self.irq_status.get();
+                if consume {
+                    // A pin held at its selected level re-latches at once.
+                    self.irq_status.set(self.level_matches());
+                }
+                status
+            }
+            PIO_AIMMR => self.aim,
+            PIO_ELSR => self.level_select,
+            PIO_FRLHSR => self.rising_high,
             PIO_MDSR => 0,
             // PUSR reads 1 where no pull-up is enabled (datasheet §31.7.20).
             PIO_PUSR => !self.pull_up,
@@ -148,21 +184,12 @@ impl Sam4sPio {
         match offset {
             PIO_PER => self.enabled |= value,
             PIO_PDR => self.enabled &= !value,
-            PIO_OER => {
-                self.output_enable |= value;
-                self.note_all_edges(value);
-            }
+            PIO_OER => self.output_enable |= value,
             PIO_ODR => self.output_enable &= !value,
             PIO_IFER => self.input_filter |= value,
             PIO_IFDR => self.input_filter &= !value,
-            PIO_SODR => {
-                self.output |= value;
-                self.note_all_edges(value);
-            }
-            PIO_CODR => {
-                self.output &= !value;
-                self.note_all_edges(value);
-            }
+            PIO_SODR => self.output |= value,
+            PIO_CODR => self.output &= !value,
             PIO_IER => self.irq_enable |= value,
             PIO_IDR => self.irq_enable &= !value,
             // Reading ISR clears it (rc_r); a write is ignored on silicon.
@@ -172,21 +199,47 @@ impl Sam4sPio {
             PIO_PUDR => self.pull_up &= !value,
             PIO_ABSR => self.ab_select = value,
             PIO_ABSR2 => self.ab_select2 = value,
+            PIO_AIMER => self.aim |= value,
+            PIO_AIMDR => self.aim &= !value,
+            PIO_ESR => self.level_select &= !value,
+            PIO_LSR => self.level_select |= value,
+            PIO_FELLSR => self.rising_high &= !value,
+            PIO_REHLSR => self.rising_high |= value,
             _ => {
                 crate::census_reg!("sam4s:Sam4sPio", offset, "write");
             }
         }
     }
 
-    /// Latch an edge on the pins in `mask` whose level changed. The model has
-    /// no interrupt consumers in the smoke, but ISR/IMR are the registers a
-    /// driver reads, so keep them coherent.
-    fn note_all_edges(&mut self, mask: u32) {
-        for pin in 0..PINS {
-            if mask & (1 << pin) != 0 && self.pad_level(pin) {
-                self.irq_status |= 1 << pin;
-            }
-        }
+    /// The pad levels as one word (PIO_PDSR).
+    fn levels(&self) -> u32 {
+        (0..PINS)
+            .filter(|&p| self.pad_level(p))
+            .fold(0u32, |word, p| word | (1 << p))
+    }
+
+    /// The level-mode pins currently at their selected level.
+    fn level_matches(&self) -> u32 {
+        let levels = self.levels();
+        let at_level = !(levels ^ self.rising_high);
+        self.aim & self.level_select & at_level
+    }
+
+    /// Latch PIO_ISR for the pad change from `before` to the current levels
+    /// (§31.5.10): any edge by default; on AIM pins the selected edge, or the
+    /// selected level while it holds.
+    fn latch_input_changes(&self, before: u32) {
+        let after = self.levels();
+        let changed = before ^ after;
+        let edge_pins = self.aim & !self.level_select;
+        let selected_edge = changed & !(after ^ self.rising_high);
+        let latched = (changed & !self.aim) | (selected_edge & edge_pins) | self.level_matches();
+        self.irq_status.set(self.irq_status.get() | latched);
+    }
+
+    /// The controller's interrupt line.
+    fn line(&self) -> bool {
+        self.irq_status.get() & self.irq_enable != 0
     }
 
     fn input_level(&self, pin: usize) -> bool {
@@ -201,39 +254,57 @@ impl Default for Sam4sPio {
 }
 
 impl Peripheral for Sam4sPio {
-    // Inert walk: a pure register bank with no `tick()`; pin edges are
-    // surfaced by the bus GPIO-diff pass. Without these the bus walked every
-    // instance on every cycle and the batched ARM loop never engaged.
-    fn needs_legacy_walk(&self) -> bool {
-        false
+    // The walk only reports the interrupt line, and with PIO_IMR clear the
+    // line is low whatever the pads do. IMR changes only through this block's
+    // own MMIO, after which the bus re-checks the predicate, so an unarmed
+    // controller stays off the per-cycle walk (and the batched ARM loop).
+    fn legacy_tick_active(&self) -> bool {
+        self.irq_enable != 0
     }
 
-    fn legacy_tick_active(&self) -> bool {
-        false
+    fn tick_elapsed(&mut self, _cycles: u64) -> PeripheralTickResult {
+        PeripheralTickResult::with_irq(self.line())
+    }
+
+    fn irq_line_level(&self) -> Option<bool> {
+        Some(self.line())
+    }
+
+    fn reads_can_deassert_irq(&self) -> bool {
+        self.irq_enable != 0
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
-        Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
+        Ok(((self.read_reg(reg, offset == reg) >> (byte * 8)) & 0xFF) as u8)
+    }
+
+    fn peek(&self, offset: u64) -> Option<u8> {
+        let byte = (offset % 4) as u32;
+        Some(((self.read_reg(offset & !3, false) >> (byte * 8)) & 0xFF) as u8)
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
         let mask: u32 = 0xFF << (byte * 8);
-        let mut v = self.read_reg(reg);
+        let mut v = self.read_reg(reg, false);
         v = (v & !mask) | ((value as u32) << (byte * 8));
+        let before = self.levels();
         self.write_reg(reg, v);
+        self.latch_input_changes(before);
         Ok(())
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
-        Ok(self.read_reg(offset & !3))
+        Ok(self.read_reg(offset & !3, true))
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        let before = self.levels();
         self.write_reg(offset & !3, value);
+        self.latch_input_changes(before);
         Ok(())
     }
 
@@ -252,9 +323,7 @@ impl Peripheral for Sam4sPio {
     }
 
     fn read_gpio_input_word(&self) -> u32 {
-        (0..PINS)
-            .filter(|&p| self.input_level(p))
-            .fold(0u32, |word, p| word | (1 << p))
+        self.levels()
     }
 
     fn read_gpio_output(&self, pin: u8) -> Option<bool> {
@@ -336,13 +405,13 @@ impl PinPort for Sam4sPio {
         if pin >= PINS {
             return None;
         }
-        let before = self.input_level(pin);
+        let levels = self.levels();
         self.external[pin] = ext.level();
-        let after = self.input_level(pin);
-        if after != before {
-            self.irq_status |= 1 << pin;
-        }
-        Some(InputChange { before, after })
+        self.latch_input_changes(levels);
+        Some(InputChange {
+            before: bit(levels, pin),
+            after: self.input_level(pin),
+        })
     }
 
     fn input(&self, pin: u8) -> Option<bool> {
@@ -720,5 +789,76 @@ mod tests {
         pio.write_u32(PIO_ABSR2, 1 << 4).unwrap();
         assert_eq!(pio.read_u32(PIO_ABSR).unwrap(), 1 << 4);
         assert_eq!(pio.read_u32(PIO_ABSR2).unwrap(), 1 << 4);
+    }
+
+    #[test]
+    fn pio_input_change_latches_both_edges_and_isr_clears_on_read() {
+        let mut pio = Sam4sPio::new();
+        pio.write_u32(PIO_PUER, 1 << 5).unwrap();
+        // Enabling the pull-up raised the floating pad: that is a change.
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 1 << 5);
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 0);
+        pio.write_u32(PIO_IER, 1 << 5).unwrap();
+        assert!(pio.legacy_tick_active());
+        assert_eq!(pio.irq_line_level(), Some(false));
+
+        pio.set_external(5, External::Level(false)); // press
+        assert_eq!(pio.irq_line_level(), Some(true));
+        assert_eq!(pio.peek(PIO_ISR), Some(1 << 5)); // a peek does not clear
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 1 << 5);
+        assert_eq!(pio.irq_line_level(), Some(false));
+
+        pio.set_external(5, External::Level(true)); // release
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 1 << 5);
+        // Same level again: no change, nothing latched.
+        pio.set_external(5, External::Level(true));
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 0);
+
+        pio.write_u32(PIO_IDR, 1 << 5).unwrap();
+        assert!(!pio.legacy_tick_active());
+    }
+
+    #[test]
+    fn pio_output_writes_latch_only_real_changes() {
+        let mut pio = Sam4sPio::new();
+        pio.write_u32(PIO_OER, 1 << 10).unwrap(); // drives the latch's 0: no change
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 0);
+        pio.write_u32(PIO_SODR, 1 << 10).unwrap();
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 1 << 10);
+        pio.write_u32(PIO_SODR, 1 << 10).unwrap();
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 0);
+        pio.write_u32(PIO_CODR, 1 << 10).unwrap();
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 1 << 10);
+    }
+
+    #[test]
+    fn pio_additional_modes_select_one_edge_or_a_held_level() {
+        let mut pio = Sam4sPio::new();
+        pio.set_external(5, External::Level(true));
+        pio.set_external(6, External::Level(true));
+        let _ = pio.read_u32(PIO_ISR);
+        // PA5: falling edge only (ESR + FELLSR are the reset selections).
+        pio.write_u32(PIO_AIMER, 1 << 5).unwrap();
+        pio.write_u32(PIO_ESR, 1 << 5).unwrap();
+        pio.write_u32(PIO_FELLSR, 1 << 5).unwrap();
+        // PA6: high level.
+        pio.write_u32(PIO_AIMER, 1 << 6).unwrap();
+        pio.write_u32(PIO_LSR, 1 << 6).unwrap();
+        pio.write_u32(PIO_REHLSR, 1 << 6).unwrap();
+        assert_eq!(pio.read_u32(PIO_AIMMR).unwrap(), 0b11 << 5);
+        assert_eq!(pio.read_u32(PIO_ELSR).unwrap(), 1 << 6);
+        assert_eq!(pio.read_u32(PIO_FRLHSR).unwrap(), 1 << 6);
+        // The high level on PA6 is already present: latched, and it
+        // re-latches on every read while it holds.
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 1 << 6);
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 1 << 6);
+        pio.set_external(6, External::Level(false));
+        let _ = pio.read_u32(PIO_ISR);
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 0);
+
+        pio.set_external(5, External::Level(false)); // falling: latched
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 1 << 5);
+        pio.set_external(5, External::Level(true)); // rising: ignored
+        assert_eq!(pio.read_u32(PIO_ISR).unwrap(), 0);
     }
 }
