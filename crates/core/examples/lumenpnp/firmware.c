@@ -209,6 +209,13 @@ void SysTick_Handler(void) {
         step_accumulator[axis] += interval_steps[axis];
         if (step_accumulator[axis] < TICKS_PER_MS) continue;
         step_accumulator[axis] -= TICKS_PER_MS;
+        /* Endstop may assert after the homing pulse was queued. */
+        if (home_active && axis == home_axis && pin_read(limit_pins[axis])) {
+            home_active = 0;
+            interval_steps[axis] = 0;
+            step_accumulator[axis] = 0;
+            continue;
+        }
         pin_write(step_pins[axis], 1);
         if (axis == Y_AXIS) pin_write(y2_step, 1);
         position[axis] += interval_direction[axis];
