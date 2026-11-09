@@ -352,6 +352,15 @@ impl SystemBus {
         if result.is_ok() {
             self.sync_analog_inputs();
             self.sync_button_inputs();
+            // Edge/stimulus-clocked gpio_devices (pybadge buttons, displays with
+            // input rules) drive pads from `input:` events. `SimInput::set_input`
+            // only updates the rule machine; without a service pass the driven
+            // IDR bits stay stale until the next MMIO edge. Flush here so a
+            // stimulus takes effect when the device has opted out of per-cycle
+            // service. Grid-schedule parts (HC-SR04) must NOT be flushed: their
+            // first service would publish pin_defaults onto ECHO and collapse
+            // the four-state HighZ until the first real echo edge.
+            self.flush_gpio_device_inputs(component, channel);
         }
         result
     }
@@ -375,6 +384,42 @@ impl SystemBus {
         for (addr, bit, level) in pending {
             self.drive_input_bit(addr, bit, level);
         }
+    }
+
+    /// Service every gpio_device that owns `channel` so driven pads reflect a
+    /// just-applied stimulus. No-op when no resident advertises the channel.
+    ///
+    /// Mirrors [`Self::sync_button_inputs`]: the level is applied at the
+    /// stimulus point so a walk-free / tick-opted-out resident (keypad) does not
+    /// need the per-cycle pass to make a press visible to firmware.
+    pub(crate) fn flush_gpio_device_inputs(&mut self, component: Option<&str>, channel: &str) {
+        if self.gpio_devices.is_empty() {
+            return;
+        }
+        let now = self.current_cycle;
+        let mut devices = std::mem::take(&mut self.gpio_devices);
+        for device in &mut devices {
+            let hit = {
+                let si = device.as_sim_input();
+                if !si.input_channels().iter().any(|c| c.key == channel) {
+                    false
+                } else {
+                    // Prefer the SimInput component id so we do not re-borrow
+                    // `device` for `id()` while `si` is live.
+                    let name = si.component_id().unwrap_or("");
+                    Self::component_matches(component, name, si)
+                }
+            };
+            // Only flush residents that opted out of the tick *and* are not
+            // schedule-driven. A grid-schedule part (HC-SR04) opts out because
+            // resident deadlines cover its waveform; servicing it here would
+            // drain construction-time pin_defaults onto the bus before any
+            // trigger edge and break four-state HighZ.
+            if hit && !device.needs_per_cycle_service() && !device.has_grid_schedules() {
+                device.service(self, now);
+            }
+        }
+        self.gpio_devices = devices;
     }
 
     /// Apply several input sets as ONE transaction: every set is resolved and
