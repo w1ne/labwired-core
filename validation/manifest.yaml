@@ -9299,6 +9299,11 @@ boards:
       # source was not on this watch list. No silicon capture is recorded for
       # this board, so no ack is implied.
       - crates/core/src/peripherals/nrf52/dppic.rs
+      # 2026-11-09, model_paths_drift_gate: nrf5340_clock_boot registers TWIM1
+      # (nrf52/twim.rs) for the BMI270 EasyDMA CHIP_ID read, and that source
+      # was not on this watch list. No silicon capture is recorded for this
+      # board, so no ack is implied.
+      - crates/core/src/peripherals/nrf52/twim.rs
 
   - id: stm32h735
     doc: docs/boards/stm32h735.md
