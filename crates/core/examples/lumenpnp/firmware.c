@@ -59,6 +59,7 @@ static volatile int32_t position[AXES];
 static volatile int32_t pressure_pa[2] = {2147483647, 2147483647};
 static volatile unsigned phase, job_index, active_nozzle, attempt;
 static volatile unsigned placed, retry_count, fault_code;
+static unsigned carrying_part;
 static volatile unsigned move_active, home_active, home_axis;
 static volatile int32_t home_direction;
 static volatile unsigned home_steps_ms;
@@ -154,8 +155,12 @@ static void delay_ms(uint32_t duration) {
 }
 
 static void stop(unsigned code) {
-    __asm volatile("cpsid i");
+    __asm volatile("cpsid i" ::: "memory");
     move_active = home_active = 0;
+    for (unsigned axis = 0; axis < AXES; axis++) {
+        interval_steps[axis] = 0;
+        step_accumulator[axis] = 0;
+    }
     fault_code = code;
     phase = STOPPED;
     for (unsigned n = 0; n < 6; n++) pin_write(enable_pins[n], 1);
@@ -163,7 +168,7 @@ static void stop(unsigned code) {
         pin_write(pump_pins[n], 0);
         pin_write(valve_pins[n], 0);
     }
-    __asm volatile("cpsie i");
+    __asm volatile("cpsie i" ::: "memory");
     event("SAFE_STOP");
     for (;;) __asm volatile("wfi");
 }
@@ -274,10 +279,10 @@ static unsigned i2c_read_byte(uint8_t address, uint8_t reg, uint8_t *value) {
     if (!i2c_write(address, &reg, 1)) return 0;
     REG(I2C1) &= ~((1u << 10) | (1u << 11));
     if (!i2c_address(address, 1)) { i2c_stop(); return 0; }
-    __asm volatile("cpsid i");
+    __asm volatile("cpsid i" ::: "memory");
     (void)REG(I2C1 + 0x14); (void)REG(I2C1 + 0x18);
     i2c_stop();
-    __asm volatile("cpsie i");
+    __asm volatile("cpsie i" ::: "memory");
     if (!i2c_wait(1u << 6)) return 0;
     *value = (uint8_t)REG(I2C1 + 0x10);
     return 1;
@@ -313,7 +318,7 @@ static uint32_t magnitude(int32_t value) { return (uint32_t)(value < 0 ? -value 
 static void move_to(int32_t x, int32_t y, int32_t z, int32_t a, int32_t b) {
     const int32_t targets[AXES] = {x, y, z, a, b};
     uint32_t duration = 80;
-    __asm volatile("cpsid i");
+    __asm volatile("cpsid i" ::: "memory");
     for (unsigned axis = 0; axis < AXES; axis++) {
         move_start[axis] = position[axis];
         move_target[axis] = targets[axis];
@@ -330,22 +335,26 @@ static void move_to(int32_t x, int32_t y, int32_t z, int32_t a, int32_t b) {
     move_duration = duration;
     move_elapsed = 0;
     move_active = 1;
-    __asm volatile("cpsie i");
-    while (move_active) __asm volatile("wfi");
+    __asm volatile("cpsie i" ::: "memory");
+    while (move_active) {
+        /* Sensor conversions wait in main while SysTick continues motion. */
+        if (carrying_part && read_pressure(active_nozzle) >= PICK_THRESHOLD_PA) stop(61);
+        __asm volatile("wfi");
+    }
     for (unsigned axis = 0; axis < AXES; axis++) {
         if (position[axis] != move_target[axis]) stop(30 + axis);
     }
 }
 
 static void home(unsigned axis, int32_t direction, int32_t coordinate) {
-    __asm volatile("cpsid i");
+    __asm volatile("cpsid i" ::: "memory");
     home_axis = axis;
     home_direction = direction;
     home_steps_ms = 1;
     pin_write(dir_pins[axis], direction > 0);
     if (axis == Y_AXIS) pin_write(y2_dir, direction > 0);
     home_active = 1;
-    __asm volatile("cpsie i");
+    __asm volatile("cpsie i" ::: "memory");
     const uint32_t deadline = milliseconds + 6000;
     while (home_active) {
         if ((int32_t)(milliseconds - deadline) >= 0) stop(40 + axis);
@@ -468,6 +477,7 @@ int main(void) {
             event("LOWER_PICK");
             move_to(position[X_AXIS], position[Y_AXIS], contact_z, position[A_AXIS], position[B_AXIS]);
             success = (unsigned)pickup(active_nozzle);
+            carrying_part = success;
             phase = LIFT;
             move_to(position[X_AXIS], position[Y_AXIS], 25 * Z_STEPS_MM, position[A_AXIS], position[B_AXIS]);
             if (success) break;
@@ -487,6 +497,7 @@ int main(void) {
         event("LOWER_PLACE");
         move_to(position[X_AXIS], position[Y_AXIS], contact_z, position[A_AXIS], position[B_AXIS]);
         phase = VENT;
+        carrying_part = 0;
         set_vacuum(active_nozzle, 0);
         event("RELEASE");
         const uint32_t release_deadline = milliseconds + 400;
