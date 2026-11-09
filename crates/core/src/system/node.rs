@@ -313,8 +313,9 @@ fn build_avr_node(
     let mut machine = Machine::new(cpu, bus);
     // Same run setting the C3 rom-boot / CLI hosted-fast paths apply: widen
     // to the bus's max-safe interval once residents are walk-free (e.g.
-    // edge-serviced keypad). Default interval 1 otherwise. Exact batch
-    // boundaries keep peripheral event cadence identical to interval-1.
+    // edge-serviced displays). A keypad keeps per-cycle service (#1787), so
+    // boards carrying one stay at interval 1. Exact batch boundaries keep
+    // peripheral event cadence identical to interval-1.
     let interval = machine.max_safe_tick_interval();
     machine.config.peripheral_tick_interval = interval;
     machine.bus.config.peripheral_tick_interval = interval;
