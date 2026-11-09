@@ -68,8 +68,7 @@ fn plant_wfe_and_irq0_stub(machine: &mut Machine<CortexM>) {
     // the alarm is armed (the IRQ handler is the success observe).
     machine.bus.write_u16(u64::from(CODE), 0xBF20).unwrap(); // WFE
     machine.bus.write_u16(u64::from(CODE + 2), 0xE7FE).unwrap(); // B .
-    // IRQ0 stub: B .
-    machine.bus.write_u16(u64::from(IRQ0), 0xE7FE).unwrap();
+    machine.bus.write_u16(u64::from(IRQ0), 0xE7FE).unwrap(); // IRQ0 stub: B .
 }
 
 /// Alarm0 + WFE + idle-FF must deliver TIMER_IRQ_0 and leave the WFE park.

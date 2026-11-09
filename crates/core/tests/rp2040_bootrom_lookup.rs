@@ -472,14 +472,20 @@ fn flash_range_erase_and_program_the_xip_window() {
     run_rom_fn(&mut machine, re);
     for i in 0..N {
         assert_eq!(
-            machine.bus.read_u8(u64::from(XIP + OFF) + i as u64).unwrap(),
+            machine
+                .bus
+                .read_u8(u64::from(XIP + OFF) + i as u64)
+                .unwrap(),
             0xFF,
             "erased {i}"
         );
     }
     assert_eq!(machine.bus.read_u8(u64::from(XIP + OFF - 1)).unwrap(), 0xA5);
     assert_eq!(
-        machine.bus.read_u8(u64::from(XIP + OFF) + N as u64).unwrap(),
+        machine
+            .bus
+            .read_u8(u64::from(XIP + OFF) + N as u64)
+            .unwrap(),
         0x5A
     );
 
@@ -492,7 +498,10 @@ fn flash_range_erase_and_program_the_xip_window() {
     run_rom_fn(&mut machine, rp);
     for i in 0..N {
         assert_eq!(
-            machine.bus.read_u8(u64::from(XIP + OFF) + i as u64).unwrap(),
+            machine
+                .bus
+                .read_u8(u64::from(XIP + OFF) + i as u64)
+                .unwrap(),
             0x0F,
             "programmed {i}"
         );
@@ -505,7 +514,10 @@ fn flash_range_erase_and_program_the_xip_window() {
     run_rom_fn(&mut machine, rp);
     for i in 0..N {
         assert_eq!(
-            machine.bus.read_u8(u64::from(XIP + OFF) + i as u64).unwrap(),
+            machine
+                .bus
+                .read_u8(u64::from(XIP + OFF) + i as u64)
+                .unwrap(),
             0x00,
             "AND {i}"
         );
