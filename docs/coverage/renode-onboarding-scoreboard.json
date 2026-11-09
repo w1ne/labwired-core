@@ -6976,24 +6976,24 @@
       "script": "examples/renode-onboarding/sam4s-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T22:11:50Z",
-      "finished_at_utc": "2026-11-09T22:11:52Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1620,
+      "started_at_utc": "2026-11-09T22:37:43Z",
+      "finished_at_utc": "2026-11-09T22:37:55Z",
+      "elapsed_seconds": 12,
+      "elapsed_ms": 11936,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.452,
-        "build_firmware": 0.196,
-        "run_smoke": 0.956
+        "build_cli": 10.112,
+        "build_firmware": 0.898,
+        "run_smoke": 0.913
       },
       "stages_ms": {
-        "build_cli": 452,
-        "build_firmware": 196,
-        "run_smoke": 956
+        "build_cli": 10112,
+        "build_firmware": 898,
+        "run_smoke": 913
       },
       "_artifact_path": "sam4s",
       "zero_answering_windows": [],

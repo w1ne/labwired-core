@@ -47,6 +47,7 @@ peripherals:
 - id: usart1
   type: sam_usart
   base_address: 0x40028000
+  irq: 15
 - id: pmc
   type: sam4s_pmc
   base_address: 0x400E0400

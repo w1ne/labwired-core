@@ -1259,7 +1259,7 @@ jobs:
             script: examples/renode-onboarding/sam4s_xplained-smoke.yaml
             system: configs/systems/onboarding/sam4s_xplained.yaml
           # Generic SAM4S is bounded to the smallest-family memory windows,
-          # Cortex-M4, the modeled PMC status, and the UART0 smoke path.
+          # Cortex-M4, modeled PMC status, UART0, and USART0/1 TXRDY IRQs.
           - id: sam4s
             crate: firmware-sam4s-smoke
             target: thumbv7em-none-eabi

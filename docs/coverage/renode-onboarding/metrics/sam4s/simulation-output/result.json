@@ -49,6 +49,7 @@
           "pio ports=3 ok",
           "tc0 rc pend=1 ok",
           "usart0 txrdy imr=2 pend=1 released=1 ok",
+          "usart1 txrdy imr=2 pend=1 released=1 ok",
           "SAM4S PASS"
         ]
       },
@@ -58,7 +59,7 @@
       "assertion": {
         "memory_value": {
           "address": 536936192,
-          "expected_value": 1514151935,
+          "expected_value": 1514160127,
           "mask": null,
           "size": 4
         }
@@ -75,24 +76,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      12836,
+      12926,
+      16383,
       8191,
-      2,
-      49,
+      13,
       1074660884,
-      0,
-      50,
+      1073807360,
+      8,
       536936416,
       0,
       1074664532,
       536935936,
       1,
-      3758154240,
+      32768,
       536936416,
-      4216047,
-      4216614
+      4216089,
+      4216654
     ],
-    "pc": 4216614,
+    "pc": 4216654,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -105,7 +106,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "0dc3d787c609a4fd3b6233541a7413a6769183af284ef8f54059be3e6328c85b",
+  "firmware_hash": "4a43c0eaf81a712becdd6055025532ba37353e53263ee45138ec9f755f60aae4",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s.yaml",
@@ -362,6 +363,12 @@
         "end_cycle": 40000
       },
       {
+        "text": "usart1 txrdy imr=2 pend=1 released=1 ok",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      },
+      {
         "text": "SAM4S PASS",
         "cycle_lo": 30000,
         "cycle": 40000,
@@ -372,14 +379,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 22332,
+    "text_bytes": 22384,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 22332,
+    "flash_used_bytes": 22384,
     "ram_static_bytes": 0,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 65536,
-    "flash_used_pct": 17.04,
+    "flash_used_pct": 17.08,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -389,15 +396,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 65536,
-    "main_stack_high_water_bytes": 32,
-    "main_stack_free_min_bytes": 65496,
+    "main_stack_high_water_bytes": 40,
+    "main_stack_free_min_bytes": 65488,
     "main_stack_base": 536870912,
     "main_stack_top": 536936448,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 65536,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 65496,
+    "heap_free_min_bytes": 65488,
     "heap_base": 536870912,
     "heap_top": 536936448
   },
@@ -405,23 +412,23 @@
     "cycles": 1500000,
     "instructions": 1500000,
     "steps_executed": 1500000,
-    "memory_reads": 3720,
-    "memory_writes": 91,
-    "peripheral_accesses": 6319,
+    "memory_reads": 3775,
+    "memory_writes": 100,
+    "peripheral_accesses": 6410,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 4216612,
+        "pc": 4216652,
         "count": 1953,
         "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 4216614,
+        "pc": 4216654,
         "count": 1953,
         "symbol": "firmware_sam4s_smoke::family::spin"
       },
       {
-        "pc": 4216616,
+        "pc": 4216656,
         "count": 1953,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       }
