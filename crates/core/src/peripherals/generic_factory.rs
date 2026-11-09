@@ -71,6 +71,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "crs",
     "rtc",
     "rtc_f1",
+    "bkp_f1",
     "rtc_v3",
     "iwdg",
     "wwdg",
@@ -1114,6 +1115,9 @@ pub fn try_build(
                 // F4 has only PWR_CR/PWR_CSR (RM0368 §5.4) — a distinct reset
                 // shape from the L4 CR1..CR4 / PUCRx set.
                 Some("stm32f4") | Some("f4") => Box::new(crate::peripherals::pwr::PwrF4::new()),
+                // F1: PWR_CR/PWR_CSR, both reset 0 (RM0008 §5.4). DBP gates
+                // the F1 BKP backup registers.
+                Some("stm32f1") | Some("f1") => Box::new(crate::peripherals::pwr::PwrF1::new()),
                 _ => Box::new(crate::peripherals::pwr::Pwr::new()),
             }
         }
@@ -1223,6 +1227,16 @@ pub fn try_build(
         "crs" => Box::new(crate::peripherals::crs::Crs::new()),
         "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
         "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
+        "bkp_f1" => {
+            // `data_registers: 10` (low/medium density, the default) or 42
+            // (high/XL density, DR11..DR42 at 0x40..0xBC).
+            let data_registers = p_cfg
+                .config
+                .get("data_registers")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(10) as usize;
+            Box::new(crate::peripherals::bkp_f1::BkpF1::new(data_registers)?)
+        }
         "rtc_v3" => Box::new(crate::peripherals::rtc_v3::RtcV3::new()),
         "iwdg" => Box::new(crate::peripherals::iwdg::Iwdg::new()),
         "wwdg" => Box::new(crate::peripherals::wwdg::Wwdg::new()),

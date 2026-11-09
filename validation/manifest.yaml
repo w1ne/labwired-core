@@ -2448,8 +2448,15 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 1cf8837b47ec1cbc8750a7d85e04f6a664821a64a6b6595d108933ec7a135f75
+    # 2026-11-09 (feat/stm32f103-bkp-2026-11-09): pwr.rs gained `PwrF1`, a new
+    # struct built only for `profile: stm32f1` (the F103 family). This board's
+    # PWR keeps its own profile, so no register this capture anchors changes
+    # value; bus/from_config.rs now also hands the backup-domain DBP flag to a
+    # peripheral named `bkp` when one exists (none on this board). The digest
+    # moves because it hashes whole files. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: fc1335a3f8088e1fe5e3b5df9a49ea8b593dc2a011e290737082295f7387ba2f
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4663,8 +4670,15 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 522b4fc22955059d1baeb90ac01cce43945353e195371493fee02b9142c894bc
+    # 2026-11-09 (feat/stm32f103-bkp-2026-11-09): pwr.rs gained `PwrF1`, a new
+    # struct built only for `profile: stm32f1` (the F103 family). This board's
+    # PWR keeps its own profile, so no register this capture anchors changes
+    # value; bus/from_config.rs now also hands the backup-domain DBP flag to a
+    # peripheral named `bkp` when one exists (none on this board). The digest
+    # moves because it hashes whole files. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: 5d75b2f09942eead0d923adf34f38719060dd492f55e9048442ac74f47880f8f
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6337,6 +6351,8 @@ boards:
       - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/bxcan.rs
       - crates/core/src/peripherals/rtc_f1.rs
+      - crates/core/src/peripherals/bkp_f1.rs
+      - crates/core/src/peripherals/pwr.rs
       - crates/core/src/peripherals/iwdg.rs
       - crates/core/src/peripherals/wwdg.rs
       - configs/chips/stm32f103.yaml
@@ -6917,8 +6933,18 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 2ff8315cb06b1105dc0c52eb3b6cadc903c288459b32f36eb5fe6d1618f2c834
+    # 2026-11-09 (feat/stm32f103-bkp-2026-11-09): BKP @0x40006C00 was a
+    # read-as-zero `stub`; it is now `bkp_f1` (DR1..DR10, RTCCR/CR/CSR, gated
+    # by APB1ENR.BKPEN and PWR_CR.DBP, kept across SYSRESETREQ). PWR moves off
+    # the L4 model (CR reset 0x200) to `profile: stm32f1` (PwrF1, CR/CSR reset
+    # 0 per RM0008 §5.4 and the vendored SVD; a system reset clears DBP).
+    # Neither PWR nor BKP is in stm32f1_mmio_diff's silicon case list, so no
+    # captured register changes value. pwr.rs and bkp_f1.rs join `models:`.
+    # Evidence: stock STM32duino sketch (backup.h + NVIC_SystemReset) counts
+    # boots 0..3 and keeps DR1 with DBP cleared; main's config reset-loops at
+    # boot 0. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: 76ea81001da10935742438589d8b56fd7833ef71c93dc14aa207d4bc4c76fb8e
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
