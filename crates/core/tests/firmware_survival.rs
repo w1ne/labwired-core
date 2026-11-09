@@ -819,7 +819,8 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         // clock_control (HFCLK/LFCLK start + poll) and nrf_rtc_timer init, then
         // prints the banner over the UARTE0 EasyDMA console. Proves the shared
         // Nordic CLOCK / UARTE / RTC behavioural models satisfy the nRF5340 boot
-        // spin-loops at the 0x50000000 non-secure peripheral alias. Fixture is
+        // spin-loops at the secure cpuapp 0x50000000 peripheral view. The `/ns`
+        // target uses the separate 0x40000000 aliases. Fixture is
         // rebuilt via crates/firmware-nrf5340-zephyr/build.sh.
         name: "nrf5340_zephyr",
         core: "cortex-m33",

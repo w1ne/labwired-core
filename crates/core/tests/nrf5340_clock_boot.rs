@@ -9,8 +9,9 @@
 //! `test_nrf5340_zephyr_survival` in `firmware_survival.rs` (which boots a real
 //! unmodified Zephyr v3.7 hello_world ELF end to end). It asserts, at the bus
 //! level, the three things the boot path depends on:
-//!   1. Peripherals are reachable at the NON-secure alias base 0x5000_0000 — the
-//!      view the `nrf5340dk/nrf5340/cpuapp` devicetree links against.
+//!   1. Peripherals are reachable at the secure base 0x5000_0000 — the view
+//!      the `nrf5340dk/nrf5340/cpuapp` devicetree links against. The `/ns`
+//!      target uses the 0x4000_0000 aliases and is a separate compile profile.
 //!   2. CLOCK HFCLKSTART/LFCLKSTART raise their STARTED events (the busy-loops in
 //!      `clock_control` and `nrf_rtc_timer` init).
 //!
@@ -20,14 +21,33 @@
 //!
 //! Register facts: nRF5340 PS v1.5 (CLOCK §4.x) and the Zephyr DT address map.
 
-use labwired_config::ChipDescriptor;
+use labwired_config::{ChipDescriptor, ExternalDevice};
 use labwired_core::bus::SystemBus;
 use labwired_core::Bus;
 
-// Peripherals at the non-secure alias the cpuapp DT uses (peripheral@50000000).
+// Peripherals at the secure cpuapp view (the `/ns` target uses 0x4000_0000).
 const CLOCK: u64 = 0x5000_5000;
 const UART0: u64 = 0x5000_8000;
+const I2C1: u64 = 0x5000_9000;
 const RTC1: u64 = 0x5001_5000;
+const RAM: u64 = 0x2000_0000;
+
+// Shared Nordic TWIM register offsets. nRF5340 TWIM1_S derives from TWIM0_NS
+// in the vendor SVD and preserves these nRF52 offsets.
+const TWIM_TASKS_STARTTX: u64 = 0x008;
+const TWIM_EVENTS_LASTRX: u64 = 0x15C;
+const TWIM_SHORTS: u64 = 0x200;
+const TWIM_ERRORSRC: u64 = 0x4C4;
+const TWIM_ENABLE: u64 = 0x500;
+const TWIM_PSEL_SCL: u64 = 0x508;
+const TWIM_PSEL_SDA: u64 = 0x50C;
+const TWIM_RXD_PTR: u64 = 0x534;
+const TWIM_RXD_MAXCNT: u64 = 0x538;
+const TWIM_TXD_PTR: u64 = 0x544;
+const TWIM_TXD_MAXCNT: u64 = 0x548;
+const TWIM_ADDRESS: u64 = 0x588;
+const TWIM_SHORT_LASTTX_STARTRX: u32 = 1 << 7;
+const TWIM_SHORT_LASTRX_STOP: u32 = 1 << 12;
 
 // CLOCK register offsets (nRF5340 PS, shared with nRF52 CLOCK layout).
 const TASKS_HFCLKSTART: u64 = 0x000;
@@ -37,7 +57,7 @@ const EVENTS_LFCLKSTARTED: u64 = 0x104;
 const HFCLKSTAT: u64 = 0x40C;
 const LFCLKSRC: u64 = 0x518;
 
-fn nrf5340_bus() -> SystemBus {
+fn nrf5340_bus_with(external_devices: Vec<ExternalDevice>) -> SystemBus {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../configs/chips/nrf5340.yaml");
     let chip = ChipDescriptor::from_file(&path).expect("load nrf5340 chip");
@@ -48,7 +68,7 @@ fn nrf5340_bus() -> SystemBus {
         name: "nrf5340-clock-boot".to_string(),
         chip: path.to_string_lossy().to_string(),
         cpu_hz: None,
-        external_devices: vec![],
+        external_devices,
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
         board_io: vec![],
@@ -60,16 +80,25 @@ fn nrf5340_bus() -> SystemBus {
     SystemBus::from_config(&chip, &manifest).expect("assemble nrf5340 bus")
 }
 
+fn nrf5340_bus() -> SystemBus {
+    nrf5340_bus_with(Vec::new())
+}
+
 #[test]
-fn peripherals_mapped_at_nonsecure_alias() {
-    // The cpuapp firmware accesses peripherals through 0x5000_0000, not the
-    // secure 0x4000_0000 base. A read here must resolve to a peripheral (not
-    // fault into open bus), or the console/clock/timer drivers never start.
+fn peripherals_mapped_at_secure_cpuapp_view() {
+    // The secure cpuapp firmware accesses peripherals through 0x5000_0000.
+    // A read here must resolve to a peripheral (not fault into open bus), or
+    // the console/clock/timer/I2C drivers never start.
     let bus = nrf5340_bus();
-    for (name, addr) in [("CLOCK", CLOCK), ("UART0", UART0), ("RTC1", RTC1)] {
+    for (name, addr) in [
+        ("CLOCK", CLOCK),
+        ("UART0", UART0),
+        ("TWIM1", I2C1),
+        ("RTC1", RTC1),
+    ] {
         assert!(
             bus.read_u32(addr).is_ok(),
-            "{name} must be mapped at non-secure alias 0x{addr:08X}"
+            "{name} must be mapped at secure cpuapp address 0x{addr:08X}"
         );
     }
 }
@@ -114,5 +143,65 @@ fn lfclk_start_raises_started_event() {
         bus.read_u32(CLOCK + EVENTS_LFCLKSTARTED).unwrap(),
         1,
         "LFCLKSTARTED must set — nrf_rtc_timer init would hang otherwise"
+    );
+}
+
+#[test]
+fn twim1_reads_bmi270_chip_id_over_easydma() {
+    let mut bus = nrf5340_bus_with(vec![ExternalDevice {
+        id: "imu".to_string(),
+        r#type: "bmi270".to_string(),
+        connection: "i2c1".to_string(),
+        channel: None,
+        route: [
+            ("sda".to_string(), "P1.02".to_string()),
+            ("scl".to_string(), "P1.03".to_string()),
+        ]
+        .into_iter()
+        .collect(),
+        config: Default::default(),
+    }]);
+
+    // BMI270 CHIP_ID pointer write followed by a repeated-START one-byte read.
+    bus.write_u8(RAM, 0x00).unwrap();
+    bus.write_u8(RAM + 0x100, 0xEE).unwrap();
+    bus.write_u32(I2C1 + TWIM_ENABLE, 6).unwrap();
+    // nRF PSEL encodes PORT in bit 5 and PIN in bits 4:0.
+    bus.write_u32(I2C1 + TWIM_PSEL_SDA, (1 << 5) | 2).unwrap();
+    bus.write_u32(I2C1 + TWIM_PSEL_SCL, (1 << 5) | 3).unwrap();
+    bus.write_u32(I2C1 + TWIM_ADDRESS, 0x68).unwrap();
+    bus.write_u32(I2C1 + TWIM_TXD_PTR, RAM as u32).unwrap();
+    bus.write_u32(I2C1 + TWIM_TXD_MAXCNT, 1).unwrap();
+    bus.write_u32(I2C1 + TWIM_RXD_PTR, (RAM + 0x100) as u32)
+        .unwrap();
+    bus.write_u32(I2C1 + TWIM_RXD_MAXCNT, 1).unwrap();
+    bus.write_u32(
+        I2C1 + TWIM_SHORTS,
+        TWIM_SHORT_LASTTX_STARTRX | TWIM_SHORT_LASTRX_STOP,
+    )
+    .unwrap();
+    bus.write_u32(I2C1 + TWIM_TASKS_STARTTX, 1).unwrap();
+
+    let mut completed = false;
+    for _ in 0..500_000 {
+        bus.tick_peripherals_fully_forced();
+        if bus.read_u32(I2C1 + TWIM_EVENTS_LASTRX).unwrap() == 1 {
+            completed = true;
+            break;
+        }
+    }
+    assert!(
+        completed,
+        "TWIM1 did not complete the BMI270 repeated-START read"
+    );
+    assert_eq!(
+        bus.read_u32(I2C1 + TWIM_ERRORSRC).unwrap(),
+        0,
+        "BMI270 must ACK on the nRF5340 DK i2c1 bus"
+    );
+    assert_eq!(
+        bus.read_u8(RAM + 0x100).unwrap(),
+        0x24,
+        "BMI270 CHIP_ID must come from the attached model, not the 0xEE sentinel"
     );
 }
