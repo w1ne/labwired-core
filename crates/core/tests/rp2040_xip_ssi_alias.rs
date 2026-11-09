@@ -23,7 +23,7 @@ fn xip_ssi_ssienr_set_and_clr_aliases_reach_the_register() {
     let chip_path = root("configs/chips/rp2040.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).expect("rp2040 chip");
     let mut manifest =
-        SystemManifest::from_file(&root("configs/systems/rp2040-pico.yaml")).expect("pico");
+        SystemManifest::from_file(root("configs/systems/rp2040-pico.yaml")).expect("pico");
     manifest.chip = chip_path.to_str().expect("utf8").to_string();
     let mut bus = labwired_core::bus::SystemBus::from_config(&chip, &manifest).expect("bus");
 
