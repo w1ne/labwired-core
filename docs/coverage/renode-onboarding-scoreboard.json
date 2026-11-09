@@ -11,7 +11,7 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1463,
+    "pass_claimed_peripherals_total": 1464,
     "pass_claimed_peripherals_median": 2,
     "median_elapsed_ms": 1406,
     "median_elapsed_seconds": 1.406,
@@ -9483,28 +9483,28 @@
       "script": "examples/renode-onboarding/stm32f103-i2c-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f103.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T22:51:20Z",
-      "finished_at_utc": "2026-11-09T22:53:14Z",
-      "elapsed_seconds": 114,
-      "elapsed_ms": 113540,
+      "started_at_utc": "2026-11-09T23:20:23Z",
+      "finished_at_utc": "2026-11-09T23:20:27Z",
+      "elapsed_seconds": 5,
+      "elapsed_ms": 4227,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 111.781,
-        "build_firmware": 0.191,
-        "run_smoke": 1.549
+        "build_cli": 0.558,
+        "build_firmware": 2.348,
+        "run_smoke": 1.308
       },
       "stages_ms": {
-        "build_cli": 111781,
-        "build_firmware": 191,
-        "run_smoke": 1549
+        "build_cli": 558,
+        "build_firmware": 2348,
+        "run_smoke": 1308
       },
       "_artifact_path": "stm32f103",
       "zero_answering_windows": [],
-      "claimed_peripherals": 5,
+      "claimed_peripherals": 6,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"

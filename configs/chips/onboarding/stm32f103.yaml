@@ -1,7 +1,7 @@
 # Bounded Cortex-M3 profile for the imported STM32F103 platform. The memory
 # windows match the common F103C8 density; this profile makes no claim about
-# the wider STM32F1 family. Only the RCC, GPIOA/GPIOB, USART2 and I2C1 surfaces
-# exercised by the exact-import smoke are declared.
+# the wider STM32F1 family. Only the RCC, GPIOA/GPIOB, USART2, SPI1 and I2C1
+# surfaces exercised by the exact-import smoke are declared.
 name: stm32f103
 arch: arm
 core: cortex-m3
@@ -43,6 +43,16 @@ peripherals:
   # STM32F103 USART2_IRQn, per ST's cmsis-device-f1 header.
   irq: 38
   clock: { reg: apb1enr, bit: 17 }
+  config:
+    profile: stm32f1
+- id: spi1
+  type: spi
+  bus: sysbus
+  base_address: 0x40013000
+  size: 1KB
+  # STM32F103 SPI1_IRQn, per ST's cmsis-device-f1 header.
+  irq: 35
+  clock: { reg: apb2enr, bit: 12 }
   config:
     profile: stm32f1
 - id: i2c1

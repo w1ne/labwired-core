@@ -9,8 +9,9 @@
 //! three sensor inputs. It also checks I2C write/read-back for the BME280's
 //! control-register storage. USART2 emits a human-readable register
 //! fingerprint at 115200/8N1. The onboarding system attaches declarative TMP102
-//! and BME280 models at addresses 0x48 and 0x76; TMP102's reset temperature is
-//! 25 °C (0x1900). The absent address remains an intentional NACK check.
+//! and BME280 models at addresses 0x48 and 0x76, plus a MAX31855 on SPI1;
+//! TMP102's reset temperature is 25 °C (0x1900). The absent I2C address remains
+//! an intentional NACK check.
 //! These exact sensor values are simulator assertions, not a claim about a
 //! physical board's ambient reading.
 //!
@@ -21,6 +22,7 @@
 //! GPIOA@ 0x40010800 — CRL: PA2 (USART2_TX) = alternate-function push-pull
 //!                    50 MHz output = nibble 0b1011 in bits[11:8].
 //! USART2@0x40004400 — SR/DR/BRR/CR1; BRR=0x45 → 115200 @ 8 MHz HSI.
+//! SPI1  @0x40013000 — CR1/CR2/SR/DR, 8-bit master mode.
 //! I2C1 @ 0x40005400 — CR1/CR2/OAR1/DR/SR1/SR2/CCR/TRISE.
 
 #![no_std]
@@ -50,6 +52,18 @@ const NVIC_ISPR: *const u32 = 0xE000_E200 as *const u32;
 const NVIC_ICPR: *mut u32 = 0xE000_E280 as *mut u32;
 const USART2_IRQ: u32 = 38;
 const USART2_IRQ_BIT: u32 = 1 << (USART2_IRQ % 32);
+
+const SPI1_BASE: u32 = 0x4001_3000;
+const SPI1_IRQ: u32 = 35;
+const SPI1_IRQ_BIT: u32 = 1 << (SPI1_IRQ % 32);
+const SPI1_CR1: u32 = SPI1_BASE;
+const SPI1_CR2: u32 = SPI1_BASE + 0x04;
+const SPI1_SR: u32 = SPI1_BASE + 0x08;
+const SPI1_DR: u32 = SPI1_BASE + 0x0C;
+const SPI_SR_RXNE: u32 = 1 << 0;
+const SPI_SR_TXE: u32 = 1 << 1;
+const SPI_SR_BSY: u32 = 1 << 7;
+const GPIOA_BSRR: u32 = GPIOA_BASE + 0x10;
 
 const I2C1_BASE: u32 = 0x4000_5400;
 const I2C1_CR1: u32 = I2C1_BASE + 0x00;
@@ -205,6 +219,7 @@ fn main() -> ! {
     }
     putline(b"F103 I2C");
     smoke_usart2_txe_irq();
+    smoke_spi1_irq_and_max31855();
     unsafe {
         i2c1_init();
     }
@@ -572,7 +587,7 @@ fn main() -> ! {
 // ── Init helpers ──────────────────────────────────────────────────────────────
 
 unsafe fn rcc_init() {
-    // Enable GPIOA + GPIOB + AFIO on APB2 (bits 2, 3, 0).  GPIOB is
+    // Enable GPIOA + GPIOB + AFIO + SPI1 on APB2 (bits 2, 3, 0, 12). GPIOB is
     // required because I2C1's default pin mapping is PB6 (SCL) / PB7
     // (SDA); without IOPBEN the GPIOB CRL writes go to a dead clock
     // domain and the I²C state machine never gets the bus pins it
@@ -581,7 +596,7 @@ unsafe fn rcc_init() {
     // simulator's I²C model does NOT check GPIO config so the same
     // firmware "works" there even without IOPBEN; matching silicon
     // is mandatory.
-    rmw32(RCC_APB2ENR, (1 << 0) | (1 << 2) | (1 << 3));
+    rmw32(RCC_APB2ENR, (1 << 0) | (1 << 2) | (1 << 3) | (1 << 12));
     // Enable USART2 + I2C1 on APB1 (bits 17 and 21).
     rmw32(RCC_APB1ENR, (1 << 17) | (1 << 21));
 }
@@ -637,6 +652,107 @@ fn smoke_usart2_txe_irq() {
     } else {
         putline(b"USART2 TXEIRQ=0 REARM=1");
     }
+}
+
+fn smoke_spi1_irq_and_max31855() {
+    unsafe {
+        // PA4 is a GPIO chip select for the fixture MAX31855. Configure it as
+        // 50 MHz push-pull output and leave the device deselected.
+        let crl = read_volatile(GPIOA_CRL as *const u32);
+        write_volatile(GPIOA_CRL as *mut u32, (crl & !(0xF << 16)) | (0x3 << 16));
+        write_volatile(GPIOA_BSRR as *mut u32, 1 << 4);
+
+        // SPI1 master, software NSS, fPCLK/8, mode 0, 8-bit frames.
+        write_volatile(
+            SPI1_CR1 as *mut u32,
+            (1 << 9) | (1 << 8) | (0b010 << 3) | (1 << 2),
+        );
+        write_volatile(
+            SPI1_CR1 as *mut u32,
+            read_volatile(SPI1_CR1 as *const u32) | (1 << 6), // SPE
+        );
+        write_volatile(NVIC_ICPR.add((SPI1_IRQ / 32) as usize), SPI1_IRQ_BIT);
+
+        // TXE is high at idle; TXEIE must assert and then release SPI1's line.
+        write_volatile(SPI1_CR2 as *mut u32, 1 << 7);
+    }
+    let txe_pended =
+        unsafe { read_volatile(NVIC_ISPR.add((SPI1_IRQ / 32) as usize)) & SPI1_IRQ_BIT != 0 };
+    unsafe {
+        write_volatile(SPI1_CR2 as *mut u32, 0);
+        write_volatile(NVIC_ICPR.add((SPI1_IRQ / 32) as usize), SPI1_IRQ_BIT);
+    }
+    let txe_released =
+        unsafe { read_volatile(NVIC_ISPR.add((SPI1_IRQ / 32) as usize)) & SPI1_IRQ_BIT == 0 };
+
+    unsafe { write_volatile(SPI1_CR2 as *mut u32, 1 << 6) }; // RXNEIE
+    unsafe { write_volatile(GPIOA_BSRR as *mut u32, 1 << (4 + 16)) }; // PA4 low
+    let mut frame = 0u32;
+    let mut rxne_pended = false;
+    let mut transfer_ok = true;
+    for _ in 0..4 {
+        if !wait_spi(SPI1_SR, SPI_SR_TXE, SPI_SR_TXE) {
+            transfer_ok = false;
+            break;
+        }
+        unsafe { write_volatile(SPI1_DR as *mut u32, 0) };
+        if !wait_spi(SPI1_SR, SPI_SR_RXNE, SPI_SR_RXNE) {
+            transfer_ok = false;
+            break;
+        }
+        let rxne = unsafe { read_volatile(SPI1_SR as *const u32) } & SPI_SR_RXNE != 0;
+        let pending =
+            unsafe { read_volatile(NVIC_ISPR.add((SPI1_IRQ / 32) as usize)) & SPI1_IRQ_BIT != 0 };
+        rxne_pended |= rxne && pending;
+        frame = (frame << 8) | (unsafe { read_volatile(SPI1_DR as *const u32) } & 0xFF);
+    }
+    let idle = wait_spi(SPI1_SR, SPI_SR_BSY, 0);
+    unsafe {
+        write_volatile(GPIOA_BSRR as *mut u32, 1 << 4); // PA4 high
+    }
+    let rxne_released = unsafe {
+        read_volatile(NVIC_ISPR.add((SPI1_IRQ / 32) as usize)) & SPI1_IRQ_BIT == 0
+            && read_volatile(SPI1_SR as *const u32) & SPI_SR_RXNE == 0
+    };
+    unsafe { write_volatile(SPI1_CR2 as *mut u32, 0) };
+
+    print_reg(b"SPI1 MAX31855=", frame);
+    putbytes(b"SPI1 TXEIRQ=");
+    put_flag(txe_pended);
+    putbytes(b" REARM=");
+    put_flag(!txe_released);
+    putbytes(b" RXNEIRQ=");
+    put_flag(rxne_pended);
+    putbytes(b" RELEASED=");
+    put_flag(rxne_released);
+    putbyte(b'\n');
+    let checks_passed = transfer_ok
+        && idle
+        && frame == 0x0190_1600
+        && txe_pended
+        && txe_released
+        && rxne_pended
+        && rxne_released;
+    putbytes(b"SPI1 CHECKS=");
+    put_flag(checks_passed);
+    putbyte(b'\n');
+    if !checks_passed {
+        putline(b"SPI1_CHECK_FAIL");
+    }
+}
+
+fn wait_spi(addr: u32, mask: u32, want: u32) -> bool {
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(addr as *const u32) } & mask == want {
+            return true;
+        }
+        core::hint::spin_loop();
+    }
+    false
+}
+
+fn put_flag(value: bool) {
+    putbyte(if value { b'1' } else { b'0' });
 }
 
 unsafe fn i2c1_init() {

@@ -8,6 +8,9 @@ limits:
 assertions:
   - uart_contains: "F103 I2C"
   - uart_contains: "USART2 TXEIRQ=1 REARM=0"
+  - uart_contains: "SPI1 MAX31855=01901600"
+  - uart_contains: "SPI1 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1"
+  - uart_contains: "SPI1 CHECKS=1"
   - uart_contains: "I2C_NACK_OK"
   - uart_contains: "I2C_IDLE_OK"
   - uart_contains: "TMP102=00001900"
