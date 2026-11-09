@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 1000000,
-  "cycles": 2000302,
+  "cycles": 2118440,
   "instructions": 1000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -31,6 +31,18 @@
     {
       "assertion": {
         "uart_contains": "ESP32_C61_UART0_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_ID=0x60"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_TEMP_RAW=0x082DC0"
       },
       "passed": true
     },
@@ -67,27 +79,27 @@
     "type": "risc_v",
     "registers": [
       0,
-      1107298162,
-      1082458080,
+      1107298780,
+      1082458048,
       1082132480,
       0,
       0,
       1082458112,
       0,
-      1082458112,
-      0,
-      0,
+      4294938623,
+      1611206656,
       0,
       256,
+      1280,
+      1107298895,
+      1107298907,
+      0,
+      0,
+      0,
+      220,
+      130,
+      0,
       1611210752,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
       0,
       0,
       0,
@@ -99,11 +111,11 @@
       0,
       0
     ],
-    "pc": 1107298162,
+    "pc": 1107298780,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
-    "mtvec": 1107296568,
+    "mtvec": 1107296588,
     "mscratch": 0,
     "mepc": 0,
     "mcause": 0,
@@ -135,7 +147,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "af5b3da4d943ab7bca4869f65f4dd8afbce1bde67f460bc4d7cb6ee5a7ef482f",
+  "firmware_hash": "4e1e448d521c88a63e1415965939563577e7d91d9b806fb8522d814be7d7ee74",
   "config": {
     "firmware": "examples/esp32c61-devkitc/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c61-devkitc-smoke",
     "system": "examples/esp32c61-devkitc/../../configs/systems/esp32c61-devkitc.yaml",
@@ -503,7 +515,7 @@
             "name": "GPIO_ENABLE",
             "offset": 52,
             "size": 32,
-            "value": 256,
+            "value": 304,
             "fields": [],
             "access": "rw"
           },
@@ -511,7 +523,7 @@
             "name": "GPIO_ENABLE_W1TS",
             "offset": 56,
             "size": 32,
-            "value": 256,
+            "value": 304,
             "fields": [],
             "access": "wo"
           },
@@ -519,7 +531,7 @@
             "name": "GPIO_ENABLE_W1TC",
             "offset": 60,
             "size": 32,
-            "value": 256,
+            "value": 304,
             "fields": [],
             "access": "wo"
           },
@@ -530,6 +542,122 @@
             "value": 0,
             "fields": [],
             "access": "ro"
+          },
+          {
+            "name": "GPIO_PIN4",
+            "offset": 228,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_PIN5",
+            "offset": 232,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PAD_DRIVER",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_FUNC4_OUT_SEL_CFG",
+            "offset": 2788,
+            "size": 32,
+            "value": 1071,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  0,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "OUT_INV_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OE_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 1
+              },
+              {
+                "name": "OE_INV_SEL",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_FUNC5_OUT_SEL_CFG",
+            "offset": 2792,
+            "size": 32,
+            "value": 1070,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  0,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OUT_INV_SEL",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OE_SEL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 1
+              },
+              {
+                "name": "OE_INV_SEL",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
           },
           {
             "name": "GPIO_FUNC8_OUT_SEL_CFG",
@@ -571,6 +699,56 @@
               }
             ],
             "access": "rw"
+          },
+          {
+            "name": "GPIO_FUNC46_IN_SEL_CFG",
+            "offset": 908,
+            "size": 32,
+            "value": 261,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  0,
+                  5
+                ],
+                "value": 1
+              },
+              {
+                "name": "SIG_IN_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_FUNC47_IN_SEL_CFG",
+            "offset": 912,
+            "size": 32,
+            "value": 260,
+            "fields": [
+              {
+                "name": "IN_SEL",
+                "bits": [
+                  0,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "SIG_IN_SEL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
           }
         ],
         "artifacts": []
@@ -580,6 +758,72 @@
         "kind": "native",
         "base": 1611202560,
         "registers": [
+          {
+            "name": "GPIO4",
+            "offset": 16,
+            "size": 32,
+            "value": 6144,
+            "fields": [
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  10,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  12,
+                  14
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO5",
+            "offset": 20,
+            "size": 32,
+            "value": 6144,
+            "fields": [
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  10,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  12,
+                  14
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
           {
             "name": "GPIO8",
             "offset": 32,
@@ -615,9 +859,346 @@
           }
         ],
         "artifacts": []
+      },
+      {
+        "name": "i2c0",
+        "kind": "native",
+        "base": 1610629120,
+        "registers": [
+          {
+            "name": "SCL_LOW_PERIOD",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CTR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TO",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SLAVE_ADDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FIFO_ST",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FIFO_CONF",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATA",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ENA",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_STATUS",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SDA_HOLD",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SDA_SAMPLE",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_HIGH_PERIOD",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_START_HOLD",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_RSTART_SETUP",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STOP_HOLD",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STOP_SETUP",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FILTER_CFG",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLK_CONF",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD0-7",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_ST_TIME_OUT",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_MAIN_ST_TIME_OUT",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_SP_CONF",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STRETCH_CONF",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 248,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TXFIFO_START_ADDR",
+            "offset": 256,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RXFIFO_START_ADDR",
+            "offset": 384,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x77",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
       }
     ],
     "devices": [
+      {
+        "id": "bme280",
+        "device_type": "bme280",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c0",
+          "address": 119
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "bme280",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      },
       {
         "id": "rgb_led",
         "device_type": "neopixel",
@@ -646,6 +1227,13 @@
   },
   "fidelity": [
     {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (160000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
       "kind": "unpowered_rail_assumed",
       "address": "0x0",
       "first_pc": "0x0",
@@ -665,195 +1253,195 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 189,
+            "cycle": 236209,
             "value": 1
           },
           {
-            "cycle": 230,
+            "cycle": 236250,
             "value": 0
           },
           {
-            "cycle": 383,
+            "cycle": 236403,
             "value": 1
           },
           {
-            "cycle": 424,
+            "cycle": 236444,
             "value": 0
           },
           {
-            "cycle": 577,
+            "cycle": 236597,
             "value": 1
           },
           {
-            "cycle": 618,
+            "cycle": 236638,
             "value": 0
           },
           {
-            "cycle": 771,
+            "cycle": 236791,
             "value": 1
           },
           {
-            "cycle": 812,
+            "cycle": 236832,
             "value": 0
           },
           {
-            "cycle": 965,
+            "cycle": 236985,
             "value": 1
           },
           {
-            "cycle": 1006,
+            "cycle": 237026,
             "value": 0
           },
           {
-            "cycle": 1159,
+            "cycle": 237179,
             "value": 1
           },
           {
-            "cycle": 1200,
+            "cycle": 237220,
             "value": 0
           },
           {
-            "cycle": 1353,
+            "cycle": 237373,
             "value": 1
           },
           {
-            "cycle": 1394,
+            "cycle": 237414,
             "value": 0
           },
           {
-            "cycle": 1547,
+            "cycle": 237567,
             "value": 1
           },
           {
-            "cycle": 1588,
+            "cycle": 237608,
             "value": 0
           },
           {
-            "cycle": 1743,
+            "cycle": 237763,
             "value": 1
           },
           {
-            "cycle": 1840,
+            "cycle": 237860,
             "value": 0
           },
           {
-            "cycle": 1937,
+            "cycle": 237957,
             "value": 1
           },
           {
-            "cycle": 2034,
+            "cycle": 238054,
             "value": 0
           },
           {
-            "cycle": 2131,
+            "cycle": 238151,
             "value": 1
           },
           {
-            "cycle": 2228,
+            "cycle": 238248,
             "value": 0
           },
           {
-            "cycle": 2325,
+            "cycle": 238345,
             "value": 1
           },
           {
-            "cycle": 2422,
+            "cycle": 238442,
             "value": 0
           },
           {
-            "cycle": 2519,
+            "cycle": 238539,
             "value": 1
           },
           {
-            "cycle": 2616,
+            "cycle": 238636,
             "value": 0
           },
           {
-            "cycle": 2713,
+            "cycle": 238733,
             "value": 1
           },
           {
-            "cycle": 2810,
+            "cycle": 238830,
             "value": 0
           },
           {
-            "cycle": 2907,
+            "cycle": 238927,
             "value": 1
           },
           {
-            "cycle": 3004,
+            "cycle": 239024,
             "value": 0
           },
           {
-            "cycle": 3101,
+            "cycle": 239121,
             "value": 1
           },
           {
-            "cycle": 3198,
+            "cycle": 239218,
             "value": 0
           },
           {
-            "cycle": 3297,
+            "cycle": 239317,
             "value": 1
           },
           {
-            "cycle": 3338,
+            "cycle": 239358,
             "value": 0
           },
           {
-            "cycle": 3491,
+            "cycle": 239511,
             "value": 1
           },
           {
-            "cycle": 3532,
+            "cycle": 239552,
             "value": 0
           },
           {
-            "cycle": 3685,
+            "cycle": 239705,
             "value": 1
           },
           {
-            "cycle": 3726,
+            "cycle": 239746,
             "value": 0
           },
           {
-            "cycle": 3879,
+            "cycle": 239899,
             "value": 1
           },
           {
-            "cycle": 3920,
+            "cycle": 239940,
             "value": 0
           },
           {
-            "cycle": 4073,
+            "cycle": 240093,
             "value": 1
           },
           {
-            "cycle": 4114,
+            "cycle": 240134,
             "value": 0
           },
           {
-            "cycle": 4267,
+            "cycle": 240287,
             "value": 1
           },
           {
-            "cycle": 4308,
+            "cycle": 240328,
             "value": 0
           },
           {
-            "cycle": 4461,
+            "cycle": 240481,
             "value": 1
           },
           {
-            "cycle": 4502,
+            "cycle": 240522,
             "value": 0
           },
           {
-            "cycle": 4655,
+            "cycle": 240675,
             "value": 1
           },
           {
-            "cycle": 4696,
+            "cycle": 240716,
             "value": 0
           }
         ],
@@ -861,199 +1449,199 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 187,
+            "cycle": 236207,
             "state": "0"
           },
           {
-            "cycle": 189,
+            "cycle": 236209,
             "state": "1"
           },
           {
-            "cycle": 230,
+            "cycle": 236250,
             "state": "0"
           },
           {
-            "cycle": 383,
+            "cycle": 236403,
             "state": "1"
           },
           {
-            "cycle": 424,
+            "cycle": 236444,
             "state": "0"
           },
           {
-            "cycle": 577,
+            "cycle": 236597,
             "state": "1"
           },
           {
-            "cycle": 618,
+            "cycle": 236638,
             "state": "0"
           },
           {
-            "cycle": 771,
+            "cycle": 236791,
             "state": "1"
           },
           {
-            "cycle": 812,
+            "cycle": 236832,
             "state": "0"
           },
           {
-            "cycle": 965,
+            "cycle": 236985,
             "state": "1"
           },
           {
-            "cycle": 1006,
+            "cycle": 237026,
             "state": "0"
           },
           {
-            "cycle": 1159,
+            "cycle": 237179,
             "state": "1"
           },
           {
-            "cycle": 1200,
+            "cycle": 237220,
             "state": "0"
           },
           {
-            "cycle": 1353,
+            "cycle": 237373,
             "state": "1"
           },
           {
-            "cycle": 1394,
+            "cycle": 237414,
             "state": "0"
           },
           {
-            "cycle": 1547,
+            "cycle": 237567,
             "state": "1"
           },
           {
-            "cycle": 1588,
+            "cycle": 237608,
             "state": "0"
           },
           {
-            "cycle": 1743,
+            "cycle": 237763,
             "state": "1"
           },
           {
-            "cycle": 1840,
+            "cycle": 237860,
             "state": "0"
           },
           {
-            "cycle": 1937,
+            "cycle": 237957,
             "state": "1"
           },
           {
-            "cycle": 2034,
+            "cycle": 238054,
             "state": "0"
           },
           {
-            "cycle": 2131,
+            "cycle": 238151,
             "state": "1"
           },
           {
-            "cycle": 2228,
+            "cycle": 238248,
             "state": "0"
           },
           {
-            "cycle": 2325,
+            "cycle": 238345,
             "state": "1"
           },
           {
-            "cycle": 2422,
+            "cycle": 238442,
             "state": "0"
           },
           {
-            "cycle": 2519,
+            "cycle": 238539,
             "state": "1"
           },
           {
-            "cycle": 2616,
+            "cycle": 238636,
             "state": "0"
           },
           {
-            "cycle": 2713,
+            "cycle": 238733,
             "state": "1"
           },
           {
-            "cycle": 2810,
+            "cycle": 238830,
             "state": "0"
           },
           {
-            "cycle": 2907,
+            "cycle": 238927,
             "state": "1"
           },
           {
-            "cycle": 3004,
+            "cycle": 239024,
             "state": "0"
           },
           {
-            "cycle": 3101,
+            "cycle": 239121,
             "state": "1"
           },
           {
-            "cycle": 3198,
+            "cycle": 239218,
             "state": "0"
           },
           {
-            "cycle": 3297,
+            "cycle": 239317,
             "state": "1"
           },
           {
-            "cycle": 3338,
+            "cycle": 239358,
             "state": "0"
           },
           {
-            "cycle": 3491,
+            "cycle": 239511,
             "state": "1"
           },
           {
-            "cycle": 3532,
+            "cycle": 239552,
             "state": "0"
           },
           {
-            "cycle": 3685,
+            "cycle": 239705,
             "state": "1"
           },
           {
-            "cycle": 3726,
+            "cycle": 239746,
             "state": "0"
           },
           {
-            "cycle": 3879,
+            "cycle": 239899,
             "state": "1"
           },
           {
-            "cycle": 3920,
+            "cycle": 239940,
             "state": "0"
           },
           {
-            "cycle": 4073,
+            "cycle": 240093,
             "state": "1"
           },
           {
-            "cycle": 4114,
+            "cycle": 240134,
             "state": "0"
           },
           {
-            "cycle": 4267,
+            "cycle": 240287,
             "state": "1"
           },
           {
-            "cycle": 4308,
+            "cycle": 240328,
             "state": "0"
           },
           {
-            "cycle": 4461,
+            "cycle": 240481,
             "state": "1"
           },
           {
-            "cycle": 4502,
+            "cycle": 240522,
             "state": "0"
           },
           {
-            "cycle": 4655,
+            "cycle": 240675,
             "state": "1"
           },
           {
-            "cycle": 4696,
+            "cycle": 240716,
             "state": "0"
           }
         ],
@@ -1082,20 +1670,32 @@
         "cycle_lo": 10000,
         "cycle": 20000,
         "end_cycle": 270000
+      },
+      {
+        "text": "BME280_ID=0x60",
+        "cycle_lo": 270000,
+        "cycle": 280000,
+        "end_cycle": 480000
+      },
+      {
+        "text": "BME280_TEMP_RAW=0x082DC0",
+        "cycle_lo": 480000,
+        "cycle": 490000,
+        "end_cycle": 820000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 2072,
+    "text_bytes": 2786,
     "data_bytes": 0,
     "bss_bytes": 327680,
-    "flash_used_bytes": 2072,
+    "flash_used_bytes": 2786,
     "ram_static_bytes": 327680,
     "flash_total_bytes": 8388608,
     "ram_total_bytes": 327680,
-    "flash_used_pct": 0.02,
+    "flash_used_pct": 0.03,
     "ram_static_pct": 100.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -1108,28 +1708,53 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 2000302,
+    "cycles": 2118440,
     "instructions": 1000000,
     "steps_executed": 1000000,
-    "memory_reads": 59,
-    "memory_writes": 2,
-    "peripheral_accesses": 75,
+    "memory_reads": 92,
+    "memory_writes": 14,
+    "peripheral_accesses": 29642,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1107298162,
-        "count": 3828,
+        "pc": 1107298780,
+        "count": 2891,
         "symbol": "main"
       },
       {
-        "pc": 1107296868,
+        "pc": 1107296964,
+        "count": 235,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 1107296966,
+        "count": 234,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 1107296982,
+        "count": 234,
+        "symbol": "firmware_esp32c61_devkitc_smoke::read_bme280_register"
+      },
+      {
+        "pc": 1107296976,
+        "count": 195,
+        "symbol": "firmware_esp32c61_devkitc_smoke::read_bme280_register"
+      },
+      {
+        "pc": 1107296888,
         "count": 39,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 1107296870,
+        "pc": 1107296892,
         "count": 39,
-        "symbol": "firmware_esp32c61_devkitc_smoke::ws2812_reset_gap"
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 1107298586,
+        "count": 39,
+        "symbol": "firmware_esp32c61_devkitc_smoke::short_low"
       }
     ]
   }

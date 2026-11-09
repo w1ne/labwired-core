@@ -1,6 +1,6 @@
-# ESP32-C61 HP RISC-V profile for the ESP32-C61-DevKitC-1 v2.0 UART and GPIO8
-# addressable RGB LED smokes. Other C61 GPIO pads and peripherals stay out of
-# this focused board profile.
+# ESP32-C61 HP RISC-V profile for the ESP32-C61-DevKitC-1 v2.0 UART0, GPIO4/5
+# I2C0 and GPIO8 addressable RGB LED smoke. Other pads and peripherals remain
+# outside this focused board profile.
 name: "esp32c61"
 arch: "riscv"
 core: "rv32imac"
@@ -23,13 +23,14 @@ memory_regions:
     size: "256KB"
     image_env: "LABWIRED_ESP32C61_ROM"
 pins:
+  GPIO4: { gpio: "gpio", bit: 4 }
+  GPIO5: { gpio: "gpio", bit: 5 }
   GPIO8: { gpio: "gpio", bit: 8 }
 peripherals:
-  # C61 PCR keeps UART0_CONF at +0x00, UART0_SCLK_CONF at +0x04 and the same
-  # APB/function-clock bits as C5/C6. The C6 PCR model supplies the register
-  # storage and enforces the UART0 APB clock gate used by this smoke.
+  # C61 moves I2C_CONF/I2C_SCLK_CONF to +0x2C/+0x30 (RMT_CONF on C6), so use a
+  # chip-specific narrow register model for the UART0/I2C0 smoke clock gates.
   - id: "pcr"
-    type: "esp32c6_pcr"
+    type: "esp32c61_pcr"
     base_address: 0x60096000
     size: "4KB"
   # C61 UART0's FIFO/register head matches the C6 map through UART_ID at +0x9C.
@@ -42,8 +43,8 @@ peripherals:
     clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
     config:
       debug_schema: "../peripherals/esp32c6/uart0.yaml"
-  # C61 GPIO differs from the C6 register head. The behavioral profile covers
-  # direct GPIO8 output only: OUT/W1TS/W1TC, ENABLE_W1TS, and the GPIO8 selector.
+  # C61 GPIO differs from the C6 register head. The profile covers GPIO4/5
+  # I2C0 matrix routes and direct GPIO8 RGB output.
   - id: "gpio"
     type: "esp32c61_gpio"
     base_address: 0x60091000
@@ -51,10 +52,20 @@ peripherals:
     size: "3584"
     config:
       debug_schema: "../peripherals/esp32c61/gpio_gpio8.yaml"
-  # The one IO_MUX word exercised by this smoke. GPIO8 is at +0x20 on C61.
+  # IO_MUX GPIO4/5 route the I2C sensor; GPIO8 is the onboard RGB data pad.
   - id: "io_mux"
     type: "esp32c61_io_mux"
     base_address: 0x60090000
     size: "4KB"
     config:
       debug_schema: "../peripherals/esp32c61/io_mux_gpio8.yaml"
+  # C61 I2C0 uses the same command register layout as the existing C3/C5/C6
+  # model, with its own C61 clock gate and GPIO matrix signal numbering.
+  - id: "i2c0"
+    type: "esp32c3_i2c"
+    irq: 45
+    base_address: 0x60004000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "I2C_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c6/i2c0.yaml"

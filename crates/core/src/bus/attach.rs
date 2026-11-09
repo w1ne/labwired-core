@@ -106,7 +106,7 @@ impl SystemBus {
         Ok(())
     }
 
-    /// Wire the shared ESP32-C3/C5/C6 I²C0 bit engine to its GPIO matrix. GPIO
+    /// Wire the shared ESP32-C3/C5/C6/C61 I²C0 bit engine to its GPIO matrix. GPIO
     /// exposes the live SDA/SCL levels, while I²C checks the configured input
     /// and output routes before a physically routed slave can acknowledge.
     /// No-op unless a supported I²C controller and matching GPIO model exist.
@@ -1320,8 +1320,9 @@ impl SystemBus {
         }
     }
 
-    /// Wire the C61 GPIO8 IO_MUX word into its GPIO slice so MCU_SEL gates the
-    /// DevKitC RGB LED output. Other C61 pads are outside this narrow model.
+    /// Wire the C61 GPIO4/5/8 IO_MUX words into its GPIO slice so MCU_SEL gates
+    /// the DevKitC I²C route and RGB LED output. Other pads remain outside this
+    /// narrow model.
     pub(crate) fn wire_esp32c61_pad_controls(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
         use crate::peripherals::esp32c6::io_mux::Esp32c61IoMux;

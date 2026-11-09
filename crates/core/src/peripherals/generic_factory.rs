@@ -167,11 +167,12 @@ pub const MODEL_TYPES: &[&str] = &[
     // factory. Keep its name canonical so the generic `gpio` fallback cannot
     // replace it with a register-layout placeholder before that factory runs.
     "esp32h2_gpio",
-    // C6-only behavioral blocks: PCR (clock/reset, full SVD register map) and
-    // GDMA (3 channels, C6 register layout). The fuzzy `contains("dma")`
+    // C6/C61 behavioral blocks: full-map C6 PCR, narrow C61 PCR, and C6 GDMA
+    // (3 channels). The fuzzy `contains("dma")`
     // fallback would otherwise coerce `esp32c6_gdma` onto the STM32 DMA
     // register map — a silently wrong model.
     "esp32c6_pcr",
+    "esp32c61_pcr",
     "esp32c6_gdma",
     // C6 TIMG-with-MWDT (shared `esp32_timg` model + the C3/C6 watchdog path)
     // and LP_TIMER (C6 RTC main timer). `esp32c6_lp_rtc` contains "rtc" and

@@ -43,8 +43,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // Its GPIO interrupt is matrix source 30 (esp32c6.svd), not the C3's 16.
         "esp32c6_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c6()),
         // The C61 GPIO block has its own register head and selector placement;
-        // currently only the direct GPIO8 output path used by the DevKitC RGB
-        // LED is claimed.
+        // this profile covers the DevKitC GPIO4/5 I2C0 route and GPIO8 RGB LED.
         "esp32c61_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c61()),
         "esp32c61_io_mux" => Box::new(super::io_mux::Esp32c61IoMux::new()),
         // The H2 smoke uses only direct GPIO output on GPIO8. Espressif's
@@ -58,6 +57,9 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // (`Peripheral::clock_gate_reg_offset`); see super::pcr for exactly
         // what is and is not enforced.
         "esp32c6_pcr" => Box::new(super::pcr::Esp32c6Pcr::new()),
+        // The C61 moves I2C_CONF/I2C_SCLK_CONF to +0x2C/+0x30, so it has a
+        // separate narrow PCR profile for its DevKitC UART0/I2C0 smoke.
+        "esp32c61_pcr" => Box::new(super::pcr::Esp32c61Pcr::new()),
         // C6's two-channel RMT TX path, symbol RAM, TX-end status and timed
         // output through GPIO matrix signals 71/72. Source 49 is ETS_RMT_INTR_SOURCE.
         "esp32c6_rmt" => Box::new(super::rmt::Esp32c6Rmt::new(p_cfg.irq.unwrap_or(49))),
@@ -135,6 +137,7 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c61_io_mux",
     "esp32h2_gpio",
     "esp32c6_pcr",
+    "esp32c61_pcr",
     "esp32c6_rmt",
     "esp32c6_extmem",
     "esp32c6_systimer",

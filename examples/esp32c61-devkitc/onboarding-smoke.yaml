@@ -1,4 +1,4 @@
-# ESP32-C61-DevKitC-1 v2.0 smoke: exercise UART0 and the onboard GPIO8 RGB LED.
+# ESP32-C61-DevKitC-1 v2.0 smoke: UART0, GPIO4/5 I2C0 BME280, onboard RGB LED.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c61-devkitc-smoke"
@@ -7,6 +7,8 @@ limits:
   max_steps: 1000000
 assertions:
   - uart_contains: "ESP32_C61_UART0_OK"
+  - uart_contains: "BME280_ID=0x60"
+  - uart_contains: "BME280_TEMP_RAW=0x082DC0"
   - gpio_edges:
       pin: "gpio:8"
       min_edges: 48

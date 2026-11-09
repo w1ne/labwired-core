@@ -1,6 +1,30 @@
-peripheral: IO_MUX GPIO8
+peripheral: IO_MUX GPIO4/5/8
 version: 0.1.0
 registers:
+  - id: GPIO4
+    address_offset: 0x10
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x1800
+    fields:
+      - name: FUN_IE
+        bit_range: [9, 9]
+      - name: FUN_DRV
+        bit_range: [10, 11]
+      - name: MCU_SEL
+        bit_range: [12, 14]
+  - id: GPIO5
+    address_offset: 0x14
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x1800
+    fields:
+      - name: FUN_IE
+        bit_range: [9, 9]
+      - name: FUN_DRV
+        bit_range: [10, 11]
+      - name: MCU_SEL
+        bit_range: [12, 14]
   - id: GPIO8
     address_offset: 0x20
     size: 32

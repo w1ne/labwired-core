@@ -227,6 +227,94 @@ impl Peripheral for Esp32c6Pcr {
     }
 }
 
+/// Minimal ESP32-C61 PCR profile for the board's UART0 and I2C0 smoke.
+///
+/// The C61 moves I2C_CONF/I2C_SCLK_CONF to +0x2C/+0x30; those offsets are
+/// RMT_CONF/RMT_SCLK_CONF on the C6. Keep the C61 map separate so a chip
+/// descriptor cannot silently claim the sibling's register names.
+#[derive(Debug)]
+pub struct Esp32c61Pcr {
+    regs: crate::FastMap<u64, u32>,
+}
+
+const C61_PCR_REGISTERS: &[(u64, &str, u32)] = &[
+    (0x00, "UART0_CONF", 0x0000_0001),
+    (0x04, "UART0_SCLK_CONF", 0x0070_0000),
+    (0x2C, "I2C_CONF", 0x0000_0001),
+    (0x30, "I2C_SCLK_CONF", 0x0040_0000),
+];
+
+impl Default for Esp32c61Pcr {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Esp32c61Pcr {
+    pub fn new() -> Self {
+        let regs = C61_PCR_REGISTERS
+            .iter()
+            .map(|(offset, _, reset)| (*offset, *reset))
+            .collect();
+        Self { regs }
+    }
+
+    fn word(&self, offset: u64) -> u32 {
+        self.regs.get(&(offset & !3)).copied().unwrap_or(0)
+    }
+
+    pub fn gate_reg_offset(name: &str) -> Option<u64> {
+        C61_PCR_REGISTERS
+            .iter()
+            .find(|(_, register, _)| register.eq_ignore_ascii_case(name))
+            .map(|(offset, _, _)| *offset)
+    }
+}
+
+impl Peripheral for Esp32c61Pcr {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let shift = (offset & 3) * 8;
+        Ok(((self.word(offset) >> shift) & 0xFF) as u8)
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let word_offset = offset & !3;
+        let shift = (offset & 3) * 8;
+        let entry = self.regs.entry(word_offset).or_insert(0);
+        *entry = (*entry & !(0xFF << shift)) | (u32::from(value) << shift);
+        Ok(())
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.word(offset))
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.regs.insert(offset & !3, value);
+        Ok(())
+    }
+
+    fn peek(&self, offset: u64) -> Option<u8> {
+        self.read(offset).ok()
+    }
+
+    fn clock_gate_reg_offset(&self, name: &str) -> Option<u64> {
+        Self::gate_reg_offset(name)
+    }
+
+    fn tick(&mut self) -> PeripheralTickResult {
+        PeripheralTickResult::default()
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

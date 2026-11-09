@@ -91,12 +91,11 @@ fn c3_out_signal_name(idx: u32) -> Option<&'static str> {
 
 /// The chip-specific numbers of the GPIO matrix this model decodes.
 ///
-/// The ESP32-C6 reuses this model (same register head), but its matrix is
-/// numbered differently: `I2CEXT0_SCL`/`SDA` are 45/46 (the C3's 53/54) and
-/// `FUNCn_IN_SEL_CFG` keeps the pad in [5:0] with `SEL` at bit 7 (the C3:
-/// [4:0], bit 6). esp-hal's generated metadata
-/// (`esp-metadata-generated` 0.4, `_generated_esp32c3.rs` /
-/// `_generated_esp32c6.rs`) and the two PACs agree on every number here.
+/// ESP32-C6 and C61 reuse this model with different matrix numbering. C6
+/// `I2CEXT0_SCL`/`SDA` are 45/46 (C3: 53/54), and its input pad uses bits [5:0]
+/// with `SEL` at bit 7. C61 uses I2C signals 46/47 and `SEL` at bit 8. C3 uses
+/// pad bits [4:0] and `SEL` at bit 6. esp-hal metadata, PACs, and the C61 TRM
+/// agree on these per-chip layouts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MatrixLayout {
     pub(crate) i2c_scl: u32,
@@ -106,7 +105,8 @@ pub(crate) struct MatrixLayout {
     pub(crate) fspid: u32,
     pub(crate) fspics0: u32,
     /// `LEDC_LS_SIG_OUT0_IDX`, or `None` where this model does not bind the
-    /// LEDC outputs (the C6 numbers its matrix differently; its 45/46 are I²C).
+    /// LEDC outputs (C6/C61 number their matrix differently; those I²C signals
+    /// occupy indices 45/46 and 46/47 respectively).
     pub(crate) ledc_ls_out0: Option<u32>,
     pub(crate) in_sel: crate::peripherals::esp_gpio_net::InSelLayout,
 }
@@ -141,11 +141,35 @@ pub(crate) const C6_MATRIX: MatrixLayout = MatrixLayout {
     },
 };
 
+/// ESP32-C61 GPIO-matrix signals and input selector layout from the C61 TRM.
+/// This profile exposes GPIO4/GPIO5 I²C0 routing and GPIO8's board LED output.
+pub(crate) const C61_MATRIX: MatrixLayout = MatrixLayout {
+    i2c_scl: 46,
+    i2c_sda: 47,
+    // The C61 slice intentionally does not claim FSPI matrix routing.
+    fspiclk: 0,
+    fspiq: 0,
+    fspid: 0,
+    fspics0: 0,
+    ledc_ls_out0: None,
+    in_sel: crate::peripherals::esp_gpio_net::InSelLayout {
+        pad_mask: 0x3F,
+        sel_bit: 1 << 8,
+    },
+};
+
 impl MatrixLayout {
     /// Output signal index → name, for `gpio_routing`.
     fn out_signal_name(&self, idx: u32) -> Option<&'static str> {
         if *self == C3_MATRIX {
             return c3_out_signal_name(idx);
+        }
+        if *self == C61_MATRIX {
+            return match idx {
+                46 => Some("I2CEXT0_SCL"),
+                47 => Some("I2CEXT0_SDA"),
+                _ => None,
+            };
         }
         Some(match idx {
             6 => "U0TXD",
@@ -179,15 +203,19 @@ const IN: u64 = 0x3C;
 const STATUS: u64 = 0x44;
 const STATUS_W1TS: u64 = 0x48;
 const STATUS_W1TC: u64 = 0x4C;
-// The C61's GPIO block moved output-enable/strap/input registers and places
-// GPIO_FUNC8_OUT_SEL_CFG at 0xAF4. This profile currently models the direct
-// GPIO8 output path used by the C61-DevKitC RGB LED.
+// The C61's GPIO block moved output-enable/strap/input registers and uses
+// chip-specific GPIO4/5/8 matrix-selector addresses.
 const C61_STRAP: u64 = 0x00;
 const C61_ENABLE: u64 = 0x34;
 const C61_ENABLE_W1TS: u64 = 0x38;
 const C61_ENABLE_W1TC: u64 = 0x3C;
 const C61_IN: u64 = 0x64;
+const C61_PIN0: u64 = 0xD4;
+const C61_FUNC4_OUT_SEL: u64 = 0xAE4;
+const C61_FUNC5_OUT_SEL: u64 = 0xAE8;
 const C61_FUNC8_OUT_SEL: u64 = 0xAF4;
+const C61_FUNC46_IN_SEL: u64 = 0x38C;
+const C61_FUNC47_IN_SEL: u64 = 0x390;
 const C61_SIG_GPIO_OUT: u32 = 256;
 const PCPU_INT: u64 = 0x5C;
 const PCPU_NMI_INT: u64 = 0x60;
@@ -245,8 +273,8 @@ pub struct Esp32c3Gpio {
     intr_source: u32,
     /// Matrix numbering of the chip this block sits on (C3 or C6).
     layout: MatrixLayout,
-    /// C61 has a different GPIO register head and GPIO8 selector location.
-    /// Only the direct GPIO8 output path is exposed by the current C61 board.
+    /// C61 has a different GPIO register head and matrix selector placement.
+    /// The current board profile exposes GPIO4/5 I²C0 and GPIO8 RGB output.
     esp32c61_layout: bool,
     /// Peripheral input signals bound to wire lines (`FUNCn_IN_SEL_CFG`).
     in_routes: crate::peripherals::esp_gpio_net::MatrixInputs,
@@ -315,12 +343,15 @@ impl Esp32c3Gpio {
         }
     }
 
-    /// The ESP32-C61 direct GPIO output register path used by DevKitC GPIO8.
-    /// Its selector value is 256 (with OE_SEL at bit 10), and its output
+    /// The ESP32-C61 GPIO4/5 I2C0 matrix route and direct DevKitC GPIO8 output.
+    /// The GPIO8 selector value is 256 (with OE_SEL at bit 10), and the output
     /// enable W1TS register is at +0x38 rather than the C3/C6 +0x24.
     pub fn for_esp32c61() -> Self {
         let mut gpio = Self::new();
         gpio.esp32c61_layout = true;
+        gpio.layout = C61_MATRIX;
+        gpio.out_sel[4] = C61_SIG_GPIO_OUT;
+        gpio.out_sel[5] = C61_SIG_GPIO_OUT;
         gpio.out_sel[8] = C61_SIG_GPIO_OUT;
         gpio
     }
@@ -512,20 +543,25 @@ impl Esp32c3Gpio {
     }
 
     fn gpio_output_path_selected(&self, pin: u8) -> bool {
-        if !self.esp32c61_layout || pin != 8 {
+        if !self.esp32c61_layout || !matches!(pin, 4 | 5 | 8) {
             return true;
         }
         let iomux_selected = self.pad_controls.as_ref().is_some_and(|controls| {
             controls
                 .read()
                 .expect("ESP32-C61 IO_MUX pad controls poisoned")
-                .get(8)
+                .get(pin as usize)
                 .is_some_and(|word| {
                     crate::peripherals::esp32c6::io_mux::gpio_function_selected(*word)
                 })
         });
-        let selector = self.out_sel[8];
-        iomux_selected && selector & 0x1FF == C61_SIG_GPIO_OUT && selector & (1 << 10) != 0
+        let selector = self.out_sel[pin as usize];
+        let expected = match pin {
+            4 => self.layout.i2c_sda,
+            5 => self.layout.i2c_scl,
+            _ => C61_SIG_GPIO_OUT,
+        };
+        iomux_selected && selector & 0x1FF == expected && selector & (1 << 10) != 0
     }
 
     /// Clone the live GPIO-matrix route cell for the C3 I²C controller. It is
@@ -737,8 +773,13 @@ impl Esp32c3Gpio {
     }
 
     fn out_sel_index(&self, off: u64) -> Option<usize> {
-        if self.esp32c61_layout && off == C61_FUNC8_OUT_SEL {
-            return Some(8);
+        if self.esp32c61_layout {
+            return match off {
+                C61_FUNC4_OUT_SEL => Some(4),
+                C61_FUNC5_OUT_SEL => Some(5),
+                C61_FUNC8_OUT_SEL => Some(8),
+                _ => None,
+            };
         }
         if (FUNC_OUT_SEL..FUNC_OUT_SEL + (PIN_COUNT as u64) * 4).contains(&off) {
             Some(((off - FUNC_OUT_SEL) / 4) as usize)
@@ -747,7 +788,14 @@ impl Esp32c3Gpio {
         }
     }
 
-    fn in_sel_index(off: u64) -> Option<usize> {
+    fn in_sel_index(&self, off: u64) -> Option<usize> {
+        if self.esp32c61_layout {
+            return match off {
+                C61_FUNC46_IN_SEL => Some(46),
+                C61_FUNC47_IN_SEL => Some(47),
+                _ => None,
+            };
+        }
         if (FUNC_IN_SEL..FUNC_IN_SEL + (INPUT_SIGNAL_COUNT as u64) * 4).contains(&off) {
             Some(((off - FUNC_IN_SEL) / 4) as usize)
         } else {
@@ -893,7 +941,12 @@ impl Esp32c3Gpio {
         enabled
     }
 
-    fn pin_cfg_index(off: u64) -> Option<usize> {
+    fn pin_cfg_index(&self, off: u64) -> Option<usize> {
+        if self.esp32c61_layout {
+            return (C61_PIN0..C61_PIN0 + (PIN_COUNT as u64) * 4)
+                .contains(&off)
+                .then_some(((off - C61_PIN0) / 4) as usize);
+        }
         if (PIN0..PIN0 + (PIN_COUNT as u64) * 4).contains(&off) {
             Some(((off - PIN0) / 4) as usize)
         } else {
@@ -911,6 +964,10 @@ impl Esp32c3Gpio {
                 off => {
                     if let Some(idx) = self.out_sel_index(off) {
                         self.out_sel[idx]
+                    } else if let Some(idx) = self.in_sel_index(off) {
+                        self.in_sel[idx]
+                    } else if let Some(idx) = self.pin_cfg_index(off) {
+                        self.pin_cfg[idx]
                     } else {
                         0
                     }
@@ -930,10 +987,10 @@ impl Esp32c3Gpio {
             off => {
                 if let Some(idx) = self.out_sel_index(off) {
                     self.out_sel[idx]
-                } else if let Some(idx) = Self::in_sel_index(off) {
+                } else if let Some(idx) = self.in_sel_index(off) {
                     self.in_sel[idx]
                 } else {
-                    Self::pin_cfg_index(off)
+                    self.pin_cfg_index(off)
                         .map(|idx| self.pin_cfg[idx])
                         .unwrap_or(0)
                 }
@@ -955,6 +1012,10 @@ impl Esp32c3Gpio {
                 off => {
                     if let Some(idx) = self.out_sel_index(off) {
                         self.out_sel[idx] = value;
+                    } else if let Some(idx) = self.in_sel_index(off) {
+                        self.in_sel[idx] = value;
+                    } else if let Some(idx) = self.pin_cfg_index(off) {
+                        self.pin_cfg[idx] = value;
                     }
                 }
             }
@@ -978,9 +1039,9 @@ impl Esp32c3Gpio {
             off => {
                 if let Some(idx) = self.out_sel_index(off) {
                     self.out_sel[idx] = value;
-                } else if let Some(idx) = Self::in_sel_index(off) {
+                } else if let Some(idx) = self.in_sel_index(off) {
                     self.in_sel[idx] = value;
-                } else if let Some(idx) = Self::pin_cfg_index(off) {
+                } else if let Some(idx) = self.pin_cfg_index(off) {
                     self.pin_cfg[idx] = value;
                 }
             }
@@ -1301,7 +1362,11 @@ impl Peripheral for Esp32c3Gpio {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::json!({
-            "layout": if self.esp32c61_layout { "esp32c61-gpio8" } else { "esp32c3" },
+            "layout": if self.esp32c61_layout {
+                "esp32c61-gpio4-5-i2c-gpio8"
+            } else {
+                "esp32c3"
+            },
             "odr": self.out,
             "idr": self.effective_input(),
             "enable": self.enable,

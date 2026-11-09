@@ -2,16 +2,20 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Narrow ESP32-C61 IO_MUX model for the GPIO8 output used by DevKitC's RGB LED.
+//! Narrow ESP32-C61 IO_MUX model for board GPIO4/5 I²C and GPIO8 RGB output.
 //!
-//! C61 puts IO_MUX GPIO8 at offset `0x20`. The word is shared with the C61
-//! GPIO model so selecting a non-GPIO function really disconnects the modeled
-//! GPIO output from the board pin.
+//! C61 puts IO_MUX GPIO4/5/8 at offsets `0x10`/`0x14`/`0x20`. The words are
+//! shared with the C61 GPIO model so selecting a non-GPIO function disconnects
+//! the modeled routes from the board pads.
 
 use crate::{MmioAccessClass, Peripheral, SimResult};
 use labwired_config::PeripheralDescriptor;
 use std::sync::{Arc, OnceLock, RwLock};
 
+const GPIO4: u64 = 0x10;
+const GPIO4_PIN: usize = 4;
+const GPIO5: u64 = 0x14;
+const GPIO5_PIN: usize = 5;
 const GPIO8: u64 = 0x20;
 const GPIO8_PIN: usize = 8;
 const PAD_COUNT: usize = 22;
@@ -39,6 +43,8 @@ pub struct Esp32c61IoMux {
 impl Esp32c61IoMux {
     pub fn new() -> Self {
         let mut pads = [0; PAD_COUNT];
+        pads[GPIO4_PIN] = PAD_RESET;
+        pads[GPIO5_PIN] = PAD_RESET;
         pads[GPIO8_PIN] = PAD_RESET;
         Self {
             pads: Arc::new(RwLock::new(pads)),
@@ -49,21 +55,28 @@ impl Esp32c61IoMux {
         Arc::clone(&self.pads)
     }
 
-    fn read_word(&self, offset: u64) -> u32 {
-        if offset == GPIO8 {
-            self.pads
-                .read()
-                .expect("ESP32-C61 IO_MUX pad controls poisoned")[GPIO8_PIN]
-        } else {
-            0
+    fn pad_index(offset: u64) -> Option<usize> {
+        match offset {
+            GPIO4 => Some(GPIO4_PIN),
+            GPIO5 => Some(GPIO5_PIN),
+            GPIO8 => Some(GPIO8_PIN),
+            _ => None,
         }
     }
 
+    fn read_word(&self, offset: u64) -> u32 {
+        Self::pad_index(offset).map_or(0, |pin| {
+            self.pads
+                .read()
+                .expect("ESP32-C61 IO_MUX pad controls poisoned")[pin]
+        })
+    }
+
     fn write_word(&mut self, offset: u64, value: u32) {
-        if offset == GPIO8 {
+        if let Some(pin) = Self::pad_index(offset) {
             self.pads
                 .write()
-                .expect("ESP32-C61 IO_MUX pad controls poisoned")[GPIO8_PIN] = value;
+                .expect("ESP32-C61 IO_MUX pad controls poisoned")[pin] = value;
         }
     }
 }
@@ -81,13 +94,13 @@ impl Peripheral for Esp32c61IoMux {
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let word_offset = offset & !3;
-        if word_offset == GPIO8 {
+        if let Some(pin) = Self::pad_index(word_offset) {
             let shift = (offset & 3) * 8;
             let mut pads = self
                 .pads
                 .write()
                 .expect("ESP32-C61 IO_MUX pad controls poisoned");
-            let word = &mut pads[GPIO8_PIN];
+            let word = &mut pads[pin];
             *word = (*word & !(0xFF << shift)) | (u32::from(value) << shift);
         }
         Ok(())
@@ -107,7 +120,7 @@ impl Peripheral for Esp32c61IoMux {
 
     fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
         match offset & !3 {
-            GPIO8 => MmioAccessClass::SideEffectFree,
+            GPIO4 | GPIO5 | GPIO8 => MmioAccessClass::SideEffectFree,
             _ => MmioAccessClass::SideEffecting,
         }
     }
@@ -121,12 +134,18 @@ impl Peripheral for Esp32c61IoMux {
     }
 
     fn snapshot(&self) -> serde_json::Value {
-        serde_json::json!({ "gpio8": self.read_word(GPIO8) })
+        serde_json::json!({
+            "gpio4": self.read_word(GPIO4),
+            "gpio5": self.read_word(GPIO5),
+            "gpio8": self.read_word(GPIO8),
+        })
     }
 
     fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
-        if let Some(value) = state.get("gpio8").and_then(serde_json::Value::as_u64) {
-            self.write_word(GPIO8, value as u32);
+        for (key, offset) in [("gpio4", GPIO4), ("gpio5", GPIO5), ("gpio8", GPIO8)] {
+            if let Some(value) = state.get(key).and_then(serde_json::Value::as_u64) {
+                self.write_word(offset, value as u32);
+            }
         }
         Ok(())
     }
@@ -136,17 +155,29 @@ impl Peripheral for Esp32c61IoMux {
     }
 
     fn runtime_snapshot(&self) -> Vec<u8> {
-        bincode::serialize(&self.read_word(GPIO8)).expect("serialize C61 IO_MUX GPIO8")
+        bincode::serialize(&[
+            self.read_word(GPIO4),
+            self.read_word(GPIO5),
+            self.read_word(GPIO8),
+        ])
+        .expect("serialize C61 IO_MUX GPIO4/5/8")
     }
 
     fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
         if !bytes.is_empty() {
-            let value: u32 = bincode::deserialize(bytes).map_err(|error| {
-                crate::SimulationError::NotImplemented(format!(
-                    "ESP32-C61 IO_MUX snapshot decode: {error}"
-                ))
-            })?;
-            self.write_word(GPIO8, value);
+            if let Ok(values) = bincode::deserialize::<[u32; 3]>(bytes) {
+                self.write_word(GPIO4, values[0]);
+                self.write_word(GPIO5, values[1]);
+                self.write_word(GPIO8, values[2]);
+            } else {
+                // Older snapshots stored only GPIO8 as a single u32.
+                let value: u32 = bincode::deserialize(bytes).map_err(|error| {
+                    crate::SimulationError::NotImplemented(format!(
+                        "ESP32-C61 IO_MUX snapshot decode: {error}"
+                    ))
+                })?;
+                self.write_word(GPIO8, value);
+            }
         }
         Ok(())
     }

@@ -1,4 +1,4 @@
-peripheral: GPIO (GPIO8 output slice)
+peripheral: GPIO (I2C0 GPIO4/5 and GPIO8 output slice)
 version: 0.1.0
 registers:
   - id: GPIO_STRAP
@@ -41,6 +41,50 @@ registers:
     size: 32
     access: READ_ONLY
     reset_value: 0
+  - id: GPIO_PIN4
+    address_offset: 0xE4
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+    fields:
+      - name: PAD_DRIVER
+        bit_range: [2, 2]
+  - id: GPIO_PIN5
+    address_offset: 0xE8
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+    fields:
+      - name: PAD_DRIVER
+        bit_range: [2, 2]
+  - id: GPIO_FUNC4_OUT_SEL_CFG
+    address_offset: 0xAE4
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x100
+    fields:
+      - name: OUT_SEL
+        bit_range: [0, 8]
+      - name: OUT_INV_SEL
+        bit_range: [9, 9]
+      - name: OE_SEL
+        bit_range: [10, 10]
+      - name: OE_INV_SEL
+        bit_range: [11, 11]
+  - id: GPIO_FUNC5_OUT_SEL_CFG
+    address_offset: 0xAE8
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x100
+    fields:
+      - name: OUT_SEL
+        bit_range: [0, 8]
+      - name: OUT_INV_SEL
+        bit_range: [9, 9]
+      - name: OE_SEL
+        bit_range: [10, 10]
+      - name: OE_INV_SEL
+        bit_range: [11, 11]
   - id: GPIO_FUNC8_OUT_SEL_CFG
     address_offset: 0xAF4
     size: 32
@@ -55,3 +99,23 @@ registers:
         bit_range: [10, 10]
       - name: OE_INV_SEL
         bit_range: [11, 11]
+  - id: GPIO_FUNC46_IN_SEL_CFG
+    address_offset: 0x38C
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+    fields:
+      - name: IN_SEL
+        bit_range: [0, 5]
+      - name: SIG_IN_SEL
+        bit_range: [8, 8]
+  - id: GPIO_FUNC47_IN_SEL_CFG
+    address_offset: 0x390
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+    fields:
+      - name: IN_SEL
+        bit_range: [0, 5]
+      - name: SIG_IN_SEL
+        bit_range: [8, 8]
