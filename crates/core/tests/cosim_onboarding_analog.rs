@@ -79,6 +79,7 @@ const CONVERTED: &[&str] = &[
     "gr716",
     "imxrt1064",
     "imxrt500",
+    "lpc2294",
     "mars_zx3",
     "max32652-evkit",
     "max32652",
@@ -364,7 +365,19 @@ enum Family {
     /// poll `SR.ADONS`, rank 1 in `SQR5`, `SWSTART`, poll `EOC`, read `DR`.
     /// 12 bits against VREF+ 3.3 V.
     Stm32L1Adc,
+    /// NXP LPC2000 A/D (`lpc2000_adc`), the LPC21xx/22xx software read:
+    /// `ADCR` = PDN | CLKDIV | SEL bit, `ADCR |= START` (001), poll
+    /// `ADDR.DONE`, `ADCR ^= START`, result `(ADDR >> 6) & 0x3FF`. 10 bits,
+    /// the fraction of V3A (3.3 V).
+    Lpc2000Adc,
 }
+
+/// LPC2000 A/D offsets and bits (LPC2119/2129/2194/2292/2294 UM ch. 17).
+const LPC_ADCR: u64 = 0x00;
+const LPC_ADDR: u64 = 0x04;
+const LPC_PDN: u32 = 1 << 21;
+const LPC_START_NOW: u32 = 1 << 24;
+const LPC_DONE: u32 = 1 << 31;
 
 /// STM32L1 ADC offsets and bits (STM32L151.svd v1.4).
 const L1_SR: u64 = 0x00;
@@ -644,6 +657,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Gr716Adc
         } else if kind == "stm32l1_adc" {
             Family::Stm32L1Adc
+        } else if kind == "lpc2000_adc" {
+            Family::Lpc2000Adc
         } else if kind == "nxp_lpadc" {
             Family::NxpLpadc {
                 ctype_mode: p.config.get("layout").and_then(|v| v.as_str()) == Some("ctype_mode"),
@@ -750,6 +765,9 @@ impl Converter {
             // 11 bits, 2^11 / 2.5 V, truncated, clamped: the -10 °C
             // divider (2.79 V) saturates, 25/80 °C resolve.
             Family::Gr716Adc => (mv * 2048 / 2500).min(2047),
+            // 10 bits, V/V3A as a binary fraction: mV * 1024 / 3300,
+            // truncated, clamped at 0x3FF.
+            Family::Lpc2000Adc => (mv * 1024 / 3300).min(1023),
         }
     }
 
@@ -851,6 +869,23 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Lpc2000Adc => {
+                assert_eq!(
+                    bus.read_u32(self.base + LPC_ADCR).unwrap(),
+                    0x01,
+                    "{}: ADCR reset (SEL = Ain0)",
+                    self.id
+                );
+                // START with PDN = 0 (power down) converts nothing.
+                bus.write_u32(self.base + LPC_ADCR, (1 << NTC_CHANNEL) | LPC_START_NOW)
+                    .expect("START without PDN");
+                assert_eq!(
+                    bus.read_u32(self.base + LPC_ADDR).unwrap() & LPC_DONE,
+                    0,
+                    "{}: no conversion in power down",
+                    self.id
+                );
+            }
             Family::Stm32L1Adc => {
                 // SWSTART before ADON converts nothing; ADON raises ADONS,
                 // which HAL ADC_Enable polls, mirrored in the common CSR.
@@ -2821,6 +2856,32 @@ impl Converter {
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {
         match self.family {
+            Family::Lpc2000Adc => {
+                // adc_init (PDN, CLKDIV 4) + adc_read: select, START, poll
+                // DONE, ADCR ^= START, deselect, read the result.
+                let adcr = self.base + LPC_ADCR;
+                let addr = self.base + LPC_ADDR;
+                bus.write_u32(adcr, LPC_PDN | (4 << 8)).expect("adc_init");
+                let cr = bus.read_u32(adcr).unwrap();
+                bus.write_u32(adcr, cr | (1 << channel)).expect("SEL");
+                let cr = bus.read_u32(adcr).unwrap();
+                bus.write_u32(adcr, cr | LPC_START_NOW).expect("START");
+                let polled = bus.read_u32(addr).unwrap();
+                assert_ne!(polled & LPC_DONE, 0, "{}: Ain{channel} DONE", self.id);
+                assert_eq!(
+                    (polled >> 24) & 7,
+                    u32::from(channel),
+                    "{}: ADDR.CHN",
+                    self.id
+                );
+                let cr = bus.read_u32(adcr).unwrap();
+                bus.write_u32(adcr, cr ^ LPC_START_NOW).expect("stop");
+                let cr = bus.read_u32(adcr).unwrap();
+                bus.write_u32(adcr, cr ^ (1 << channel)).expect("deselect");
+                let after = bus.read_u32(addr).unwrap();
+                assert_eq!(after & LPC_DONE, 0, "{}: read cleared DONE", self.id);
+                (after >> 6) & 0x3FF
+            }
             Family::Stm32L1Adc => {
                 // HAL_ADC_ConfigChannel (rank 1), Start, PollForConversion,
                 // GetValue; flags clear by writing their complement.
@@ -3711,6 +3772,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::NpcxAdc
                 | Family::Gr716Adc
                 | Family::Stm32L1Adc
+                | Family::Lpc2000Adc
                 | Family::NxpLpadc { .. }
                 | Family::RaAdc { .. }
                 | Family::ZynqmpAms
@@ -3800,7 +3862,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 159,
+        instances, 160,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -3808,7 +3870,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 86,
+        without_adc, 85,
         "onboarding profiles that declare no modelled ADC"
     );
 }

@@ -15,8 +15,9 @@ ram:
 peripherals:
 # Renode's lpc2294 platform declares no GPIO. The legacy APB GPIO puts
 # ports 0..3 at 0xE002_8000 + 0x10*n: IOnPIN @0x0, IOnSET @0x4, IOnDIR @0x8,
-# IOnCLR @0xC (UM10114 GPIO chapter). PINSEL0..2 reset to 0, so P0.0/P0.1
-# are GPIO until firmware selects UART0; the pin connect block is not declared.
+# IOnCLR @0xC (UM10114 GPIO chapter). PINSEL0 resets to 0, so P0.0/P0.1
+# are GPIO until firmware selects UART0; PINSEL1 resets P0.27..P0.30 to
+# AIN0..3 (UM 2004-05-03 Table 60). The pin connect block is not declared.
 - id: gpio0
   type: declarative
   bus: sysbus
@@ -73,3 +74,25 @@ peripherals:
   type: lpc_ctimer
   bus: sysbus
   base_address: 3758112768
+# A/D converter (lpc2000_adc): ADCR @0xE0034000, ADDR @0xE0034004 (Philips
+# LPC2119/2129/2194/2292/2294 User Manual 2004-05-03, ch. 17, Tables 173-175;
+# Renode lpc2294.repl tags both). The APB slot is 16KB like its neighbours.
+# VIC channel 18 is A/D, but no VIC is declared here, so no irq is wired.
+# V3A is the board's 3.3 V supply.
+- id: adc
+  type: lpc2000_adc
+  bus: sysbus
+  base_address: 0xE0034000
+  size: 16KB
+# Ain pads of the 144-pin LPC2294 (UM 2004-05-03 pin description; PINSEL1
+# P0.27..P0.30 = AIN0..3, PINSEL2 P2.30/P2.31 = AIN4/5, P3.29/P3.28 =
+# AIN6/7). "These analog inputs are always connected to their pins."
+analog_pins:
+  P0.27: { peripheral: adc, channel: 0 }
+  P0.28: { peripheral: adc, channel: 1 }
+  P0.29: { peripheral: adc, channel: 2 }
+  P0.30: { peripheral: adc, channel: 3 }
+  P2.30: { peripheral: adc, channel: 4 }
+  P2.31: { peripheral: adc, channel: 5 }
+  P3.29: { peripheral: adc, channel: 6 }
+  P3.28: { peripheral: adc, channel: 7 }
