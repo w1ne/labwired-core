@@ -411,7 +411,13 @@ impl Lcd1602 {
             if prev == &text {
                 return;
             }
-            if Self::is_monotonic_fill(prev, &text) || Self::is_blink_only(prev, &text) {
+            // Blink colon frames are ephemeral evidence — keep the prior
+            // panel (usually with `:`) so Acc history needles like "00:02"
+            // survive a run that ends on the space-blink frame.
+            if Self::is_blink_only(prev, &text) {
+                return;
+            }
+            if Self::is_monotonic_fill(prev, &text) {
                 self.texts_seen.pop_back();
                 self.texts_seen.push_back(text);
                 return;
@@ -708,8 +714,14 @@ mod tests {
         );
         let tail = &dev.texts_seen[0];
         assert!(
-            tail.contains("Time Remainig") && tail.contains("00") && !tail.contains(':'),
-            "tail should reflect blink-off frame: {tail:?}"
+            tail.contains("Time Remainig") && tail.contains("00:02"),
+            "history must keep the colon frame for Acc needles: {tail:?}"
+        );
+        // Live text() still shows the blink-off glyph.
+        assert!(
+            !dev.text().contains(':'),
+            "live panel should show blink-off: {:?}",
+            dev.text()
         );
     }
 
