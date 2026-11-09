@@ -19,7 +19,9 @@ test/test_smoke/test_main.c:52: test_string_length    [PASSED]
 ================== 3 test cases: 3 succeeded in 00:00:02.122 ==================
 ```
 
-Use `--without-uploading` because the simulator runs the ELF directly; no J-Link or physical board is needed. This follows PlatformIO's documented Renode/QEMU test workflow.\n\n## How it works
+Use `--without-uploading` because the simulator runs the ELF directly; no J-Link or physical board is needed. This follows PlatformIO's documented Renode/QEMU test workflow.
+
+## How it works
 
 ```
 pio test
