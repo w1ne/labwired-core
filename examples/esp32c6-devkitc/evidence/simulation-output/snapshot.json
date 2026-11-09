@@ -4,23 +4,23 @@
     "type": "risc_v",
     "registers": [
       0,
-      1107297068,
+      1107297086,
       1082654688,
       1082132480,
       0,
       0,
       1082654720,
       0,
-      1082654720,
+      1611206656,
       0,
-      1107297135,
+      1,
       1610612736,
-      1107297135,
-      10,
-      1610637312,
-      2560,
-      5275648,
-      71,
+      1,
+      1107297284,
+      1107297263,
+      1,
+      1107297263,
+      1107297243,
       0,
       0,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 1107297096,
+    "pc": 1107297166,
     "mstatus": 0,
     "mie": 0,
     "mip": 0,
@@ -45,7 +45,7 @@
     "mepc": 0,
     "mcause": 0,
     "mtval": 0,
-    "mtime": 200000,
+    "mtime": 1500000,
     "mtimecmp": 18446744073709551615,
     "triggers": {
       "tselect": 0,
@@ -72,23 +72,23 @@
       "tcontrol": 0
     }
   },
-  "steps_executed": 200000,
-  "cycles": 400268,
-  "instructions": 200000,
+  "steps_executed": 1500000,
+  "cycles": 3650980,
+  "instructions": 1500000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 200000
+      "value": 1500000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 200000
+      "value": 1500000
     }
   },
   "limits": {
-    "max_steps": 200000,
+    "max_steps": 1500000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "07bc73b7237b29ac2b5d41d335abc42fcc2973b96848cb84eca2183cbef13bf5",
+  "firmware_hash": "c3d0a08d6a239326c073b746f0cd1c943b536da9f5354e737ef0de4a45b141d8",
   "config": {
     "firmware": "examples/esp32c6-devkitc/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c6-demo",
     "system": "examples/esp32c6-devkitc/../../configs/systems/esp32c6-devkitc.yaml",

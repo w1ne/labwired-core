@@ -21,7 +21,7 @@ cargo build -p firmware-esp32c6-demo --release --target riscv32imc-unknown-none-
 
 Committed copy of the same artifact: `tests/fixtures/esp32c6-demo.elf`.
 
-## 3) Run deterministic UART0 + on-board RGB LED smoke
+## 3) Run UART0, RGB LED, and BOOT-button smoke
 
 ```bash
 cargo run -q -p labwired-cli -- test \
@@ -36,6 +36,11 @@ Pass criteria:
 2. UART0 host capture contains `OK`
 3. GPIO8 records at least 48 edges from the WS2812 frame
 4. the `rgb_led` artifact contains a red pixel (`RGB565 0xF800`)
+5. the scripted GPIO9 BOOT-button press and release produce both UART markers
+6. the run stops at the configured step limit
+
+The BOOT contact is active-low and only models GPIO9 while firmware is
+running. The reset-time download-mode strap is outside this smoke.
 
 ## 4) Run firmware survival gate
 

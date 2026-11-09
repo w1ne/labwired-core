@@ -13,12 +13,15 @@ and no firmware beyond the in-tree fixtures/apps has been run.
 
 ## DevKitC-1 smoke profile
 
-The board manifest exposes UART0 directly to the twin's host capture sink and
-attaches the on-board WS2812B to GPIO8. The smoke writes a GRB frame into the
-C6 RMT symbol RAM, starts TX channel 0, and asserts the resulting pad edges and
-decoded red pixel. The USB-to-UART bridge and electrical propagation through
-GPIO16/GPIO17 are not modeled. RMT RX capture, the BOOT button, native USB
-console, and radios remain omitted.
+The board manifest exposes UART0 directly to the twin's host capture sink,
+attaches the on-board WS2812B to GPIO8, and maps the active-low BOOT contact to
+GPIO9. The smoke writes a GRB frame into C6 RMT symbol RAM, starts TX channel 0,
+and asserts the resulting pad edges and decoded red pixel. A scripted contact
+press/release drives GPIO9, and firmware observes both levels through GPIO_IN.
+The GPIO model accepts that external input; IO_MUX pad writes are stored but do
+not electrically enforce routing. The reset-time download-mode strap, USB-to-
+UART bridge propagation through GPIO16/GPIO17, RMT RX capture, native USB
+console, and radios remain outside the profile.
 
 ## Proven at tier-1 (documented scenarios)
 
@@ -45,7 +48,7 @@ The full twelve-cell row, proven by `tests/fixtures/tier1/esp32c6.elf`:
 |------|-------------|---------------------------------|
 | PCR (`esp32c6_pcr`, full SVD register map) | All documented PCR registers store/read back with SVD reset values; `CLK_EN` gates are resolved and enforced through the shared bus gate. | `RST_EN` is recorded but **not enforced** (the generic gate cannot express its active-low/reset-at-boot polarity without gating the console at reset). No clock tree: dividers, `SYSCLK_CONF` mux, `PLL_DIV_CLK_EN` are storage only; nothing is paced from them (`cpu_hz` stays the single clock fact). Only HP PCR; LP clock registers are absent. |
 | UART0/UART1 (`esp32c6_uart`) | Head register map (FIFO/INT/CLKDIV/STATUS/CONF0/CONF1), 128-byte FIFOs, interrupt RAW/ST/ENA/CLR, baud-paced shifting, UART0 echoes to the host sink. | C6 tail registers (`SLEEP_CONF0-2` @0x30-0x38, `CLK_CONF` @0x88, `DATE` @0x8C, `ID` @0x9C) are unmodelled: those offsets answer with the C3/S3 tail layout. Flow control, RS-485, IR modulation, wake-up, and DMA (UHCI) coupling are not modelled. `INT_RAW` bits latch, but **no UART interrupt has been routed through the C6 matrix by a fixture** (see below). |
-| GPIO (`esp32c6_gpio`) | Shared C3-sized register block: OUT/W1TS/W1TC, ENABLE, IN, FUNC0_IN_SEL_CFG, FUNC0_OUT_SEL_CFG side effects; attached GPIO observers see direct pad transitions. The DevKitC-1 smoke uses GPIO8 to receive RMT signal 71 and decode one WS2812B pixel. | Sized for 26 pins: **GPIO26–GPIO30 are not modelled** (C6 has 31). No GPIO interrupt generator fed to matrix source 30. IO_MUX pad routing is a register stub; RMT is the only modeled peripheral-output path. |
+| GPIO (`esp32c6_gpio`) | Shared C3-sized register block: OUT/W1TS/W1TC, ENABLE, IN, FUNC0_IN_SEL_CFG, FUNC0_OUT_SEL_CFG side effects; attached GPIO observers see direct pad transitions. The DevKitC-1 smoke routes RMT signal 71 to GPIO8/WS2812B and samples the board's active-low BOOT contact on GPIO9 through GPIO_IN. | Sized for 26 pins: **GPIO26–GPIO30 are not modelled** (C6 has 31). No GPIO interrupt generator fed to matrix source 30. IO_MUX pad routing is a register stub; RMT is the only modeled peripheral-output path. Reset-time strap behavior is not modeled. |
 | RMT (`esp32c6_rmt`) | TX channels 0/1, 192-word symbol RAM, TX_END status/interrupt registers, and timed GPIO-matrix output. The board smoke proves channel 0 to GPIO8 and a decoded red pixel. | RX capture, carrier modulation, DMA, fractional clock selection, continuous/repeated TX, and refill/threshold behavior are not modeled. The smoke polls `INT_RAW.TX_END`; RMT interrupt delivery to the CPU is not covered by a fixture. |
 | TIMG0/TIMG1 (`esp32c6_mwdt`) | T0 counter with EN gate, LO/HI latch via UPDATE, preload, INT_RAW/INT_CLR plumbing, generic round-trip for other offsets; plus the C3/C6 MWDT path (`with_mwdt`): `WDTWPROTECT` write lock over `WDTCONFIG0..5`, `WDTFEED` reload, and the full four-stage chain — WDTCONFIG2..5 hold values, WDTCONFIG0 STG0..3 actions, expiry advancing `0→1→2→3→0`, every "interrupt" stage latching `INT_RAW_TIMERS.WDT_INT_RAW` (W1C via `INT_CLR_TIMERS`), off/reset stages advancing without latching. The config/hold registers seed their SVD reset values. The mwdt variant is walk-driven so a read-only status poll sees time pass; one count is one peripheral walk tick (512 CPU cycles under the CLI default), **not** 12.5 ns × prescaler, and WDTCONFIG1's prescaler does not scale the countdown. | One general-purpose timer per group on C6 (the model's T1 head at 0x24 is inert phantom storage, as on C3). The GP counter advances 1 per model tick, **not** at the programmed divider/clock-source. Stage actions 2/3 (reset CPU/system) advance the chain but **no reset is ever performed** — the bus exposes no safe reset-request path for a peripheral; a feed does not clear the latched interrupt (only INT_CLR does). **No TIMG interrupt is fired**: `TG0_T0_LEVEL` (51) and `TG0_WDT_LEVEL` (53) are declared on the descriptor but nothing routes them. |
 | I²C0 (`esp32c3_i2c`) | Command-list engine (RSTART/WRITE/READ/STOP), TX/RX FIFOs, INT RAW/ST/ENA/CLR, clock stretch/timeout storage. Reused from the C3; the C6 SVD head is offset-identical and the C6 source (I2C_EXT0=50) is passed through `irq:`. `Esp32c3Gpio::for_esp32c6()` + `wire_esp32c3_i2c_pads` carry matrix-routed SDA/SCL on signals **45/46** (SEL bit 7); proven by `crates/core/src/tests/esp32c6_i2c_waveform.rs` (pads 16/17, SSD1306 ACK + logic-capture match). | C6-only filter/timing tail registers are storage. No interrupt-matrix delivery of source 50 to the CPU. |

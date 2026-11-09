@@ -2,7 +2,7 @@
 #![no_main]
 #![allow(clippy::empty_loop)]
 
-//! ESP32-C6 DevKitC-1 UART0 + built-in WS2812 RGB LED smoke.
+//! ESP32-C6 DevKitC-1 UART0, built-in WS2812 RGB LED, and BOOT button smoke.
 //!
 //! Target: `riscv32imc-unknown-none-elf`. The C6 HP core is RV32IMAC on silicon;
 //! this smoke needs no atomics (A) and no multiply, so it links for the
@@ -10,8 +10,9 @@
 //! decodes (see `crates/core/src/decoder/riscv.rs`) but is deliberately not
 //! part of this L1 image — the LP core and SMP are out of scope.
 //!
-//! The smoke exercises UART0 and sends a WS2812 frame through RMT channel 0
-//! and GPIO8's output matrix to the DevKitC-1's on-board RGB LED.
+//! The smoke exercises UART0, sends a WS2812 frame through RMT channel 0 and
+//! GPIO8's output matrix to the on-board RGB LED, then observes the active-low
+//! BOOT button on GPIO9.
 
 use panic_halt as _;
 use riscv_rt::entry;
@@ -41,7 +42,11 @@ const UART0_CLKDIV: *mut u32 = 0x6000_0014 as *mut u32;
 /// ESP32-C6 GPIO output-latch aliases and output enable.
 const GPIO_OUT_W1TC: *mut u32 = 0x6009_100C as *mut u32;
 const GPIO_ENABLE_W1TS: *mut u32 = 0x6009_1024 as *mut u32;
+const GPIO_ENABLE_W1TC: *mut u32 = 0x6009_1028 as *mut u32;
 const GPIO8_MASK: u32 = 1 << 8;
+const GPIO9_MASK: u32 = 1 << 9;
+/// GPIO input register, one sampled pad level per bit.
+const GPIO_IN: *const u32 = 0x6009_103C as *const u32;
 
 /// GPIO8 output selector to RMT channel 0 (`RMT_SIG_OUT0_IDX=71` in ESP-IDF
 /// `components/soc/esp32c6/include/soc/gpio_sig_map.h`).
@@ -53,6 +58,15 @@ const RMT_MEM: *mut u32 = 0x6000_6400 as *mut u32;
 
 /// IO_MUX GPIO8 register: base 0x6009_0000 + 0x04 + GPIO8 * 4.
 const IO_MUX_GPIO8: *mut u32 = 0x6009_0024 as *mut u32;
+/// IO_MUX pad register for GPIO9 (BOOT button): FUN_WPU and FUN_IE are bits 8/9.
+const IO_MUX_GPIO9: *mut u32 = 0x6009_0028 as *mut u32;
+
+#[inline(always)]
+unsafe fn uart_write(bytes: &[u8]) {
+    for &byte in bytes {
+        core::ptr::write_volatile(UART0_FIFO, u32::from(byte));
+    }
+}
 
 #[inline(always)]
 unsafe fn write_ws2812_byte(byte: u8, index: &mut usize) {
@@ -95,6 +109,14 @@ fn main() -> ! {
         // 3. Divisor for the console clock (explicit; matches reset).
         core::ptr::write_volatile(UART0_CLKDIV, 694);
 
+        // Configure GPIO9 as a pulled-up input. The DevKitC-1 BOOT switch
+        // shorts GPIO9 to ground while pressed; board_io supplies the contact
+        // level to the GPIO model. IO_MUX currently records these pad bits but
+        // does not electrically enforce them.
+        let gpio9_mux = core::ptr::read_volatile(IO_MUX_GPIO9);
+        core::ptr::write_volatile(IO_MUX_GPIO9, gpio9_mux | (1 << 8) | (1 << 9));
+        core::ptr::write_volatile(GPIO_ENABLE_W1TC, GPIO9_MASK);
+
         // 4. Enable RMT's APB and function clocks. Preserve the PCR clock
         //    divider and select the default 80 MHz source.
         let rmt_conf = core::ptr::read_volatile(PCR_RMT_CONF);
@@ -128,10 +150,18 @@ fn main() -> ! {
         ws2812_reset_gap();
 
         // 5. UART0 capture confirms firmware reached the end of both outputs.
-        for &b in b"OK\n" {
-            core::ptr::write_volatile(UART0_FIFO, u32::from(b));
-        }
+        uart_write(b"OK\n");
     }
 
-    loop {}
+    let (mut saw_press, mut saw_release) = (false, false);
+    loop {
+        let released = unsafe { core::ptr::read_volatile(GPIO_IN) & GPIO9_MASK != 0 };
+        if !saw_press && !released {
+            unsafe { uart_write(b"BOOT_BUTTON_PRESSED\n") };
+            saw_press = true;
+        } else if saw_press && !saw_release && released {
+            unsafe { uart_write(b"BOOT_BUTTON_RELEASED\n") };
+            saw_release = true;
+        }
+    }
 }

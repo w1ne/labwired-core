@@ -1,8 +1,8 @@
 # Onboarding Smoke: esp32c6-devkitc
 
 - status: `pass`
-- elapsed_seconds: `44`
-- elapsed_ms: `43044`
+- elapsed_seconds: `3`
+- elapsed_ms: `2876`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

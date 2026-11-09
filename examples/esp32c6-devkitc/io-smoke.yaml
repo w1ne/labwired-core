@@ -1,15 +1,26 @@
 # LabWired - ESP32-C6-DevKitC-1 strict-onboarding smoke test
 #
-# Verify UART0 output, the GPIO8 edge stream, and the decoded red WS2812 pixel
-# on the ESP32-C6-DevKitC-1's built-in addressable RGB LED.
-schema_version: "1.0"
+# Verify UART0 output, the GPIO8 edge stream and decoded red WS2812 pixel, plus
+# the board's active-low GPIO9 BOOT button press/release path.
+schema_version: "1.2"
 inputs:
   firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c6-demo"
   system: "../../configs/systems/esp32c6-devkitc.yaml"
 limits:
-  max_steps: 200000
+  # Leave enough simulated time for the baud-paced press and release markers
+  # to drain after the scheduled GPIO9 contact transitions.
+  max_steps: 1500000
+stimuli:
+  - target: { component: button_boot, channel: pressed }
+    trigger: !after_cycles { cycles: 100000 }
+    value: 1.0
+  - target: { component: button_boot, channel: pressed }
+    trigger: !after_cycles { cycles: 200000 }
+    value: 0.0
 assertions:
   - uart_contains: "OK"
+  - uart_contains: "BOOT_BUTTON_PRESSED"
+  - uart_contains: "BOOT_BUTTON_RELEASED"
   - gpio_edges:
       pin: "gpio:8"
       min_edges: 48

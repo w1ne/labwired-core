@@ -1,23 +1,23 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 200000,
-  "cycles": 400268,
-  "instructions": 200000,
+  "steps_executed": 1500000,
+  "cycles": 3650980,
+  "instructions": 1500000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 200000
+      "value": 1500000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 200000
+      "value": 1500000
     }
   },
   "limits": {
-    "max_steps": 200000,
+    "max_steps": 1500000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -31,6 +31,18 @@
     {
       "assertion": {
         "uart_contains": "OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BOOT_BUTTON_PRESSED"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BOOT_BUTTON_RELEASED"
       },
       "passed": true
     },
@@ -67,23 +79,23 @@
     "type": "risc_v",
     "registers": [
       0,
-      1107297068,
+      1107297086,
       1082654688,
       1082132480,
       0,
       0,
       1082654720,
       0,
-      1082654720,
+      1611206656,
       0,
-      1107297135,
+      1,
       1610612736,
-      1107297135,
-      10,
-      1610637312,
-      2560,
-      5275648,
-      71,
+      1,
+      1107297284,
+      1107297263,
+      1,
+      1107297263,
+      1107297243,
       0,
       0,
       0,
@@ -99,7 +111,7 @@
       0,
       0
     ],
-    "pc": 1107297096,
+    "pc": 1107297166,
     "mstatus": 0,
     "mie": 0,
     "mip": 0,
@@ -108,7 +120,7 @@
     "mepc": 0,
     "mcause": 0,
     "mtval": 0,
-    "mtime": 200000,
+    "mtime": 1500000,
     "mtimecmp": 18446744073709551615,
     "triggers": {
       "tselect": 0,
@@ -135,7 +147,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "07bc73b7237b29ac2b5d41d335abc42fcc2973b96848cb84eca2183cbef13bf5",
+  "firmware_hash": "c3d0a08d6a239326c073b746f0cd1c943b536da9f5354e737ef0de4a45b141d8",
   "config": {
     "firmware": "examples/esp32c6-devkitc/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c6-demo",
     "system": "examples/esp32c6-devkitc/../../configs/systems/esp32c6-devkitc.yaml",
@@ -1031,7 +1043,7 @@
             "name": "IN",
             "offset": 60,
             "size": 32,
-            "value": 0,
+            "value": 512,
             "fields": [
               {
                 "name": "DATA_NEXT",
@@ -1039,7 +1051,7 @@
                   31,
                   0
                 ],
-                "value": 0
+                "value": 512
               }
             ],
             "access": "rw"
@@ -11209,7 +11221,7 @@
             "name": "GPIO9",
             "offset": 40,
             "size": 32,
-            "value": 2048,
+            "value": 2816,
             "fields": [
               {
                 "name": "MCU_OE",
@@ -11273,7 +11285,7 @@
                   8,
                   8
                 ],
-                "value": 0
+                "value": 1
               },
               {
                 "name": "FUN_IE",
@@ -11281,7 +11293,7 @@
                   9,
                   9
                 ],
-                "value": 0
+                "value": 1
               },
               {
                 "name": "FUN_DRV",
@@ -18864,6 +18876,15 @@
     ],
     "devices": [
       {
+        "id": "button_boot",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      },
+      {
         "id": "rgb_led",
         "device_type": "neopixel",
         "declared": true,
@@ -18900,7 +18921,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 200000,
+    "now_cycle": 1500000,
     "channels": [
       {
         "ch": 0,
@@ -18910,195 +18931,195 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 204,
+            "cycle": 210,
             "value": 1
           },
           {
-            "cycle": 244,
+            "cycle": 250,
             "value": 0
           },
           {
-            "cycle": 404,
+            "cycle": 410,
             "value": 1
           },
           {
-            "cycle": 444,
+            "cycle": 450,
             "value": 0
           },
           {
-            "cycle": 604,
+            "cycle": 610,
             "value": 1
           },
           {
-            "cycle": 644,
+            "cycle": 650,
             "value": 0
           },
           {
-            "cycle": 804,
+            "cycle": 810,
             "value": 1
           },
           {
-            "cycle": 844,
+            "cycle": 850,
             "value": 0
           },
           {
-            "cycle": 1004,
+            "cycle": 1010,
             "value": 1
           },
           {
-            "cycle": 1044,
+            "cycle": 1050,
             "value": 0
           },
           {
-            "cycle": 1204,
+            "cycle": 1210,
             "value": 1
           },
           {
-            "cycle": 1244,
+            "cycle": 1250,
             "value": 0
           },
           {
-            "cycle": 1404,
+            "cycle": 1410,
             "value": 1
           },
           {
-            "cycle": 1444,
+            "cycle": 1450,
             "value": 0
           },
           {
-            "cycle": 1604,
+            "cycle": 1610,
             "value": 1
           },
           {
-            "cycle": 1644,
+            "cycle": 1650,
             "value": 0
           },
           {
-            "cycle": 1804,
+            "cycle": 1810,
             "value": 1
           },
           {
-            "cycle": 1904,
+            "cycle": 1910,
             "value": 0
           },
           {
-            "cycle": 2004,
+            "cycle": 2010,
             "value": 1
           },
           {
-            "cycle": 2104,
+            "cycle": 2110,
             "value": 0
           },
           {
-            "cycle": 2204,
+            "cycle": 2210,
             "value": 1
           },
           {
-            "cycle": 2304,
+            "cycle": 2310,
             "value": 0
           },
           {
-            "cycle": 2404,
+            "cycle": 2410,
             "value": 1
           },
           {
-            "cycle": 2504,
+            "cycle": 2510,
             "value": 0
           },
           {
-            "cycle": 2604,
+            "cycle": 2610,
             "value": 1
           },
           {
-            "cycle": 2704,
+            "cycle": 2710,
             "value": 0
           },
           {
-            "cycle": 2804,
+            "cycle": 2810,
             "value": 1
           },
           {
-            "cycle": 2904,
+            "cycle": 2910,
             "value": 0
           },
           {
-            "cycle": 3004,
+            "cycle": 3010,
             "value": 1
           },
           {
-            "cycle": 3104,
+            "cycle": 3110,
             "value": 0
           },
           {
-            "cycle": 3204,
+            "cycle": 3210,
             "value": 1
           },
           {
-            "cycle": 3304,
+            "cycle": 3310,
             "value": 0
           },
           {
-            "cycle": 3404,
+            "cycle": 3410,
             "value": 1
           },
           {
-            "cycle": 3444,
+            "cycle": 3450,
             "value": 0
           },
           {
-            "cycle": 3604,
+            "cycle": 3610,
             "value": 1
           },
           {
-            "cycle": 3644,
+            "cycle": 3650,
             "value": 0
           },
           {
-            "cycle": 3804,
+            "cycle": 3810,
             "value": 1
           },
           {
-            "cycle": 3844,
+            "cycle": 3850,
             "value": 0
           },
           {
-            "cycle": 4004,
+            "cycle": 4010,
             "value": 1
           },
           {
-            "cycle": 4044,
+            "cycle": 4050,
             "value": 0
           },
           {
-            "cycle": 4204,
+            "cycle": 4210,
             "value": 1
           },
           {
-            "cycle": 4244,
+            "cycle": 4250,
             "value": 0
           },
           {
-            "cycle": 4404,
+            "cycle": 4410,
             "value": 1
           },
           {
-            "cycle": 4444,
+            "cycle": 4450,
             "value": 0
           },
           {
-            "cycle": 4604,
+            "cycle": 4610,
             "value": 1
           },
           {
-            "cycle": 4644,
+            "cycle": 4650,
             "value": 0
           },
           {
-            "cycle": 4804,
+            "cycle": 4810,
             "value": 1
           },
           {
-            "cycle": 4844,
+            "cycle": 4850,
             "value": 0
           }
         ],
@@ -19128,19 +19149,57 @@
     "lines": [
       {
         "text": "OK",
-        "cycle_lo": 42900,
-        "cycle": 42901,
-        "end_cycle": 70660
+        "cycle_lo": 42906,
+        "cycle": 42907,
+        "end_cycle": 70666
+      },
+      {
+        "text": "BOOT_BUTTON_PRESSED",
+        "cycle_lo": 113888,
+        "cycle": 113889,
+        "end_cycle": 377608
+      },
+      {
+        "text": "BOOT_BUTTON_RELEASED",
+        "cycle_lo": 391487,
+        "cycle": 391488,
+        "end_cycle": 669088
       }
     ],
     "dropped_lines": 0
   },
+  "stimuli": [
+    {
+      "channel": "pressed",
+      "component": "button_boot",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 100000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 100000
+    },
+    {
+      "channel": "pressed",
+      "component": "button_boot",
+      "value": 0.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 200000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 200000
+    }
+  ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 990,
+    "text_bytes": 1140,
     "data_bytes": 0,
     "bss_bytes": 524288,
-    "flash_used_bytes": 990,
+    "flash_used_bytes": 1140,
     "ram_static_bytes": 524288,
     "flash_total_bytes": 8388608,
     "ram_total_bytes": 524288,
@@ -19157,17 +19216,62 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 400268,
-    "instructions": 200000,
-    "steps_executed": 200000,
+    "cycles": 3650980,
+    "instructions": 1500000,
+    "steps_executed": 1500000,
     "memory_reads": 0,
-    "memory_writes": 2,
-    "peripheral_accesses": 1656,
+    "memory_writes": 3,
+    "peripheral_accesses": 171469,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1107297096,
-        "count": 668,
+        "pc": 1107297150,
+        "count": 664,
+        "symbol": "main"
+      },
+      {
+        "pc": 1107297146,
+        "count": 663,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 1107297154,
+        "count": 663,
+        "symbol": "main"
+      },
+      {
+        "pc": 1107297148,
+        "count": 662,
+        "symbol": "main"
+      },
+      {
+        "pc": 1107297164,
+        "count": 609,
+        "symbol": "main"
+      },
+      {
+        "pc": 1107297166,
+        "count": 608,
+        "symbol": "main"
+      },
+      {
+        "pc": 1107297156,
+        "count": 607,
+        "symbol": "main"
+      },
+      {
+        "pc": 1107297160,
+        "count": 607,
+        "symbol": "main"
+      },
+      {
+        "pc": 1107297162,
+        "count": 607,
+        "symbol": "main"
+      },
+      {
+        "pc": 1107297170,
+        "count": 56,
         "symbol": "main"
       },
       {
@@ -19186,20 +19290,25 @@
         "symbol": "firmware_esp32c6_demo::ws2812_reset_gap"
       },
       {
-        "pc": 1107297052,
+        "pc": 1107297070,
         "count": 7,
         "symbol": "main"
       },
       {
-        "pc": 1107297050,
+        "pc": 1107297068,
         "count": 6,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 1107297054,
+        "pc": 1107297072,
         "count": 6,
         "symbol": "main"
       }
-    ]
+    ],
+    "stalled_poll": {
+      "peripheral": "gpio",
+      "offset": 60,
+      "accesses": 144433
+    }
   }
 }

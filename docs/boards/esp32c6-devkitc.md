@@ -1,8 +1,8 @@
 # ESP32-C6-DevKitC-1
 
-Espressif **ESP32-C6** on the **ESP32-C6-DevKitC-1** (v1.2) — single HP core **RISC-V RV32IMAC @ 160 MHz**, 512 KB HP SRAM, 320 KB ROM, 8 MB external SPI flash on the WROOM-1 module, plus an LP core and Wi-Fi 6 / Bluetooth 5 / IEEE 802.15.4 radios on silicon. The bare-metal smoke sends a GRB frame from RMT channel 0 through the GPIO8 output matrix to the built-in WS2812B and sends `OK` through UART0. RMT RX capture, pad-level propagation to the USB-to-UART bridge, and radio behavior are not claimed.
+Espressif **ESP32-C6** on the **ESP32-C6-DevKitC-1** (v1.2) — single HP core **RISC-V RV32IMAC @ 160 MHz**, 512 KB HP SRAM, 320 KB ROM, 8 MB external SPI flash on the WROOM-1 module, plus an LP core and Wi-Fi 6 / Bluetooth 5 / IEEE 802.15.4 radios on silicon. The bare-metal smoke sends a GRB frame from RMT channel 0 through the GPIO8 output matrix to the built-in WS2812B, sends `OK` through UART0, and observes a scripted press/release on the active-low GPIO9 BOOT input. Reset-time download-mode selection, RMT RX capture, pad-level propagation to the USB-to-UART bridge, and radio behavior are not claimed.
 
-**Vendor availability checked 2026-11-05:** [Espressif's live devkit listing](https://www.espressif.com/en/products/devkits/esp32-devkitc/overview) lists `ESP32-C6-DevKitC-1-N8`, a $9 reference sample price, and purchase links for AliExpress, DigiKey, Mouser, Amazon US, Adafruit, Robu India, and Akizuki. The [v1.2 user guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c6/esp32-c6-devkitc-1/user_guide.html) identifies the N8/WROOM-1 configuration used here.
+**Vendor availability checked live 2026-11-09:** [Espressif's devkit listing](https://www.espressif.com/en/products/devkits/esp32-devkitc/overview) lists `ESP32-C6-DevKitC-1-N8`, a $9 reference sample price, and purchase links for AliExpress, DigiKey, Mouser, Amazon US, Adafruit, Robu India, and Akizuki. The [v1.2 user guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c6/esp32-c6-devkitc-1/user_guide.html) identifies the N8/WROOM-1 configuration and the GPIO9 BOOT switch.
 
 This is an **L3 (production-ready)** target by the [target support rubric](../target_support_rubric.md): the full twelve-cell tier-1 row — clock (PCR), GPIO, UART, timer (TIMG), DMA (GDMA), interrupt delivery, I²C, SPI, ADC, PWM (LEDC), watchdog (TIMG MWDT) and RTC (LP_TIMER) — is proven by the tier-1 fixture, and the L2 package (CI lanes, known-limitations file, unsupported-instruction audit) is in place. The C3-shared Espressif IP (UART, GPIO, I²C0, GP-SPI2, LEDC, APB_SARADC, TIMG) is reused where the C6 SVD register head is offset-identical; PCR, GDMA, the MWDT path and LP_TIMER are C6-specific models. No silicon capture exists: register behaviour is SIM-DERIVED.
 
@@ -24,7 +24,7 @@ This is an **L3 (production-ready)** target by the [target support rubric](../ta
 | Reference firmware | [`crates/firmware-esp32c6-demo/`](../../crates/firmware-esp32c6-demo/) |
 | TIER1 fixture | [`examples/tier1-fixture/esp32c6/`](../../examples/tier1-fixture/esp32c6/) → `tests/fixtures/tier1/esp32c6.elf` |
 | Example | [`examples/esp32c6-devkitc/`](../../examples/esp32c6-devkitc/) |
-| Committed artifact | `tests/fixtures/esp32c6-demo.elf` (`OK\n` + GPIO8 red WS2812 frame) |
+| Committed artifact | `tests/fixtures/esp32c6-demo.elf` (`OK\n` + GPIO8 red WS2812 frame; the scripted smoke also exercises GPIO9 press/release) |
 | Register/interrupt source | Vendored `tests/fixtures/real_world/esp32c6.svd` (espressif/svd) |
 | Tier (snapshot) | **L3** — SIM-DERIVED, no silicon diff. Tier-1 row: all 12 classes pass (`clock` `gpio` `uart` `timer` `dma` `irq` `i2c` `spi` `adc` `pwm` `wdt` `rtc`) |
 | Known limitations | [`examples/esp32c6-devkitc/KNOWN_LIMITATIONS.md`](../../examples/esp32c6-devkitc/KNOWN_LIMITATIONS.md) |
@@ -61,7 +61,7 @@ var the window stays zero.
 | TX (J3-2) | GPIO16 | **U0TXD** | USB-to-UART console |
 | RX (J3-3) | GPIO17 | **U0RXD** | USB-to-UART console |
 | — | GPIO8 | **Addressable RGB LED** (WS2812B) | Smoke sends a red GRB frame through RMT TX channel 0 and GPIO matrix signal 71 |
-| BOOT (J3-11) | GPIO9 | BOOT button (active low) | Strapping pin; download mode not modelled |
+| BOOT (J3-11) | GPIO9 | BOOT button (active low) | Running-system contact is modeled and smoke-tested; reset-time download-mode strap is not modeled |
 | D0… | GPIO0–GPIO7 | LP-capable / ADC1 / strapping (MTMS/MTDI) | Advertised via the shared GPIO matrix model |
 | D1… | GPIO10, GPIO11, GPIO15, GPIO18–GPIO23 | Header pins | Not modelled beyond the GPIO window |
 | 3V3 / 5V / GND | — | Power | Digital levels in sim — not SPICE |
@@ -95,7 +95,7 @@ The GPIO matrix reuses the engine's C3-sized register block (pins 0–25), so
 | Block | Status | Notes |
 |-------|--------|-------|
 | UART0 / UART1 | ✅ / ⚠️ | Espressif UART IP + 128-byte FIFOs, clocked at 160 MHz (`esp32c6_uart`). Head map only: the C6 register tail (`SLEEP_CONF*`, `CLK_CONF` @0x88, `DATE` @0x8C, `ID` @0x9C) is unmodelled and reads as the C3's old offsets |
-| GPIO matrix | ⚠️ | Shared C3-sized model (26 pins), with observable direct GPIO pad transitions. The C6 RMT TX model routes signals 71/72 through this matrix and exposes timed pad changes. GPIO26–GPIO30, GPIO interrupt delivery, and IO_MUX electrical enforcement remain unmodeled |
+| GPIO matrix | ⚠️ | Shared C3-sized model (26 pins), with observable direct GPIO pad transitions and externally driven GPIO input. The C6 RMT TX model routes signals 71/72 through this matrix and exposes timed pad changes. The board smoke checks the GPIO9 BOOT-button input and GPIO8 WS2812 output. GPIO26–GPIO30, GPIO interrupt delivery, and IO_MUX electrical enforcement remain unmodeled |
 | RMT | ⚠️ | C6 TX channels 0/1, 192-word symbol RAM, TX_END status/interrupt registers, and timed matrix output are modeled; RX capture, carrier modulation, DMA, fractional clock selection, and channel refill behavior are not |
 | IO_MUX | ⚠️ | Register-backed stub: pad function writes are recorded, not electrically enforced — the console shifts bytes regardless of routing |
 | USB Serial/JTAG | ⚠️ | `UsbSerialJtag` @ `0x6000_F000` (irq 48); system `debug_uart` still `uart0` |

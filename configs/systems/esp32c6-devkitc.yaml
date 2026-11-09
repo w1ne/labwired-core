@@ -1,15 +1,18 @@
 # LabWired - ESP32-C6-DevKitC-1 System Configuration
 #
 # Board wiring per the ESP32-C6-DevKitC-1 v1.2 user guide. This profile claims
-# UART0 and the on-board WS2812 RGB LED. The smoke drives the LED through RMT
-# channel 0 and GPIO8's output matrix; the USB-to-UART bridge and
-# GPIO16/GPIO17 pad-level propagation are not modeled. RMT RX capture, the
-# BOOT button, USB-device path, and radio remain omitted.
+# UART0, the on-board WS2812 RGB LED, and the active-low BOOT button. The smoke
+# drives the LED through RMT channel 0/GPIO8 and samples GPIO9 while running;
+# the reset-time strap is not modeled. The USB-to-UART bridge and
+# GPIO16/GPIO17 pad-level propagation are not modeled. RMT RX capture,
+# USB-device path, and radio remain omitted.
 # Physical pin map: GPIO16/U0TXD -> bridge RX; bridge TX -> GPIO17/U0RXD.
 # UART0 capture is direct to the host; GPIO8 pad transitions are decoded by
 # the attached WS2812 model. Neither path claims analog or power behavior.
 # RMT TX symbol playback and GPIO8 pad edges are modeled; analog and power
-# behavior are outside the profile. RESET is wired to CHIP_EN, not a GPIO.
+# behavior are outside the profile. The active-low BOOT button is a GPIO9
+# input while firmware is running; its reset-time download-mode strap is not
+# modeled. RESET is wired to CHIP_EN, not a GPIO.
 #
 # SIM-DERIVED / L1 smoke — no silicon diff. See docs/boards/esp32c6-devkitc.md.
 
@@ -25,3 +28,10 @@ external_devices:
       data_pin: "GPIO8"
       num_pixels: 1
       cpu_hz: 160_000_000
+board_io:
+  - id: "button_boot"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 9
+    signal: "input"
+    active_high: false
