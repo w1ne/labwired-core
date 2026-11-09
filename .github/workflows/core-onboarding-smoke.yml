@@ -106,6 +106,7 @@ on:
       - "crates/firmware-nucleo-u3c5zi-q-smoke/**"
       - "crates/firmware-nucleo-u385rg-q-smoke/**"
       - "crates/firmware-nucleo-h723zg-smoke/**"
+      - "crates/firmware-nucleo-h7s3l8-smoke/**"
       - "crates/firmware-nucleo-h753zi-smoke/**"
       - "crates/firmware-nucleo-h755zi-q-smoke/**"
       - "crates/firmware-nucleo-h7a3zi-q-smoke/**"
@@ -585,6 +586,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-h723zg/onboarding-smoke.yaml
             system: configs/systems/nucleo-h723zg.yaml
+          - id: nucleo-h7s3l8
+            crate: firmware-nucleo-h7s3l8-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-h7s3l8/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h7s3l8.yaml
           - id: nucleo-h753zi
             crate: firmware-nucleo-h753zi-smoke
             target: thumbv7em-none-eabi

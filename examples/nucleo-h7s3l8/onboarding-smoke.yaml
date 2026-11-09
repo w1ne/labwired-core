@@ -1,0 +1,12 @@
+# NUCLEO-H7S3L8: capture LD1 GPIO transitions.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-h7s3l8-smoke"
+  system: "../../configs/systems/nucleo-h7s3l8.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - gpio_edges:
+      pin: "gpiod:10"
+      min_edges: 16
+  - expected_stop_reason: max_steps

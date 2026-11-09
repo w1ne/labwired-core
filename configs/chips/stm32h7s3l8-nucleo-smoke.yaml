@@ -1,0 +1,45 @@
+# Narrow STM32H7S3L8 profile for the NUCLEO-H7S3L8 board smoke.
+# The profile exposes the reset-clock path, GPIOD/LD1, 64 KiB internal user
+# flash, and the 64 KiB DTCM used by the smoke image. AXI/SRAM banks, the
+# external Octo-SPI flash, USART3 VCP, Ethernet, USB HS, security, and other
+# peripherals are not modeled.
+#
+# Sources: ST DS14359 Rev 7 (H7S3L8 memory/core), RM0477 (H7RS register map),
+# and UM3276 Rev 2 (MB1737 board wiring: LD1 active-high on PD10).
+# The common H7 RCC/GPIO register models are used only for the reset-clock and
+# GPIOD clock/output path exercised by this smoke; this profile is model
+# evidence, not silicon proof.
+
+name: "stm32h7s3l8-nucleo-smoke"
+arch: "arm"
+core: "cortex-m7"
+registers_count: 140
+# Reset HSI clock is left selected by the smoke.
+cpu_hz: 64_000_000
+
+flash:
+  base: 0x08000000
+  size: "64KiB"
+ram:
+  # The smoke image uses the H7S3L8's DTCM region only.
+  base: 0x20000000
+  size: "64KiB"
+
+pins:
+  PD10: { gpio: "gpiod", bit: 10, functions: [{ type: gpio, peripheral: gpiod }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x58024400
+    size: "1KB"
+    config:
+      profile: "h7"
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x58020C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb4enr", bit: 3 }

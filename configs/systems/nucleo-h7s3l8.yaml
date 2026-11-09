@@ -1,0 +1,14 @@
+# NUCLEO-H7S3L8 (MB1737) narrow smoke profile.
+# Only the active-high user LD1 on PD10 is represented. The external Octo-SPI
+# flash, USART3 VCP, other LEDs/button, USB, Ethernet, and remaining H7RS
+# peripherals are outside this system profile.
+name: "nucleo-h7s3l8"
+chip: "../chips/stm32h7s3l8-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld1"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 10
+    signal: "output"
+    active_high: true
