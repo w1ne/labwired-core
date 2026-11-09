@@ -3,24 +3,24 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      34,
-      1073758212,
-      16777576,
       10,
-      1073758208,
+      1073762308,
+      1073762304,
+      0,
+      85,
+      84,
+      32,
+      536968944,
       0,
       0,
-      536969200,
       0,
       0,
       0,
-      0,
-      0,
-      536969200,
-      16777569,
-      16777546
+      536968880,
+      16780769,
+      16780750
     ],
-    "pc": 16777546,
+    "pc": 16780750,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 200000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 200000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 200000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "d3a6832cbce2ed0661660ddd602db170548ba0bcd4ddb4883fa5a9b89a428b4d",
+  "firmware_hash": "ff7fcc9f1c61a30f6af944bf65272b678ccef6673ac346140d6edec2431ca1bc",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-ut32m0r500-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/ut32m0r500.yaml",

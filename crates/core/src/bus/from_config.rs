@@ -1106,6 +1106,23 @@ impl SystemBus {
                             cfg_u32("reset_seccfgr"),
                         )
                         .with_window_offset(window_offset)
+                    } else if layout == GpioRegisterLayout::Cmsdk
+                        && p_cfg.config.contains_key("reset_altfunc")
+                    {
+                        // CMSDK ports whose pads reset to their peripheral
+                        // function (ALTFUNC reset value from the chip yaml).
+                        let reset = p_cfg
+                            .config
+                            .get("reset_altfunc")
+                            .and_then(|v| v.as_u64())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "GPIO peripheral '{}': `reset_altfunc` must be an integer",
+                                    p_cfg.id
+                                )
+                            })?;
+                        crate::peripherals::gpio::GpioPort::new_cmsdk(reset as u32)
+                            .with_window_offset(window_offset)
                     } else {
                         crate::peripherals::gpio::GpioPort::new_with_layout(layout)
                             .with_window_offset(window_offset)

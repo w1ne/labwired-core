@@ -1,0 +1,12 @@
+2026-11-09T18:04:08.116371Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/ut32m0r500.yaml
+2026-11-09T18:04:08.118045Z  INFO labwired_loader: ELF Entry Point: 0x10000c1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+UT32M0R500 Cortex-M0+ UART0 smoke
+UT32 checks PFPPPPPPPP DONE
+UT32 UART1 line
+labwired-cli test: idle_ff skipped 186470 of 200000 device cycles (13530 interpreted)
+2026-11-09T18:04:08.122928Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "UT32 checks PPPPPPPPPP DONE" }) (captured len=78)
+2026-11-09T18:04:08.122946Z ERROR labwired_cli::execute: Memory assertion failed at 0x20017f00 (size 4): expected 0x5e3203ff, got 0x5e3203fd (mask 0xffffffff)
+2026-11-09T18:04:08.122953Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536968960, expected_value: 1580336127, mask: None, size: Some(4), node: None } }) (captured len=78)
+FAIL  5/7 checks · smoke · 200000 steps · 0.00s

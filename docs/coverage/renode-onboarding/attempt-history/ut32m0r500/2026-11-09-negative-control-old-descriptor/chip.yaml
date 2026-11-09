@@ -1,0 +1,18 @@
+# Bounded imported UT32M0R500 profile: Cortex-M0+, exact Renode flash/SRAM
+# windows, and UART0. Other imported peripherals are omitted until modeled.
+name: ut32m0r500
+arch: arm
+core: cortex-m0+
+flash:
+  base: 16777216
+  size: 65536B
+ram:
+  base: 536870912
+  size: 98304B
+peripherals:
+- id: uart0
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 1073758208
+  config:
+    profile: gaisler

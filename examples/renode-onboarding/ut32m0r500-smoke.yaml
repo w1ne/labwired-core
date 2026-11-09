@@ -1,10 +1,23 @@
-# Exact-system smoke for the narrowed UT32M0R500 Cortex-M0+ profile.
+# UT32M0R500 smoke on the Renode platform surface: UART0, CMSDK AHB GPIO
+# banks 0..2 (reset, GPIO2 ALTFUNC reset 0xFFFF, UT32 pulls, OUTEN set/clear,
+# masked byte access, edge INTSTATUS), SRAM top; GPIO 45 (GPIO2 pin 13)
+# pulses and a line on UART1.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-ut32m0r500-smoke"
   system: "../../configs/systems/onboarding/ut32m0r500.yaml"
 limits:
-  max_steps: 100000
+  max_steps: 200000
 assertions:
   - uart_contains: "UT32M0R500 Cortex-M0+ UART0 smoke"
+  - uart_contains: "UT32 checks PPPPPPPPPP DONE"
+  - uart_contains: "UT32 UART1 line"
+  - memory_value:
+      address: 0x20017F00
+      expected_value: 0x5E3203FF
+      size: 4
+  - gpio_edges:
+      pin: "gpio_bank2:13"
+      min_edges: 6
+  - fidelity_clean: true
   - expected_stop_reason: max_steps

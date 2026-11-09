@@ -2581,8 +2581,14 @@ boards:
     # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
     # of this chip's GPIO layout changed.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 423): gpio.rs gains the
+    # opt-in `cmsdk` layout (Arm CMSDK AHB GPIO, UT32M0R500 pulls and masked
+    # byte arrays), a new GpioFamily variant with its own match arms, and
+    # GpioPort::new_cmsdk; from_config reads `reset_altfunc` only for that
+    # layout. No register, mask or reset value of this chip's GPIO layout
+    # changed. ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 239e825dce7d81664f938886718ad30f439c6738a981cfbb8ebee0b27bb43e2a
+    drift_ack_digest: 3cad3a3fc14cfa3be9b54bd736c06c145740e5671d0b398d99be78113966aeb5
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -4911,8 +4917,14 @@ boards:
     # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
     # of this chip's GPIO layout changed.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 423): gpio.rs gains the
+    # opt-in `cmsdk` layout (Arm CMSDK AHB GPIO, UT32M0R500 pulls and masked
+    # byte arrays), a new GpioFamily variant with its own match arms, and
+    # GpioPort::new_cmsdk; from_config reads `reset_altfunc` only for that
+    # layout. No register, mask or reset value of this chip's GPIO layout
+    # changed. ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 0a8bc6306a878243f2db64f2d76b7f1e2f20525cd72b2f65e3ecd5b5b260e3c8
+    drift_ack_digest: 9d776ae6256814023cebc3a76c852490877ad6e3d5d2f7c14e0e3f42e4ee5517
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -6082,8 +6094,14 @@ boards:
     # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
     # of this chip's GPIO layout changed.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 423): gpio.rs gains the
+    # opt-in `cmsdk` layout (Arm CMSDK AHB GPIO, UT32M0R500 pulls and masked
+    # byte arrays), a new GpioFamily variant with its own match arms, and
+    # GpioPort::new_cmsdk; from_config reads `reset_altfunc` only for that
+    # layout. No register, mask or reset value of this chip's GPIO layout
+    # changed. ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: a5aca9648e06e329dac874594b8c06ecf8b5be3defa257ec24327765c19cbf94
+    drift_ack_digest: d4e98e8f65a371cae757f9df48a117491e9010d44473901d484f77ac6125121a
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -7395,8 +7413,14 @@ boards:
     # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
     # of this chip's GPIO layout changed.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 423): gpio.rs gains the
+    # opt-in `cmsdk` layout (Arm CMSDK AHB GPIO, UT32M0R500 pulls and masked
+    # byte arrays), a new GpioFamily variant with its own match arms, and
+    # GpioPort::new_cmsdk; from_config reads `reset_altfunc` only for that
+    # layout. No register, mask or reset value of this chip's GPIO layout
+    # changed. ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: d02b9d2c7158a40d4ba989a499ec025ccf53d41f652385598ae80376b9501907
+    drift_ack_digest: 09c1cac8e056e182caa5043d8c905f19b2958747f9e16a5c9de95cba2840caa2
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -8577,8 +8601,14 @@ boards:
     # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
     # of this chip's GPIO layout changed.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 423): gpio.rs gains the
+    # opt-in `cmsdk` layout (Arm CMSDK AHB GPIO, UT32M0R500 pulls and masked
+    # byte arrays), a new GpioFamily variant with its own match arms, and
+    # GpioPort::new_cmsdk; from_config reads `reset_altfunc` only for that
+    # layout. No register, mask or reset value of this chip's GPIO layout
+    # changed. ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 53e32b82ef183e84e06ba949b120ef7f21c36ba1c853b13a273df0e673611a93
+    drift_ack_digest: a62c65b19b3376333d852069d28ee16d76ab152487d5ef52a1aa73e5c081db0a
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other

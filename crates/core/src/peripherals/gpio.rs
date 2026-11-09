@@ -135,6 +135,11 @@ pub enum GpioRegisterLayout {
     /// One instance = both ports; pad `16 * port + n` is Pport.n (Renode
     /// `RenesasDA14_GPIO`, Zephyr `gpio_smartbond.c`).
     Da14,
+    /// Arm CMSDK AHB GPIO (16 pins per port) with the CAES UT32M0R500
+    /// additions: SOFTRESET @0x3C, PULL_ENABLE @0x40, PULL_UP_DOWN @0x44.
+    /// Pad `16 * bank + n` is GPIO number `16 * bank + n` (Renode
+    /// `ARM_AHB_GPIO`, Frontgrade app note "UT32M0R500 Enable the GPIO").
+    Cmsdk,
 }
 
 impl FromStr for GpioRegisterLayout {
@@ -159,8 +164,9 @@ impl FromStr for GpioRegisterLayout {
             "eos_s3" | "eoss3" | "eos_s3_misc" => Ok(Self::EosS3),
             "max32650" | "max3265x" | "mxc_gpio_me10" => Ok(Self::Max32650),
             "da14" | "da1459x" | "smartbond" => Ok(Self::Da14),
+            "cmsdk" | "cmsdk_ahb" | "arm_ahb_gpio" | "ut32" => Ok(Self::Cmsdk),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, efm32s0, efm32s1, sam_port, ra_port, imxrt, lpc2xxx, eos_s3, max32650, da14",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, efm32s0, efm32s1, sam_port, ra_port, imxrt, lpc2xxx, eos_s3, max32650, da14, cmsdk",
                 value
             )),
         }
@@ -1894,6 +1900,151 @@ impl Da14Gpio {
     }
 }
 
+// ── Arm CMSDK AHB GPIO (CAES UT32M0R500 variant) ─────────────────────────────
+// Register map: Renode `ARM_AHB_GPIO.cs` and the Frontgrade (Cobham CAES)
+// application note "UT32M0R500 Enable the GPIO" (12/21/2017). DATA @0x00
+// (read: pad level, write: output latch), DATAOUT @0x04, OUTENSET/CLR
+// @0x10/0x14, ALTFUNCSET/CLR @0x18/0x1C, INTENSET/CLR @0x20/0x24,
+// INTTYPESET/CLR @0x28/0x2C (1 edge), INTPOLSET/CLR @0x30/0x34 (1 high or
+// rising), INTSTATUS/INTCLEAR @0x38 (write 1 clears), UT32 SOFTRESET @0x3C,
+// PULL_ENABLE @0x40, PULL_UP_DOWN @0x44 (1 pull-up: the app note enables a
+// pull-up with PinPullEnable = PinPullDirection = PIN_14), MASKLOWBYTE[256]
+// @0x400 and MASKHIGHBYTE[256] @0x800 (the word index is the bit mask).
+// Deviations from Renode, which follows neither point: DATA reads the pad on
+// output pins too (Renode returns 0 there; the Arm CMSDK TRM samples the
+// pin), and the masked byte arrays are modelled (Renode tags them; the app
+// note §3.5.2 describes them). Not modelled: the interrupt OUTPUT to the NVIC
+// (INTSTATUS latches, nothing is raised), alternate-function routing (an
+// ALTFUNC pad reports AF and this port does not drive it), open drain, the
+// PID/CID words at 0xFD0.. (read 0, census).
+#[derive(Debug, serde::Serialize)]
+pub struct CmsdkGpio {
+    out: u32,
+    out_en: u32,
+    alt_func: u32,
+    int_en: u32,
+    int_type: u32,
+    int_pol: u32,
+    int_status: u32,
+    soft_reset: u32,
+    pull_en: u32,
+    pull_up: u32,
+    /// Input latch (host/button injection). Not a register.
+    pin_in: u32,
+    /// Pins the outside world is holding. Not a register.
+    #[serde(skip)]
+    external: u32,
+}
+
+impl CmsdkGpio {
+    const PINS: u32 = 0xFFFF;
+
+    fn with_alt_func(alt_func: u32) -> Self {
+        Self {
+            out: 0,
+            out_en: 0,
+            alt_func: alt_func & Self::PINS,
+            int_en: 0,
+            int_type: 0,
+            int_pol: 0,
+            int_status: 0,
+            soft_reset: 0,
+            pull_en: 0,
+            pull_up: 0,
+            pin_in: 0,
+            external: 0,
+        }
+    }
+
+    fn driven_mask(&self) -> u32 {
+        self.out_en & !self.alt_func
+    }
+
+    fn pull_of(&self, pin: u8) -> Option<bool> {
+        let bit = 1u32 << pin;
+        (self.pull_en & bit != 0).then_some(self.pull_up & bit != 0)
+    }
+
+    /// The pad level: driven pads read the latch, pulled pads nothing
+    /// outside holds read the rail, everything else the external level.
+    fn pad_level(&self) -> u32 {
+        let driven = self.driven_mask();
+        let from_pull = self.pull_en & !driven & !self.external;
+        let from_latch = !driven & !from_pull;
+        ((self.out & driven) | (self.pull_up & from_pull) | (self.pin_in & from_latch)) & Self::PINS
+    }
+
+    /// Latch INTSTATUS for the pad change `old` -> `new` (app note Table 2:
+    /// type 0 level, 1 edge; polarity 0 low/falling, 1 high/rising). Like
+    /// Renode, a level source latches when a pad changes, not continuously.
+    fn latch_interrupts(&mut self, old: u32, new: u32) {
+        let changed = old ^ new;
+        let active = !(new ^ self.int_pol); // level matches polarity
+        let edge = self.int_type & changed & active;
+        let level = !self.int_type & changed & active;
+        self.int_status |= (edge | level) & Self::PINS;
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.pad_level(),
+            0x04 => self.out,
+            0x10 | 0x14 => self.out_en,
+            0x18 | 0x1C => self.alt_func,
+            0x20 | 0x24 => self.int_en,
+            0x28 | 0x2C => self.int_type,
+            0x30 | 0x34 => self.int_pol,
+            0x38 => self.int_status,
+            0x3C => self.soft_reset,
+            0x40 => self.pull_en,
+            0x44 => self.pull_up,
+            0x400..=0x7FC if offset % 4 == 0 => self.pad_level() & ((offset as u32 - 0x400) >> 2),
+            0x800..=0xBFC if offset % 4 == 0 => {
+                self.pad_level() & (((offset as u32 - 0x800) >> 2) << 8)
+            }
+            _ => {
+                crate::census_reg!("gpio:CmsdkGpio", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        let v = value & Self::PINS;
+        let before = self.pad_level();
+        match offset {
+            0x00 | 0x04 => self.out = v,
+            0x10 => self.out_en |= v,
+            0x14 => self.out_en &= !v,
+            0x18 => self.alt_func |= v,
+            0x1C => self.alt_func &= !v,
+            0x20 => self.int_en |= v,
+            0x24 => self.int_en &= !v,
+            0x28 => self.int_type |= v,
+            0x2C => self.int_type &= !v,
+            0x30 => self.int_pol |= v,
+            0x34 => self.int_pol &= !v,
+            0x38 => self.int_status &= !v,
+            0x3C => self.soft_reset = value & 1,
+            0x40 => self.pull_en = v,
+            0x44 => self.pull_up = v,
+            0x400..=0x7FC if offset % 4 == 0 => {
+                let mask = (offset as u32 - 0x400) >> 2;
+                self.out = (self.out & !mask) | (value & mask);
+            }
+            0x800..=0xBFC if offset % 4 == 0 => {
+                let mask = ((offset as u32 - 0x800) >> 2) << 8;
+                self.out = (self.out & !mask) | (value & mask);
+            }
+            _ => {
+                crate::census_reg!("gpio:CmsdkGpio", offset, "write");
+            }
+        }
+        let after = self.pad_level();
+        self.latch_interrupts(before, after);
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 pub enum GpioFamily {
     Stm32F1(F1Gpio),
@@ -1909,6 +2060,7 @@ pub enum GpioFamily {
     EosS3(EosS3Gpio),
     Max32650(Max32650Gpio),
     Da14(Da14Gpio),
+    Cmsdk(CmsdkGpio),
 }
 
 impl GpioFamily {
@@ -1927,6 +2079,7 @@ impl GpioFamily {
             Self::EosS3(g) => g.read_reg(offset),
             Self::Max32650(g) => g.read_reg(offset),
             Self::Da14(g) => g.read_reg(offset),
+            Self::Cmsdk(g) => g.read_reg(offset),
         }
     }
 
@@ -1945,6 +2098,7 @@ impl GpioFamily {
             Self::EosS3(g) => g.write_reg(offset, value),
             Self::Max32650(g) => g.write_reg(offset, value),
             Self::Da14(g) => g.write_reg(offset, value),
+            Self::Cmsdk(g) => g.write_reg(offset, value),
         }
     }
 
@@ -2041,6 +2195,16 @@ impl GpioFamily {
                 apply(&mut g.pin_in);
                 g.external |= bit;
             }
+            Self::Cmsdk(g) => {
+                if pin >= 16 {
+                    return false;
+                }
+                let before = g.pad_level();
+                apply(&mut g.pin_in);
+                g.external |= bit;
+                let after = g.pad_level();
+                g.latch_interrupts(before, after);
+            }
         }
         true
     }
@@ -2073,6 +2237,12 @@ impl GpioFamily {
             Self::EosS3(g) => g.external &= !bit,
             Self::Max32650(g) => g.external &= !bit,
             Self::Da14(g) => g.external &= !bit,
+            Self::Cmsdk(g) => {
+                let before = g.pad_level();
+                g.external &= !bit;
+                let after = g.pad_level();
+                g.latch_interrupts(before, after);
+            }
         }
     }
 
@@ -2231,6 +2401,7 @@ impl GpioFamily {
             Self::EosS3(g) => (pin < 8).then(|| bit(g.io_output)),
             Self::Max32650(g) => Some(bit(g.pad_level())),
             Self::Da14(g) => Some(bit(g.pad_level())),
+            Self::Cmsdk(g) => (pin < 16).then(|| bit(g.pad_level())),
         }
     }
 }
@@ -2456,6 +2627,20 @@ impl GpioPort {
                     GpioMode::Input
                 }
             }
+            // CMSDK: ALTFUNC hands the pad to a peripheral (routing not
+            // modelled); otherwise OUTEN is the direction.
+            GpioFamily::Cmsdk(g) => {
+                let bit = 1u32 << pin;
+                if pin >= 16 {
+                    return None;
+                } else if g.alt_func & bit != 0 {
+                    GpioMode::Af
+                } else if g.out_en & bit != 0 {
+                    GpioMode::Output
+                } else {
+                    GpioMode::Input
+                }
+            }
             // Series-2 EFR32: 4-bit mode nibble per pin (MODEL/MODEH).
             // 0 DISABLED is a hi-Z pin — closest to Analog here; 1..3 are the
             // input modes; >= 4 the output modes. No AF verdict: the ROUTE
@@ -2621,6 +2806,10 @@ impl GpioPort {
                 .flatten(),
             // DA14: PUPD 1 up / 2 down (input modes only, so never driven).
             GpioFamily::Da14(g) => g.pull_of(pin),
+            // CMSDK (UT32): PULL_ENABLE + PULL_UP_DOWN, on an undriven pad.
+            GpioFamily::Cmsdk(g) => (pin < 16 && g.driven_mask() & (1u32 << pin) == 0)
+                .then(|| g.pull_of(pin))
+                .flatten(),
         }
     }
 
@@ -2832,7 +3021,14 @@ impl GpioPort {
             GpioRegisterLayout::EosS3 => GpioFamily::EosS3(EosS3Gpio::default()),
             GpioRegisterLayout::Max32650 => GpioFamily::Max32650(Max32650Gpio::default()),
             GpioRegisterLayout::Da14 => GpioFamily::Da14(Da14Gpio::default()),
+            GpioRegisterLayout::Cmsdk => GpioFamily::Cmsdk(CmsdkGpio::with_alt_func(0)),
         })
+    }
+
+    /// Build a CMSDK AHB GPIO port whose ALTFUNC resets to `alt_func`
+    /// (Renode `alternateFunctionResetValue`; UT32M0R500 GPIO2 = 0xFFFF).
+    pub fn new_cmsdk(alt_func: u32) -> Self {
+        Self::from_family(GpioFamily::Cmsdk(CmsdkGpio::with_alt_func(alt_func)))
     }
 
     /// Build an nRF52-layout GPIO port with an explicit pin count.
@@ -2994,6 +3190,7 @@ impl GpioPort {
             GpioFamily::Max32650(_) => 0x18, // OUT
             // P0_DATA; a P1 pad is one word up (see `data_word_of`).
             GpioFamily::Da14(_) => 0x00,
+            GpioFamily::Cmsdk(_) => 0x04, // DATAOUT
         };
         family.saturating_sub(self.window_offset)
     }
@@ -3017,6 +3214,7 @@ impl GpioPort {
             GpioFamily::EosS3(_) => 0x00,    // IO_INPUT
             GpioFamily::Max32650(_) => 0x24, // IN
             GpioFamily::Da14(_) => 0x00,     // P0_DATA (see odr_offset)
+            GpioFamily::Cmsdk(_) => 0x00,    // DATA
         };
         family.saturating_sub(self.window_offset)
     }
@@ -3097,6 +3295,7 @@ impl GpioPort {
             GpioFamily::EosS3(_) => GpioRegisterLayout::EosS3,
             GpioFamily::Max32650(_) => GpioRegisterLayout::Max32650,
             GpioFamily::Da14(_) => GpioRegisterLayout::Da14,
+            GpioFamily::Cmsdk(_) => GpioRegisterLayout::Cmsdk,
         }
     }
 
@@ -3865,6 +4064,7 @@ impl crate::Peripheral for GpioPort {
             GpioFamily::EosS3(g) => serde_json::to_value(g),
             GpioFamily::Max32650(g) => serde_json::to_value(g),
             GpioFamily::Da14(g) => serde_json::to_value(g),
+            GpioFamily::Cmsdk(g) => serde_json::to_value(g),
         }
         .unwrap_or(serde_json::Value::Null)
     }
@@ -4152,6 +4352,54 @@ mod routing_tests {
         assert_eq!(g.read_u32(0x04).unwrap(), 0, "P1 latch kept");
         g.write_u32(0xA4, 0x1_0010).unwrap();
         assert_eq!(g.read_u32(0xA4).unwrap(), 0x10, "WEAK_CTRL 16 bits");
+    }
+
+    /// CMSDK AHB GPIO (UT32M0R500): DATA reads the pad, OUTEN set/clear,
+    /// UT32 pulls, masked byte writes, ALTFUNC reset value, INTSTATUS latch.
+    #[test]
+    fn cmsdk_outen_pulls_masked_bytes_interrupt_latch() {
+        let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Cmsdk);
+        assert_eq!(g.read_u32(0x00).unwrap(), 0, "floating inputs read 0");
+        g.write_u32(0x40, 1 << 3).unwrap(); // PULL_ENABLE
+        g.write_u32(0x44, 1 << 3).unwrap(); // PULL_UP_DOWN: up
+        assert_eq!(g.read_u32(0x00).unwrap(), 1 << 3, "pull-up");
+        assert!(g.set_gpio_input(3, false));
+        assert_eq!(g.read_u32(0x00).unwrap(), 0, "outside beats pull");
+        g.write_u32(0x10, 0x00F0).unwrap(); // OUTENSET 4..7
+        g.write_u32(0x04, 0xFFFF_FFFF).unwrap(); // DATAOUT keeps 16 bits
+        assert_eq!(g.read_u32(0x04).unwrap(), 0xFFFF);
+        assert_eq!(g.read_u32(0x00).unwrap(), 0x00F0, "DATA = driven pads");
+        assert_eq!(g.read_u32(0x14).unwrap(), 0x00F0, "OUTENCLR reads OUTEN");
+        // MASKLOWBYTE[0x30] = 0x10: pin 4 stays 1, pin 5 cleared.
+        g.write_u32(0x400 + 4 * 0x30, 0x10).unwrap();
+        assert_eq!(g.read_u32(0x00).unwrap(), 0x00D0);
+        assert_eq!(g.read_u32(0x400 + 4 * 0x30).unwrap(), 0x10);
+        // MASKHIGHBYTE[0x01] = 0: DATAOUT pin 8 cleared, others kept.
+        g.write_u32(0x800 + 4, 0).unwrap();
+        assert_eq!(g.read_u32(0x04).unwrap(), 0xFEDF);
+        assert_eq!(g.gpio_routing(4).unwrap().mode, GpioMode::Output);
+        assert_eq!(g.gpio_routing(3).unwrap().mode, GpioMode::Input);
+        g.write_u32(0x18, 1 << 4).unwrap(); // ALTFUNCSET
+        assert_eq!(g.gpio_routing(4).unwrap().mode, GpioMode::Af);
+        assert_eq!(g.read_u32(0x00).unwrap() & (1 << 4), 0, "AF pad not driven");
+        // Falling edge on pin 3 (INTTYPE 1, INTPOL 0), then w1c.
+        g.write_u32(0x28, 1 << 3).unwrap();
+        g.write_u32(0x20, 1 << 3).unwrap();
+        // The earlier 1 -> 0 change latched as a low-level source (type 0).
+        assert_eq!(
+            g.read_u32(0x38).unwrap() & (1 << 3),
+            1 << 3,
+            "level latched"
+        );
+        g.write_u32(0x38, 0xFFFF).unwrap();
+        assert!(g.set_gpio_input(3, true));
+        assert_eq!(g.read_u32(0x38).unwrap() & (1 << 3), 0, "rising: no");
+        assert!(g.set_gpio_input(3, false));
+        assert_eq!(g.read_u32(0x38).unwrap() & (1 << 3), 1 << 3, "falling");
+        g.write_u32(0x38, 1 << 3).unwrap();
+        assert_eq!(g.read_u32(0x38).unwrap() & (1 << 3), 0, "INTCLEAR");
+        let gpio2 = GpioPort::new_cmsdk(0xFFFF);
+        assert_eq!(gpio2.read_u32(0x18).unwrap(), 0xFFFF, "ALTFUNC reset");
     }
 
     /// EOS S3 MISC IO: IO_OUTPUT keeps bits [7:0] and drives the pads;

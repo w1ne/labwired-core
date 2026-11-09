@@ -12,7 +12,7 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1453`
+- pass_claimed_peripherals_total: `1457`
 - pass_claimed_peripherals_median: `2`
 - median_elapsed_ms: `1371`
 - median_elapsed_seconds: `1.371`
@@ -252,7 +252,7 @@
 | `tegra3` | `pass` | `True` | `yes` | `yes` | `1043` | `1.043` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `tock_veer_el2_sim` | `pass` | `True` | `yes` | `yes` | `952` | `0.952` | `True` | `observable` | `1` | `memory_value`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `up_squared_x86_64` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `3` | n/a | 2: `hpet:hpet`, `pci:pythonperipheral` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no x86-64 CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
-| `ut32m0r500` | `pass` | `True` | `yes` | `yes` | `1004` | `1.004` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `ut32m0r500` | `pass` | `True` | `yes` | `yes` | `1298` | `1.298` | `True` | `observable` | `5` | `uart_contains`, `memory_value`, `gpio_edges`, `fidelity_clean` | 0 | `n/a` | n/a | n/a |
 | `vegaboard_ri5cy` | `pass` | `True` | `yes` | `yes` | `1404` | `1.404` | `True` | `observable` | `1` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `verilated_ibex` | `pass` | `True` | `yes` | `yes` | `655` | `0.655` | `True` | `observable` | `2` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `versatile` | `pass` | `True` | `yes` | `yes` | `154313` | `154.313` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |

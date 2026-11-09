@@ -429,6 +429,41 @@ impl Rig for Da14 {
     }
 }
 
+struct Cmsdk;
+impl Rig for Cmsdk {
+    fn name(&self) -> &'static str {
+        "GpioPort cmsdk"
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
+            crate::peripherals::gpio::GpioRegisterLayout::Cmsdk,
+        ))
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        // UT32M0R500 app note: PULL_ENABLE @0x40 + PULL_UP_DOWN @0x44 (1 up),
+        // OUTENSET/CLR @0x10/0x14, latch through the masked byte array. No
+        // open drain in the model.
+        match mode {
+            Mode::Input(pull) => {
+                bit_to(port, 0x40, pin, pull != Pull::None);
+                bit_to(port, 0x44, pin, pull == Pull::Up);
+                w32(port, 0x14, 1 << pin);
+            }
+            Mode::PushPull(level) => {
+                let mask = 1u32 << pin; // pin < 8: MASKLOWBYTE
+                w32(
+                    port,
+                    0x400 + 4 * u64::from(mask),
+                    if level { mask } else { 0 },
+                );
+                w32(port, 0x10, mask);
+            }
+            Mode::OpenDrain(_) => return false,
+        }
+        true
+    }
+}
+
 #[derive(Default)]
 struct RaPort {
     pfs: Option<crate::peripherals::ra_pfs::RaPfs>,
@@ -929,6 +964,7 @@ fn rigs() -> Vec<Box<dyn Rig>> {
         Box::new(Lpc2xxx),
         Box::new(Max32650),
         Box::new(Da14),
+        Box::new(Cmsdk),
         Box::new(Avr),
         Box::new(Pic24),
         Box::new(Rp2040),

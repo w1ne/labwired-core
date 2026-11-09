@@ -1,0 +1,20 @@
+2026-11-09T18:04:07.954956Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/ut32m0r500.yaml
+2026-11-09T18:04:07.956360Z  INFO labwired_loader: ELF Entry Point: 0x10000c1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-09T18:04:07.957777Z ERROR labwired_cli::execute: --watch-gpio: peripheral "gpio_bank2" not found on the bus; channel will stay flat
+UT32M0R500 Cortex-M0+ UART0 smoke
+2026-11-09T18:04:07.959862Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "UT32 checks PPPPPPPPPP DONE" }) (captured len=34)
+2026-11-09T18:04:07.959879Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "UT32 UART1 line" }) (captured len=34)
+2026-11-09T18:04:07.959886Z ERROR labwired_cli::execute: Memory assertion failed at 0x20017f00 (size 4): expected 0x5e3203ff, got 0x0 (mask 0xffffffff)
+2026-11-09T18:04:07.959892Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536968960, expected_value: 1580336127, mask: None, size: Some(4), node: None } }) (captured len=34)
+2026-11-09T18:04:07.959918Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpio_bank2:13", min_edges: 6 } }) (captured len=34)
+2026-11-09T18:04:07.959941Z ERROR labwired_cli::execute: Assertion failed: fidelity_clean: true, but fidelity: 1 gap kind(s), 1 total hit(s):
+  unmapped MMIO:
+    0x40020010 (read)  x1
+  approximations:
+    unpowered_rail_assumed: no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated
+2026-11-09T18:04:07.959949Z ERROR labwired_cli::execute: Assertion failed: FidelityClean(FidelityCleanAssertion { fidelity_clean: true }) (captured len=34)
+FAIL  2/7 checks · smoke · 200000 steps · 0.00s
+FAULT  HardFault: data access at 0x4002_0010, at PC 0x0100_014E in `core::ptr::read_volatile` (mod.rs:2091), called from `main`.
+       ARMv6-M (no HFSR/CFSR); engine-recorded cause [PRECISERR] address=0x40020010

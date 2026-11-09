@@ -1,14 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.000873">
+<testsuite name="labwired" tests="8" failures="0" errors="0" time="0.001775">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="d3a6832cbce2ed0661660ddd602db170548ba0bcd4ddb4883fa5a9b89a428b4d"/>
+    <property name="firmware_hash" value="ff7fcc9f1c61a30f6af944bf65272b678ccef6673ac346140d6edec2431ca1bc"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.000873">
+  <testcase classname="labwired" name="run" time="0.001775">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: UT32M0R500 Cortex-M0+ UART0 smoke" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_contains: UT32 checks PPPPPPPPPP DONE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: UT32 UART1 line" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x20017f00=0x5e3203ff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: gpio_edges: gpio_bank2:13 &gt;= 6 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: fidelity_clean: true" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

@@ -1,5 +1,12 @@
-# Bounded imported UT32M0R500 profile: Cortex-M0+, exact Renode flash/SRAM
-# windows, and UART0. Other imported peripherals are omitted until modeled.
+# UT32M0R500 (Frontgrade/CAES) profile: Cortex-M0+, exact Renode flash/SRAM
+# windows, UART0/UART1 (Gaisler APBUART) and the three Arm CMSDK AHB GPIO
+# banks with the UT32 pull registers (Renode platforms/cpus/ut32m0r500.repl;
+# Frontgrade app note "UT32M0R500 Enable the GPIO"). GPIO2 ALTFUNC resets to
+# 0xFFFF (Renode alternateFunctionResetValue). Not declared (no model in this
+# engine): bootrom, EDAC SRAM, timer0/1 (ARM SP804), ADC, CAN0/1, and the
+# Renode Tag-only blocks (RTC, PWM, SPI, DACs, watchdog, I2C, NFC).
+# Not modelled on the declared blocks: GPIO interrupt OUTPUT to the NVIC
+# (INTSTATUS latches only) and alternate-function pad routing.
 name: ut32m0r500
 arch: arm
 core: cortex-m0+
@@ -14,5 +21,32 @@ peripherals:
   type: gaislerapbuart
   bus: sysbus
   base_address: 1073758208
+  size: 4KB
   config:
     profile: gaisler
+- id: uart1
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 0x40005000
+  size: 4KB
+  config:
+    profile: gaisler
+- id: gpio_bank0
+  type: gpio
+  base_address: 0x40020000
+  size: 4KB
+  config:
+    profile: cmsdk
+- id: gpio_bank1
+  type: gpio
+  base_address: 0x40021000
+  size: 4KB
+  config:
+    profile: cmsdk
+- id: gpio_bank2
+  type: gpio
+  base_address: 0x40022000
+  size: 4KB
+  config:
+    profile: cmsdk
+    reset_altfunc: 0xFFFF
