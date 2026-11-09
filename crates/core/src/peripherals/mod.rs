@@ -162,6 +162,7 @@ pub mod virtual_ble;
 pub mod wave_plan;
 pub mod wwdg;
 pub mod xilinx_xadc;
+pub mod zynqmp_ams;
 
 /// Record one CAN/CAN-FD frame into the machine's ONE bus trace.
 ///

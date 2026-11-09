@@ -149,6 +149,11 @@ const CONVERTED: &[&str] = &[
     "zedboard",
     "zolertia-firefly",
     "zynq-7000",
+    "zynqmp-zcu102-revA",
+    "zynqmp-zcu102-revB",
+    "zynqmp-zcu104",
+    "zynqmp-zcu106-vcu",
+    "zynqmp",
 ];
 
 /// Onboarding profiles that declare an ADC whose IP LabWired does not yet
@@ -262,6 +267,11 @@ enum Family {
     /// MSB-justified against 1 V on VP/VN and VAUXn (Renode Xilinx_XADC.cs,
     /// embeddedsw xadcps.c), so the 3.3 V NTC divider saturates above 1 V.
     Xadc,
+    /// Zynq UltraScale+ AMS PL SYSMON: the sequencer converts the channels
+    /// `SEQ_CH0/1` enable into status registers at `DRP * 4`, 10 bits
+    /// MSB-justified against 1 V on VP/VN and VAUXn (embeddedsw sysmonpsu,
+    /// Linux xilinx-ams.c), so the 3.3 V NTC divider saturates above 1 V.
+    ZynqmpAms,
     /// SAM D21 ADC: `INPUTCTRL.MUXPOS` against GND, `SWTRIG.START`,
     /// `INTFLAG.RESRDY` cleared by the `RESULT` read, and a pad converts
     /// only once PORT hands it to the ADC (PINCFG.PMUXEN, PMUX function B)
@@ -539,6 +549,21 @@ const RA_ADCER: u64 = 0x0E;
 /// XADC DRP channel of VAUXn (xadcps_hw.h `XADCPS_CH_AUX_MIN`).
 const XADC_AUX0: u8 = 0x10;
 
+// Zynq UltraScale+ AMS (embeddedsw xsysmonpsu_hw.h): control offsets, and
+// PL SYSMON DRP addresses (byte offset / 4).
+const AMS_ISR_1: u64 = 0x14;
+const AMS_IDR_0: u64 = 0x28;
+const AMS_IDR_1: u64 = 0x2C;
+const AMS_PS_CSTS: u64 = 0x40;
+const AMS_PL_CSTS: u64 = 0x44;
+const AMS_EOC: u32 = 1 << 3;
+const AMS_EOS: u32 = 1 << 4;
+const AMS_CFG_REG0: usize = 0x40;
+const AMS_CFG_REG1: usize = 0x41;
+const AMS_SEQ_CH2: usize = 0x46;
+const AMS_SEQ_CH0: usize = 0x48;
+const AMS_SEQ_CH1: usize = 0x49;
+
 struct Converter {
     id: String,
     base: u64,
@@ -552,7 +577,9 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
     for p in &chip.peripherals {
         let kind = p.r#type.to_ascii_lowercase();
         // SAM E70 names its converters AFEC0/AFEC1, so the type counts too.
-        let named_adc = p.id.to_ascii_lowercase().contains("adc") || kind == "sam_afec";
+        // The ZynqMP block is the AMS, not an "ADC".
+        let named_adc =
+            p.id.to_ascii_lowercase().contains("adc") || kind == "sam_afec" || kind == "zynqmp_ams";
         if kind == "stub" || !named_adc {
             continue;
         }
@@ -582,6 +609,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Samd51
         } else if kind == "xilinx_xadc" {
             Family::Xadc
+        } else if kind == "zynqmp_ams" {
+            Family::ZynqmpAms
         } else if kind == "efr32s2_iadc" {
             Family::Efr32Iadc
         } else if kind == "efr32s1_adc" {
@@ -670,6 +699,8 @@ impl Converter {
             Family::Caes => mv.min(1500) * 4095 / 1500,
             // Unipolar, 1 LSB = 1 V / 4096, clamped at 0xFFF.
             Family::Xadc => (mv * 4096 / 1000).min(4095),
+            // Unipolar, 10 bits, 1 LSB = 1 V / 1024, clamped at 0x3FF.
+            Family::ZynqmpAms => (mv * 1024 / 1000).min(1023),
             // 12-bit against REFCTRL.REFSEL INTVCC0 = VDDANA / 1.48
             // (2229 mV at 3.3 V), truncated, clamped.
             Family::Samd21 => (mv * 4095 / (3300 * 100 / 148)).min(4095),
@@ -731,7 +762,9 @@ impl Converter {
             // DA1459x: SEL_P 0/1 are pads P1_0/P1_1.
             Family::Eoss3 | Family::Max32650 | Family::Da14Gpadc => [0, 1],
             // VAUX5 and VAUX6: the DRP channel is 0x10 + n.
-            Family::Xadc => [XADC_AUX0 + NTC_CHANNEL, XADC_AUX0 + DIODE_CHANNEL],
+            Family::Xadc | Family::ZynqmpAms => {
+                [XADC_AUX0 + NTC_CHANNEL, XADC_AUX0 + DIODE_CHANNEL]
+            }
             // PA3 and PA4. emlib em_gpio.h (gsdk_4.4) bonds only PA0..PA5
             // on xG1 and xG13 (`_GPIO_PORT_A_PIN_MASK` 0x003F, SDID 80/89),
             // so PA6/PA7 do not exist there.
@@ -768,6 +801,8 @@ impl Converter {
             Family::NxpLpadc { ctype_mode: false } => 1,
             // CH2A (PIO10_4).
             Family::NxpLpadc { ctype_mode: true } => 2,
+            // VAUX7: a DRP status address, not channel 7 (VCCPAUX).
+            Family::ZynqmpAms => XADC_AUX0 + IDLE_CHANNEL,
             _ => IDLE_CHANNEL,
         }
     }
@@ -1184,6 +1219,33 @@ impl Converter {
                     "{}: IF",
                     self.id
                 );
+            }
+            Family::ZynqmpAms => {
+                // xilinx-ams.c ams_init_device: poll PS_CSTS for READY, see
+                // the PL SYSMON accessible, soft-reset it through VP_VN, put
+                // its sequencer in default mode, mask and clear interrupts.
+                assert_eq!(
+                    bus.read_u32(self.base + AMS_PS_CSTS).unwrap() & 0x0801_0000,
+                    0x0801_0000,
+                    "{}: PS SYSMON startup done",
+                    self.id
+                );
+                assert_ne!(
+                    bus.read_u32(self.base + AMS_PL_CSTS).unwrap(),
+                    0,
+                    "{}: PL SYSMON accessible",
+                    self.id
+                );
+                bus.write_u32(self.ams_pl(0x03), 0xFFFF)
+                    .expect("VP_VN reset");
+                bus.write_u32(self.ams_pl(AMS_CFG_REG1), 0)
+                    .expect("CFG_REG1 default");
+                bus.write_u32(self.base + AMS_IDR_0, u32::MAX)
+                    .expect("IDR_0");
+                bus.write_u32(self.base + AMS_IDR_1, 0xE000_001F)
+                    .expect("IDR_1");
+                bus.write_u32(self.base + AMS_ISR_1, 0xE000_001F)
+                    .expect("ISR_1");
             }
             Family::Xadc => {
                 // xadcps.c XAdcPs_CfgInitialize: CFG |= ENABLE | CFIFOTH |
@@ -1655,6 +1717,36 @@ impl Converter {
                 );
                 bus.write_u16(self.base + ctl0, on).expect("clear ENC");
                 [codes[0], codes[1]]
+            }
+            Family::ZynqmpAms => {
+                // ams_enable_channel_sequence on the PL SYSMON: default mode,
+                // SEQ_CH0/1/2, then continuous; the IIO read waits for a
+                // finished pass (EOS) and reads each VAUX status register.
+                let [ntc, diode] = self.routed_channels();
+                let aux = |ch: u8| 1u32 << (ch - XADC_AUX0);
+                let idle = self.idle_channel();
+                bus.write_u32(self.ams_pl(AMS_CFG_REG1), 0)
+                    .expect("CFG_REG1 default");
+                bus.write_u32(self.ams_pl(AMS_SEQ_CH0), 0).expect("SEQ_CH0");
+                bus.write_u32(self.ams_pl(AMS_SEQ_CH1), aux(ntc) | aux(diode) | aux(idle))
+                    .expect("SEQ_CH1");
+                bus.write_u32(self.ams_pl(AMS_SEQ_CH2), 0).expect("SEQ_CH2");
+                bus.write_u32(self.ams_pl(AMS_CFG_REG1), 2 << 12)
+                    .expect("continuous");
+                self.ams_wait(bus, AMS_EOS);
+                let codes: Vec<u32> = [ntc, diode, idle]
+                    .iter()
+                    .map(|&ch| bus.read_u32(self.ams_pl(usize::from(ch))).unwrap())
+                    .collect();
+                for code in &codes {
+                    assert_eq!(code & 0x3F, 0, "{}: 10 bits MSB-justified", self.id);
+                }
+                assert_eq!(
+                    codes[2], 0,
+                    "{}: unrouted VAUX{IDLE_CHANNEL} converts to zero",
+                    self.id
+                );
+                [codes[0] >> 6, codes[1] >> 6]
             }
             Family::Xadc => {
                 // Three pipelined DRP reads and a no-op: each command shifts
@@ -2890,6 +2982,19 @@ impl Converter {
                 bus.write_u16(self.base + ctl0, on).expect("clear ENC");
                 u32::from(code)
             }
+            Family::ZynqmpAms => {
+                // ams_read_vcc_reg's single-channel pattern on the PL
+                // SYSMON: default mode, CFG_REG0.MUX_CH, single channel,
+                // clear EOC and wait for the next one.
+                bus.write_u32(self.ams_pl(AMS_CFG_REG1), 0)
+                    .expect("CFG_REG1 default");
+                bus.write_u32(self.ams_pl(AMS_CFG_REG0), u32::from(channel))
+                    .expect("CFG_REG0.MUX_CH");
+                bus.write_u32(self.ams_pl(AMS_CFG_REG1), 3 << 12)
+                    .expect("single channel");
+                self.ams_wait(bus, AMS_EOC);
+                bus.read_u32(self.ams_pl(usize::from(channel))).unwrap() >> 6
+            }
             Family::Xadc => {
                 // XAdcPs_ReadInternalReg: read command, dummy RDFIFO pop,
                 // write the dummy back (a no-op), pop the result.
@@ -3373,6 +3478,24 @@ impl Converter {
             .collect()
     }
 
+    /// A PL SYSMON register by DRP address (xsysmonpsu.h `XPL_BA_OFFSET`).
+    fn ams_pl(&self, drp: usize) -> u64 {
+        self.base + 0xC00 + drp as u64 * 4
+    }
+
+    /// Clear `ISR_1` and tick until `flag` latches.
+    fn ams_wait(&self, bus: &mut SystemBus, flag: u32) {
+        bus.write_u32(self.base + AMS_ISR_1, flag)
+            .expect("clear ISR_1");
+        for _ in 0..8 {
+            if bus.read_u32(self.base + AMS_ISR_1).unwrap() & flag != 0 {
+                return;
+            }
+            bus.tick_peripherals_fully();
+        }
+        panic!("{}: ISR_1 {flag:#x} never latched", self.id);
+    }
+
     /// The shared STM32 model also exposes what it holds per channel, so an
     /// unrouted channel can be shown undriven rather than merely "some code".
     fn held_count(&self, bus: &mut SystemBus, channel: u8) -> Option<u16> {
@@ -3558,6 +3681,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Stm32L1Adc
                 | Family::NxpLpadc { .. }
                 | Family::RaAdc { .. }
+                | Family::ZynqmpAms
         ) {
             assert_eq!(
                 converter.convert(&mut bus, converter.idle_channel()),
@@ -3570,18 +3694,19 @@ fn assert_converter_routes_generic_analog(
     // The NTC sits on the low side: hotter means lower resistance, lower volts.
     if matches!(
         converter.family,
-        Family::Apollo4 | Family::Eoss3 | Family::Xadc
+        Family::Apollo4 | Family::Eoss3 | Family::Xadc | Family::ZynqmpAms
     ) {
-        // Above the 1.19 V (Apollo4), 1.4 V (EOS S3) or 1 V (XADC) full
-        // scale the -10 and 25 °C dividers (2.79 V, 1.65 V) both saturate;
-        // only 80 °C (0.37 V) is in range.
+        // Above the 1.19 V (Apollo4), 1.4 V (EOS S3) or 1 V (XADC, ZynqMP
+        // AMS) full scale the -10 and 25 °C dividers (2.79 V, 1.65 V) both
+        // saturate; only 80 °C (0.37 V) is in range.
+        let full_scale = converter.expected_code(3.3);
         assert_eq!(
             ntc_codes[..2],
-            [4095, 4095],
+            [full_scale, full_scale],
             "{tag}: dividers above VREF saturate"
         );
         assert!(
-            ntc_codes[2] < 4095,
+            ntc_codes[2] < full_scale,
             "{tag}: in-range divider resolves: {ntc_codes:?}"
         );
     } else {
@@ -3643,7 +3768,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 150,
+        instances, 155,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -3651,7 +3776,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 93,
+        without_adc, 88,
         "onboarding profiles that declare no modelled ADC"
     );
 }
