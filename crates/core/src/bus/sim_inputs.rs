@@ -400,11 +400,16 @@ impl SystemBus {
         let now = self.current_cycle;
         let mut devices = std::mem::take(&mut self.gpio_devices);
         for device in &mut devices {
-            let id = device.id().to_string();
             let hit = {
                 let si = device.as_sim_input();
-                si.input_channels().iter().any(|c| c.key == channel)
-                    && Self::component_matches(component, &id, si)
+                if !si.input_channels().iter().any(|c| c.key == channel) {
+                    false
+                } else {
+                    // Prefer the SimInput component id so we do not re-borrow
+                    // `device` for `id()` while `si` is live.
+                    let name = si.component_id().unwrap_or("");
+                    Self::component_matches(component, name, si)
+                }
             };
             if hit {
                 device.service(self, now);
