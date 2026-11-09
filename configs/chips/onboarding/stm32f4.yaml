@@ -15,19 +15,23 @@ peripherals:
     type: stm32_uart
     bus: sysbus
     base_address: 0x40004400
+    size: 1KB
   - id: gpioPortA
     type: stm32_gpioport
     bus: sysbus
     base_address: 0x40020000
+    size: 1KB
     config:
       profile: stm32v2
   - id: gpioPortD
     type: stm32_gpioport
     bus: sysbus
     base_address: 0x40020C00
+    size: 1KB
     config:
       profile: stm32v2
   - id: rcc
     type: stm32f4_rcc
     bus: sysbus
     base_address: 0x40023800
+    size: 1KB

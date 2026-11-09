@@ -24,6 +24,7 @@ peripherals:
   type: efm32_uart
   bus: sysbus
   base_address: 1073790976
+  size: 1KB
 # Secondary (U)SART/UART instances (Renode efm32gg942.repl usart0-2 and
 # efm32*995.repl uart0/uart1; EFM32 USART register map CMD 0x0C,
 # STATUS 0x10, TXDATA 0x34). Polled only: the efm32 UART profile has no

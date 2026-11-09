@@ -1,0 +1,8 @@
+2026-11-09T16:41:33.190884Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sam4s8b.yaml
+2026-11-09T16:41:33.194218Z  INFO labwired_loader: ELF Entry Point: 0x400401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-09T16:41:33.955013Z ERROR labwired_cli::execute: Memory assertion failed to read address 0x400e123c (size 32): Memory access violation at 0x400e123c
+2026-11-09T16:41:33.955048Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1074663996, expected_value: 0, mask: None, size: None, node: None } }) (captured len=436)
+2026-11-09T16:41:33.955058Z ERROR labwired_cli::execute: Memory assertion failed to read address 0x400e0c00 (size 32): Memory access violation at 0x400e0c00
+2026-11-09T16:41:33.955061Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1074662400, expected_value: 0, mask: None, size: None, node: None } }) (captured len=436)
+FAIL  3/5 checks · sam4s8b-new · 1500000 steps · 0.76s

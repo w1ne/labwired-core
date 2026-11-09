@@ -22,6 +22,7 @@ peripherals:
   type: efm32_uart
   bus: sysbus
   base_address: 1073807360
+  size: 1KB
 # Series-1 GPIO ports A..F (Renode: one `GPIOPort.EFMGPIOPort` at
 # 0x4000A000). GPIO_P_TypeDef at a 0x30 stride
 # (Gecko SDK efm32pg1b_gpio_p.h: P[6]); DOUTSET/DOUTCLR do not exist on

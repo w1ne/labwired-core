@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "17e80a99dedd928d4cf2b980837b4347556c25d3916b4436aef09bd909733d2a",
+  "firmware_hash": "5ea81dc6523eca903a425ca814f5c7dbb123741f7389d7a562eed088cee75b8e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-efm32hg350-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32hg350.yaml",

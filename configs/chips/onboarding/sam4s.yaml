@@ -52,9 +52,11 @@ peripherals:
 - id: uart0
   type: sam_usart
   base_address: 0x400E0600
+  size: 512B
 - id: uart1
   type: sam_usart
   base_address: 0x400E0800
+  size: 512B
 - id: eefc
   type: sam4s_eefc
   base_address: 0x400E0A00
@@ -64,14 +66,17 @@ peripherals:
 - id: pioA
   type: sam4s_pio
   base_address: 0x400E0E00
+  size: 512B
   irq: 11
 - id: pioB
   type: sam4s_pio
   base_address: 0x400E1000
+  size: 512B
   irq: 12
 - id: pioC
   type: sam4s_pio
   base_address: 0x400E1200
+  size: 512B
   irq: 13
 - id: rstc
   type: sam4s_rstc

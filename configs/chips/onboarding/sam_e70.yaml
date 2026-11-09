@@ -61,9 +61,11 @@ peripherals:
 - id: uart0
   type: sam_usart
   base_address: 0x400E0800
+  size: 320B
 - id: uart1
   type: sam_usart
   base_address: 0x400E0A00
+  size: 512B
 - id: chipid
   type: declarative
   base_address: 0x400E0940
@@ -115,12 +117,15 @@ peripherals:
 - id: uart2
   type: sam_usart
   base_address: 0x400E1A00
+  size: 512B
 - id: uart3
   type: sam_usart
   base_address: 0x400E1C00
+  size: 512B
 - id: uart4
   type: sam_usart
   base_address: 0x400E1E00
+  size: 512B
 - id: l1_cache
   type: cortex_m7_cache
   base_address: 0xE000EF50

@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/stk3600-smoke.yaml",
   "system": "configs/systems/onboarding/stk3600.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-09T11:56:54Z",
-  "finished_at_utc": "2026-11-09T11:56:55Z",
+  "started_at_utc": "2026-11-09T16:43:05Z",
+  "finished_at_utc": "2026-11-09T16:43:06Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1171,
+  "elapsed_ms": 1065,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.41,
-    "build_firmware": 0.311,
-    "run_smoke": 0.437
+    "build_cli": 0.406,
+    "build_firmware": 0.23,
+    "run_smoke": 0.415
   },
   "stages_ms": {
-    "build_cli": 410,
-    "build_firmware": 311,
-    "run_smoke": 437
+    "build_cli": 406,
+    "build_firmware": 230,
+    "run_smoke": 415
   }
 }

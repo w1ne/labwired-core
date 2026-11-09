@@ -23,6 +23,7 @@ peripherals:
   type: efr32_usart
   bus: sysbus
   base_address: 0x40010000
+  size: 1KB
 # Series-1 GPIO ports A..F. Renode maps EFR32_GPIOPort @ 0x4000A000; the
 # per-port GPIO_P_TypeDef sits at a 0x30 stride (Gecko SDK v4.4.0
 # efr32mg1p_gpio_p.h: no DOUTSET/DOUTCLR, OVTDIS @0x28; efr32mg1p_gpio.h

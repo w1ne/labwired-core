@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.705084">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.590536">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="4418e09fad13052ab362a54c717a49f207d7cea5c560080567fd61cb8bc7bbbf"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.705084">
+  <testcase classname="labwired" name="run" time="0.590536">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;SAM4S16C RENODE SMOKE&quot;, &quot;eefc fmr=00000500 ok&quot;, &quot;eefc getd size=&quot;, &quot;eefc gpnvm=2 set=3 glb=2 clb=0 ok&quot;,…" time="0.000000">
   </testcase>

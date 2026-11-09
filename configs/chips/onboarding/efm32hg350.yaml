@@ -23,6 +23,7 @@ peripherals:
   type: efm32_uart
   bus: sysbus
   base_address: 1073790976
+  size: 1KB
 # Series-0 GPIO ports A..F (Renode: one `GPIOPort.EFMGPIOPort` at
 # 0x40006000). GPIO_P_TypeDef at a 0x24 stride (Gecko SDK efm32hg_gpio_p.h).
 # Register sets exist for all six ports; which pins are bonded out on this

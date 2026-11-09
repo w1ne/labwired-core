@@ -1,0 +1,11 @@
+2026-11-09T16:41:29.275779Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f4.yaml
+2026-11-09T16:41:29.282646Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-09T16:41:30.221642Z ERROR labwired_cli::execute: Memory assertion failed to read address 0x40020414 (size 32): Memory access violation at 0x40020414
+2026-11-09T16:41:30.221671Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073873940, expected_value: 0, mask: None, size: None, node: None } }) (captured len=556)
+2026-11-09T16:41:30.221688Z ERROR labwired_cli::execute: Memory assertion failed to read address 0x40020814 (size 32): Memory access violation at 0x40020814
+2026-11-09T16:41:30.221691Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073874964, expected_value: 0, mask: None, size: None, node: None } }) (captured len=556)
+2026-11-09T16:41:30.221696Z ERROR labwired_cli::execute: Memory assertion failed to read address 0x40004814 (size 32): Memory access violation at 0x40004814
+2026-11-09T16:41:30.221700Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073760276, expected_value: 0, mask: None, size: None, node: None } }) (captured len=556)
+FAIL  3/6 checks · stm32f4-new · 4000000 steps · 0.94s

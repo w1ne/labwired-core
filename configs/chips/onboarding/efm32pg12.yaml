@@ -26,6 +26,7 @@ peripherals:
   # USART0 at 0x40010000 (Renode efm32pg12.repl, EFM32PG12 RM); 0x4000C000
   # is I2C0.
   base_address: 0x40010000
+  size: 1KB
 # Series-1 GPIO ports A..F. Renode only tags 0x4000A000-0x4000AFFF "GPIO";
 # silicon has the ports, so they are modelled here. GPIO_P_TypeDef at a
 # 0x30 stride (Gecko SDK efm32pg1b_gpio_p.h: P[6]); DOUTSET/DOUTCLR do not exist on

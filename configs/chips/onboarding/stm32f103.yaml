@@ -16,12 +16,14 @@ peripherals:
   type: rcc
   bus: sysbus
   base_address: 0x40021000
+  size: 1KB
   config:
     profile: stm32f1
 - id: gpioPortA
   type: stm32_gpioport
   bus: sysbus
   base_address: 0x40010800
+  size: 1KB
   clock: { reg: apb2enr, bit: 2 }
   config:
     profile: stm32f1
@@ -29,6 +31,7 @@ peripherals:
   type: stm32_gpioport
   bus: sysbus
   base_address: 0x40010C00
+  size: 1KB
   clock: { reg: apb2enr, bit: 3 }
   config:
     profile: stm32f1
@@ -36,6 +39,7 @@ peripherals:
   type: uart
   bus: sysbus
   base_address: 0x40004400
+  size: 1KB
   clock: { reg: apb1enr, bit: 17 }
   config:
     profile: stm32f1
@@ -43,6 +47,7 @@ peripherals:
   type: i2c
   bus: sysbus
   base_address: 0x40005400
+  size: 1KB
   clock: { reg: apb1enr, bit: 21 }
   config:
     profile: stm32f1
