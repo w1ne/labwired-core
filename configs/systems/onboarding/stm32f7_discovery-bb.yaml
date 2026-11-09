@@ -6,3 +6,18 @@
 
 name: stm32f7_discovery-bb
 chip: ../../chips/onboarding/stm32f7_discovery-bb.yaml
+# 32F746GDISCOVERY board IO (UM1907 §6.5/§6.6). LD1 (green) is on PI1, active
+# high. B1 USER connects PI11 to VDD when pressed (active high).
+board_io:
+  - id: "ld1"
+    kind: "led"
+    peripheral: "gpioi"
+    pin: 1
+    signal: "output"
+    active_high: true
+  - id: "b1"
+    kind: "button"
+    peripheral: "gpioi"
+    pin: 11
+    signal: "input"
+    active_high: true

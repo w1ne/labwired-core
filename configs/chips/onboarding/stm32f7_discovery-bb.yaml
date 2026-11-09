@@ -1,33 +1,14 @@
-# Exact-import profile for the STM32F746G Discovery smoke. Keep only the
-# Cortex-M7, bounded on-chip memory window, F7 RCC, GPIOI, and USART1 paths that
-# the smoke exercises. Other imported peripherals are not claimed here.
+# STM32F746G-DISCO (platforms/boards/stm32f7_discovery-bb.repl). Renode builds
+# the board as `using "platforms/cpus/stm32f746.repl"` plus two Ethernet PHYs
+# and an FT5336 touch controller on I2C3; the board's part is the
+# STM32F746NGH6. The silicon is the imported stm32f746 profile, included whole
+# rather than copied so the two rows cannot drift: 1 MiB / 320 KiB, RCC,
+# USART1/2/3/6 + UART4/5/7/8, GPIOA..K, SYSCFG + EXTI, TIM1..TIM14, SPI1/2/3,
+# I2C1..4, DMA1/DMA2, CRC and RNG.
+# See stm32f746.yaml for the per-block sources and what it does not claim.
 #
-# Part Knowledge returned a NOT_EXTRACTED quote from the STM32F746xx datasheet
-# (DS10916 Rev 5, p.109): the shown memory map places flash at 0x08000000-
-# 0x080FFFFF and lists 64 KiB DTCM, 240 KiB SRAM1, and 16 KiB SRAM2 in the
-# contiguous 0x20000000-0x2004FFFF range. These are source quotes, not a
-# cross-checked LabWired part fact.
+# The board-level parts (LD1 on PI1, B1 on PI11) live in the system file.
+# The Ethernet PHYs (the engine has no Ethernet MAC on this part) and the
+# FT5336 touch controller (no engine model) are not declared.
+include: stm32f746.yaml
 name: stm32f7_discovery-bb
-arch: arm
-core: cortex-m7
-flash:
-  base: 0x08000000
-  size: 1MiB
-ram:
-  base: 0x20000000
-  size: 320KiB
-peripherals:
-  - id: usart1
-    type: stm32f7_usart
-    bus: sysbus
-    base_address: 0x40011000
-  - id: gpioPortI
-    type: stm32_gpioport
-    bus: sysbus
-    base_address: 0x40022000
-    config:
-      profile: stm32v2
-  - id: rcc
-    type: stm32f4_rcc
-    bus: sysbus
-    base_address: 0x40023800

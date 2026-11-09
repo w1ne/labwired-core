@@ -839,7 +839,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/stm32f746-smoke.yaml",
     },
     "stm32f7_discovery-bb": {
-        "crate": "firmware-stm32f746-demo",
+        "crate": "firmware-stm32f746g-disco-smoke",
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/stm32f7_discovery-bb-smoke.yaml",
     },

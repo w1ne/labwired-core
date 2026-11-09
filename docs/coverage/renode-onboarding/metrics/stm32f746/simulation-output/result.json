@@ -164,9 +164,9 @@
       70,
       537198504,
       70,
-      134239606
+      134240732
     ],
-    "pc": 134239606,
+    "pc": 134240732,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -179,7 +179,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "1d67d620bdc36fbe4bc371c5dcfdbef8a87f05ba826a346fbcc933f0a186267d",
+  "firmware_hash": "632e0130baeb8b99fb8d1bf68c99943441ee86cacb8e70854a45032b9726f241",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f746.yaml",
@@ -1153,20 +1153,20 @@
     "cycles": 8000000,
     "instructions": 8000000,
     "steps_executed": 8000000,
-    "memory_reads": 10286,
+    "memory_reads": 10267,
     "memory_writes": 1491,
     "peripheral_accesses": 1084450,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134239606,
+        "pc": 134240732,
         "count": 995,
         "symbol": "firmware_stm32f746_smoke::__cortex_m_rt_main"
       },
       {
         "pc": 134221470,
         "count": 586,
-        "symbol": "firmware_stm32f746_smoke::wait"
+        "symbol": "firmware_stm32f746_smoke::f746_checks::wait"
       },
       {
         "pc": 134221524,
@@ -1191,52 +1191,52 @@
       {
         "pc": 134221502,
         "count": 547,
-        "symbol": "firmware_stm32f746_smoke::wait"
+        "symbol": "firmware_stm32f746_smoke::f746_checks::wait"
       },
       {
-        "pc": 134228660,
+        "pc": 134229786,
         "count": 547,
-        "symbol": "firmware_stm32f746_smoke::wait_level"
+        "symbol": "firmware_stm32f746_smoke::f746_checks::wait_level"
       },
       {
-        "pc": 134228662,
-        "count": 547,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134228664,
+        "pc": 134229788,
         "count": 547,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228666,
+        "pc": 134229790,
         "count": 547,
-        "symbol": "firmware_stm32f746_smoke::wait_level"
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228672,
+        "pc": 134229792,
+        "count": 547,
+        "symbol": "firmware_stm32f746_smoke::f746_checks::wait_level"
+      },
+      {
+        "pc": 134229798,
         "count": 542,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134228670,
+        "pc": 134229796,
         "count": 508,
-        "symbol": "firmware_stm32f746_smoke::wait_level"
+        "symbol": "firmware_stm32f746_smoke::f746_checks::wait_level"
       },
       {
-        "pc": 134228674,
+        "pc": 134229800,
         "count": 508,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134228678,
+        "pc": 134229804,
         "count": 508,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228680,
+        "pc": 134229806,
         "count": 508,
-        "symbol": "firmware_stm32f746_smoke::wait_level"
+        "symbol": "firmware_stm32f746_smoke::f746_checks::wait_level"
       }
     ]
   }

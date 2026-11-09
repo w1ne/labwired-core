@@ -11,7 +11,7 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1013,
+    "pass_claimed_peripherals_total": 1057,
     "pass_claimed_peripherals_median": 2,
     "median_elapsed_ms": 1357,
     "median_elapsed_seconds": 1.357,
@@ -9763,24 +9763,24 @@
       "script": "examples/renode-onboarding/stm32f746-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f746.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T07:27:49Z",
-      "finished_at_utc": "2026-11-09T07:33:37Z",
-      "elapsed_seconds": 348,
-      "elapsed_ms": 347810,
+      "started_at_utc": "2026-11-09T08:01:01Z",
+      "finished_at_utc": "2026-11-09T08:01:03Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1989,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 346.323,
-        "build_firmware": 0.251,
-        "run_smoke": 1.223
+        "build_cli": 0.439,
+        "build_firmware": 0.248,
+        "run_smoke": 1.286
       },
       "stages_ms": {
-        "build_cli": 346323,
-        "build_firmware": 251,
-        "run_smoke": 1223
+        "build_cli": 439,
+        "build_firmware": 248,
+        "run_smoke": 1286
       },
       "_artifact_path": "stm32f746",
       "zero_answering_windows": [],
@@ -9848,39 +9848,41 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 800000,
+        "instructions": 6000000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
-      "crate": "firmware-stm32f746-demo",
+      "crate": "firmware-stm32f746g-disco-smoke",
       "target_triple": "thumbv7em-none-eabi",
       "script": "examples/renode-onboarding/stm32f7_discovery-bb-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f7_discovery-bb.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:50:17Z",
-      "finished_at_utc": "2026-11-05T14:50:18Z",
-      "elapsed_seconds": 1,
-      "elapsed_ms": 746,
+      "started_at_utc": "2026-11-09T08:00:58Z",
+      "finished_at_utc": "2026-11-09T08:00:59Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1213,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.288,
-        "build_firmware": 0.172,
-        "run_smoke": 0.275
+        "build_cli": 0.325,
+        "build_firmware": 0.238,
+        "run_smoke": 0.632
       },
       "stages_ms": {
-        "build_cli": 288,
-        "build_firmware": 172,
-        "run_smoke": 275
+        "build_cli": 325,
+        "build_firmware": 238,
+        "run_smoke": 632
       },
       "_artifact_path": "stm32f7_discovery-bb",
       "zero_answering_windows": [],
-      "claimed_peripherals": 3,
+      "claimed_peripherals": 47,
       "smoke_assertion_kinds": [
         "uart_contains",
+        "uart_ordered",
+        "memory_value",
         "gpio_edges",
         "expected_stop_reason"
       ],

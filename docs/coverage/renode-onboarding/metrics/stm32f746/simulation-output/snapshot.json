@@ -18,9 +18,9 @@
       70,
       537198504,
       70,
-      134239606
+      134240732
     ],
-    "pc": 134239606,
+    "pc": 134240732,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "1d67d620bdc36fbe4bc371c5dcfdbef8a87f05ba826a346fbcc933f0a186267d",
+  "firmware_hash": "632e0130baeb8b99fb8d1bf68c99943441ee86cacb8e70854a45032b9726f241",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f746.yaml",

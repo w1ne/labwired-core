@@ -1,6 +1,10 @@
-2026-11-05T14:50:18.486767Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f7_discovery-bb.yaml
-2026-11-05T14:50:18.488215Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+[2m2026-11-09T08:00:59.287900Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f7_discovery-bb.yaml
+[2m2026-11-09T08:00:59.294362Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-labwired-cli test: idle_ff skipped 799864 of 800000 device cycles (136 interpreted)
-PASS  3/3 checks · stm32f7_discovery-bb-smoke · 800000 steps · 0.00s
+[2m2026-11-09T08:00:59.343256Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
+[2m2026-11-09T08:00:59.351693Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
+[2m2026-11-09T08:00:59.370778Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
+[2m2026-11-09T08:00:59.413293Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
+labwired-cli test: idle_ff skipped 4834740 of 6000000 device cycles (1165260 interpreted)
+PASS  5/5 checks · stm32f7_discovery-bb-smoke · 6000000 steps · 0.25s
