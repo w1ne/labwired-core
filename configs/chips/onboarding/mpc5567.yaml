@@ -38,3 +38,60 @@ peripherals:
   size: 16384B
   config:
     path: ../../peripherals/mpc5500/siu_gpio.yaml
+# Enhanced queued ADC (eQADC) at 0xFFF8_0000 (the MPC5567 header's
+# `EQADC` = `(struct EQADC_tag *) 0xFFF80000`; registers end below 0x480).
+# Renode's mpc5567.repl does not declare it. CFIFO0..5 feed ADC0/ADC1,
+# results return through RFIFO0..5. VRH - VRL is the nominal 5 V reference.
+# The FISR interrupts go to the INTC, which this profile does not declare,
+# so no irq is wired.
+- id: eqadc
+  type: mpc55xx_eqadc
+  bus: sysbus
+  base_address: 0xFFF80000
+  size: 2KB
+  config:
+    vref_mv: 5000
+# AN0..AN39 are the dedicated analog input pads, conversion command channels
+# 0..39 (ChibiOS SPC5xx EQADC_v1 adc_lld.h `ADC_CHN_AN0..39`; channels 40..44
+# are the internal VRH/VRL/50 %/75 %/25 % references).
+analog_pins:
+  AN0: { peripheral: eqadc, channel: 0 }
+  AN1: { peripheral: eqadc, channel: 1 }
+  AN2: { peripheral: eqadc, channel: 2 }
+  AN3: { peripheral: eqadc, channel: 3 }
+  AN4: { peripheral: eqadc, channel: 4 }
+  AN5: { peripheral: eqadc, channel: 5 }
+  AN6: { peripheral: eqadc, channel: 6 }
+  AN7: { peripheral: eqadc, channel: 7 }
+  AN8: { peripheral: eqadc, channel: 8 }
+  AN9: { peripheral: eqadc, channel: 9 }
+  AN10: { peripheral: eqadc, channel: 10 }
+  AN11: { peripheral: eqadc, channel: 11 }
+  AN12: { peripheral: eqadc, channel: 12 }
+  AN13: { peripheral: eqadc, channel: 13 }
+  AN14: { peripheral: eqadc, channel: 14 }
+  AN15: { peripheral: eqadc, channel: 15 }
+  AN16: { peripheral: eqadc, channel: 16 }
+  AN17: { peripheral: eqadc, channel: 17 }
+  AN18: { peripheral: eqadc, channel: 18 }
+  AN19: { peripheral: eqadc, channel: 19 }
+  AN20: { peripheral: eqadc, channel: 20 }
+  AN21: { peripheral: eqadc, channel: 21 }
+  AN22: { peripheral: eqadc, channel: 22 }
+  AN23: { peripheral: eqadc, channel: 23 }
+  AN24: { peripheral: eqadc, channel: 24 }
+  AN25: { peripheral: eqadc, channel: 25 }
+  AN26: { peripheral: eqadc, channel: 26 }
+  AN27: { peripheral: eqadc, channel: 27 }
+  AN28: { peripheral: eqadc, channel: 28 }
+  AN29: { peripheral: eqadc, channel: 29 }
+  AN30: { peripheral: eqadc, channel: 30 }
+  AN31: { peripheral: eqadc, channel: 31 }
+  AN32: { peripheral: eqadc, channel: 32 }
+  AN33: { peripheral: eqadc, channel: 33 }
+  AN34: { peripheral: eqadc, channel: 34 }
+  AN35: { peripheral: eqadc, channel: 35 }
+  AN36: { peripheral: eqadc, channel: 36 }
+  AN37: { peripheral: eqadc, channel: 37 }
+  AN38: { peripheral: eqadc, channel: 38 }
+  AN39: { peripheral: eqadc, channel: 39 }

@@ -87,6 +87,7 @@ const CONVERTED: &[&str] = &[
     "mimxrt1064_evk",
     "mimxrt700_evk",
     "mimxrt798s",
+    "mpc5567",
     "msp430f2619",
     "mspsim-msp430f149",
     "mspsim-msp430f1611",
@@ -403,7 +404,33 @@ enum Family {
     /// `ADC_CONTROL` bit 0, DONE1, `ADC_SAMPLE_REG_[ADC_SEL]`. 12 bits,
     /// (2^12 - 1) / VREF, VREF from the descriptor's `vref_mv`.
     AlifAdc12 { vref_mv: u32 },
+    /// MPC55xx eQADC (`mpc55xx_eqadc`), the OpenSAR `Adc_eQADC.c` register
+    /// access idiom on CFIFO0: `CFINV`, push the command to `CFPR0`,
+    /// `MODE` 1 (software single scan) + `SSE`, wait for `FISR0.SSS` to
+    /// clear and `EOQF`, pop `RFPR0`, clear `EOQF`. Both ADCs are enabled
+    /// first with `ADC0_CR`/`ADC1_CR` = `EN` write commands. The result is
+    /// 14 bits, the 12-bit code (mV * 4096 / VRH) shifted left 2; VRH from
+    /// the descriptor's `vref_mv` (5 V).
+    Mpc55xxEqadc { vref_mv: u32 },
 }
+
+/// MPC55xx eQADC offsets, bits and command fields (MPC5567 header
+/// `EQADC_tag`; OpenSAR `Adc_eQADC.c`).
+const EQADC_CFPR0: u64 = 0x10;
+const EQADC_RFPR0: u64 = 0x30;
+const EQADC_CFCR0: u64 = 0x50;
+const EQADC_FISR0: u64 = 0x70;
+const EQADC_CFCR_SSE: u16 = 1 << 10;
+const EQADC_CFCR_CFINV: u16 = 1 << 9;
+const EQADC_MODE_SWSS: u16 = 1 << 4;
+const EQADC_SSS: u32 = 1 << 26;
+const EQADC_EOQF: u32 = 1 << 28;
+const EQADC_EOQ: u32 = 1 << 31;
+const EQADC_BN_ADC1: u32 = 1 << 25;
+/// `LST` 128 clocks, the OpenSAR calibration sample time.
+const EQADC_LST_128: u32 = 3 << 18;
+const EQADC_ADC_CR: u32 = 1;
+const EQADC_ADC_CR_EN: u32 = 0x8000;
 
 /// Alif ADC12 offsets and bits (alif_ensemble-cmsis-dfp soc.h `ADC_Type`,
 /// drivers/include/adc.h).
@@ -753,6 +780,14 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
                     .and_then(|v| v.as_u64())
                     .map_or(1800, |mv| mv as u32),
             }
+        } else if kind == "mpc55xx_eqadc" {
+            Family::Mpc55xxEqadc {
+                vref_mv: p
+                    .config
+                    .get("vref_mv")
+                    .and_then(|v| v.as_u64())
+                    .map_or(5000, |mv| mv as u32),
+            }
         } else if kind == "renesas_adc_c" {
             Family::RenesasAdcC {
                 vref_mv: p
@@ -891,6 +926,9 @@ impl Converter {
             Family::RenesasAdcC { vref_mv } => (mv * 4095 / vref_mv).min(4095),
             // The same scale after 256 accumulated samples shifted right 8.
             Family::AlifAdc12 { vref_mv } => (mv * 4095 / vref_mv).min(4095),
+            // 12 bits, 2^12 / VRH (5 V), truncated, clamped: the 3.3 V
+            // dividers stay below full scale. The sweep reads RFPOP >> 2.
+            Family::Mpc55xxEqadc { vref_mv } => (mv * 4096 / vref_mv).min(4095),
             // Against GND: raw 32768 * V / 1.2 V floored and limited to
             // 32767, 12 significant bits (low 4 cleared), halved by the
             // offset/gain stage at reset OFFSET/GAIN.
@@ -1044,6 +1082,30 @@ impl Converter {
                     self.id
                 );
                 bus.write_u32(self.base + W108_DMACR, 1 << 4).expect("RST");
+            }
+            Family::Mpc55xxEqadc { .. } => {
+                // A command in a disabled CFIFO (MODE 0) waits: no result.
+                let cmd = EQADC_EOQ | EQADC_LST_128 | (u32::from(NTC_CHANNEL) << 8);
+                bus.write_u32(self.base + EQADC_CFPR0, cmd).expect("push");
+                for _ in 0..4 {
+                    bus.tick_peripherals();
+                }
+                let fisr = bus.read_u32(self.base + EQADC_FISR0).unwrap();
+                assert_eq!(
+                    ((fisr >> 12) & 0xF, (fisr >> 4) & 0xF),
+                    (1, 0),
+                    "{}: CFIFO0 holds the command while MODE = 0",
+                    self.id
+                );
+                // Triggered with ADC0_CR.EN = 0 (reset): no result.
+                let rfctr = self.eqadc_run(bus, cmd);
+                assert_eq!(rfctr, 0, "{}: no result while ADC0 is disabled", self.id);
+                // Adc_ConfigureEQADC: enable ADC0 and ADC1 (ChibiOS
+                // adc_enable: both converters of the pair).
+                for bn in [0, EQADC_BN_ADC1] {
+                    let write = EQADC_EOQ | bn | (EQADC_ADC_CR_EN << 8) | EQADC_ADC_CR;
+                    assert_eq!(self.eqadc_run(bus, write), 0, "{}: write command", self.id);
+                }
             }
             Family::AlifAdc12 { .. } => {
                 // CONTROL bit 0 without START_SRC.ENA converts nothing.
@@ -3075,6 +3137,30 @@ impl Converter {
             .collect()
     }
 
+    /// OpenSAR `Adc_WriteEQADCRegister` on CFIFO0 up to the pop: `CFINV`,
+    /// push, `MODE` 1 + `SSE`, `WAIT_FOR_QUEUE_TO_FINISH`, clear `EOQF`.
+    /// Returns `FISR0.RFCTR`.
+    fn eqadc_run(&self, bus: &mut SystemBus, cmd: u32) -> u32 {
+        let cfcr = self.base + EQADC_CFCR0;
+        bus.write_u16(cfcr, EQADC_CFCR_CFINV).expect("CFINV");
+        bus.write_u32(self.base + EQADC_CFPR0, cmd).expect("push");
+        bus.write_u16(cfcr, EQADC_MODE_SWSS).expect("MODE 1");
+        let mode = bus.read_u16(cfcr).unwrap();
+        bus.write_u16(cfcr, mode | EQADC_CFCR_SSE).expect("SSE");
+        let fisr = self.base + EQADC_FISR0;
+        let mut polls = 0;
+        while bus.read_u32(fisr).unwrap() & EQADC_SSS != 0 {
+            bus.tick_peripherals();
+            polls += 1;
+            assert!(polls < 16, "{}: SSS clears", self.id);
+        }
+        let status = bus.read_u32(fisr).unwrap();
+        assert_ne!(status & EQADC_EOQF, 0, "{}: EOQF", self.id);
+        bus.write_u32(fisr, EQADC_EOQF).expect("clear EOQF");
+        bus.write_u16(cfcr, 0).expect("MODE 0");
+        (status >> 4) & 0xF
+    }
+
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {
         match self.family {
             Family::Stm32w108Adc => {
@@ -3099,6 +3185,16 @@ impl Converter {
                 }
                 bus.write_u32(self.base + W108_CR, 0).expect("ADC off");
                 u32::from(bus.read_u16(W108_BUFFER).unwrap())
+            }
+            Family::Mpc55xxEqadc { .. } => {
+                let cmd = EQADC_EOQ | EQADC_LST_128 | (u32::from(channel) << 8);
+                assert_eq!(
+                    self.eqadc_run(bus, cmd),
+                    1,
+                    "{}: AN{channel} result",
+                    self.id
+                );
+                u32::from(bus.read_u16(self.base + EQADC_RFPR0 + 2).unwrap()) >> 2
             }
             Family::AlifAdc12 { .. } => {
                 // adc_channel_select + adc_start_read + the DONE1 ISR + stop.
@@ -4173,7 +4269,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 171,
+        instances, 172,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -4181,7 +4277,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 78,
+        without_adc, 77,
         "onboarding profiles that declare no modelled ADC"
     );
 }

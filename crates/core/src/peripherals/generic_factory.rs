@@ -466,6 +466,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "renesas_adc_c",
     // Alif Ensemble/Balletto ADC12 (alif_ensemble-cmsis-dfp ADC_Type, adc.h).
     "alif_adc12",
+    // Freescale MPC55xx eQADC (MPC5567 header `EQADC_tag`, OpenSAR Adc_eQADC.c).
+    "mpc55xx_eqadc",
     // STM32W108 sigma-delta ADC + DMA channel (DocID16252 Rev 16 ch. 11).
     "stm32w108_adc",
     // MSP430 ADC12 (F1/F2) and ADC12_A (F5) (mspsim ADC12.java, TI headers).
@@ -2087,6 +2089,14 @@ pub fn try_build(
                 .get("vref_mv")
                 .and_then(|v| v.as_u64())
                 .map_or(1800, |v| v as u32),
+        )),
+        // `vref_mv`: VRH - VRL (nominal 5 V on the MPC55xx).
+        "mpc55xx_eqadc" => Box::new(crate::peripherals::mpc55xx_eqadc::Mpc55xxEqadc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(5000, |v| v as u32),
         )),
         // `vref_mv`: the ADC12 reference (no public source; 1800 assumed).
         "alif_adc12" => Box::new(crate::peripherals::alif_adc12::AlifAdc12::new(
