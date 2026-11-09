@@ -48,7 +48,14 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // ESP32-classic is the only chip in this model that HAS a LACT timer
         // (the C3 path in generic_factory.rs deliberately does not opt in —
         // it put INT_ST/INT_CLR/RTCCALICFG2 at those offsets).
-        "esp32_timg" => Box::new(timg::Timg::new(base).with_lact()),
+        "esp32_timg" => {
+            let model = timg::Timg::new(base).with_lact();
+            match base {
+                0x3FF5_F000 => Box::new(model.with_alarms(14)),
+                0x3FF6_0000 => Box::new(model.with_alarms(18)),
+                _ => Box::new(model),
+            }
+        }
         "esp32_efuse" => Box::new(efuse::Efuse::new()),
         "esp32_syscon" => Box::new(syscon::Syscon::new()),
         "esp32_ledc" => Box::new(ledc::Ledc::new(base)),
