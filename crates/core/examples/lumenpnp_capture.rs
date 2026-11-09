@@ -413,16 +413,16 @@ fn main() -> Result<()> {
     );
     let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
     let mut machine = Machine::new(cpu, bus);
-    let x_driver = machine
-        .bus
-        .observed_of::<StepDirMotor>()
-        .into_iter()
-        .find(|motor| motor.id() == "X")
-        .context("X driver observer")?;
-    // An open PCB STEP conductor changes the driver-side input, not the MCU
-    // GPIO pin mapping. The real MCU waveform remains available for capture.
+    // Obtain the driver only for the duration of each operation: observed_of
+    // borrows the bus; keeping that reference across advance() would prevent
+    // the same Machine from moving and resetting.
     if matches!(scenario.as_str(), "open-x-step" | "repair-x") {
-        x_driver.set_step_connected(false);
+        machine
+            .bus
+            .observed_of::<StepDirMotor>()
+            .find(|motor| motor.id() == "X")
+            .context("X driver observer")?
+            .set_step_connected(false);
     }
     machine.config.idle_fast_forward_enabled = true;
     let wide = machine.max_safe_tick_interval();
@@ -811,7 +811,12 @@ fn main() -> Result<()> {
                 // resets the same MCU; the fault was latched by firmware.
                 x_steps_before_repair = edge_counts[0];
                 x_model_steps_before_repair = model_counts[0];
-                x_driver.set_step_connected(true);
+                machine
+                    .bus
+                    .observed_of::<StepDirMotor>()
+                    .find(|motor| motor.id() == "X")
+                    .context("X driver observer on repair")?
+                    .set_step_connected(true);
                 machine.reset()?;
                 repaired = true;
                 repair_at_s = Some(time_s);
@@ -912,7 +917,13 @@ fn main() -> Result<()> {
         );
         checks["fault_safe_before_repair"] = json!(fault_observed_safe);
         checks["x_static_before_repair"] = json!(fault_x_static);
-        checks["physical_step_trace_reconnected"] = json!(repaired && x_driver.step_connected());
+        checks["physical_step_trace_reconnected"] = json!(
+            repaired
+                && machine
+                    .bus
+                    .observed_of::<StepDirMotor>()
+                    .any(|motor| motor.id() == "X" && motor.step_connected())
+        );
         checks["same_machine_time_monotonic"] = json!(repair_at_s
             .zip(first_fault_at_s)
             .is_some_and(|(repair, fault)| repair > fault && duration_s > repair));
