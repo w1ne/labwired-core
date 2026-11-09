@@ -213,12 +213,17 @@ impl DeclarativeGpioDevice {
             listens_for_pin_sets,
             moved: Vec::new(),
             seed_input_clamp: descriptor.behavior.seed_input_clamp,
+            // Pin/Pins *and* Input: a keypad is firmware-clocked on pad edges
+            // and stimulus-clocked on `set_input`, with no timer of its own.
+            // Treating Input like Pin keeps `grid_eligible` meaning "no
+            // autonomous clock" so `needs_per_cycle_service` can opt out.
             grid_eligible: descriptor.behavior.timers.is_empty()
-                && descriptor
-                    .behavior
-                    .rules
-                    .iter()
-                    .all(|r| matches!(r.on, Event::Pin { .. } | Event::Pins { .. })),
+                && descriptor.behavior.rules.iter().all(|r| {
+                    matches!(
+                        r.on,
+                        Event::Pin { .. } | Event::Pins { .. } | Event::Input { .. }
+                    )
+                }),
             schedules: descriptor.behavior.schedules.clone(),
             schedule_bank: ScheduleBank::default(),
             schedule_fault: None,
@@ -658,30 +663,28 @@ impl BusResidentDevice for DeclarativeGpioDevice {
     /// ⚠️ STATED, not inherited, and the two halves of the condition are each a
     /// fact a default would get wrong.
     ///
-    /// A part that owns NO TIMER and DRIVES NO PAD can only change when
-    /// firmware stores to an output register, and `edge_service_addrs` already
-    /// services it synchronously inside that store. A tick pass would resample
-    /// pads that cannot have moved. The TM1637 and the bare 7-segment digit are
-    /// both this, and their hand-written predecessors each said so by hand —
-    /// left at the trait's `true`, a board carrying either would force
-    /// `requires_cycle_accurate()` and pin `max_safe_tick_interval()` to 1: a
-    /// performance regression against the models they replace, invisible to
-    /// every behavioural test.
+    /// A part that owns NO TIMER and is only pin/input-clocked (`grid_eligible`)
+    /// can only change when firmware stores to an output register or the host
+    /// writes a stimulus channel. `edge_service_addrs` services the store path
+    /// synchronously; `SystemBus::set_input` flushes driven pads after the
+    /// stimulus path (same shape as `sync_button_inputs`). A tick pass would
+    /// resample pads that cannot have moved. The TM1637, bare 7-segment digit,
+    /// and membrane keypad are this class — left at the trait's `true`, a board
+    /// carrying any of them would force `requires_cycle_accurate()` and pin
+    /// `max_safe_tick_interval()` to 1.
     ///
     /// ⚠️ A `gpio_device` with `timers:` MUST NOT say false — its clock only
-    /// advances on the tick — and one that DRIVES a pad must not either, since
-    /// the level it answers with is put on the pad by this same pass. The HX711
-    /// is both, and answers `true` through this expression rather than through
-    /// an override somebody has to remember.
+    /// advances on the tick. The HX711 answers `true` through this expression
+    /// (timer + driven pad) rather than through an override somebody has to
+    /// remember.
     // Grid-only finite schedules are serviced by resident deadlines when every
     // other action is synchronous with a host pad write. The bus separately
     // gates batching on its scheduler, timer, and live-cycle capabilities.
     fn needs_per_cycle_service(&self) -> bool {
-        !self.timers.is_empty()
-            || !(self.driven.is_empty() || self.has_grid_schedules() && self.grid_eligible)
+        !self.timers.is_empty() || !(self.driven.is_empty() || self.grid_eligible)
     }
 
-    /// No timers and only pad-edge rules (`grid_eligible`) means every change
+    /// No timers and only pad/input rules (`grid_eligible`) means every change
     /// this part makes on its own is a schedule edge, and every pad edge is
     /// serviced from the write hook. So it is idle exactly when no schedule
     /// edge is pending: a DHT22 between reads, not during one.
