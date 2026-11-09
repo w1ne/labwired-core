@@ -360,6 +360,12 @@ impl SystemBus {
         if result.is_ok() {
             self.sync_analog_inputs();
             self.sync_button_inputs();
+            // Keypad-class gpio_devices drive pads from rules that fire on
+            // `input:` events. `SimInput::set_input` only updates the rule
+            // machine; without a service pass the driven IDR bits stay stale
+            // until the next MMIO edge. Flush here so a stimulus takes effect
+            // even when the device has opted out of per-cycle service.
+            self.flush_gpio_device_inputs(component, channel);
         }
         result
     }
@@ -383,6 +389,37 @@ impl SystemBus {
         for (addr, bit, level) in pending {
             self.drive_input_bit(addr, bit, level);
         }
+    }
+
+    /// Service every gpio_device that owns `channel` so driven pads reflect a
+    /// just-applied stimulus. No-op when no resident advertises the channel.
+    ///
+    /// Mirrors [`Self::sync_button_inputs`]: the level is applied at the
+    /// stimulus point so a walk-free / tick-opted-out resident (keypad) does not
+    /// need the per-cycle pass to make a press visible to firmware.
+    pub(crate) fn flush_gpio_device_inputs(&mut self, component: Option<&str>, channel: &str) {
+        if self.gpio_devices.is_empty() {
+            return;
+        }
+        let now = self.current_cycle;
+        let mut devices = std::mem::take(&mut self.gpio_devices);
+        for device in &mut devices {
+            let hit = {
+                let si = device.as_sim_input();
+                if !si.input_channels().iter().any(|c| c.key == channel) {
+                    false
+                } else {
+                    // Prefer the SimInput component id so we do not re-borrow
+                    // `device` for `id()` while `si` is live.
+                    let name = si.component_id().unwrap_or("");
+                    Self::component_matches(component, name, si)
+                }
+            };
+            if hit {
+                device.service(self, now);
+            }
+        }
+        self.gpio_devices = devices;
     }
 
     /// Apply several input sets as ONE transaction: every set is resolved and
