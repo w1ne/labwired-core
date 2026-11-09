@@ -514,6 +514,7 @@ const FIFO_CR2_LDMA_TX: u16 = 1 << 14;
 /// CR2.RXDMAEN / TXDMAEN (bits 0/1 on the classic and FIFO ports alike).
 const CR2_RXDMAEN: u16 = 1 << 0;
 const CR2_TXDMAEN: u16 = 1 << 1;
+const CR2_TXEIE: u16 = 1 << 7;
 const CR2_RXNEIE: u16 = 1 << 6;
 /// SR.FRLVL[1:0] (bits 10:9) and SR.FTLVL[1:0] (bits 12:11).
 const FIFO_SR_FRLVL_SHIFT: u16 = 9;
@@ -3871,6 +3872,20 @@ impl Spi {
         }
     }
 
+    /// Classic/FIFO STM32 SPI's configured IRQ is a live status-enable
+    /// conjunction, not a one-cycle frame-completion pulse. The modelled
+    /// sources are TXE/TXEIE and RXNE/RXNEIE; error status producers remain
+    /// outside this bounded profile.
+    fn stm32_irq_pending(&self) -> Option<bool> {
+        let SpiRegs::Stm32(r) = &self.regs else {
+            return None;
+        };
+        Some(
+            (r.cr2 & CR2_TXEIE != 0 && self.stm32_txe())
+                || (r.cr2 & CR2_RXNEIE != 0 && self.stm32_rxne.get()),
+        )
+    }
+
     /// SR with the receive-queue-dependent flags applied: RXP/DXP are live
     /// over the queue, everything else is the stored event register. CTSIZE
     /// occupies SR[31:16] on the full H5/U5 personality; the limited U575
@@ -3937,6 +3952,14 @@ impl Spi {
 }
 
 impl crate::Peripheral for Spi {
+    fn irq_line_level(&self) -> Option<bool> {
+        self.stm32_irq_pending()
+    }
+
+    fn reads_can_deassert_irq(&self) -> bool {
+        matches!(self.regs, SpiRegs::Stm32(_))
+    }
+
     fn spi_attached_devices(&self) -> Option<&Vec<Box<dyn crate::peripherals::device::SpiDevice>>> {
         Some(&self.attached_devices)
     }

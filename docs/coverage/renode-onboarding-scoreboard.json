@@ -10275,24 +10275,24 @@
       "script": "examples/renode-onboarding/stm32l151-smoke.yaml",
       "system": "configs/systems/onboarding/stm32l151.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T02:38:24Z",
-      "finished_at_utc": "2026-11-09T02:38:26Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2524,
+      "started_at_utc": "2026-11-09T23:05:35Z",
+      "finished_at_utc": "2026-11-09T23:07:15Z",
+      "elapsed_seconds": 101,
+      "elapsed_ms": 100310,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.444,
+        "build_cli": 98.342,
         "build_firmware": 0.979,
-        "run_smoke": 1.085
+        "run_smoke": 0.977
       },
       "stages_ms": {
-        "build_cli": 444,
+        "build_cli": 98342,
         "build_firmware": 979,
-        "run_smoke": 1085
+        "run_smoke": 977
       },
       "_artifact_path": "stm32l151",
       "zero_answering_windows": [],

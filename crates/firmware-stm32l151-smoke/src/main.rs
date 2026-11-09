@@ -11,8 +11,9 @@
 //!
 //! Interrupts stay disabled in the NVIC: each check reads the line's
 //! ISPR bit, which proves the block reaches the right NVIC input without a
-//! device vector table. Every check prints one line and sets one bit of the
-//! summary word at `SUMMARY`.
+//! device vector table. SPI checks also confirm the classic TXE/RXNE source
+//! levels assert and release with their status and enable bits. Every check
+//! prints its results and sets one bit of the summary word at `SUMMARY`.
 
 use core::arch::asm;
 use core::ptr::{read_volatile, write_volatile};
@@ -408,25 +409,59 @@ fn max31855_frame(base: u32, port: u32, pin: u32) -> Option<u32> {
     idle.then_some(word)
 }
 
-/// Each SPI reads its own device's frame twice — polled, then with RXNEIE,
-/// which must pend the SPI's own NVIC line and no other SPI's.
+/// Like `max31855_frame`, but sample the RXNE IRQ while the received byte is
+/// still in DR, then verify its level can fall when the read drains RXNE.
+fn max31855_frame_with_irq(base: u32, irq: u32, port: u32, pin: u32) -> Option<(u32, bool)> {
+    cs(port, pin, true);
+    let mut word = 0u32;
+    let mut irq_seen = false;
+    for _ in 0..4 {
+        if !wait(base + S_SR, SPI_SR_TXE, SPI_SR_TXE) {
+            cs(port, pin, false);
+            return None;
+        }
+        wr(base + S_DR, 0);
+        if !wait(base + S_SR, SPI_SR_RXNE, SPI_SR_RXNE) {
+            cs(port, pin, false);
+            return None;
+        }
+        irq_seen |= pending(irq) && rd(base + S_SR) & SPI_SR_RXNE != 0;
+        word = (word << 8) | (rd(base + S_DR) & 0xFF);
+    }
+    let idle = wait(base + S_SR, SPI_SR_BSY, 0);
+    cs(port, pin, false);
+    idle.then_some((word, irq_seen))
+}
+
+/// Each SPI reads its own device's frame, checks idle TXEIE and then RXNEIE;
+/// status-and-enable levels must pend the SPI's own NVIC line and release it
+/// as firmware disables TXEIE or drains RXNE.
 fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) -> bool {
     cs_output(port, pin);
     spi_enable(base);
     let frame = max31855_frame(base, port, pin).unwrap_or(0xDEAD_BEEF);
+    unpend(irq);
     let quiet = !pending(irq);
 
-    unpend(irq);
+    // TXE is already high while the controller is idle. Enabling TXEIE must
+    // assert the level immediately, and disabling it must drop that pend.
+    wr(base + S_CR2, 1 << 7); // TXEIE
+    let txe_irq = rd(base + S_SR) & SPI_SR_TXE != 0 && pending(irq);
+    wr(base + S_CR2, 0);
+    let txe_released = !pending(irq);
+
     wr(base + S_CR2, 1 << 6); // RXNEIE
-    let again = max31855_frame(base, port, pin);
-    let data = frame == want && again == Some(want);
-    let pend = quiet && pending(irq);
+    let again = max31855_frame_with_irq(base, irq, port, pin);
+    let rx_irq = again.is_some_and(|(_, seen)| seen);
+    let again_frame = again.map(|(frame, _)| frame);
+    let data = frame == want && again_frame == Some(want);
+    let pend = quiet && rx_irq;
     let alone = SPIS
         .iter()
         .all(|&(_, _, other, _, _, _)| other == irq || !pending(other));
-    wr(base + S_CR2, 0);
-    unpend(irq);
+    // Reading DR drained the RXNE source while RXNEIE stayed enabled.
     let released = !pending(irq) && rd(base + S_SR) & SPI_SR_RXNE == 0;
+    wr(base + S_CR2, 0);
 
     puts(name);
     puts(" frame=");
@@ -438,7 +473,13 @@ fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) ->
     flag("released", released);
     let ok = data && pend && alone && released;
     verdict(ok);
-    ok
+    puts(name);
+    puts(" TXEIE ");
+    flag("pend", txe_irq);
+    flag("released", txe_released);
+    let txe_ok = txe_irq && txe_released;
+    verdict(txe_ok);
+    ok && txe_ok
 }
 
 /// Two MAX31855s share SPI1, told apart only by their GPIO chip selects
