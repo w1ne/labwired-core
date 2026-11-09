@@ -118,7 +118,10 @@ pub enum UartRegisterLayout {
     Max32650,
     /// lowRISC OpenTitan — WDATA@0x1C, RDATA@0x18, STATUS@0x14.
     OpenTitan,
-    /// Atmel/Microchip SAM USART (SAM3/SAM4) — US_CSR@0x14, US_THR@0x1C.
+    /// Atmel/Microchip SAM USART (SAM3/SAM4) — US_IER/IDR/IMR@0x08/0x0C/0x10,
+    /// US_CSR@0x14, US_RHR@0x18, US_THR@0x1C. IER/IDR/IMR and level IRQs
+    /// follow the modeled CSR flags; error/status producers beyond TXRDY,
+    /// TXEMPTY, and the RX queue's RXRDY remain outside this model.
     Sam,
     /// Microchip SAMD5x/SAME5x SERCOM USART — DATA@0x28, INTFLAG@0x18.
     Sercom,
@@ -965,6 +968,10 @@ pub struct Uart {
     /// CR1 register (tracks TXEIE and TE bits for interrupt-driven TX simulation).
     cr1: u32,
     cr3: u32,
+    /// SAM USART interrupt mask, set/cleared through write-only IER/IDR.
+    /// The wired IRQ is the level `(US_CSR & US_IMR) != 0`.
+    #[serde(default)]
+    sam_imr: u32,
     /// F1-layout config registers, captured for read-back fidelity (BRR/CR2/GTPR
     /// have no behavioural effect in this instruction-level model, but firmware
     /// reads them back). Masked to the silicon writable bits on read. Unused by
@@ -1223,6 +1230,7 @@ impl Uart {
             stdout_line_buf: String::new(),
             cr1: 0,
             cr3: 0,
+            sam_imr: 0,
             cr2: 0,
             brr: 0,
             gtpr: 0,
@@ -1743,14 +1751,21 @@ impl Uart {
         let rxftie_armed = matches!(self.layout, UartRegisterLayout::Stm32V2)
             && self.cr1 & (1 << 29) != 0
             && self.cr3 & (1 << 28) != 0;
+        let sam_irq_armed =
+            matches!(self.layout, UartRegisterLayout::Sam) && self.sam_irq_asserted();
         // RXNEIE is a level enable with no local producer: the byte arrives
         // asynchronously (an injected peer, a cross-chip link). Keep a wakeup
         // armed while it is set so a byte landing in `rx_buf` is observed and
         // the NVIC line is pended — the RX counterpart of the TXEIE/TCIE arm
         // below. Without it firmware waiting in HAL_UART_Receive_IT never sees
         // the character (60North hal-uart/hal-uart-dma).
-        let level_irq_observable =
-            self.irq_wired && (txeie_set || tcie_set || rxneie_armed || rxftie_armed || dmar_armed);
+        let level_irq_observable = self.irq_wired
+            && (txeie_set
+                || tcie_set
+                || rxneie_armed
+                || rxftie_armed
+                || dmar_armed
+                || sam_irq_armed);
         // A buffered narration is real work: the wire is mid-burst, and the
         // flush that ends it needs a wakeup to happen on. Without this a
         // scheduler-driven bus would leave the last print unpublished.
@@ -2003,6 +2018,42 @@ impl Uart {
     fn status_offset(&self) -> u64 {
         self.effective_regmap().status
     }
+
+    fn sam_imr_byte(&self, offset: u64) -> Option<u8> {
+        if matches!(self.layout, UartRegisterLayout::Sam) && (0x10..0x14).contains(&offset) {
+            Some((self.sam_imr >> ((offset - 0x10) * 8)) as u8)
+        } else {
+            None
+        }
+    }
+
+    fn sam_interrupt_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Sam) {
+            return false;
+        }
+        let (base, enable) = match offset {
+            0x08..0x0C => (0x08, true),
+            0x0C..0x10 => (0x0C, false),
+            _ => return false,
+        };
+        let shift = ((offset - base) * 8) as u32;
+        let mask = u32::from(value) << shift;
+        if enable {
+            self.sam_imr |= mask;
+        } else {
+            self.sam_imr &= !mask;
+        }
+        true
+    }
+
+    fn sam_irq_asserted(&self) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Sam) {
+            return false;
+        }
+        let rx_present = self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
+        self.status_word(rx_present) & self.sam_imr != 0
+    }
+
     /// The status register as a 32-bit word: the idle pattern adjusted for a
     /// pending RX byte (set the active-high "data present" flags, clear the
     /// active-high "empty" flags). Byte-addressed reads slice this word, so an
@@ -2624,6 +2675,9 @@ impl crate::Peripheral for Uart {
         if let Some(byte) = self.timed_read(offset) {
             return Ok(byte);
         }
+        if let Some(byte) = self.sam_imr_byte(offset) {
+            return Ok(byte);
+        }
         if let Some(byte) = self.lcr_dlab_read(offset) {
             return Ok(byte);
         }
@@ -2754,6 +2808,9 @@ impl crate::Peripheral for Uart {
             if self.timed_config_write(offset, value) {
                 self.timed_config_written();
             }
+            return Ok(());
+        }
+        if self.sam_interrupt_write(offset, value) {
             return Ok(());
         }
         if matches!(self.layout, UartRegisterLayout::Avr) {
@@ -2911,13 +2968,18 @@ impl crate::Peripheral for Uart {
         self.irq_wired = irq.is_some();
     }
 
-    /// Timed mode only: the USART interrupt line as a level. The default
-    /// model keeps its historical pulse semantics.
+    /// Timed UARTs and SAM USARTs report their interrupt as a level. Other
+    /// layouts keep their existing pulse semantics.
     fn irq_line_level(&self) -> Option<bool> {
-        self.timed_level()
+        self.timed_level().or_else(|| {
+            matches!(self.layout, UartRegisterLayout::Sam).then(|| self.sam_irq_asserted())
+        })
     }
 
     fn on_node_reset(&mut self) {
+        if matches!(self.layout, UartRegisterLayout::Sam) {
+            self.sam_imr = 0;
+        }
         if self.timed.is_some() {
             self.timed_reset();
         }
@@ -3109,6 +3171,9 @@ impl crate::Peripheral for Uart {
 
     fn peek(&self, offset: u64) -> Option<u8> {
         if let Some(byte) = self.timed_peek(offset) {
+            return Some(byte);
+        }
+        if let Some(byte) = self.sam_imr_byte(offset) {
             return Some(byte);
         }
         if offset == SCI_SSR && self.sci_fifo_mode() {
@@ -3490,6 +3555,31 @@ mod tests {
                 "{layout:?}: idle status at {status:#x}"
             );
         }
+    }
+
+    #[test]
+    fn sam_usart_ier_idr_imr_drive_the_csr_level_irq() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Sam);
+        assert_eq!(uart.read_u32(0x10).unwrap(), 0, "IMR resets disabled");
+        assert_eq!(uart.irq_line_level(), Some(false));
+
+        // CSR.TXRDY is already asserted by this model's idle status word.
+        uart.write_u32(0x08, 1 << 1).unwrap(); // IER.TXRDY
+        assert_eq!(uart.read_u32(0x10).unwrap(), 1 << 1);
+        assert_eq!(uart.peek(0x10), Some(1 << 1));
+        assert_eq!(uart.irq_line_level(), Some(true));
+
+        uart.write_u32(0x0C, 1 << 1).unwrap(); // IDR.TXRDY
+        assert_eq!(uart.read_u32(0x10).unwrap(), 0);
+        assert_eq!(uart.irq_line_level(), Some(false));
+
+        // RXRDY follows the live receive queue and drops when RHR is read.
+        uart.rx_buffer().lock().unwrap().push_back(b'R');
+        uart.write_u32(0x08, 1).unwrap(); // IER.RXRDY
+        assert_eq!(uart.read_u32(0x10).unwrap(), 1);
+        assert_eq!(uart.irq_line_level(), Some(true));
+        assert_eq!(uart.read_u32(0x18).unwrap() & 0xFF, u32::from(b'R'));
+        assert_eq!(uart.irq_line_level(), Some(false));
     }
 
     #[test]

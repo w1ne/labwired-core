@@ -16,6 +16,7 @@ wdt mr once=00801100 ok
 pmc pcsr0=0003fd80 pcsr1=00007000 ok
 pio ports=5 ok
 pioa pa11 change up=1 isr=11 pend=1 released=1 ok
+usart0 txrdy imr=2 pend=1 released=1 ok
 usart0 tx
 usart2 tx
 uart0 tx

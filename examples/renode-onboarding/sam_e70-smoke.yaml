@@ -4,7 +4,8 @@
 # RSTC/WDT reset state, an RSTC software reset, a WDT_MR-armed watchdog
 # reset, then the WDT window interrupt, write-once WDT_MR, PMC banks 0/1,
 # PIOA-E latches, the PIOA input change interrupt (NVIC 10) and a line out of
-# USART0/2 and UART0-4. Summary word 0xE7003FFF = all fourteen checks.
+# USART0/2 and UART0-4. USART0 also asserts/releases its TXRDY IRQ 13 through
+# IER/IDR/IMR. Summary word 0xE7007FFF = all fifteen checks.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam-e70-renode-smoke"
@@ -31,6 +32,7 @@ assertions:
       - "pmc pcsr0="
       - "pio ports=5 ok"
       - "pioa pa11 change up=1 isr=11 pend=1 released=1 ok"
+      - "usart0 txrdy imr=2 pend=1 released=1 ok"
       - "uarts=7 ok"
       - "SAM E70 PASS"
   - uart_contains: "usart0 tx"
@@ -39,6 +41,6 @@ assertions:
   - uart_contains: "uart4 tx"
   - memory_value:
       address: 0x2045F000
-      expected_value: 0xE7003FFF
+      expected_value: 0xE7007FFF
       size: 4
   - expected_stop_reason: max_steps

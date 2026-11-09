@@ -7161,24 +7161,24 @@
       "script": "examples/renode-onboarding/sam_e70-smoke.yaml",
       "system": "configs/systems/onboarding/sam_e70.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T16:42:51Z",
-      "finished_at_utc": "2026-11-09T16:42:53Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2556,
+      "started_at_utc": "2026-11-09T21:28:06Z",
+      "finished_at_utc": "2026-11-09T21:30:10Z",
+      "elapsed_seconds": 124,
+      "elapsed_ms": 123872,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.351,
-        "build_firmware": 0.244,
-        "run_smoke": 1.95
+        "build_cli": 120.879,
+        "build_firmware": 0.984,
+        "run_smoke": 1.996
       },
       "stages_ms": {
-        "build_cli": 351,
-        "build_firmware": 244,
-        "run_smoke": 1950
+        "build_cli": 120879,
+        "build_firmware": 984,
+        "run_smoke": 1996
       },
       "_artifact_path": "sam_e70",
       "zero_answering_windows": [],

@@ -3,8 +3,8 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      19548,
-      16383,
+      19638,
+      32767,
       1074667008,
       2147483648,
       1073905684,
@@ -15,12 +15,12 @@
       10,
       32,
       541454080,
-      4219910,
+      4221418,
       541458392,
-      4219479,
-      4219656
+      4220987,
+      4221162
     ],
-    "pc": 4219656,
+    "pc": 4221162,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "232f4992c091138ed4d35f6a3acdc9859ddcd24b8ea024cde302d8e3fdd21f78",
+  "firmware_hash": "3739856ab444a147b21d426564f44520a2176702773f586214d95136df0f3562",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam-e70-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam_e70.yaml",

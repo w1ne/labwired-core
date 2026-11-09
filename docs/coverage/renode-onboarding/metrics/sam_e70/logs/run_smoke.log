@@ -1,4 +1,4 @@
-[2m2026-11-09T16:42:52.144670Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/sam_e70.yaml
-[2m2026-11-09T16:42:52.148508Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x400401
+2026-11-09T21:30:08.498463Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sam_e70.yaml
+2026-11-09T21:30:08.502774Z  INFO labwired_loader: ELF Entry Point: 0x400401
 labwired-cli test: idle_ff=on (event_scheduler=on)
-PASS  7/7 checks · sam_e70-smoke · 4000000 steps · 1.61s
+PASS  7/7 checks · sam_e70-smoke · 4000000 steps · 1.69s

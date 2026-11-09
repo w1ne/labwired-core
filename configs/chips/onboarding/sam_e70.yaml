@@ -10,8 +10,8 @@
 # Declared: what this engine models out of the Renode platform and the
 # system controller every SAM E70 boot path touches:
 # - USART0-2 (Renode SAM_USART) and UART0-4 (`sam_usart`: polled TX/RX
-#   through THR/RHR/CSR; IER/IMR interrupts are not modelled, so no IRQ is
-#   declared for them).
+#   through THR/RHR/CSR). USART0 also wires IRQ 13 and models IER/IDR/IMR
+#   against the CSR flags this UART model currently produces.
 # - CHIPID (CIDR 0xA1020E00, the word Renode tags; EXID 0x2).
 # - PMC (`sam4s_pmc`, PCER0/PCER1 banks) — replaces Renode's PMC_SR
 #   flip-flop.
@@ -47,6 +47,7 @@ peripherals:
 - id: usart0
   type: sam_usart
   base_address: 0x40024000
+  irq: 13
 - id: usart1
   type: sam_usart
   base_address: 0x40028000

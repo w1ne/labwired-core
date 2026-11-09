@@ -178,7 +178,7 @@
 | `sam4s16c` | `pass` | `True` | `yes` | `yes` | `1823` | `1.823` | `True` | `observable` | `13` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sam4s8b` | `pass` | `True` | `yes` | `yes` | `1508` | `1.508` | `True` | `observable` | `12` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sam4s_xplained` | `pass` | `True` | `yes` | `yes` | `3452` | `3.452` | `True` | `observable` | `13` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `sam_e70` | `pass` | `True` | `yes` | `yes` | `2556` | `2.556` | `True` | `observable` | `19` | `uart_ordered`, `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `sam_e70` | `pass` | `True` | `yes` | `yes` | `123872` | `123.872` | `True` | `observable` | `19` | `uart_ordered`, `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sifive-fe310` | `pass` | `True` | `yes` | `yes` | `295568` | `295.568` | `True` | `observable` | `2` | `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `sifive-fu540` | `pass` | `True` | `yes` | `yes` | `1354` | `1.354` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `sifive-fu740` | `pass` | `True` | `yes` | `yes` | `1456` | `1.456` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |

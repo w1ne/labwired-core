@@ -20,7 +20,7 @@
 //
 // Check bits persist across the reboots in a word below the summary (not in
 // .bss, which cortex-m-rt zeroes on every boot). Summary = 0xE700_0000 |
-// bits; 0xE700_3FFF means all fourteen passed.
+// bits; 0xE700_7FFF means all fifteen passed.
 
 #![no_std]
 #![no_main]
@@ -32,7 +32,7 @@ use panic_halt as _;
 // 4 KiB below the top of SRAM, clear of the stack.
 const SUMMARY: u32 = 0x2045_F000;
 const STATE: u32 = SUMMARY - 0x100;
-const ALL: u32 = 0x3FFF;
+const ALL: u32 = 0x7FFF;
 
 const PMC_PCER0: u32 = 0x400E_0610;
 const PMC_PCSR0: u32 = 0x400E_0618;
@@ -66,6 +66,7 @@ const NVIC_ISPR0: u32 = 0xE000_E200;
 const NVIC_ICPR0: u32 = 0xE000_E280;
 const IRQ_WDT: u32 = 4;
 const IRQ_PIOA: u32 = 10;
+const IRQ_USART0: u32 = 13;
 
 const ID_UART0: u32 = 7;
 const ID_UART1: u32 = 8;
@@ -102,8 +103,9 @@ const PIO_PUER: u32 = 0x64;
 
 const USART1: u32 = 0x4002_8000;
 // Every other serial block, with the name it prints.
+const USART0: u32 = 0x4002_4000;
 const OTHER_UARTS: [(u32, &str); 7] = [
-    (0x4002_4000, "usart0"),
+    (USART0, "usart0"),
     (0x4002_C000, "usart2"),
     (0x400E_0800, "uart0"),
     (0x400E_0A00, "uart1"),
@@ -114,6 +116,9 @@ const OTHER_UARTS: [(u32, &str); 7] = [
 const US_CR: u32 = 0x00;
 const US_MR: u32 = 0x04;
 const US_CSR: u32 = 0x14;
+const US_IER: u32 = 0x08;
+const US_IDR: u32 = 0x0C;
+const US_IMR: u32 = 0x10;
 const US_THR: u32 = 0x1C;
 const US_BRGR: u32 = 0x20;
 const US_CR_RSTRX: u32 = 1 << 2;
@@ -393,6 +398,24 @@ fn peripherals() {
         level_up && rise_pend && isr_up == pa11 && released && isr_down == pa11,
         12,
     );
+
+    // USART0 TXRDY is a level source: IER sets its mask, CSR.TXRDY asserts
+    // IRQ 13, and IDR must clear both IMR and the pending NVIC level.
+    uart_init(USART0);
+    wr(NVIC_ICPR0, 1 << IRQ_USART0);
+    wr(USART0 + US_IER, US_CSR_TXRDY);
+    spin(8);
+    let imr = rd(USART0 + US_IMR);
+    let pended = rd(NVIC_ISPR0) & (1 << IRQ_USART0) != 0;
+    wr(USART0 + US_IDR, US_CSR_TXRDY);
+    let released = rd(USART0 + US_IMR) == 0 && rd(NVIC_ISPR0) & (1 << IRQ_USART0) == 0;
+    puts("usart0 txrdy imr=");
+    put_hex(imr, 1);
+    puts(" pend=");
+    put_hex(pended as u32, 1);
+    puts(" released=");
+    put_hex(released as u32, 1);
+    finish("", imr == US_CSR_TXRDY && pended && released, 14);
 
     for &(base, name) in OTHER_UARTS.iter() {
         uart_init(base);
