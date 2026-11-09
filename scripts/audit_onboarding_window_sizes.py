@@ -12,6 +12,11 @@ gap between the base and the first declared neighbour is the upper bound of
 the block size, and every undeclared address in the rest of the window is
 masked.
 
+The Cortex-M core windows (NVIC at 0xE000E100, SCB at 0xE000ED00) are wired
+by `configure_cortex_m`, not by the descriptor, so they count as implicit
+neighbours: a size-less SysTick at 0xE000E010 covers DEMCR and the other SCS
+gaps.
+
 Usage: /usr/bin/python3 scripts/audit_onboarding_window_sizes.py [--arch arm]
 """
 
@@ -24,6 +29,8 @@ import sys
 import yaml
 
 DEFAULT_WINDOW = 0x1000
+# Windows `configure_cortex_m` adds to every Cortex-M bus (crates/core/src/system/cortex_m.rs).
+CORTEX_M_CORE_WINDOWS = [("nvic(core)", 0xE000E100), ("scb(core)", 0xE000ED00)]
 UNITS = {"": 1, "B": 1, "K": 1024, "KB": 1024, "KIB": 1024, "M": 1 << 20,
          "MIB": 1 << 20, "MB": 1_000_000, "GB": 1 << 30, "GIB": 1 << 30}
 
@@ -70,7 +77,8 @@ def main():
         for pid, base, size in windows:
             if size is not None:
                 continue
-            covered = sorted((b, q) for q, b, _ in windows if q != pid and base < b < base + DEFAULT_WINDOW)
+            neighbours = [(q, b) for q, b, _ in windows if q != pid] + CORTEX_M_CORE_WINDOWS
+            covered = sorted({(b, q) for q, b in neighbours if base < b < base + DEFAULT_WINDOW})
             if covered:
                 rows.append((os.path.basename(path), pid, base, covered))
 

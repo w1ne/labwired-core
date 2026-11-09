@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.025035">
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.019461">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="8665976e31c8430d6038477dcd1693b99d2c20d092c3681df405f39ae63e8895"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.025035">
+  <testcase classname="labwired" name="run" time="0.019461">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: EK-RA6M5 SMOKE" time="0.000000">
   </testcase>
