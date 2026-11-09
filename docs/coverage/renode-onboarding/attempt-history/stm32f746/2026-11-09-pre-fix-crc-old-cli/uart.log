@@ -1,0 +1,44 @@
+STM32F746 Cortex-M7 smoke
+usart2 ok
+usart3 ok
+uart4 ok
+uart5 ok
+usart6 ok
+uart7 ok
+uart8 ok
+rcc reset=0 gate=1 mask=1 FAIL
+usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok
+gpio pa=1 pb=1 reset=1 pi1=1 jk=1 ok
+syscfg memrmp=0x00000003 pmc=0x00810000 fields=0 cmpcr=1 FAIL
+exti swier masked=1 routed=1 ok
+tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim4 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim8 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim9 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim10 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim11 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim12 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim13 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+exti pads idle=1 presses=1 pa_quiet=1 pk3=1 pc13=1 ok
+spi1 frame=0x03201600 ds=1 data=0 pend=0 alone=1 released=1 FAIL
+spi2 frame=0x06401600 ds=1 data=1 pend=0 alone=1 released=1 FAIL
+spi3 frame=0x04B01600 ds=1 data=1 pend=0 alone=1 released=1 FAIL
+spi1 shared a=0x03201600 b=0x03201600 after_cut=0x16000320 a=0 b=1 restart=0 FAIL
+dma2 spi1 frame=0x16000320 unselected=1 data=0 flags=1 pend=1 alone=1 released=1 FAIL
+dma1 spi2 frame=0x06401600 unselected=1 data=1 flags=1 pend=1 alone=1 released=1 ok
+dma m2m dma1_refused=1 dma2_copied=1 ok
+i2c1 tmp102=0x00001900 data=1 rx_pend=1 ok
+i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok
+i2c2 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok
+i2c3 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok
+i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok
+crc word=0xDF8A8A2B crc16=0x0000FF39 seed=1 std=1 init=1 idr=1 poly16=0 FAIL
+rng off=1 ready=1 draws=0 stopped=0 FAIL
+summary 0x7467F076
+DONE

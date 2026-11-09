@@ -16,8 +16,10 @@
 //! IDR = 0, CR = 0, INIT = 0xFFFFFFFF, POL = 0x04C11DB7 (Ethernet
 //! CRC-32 polynomial, the default).
 //!
-//! Engine: standard CRC-32, MSB-first, no reflection (input/output
-//! reversed bits stay off unless firmware sets CR bits 5/6/7).
+//! Engine: MSB-first CRC of CR.POLYSIZE bits (32/16/8/7) with the
+//! programmable POL, fed by the size of each DR store (byte, half-word or
+//! word). CR.REV_IN / REV_OUT (bits 6:5 / 7) are stored but NOT modelled:
+//! the data and the result are never bit-reversed.
 
 use crate::SimResult;
 
@@ -63,30 +65,35 @@ impl Crc {
         self
     }
 
-    fn step32(&mut self, value: u32) {
-        // CR.POLYSIZE selects 7/8/16/32-bit polynomial. Default 32-bit.
-        let poly_size = match (self.cr >> 3) & 0x3 {
+    /// Width of the CRC, from CR.POLYSIZE: 32, 16, 8 or 7 bits.
+    fn poly_size(&self) -> u32 {
+        match (self.cr >> 3) & 0x3 {
             0 => 32,
             1 => 16,
             2 => 8,
             _ => 7,
-        };
-        let mut crc = self.dr;
-        let bits = poly_size;
-        let high_bit: u32 = 1u32 << (bits - 1);
-        let poly_mask: u32 = if bits == 32 {
-            0xFFFF_FFFF
-        } else {
-            (1u32 << bits) - 1
-        };
+        }
+    }
 
-        // Feed value MSB-first, 32 bits at a time.
-        crc ^= value;
-        for _ in 0..bits {
-            if (crc & high_bit) != 0 {
-                crc = ((crc << 1) ^ self.pol) & poly_mask;
-            } else {
-                crc = (crc << 1) & poly_mask;
+    /// Feed the low `width` bits of `value` (the size of the DR write: 8, 16
+    /// or 32), MSB first, through the CR.POLYSIZE-bit CRC (RM0385 §11.3.2:
+    /// "the data size can be dynamically adjusted ... a byte, half-word or
+    /// word"). Bit-at-a-time, so any data size works with any polynomial size.
+    fn feed(&mut self, value: u32, width: u32) {
+        let size = self.poly_size();
+        let mask = if size == 32 {
+            u32::MAX
+        } else {
+            (1u32 << size) - 1
+        };
+        let pol = self.pol & mask;
+        let mut crc = self.dr & mask;
+        for i in (0..width).rev() {
+            let bit = (value >> i) & 1;
+            let top = (crc >> (size - 1)) & 1;
+            crc = (crc << 1) & mask;
+            if top ^ bit != 0 {
+                crc ^= pol;
             }
         }
         self.dr = crc;
@@ -138,19 +145,10 @@ impl crate::Peripheral for Crc {
         };
         let mask: u32 = 0xFF << (byte * 8);
         let new = (cur & !mask) | ((value as u32) << (byte * 8));
-        // For DR, the engine reacts only on full-word writes (real
-        // hardware behaves the same — sub-word writes feed less data
-        // through the polynomial). The trick is that a 32-bit STR
-        // through the byte-write fallback completes the word on the
-        // last byte; we feed the value once at byte 3.
         match reg {
-            0x00 => {
-                if byte == 3 {
-                    self.step32(new);
-                } else {
-                    self.dr = new;
-                }
-            }
+            // A byte store to DR feeds 8 bits of data (HAL's
+            // CRC_INPUTDATA_FORMAT_BYTES path); it never overwrites the CRC.
+            0x00 => self.feed(u32::from(value), 8),
             0x04 => self.idr = new & self.idr_mask,
             0x08 => {
                 self.cr = new & 0x000000FF;
@@ -169,12 +167,22 @@ impl crate::Peripheral for Crc {
         }
         Ok(())
     }
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        match offset {
+            // A half-word store to DR feeds 16 bits.
+            0x00 => {
+                self.feed(u32::from(value), 16);
+                Ok(())
+            }
+            _ => {
+                self.write(offset, value as u8)?;
+                self.write(offset + 1, (value >> 8) as u8)
+            }
+        }
+    }
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            0x00 => {
-                // DR write: feed the polynomial engine with the new word.
-                self.step32(value);
-            }
+            0x00 => self.feed(value, 32),
             0x04 => self.idr = value & self.idr_mask,
             0x08 => {
                 self.cr = value & 0x000000FF;
@@ -213,5 +221,40 @@ mod tests {
         let mut l4 = Crc::new();
         l4.write_u32(0x04, 0x1234_5678).unwrap();
         assert_eq!(l4.read_u32(0x04).unwrap(), 0x1234_5678);
+    }
+
+    #[test]
+    fn word_write_is_crc32_mpeg2() {
+        let mut c = Crc::new();
+        c.write_u32(0x00, 0x1234_5678).unwrap();
+        assert_eq!(c.read_u32(0x00).unwrap(), 0xDF8A_8A2B);
+    }
+
+    #[test]
+    fn byte_and_halfword_writes_feed_their_own_width() {
+        // Four byte stores of 0x12 0x34 0x56 0x78 = one word store of
+        // 0x12345678 (MSB first).
+        let mut c = Crc::new();
+        for b in [0x12u8, 0x34, 0x56, 0x78] {
+            c.write(0x00, b).unwrap();
+        }
+        assert_eq!(c.read_u32(0x00).unwrap(), 0xDF8A_8A2B);
+        let mut h = Crc::new();
+        h.write_u16(0x00, 0x1234).unwrap();
+        h.write_u16(0x00, 0x5678).unwrap();
+        assert_eq!(h.read_u32(0x00).unwrap(), 0xDF8A_8A2B);
+    }
+
+    #[test]
+    fn sixteen_bit_polynomial_over_bytes_is_crc16_ccitt_false() {
+        // CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF): "123456789" -> 0x29B1.
+        let mut c = Crc::new();
+        c.write_u32(0x14, 0x1021).unwrap();
+        c.write_u32(0x10, 0xFFFF).unwrap();
+        c.write_u32(0x08, (0b01 << 3) | 1).unwrap(); // POLYSIZE 16 | RESET
+        for b in b"123456789" {
+            c.write(0x00, *b).unwrap();
+        }
+        assert_eq!(c.read_u32(0x00).unwrap(), 0x29B1);
     }
 }

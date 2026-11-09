@@ -834,7 +834,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/stm32f4_discovery-kit-smoke.yaml",
     },
     "stm32f746": {
-        "crate": "firmware-stm32f746-demo",
+        "crate": "firmware-stm32f746-smoke",
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/stm32f746-smoke.yaml",
     },

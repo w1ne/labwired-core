@@ -2535,8 +2535,18 @@ boards:
     # rewritten (DOR1/DOR2 at 0x2C/0x30), but this board declares no DAC. No
     # H5 conformance case reads RNG_DR. ACK, NOT A SILICON CAPTURE;
     # re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 407): rcc.rs gains an opt-in
+    # F4-layout AHB1ENR reset value (`rcc_ahb1enr_reset`, the F7's
+    # DTCMRAMEN); without the key the reset stays 0, as here. No register,
+    # mask or reset value of this chip changed.
+    # crc.rs: a byte / half-word store to CRC_DR now feeds 8 / 16 bits of
+    # data (it used to overwrite DR), and POLYSIZE < 32 is computed bit by
+    # bit over the store's width. Word stores with the 32-bit polynomial
+    # (every in-tree capture) give the same result; hw-oracle sim diffs
+    # re-run green.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 84720531c9b22227a8c677e2156d8b3504fec3510f61ae6034899f7b2af05605
+    drift_ack_digest: e7f824f9ef1c5613bde4078e7222cb2695efe75fcaccef069556bf28c98736e5
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -4833,8 +4843,18 @@ boards:
     # the F04x CFGR1 mask (`profile: stm32f04x`); the stm32f0 mask and the
     # other SYSCFG variants are unchanged. generic_factory.rs only parses the
     # two new options. ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 407): rcc.rs gains an opt-in
+    # F4-layout AHB1ENR reset value (`rcc_ahb1enr_reset`, the F7's
+    # DTCMRAMEN); without the key the reset stays 0, as here. No register,
+    # mask or reset value of this chip changed.
+    # crc.rs: a byte / half-word store to CRC_DR now feeds 8 / 16 bits of
+    # data (it used to overwrite DR), and POLYSIZE < 32 is computed bit by
+    # bit over the store's width. Word stores with the 32-bit polynomial
+    # (every in-tree capture) give the same result; hw-oracle sim diffs
+    # re-run green.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 8ee028f21c39638b47bf39daea24dcd55da917f4be808becfa346633a55bc7c3
+    drift_ack_digest: 9add330bfb72025a15c9f38a66d7cf475a4cf0a93a4b2ddc91c2d72344a13a2e
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -5972,8 +5992,18 @@ boards:
     # (RCC/GPIO/SPI1/TIM2/TIM21); the demo's ADC line stays 0 because it
     # writes ADC_CCR at 0x40012788 (RM0377: 0x40012708). ACK, NOT A SILICON
     # CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 407): rcc.rs gains an opt-in
+    # F4-layout AHB1ENR reset value (`rcc_ahb1enr_reset`, the F7's
+    # DTCMRAMEN); without the key the reset stays 0, as here. No register,
+    # mask or reset value of this chip changed.
+    # crc.rs: a byte / half-word store to CRC_DR now feeds 8 / 16 bits of
+    # data (it used to overwrite DR), and POLYSIZE < 32 is computed bit by
+    # bit over the store's width. Word stores with the 32-bit polynomial
+    # (every in-tree capture) give the same result; hw-oracle sim diffs
+    # re-run green.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: e2c27c9ff234058fe518d7404d71261e627faabe8c8b7a1fd39d3a7dd46e4d91
+    drift_ack_digest: 636d92329d17b94ec5d9fffb24abb71f0ead2af709080d515ea7a50676637d7f
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -7258,8 +7288,13 @@ boards:
     # the F04x CFGR1 mask (`profile: stm32f04x`); the stm32f0 mask and the
     # other SYSCFG variants are unchanged. generic_factory.rs only parses the
     # two new options. ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 407): rcc.rs gains an opt-in
+    # F4-layout AHB1ENR reset value (`rcc_ahb1enr_reset`, the F7's
+    # DTCMRAMEN); without the key the reset stays 0, as here. No register,
+    # mask or reset value of this chip changed.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 24d3169f899eb04b94b57ced54ef7745b9fb0e0c9bd317c05d9db49f972d26e0
+    drift_ack_digest: 548df192135dabe0e7cbcaf601b4f132446f7905481ef8308e2fcb418a5398f8
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -8413,8 +8448,13 @@ boards:
     # the F04x CFGR1 mask (`profile: stm32f04x`); the stm32f0 mask and the
     # other SYSCFG variants are unchanged. generic_factory.rs only parses the
     # two new options. ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 407): rcc.rs gains an opt-in
+    # F4-layout AHB1ENR reset value (`rcc_ahb1enr_reset`, the F7's
+    # DTCMRAMEN); without the key the reset stays 0, as here. No register,
+    # mask or reset value of this chip changed.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 52cc0ef4c3461da96898f8123f7e9d98be664b0b80ab2f7dd7e0889edbe8e053
+    drift_ack_digest: b04e2719a5d747bfeb3747a9ef5bd9173b5d1df60662a67d417dcef2ad88488d
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other

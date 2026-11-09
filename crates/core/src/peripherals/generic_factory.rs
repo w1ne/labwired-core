@@ -862,6 +862,14 @@ pub fn try_build(
                 m("rcc_apb1enr_mask"),
                 m("rcc_apb2enr_mask"),
             );
+            // `rcc_ahb1enr_reset`: the part's AHB1ENR reset value (F7: DTCMRAMEN).
+            if let Some(v) = p_cfg
+                .config
+                .get("rcc_ahb1enr_reset")
+                .and_then(|v| v.as_u64())
+            {
+                rcc.set_f4_ahb1enr_reset(v as u32);
+            }
             // HSE is a board component. U5 reference platforms have none
             // fitted unless the chip yaml says `hse: true`.
             if let Some(present) = p_cfg.config.get("hse").and_then(|v| v.as_bool()) {
@@ -1655,6 +1663,11 @@ pub fn try_build(
         // go through.
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f4") => {
             Box::new(crate::peripherals::syscfg::Stm32F4Syscfg::new())
+        }
+        // SYSCFG on STM32F74x/F75x (`profile: stm32f7`): the F4 register
+        // file with the F7 MEMRMP / PMC fields (RM0385 §7).
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f7") => {
+            Box::new(crate::peripherals::syscfg::Stm32F4Syscfg::new_f7())
         }
         // SYSCFG on STM32L0 (`profile: stm32l0`): the same EXTICR line-source
         // mux, among the L0's own configuration words (RM0367 §10).

@@ -40,11 +40,35 @@ pub struct Stm32F4Syscfg {
     pmc: u32,
     exticr: [u32; 4],
     cmpcr: u32,
+    /// The F74x/F75x field set (`profile: stm32f7`) instead of the F4 one.
+    #[serde(skip)]
+    f7: bool,
 }
+
+/// F4 `MEMRMP`: MEM_MODE[1:0].
+const F4_MEMRMP_MASK: u32 = 0x3;
+/// F4 `PMC`: ADC1DC2 (bit 16, F401/F411) and MII_RMII_SEL (bit 23, F407).
+const F4_PMC_MASK: u32 = (1 << 16) | (1 << 23);
+/// F74x `MEMRMP` (RM0385 §7.2.1, `stm32f746xx.h`): SWP_FMC[11:10]. MEM_BOOT
+/// (bit 0) is read-only and reads 0, the BOOT_ADD0 boot this model has.
+const F7_MEMRMP_MASK: u32 = 0x3 << 10;
+/// F74x `PMC` (RM0385 §7.2.2): I2C1..4_FMP and PB6..PB9_FMP (bits 0..7),
+/// ADC1..3DC2 (bits 16..18), MII_RMII_SEL (bit 23).
+const F7_PMC_MASK: u32 = 0xFF | (0x7 << 16) | (1 << 23);
 
 impl Stm32F4Syscfg {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The STM32F74x/F75x SYSCFG (RM0385 §7): the F4 EXTICR offsets and the
+    /// by-letter port codes (A = 0 .. K = 10), CMPCR at 0x20, and F7 fields in
+    /// `MEMRMP` and `PMC`.
+    pub fn new_f7() -> Self {
+        Self {
+            f7: true,
+            ..Self::default()
+        }
     }
 
     /// The GPIO port index (0 = A) `SYSCFG_EXTICRx` routes to EXTI `line`.
@@ -75,10 +99,15 @@ impl Stm32F4Syscfg {
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            // MEM_MODE[1:0].
-            0x00 => self.memrmp = value & 0x3,
-            // ADC1DC2 (bit 16, F401/F411) and MII_RMII_SEL (bit 23, F407).
-            0x04 => self.pmc = value & ((1 << 16) | (1 << 23)),
+            0x00 => {
+                self.memrmp = value
+                    & if self.f7 {
+                        F7_MEMRMP_MASK
+                    } else {
+                        F4_MEMRMP_MASK
+                    }
+            }
+            0x04 => self.pmc = value & if self.f7 { F7_PMC_MASK } else { F4_PMC_MASK },
             // EXTICRx: four 4-bit port selects in [15:0], [31:16] reserved.
             0x08 => self.exticr[0] = value & 0xFFFF,
             0x0C => self.exticr[1] = value & 0xFFFF,
@@ -493,6 +522,24 @@ mod tests {
         s.write_u32(0x0C, 0x1234).unwrap();
         s.write(0x0D, 0x05).unwrap();
         assert_eq!(s.read_u32(0x0C).unwrap(), 0x0534);
+    }
+
+    #[test]
+    fn f7_profile_keeps_the_f74x_memrmp_and_pmc_fields() {
+        let mut f7 = Stm32F4Syscfg::new_f7();
+        f7.write_u32(0x00, 0xFFFF_FFFF).unwrap();
+        f7.write_u32(0x04, 0xFFFF_FFFF).unwrap();
+        // SWP_FMC only; MEM_BOOT reads 0.
+        assert_eq!(f7.read_u32(0x00).unwrap(), 0x0C00);
+        assert_eq!(f7.read_u32(0x04).unwrap(), 0x0087_00FF);
+        let mut f4 = Stm32F4Syscfg::new();
+        f4.write_u32(0x00, 0xFFFF_FFFF).unwrap();
+        f4.write_u32(0x04, 0xFFFF_FFFF).unwrap();
+        assert_eq!(f4.read_u32(0x00).unwrap(), 0x3);
+        assert_eq!(f4.read_u32(0x04).unwrap(), 0x0081_0000);
+        // The same EXTICR mux, port K = 10.
+        f7.write_u32(0x08, 10 << 12).unwrap();
+        assert_eq!(f7.exti_line_source(3), Some(10));
     }
 
     #[test]
