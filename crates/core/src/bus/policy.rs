@@ -160,22 +160,19 @@ impl SystemBus {
     /// model that is always decoded, so it needs no such condition. See
     /// [`InterruptFabric::per_cycle_aggregation_free`](crate::bus::InterruptFabric::per_cycle_aggregation_free).
     ///
-    /// `gpio_devices` counts as work. A bus-resident device (keypad, rotary
-    /// encoder, DHT22) DRIVES pins the firmware samples, and
-    /// `service_gpio_devices` — the pass that does the driving — lives inside
-    /// the phase-1 body this predicate skips. Omitting the check made those
-    /// devices silently inert on every walk-deleted bus: attach succeeded,
-    /// `list_inputs` advertised the channel, `set_input` returned Ok, and the
-    /// pin never moved. Walk deletion is a performance decision about
-    /// peripheral ORCHESTRATION; a device driving a pin is not orchestration,
-    /// and no fast path may decide it stops existing.
+    /// `gpio_devices` counts as work when a resident needs per-cycle service
+    /// (rotary encoder, DHT22, HX711, …). `service_gpio_devices` — the pass that
+    /// does the driving — lives inside the phase-1 body this predicate skips.
+    /// Omitting the check made those devices silently inert on every
+    /// walk-deleted bus. Walk deletion is a performance decision about
+    /// peripheral ORCHESTRATION; a device whose clock is the tick is not
+    /// orchestration, and no fast path may decide it stops existing.
     ///
-    /// The cost is bounded: only buses that actually host such a device give up
-    /// the fast path, and `service_gpio_devices` early-outs on an empty list,
-    /// so a bus without one is unaffected. Buttons deliberately do NOT rely on
-    /// this — a contact level changes only when something drives it, so it is
-    /// applied at the stimulus point (`sync_button_inputs`) and a button alone
-    /// never costs a bus its fast path.
+    /// The cost is bounded: only buses that host a per-cycle resident give up
+    /// the fast path. Buttons and the membrane keypad deliberately do NOT —
+    /// their levels are applied at the stimulus point (`sync_button_inputs` /
+    /// `flush_gpio_device_inputs`) and on MMIO edges, so either alone never
+    /// costs a bus its fast path.
     #[inline]
     pub fn per_cycle_tick_is_trivial(&self) -> bool {
         // Without the scheduler every model is on the per-cycle walk.
