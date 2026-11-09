@@ -7,180 +7,481 @@
 //! The board's STM32F072RBT6 is a Cortex-M0 with 128 KiB of flash at
 //! 0x08000000 and 16 KiB of SRAM at 0x20000000. The simulator console is
 //! USART1 (PA9/PA10, AF1); the on-board ST-LINK/V2 is SWD-only. The four user
-//! LEDs are PC6 (LD3 red), PC8 (LD4 orange), PC9 (LD5 green) and PC7 (LD6 blue),
-//! all active high; the user button B1 pulls PA0 low.
+//! LEDs are PC6 (LD3 red), PC8 (LD4 orange), PC9 (LD5 green) and PC7 (LD6
+//! blue), all active high; the user button B1 drives PA0 high when pressed
+//! (UM1690 §6.4/§6.5).
 //!
-//! The firmware enables the F0 clock gates (AHBENR for the GPIOs, APB2ENR for
-//! USART1), configures the pins, walks the LEDs and prints the GPIOC ODR
-//! readback, reads the button level and then heartbeats.
+//! The chip surface is the stm32f072 profile (Renode builds the board on
+//! `stm32f072.repl`), so besides the board IO this checks that the board row
+//! loads that surface: RCC clock gates, USART2..4 lines, the B1 edge through
+//! SYSCFG EXTICR into EXTI on the grouped vector, all nine timers on their own
+//! lines, DMA1 memory-to-memory on channel 1 and CRC. SPI1/2 and I2C1 have no
+//! on-board slave and are proven by the stm32f072 fixture smoke instead.
+//! Bases and IRQ numbers are RM0091 and ST's CMSIS `stm32f072xb.h`.
 //!
-//! Only the reset HSI (8 MHz) is used: BRR = 8 MHz / 115200 = 69 (0x45) for
-//! the USART v2 block at the F0's peripheral clock.
+//! Interrupts stay disabled in the NVIC: each check reads the line's ISPR
+//! bit. Every check prints one line and sets one bit of the summary word at
+//! `SUMMARY`.
 
 #![no_std]
 #![no_main]
 
+use core::arch::asm;
 use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-// RCC (RM0360 §6): AHBENR @ 0x14, APB2ENR @ 0x18.
-const RCC_AHBENR: *mut u32 = 0x4002_1014 as *mut u32;
-const RCC_APB2ENR: *mut u32 = 0x4002_1018 as *mut u32;
+const SUMMARY: u32 = 0x2000_3000;
 
-// GPIOA @ 0x48000000 (AHB): MODER @ 0x00, PUPDR @ 0x0C, IDR @ 0x10, AFRH @ 0x24.
-const GPIOA_MODER: *mut u32 = 0x4800_0000 as *mut u32;
-const GPIOA_PUPDR: *mut u32 = 0x4800_000C as *mut u32;
-const GPIOA_IDR: *const u32 = 0x4800_0010 as *const u32;
-const GPIOA_AFRH: *mut u32 = 0x4800_0024 as *mut u32;
+// RCC (RM0091 §6.4).
+const RCC: u32 = 0x4002_1000;
+const RCC_CR: u32 = RCC;
+const RCC_AHBENR: u32 = RCC + 0x14;
+const RCC_APB2ENR: u32 = RCC + 0x18;
+const RCC_APB1ENR: u32 = RCC + 0x1C;
+// DMA, SRAM, FLITF, CRC, IOPA..IOPF.
+const AHB_ON: u32 = (1 << 0) | (1 << 2) | (1 << 4) | (1 << 6) | (0x3F << 17);
+// SYSCFG, TIM1, SPI1, USART1, TIM15/16/17.
+const APB2_ON: u32 = (1 << 0) | (1 << 11) | (1 << 12) | (1 << 14) | (0b111 << 16);
+// TIM2/3, TIM6/7, TIM14, SPI2, USART2/3/4, I2C1.
+const APB1_ON: u32 = 0b11 | (0b11 << 4) | (1 << 8) | (1 << 14) | (0b111 << 17) | (1 << 21);
 
-// GPIOC @ 0x48000800: MODER @ 0x00, ODR @ 0x14, BSRR @ 0x18.
-const GPIOC_MODER: *mut u32 = 0x4800_0800 as *mut u32;
-const GPIOC_ODR: *const u32 = 0x4800_0814 as *const u32;
-const GPIOC_BSRR: *mut u32 = 0x4800_0818 as *mut u32;
-
-// USART1 @ 0x40013800: CR1 @ 0x00, BRR @ 0x0C, ISR @ 0x1C, TDR @ 0x28.
-const USART1_CR1: *mut u32 = 0x4001_3800 as *mut u32;
-const USART1_BRR: *mut u32 = 0x4001_380C as *mut u32;
-const USART1_ISR: *const u32 = 0x4001_381C as *const u32;
-const USART1_TDR: *mut u32 = 0x4001_3828 as *mut u32;
-
+// USARTx ("v2" layout).
+const USART1: u32 = 0x4001_3800;
+const USART2: u32 = 0x4000_4400;
+const USART3: u32 = 0x4000_4800;
+const USART4: u32 = 0x4000_4C00;
+const U_CR1: u32 = 0x00;
+const U_BRR: u32 = 0x0C;
+const U_ISR: u32 = 0x1C;
+const U_TDR: u32 = 0x28;
 const USART_ISR_TXE: u32 = 1 << 7;
-const USART_CR1_UE: u32 = 1 << 0;
-const USART_CR1_RE: u32 = 1 << 2;
-const USART_CR1_TE: u32 = 1 << 3;
+const USART_CR1_TXEIE: u32 = 1 << 7;
+
+// GPIO.
+const GPIOA: u32 = 0x4800_0000;
+const GPIOC: u32 = 0x4800_0800;
+const GPIOD: u32 = 0x4800_0C00;
+const G_MODER: u32 = 0x00;
+const G_PUPDR: u32 = 0x0C;
+const G_IDR: u32 = 0x10;
+const G_ODR: u32 = 0x14;
+const G_BSRR: u32 = 0x18;
+const G_BRR: u32 = 0x28;
+const G_AFRH: u32 = 0x24;
 
 const LED_LD3: u32 = 1 << 6; // PC6, red
 const LED_LD4: u32 = 1 << 8; // PC8, orange
 const LED_LD5: u32 = 1 << 9; // PC9, green
 const LED_LD6: u32 = 1 << 7; // PC7, blue
+const LEDS: [(&str, u32); 4] = [
+    ("ld3", LED_LD3),
+    ("ld4", LED_LD4),
+    ("ld5", LED_LD5),
+    ("ld6", LED_LD6),
+];
 
-fn putc(byte: u8) {
-    unsafe {
-        while read_volatile(USART1_ISR) & USART_ISR_TXE == 0 {}
-        write_volatile(USART1_TDR, byte as u32);
+// SYSCFG / EXTI.
+const SYSCFG_EXTICR1: u32 = 0x4001_0008;
+const EXTI: u32 = 0x4001_0400;
+const E_IMR: u32 = 0x00;
+const E_RTSR: u32 = 0x08;
+const E_PR: u32 = 0x14;
+const CODE_PA: u32 = 0;
+const CODE_PC: u32 = 2;
+const EXTI0_1_IRQ: u32 = 5;
+
+// TIMx.
+const T_CR1: u32 = 0x00;
+const T_DIER: u32 = 0x0C;
+const T_SR: u32 = 0x10;
+const T_CNT: u32 = 0x24;
+const T_PSC: u32 = 0x28;
+const T_ARR: u32 = 0x2C;
+
+/// (name, base, NVIC line, counter width in bits) — `stm32f072xb.h`
+/// TIMx_BASE / TIMx_IRQn; TIM1's update raises TIM1_BRK_UP_TRG_COM_IRQn.
+const TIMERS: [(&str, u32, u32, u32); 9] = [
+    ("tim1", 0x4001_2C00, 13, 16),
+    ("tim2", 0x4000_0000, 15, 32),
+    ("tim3", 0x4000_0400, 16, 16),
+    ("tim6", 0x4000_1000, 17, 16),
+    ("tim7", 0x4000_1400, 18, 16),
+    ("tim14", 0x4000_2000, 19, 16),
+    ("tim15", 0x4001_4000, 20, 16),
+    ("tim16", 0x4001_4400, 21, 16),
+    ("tim17", 0x4001_4800, 22, 16),
+];
+
+// DMA1 (channel n registers at 0x08 + 20 * (n - 1)).
+const DMA1: u32 = 0x4002_0000;
+const D_ISR: u32 = 0x00;
+const D_IFCR: u32 = 0x04;
+const DMA1_CH1: u32 = DMA1 + 0x08;
+const C_CCR: u32 = 0x00;
+const C_CNDTR: u32 = 0x04;
+const C_CPAR: u32 = 0x08;
+const C_CMAR: u32 = 0x0C;
+const DMA_SRC: u32 = 0x2000_3100;
+const DMA_DST: u32 = 0x2000_3200;
+/// DMA1_Channel1_IRQn, DMA1_Channel2_3_IRQn, DMA1_Channel4_5_6_7_IRQn.
+const DMA_LINES: [u32; 3] = [9, 10, 11];
+
+// CRC.
+const CRC: u32 = 0x4002_3000;
+const CRC_DR: u32 = CRC;
+const CRC_CR: u32 = CRC + 0x08;
+
+const NVIC_ISPR0: u32 = 0xE000_E200;
+const NVIC_ICPR0: u32 = 0xE000_E280;
+
+fn rd(addr: u32) -> u32 {
+    unsafe { read_volatile(addr as *const u32) }
+}
+
+fn wr(addr: u32, value: u32) {
+    unsafe { write_volatile(addr as *mut u32, value) }
+}
+
+fn pending(irq: u32) -> bool {
+    rd(NVIC_ISPR0) & (1 << irq) != 0
+}
+
+fn unpend(irq: u32) {
+    wr(NVIC_ICPR0, 1 << irq);
+}
+
+/// 8 MHz HSI / 115200 = 69 = 0x45.
+fn uart_init(base: u32) {
+    wr(base + U_BRR, 0x45);
+    wr(base + U_CR1, (1 << 3) | 1); // TE | UE
+}
+
+fn send(base: u32, bytes: &[u8]) {
+    for byte in bytes {
+        let mut remaining = 100_000;
+        while rd(base + U_ISR) & USART_ISR_TXE == 0 && remaining > 0 {
+            remaining -= 1;
+        }
+        wr(base + U_TDR, u32::from(*byte));
     }
 }
 
-fn puts(text: &str) {
-    for byte in text.bytes() {
-        putc(byte);
-    }
+fn puts(s: &str) {
+    send(USART1, s.as_bytes());
 }
 
-fn put_hex32(value: u32) {
-    for shift in (0..8).rev() {
-        let nibble = ((value >> (shift * 4)) & 0xF) as u8;
-        putc(match nibble {
-            0..=9 => b'0' + nibble,
-            _ => b'a' + nibble - 10,
-        });
-    }
+fn flag(name: &str, ok: bool) {
+    puts(name);
+    puts(if ok { "=1 " } else { "=0 " });
 }
 
-fn put_dec32(value: u32) {
-    let mut digits = [0u8; 10];
-    let mut remaining = value;
-    let mut start = digits.len();
-    loop {
-        start -= 1;
-        digits[start] = b'0' + (remaining % 10) as u8;
-        remaining /= 10;
-        if remaining == 0 {
+fn verdict(ok: bool) {
+    puts(if ok { "ok\r\n" } else { "FAIL\r\n" });
+}
+
+fn hex(v: u32) {
+    let digits = b"0123456789ABCDEF";
+    let mut buf = [0u8; 10];
+    buf[0] = b'0';
+    buf[1] = b'x';
+    for i in 0..8 {
+        buf[2 + i] = digits[((v >> (28 - 4 * i)) & 0xF) as usize];
+    }
+    send(USART1, &buf);
+}
+
+/// RCC reset state (HSI on and ready, AHBENR = SRAM | FLITF) and a clock
+/// gate that holds: GPIOD ignores ODR writes until IOPDEN is set. Runs
+/// before anything else, so USART1 is still gated and the result is
+/// reported later.
+fn rcc_bringup() -> (bool, bool) {
+    let reset = rd(RCC_CR) & 0b11 == 0b11 && rd(RCC_AHBENR) == 0x14;
+    wr(GPIOD + G_ODR, 0x00A5);
+    let gated = rd(GPIOD + G_ODR) == 0;
+    wr(RCC_AHBENR, AHB_ON);
+    wr(RCC_APB2ENR, APB2_ON);
+    wr(RCC_APB1ENR, APB1_ON);
+    wr(GPIOD + G_ODR, 0x00A5);
+    let gate = gated && rd(GPIOD + G_ODR) == 0x00A5 && rd(RCC_AHBENR) == AHB_ON;
+    wr(GPIOD + G_ODR, 0);
+    (reset, gate)
+}
+
+/// PA9/PA10 as AF1 (USART1 on the ST-LINK VCP pins).
+fn console_pins() {
+    let moder = rd(GPIOA + G_MODER) & !(0b1111 << 18);
+    wr(GPIOA + G_MODER, moder | (0b10 << 18) | (0b10 << 20));
+    let afrh = rd(GPIOA + G_AFRH) & !(0xFF << 4);
+    wr(GPIOA + G_AFRH, afrh | (0x11 << 4));
+}
+
+fn report_rcc(reset: bool, gate: bool) -> bool {
+    puts("rcc ");
+    flag("reset", reset);
+    flag("gate", gate);
+    let ok = reset && gate;
+    verdict(ok);
+    ok
+}
+
+/// TXEIE on USART2..4 raises each one's own line; USART3 and USART4 share
+/// USART3_4_IRQn = 29.
+fn check_usart_irqs() -> bool {
+    let mut ok = true;
+    puts("usart irq ");
+    for &(name, base, irq) in &[
+        ("u2", USART2, 28u32),
+        ("u3", USART3, 29),
+        ("u4", USART4, 29),
+    ] {
+        unpend(irq);
+        let quiet = !pending(irq);
+        wr(base + U_CR1, rd(base + U_CR1) | USART_CR1_TXEIE);
+        let pend = pending(irq);
+        wr(base + U_CR1, rd(base + U_CR1) & !USART_CR1_TXEIE);
+        unpend(irq);
+        let released = !pending(irq);
+        let this = quiet && pend && released;
+        flag(name, this);
+        ok &= this;
+    }
+    verdict(ok);
+    ok
+}
+
+/// LD3..LD6 lit one by one through BSRR, each step read back from ODR (and
+/// the pad from IDR); then LD3 blinks twice for the gpio_edges assertion and
+/// BRR turns them all off.
+fn check_leds() -> bool {
+    // PC6..PC9 as push-pull outputs.
+    let moder = rd(GPIOC + G_MODER) & !(0xFF << 12);
+    wr(GPIOC + G_MODER, moder | (0x55 << 12));
+    let mut lit = 0u32;
+    let mut walk = true;
+    for &(name, mask) in &LEDS {
+        wr(GPIOC + G_BSRR, mask);
+        lit |= mask;
+        let odr = rd(GPIOC + G_ODR);
+        walk &= odr == lit && rd(GPIOC + G_IDR) & lit == lit;
+        puts("led=");
+        puts(name);
+        puts(" odr=");
+        hex(odr);
+        puts("\r\n");
+    }
+    let mut blink = true;
+    for _ in 0..2 {
+        wr(GPIOC + G_BRR, LED_LD3);
+        blink &= rd(GPIOC + G_ODR) & LED_LD3 == 0;
+        wr(GPIOC + G_BSRR, LED_LD3);
+        blink &= rd(GPIOC + G_ODR) & LED_LD3 != 0;
+    }
+    wr(GPIOC + G_BRR, lit);
+    let off = rd(GPIOC + G_ODR) == 0;
+    puts("leds ");
+    flag("walk", walk);
+    flag("blink", blink);
+    flag("off", off);
+    let ok = walk && blink && off;
+    verdict(ok);
+    ok
+}
+
+fn wait_level(port: u32, pin: u32, high: bool) -> bool {
+    for _ in 0..2_000_000 {
+        if (rd(port + G_IDR) >> pin) & 1 == u32::from(high) {
+            return true;
+        }
+    }
+    false
+}
+
+/// B1 on PA0 (pressed = high, internal pull-down) through the SYSCFG port
+/// mux into EXTI line 0 on the rising edge. With EXTICR1 selecting port C
+/// the first press must not pend line 0; with port A the second press must,
+/// on NVIC EXTI0_1 = 5 only.
+fn check_button() -> bool {
+    let pupdr = rd(GPIOA + G_PUPDR) & !0b11;
+    wr(GPIOA + G_PUPDR, pupdr | 0b10);
+    let moder = rd(GPIOA + G_MODER) & !0b11;
+    wr(GPIOA + G_MODER, moder);
+    wr(SYSCFG_EXTICR1, CODE_PC);
+    wr(EXTI + E_RTSR, 1);
+    wr(EXTI + E_IMR, 1);
+    unpend(EXTI0_1_IRQ);
+
+    let idle = wait_level(GPIOA, 0, false);
+    let press1 = wait_level(GPIOA, 0, true) && wait_level(GPIOA, 0, false);
+    let other_port_quiet = rd(EXTI + E_PR) & 1 == 0 && !pending(EXTI0_1_IRQ);
+
+    wr(SYSCFG_EXTICR1, CODE_PA);
+    let press2 = wait_level(GPIOA, 0, true);
+    let routed = rd(EXTI + E_PR) & 1 != 0 && pending(EXTI0_1_IRQ) && !pending(6) && !pending(7);
+    let released = wait_level(GPIOA, 0, false);
+    wr(EXTI + E_PR, 1);
+    unpend(EXTI0_1_IRQ);
+    let cleared = rd(EXTI + E_PR) & 1 == 0 && !pending(EXTI0_1_IRQ);
+    wr(EXTI + E_IMR, 0);
+
+    puts("b1 ");
+    flag("idle", idle);
+    flag("presses", press1 && press2 && released);
+    flag("pc_quiet", other_port_quiet);
+    flag("pa0", routed);
+    flag("cleared", cleared);
+    let ok = idle && press1 && press2 && released && other_port_quiet && routed && cleared;
+    verdict(ok);
+    ok
+}
+
+/// Counter width (ARR keeps 16 or 32 bits), counting, and the update
+/// interrupt reaching the timer's own NVIC line — and no other timer's.
+fn check_timer(name: &str, base: u32, irq: u32, width: u32) -> bool {
+    wr(base + T_ARR, 0xFFFF_FFFF);
+    let top = if width == 32 { 0xFFFF_FFFF } else { 0xFFFF };
+    let arr = rd(base + T_ARR);
+    let width_ok = arr == top;
+
+    wr(base + T_PSC, 0);
+    wr(base + T_ARR, 999);
+    wr(base + T_SR, 0);
+    unpend(irq);
+    wr(base + T_DIER, 1); // UIE
+    wr(base + T_CR1, 1); // CEN
+    let c0 = rd(base + T_CNT);
+    let mut uif = false;
+    for _ in 0..200_000 {
+        if rd(base + T_SR) & 1 != 0 {
+            uif = true;
             break;
         }
     }
-    for &digit in &digits[start..] {
-        putc(digit);
-    }
+    let counted = rd(base + T_CNT) != c0 || uif;
+    let pend = pending(irq);
+    let alone = TIMERS
+        .iter()
+        .all(|&(_, _, other, _)| other == irq || !pending(other));
+    wr(base + T_CR1, 0);
+    wr(base + T_DIER, 0);
+    wr(base + T_SR, 0);
+    unpend(irq);
+    let released = !pending(irq);
+
+    puts(name);
+    puts(" arr=");
+    hex(arr);
+    puts(" ");
+    flag("width", width_ok);
+    flag("count", counted);
+    flag("uif", uif);
+    flag("pend", pend);
+    flag("alone", alone);
+    flag("released", released);
+    let ok = width_ok && counted && uif && pend && alone && released;
+    verdict(ok);
+    ok
 }
 
-#[inline(never)]
-fn spin(iterations: u32) {
-    for _ in 0..iterations {
-        unsafe {
-            core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+/// DMA1 channel 1 memory-to-memory (MEM2MEM, 32-bit, both pointers
+/// incrementing): four words copied, TCIF1 set, and the transfer-complete
+/// interrupt on DMA1_Channel1_IRQn = 9 only.
+fn check_dma_m2m() -> bool {
+    let words = [0x0072_0B01u32, 0xD15C_0000, 0x1234_5678, 0xA5A5_5A5A];
+    for (i, &w) in words.iter().enumerate() {
+        wr(DMA_SRC + 4 * i as u32, w);
+        wr(DMA_DST + 4 * i as u32, 0);
+    }
+    for &line in &DMA_LINES {
+        unpend(line);
+    }
+    wr(DMA1 + D_IFCR, 0x0FFF_FFFF);
+    wr(DMA1_CH1 + C_CPAR, DMA_SRC);
+    wr(DMA1_CH1 + C_CMAR, DMA_DST);
+    wr(DMA1_CH1 + C_CNDTR, words.len() as u32);
+    // MEM2MEM | MSIZE=32 | PSIZE=32 | MINC | PINC | TCIE | EN (DIR=0: CPAR is the source).
+    wr(
+        DMA1_CH1 + C_CCR,
+        (1 << 14) | (0b10 << 10) | (0b10 << 8) | (1 << 7) | (1 << 6) | (1 << 1) | 1,
+    );
+    let mut tc = false;
+    for _ in 0..100_000 {
+        if rd(DMA1 + D_ISR) & (1 << 1) != 0 {
+            tc = true;
+            break;
         }
     }
+    let data = words
+        .iter()
+        .enumerate()
+        .all(|(i, &w)| rd(DMA_DST + 4 * i as u32) == w)
+        && rd(DMA1_CH1 + C_CNDTR) == 0;
+    let pend = pending(9);
+    let alone = !pending(10) && !pending(11);
+    wr(DMA1_CH1 + C_CCR, 0);
+    wr(DMA1 + D_IFCR, 1); // CGIF1
+    unpend(9);
+    let released = rd(DMA1 + D_ISR) & 0xF == 0 && !pending(9);
+
+    puts("dma1 m2m ");
+    flag("tc", tc);
+    flag("data", data);
+    flag("pend", pend);
+    flag("alone", alone);
+    flag("released", released);
+    let ok = tc && data && pend && alone && released;
+    verdict(ok);
+    ok
 }
 
-fn led_on(mask: u32) {
-    unsafe {
-        write_volatile(GPIOC_BSRR, mask);
-    }
-}
-
-fn report(label: &str) {
-    puts(label);
-    puts(" odr=");
-    put_hex32(unsafe { read_volatile(GPIOC_ODR) });
-    putc(b'\n');
-}
-
-fn button_level() -> u32 {
-    unsafe { read_volatile(GPIOA_IDR) & 1 }
+fn check_crc() -> bool {
+    wr(CRC_CR, 1); // RESET
+    let seed = rd(CRC_DR) == 0xFFFF_FFFF;
+    wr(CRC_DR, 0x1234_5678);
+    let word = rd(CRC_DR);
+    let std = word == 0xDF8A_8A2B;
+    puts("crc word=");
+    hex(word);
+    puts(" ");
+    flag("seed", seed);
+    flag("std", std);
+    let ok = seed && std;
+    verdict(ok);
+    ok
 }
 
 #[entry]
 fn main() -> ! {
-    unsafe {
-        // Gate GPIOA/GPIOC (AHBENR bits 17/19) and USART1 (APB2ENR bit 14).
-        write_volatile(
-            RCC_AHBENR,
-            read_volatile(RCC_AHBENR) | (1 << 17) | (1 << 19),
-        );
-        write_volatile(RCC_APB2ENR, read_volatile(RCC_APB2ENR) | (1 << 14));
+    let (rcc_reset, rcc_gate) = rcc_bringup();
+    console_pins();
+    uart_init(USART1);
+    uart_init(USART2);
+    uart_init(USART3);
+    uart_init(USART4);
+    puts("STM32F072B-DISCO SMOKE\r\n");
+    puts("cpu=cortex-m0 uart=usart1\r\n");
 
-        // PA9/PA10 as AF1 (USART1): MODER 10, AFRH nibble 1 per pin.
-        let moder = read_volatile(GPIOA_MODER);
-        write_volatile(
-            GPIOA_MODER,
-            (moder & !(0b1111 << 18)) | (0b10 << 18) | (0b10 << 20),
-        );
-        write_volatile(
-            GPIOA_AFRH,
-            (read_volatile(GPIOA_AFRH) & !(0xFF << 4)) | (0x11 << 4),
-        );
-        // PA0 input with the internal pull-up (B1 pulls it low when pressed).
-        write_volatile(GPIOA_PUPDR, (read_volatile(GPIOA_PUPDR) & !0b11) | 0b01);
-
-        // PC6..PC9 as outputs.
-        write_volatile(
-            GPIOC_MODER,
-            (read_volatile(GPIOC_MODER) & !(0xFF << 12)) | (0x55 << 12),
-        );
-
-        // USART1: 8 MHz HSI / 115200 = 69 = 0x45.
-        write_volatile(USART1_BRR, 0x45);
-        write_volatile(USART1_CR1, USART_CR1_UE | USART_CR1_TE | USART_CR1_RE);
+    let mut summary: u32 = 0;
+    let mut mark = |bit: u32, ok: bool| {
+        if ok {
+            summary |= 1 << bit;
+        }
+    };
+    mark(0, report_rcc(rcc_reset, rcc_gate));
+    mark(1, check_usart_irqs());
+    mark(2, check_leds());
+    mark(3, check_button());
+    for (i, &(name, base, irq, width)) in TIMERS.iter().enumerate() {
+        mark(4 + i as u32, check_timer(name, base, irq, width));
     }
-
-    puts("STM32F072B-DISCO SMOKE\n");
-    puts("cpu=cortex-m0 uart=usart1\n");
-
-    led_on(LED_LD3);
-    report("led=ld3");
-    led_on(LED_LD4);
-    report("led=ld4");
-    led_on(LED_LD5);
-    report("led=ld5");
-    led_on(LED_LD6);
-    report("led=ld6");
-
-    puts("btn=");
-    put_dec32(button_level());
-    putc(b'\n');
-
-    let mut heartbeat: u32 = 0;
+    mark(13, check_dma_m2m());
+    mark(14, check_crc());
+    let summary = summary | 0x0DC0_0000;
+    wr(SUMMARY, summary);
+    puts("summary ");
+    hex(summary);
+    puts("\r\nDONE\r\n");
     loop {
-        puts("hb=");
-        put_dec32(heartbeat);
-        puts(" odr=");
-        put_hex32(unsafe { read_volatile(GPIOC_ODR) });
-        puts(" btn=");
-        put_dec32(button_level());
-        putc(b'\n');
-        spin(200_000);
-        heartbeat = heartbeat.wrapping_add(1);
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
     }
 }

@@ -4814,8 +4814,15 @@ boards:
     # is driven high is skipped. No SPI register, flag or IRQ changed; a
     # device with no resolvable CS output keeps the old pass-through.
     # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 401): dma.rs (the F1/L0/L4
+    # channel DMA) now honours CCR.DIR in MEM2MEM mode (DIR=0, ST HAL's
+    # DMA_MEMORY_TO_MEMORY, copies CPAR -> CMAR; DIR=1 unchanged) and
+    # IFCR.CGIFx clears the channel's TCIF/HTIF/TEIF with GIF (RM0008
+    # §13.4.2). No register address, reset or RW value changed; every
+    # in-tree MEM2MEM user sets DIR=1. ACK, NOT A SILICON CAPTURE;
+    # re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: f4b58e0251036fb95d0a1596244de3be6c5e90ceb453cb66f0fcfa7b7478160c
+    drift_ack_digest: 735098e48f3b0888378e3cf9bab7ab93bf1b71ee3974438ec1675edfb3b696cb
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -5932,8 +5939,15 @@ boards:
     # is driven high is skipped. No SPI register, flag or IRQ changed; a
     # device with no resolvable CS output keeps the old pass-through.
     # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 401): dma.rs (the F1/L0/L4
+    # channel DMA) now honours CCR.DIR in MEM2MEM mode (DIR=0, ST HAL's
+    # DMA_MEMORY_TO_MEMORY, copies CPAR -> CMAR; DIR=1 unchanged) and
+    # IFCR.CGIFx clears the channel's TCIF/HTIF/TEIF with GIF (RM0008
+    # §13.4.2). No register address, reset or RW value changed; every
+    # in-tree MEM2MEM user sets DIR=1. ACK, NOT A SILICON CAPTURE;
+    # re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: f43a6ce8909889910ed6687b6e30181654e5c376e7d8bf9adb88b275add28854
+    drift_ack_digest: 48db904b641aaa16c4dfcdf0c6dfda46dc3c4423e7cacd6742fef63eb42d2548
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -7205,8 +7219,15 @@ boards:
     # is driven high is skipped. No SPI register, flag or IRQ changed; a
     # device with no resolvable CS output keeps the old pass-through.
     # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 401): dma.rs (the F1/L0/L4
+    # channel DMA) now honours CCR.DIR in MEM2MEM mode (DIR=0, ST HAL's
+    # DMA_MEMORY_TO_MEMORY, copies CPAR -> CMAR; DIR=1 unchanged) and
+    # IFCR.CGIFx clears the channel's TCIF/HTIF/TEIF with GIF (RM0008
+    # §13.4.2). No register address, reset or RW value changed; every
+    # in-tree MEM2MEM user sets DIR=1. ACK, NOT A SILICON CAPTURE;
+    # re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: dc107fbd149d168edfe904d364c0b70bb9bb8fdf1e3f7b5abc0a5424bd3231b4
+    drift_ack_digest: 9c0feb6b05a2c87f3ec14a00eebf77baef2d2a21f38ecab4d5b141b7df51c28e
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -8347,8 +8368,15 @@ boards:
     # is driven high is skipped. No SPI register, flag or IRQ changed; a
     # device with no resolvable CS output keeps the old pass-through.
     # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 401): dma.rs (the F1/L0/L4
+    # channel DMA) now honours CCR.DIR in MEM2MEM mode (DIR=0, ST HAL's
+    # DMA_MEMORY_TO_MEMORY, copies CPAR -> CMAR; DIR=1 unchanged) and
+    # IFCR.CGIFx clears the channel's TCIF/HTIF/TEIF with GIF (RM0008
+    # §13.4.2). No register address, reset or RW value changed; every
+    # in-tree MEM2MEM user sets DIR=1. ACK, NOT A SILICON CAPTURE;
+    # re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 0e1abb17bf00217a2e2f8fcf98c67b7397afe20847918615f1d79db1f1915f0e
+    drift_ack_digest: 3604b81d034355a57b8c74fe760c06b412c1e90e52c585676d07e93ccc8f835e
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other

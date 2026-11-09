@@ -1,40 +1,13 @@
-# Bounded imported STM32F072B-DISCO profile for the Cortex-M0 GPIO/USART smoke.
-# The memory windows match the STM32F072RBT6 on the board. Only the F0 RCC,
-# GPIOA, GPIOC, and USART1 register surfaces used by this fixture are declared.
+# STM32F072B-DISCO (platforms/boards/stm32f072b_discovery.repl). Renode builds
+# the board as `using "platforms/cpus/stm32f072.repl"` plus one LED on PC6 and
+# a button on PA0; the board's part is the STM32F072RBT6. The silicon is the
+# imported stm32f072 profile, included whole rather than copied so the two
+# rows cannot drift: 128 KiB / 16 KiB, RCC, USART1..4, GPIOA..F, SYSCFG +
+# EXTI, TIM1/2/3/6/7/14/15/16/17, SPI1/2, I2C1, DMA1 (7 channels) and CRC.
+# See stm32f072.yaml for the per-block sources and what it does not claim.
+#
+# The board-level parts (LD3..LD6 on PC6/PC8/PC9/PC7, B1 on PA0) live in the
+# system file. The on-board L3GD20 gyroscope (SPI2, CS PC0) has no engine
+# model and is not declared; Renode does not model it either.
+include: stm32f072.yaml
 name: stm32f072b_discovery
-arch: arm
-core: cortex-m0
-flash:
-  base: 0x08000000
-  size: 131072B
-ram:
-  base: 0x20000000
-  size: 16384B
-peripherals:
-- id: rcc
-  type: rcc
-  bus: sysbus
-  base_address: 0x40021000
-  config:
-    profile: stm32f0
-- id: gpioPortA
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 0x48000000
-  clock: { reg: ahbenr, bit: 17 }
-  config:
-    profile: stm32v2
-- id: gpioPortC
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 0x48000800
-  clock: { reg: ahbenr, bit: 19 }
-  config:
-    profile: stm32v2
-- id: usart1
-  type: uart
-  bus: sysbus
-  base_address: 0x40013800
-  clock: { reg: apb2enr, bit: 14 }
-  config:
-    profile: stm32v2

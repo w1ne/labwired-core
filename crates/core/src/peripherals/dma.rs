@@ -391,7 +391,16 @@ impl Dma1 {
                         self.isr = (self.isr & !(0xf << (4 * i))) | (flags << (4 * i));
                     }
                 } else {
-                    self.isr &= !value;
+                    // CGIFx clears the channel's GIF, TCIF, HTIF and TEIF
+                    // together (RM0008 §13.4.2, RM0091 §10.4.2); the other
+                    // bits clear only their own flag.
+                    let mut clear = value;
+                    for i in 0..7 {
+                        if (value >> (4 * i)) & 1 != 0 {
+                            clear |= 0xf << (4 * i);
+                        }
+                    }
+                    self.isr &= !clear;
                 }
             }
             0xA8 => {
@@ -486,12 +495,13 @@ impl Dma1 {
         // "programmable data width"): the bus reads the source and writes
         // the destination with accesses of those widths, so a half-word item
         // to an SPI DR is ONE 16-bit access.
-        let (src, dst, src_w, dst_w) = if mem2mem == 1 {
-            // STM32 mem-to-mem mode (RM0351 §11.4.7): MEM2MEM=1 requires
-            // DIR=1, and the data flows CMAR -> CPAR. CMAR is "memory side"
-            // (source), CPAR is "peripheral side" (destination).
-            (chan.cmar_ptr, chan.cpar_ptr, msize, psize)
-        } else if dir_bit == 1 {
+        //
+        // MEM2MEM keeps the DIR meaning (RM0351 §11.6.3 DMA_CCRx.DIR: the
+        // source/destination attributes are "still valid in a
+        // memory-to-memory mode"): DIR=1 copies CMAR -> CPAR, DIR=0 copies
+        // CPAR -> CMAR. ST's HAL DMA_MEMORY_TO_MEMORY is MEM2MEM with DIR=0
+        // and the source in CPAR.
+        let (src, dst, src_w, dst_w) = if dir_bit == 1 {
             // Memory -> peripheral: read from CMAR, write to CPAR.
             (chan.cmar_ptr, chan.cpar_ptr, msize, psize)
         } else {
@@ -903,6 +913,41 @@ mod tests {
         assert_eq!(reqs[0].addr, 0x2000_0010);
         // CH1 TCIF is bit 1.
         assert_ne!(dma.read_reg(0x00) & (1 << 1), 0);
+    }
+
+    /// MEM2MEM keeps DIR: DIR=0 (ST HAL `DMA_MEMORY_TO_MEMORY`) copies
+    /// CPAR -> CMAR, DIR=1 copies CMAR -> CPAR.
+    #[test]
+    fn mem2mem_copies_in_the_dir_direction() {
+        let mut dma = Dma1::new();
+        dma.write_reg(0x0C, 1); // CNDTR1
+        dma.write_reg(0x10, 0x2000_0100); // CPAR1
+        dma.write_reg(0x14, 0x2000_0200); // CMAR1
+        dma.write_reg(0x08, 1 | (1 << 14)); // EN | MEM2MEM, DIR = 0
+        let r = dma.tick().dma_requests.unwrap()[0];
+        assert_eq!((r.src_addr, r.addr), (0x2000_0100, 0x2000_0200));
+
+        let mut dma = Dma1::new();
+        m2m(&mut dma, 1, 1, 0x2000_0200, 0x2000_0100, 0); // DIR = 1
+        let r = dma.tick().dma_requests.unwrap()[0];
+        assert_eq!((r.src_addr, r.addr), (0x2000_0200, 0x2000_0100));
+    }
+
+    /// IFCR.CGIFx clears the channel's GIF, TCIF, HTIF and TEIF; CTCIFx
+    /// clears TCIF alone; neither touches another channel.
+    #[test]
+    fn cgif_clears_every_flag_of_its_channel_only() {
+        let mut dma = Dma1::new();
+        m2m(&mut dma, 1, 1, 0x2000_0000, 0x2000_0100, 0);
+        m2m(&mut dma, 2, 1, 0x2000_0010, 0x2000_0110, 0);
+        for _ in 0..4 {
+            dma.tick();
+        }
+        assert_eq!(dma.read_reg(0x00) & 0xFF, 0x33, "GIF|TCIF on 1 and 2");
+        dma.write_reg(0x04, 1 << 5); // CTCIF2
+        assert_eq!(dma.read_reg(0x00) & 0xFF, 0x13);
+        dma.write_reg(0x04, 1); // CGIF1
+        assert_eq!(dma.read_reg(0x00) & 0xFF, 0x10);
     }
 
     /// F1/L1 `DMA1_Channel1..7_IRQn`: with `channel_irqs`, a channel's

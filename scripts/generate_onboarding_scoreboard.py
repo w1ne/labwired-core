@@ -45,6 +45,43 @@ def load_zero_answering_types(path: Path = KNOWN_STUBS_RS) -> set[str]:
     return types - REPLACED_AT_CONSTRUCTION
 
 
+def read_chip_file(path: Path, depth: int = 0) -> dict:
+    """A chip YAML with its `include:` files expanded the way the engine's
+    ChipDescriptor::from_file does: includes load first, local keys win and
+    `peripherals` union by `id` (a local entry replaces an included one)."""
+    chip = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(chip, dict):
+        raise ValueError(f"{path} is not a mapping")
+    include = chip.pop("include", None)
+    if include is None or depth > 8:
+        return chip
+    merged: dict = {}
+    peripherals: list[dict] = []
+    for ref in [include] if isinstance(include, str) else list(include):
+        base = read_chip_file(path.parent / ref, depth + 1)
+        peripherals = union_peripherals(peripherals, base.get("peripherals") or [])
+        merged.update(base)
+    peripherals = union_peripherals(peripherals, chip.get("peripherals") or [])
+    merged.update(chip)
+    merged["peripherals"] = peripherals
+    return merged
+
+
+def union_peripherals(base: list, local: list) -> list:
+    out = list(base)
+    for p in local:
+        pid = p.get("id") if isinstance(p, dict) else None
+        index = next(
+            (i for i, q in enumerate(out) if isinstance(q, dict) and pid and q.get("id") == pid),
+            None,
+        )
+        if index is None:
+            out.append(p)
+        else:
+            out[index] = p
+    return out
+
+
 def load_chip(system: str | None) -> dict | None:
     """The chip YAML a target's system loads, or None when it cannot be resolved."""
     if yaml is None or not system:
@@ -54,8 +91,8 @@ def load_chip(system: str | None) -> dict | None:
         chip_ref = (yaml.safe_load(system_path.read_text(encoding="utf-8")) or {}).get("chip")
         if not chip_ref:
             return None
-        chip = yaml.safe_load((system_path.parent / chip_ref).read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError, AttributeError):
+        chip = read_chip_file(system_path.parent / chip_ref)
+    except (OSError, yaml.YAMLError, AttributeError, ValueError):
         return None
     return chip if isinstance(chip, dict) else None
 

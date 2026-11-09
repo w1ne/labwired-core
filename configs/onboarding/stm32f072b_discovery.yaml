@@ -1,8 +1,10 @@
 name: stm32f072b_discovery
 description: >-
-  Imported STM32F072B-DISCO profile bounded to a Cortex-M0, 128 KiB flash,
-  16 KiB SRAM, F0 RCC, GPIOA, GPIOC, and USART1. The whole platform and other
-  peripherals remain unverified.
+  Imported STM32F072B-DISCO profile: the stm32f072 silicon profile (Cortex-M0,
+  128 KiB flash, 16 KiB SRAM, RCC, USART1-4, GPIOA-F, SYSCFG/EXTI, nine
+  timers, SPI1/2, I2C1, DMA1, CRC) plus the board's LD3-LD6 LEDs and B1
+  button. The L3GD20 gyroscope, ADC, CAN, RTC, DAC, USB, TSC and the
+  watchdogs are not modelled.
 family: STM32F0
 url: https://www.st.com/en/evaluation-tools/32f072bdiscovery.html
 code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
@@ -15,18 +17,23 @@ verified: false
 system: systems/onboarding/stm32f072b_discovery.yaml
 validation:
   method: renode-onboarding-exact-import-smoke
-  reason: bounded Cortex-M0, USART1 and GPIOA/GPIOC register smoke; whole platform remains unverified
+  reason: Cortex-M0 board smoke over the stm32f072 surface; SPI/I2C data paths are proven by the stm32f072 fixture smoke, not on this board
   checks:
     system_manifest: true
     chip_descriptor: true
     cortex_m0_smoke: true
     usart1_tx: true
-    gpioc_odr_readback: true
-    gpioa_pa0_pullup_readback: true
-    button_electrical_behavior: false
+    rcc_clock_gate: true
+    usart2_4_irq_lines: true
+    leds_ld3_ld6: true
+    button_b1_exti_edge: true
+    timers_update_lines: true
+    dma1_mem2mem: true
+    crc: true
+    spi_i2c_on_board: false
+    l3gd20: false
     whole_platform: false
-    other_peripherals: false
-  timestamp_utc: '2026-11-06T05:18:10Z'
+  timestamp_utc: '2026-11-09T03:40:00Z'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/stm32f072b_discovery/
 provenance:

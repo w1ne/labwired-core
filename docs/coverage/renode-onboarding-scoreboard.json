@@ -11,7 +11,7 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 874,
+    "pass_claimed_peripherals_total": 897,
     "pass_claimed_peripherals_median": 2,
     "median_elapsed_ms": 1338,
     "median_elapsed_seconds": 1.338,
@@ -9391,31 +9391,33 @@
       "script": "examples/renode-onboarding/stm32f072b_discovery-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f072b_discovery.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T05:19:01Z",
-      "finished_at_utc": "2026-11-06T05:19:10Z",
-      "elapsed_seconds": 10,
-      "elapsed_ms": 9087,
+      "started_at_utc": "2026-11-09T03:37:19Z",
+      "finished_at_utc": "2026-11-09T03:43:25Z",
+      "elapsed_seconds": 367,
+      "elapsed_ms": 366084,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 7.909,
-        "build_firmware": 0.803,
-        "run_smoke": 0.365
+        "build_cli": 351.397,
+        "build_firmware": 0.299,
+        "run_smoke": 14.374
       },
       "stages_ms": {
-        "build_cli": 7909,
-        "build_firmware": 803,
-        "run_smoke": 365
+        "build_cli": 351397,
+        "build_firmware": 299,
+        "run_smoke": 14374
       },
       "_artifact_path": "stm32f072b_discovery",
       "zero_answering_windows": [],
-      "claimed_peripherals": 4,
+      "claimed_peripherals": 27,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"

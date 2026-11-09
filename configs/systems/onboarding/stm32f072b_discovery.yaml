@@ -6,3 +6,38 @@
 
 name: stm32f072b_discovery
 chip: ../../chips/onboarding/stm32f072b_discovery.yaml
+# STM32F072B-DISCO board IO (UM1690 §6.4/§6.5). Renode's board .repl wires one
+# LED (PC6) and the button (PA0); the board has four user LEDs, all active
+# high: LD3 red PC6, LD4 orange PC8, LD5 green PC9, LD6 blue PC7. B1 USER
+# connects PA0 to VDD when pressed (active high, the WKUP1 pin).
+board_io:
+  - id: "ld3"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 6
+    signal: "output"
+    active_high: true
+  - id: "ld4"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 8
+    signal: "output"
+    active_high: true
+  - id: "ld5"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 9
+    signal: "output"
+    active_high: true
+  - id: "ld6"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "b1"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 0
+    signal: "input"
+    active_high: true
