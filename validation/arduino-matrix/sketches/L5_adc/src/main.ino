@@ -108,6 +108,13 @@ static bool samples_ok(int v0, int v1) {
   // the model's unseeded fixed source (3.0 V) would read 930, no conversion 0.
   return v0 == 512 && v1 == 512;
 
+#elif defined(ARDUINO_NUCLEO_G071RB) || defined(ARDUINO_NUCLEO_G0B1RE) || \
+    defined(ARDUINO_NUCLEO_C031C6)
+  // adc profile stm32g0: the matrix system holds A0 (PA0 = ADC1_IN0) at
+  // 1651 mV. 12-bit against 3.3 V is 2048; stm32duino returns 10 bits: 512.
+  // Exact; the unheld fixed source (3.0 V) reads 930, no conversion 0.
+  return v0 == 512 && v1 == 512;
+
 #elif defined(CH32V003)
   // adc profile ch32v003: the matrix system holds A0 (PA2 = ADC channel 0)
   // at 1000 mV. 10-bit against 3.3 V is 310, and WCH's core returns RDATAR

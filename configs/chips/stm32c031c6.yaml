@@ -182,17 +182,15 @@ peripherals:
       pad_map: "stm32c0"
       width: 16
     clock: { reg: "apbenr2", bit: 18 }
-  # ADC: REGISTER FILE ONLY on this part. The L4-shaped engine does not
-  # decode the C0's CFGR1/CHSELR layout; stock analogRead() returns without
-  # hanging but reads 0 on every pin. Declared so the HAL's ADC bring-up has
-  # a window to talk to; the Arduino matrix skips L5 rather than pass it.
+  # ADC: the G0/C0 block (CFGR1, CHSELR, CALFACT; RM0490 = RM0444 register
+  # for register). Converts the held input of the first CHSELR channel.
   - id: "adc1"
     type: "adc"
     base_address: 0x40012400
     size: "1KB"
     irq: 12
     config:
-      profile: "stm32l4"
+      profile: "stm32g0"
     clock: { reg: "apbenr2", bit: 20 }
   - id: "dma1"
     type: "dma"

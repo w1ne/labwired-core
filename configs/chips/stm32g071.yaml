@@ -327,7 +327,7 @@ peripherals:
     size: "1KB"
     irq: 12
     config:
-      profile: "stm32l4"
+      profile: "stm32g0"
     clock: { reg: "apbenr2", bit: 20 }
 
   - id: "dac1"

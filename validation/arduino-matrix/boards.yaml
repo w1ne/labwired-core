@@ -281,13 +281,11 @@ boards:
     pwm_watch: "gpioa:5"
     pwm_min_edges: 4
     family: stm32
-    # L5 is skipped, not passed: stock analogRead(A0) completes but reads
-    # "0 0" — the L4-shaped ADC model does not decode the C0's CFGR1/CHSELR
-    # register file, and the generic oracle would accept equal samples.
-    sketches_skip: [L5_adc, L6_pwm, L8_can]
+    # L5: the stm32g0 ADC profile converts CHSELR's channel; the system holds
+    # A0 = PA0 = ADC1_IN0 at 1651 mV and the sketch requires exactly 512.
+    sketches_skip: [L6_pwm, L8_can]
     sketches_skip_reason:
       L6_pwm: "Lane predates main #1734 (STM32 timer AF pad routing); the C0 pad table ships in the main PR — on the lane PA5 shows 0 edges"
-      L5_adc: "No C0 ADC (CHSELR) model: analogRead returns 0 on every pin; a pass would be vacuous"
       L8_can: "STM32C031C6 has no CAN peripheral"
 
   - id: stm32h563
