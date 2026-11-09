@@ -107,6 +107,35 @@
 //! `CALOFSMODE` and `CFG2.JLEFT` (the examples' `D >> 3` is the JLEFT = 0
 //! reset format). 16-bit differential results are `(A - B) * 32768 / VREF`
 //! in two's complement, the same +/-VREF span as the 13-bit format.
+//!
+//! # RV32M1 layout ([`Layout::SingleFifo`])
+//!
+//! The first LPADC revision, as on the RV32M1 (`ADC0` at `0x4004_A000`,
+//! `ADC0_IRQn` 21 on the RI5CY core).
+//!
+//! Sources:
+//! - rv32m1_sdk_riscv @92fb0650 `devices/RV32M1/RV32M1_ri5cy.h`
+//!   (`ADC_Type`: `FCTRL` @0x30, `SWTRIG` @0x34, `OFSTRIM` @0x40,
+//!   `TCTRL[4]` @0xC0, `CMD[15]` @0x100, `CV[4]` @0x200, one `RESFIFO`
+//!   @0x300; no `TSTAT`; `CMDL` = `ADCH`, `ABSEL`; `CMDH` without
+//!   `WAIT_TRIG`; `IE` = `FWMIE`, `FOFIE`; `CFG.CALOFS` bit 15) and
+//!   `RV32M1_ri5cy_features.h` (no `CMDL_DIFF`, no `CMDL_CSCALE`,
+//!   `HAS_CFG_CALOFS`, `HAS_OFSTRIM`).
+//! - rv32m1_ri5cy-pac @1f98f7ab `RV32M1_RI5CY.svd`: reset values (`VERID`
+//!   0x0100_0708 = 12-bit single-ended, no differential; `PARAM`
+//!   0x0F04_1004 = 4 triggers, 16-entry FIFO, 4 CV, 15 commands; `CFG`
+//!   0x0080_0000; `CMDLn` 0).
+//! - rv32m1_sdk_riscv `drivers/fsl_lpadc.c` `LPADC_DoAutoCalibration`:
+//!   with `CFG.CALOFS` set, one software-triggered conversion returns the
+//!   offset error in `D[14:3]`, which the driver writes to `OFSTRIM`.
+//! - rv32m1_sdk_riscv `boards/rv32m1_vega/driver_examples/lpadc/polling`:
+//!   channel 0, trigger 0, `RESFIFO.D >> 3`.
+//!
+//! Modelled: the RT500 command, chain, loop and FIFO behaviour with one
+//! FIFO, four triggers and no trigger-completion flags. Results are 12-bit
+//! single-ended against VREF with no input scaling; `ABSEL` picks the B-side
+//! pad. An ideal converter has no offset, so a conversion with `CFG.CALOFS`
+//! set stores `D` = 0. Stored only: `OFSTRIM`, `CMDH.CMPEN/STS/AVGS`.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::cell::RefCell;
@@ -162,6 +191,21 @@ const V2_CTRL_RESET: u32 = CTRL_CALOFSMODE;
 const V2_CMDL_RESET: u32 = 0x0080_0000;
 const GCR_RESET: u32 = 0x0001_0000;
 const V2_TRIGGERS: usize = 2;
+
+// RV32M1 frame (RV32M1_ri5cy.h ADC_Type, RV32M1_RI5CY.svd).
+const SF_FCTRL: u64 = 0x30;
+const SF_OFSTRIM: u64 = 0x40;
+const SF_TCTRL0: u64 = 0xC0;
+const SF_TRIGGERS: usize = 4;
+const SF_VERID_RESET: u32 = 0x0100_0708;
+const SF_PARAM_RESET: u32 = 0x0F04_1004;
+const SF_CMDL_MASK: u32 = CMDL_ADCH | CMDL_ABSEL;
+/// `CMPEN`, `LWI`, `STS`, `AVGS`, `LOOP`, `NEXT`: no `WAIT_TRIG`.
+const SF_CMDH_MASK: u32 = 0x0F0F_7783;
+/// `HTEN`, `TPRI`, `TDLY`, `TCMD`: no `FIFO_SEL_A/B`.
+const SF_TCTRL_MASK: u32 = 0x0F0F_0301;
+const SF_IE_MASK: u32 = IE_FWMIE0 | IE_FOFIE0;
+const CFG_CALOFS: u32 = 1 << 15;
 
 const CTRL_ADCEN: u32 = 1 << 0;
 const CTRL_RST: u32 = 1 << 1;
@@ -244,6 +288,9 @@ pub enum Layout {
     /// i.MX RT700: `CMDL.CTYPE/MODE/ALTB_ADCH/ALTBEN`, 2 triggers,
     /// `TCTRL.FIFO_SEL_B`, `CAL_REQ`/`CALOFS` calibration.
     CtypeMode,
+    /// RV32M1: one result FIFO, 4 triggers at `0xC0`, `FCTRL` at `0x30`,
+    /// `CMDL.ADCH/ABSEL` only, `CFG.CALOFS` offset calibration.
+    SingleFifo,
 }
 
 /// NXP LPADC with two result FIFOs and fifteen command buffers.
@@ -309,7 +356,11 @@ impl NxpLpadc {
             tstat: 0,
             tctrl: [0; TRIGGERS],
             fwmark: [0; FIFOS],
-            cmdl: [if v2 { V2_CMDL_RESET } else { CMDL_RESET }; COMMANDS],
+            cmdl: [match layout {
+                Layout::DiffCscale => CMDL_RESET,
+                Layout::CtypeMode => V2_CMDL_RESET,
+                Layout::SingleFifo => 0,
+            }; COMMANDS],
             cmdh: [0; COMMANDS],
             cv: [0; CV_COUNT],
             cal_rdy: false,
@@ -375,12 +426,28 @@ impl NxpLpadc {
         self.layout == Layout::CtypeMode
     }
 
+    fn single_fifo(&self) -> bool {
+        self.layout == Layout::SingleFifo
+    }
+
     fn triggers(&self) -> usize {
-        if self.v2() {
-            V2_TRIGGERS
-        } else {
-            TRIGGERS
+        match self.layout {
+            Layout::DiffCscale => TRIGGERS,
+            Layout::CtypeMode => V2_TRIGGERS,
+            Layout::SingleFifo => SF_TRIGGERS,
         }
+    }
+
+    /// One RV32M1 result: 12-bit single-ended in `D[14:3]`, no input
+    /// scaling. With `CFG.CALOFS` set the conversion measures the offset
+    /// error, which is 0 on an ideal converter.
+    fn convert_single_fifo(&self, cmdl: u32, adch: usize) -> u16 {
+        if self.cfg & CFG_CALOFS != 0 {
+            return 0;
+        }
+        let side = if cmdl & CMDL_ABSEL == 0 { 0 } else { B_SIDE };
+        let mv = self.input_mv(side + adch);
+        ((mv * 4096 / i64::from(self.vref_mv)).clamp(0, 4095) as u16) << 3
     }
 
     /// One RT700 result: single-ended `mv`, or `a - b` when `diff`.
@@ -436,6 +503,8 @@ impl NxpLpadc {
             let adch = ((cmdl & CMDL_ADCH) as usize + step) & CMDL_ADCH as usize;
             let results = if self.v2() {
                 self.convert_v2(cmdl, adch)
+            } else if self.single_fifo() {
+                vec![(self.convert_single_fifo(cmdl, adch), false)]
             } else {
                 // No FIFO_SEL_B on this IP: both sides use FIFO_SEL_A.
                 vec![(self.convert(cmdl, adch), false)]
@@ -524,7 +593,31 @@ impl NxpLpadc {
             || self.ie & self.tstat & (0xFFFF << TCOMP_SHIFT) != 0
     }
 
+    /// The RV32M1 registers that sit at other offsets, or are absent:
+    /// `Some` is the whole read, `None` falls through to the shared map.
+    fn read_single_fifo(&self, offset: u64) -> Option<u32> {
+        Some(match offset {
+            VERID => SF_VERID_RESET,
+            PARAM => SF_PARAM_RESET,
+            SF_FCTRL => self.fifo[0].borrow().len() as u32 | (self.fwmark[0] << FCTRL_FWMARK_SHIFT),
+            SF_OFSTRIM => self.ofstrim[0],
+            o if (SF_TCTRL0..SF_TCTRL0 + 4 * SF_TRIGGERS as u64).contains(&o) => {
+                self.tctrl[((o - SF_TCTRL0) / 4) as usize]
+            }
+            RESFIFO0 => self.fifo[0].borrow_mut().pop_front().unwrap_or(0),
+            // TSTAT, the RT500 TCTRL/FCTRL banks and RESFIFO1 are gaps.
+            TSTAT => 0,
+            o if (TCTRL0..CMD1).contains(&o) || o == RESFIFO0 + 4 => 0,
+            _ => return None,
+        })
+    }
+
     fn read_word(&self, offset: u64) -> u32 {
+        if self.single_fifo() {
+            if let Some(value) = self.read_single_fifo(offset) {
+                return value;
+            }
+        }
         let v2 = self.v2();
         match offset {
             VERID if v2 => V2_VERID_RESET,
@@ -578,8 +671,37 @@ impl NxpLpadc {
         }
     }
 
+    /// The RV32M1 writes that differ from the shared map; `true` when
+    /// handled.
+    fn write_single_fifo(&mut self, offset: u64, value: u32) -> bool {
+        match offset {
+            SF_FCTRL => self.fwmark[0] = (value & FCTRL_FWMARK_MASK) >> FCTRL_FWMARK_SHIFT,
+            SF_OFSTRIM => self.ofstrim[0] = value & 0x3F,
+            o if (SF_TCTRL0..SF_TCTRL0 + 4 * SF_TRIGGERS as u64).contains(&o) => {
+                self.tctrl[((o - SF_TCTRL0) / 4) as usize] = value & SF_TCTRL_MASK;
+            }
+            IE => self.ie = value & SF_IE_MASK,
+            DE => self.de = value & 1,
+            o if (CMD1..CMD1 + 8 * COMMANDS as u64).contains(&o) => {
+                let n = ((o - CMD1) / 8) as usize;
+                if o & 4 == 0 {
+                    self.cmdl[n] = value & SF_CMDL_MASK;
+                } else {
+                    self.cmdh[n] = value & SF_CMDH_MASK;
+                }
+            }
+            TSTAT => {}
+            o if (TCTRL0..CMD1).contains(&o) => {}
+            _ => return false,
+        }
+        true
+    }
+
     fn write_word(&mut self, offset: u64, value: u32) {
         if self.ctrl & CTRL_RST != 0 && offset != CTRL {
+            return;
+        }
+        if self.single_fifo() && self.write_single_fifo(offset, value) {
             return;
         }
         let v2 = self.v2();
@@ -1170,5 +1292,123 @@ mod tests {
         assert_eq!(adc.read_u32(GCC0).unwrap(), 0);
         assert_eq!(adc.read_u32(OFSTRIM16).unwrap(), 0);
         assert_eq!(adc.read_u32(CTRL).unwrap() & CTRL_CALOFS, CTRL_CALOFS);
+    }
+
+    // ── RV32M1 (Layout::SingleFifo) ────────────────────────────────────────
+
+    fn rv32m1_with(inputs: &[(usize, u16)]) -> NxpLpadc {
+        let mut adc = NxpLpadc::with_layout(Layout::SingleFifo, 1800);
+        for &(index, mv) in inputs {
+            assert!(adc.set_adc_channel_input(index as u8, mv));
+        }
+        adc
+    }
+
+    /// rv32m1_sdk fsl_lpadc LPADC_Init (default config) and
+    /// LPADC_DoAutoCalibration: CFG.CALOFS, CMD1 with 128 averages on
+    /// trigger 0, one result into OFSTRIM, CALOFS off, CMD1/TCTRL0 restored.
+    fn rv32m1_init_and_calibrate(adc: &mut NxpLpadc) {
+        adc.write_u32(CTRL, CTRL_RST).unwrap();
+        adc.write_u32(CTRL, 0).unwrap();
+        adc.write_u32(CTRL, CTRL_RSTFIFO0).unwrap();
+        adc.write_u32(CTRL, CTRL_DOZEN).unwrap();
+        let cfg = 0x80 << 16;
+        adc.write_u32(CFG, cfg).unwrap();
+        adc.write_u32(PAUSE, 0).unwrap();
+        adc.write_u32(SF_FCTRL, 0).unwrap();
+        adc.write_u32(CTRL, CTRL_DOZEN | CTRL_ADCEN).unwrap();
+        adc.write_u32(CFG, cfg | CFG_CALOFS).unwrap();
+        adc.write_u32(SF_TCTRL0, 1 << TCTRL_TCMD_SHIFT).unwrap();
+        command(adc, 1, 0, 7 << 12);
+        adc.write_u32(SWTRIG, 1).unwrap();
+        let entry = adc.read_u32(RESFIFO0).unwrap();
+        assert_ne!(entry & RESFIFO_VALID, 0, "calibration result");
+        adc.write_u32(SF_OFSTRIM, (entry & ENTRY_D) >> 3).unwrap();
+        adc.write_u32(CFG, cfg).unwrap();
+        command(adc, 1, 0, 0);
+        adc.write_u32(SF_TCTRL0, 0).unwrap();
+    }
+
+    #[test]
+    fn rv32m1_reset_values_match_the_svd() {
+        let adc = NxpLpadc::with_layout(Layout::SingleFifo, 1800);
+        assert_eq!(adc.read_u32(VERID).unwrap(), 0x0100_0708);
+        assert_eq!(adc.read_u32(PARAM).unwrap(), 0x0F04_1004);
+        assert_eq!(adc.read_u32(CFG).unwrap(), 0x0080_0000);
+        assert_eq!(adc.read_u32(CMD1).unwrap(), 0, "CMDL1");
+        assert_eq!(adc.read_u32(SF_FCTRL).unwrap(), 0);
+        assert_eq!(adc.read_u32(RESFIFO0).unwrap(), 0);
+    }
+
+    #[test]
+    fn rv32m1_polling_flow_converts_full_scale_without_cscale() {
+        // CH2A = 900 mV, CH2B = 300 mV, CH4A = 2500 mV, VREFH 1.8 V.
+        let mut adc = rv32m1_with(&[(2, 900), (B_SIDE + 2, 300), (4, 2500)]);
+        rv32m1_init_and_calibrate(&mut adc);
+        assert_eq!(adc.read_u32(SF_OFSTRIM).unwrap(), 0, "ideal offset");
+        // lpadc_polling: CMD1 on the channel, trigger 0 -> CMD1.
+        command(&mut adc, 1, 2, 0);
+        adc.write_u32(SF_TCTRL0, 1 << TCTRL_TCMD_SHIFT).unwrap();
+        adc.write_u32(SWTRIG, 1).unwrap();
+        assert_ne!(adc.read_u32(STAT).unwrap() & STAT_RDY0, 0);
+        assert_eq!(adc.read_u32(SF_FCTRL).unwrap() & 0x1F, 1);
+        let entry = adc.read_u32(RESFIFO0).unwrap();
+        // No CSCALE on this IP: the RT500 30/64 scaling must not apply.
+        assert_eq!((entry & ENTRY_D) >> 3, 900 * 4096 / 1800);
+        assert_eq!((entry >> RESFIFO_CMDSRC_SHIFT) & 0xF, 1);
+        // ABSEL picks the B side; over-range clamps; an unrouted pad is 0.
+        command(&mut adc, 1, CMDL_ABSEL | 2, 0);
+        adc.write_u32(SWTRIG, 1).unwrap();
+        assert_eq!(adc.read_u32(RESFIFO0).unwrap() & ENTRY_D, se12(300, 1800));
+        command(&mut adc, 1, 4, 0);
+        adc.write_u32(SWTRIG, 1).unwrap();
+        assert_eq!(adc.read_u32(RESFIFO0).unwrap() & ENTRY_D, 4095 << 3);
+        command(&mut adc, 1, 5, 0);
+        adc.write_u32(SWTRIG, 1).unwrap();
+        assert_eq!(adc.read_u32(RESFIFO0).unwrap() & ENTRY_D, 0);
+        // DIFF and CSCALE are not fields: the bits are dropped.
+        command(&mut adc, 1, CMDL_DIFF | CMDL_CSCALE | 2, 0);
+        assert_eq!(adc.read_u32(CMD1).unwrap(), 2);
+    }
+
+    #[test]
+    fn rv32m1_frame_has_four_triggers_one_fifo_and_no_tstat() {
+        let mut adc = rv32m1_with(&[(0, 100), (1, 200), (2, 300)]);
+        rv32m1_init_and_calibrate(&mut adc);
+        // CMD1: CH0 LOOP 2 with LWI -> CH0..CH2; trigger 3 runs it.
+        command(
+            &mut adc,
+            1,
+            0,
+            CMDH_LWI | (2 << CMDH_LOOP_SHIFT) | CMDH_WAIT_TRIG,
+        );
+        assert_eq!(
+            adc.read_u32(CMD1 + 4).unwrap() & CMDH_WAIT_TRIG,
+            0,
+            "no WAIT_TRIG"
+        );
+        adc.write_u32(SF_TCTRL0 + 12, TCTRL_FIFO_SEL_A | (1 << TCTRL_TCMD_SHIFT))
+            .unwrap();
+        assert_eq!(adc.read_u32(SF_TCTRL0 + 12).unwrap(), 1 << TCTRL_TCMD_SHIFT);
+        // The RT500 TCTRL bank at 0xA0 is a gap here.
+        adc.write_u32(TCTRL0, 1 << TCTRL_TCMD_SHIFT).unwrap();
+        assert_eq!(adc.read_u32(TCTRL0).unwrap(), 0);
+        adc.write_u32(SF_FCTRL, 1 << FCTRL_FWMARK_SHIFT).unwrap();
+        adc.write_u32(IE, 0xFFFF_FFFF).unwrap();
+        assert_eq!(adc.read_u32(IE).unwrap(), IE_FWMIE0 | IE_FOFIE0);
+        adc.write_u32(SWTRIG, 1 << 3).unwrap();
+        assert_eq!(adc.read_u32(SF_FCTRL).unwrap(), 3 | (1 << 16));
+        assert_eq!(adc.read_u32(TSTAT).unwrap(), 0, "no TSTAT");
+        assert!(adc.tick().irq, "FWMIE: 3 entries > FWMARK 1");
+        let d: Vec<u32> = (0..3)
+            .map(|_| {
+                let e = adc.read_u32(RESFIFO0).unwrap();
+                assert_eq!((e >> RESFIFO_TSRC_SHIFT) & 3, 3, "TSRC 3");
+                e & ENTRY_D
+            })
+            .collect();
+        assert_eq!(d, [se12(100, 1800), se12(200, 1800), se12(300, 1800)]);
+        assert!(!adc.tick().irq);
+        assert_eq!(adc.read_u32(RESFIFO0 + 4).unwrap(), 0, "no RESFIFO1");
     }
 }

@@ -2011,15 +2011,19 @@ pub fn try_build(
         // `vref_mv`: the VREFH the board ties the reference to (1.8 V on
         // the MIMXRT595-EVK); every CFG.REFSEL option converts against it.
         // `layout: ctype_mode` selects the i.MX RT700 revision (CMDL.CTYPE/
-        // MODE, two triggers, CAL_REQ/CALOFS); the default is the RT500's.
+        // MODE, two triggers, CAL_REQ/CALOFS); `layout: single_fifo` the
+        // RV32M1 one (one FIFO, four triggers at 0xC0, CFG.CALOFS); the
+        // default is the RT500's.
         "nxp_lpadc" => {
             use crate::peripherals::nxp_lpadc::{Layout, NxpLpadc};
             let layout = match p_cfg.config.get("layout").and_then(|v| v.as_str()) {
                 None | Some("diff_cscale") => Layout::DiffCscale,
                 Some("ctype_mode") => Layout::CtypeMode,
+                Some("single_fifo") => Layout::SingleFifo,
                 Some(other) => {
                     return Err(anyhow::anyhow!(
-                        "nxp_lpadc {}: unknown layout {other:?} (diff_cscale, ctype_mode)",
+                        "nxp_lpadc {}: unknown layout {other:?} \
+                         (diff_cscale, ctype_mode, single_fifo)",
                         p_cfg.id
                     ))
                 }
