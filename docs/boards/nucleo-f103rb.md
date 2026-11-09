@@ -12,12 +12,15 @@ ST-LINK virtual COM port.
 | Exact chip geometry | Declared: 128 KB flash, 20 KB SRAM, LQFP64 |
 | Board wiring | Declared from ST UM1724 |
 | GPIO + USART2 smoke | Simulator-verified: UART `OK`, 10 PA5 edges, 200,000 steps |
+| BME280 sensor path | Simulator smoke reads `CHIP_ID = 0x60` over I2C1 on PB8/PB9 and pulses LD2 |
 | Hardware comparison | Not recorded |
-| External devices | None in the base board system |
+| External devices | BME280 on the separate narrow I2C1 profile; base board system remains bare |
 
 See the [F103RB example](../../examples/nucleo-f103rb/README.md),
 [validation runbook](../../examples/nucleo-f103rb/VALIDATION.md), and
 [known limitations](../../examples/nucleo-f103rb/KNOWN_LIMITATIONS.md).
+The additional [BME280 example](../../examples/nucleo-f103rb-bme280/README.md)
+includes wiring, a copy-paste Arduino sketch, and committed smoke evidence.
 
 ## Chip and board files
 
@@ -25,6 +28,9 @@ See the [F103RB example](../../examples/nucleo-f103rb/README.md),
 - Carrier system: [`nucleo-f103rb.yaml`](../../configs/systems/nucleo-f103rb.yaml)
 - Smoke firmware: `crates/firmware-nucleo-f103rb-smoke/`
 - Runnable example: `examples/nucleo-f103rb/`
+- BME280 system: [`nucleo-f103rb-bme280.yaml`](../../configs/systems/nucleo-f103rb-bme280.yaml)
+- BME280 narrow chip profile: [`stm32f103rb-nucleo-bme280-smoke.yaml`](../../configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml)
+- BME280 firmware and evidence: `examples/nucleo-f103rb-bme280/`
 
 The model shares the family reference's medium-density F103 peripheral map.
 Its exact geometry identifies the STM32F103RB, while behavior beyond the
@@ -37,6 +43,7 @@ documented smoke remains unvalidated for this specific part.
 | LD2 user LED | PA5 | Active high |
 | B1 user button | PC13 | Active low |
 | USART2 TX/RX | PA2 / PA3 | Default ST-LINK/V2-1 VCP route |
+| I2C1 SCL/SDA | PB8 / PB9 | Arduino D15/D14; I2C1 remap enabled |
 | SWDIO / SWCLK | PA13 / PA14 | ST-LINK debug |
 | Morpho GPIO | PD0 / PD1 | Shared with OSC_IN / OSC_OUT |
 | Morpho GPIO | PD2 | General-purpose I/O |
@@ -53,7 +60,10 @@ ID is `stm32f103rb`; the carrier board ID is `nucleo-f103rb`.
 
 ## Support boundary
 
-The runnable scope is GPIOA/PA5 and USART2/PA2-PA3. B1 is declared as board I/O
-but is not exercised. External bus devices, clock-tree behavior, timers, DMA,
-ADC, SPI, I2C, USB, CAN, and other unexercised peripherals are outside the
-current claim. See the [validation boundary](../../examples/nucleo-f103rb/KNOWN_LIMITATIONS.md).
+The base board smoke exercises GPIOA/PA5 and USART2/PA2-PA3. The separate
+BME280 profile adds AFIO remapping and exercises one I2C1 register read on
+PB8/PB9. B1 is not exercised. The sensor smoke does not validate full I2C
+coverage, conversions, or other STM32F103 peripherals. USB, CAN, timers, DMA,
+ADC, SPI, and the wider clock tree remain outside these smoke claims. See the
+[base validation boundary](../../examples/nucleo-f103rb/KNOWN_LIMITATIONS.md)
+and [BME280 model boundary](../../examples/nucleo-f103rb-bme280/README.md#model-boundary).
