@@ -45,6 +45,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rcc",
     "systick",
     "arm_sp804_timer",
+    "arm_pl190_vic",
     "timer",
     "i2c",
     "spi",
@@ -771,6 +772,7 @@ pub fn try_build(
             }
         }
         "arm_sp804_timer" => Box::new(crate::peripherals::arm_sp804::ArmSp804Timer::new()),
+        "arm_pl190_vic" => Box::new(crate::peripherals::armv7::pl190_vic::Pl190Vic::new()),
         // Silicon Labs Series-2 GPIO external interrupts — the `attachInterrupt`
         // block, in the GPIO head at `GPIO_S_BASE + 0x400`. A separate window
         // from the four port structs, which keep their own model.

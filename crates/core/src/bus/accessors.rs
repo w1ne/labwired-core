@@ -598,7 +598,7 @@ impl crate::Bus for SystemBus {
         )
     }
     fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
-        self.irq_fabric.armv7.as_ref().map(|f| {
+        if let Some(f) = self.irq_fabric.armv7.as_ref() {
             // The existing RX queue capability may be filled by host input
             // between instructions. Reconcile its live level before sampling
             // GIC pins; UART entries have no legacy NVIC IRQ number.
@@ -615,8 +615,12 @@ impl crate::Bus for SystemBus {
                     f.gic.lock().unwrap().set_level(intid as usize, level);
                 }
             }
-            f.gic.lock().unwrap().levels()
-        })
+            return Some(f.gic.lock().unwrap().levels());
+        }
+        self.irq_fabric
+            .lpc2294_vic
+            .and_then(|index| self.peripherals.get(index))
+            .and_then(|peripheral| peripheral.dev.arm_irq_fiq_levels())
     }
     fn arm_cp15_read(&self, key: u32, wide: bool) -> SimResult<u64> {
         self.irq_fabric

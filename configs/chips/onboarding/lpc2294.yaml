@@ -14,14 +14,16 @@
 #
 # Register addresses: RTEMS bsps/arm/rtl22xx/include/lpc22xx.h.
 # Claimed:
+# - vic: ARM PL190 register bank. Software IRQ/FIQ and vector programming are
+#   modelled; peripheral IRQ input wiring is not claimed by this profile.
 # - uart0, uart1: 16550 register set at a 4-byte stride (RBR/THR/DLL 0x00,
 #   IER/DLM 0x04, IIR/FCR 0x08, LCR 0x0C, LSR 0x14; Renode NS16550 with
-#   wideRegisters). Polled only: no VIC model, so no UART interrupts.
+#   wideRegisters). Polled only; UART interrupt input wiring is not modelled.
 # - port0..port3: legacy GPIO ports (IOPIN/IOSET/IODIR/IOCLR).
 # - pinsel, scb: register storage (see configs/peripherals/lpc2294/).
-# Not declared (no model in this engine): VIC (PL190), timers 0/1, CAN1-4,
-# I2C, SPI, ADC, RTC, watchdog, PWM, external memory controller (BCFG) and
-# the external memory windows.
+# Not declared (no model in this engine): timers 0/1, CAN1-4, I2C, SPI, ADC,
+# RTC, watchdog, PWM, external memory controller (BCFG) and external memory
+# windows.
 name: lpc2294
 arch: arm
 core: arm7tdmi-s
@@ -32,6 +34,10 @@ ram:
   base: 0x40000000
   size: 16KB
 peripherals:
+- id: vic
+  type: arm_pl190_vic
+  base_address: 0xFFFFF000
+  size: 4KiB
 - id: uart0
   type: uart
   base_address: 0xE000C000

@@ -12,10 +12,10 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1459`
+- pass_claimed_peripherals_total: `1460`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1371`
-- median_elapsed_seconds: `1.371`
+- median_elapsed_ms: `1395`
+- median_elapsed_seconds: `1.395`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -118,7 +118,7 @@
 | `litex_vexriscv_verilated_liteuart` | `pass` | `True` | `yes` | `yes` | `2364` | `2.364` | `True` | `observable` | `2` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `litex_vexriscv_zephyr` | `pass` | `True` | `yes` | `yes` | `1993` | `1.993` | `True` | `observable` | `2` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `litex_zephyr_vexriscv_i2s` | `pass` | `True` | `yes` | `yes` | `1043` | `1.043` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `lpc2294` | `pass` | `True` | `yes` | `yes` | `979` | `0.979` | `True` | `observable` | `8` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `lpc2294` | `pass` | `True` | `yes` | `yes` | `173316` | `173.316` | `True` | `observable` | `9` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `mars_zx3` | `pass` | `True` | `yes` | `yes` | `1589` | `1.589` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `max32652` | `pass` | `True` | `yes` | `yes` | `1001` | `1.001` | `True` | `observable` | `7` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `max32652-evkit` | `pass` | `True` | `yes` | `yes` | `1157` | `1.157` | `True` | `observable` | `7` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |

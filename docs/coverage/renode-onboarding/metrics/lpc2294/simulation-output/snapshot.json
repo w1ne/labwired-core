@@ -3,11 +3,11 @@
   "cpu": {
     "type": "arm7_tdmi",
     "registers": [
-      849,
+      1077,
       0,
       96,
       128,
-      3758260256,
+      4294963200,
       4,
       3758161920,
       3758145536,
@@ -17,11 +17,11 @@
       0,
       0,
       1073758208,
-      632,
-      632
+      760,
+      760
     ],
-    "pc": 632,
-    "cpsr": 1610613203
+    "pc": 760,
+    "cpsr": 1610613075
   },
   "steps_executed": 100000,
   "cycles": 100000,
@@ -49,7 +49,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "13972dbe283d1c79b118233ca7af99ddb7fea49f73a413d88ffcc901b8cbb0d5",
+  "firmware_hash": "32396a5d29770c2fe88ac01bb663063a4852e0c1b5293127aed06805ee07ac6f",
   "config": {
     "firmware": "examples/renode-onboarding/../../tests/fixtures/lpc2294-arm7-uart-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/lpc2294.yaml",

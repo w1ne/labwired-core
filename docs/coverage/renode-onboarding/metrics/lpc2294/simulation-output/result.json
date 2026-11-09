@@ -30,7 +30,7 @@
   "assertions": [
     {
       "assertion": {
-        "uart_contains": "LPC2294 checks PPPPPPPP DONE"
+        "uart_contains": "LPC2294 checks PPPPPPPPP DONE"
       },
       "passed": true
     },
@@ -50,11 +50,11 @@
   "cpu_state": {
     "type": "arm7_tdmi",
     "registers": [
-      849,
+      1077,
       0,
       96,
       128,
-      3758260256,
+      4294963200,
       4,
       3758161920,
       3758145536,
@@ -64,13 +64,13 @@
       0,
       0,
       1073758208,
-      632,
-      632
+      760,
+      760
     ],
-    "pc": 632,
-    "cpsr": 1610613203
+    "pc": 760,
+    "cpsr": 1610613075
   },
-  "firmware_hash": "13972dbe283d1c79b118233ca7af99ddb7fea49f73a413d88ffcc901b8cbb0d5",
+  "firmware_hash": "32396a5d29770c2fe88ac01bb663063a4852e0c1b5293127aed06805ee07ac6f",
   "config": {
     "firmware": "examples/renode-onboarding/../../tests/fixtures/lpc2294-arm7-uart-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/lpc2294.yaml",
@@ -78,6 +78,13 @@
   },
   "inspect": {
     "peripherals": [
+      {
+        "name": "vic",
+        "kind": "native",
+        "base": 4294963200,
+        "registers": [],
+        "artifacts": []
+      },
       {
         "name": "uart0",
         "kind": "native",
@@ -371,7 +378,7 @@
   "uart_lines": {
     "lines": [
       {
-        "text": "LPC2294 checks PPPPPPPP DONE",
+        "text": "LPC2294 checks PPPPPPPPP DONE",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -387,14 +394,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 849,
+    "text_bytes": 1077,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 849,
+    "flash_used_bytes": 1077,
     "ram_static_bytes": 0,
     "flash_total_bytes": 262144,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 0.32,
+    "flash_used_pct": 0.41,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -410,13 +417,13 @@
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 245,
-    "memory_writes": 0,
-    "peripheral_accesses": 148,
+    "memory_reads": 299,
+    "memory_writes": 2,
+    "peripheral_accesses": 159,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 632,
+        "pc": 760,
         "count": 390
       }
     ]

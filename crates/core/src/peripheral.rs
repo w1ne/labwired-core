@@ -1691,6 +1691,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// ARM application-core IRQ/FIQ output pair driven by an interrupt
+    /// controller peripheral. Most peripherals do not own CPU interrupt pins;
+    /// ARM7's LPC2294 PL190 does and is sampled by `Bus::arm_irq_fiq_levels`.
+    fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
+        None
+    }
+
     /// Multi-line twin of [`Self::irq_line_level`], for a LEVEL source that
     /// drives SEVERAL NVIC lines from one model (the STM32 EXTI: EXTI0..4,
     /// EXTI9_5, EXTI15_10 on F1/F4/L4; EXTI0_1/2_3/4_15 on G0; EXTI0..15 on

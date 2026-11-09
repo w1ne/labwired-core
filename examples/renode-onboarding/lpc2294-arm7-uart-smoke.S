@@ -13,6 +13,7 @@
 @   6 port0..port3 keep their latches apart (one bit per port)
 @   7 IOCLR reads 0 and an input pin (IODIR 0) does not show the latch
 @   8 UART1 DLAB divisor read back and LSR THRE
+@   9 PL190 software IRQ reaches the ARM7 IRQ vector and clears on EOI
 @ The run then prints " DONE" on UART0, a line on UART1, and parks.
 .syntax unified
 .cpu arm7tdmi
@@ -39,6 +40,27 @@
 .equ PLLSTAT, 0x088
 .equ PLLFEED, 0x08C
 .equ VPBDIV,  0x100
+.equ VIC,     0xFFFFF000
+.equ VIC_IRQSTATUS, 0x000
+.equ VIC_INTENABLE, 0x010
+.equ VIC_SOFTINT, 0x018
+.equ VIC_SOFTINTCLEAR, 0x01C
+.equ VIC_VECTADDR, 0x030
+.equ VIC_VECTADDR0, 0x100
+.equ VIC_VECTCNTL0, 0x200
+.equ IRQ_SOURCE, 5
+.equ IRQ_RESULT, 0x40003FF0
+
+@ Low vectors: the IRQ entry asks the VIC for its selected handler address.
+.section .vectors, "ax", %progbits
+    b _start
+    b .
+    b .
+    b .
+    b .
+    b .
+    b irq_vector
+    b .
 
 .section .text.start, "ax", %progbits
 .global _start
@@ -219,6 +241,36 @@ _start:
     mov r6, r7
     bl verdict
 
+    @ 9. PL190 software IRQ: program slot 0 for source 5, enable it, verify
+    @    IRQSTATUS in the exception vector, dispatch through VICVectAddr,
+    @    clear the source, and write the vectored EOI.
+    ldr r4, =VIC
+    ldr r0, =IRQ_RESULT
+    mov r1, #0
+    str r1, [r0]
+    ldr r1, =irq_handler
+    str r1, [r4, #VIC_VECTADDR0]
+    mov r1, #(0x20 | IRQ_SOURCE)
+    str r1, [r4, #VIC_VECTCNTL0]
+    mov r1, #1
+    mov r1, r1, lsl #IRQ_SOURCE
+    str r1, [r4, #VIC_INTENABLE]
+    str r1, [r4, #VIC_SOFTINT]
+    @ IRQs are masked at reset. Unmask only after the vector and handler are
+    @ fully installed; ARM7 takes the pending request at the next boundary.
+    mrs r2, cpsr
+    bic r2, r2, #0x80
+    msr cpsr_c, r2
+    ldr r0, =IRQ_RESULT
+    ldr r1, [r0]
+    cmp r1, #2
+    moveq r0, #1
+    movne r0, #0
+    ldr r1, [r4, #VIC_IRQSTATUS]
+    cmp r1, #0
+    movne r0, #0
+    bl verdict
+
     ldr r0, =done
     bl puts0
     @ The UART1 line goes out last: the capture merges both UARTs.
@@ -255,6 +307,34 @@ puts0:
     beq 1b
     str r1, [r6, #RBR]
     b puts0
+
+@ ARM7 IRQ vector: check the active source, then let the VIC return the
+@ programmed handler address directly into PC.
+irq_vector:
+    ldr r0, =VIC + VIC_IRQSTATUS
+    ldr r1, [r0]
+    mov r2, #1
+    mov r2, r2, lsl #IRQ_SOURCE
+    tst r1, r2
+    beq irq_unexpected
+    ldr r0, =VIC + VIC_VECTADDR
+    ldr pc, [r0]
+
+irq_unexpected:
+    b .
+
+irq_handler:
+    ldr r0, =VIC + VIC_SOFTINTCLEAR
+    mov r1, #1
+    mov r1, r1, lsl #IRQ_SOURCE
+    str r1, [r0]
+    ldr r0, =IRQ_RESULT
+    mov r1, #2
+    str r1, [r0]
+    ldr r0, =VIC + VIC_VECTADDR
+    mov r1, #0
+    str r1, [r0]
+    subs pc, lr, #4
 
 @ r0 = 1 → 'P', else 'F', on the UART at r6.
 verdict:
