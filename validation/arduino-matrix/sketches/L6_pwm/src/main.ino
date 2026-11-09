@@ -18,6 +18,21 @@
 #  elif defined(STM32U545xx)
 // NUCLEO-U545RE-Q LD2 is PA5 = DAC1_OUT2 as well; use TIM2_CH1 on PA0.
 #    define LW_PWM_PIN PA0
+#  elif defined(STM32L073xx) || defined(STM32L476xx)
+// NUCLEO-L073RZ / NUCLEO-L476RG LD2 is PA5 = DAC1_OUT2 and the twin models
+// the DAC, so analogWrite(LED_BUILTIN) would pass on the DAC. Use TIM2_CH1
+// on PA0 (AF2 on the L0, AF1 on the L4).
+#    define LW_PWM_PIN PA0
+#  elif defined(STM32WB55xx)
+// P-NUCLEO-WB55 LD2 is PB5, which has no timer channel in stm32duino's
+// PinMap_TIM, so analogWrite would fall back to digitalWrite. Use TIM2_CH1
+// on PA0.
+#    define LW_PWM_PIN PA0
+#  elif defined(STM32H563xx)
+// NUCLEO-H563ZI LD1 is PB0, whose PinMap_TIM entry is TIM1_CH2N, a
+// complementary output the twin's timer does not generate. Use TIM2_CH1 on
+// PA0.
+#    define LW_PWM_PIN PA0
 #  elif defined(ARDUINO_BLACKPILL_F411CE)
 // WeAct Black Pill LED is PC13, which has no timer channel on F411, so
 // analogWrite would fall back to digitalWrite. Use TIM2_CH1 on PA0.
