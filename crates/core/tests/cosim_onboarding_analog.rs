@@ -93,6 +93,8 @@ const CONVERTED: &[&str] = &[
     "nucleo_h753zi",
     "nucleo_wba52cg",
     "nxp-k6xf",
+    "nxp-s32k388",
+    "nxp-s32k388evb",
     "ramn",
     "renesas-ck_ra6m5",
     "renesas-da14592",
@@ -319,6 +321,14 @@ enum Family {
     /// `read_adc_chx` reads `R[0]`, which clears it. 12 bits against VREFH
     /// 5 V (the cookbook's `5000 * R / 0xFFF`).
     S32k1Adc,
+    /// NXP S32K3 SAR ADC, the RTD `Adc_Sar_Ip` flow: `Adc_Sar_Ip_Powerdown`
+    /// / `Powerup` poll `MSR.ADCSTATUS` (1 / 0), `SetResolution` 12 bits
+    /// (`CALBISTREG.RESN` 01), `DoCalibration` (`TEST_EN`, poll `C_T_BUSY`,
+    /// check `TEST_FAIL`); each conversion is a one-shot normal chain
+    /// (`NCMR0` bit, `MCR.NSTART`), polled on `ISR.ECH`, `CDR` read with
+    /// `VALID`, `CEOCFR0`/`ISR` write-1-cleared. P5..P7 exist on all three
+    /// instances. 12 bits against VREFH 3.3 V.
+    S32k3AdcSar,
 }
 
 /// NXP LPADC offsets (MIMXRT595S_cm33.h `ADC_Type`) and bits.
@@ -373,6 +383,26 @@ const S32K1_ADIV: u32 = 3 << 5;
 const S32K1_MODE_12: u32 = 1 << 2;
 const S32K1_ADTRG: u32 = 1 << 6;
 const S32K1_CAL: u32 = 1 << 7;
+
+/// S32K3 SAR ADC offsets (S32K388_ADC.h `ADC_Type`) and bits.
+const S32K3_MCR: u64 = 0x00;
+const S32K3_MSR: u64 = 0x04;
+const S32K3_ISR: u64 = 0x10;
+const S32K3_CEOCFR0: u64 = 0x14;
+const S32K3_NCMR0: u64 = 0xA4;
+const S32K3_CDR0: u64 = 0x100;
+const S32K3_CALBISTREG: u64 = 0x3A0;
+const S32K3_PWDN: u32 = 1 << 0;
+const S32K3_NSTART: u32 = 1 << 24;
+const S32K3_ADCSTATUS: u32 = 0x7;
+const S32K3_CALIBRTD: u32 = 1 << 31;
+const S32K3_ECH: u32 = 1 << 0;
+const S32K3_EOC: u32 = 1 << 1;
+const S32K3_VALID: u32 = 1 << 19;
+const S32K3_TEST_EN: u32 = 1 << 0;
+const S32K3_TEST_FAIL: u32 = 1 << 3;
+const S32K3_C_T_BUSY: u32 = 1 << 15;
+const S32K3_RESN_12: u32 = 1 << 29;
 
 /// MSP430 ADC12 register offsets from the descriptor base, as
 /// `(CTL0, CTL1, IFG, MCTL0, MEM0)`: F1/F2 from `ADC12MCTL0` (0x0080), so
@@ -490,6 +520,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::KinetisAdc16
         } else if kind == "s32k1_adc" {
             Family::S32k1Adc
+        } else if kind == "s32k3_adc_sar" {
+            Family::S32k3AdcSar
         } else if kind == "nxp_lpadc" {
             Family::NxpLpadc {
                 ctype_mode: p.config.get("layout").and_then(|v| v.as_str()) == Some("ctype_mode"),
@@ -583,6 +615,9 @@ impl Converter {
             // 12-bit, 1 LSB = VREFH (5 V) / 4096, truncated, clamped: the
             // 3.3 V dividers stay below full scale.
             Family::S32k1Adc => (mv * 4096 / 5000).min(4095),
+            // 12 bits (RESN 01), 1 LSB = VREFH (3.3 V) / 4096, truncated,
+            // clamped; unpacked as `Adc_Sar_GetMaskedResult` does.
+            Family::S32k3AdcSar => (mv * 4096 / 3300).min(4095),
         }
     }
 
@@ -662,6 +697,58 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::S32k3AdcSar => {
+                // Adc_Sar_Ip_Powerdown: PWDN, ADCSTATUS = power-down. A
+                // normal chain started now converts nothing.
+                bus.write_u32(self.base + S32K3_MCR, S32K3_PWDN)
+                    .expect("MCR.PWDN");
+                assert_eq!(
+                    bus.read_u32(self.base + S32K3_MSR).unwrap() & S32K3_ADCSTATUS,
+                    1,
+                    "{}: powered down",
+                    self.id
+                );
+                bus.write_u32(self.base + S32K3_NCMR0, 1 << NTC_CHANNEL)
+                    .expect("NCMR0");
+                bus.write_u32(self.base + S32K3_MCR, S32K3_PWDN | S32K3_NSTART)
+                    .expect("NSTART while powered down");
+                assert_eq!(
+                    bus.read_u32(self.base + S32K3_ISR).unwrap(),
+                    0,
+                    "{}: no chain runs while powered down",
+                    self.id
+                );
+                // Adc_Sar_Ip_Powerup: ADCSTATUS idle.
+                bus.write_u32(self.base + S32K3_MCR, 0)
+                    .expect("MCR power up");
+                assert_eq!(
+                    bus.read_u32(self.base + S32K3_MSR).unwrap() & S32K3_ADCSTATUS,
+                    0,
+                    "{}: idle after power-up",
+                    self.id
+                );
+                // Adc_Sar_Ip_SetResolution(12) and Adc_Sar_Ip_DoCalibration.
+                bus.write_u32(
+                    self.base + S32K3_CALBISTREG,
+                    S32K3_RESN_12 | S32K3_TEST_FAIL,
+                )
+                .expect("RESN, clear TEST_FAIL");
+                bus.write_u32(self.base + S32K3_CALBISTREG, S32K3_RESN_12 | S32K3_TEST_EN)
+                    .expect("TEST_EN");
+                let cal = bus.read_u32(self.base + S32K3_CALBISTREG).unwrap();
+                assert_eq!(
+                    cal & (S32K3_C_T_BUSY | S32K3_TEST_FAIL),
+                    0,
+                    "{}: calibration done and passed",
+                    self.id
+                );
+                assert_ne!(
+                    bus.read_u32(self.base + S32K3_MSR).unwrap() & S32K3_CALIBRTD,
+                    0,
+                    "{}: MSR.CALIBRTD",
+                    self.id
+                );
+            }
             Family::SamAfec => {
                 // adc_sam_init: SWRST, MR, COCR = VREFP/2 behind each CSELR.
                 bus.write_u32(self.base, 1).expect("CR.SWRST");
@@ -2330,6 +2417,40 @@ impl Converter {
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {
         match self.family {
+            Family::S32k3AdcSar => {
+                // Adc_Sar_Ip_StartConversion (one-shot normal chain), poll
+                // ISR.ECH, Adc_Sar_Ip_GetConvData.
+                bus.write_u32(self.base + S32K3_NCMR0, 1 << channel)
+                    .expect("NCMR0");
+                bus.write_u32(self.base + S32K3_MCR, S32K3_NSTART)
+                    .expect("MCR.NSTART");
+                assert_ne!(
+                    bus.read_u32(self.base + S32K3_ISR).unwrap() & S32K3_ECH,
+                    0,
+                    "{}: P{channel} ends the chain",
+                    self.id
+                );
+                assert_eq!(
+                    bus.read_u32(self.base + S32K3_MCR).unwrap() & S32K3_NSTART,
+                    0,
+                    "{}: one-shot NSTART clears",
+                    self.id
+                );
+                let at = self.base + S32K3_CDR0 + 4 * u64::from(channel);
+                let cdr = bus.read_u32(at).expect("CDR");
+                assert_ne!(cdr & S32K3_VALID, 0, "{}: P{channel} VALID", self.id);
+                assert_eq!(
+                    bus.read_u32(at).unwrap() & S32K3_VALID,
+                    0,
+                    "{}: the CDR read clears VALID",
+                    self.id
+                );
+                bus.write_u32(self.base + S32K3_CEOCFR0, 1 << channel)
+                    .expect("CEOCFR0 w1c");
+                bus.write_u32(self.base + S32K3_ISR, S32K3_ECH | S32K3_EOC)
+                    .expect("ISR w1c");
+                (cdr & 0x7FF8) >> 3
+            }
             Family::NxpLpadc { .. } => {
                 // fsl_lpadc polling example: one command, trigger 0, one
                 // RESFIFO0 read, D >> 3 (standard resolution on both IPs).
@@ -3066,6 +3187,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::Msp430Adc12 { .. }
                 | Family::KinetisAdc16
                 | Family::S32k1Adc
+                | Family::S32k3AdcSar
                 | Family::NxpLpadc { .. }
                 | Family::RaAdc { .. }
         ) {
@@ -3153,7 +3275,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 139,
+        instances, 145,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -3161,7 +3283,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 100,
+        without_adc, 98,
         "onboarding profiles that declare no modelled ADC"
     );
 }

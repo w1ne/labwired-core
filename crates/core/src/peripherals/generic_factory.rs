@@ -450,6 +450,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "kinetis_adc16",
     // NXP S32K1 12-bit ADC, 16 SC1n/Rn slots (S32K118_ADC.h, S32K144.svd).
     "s32k1_adc",
+    // NXP S32K3 SAR ADC (S32K388_ADC.h, RTD Adc_Sar_Ip.c).
+    "s32k3_adc_sar",
     // NXP LPADC command/trigger SAR ADC (MIMXRT595S_cm33.h, fsl_lpadc.c).
     "nxp_lpadc",
     // MSP430 ADC12 (F1/F2) and ADC12_A (F5) (mspsim ADC12.java, TI headers).
@@ -1961,6 +1963,15 @@ pub fn try_build(
         )),
         // `vref_mv`: VREFH (REFSEL 00); `valt_mv`: VALTH (REFSEL 01). Both
         // default to the 5 V S32K118EVB supply (NXP s32k118_cookbook ADC.c).
+        // `vref_mv`: VREFH, which every channel converts against. Defaults
+        // to 3.3 V; no S32K388EVB VREFH source is vendored.
+        "s32k3_adc_sar" => Box::new(crate::peripherals::s32k3_adc_sar::S32k3AdcSar::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(3300, |v| v as u32),
+        )),
         "s32k1_adc" => Box::new(crate::peripherals::s32k1_adc::S32k1Adc::new(
             p_cfg
                 .config

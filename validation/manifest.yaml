@@ -10286,8 +10286,8 @@ boards:
     # 0x20400000). First S32K3 part: the new SIUL2 model (s32k3_siul2) and
     # LPUART0-15 on the i.MX RT LPUART layout (imxrt_lpuart). MC_ME, MC_CGM,
     # SWT_0, STM_0 and the other clock/system blocks are declared stubs;
-    # FlexCAN, LPSPI, LPI2C, eMIOS, eDMA, GMAC, ADC and the other cores are
-    # not mapped. SIM-DERIVED — no S32K388 bench part. See
+    # FlexCAN, LPSPI, LPI2C, eMIOS, eDMA, GMAC, BCTU and the other cores are
+    # not mapped. 2026-11-09: ADC_0..2 run on s32k3_adc_sar. SIM-DERIVED — no S32K388 bench part. See
     # docs/boards/s32k388-evb.md and examples/s32k388-evb/VALIDATION.md.
     doc: docs/boards/s32k388-evb.md
     chip: configs/chips/s32k388.yaml
@@ -10298,6 +10298,7 @@ boards:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/s32k3_siul2.rs
+      - crates/core/src/peripherals/s32k3_adc_sar.rs
       - crates/core/src/peripherals/imxrt/lpuart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
