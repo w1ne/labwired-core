@@ -104,6 +104,7 @@ const CONVERTED: &[&str] = &[
     "sam4s16c",
     "sam4s8b",
     "sam4s_xplained",
+    "sam_e70",
     "sltb001a",
     "sltb004a",
     "slwstk6220a",
@@ -215,6 +216,10 @@ enum Family {
     /// SAM4S 12-bit ADC: `CHER` channel set, `CR.START`, `CDRx`/`LCDR`
     /// (SAM4S datasheet DS11100 §42).
     Sam4s,
+    /// SAM E70 AFEC: `CHER` channel set, `CR.START`, then `CSELR` picks the
+    /// channel whose result the shared `CDR` returns (hal_atmel afec.h,
+    /// Zephyr adc_sam_afec.c).
+    SamAfec,
     /// Ambiq Apollo4 ADC: SLOTnCFG slots, software trigger `SWT` = 0x37,
     /// slot-tagged results in the FIFO with six fractional bits, against the
     /// 1.19 V internal reference, so the 3.3 V netlists saturate above it.
@@ -381,7 +386,9 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
     let mut found = Vec::new();
     for p in &chip.peripherals {
         let kind = p.r#type.to_ascii_lowercase();
-        if kind == "stub" || !p.id.to_ascii_lowercase().contains("adc") {
+        // SAM E70 names its converters AFEC0/AFEC1, so the type counts too.
+        let named_adc = p.id.to_ascii_lowercase().contains("adc") || kind == "sam_afec";
+        if kind == "stub" || !named_adc {
             continue;
         }
         let family = if kind == "imxrt_adc" {
@@ -390,6 +397,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::Saadc { ram: chip.ram.base }
         } else if kind == "sam4s_adc" {
             Family::Sam4s
+        } else if kind == "sam_afec" {
+            Family::SamAfec
         } else if kind == "apollo4_adc" {
             Family::Apollo4
         } else if kind == "cc2538_soc_adc" {
@@ -460,7 +469,8 @@ impl Converter {
             | Family::Stm32L4
             | Family::Stm32V2
             | Family::Stm32Adc4
-            | Family::Sam4s => (mv * 4095 / 3300).min(4095),
+            | Family::Sam4s
+            | Family::SamAfec => (mv * 4095 / 3300).min(4095),
             // 12-bit, rounded to nearest.
             Family::Imxrt => (mv.min(3300) * 4095 + 1650) / 3300,
             // Gain 1/4 against VDD/4: full scale is VDD, 12-bit, 2^12 / VDD.
@@ -570,6 +580,16 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::SamAfec => {
+                // adc_sam_init: SWRST, MR, COCR = VREFP/2 behind each CSELR.
+                bus.write_u32(self.base, 1).expect("CR.SWRST");
+                bus.write_u32(self.base + 0x04, (1 << 23) | (5 << 16))
+                    .expect("MR");
+                for channel in 0..12 {
+                    bus.write_u32(self.base + 0x64, channel).expect("CSELR");
+                    bus.write_u32(self.base + 0x6C, 512).expect("COCR");
+                }
+            }
             Family::Stm32F1 => {
                 const ADON: u32 = 1;
                 const RSTCAL: u32 = 1 << 3;
@@ -1199,6 +1219,47 @@ impl Converter {
                 bus.write_u32(self.base + 0x14, set).expect("CHDR");
                 bus.read_u32(self.base + 0x50 + 4 * u64::from(IDLE_CHANNEL))
                     .expect("drain the idle CDR");
+                codes
+            }
+            Family::SamAfec => {
+                // One START converts the enabled set; the shared CDR returns
+                // whichever channel CSELR names, and EMR.TAG puts the last
+                // channel in LCDR.CHNB.
+                const EMR_TAG: u32 = 1 << 24;
+                const DRDY: u32 = 1 << 24;
+                let set = (1 << NTC_CHANNEL) | (1 << DIODE_CHANNEL) | (1 << IDLE_CHANNEL);
+                bus.write_u32(self.base + 0x08, EMR_TAG).expect("EMR.TAG");
+                bus.write_u32(self.base + 0x14, set).expect("CHER");
+                bus.write_u32(self.base, 1 << 1).expect("CR.START");
+                assert_eq!(
+                    bus.read_u32(self.base + 0x30).unwrap() & (set | DRDY),
+                    set | DRDY,
+                    "{}: START raises EOC for every enabled channel and DRDY",
+                    self.id
+                );
+                assert_eq!(
+                    bus.read_u32(self.base + 0x20).unwrap(),
+                    u32::from(IDLE_CHANNEL) << 24,
+                    "{}: LCDR.CHNB names the last channel, unrouted AD{IDLE_CHANNEL}, with code 0",
+                    self.id
+                );
+                let mut cdr = |channel: u8| {
+                    bus.write_u32(self.base + 0x64, u32::from(channel))
+                        .expect("CSELR");
+                    bus.read_u32(self.base + 0x68).expect("CDR")
+                };
+                let codes = [cdr(NTC_CHANNEL), cdr(DIODE_CHANNEL)];
+                assert_eq!(
+                    bus.read_u32(self.base + 0x30).unwrap() & (set | DRDY),
+                    1 << IDLE_CHANNEL,
+                    "{}: each CDR read clears only the CSELR channel's EOC",
+                    self.id
+                );
+                bus.write_u32(self.base + 0x64, u32::from(IDLE_CHANNEL))
+                    .expect("CSELR idle");
+                bus.read_u32(self.base + 0x68).expect("drain the idle CDR");
+                bus.write_u32(self.base + 0x18, set).expect("CHDR");
+                bus.write_u32(self.base + 0x08, 0).expect("EMR");
                 codes
             }
             Family::RaAdc { .. } => {
@@ -2175,6 +2236,16 @@ impl Converter {
                 bus.write_u32(self.base + 0x14, 1 << channel).expect("CHDR");
                 code
             }
+            Family::SamAfec => {
+                // Zephyr adc_sam_start_conversion + adc_sam_isr, polled.
+                bus.write_u32(self.base + 0x14, 1 << channel).expect("CHER");
+                bus.write_u32(self.base, 1 << 1).expect("CR.START");
+                bus.write_u32(self.base + 0x64, u32::from(channel))
+                    .expect("CSELR");
+                let code = bus.read_u32(self.base + 0x68).expect("CDR");
+                bus.write_u32(self.base + 0x18, 1 << channel).expect("CHDR");
+                code
+            }
             Family::Apollo4 => {
                 bus.write_u32(self.base + 0x0C, 1 | (u32::from(channel) << 8))
                     .expect("enable slot 0");
@@ -2710,6 +2781,7 @@ fn assert_converter_routes_generic_analog(
             converter.family,
             Family::Imxrt
                 | Family::Sam4s
+                | Family::SamAfec
                 | Family::Apollo4
                 | Family::Cc2538
                 | Family::Caes
@@ -2806,7 +2878,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 133,
+        instances, 135,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -2814,7 +2886,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 105,
+        without_adc, 104,
         "onboarding profiles that declare no modelled ADC"
     );
 }

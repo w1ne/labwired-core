@@ -77,3 +77,21 @@ peripherals:
   bus: sysbus
   base_address: 0x400E1600
   size: 512B
+# AFEC0/AFEC1. Renode's sam_e70 platform leaves them out. Bases and IRQs from
+# hal_atmel @8f95c79f asf/sam/include/same70b/same70q21b.h (AFEC0 0x4003C000
+# IRQ 29, AFEC1 0x40064000 IRQ 40); the register map is component/afec.h, as
+# in the promoted configs/chips/same70q21b.yaml. VREFP taken as 3.3 V.
+- id: afec0
+  type: sam_afec
+  base_address: 0x4003C000
+  size: 256B
+  irq: 29
+  config:
+    vref_mv: 3300
+- id: afec1
+  type: sam_afec
+  base_address: 0x40064000
+  size: 256B
+  irq: 40
+  config:
+    vref_mv: 3300

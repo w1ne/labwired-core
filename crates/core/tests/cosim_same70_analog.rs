@@ -4,7 +4,8 @@
 
 //! Generic analog devices route onto the SAM E70 Xplained EXT1 analog pins,
 //! PC31 and PA19, and are asserted through PIO PDSR. Thresholds are test
-//! assumptions; the profile still has no AFEC model or silicon threshold claim.
+//! assumptions, not silicon threshold claims. The AFEC conversion of the same
+//! netlists is `cosim_same70_afec_analog.rs`.
 
 mod common;
 use common::root;

@@ -4,7 +4,8 @@ Boots a bare-register Cortex-M7 smoke on the Microchip SAM E70 Xplained map
 and proves the EDBG console (USART1), the LED0 output path and the SW0 input.
 A separate analog co-simulation fixture routes a generic Beta NTC divider and
 Shockley diode to the EXT1 analog pads (PC31 and PA19) through PIO's
-voltage-thresholded input path; AFEC conversion is not modeled.
+voltage-thresholded input path, and through `analog_pins` to AFEC1 AD6 and
+AFEC0 AD8, where they convert on the `sam_afec` model.
 
 ## What the firmware does
 
@@ -80,5 +81,9 @@ cargo test -p labwired-core --test cosim_same70_analog -- --nocapture
 ```
 
 The threshold ratios are test assumptions, not SAM E70 silicon threshold
-data. This proves a GPIO-level route on the board's EXT1 analog pins; AFEC
-conversion is outside this profile's current model.
+data. This proves a GPIO-level route on the board's EXT1 analog pins. The AFEC
+conversion of the same netlists runs with:
+
+```bash
+cargo test -p labwired-core --test cosim_same70_afec_analog -- --nocapture
+```

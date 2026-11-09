@@ -26,12 +26,13 @@ there is no SAM E70 bench part, and no Renode parity claim is made.
 | PIOC `PER/OER/SODR/CODR/ODSR/PDSR` (LED0 on PC8, active low) | smoke-tested | `led=on pin=0 odsr=00000000` … (the whole-ODSR read proves no other pin moved) |
 | PIOA `PUER` + `PDSR` (SW0 on PA11) | smoke-tested | `sw0=1`: the released button reads high through the pull-up |
 | Generic analog-to-GPIO route on EXT1 ADC(+)/PC31 and ADC(-)/PA19 | co-sim tested | `cosim_same70_analog::sam_e70_xplained_ntc_and_diode_netlists_reach_ext1_pio_inputs`; Beta NTC and Shockley diode voltages solve to distinct pads and are asserted through PDSR with test-only thresholds |
+| AFEC0/AFEC1 conversion of the routed NTC and diode | co-sim tested | `cosim_same70_afec_analog` (3 tests): EXT1 PC31 (AFE1_AD6) and PA19 (AFE0_AD8) convert through the Zephyr `adc_sam_afec.c` register flow across -10/25/80 °C; PA17/PB0 in one AFEC0 `CR.START` at 16 bits with `LCDR.CHNB`; `IER.EOC6` pends AFEC1_IRQn 40. Ideal converter against an assumed VREFP of 3.3 V; no silicon data |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | USART/PIO interrupts | **not modelled** in this slice | the smoke is polled |
 | TCM, MPU, FPU | **not exercised** | the smoke leaves them at reset and is built without FPU instructions; Zephyr's MPU regions are stored, not enforced |
 | EEFC, RSTC, SUPC, RTT, WDT, RTC, bus matrix | declared stubs | `configs/chips/same70q21b.yaml` (`type: "stub"`) |
-| GMAC, TRNG, TC0-3, SPI0/1, QSPI, TWIHS0-2, MCAN0/1, AFEC0/1, DACC, PWM0/1, HSMCI, SSC, USBHS, XDMAC, AES, ICM, ISI | **not mapped** | no window in `configs/chips/same70q21b.yaml`; an access faults with a memory violation |
+| GMAC, TRNG, TC0-3, SPI0/1, QSPI, TWIHS0-2, MCAN0/1, DACC, PWM0/1, HSMCI, SSC, USBHS, XDMAC, AES, ICM, ISI | **not mapped** | no window in `configs/chips/same70q21b.yaml`; an access faults with a memory violation |
 
 ## Commands and evidence (verified 2026-10-30)
 
@@ -153,5 +154,5 @@ cargo test -p labwired-core --test cosim_same70_analog -- --nocapture
 # 1 passed: generic NTC and Shockley diode netlists route to PC31/PA19 PDSR
 ```
 
-This uses test-only GPIO thresholds. It does not claim AFEC conversions or
+This uses test-only GPIO thresholds; the AFEC conversion is a separate test (`cosim_same70_afec_analog`). Neither claims
 silicon threshold values.
