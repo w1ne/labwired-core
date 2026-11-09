@@ -11,7 +11,7 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1460,
+    "pass_claimed_peripherals_total": 1462,
     "pass_claimed_peripherals_median": 2,
     "median_elapsed_ms": 1395,
     "median_elapsed_seconds": 1.395,
@@ -4421,29 +4421,29 @@
       "script": "examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml",
       "system": "configs/systems/onboarding/lpc2294.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T19:45:07Z",
-      "finished_at_utc": "2026-11-09T19:48:00Z",
-      "elapsed_seconds": 174,
-      "elapsed_ms": 173316,
+      "started_at_utc": "2026-11-09T20:15:42Z",
+      "finished_at_utc": "2026-11-09T20:19:47Z",
+      "elapsed_seconds": 246,
+      "elapsed_ms": 245022,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 172.688,
+        "build_cli": 244.433,
         "build_firmware": null,
-        "run_smoke": 0.615
+        "run_smoke": 0.577
       },
       "stages_ms": {
-        "build_cli": 172688,
+        "build_cli": 244433,
         "build_firmware": null,
-        "run_smoke": 615
+        "run_smoke": 577
       },
       "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-uart-smoke.elf",
       "_artifact_path": "lpc2294",
       "zero_answering_windows": [],
-      "claimed_peripherals": 9,
+      "claimed_peripherals": 11,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"

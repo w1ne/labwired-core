@@ -32,6 +32,12 @@ pub fn attach(bus: &mut SystemBus, chip: &ChipDescriptor) -> anyhow::Result<ArmS
         anyhow::bail!("LPC2294 'vic' peripheral does not expose ARM IRQ/FIQ outputs");
     }
     bus.irq_fabric.lpc2294_vic = Some(vic_index);
+    bus.irq_fabric.lpc2294_irq_sources = bus
+        .peripherals
+        .iter()
+        .enumerate()
+        .filter_map(|(index, peripheral)| peripheral.irq.map(|source| (index, source as usize)))
+        .collect();
 
     let mut cpu = ArmSystem::with_model(ArmModel::Arm7Tdmi)?;
     for memory in std::iter::once(&bus.flash)

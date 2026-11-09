@@ -617,10 +617,22 @@ impl crate::Bus for SystemBus {
             }
             return Some(f.gic.lock().unwrap().levels());
         }
-        self.irq_fabric
-            .lpc2294_vic
-            .and_then(|index| self.peripherals.get(index))
-            .and_then(|peripheral| peripheral.dev.arm_irq_fiq_levels())
+        let vic_index = self.irq_fabric.lpc2294_vic?;
+        let routes = &self.irq_fabric.lpc2294_irq_sources;
+        let vic = self.peripherals.get(vic_index)?;
+        let vic_model = vic
+            .dev
+            .as_any()?
+            .downcast_ref::<crate::peripherals::armv7::pl190_vic::Pl190Vic>()?;
+        for &(peripheral_index, source) in routes {
+            let level = self
+                .peripherals
+                .get(peripheral_index)
+                .and_then(|peripheral| peripheral.dev.irq_line_level())
+                .unwrap_or(false);
+            vic_model.set_input_level(source, level);
+        }
+        vic.dev.arm_irq_fiq_levels()
     }
     fn arm_cp15_read(&self, key: u32, wide: bool) -> SimResult<u64> {
         self.irq_fabric

@@ -10,3 +10,4 @@ pub mod flexcomm_usart;
 pub mod gpio;
 pub mod ostimer;
 pub mod rt5xx_ctl;
+pub mod timer;

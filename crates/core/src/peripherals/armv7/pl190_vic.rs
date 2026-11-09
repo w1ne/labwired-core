@@ -204,9 +204,28 @@ impl Pl190Vic {
     fn lock_state(&self) -> MutexGuard<'_, Pl190State> {
         self.state.lock().unwrap_or_else(|error| error.into_inner())
     }
+
+    /// Reconcile one external peripheral interrupt input as a level.
+    pub fn set_input_level(&self, source: usize, level: bool) {
+        if source >= INPUTS {
+            return;
+        }
+        let mut state = self.lock_state();
+        let bit = 1u32 << source;
+        if level {
+            state.pins |= bit;
+        } else {
+            state.pins &= !bit;
+        }
+        state.refresh();
+    }
 }
 
 impl Peripheral for Pl190Vic {
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
     fn needs_legacy_walk(&self) -> bool {
         false
     }

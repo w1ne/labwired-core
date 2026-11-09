@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.020681">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.132538">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="32396a5d29770c2fe88ac01bb663063a4852e0c1b5293127aed06805ee07ac6f"/>
+    <property name="firmware_hash" value="e2cc5d2ea7256cc9805c70c1a0c988285ca2292931a8df3765ddeca5c043b784"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.020681">
+  <testcase classname="labwired" name="run" time="0.132538">
   </testcase>
-  <testcase classname="labwired" name="assertion 1: uart_contains: LPC2294 checks PPPPPPPPP DONE" time="0.000000">
+  <testcase classname="labwired" name="assertion 1: uart_contains: LPC2294 checks PPPPPPPPPP DONE" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 2: uart_contains: LPC2294_UART1_OK" time="0.000000">
   </testcase>

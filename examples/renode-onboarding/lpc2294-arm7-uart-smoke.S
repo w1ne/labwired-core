@@ -13,7 +13,9 @@
 @   6 port0..port3 keep their latches apart (one bit per port)
 @   7 IOCLR reads 0 and an input pin (IODIR 0) does not show the latch
 @   8 UART1 DLAB divisor read back and LSR THRE
-@   9 PL190 software IRQ reaches the ARM7 IRQ vector and clears on EOI
+@   9 Timer0 MR0 and Timer1 MR1 interrupts reach ARM7 through VIC sources 4/5;
+@     match flags, prescale, Timer0 reset-on-match and W1C clear are checked
+@  10 PL190 software IRQ reaches the ARM7 IRQ vector and clears on EOI
 @ The run then prints " DONE" on UART0, a line on UART1, and parks.
 .syntax unified
 .cpu arm7tdmi
@@ -43,13 +45,30 @@
 .equ VIC,     0xFFFFF000
 .equ VIC_IRQSTATUS, 0x000
 .equ VIC_INTENABLE, 0x010
+.equ VIC_INTENABLECLEAR, 0x014
 .equ VIC_SOFTINT, 0x018
 .equ VIC_SOFTINTCLEAR, 0x01C
 .equ VIC_VECTADDR, 0x030
 .equ VIC_VECTADDR0, 0x100
+.equ VIC_VECTADDR1, 0x104
 .equ VIC_VECTCNTL0, 0x200
+.equ VIC_VECTCNTL1, 0x204
 .equ IRQ_SOURCE, 5
-.equ IRQ_RESULT, 0x40003FF0
+.equ TIMER0,   0xE0004000
+.equ TIMER1,   0xE0008000
+.equ TIR,      0x00
+.equ TTCR,     0x04
+.equ TTC,      0x08
+.equ TPR,      0x0C
+.equ TPC,      0x10
+.equ TMCR,     0x14
+.equ TMR0,     0x18
+.equ TMR1,     0x1C
+.equ TIMER0_IRQ_SOURCE, 4
+.equ TIMER1_IRQ_SOURCE, 5
+.equ TIMER0_RESULT, 0x40003FF0
+.equ TIMER1_RESULT, 0x40003FF4
+.equ SOFTIRQ_RESULT, 0x40003FF8
 
 @ Low vectors: the IRQ entry asks the VIC for its selected handler address.
 .section .vectors, "ax", %progbits
@@ -66,6 +85,16 @@
 .global _start
 .type _start, %function
 _start:
+    @ Give the IRQ mode its own stack before any peripheral interrupt is
+    @ unmasked. The vector saves the shared registers here before dispatch.
+    mrs r0, cpsr
+    bic r1, r0, #0x1F
+    orr r1, r1, #0x12             @ IRQ mode
+    msr cpsr_c, r1
+    ldr sp, =0x40003F00
+    bic r1, r1, #0x1F
+    orr r1, r1, #0x13             @ return to SVC mode
+    msr cpsr_c, r1
     ldr sp, =0x40004000            @ top of the 16 KiB SRAM
 
     @ UART0 first, so every later check can report.
@@ -241,11 +270,98 @@ _start:
     mov r6, r7
     bl verdict
 
-    @ 9. PL190 software IRQ: program slot 0 for source 5, enable it, verify
-    @    IRQSTATUS in the exception vector, dispatch through VICVectAddr,
-    @    clear the source, and write the vectored EOI.
+    @ 9. Timer0 MR0 and Timer1 MR1 drive the corresponding level inputs on
+    @    the VIC. The ARM7 takes both IRQs, handlers check the timer/VIC state,
+    @    clear the W1C flags, stop the timers, and write vectored EOI.
     ldr r4, =VIC
-    ldr r0, =IRQ_RESULT
+    ldr r0, =TIMER0_RESULT
+    mov r1, #0
+    str r1, [r0]
+    ldr r0, =TIMER1_RESULT
+    str r1, [r0]
+    ldr r1, =timer0_irq_handler
+    str r1, [r4, #VIC_VECTADDR0]
+    mov r1, #(0x20 | TIMER0_IRQ_SOURCE)
+    str r1, [r4, #VIC_VECTCNTL0]
+    ldr r1, =timer1_irq_handler
+    str r1, [r4, #VIC_VECTADDR1]
+    mov r1, #(0x20 | TIMER1_IRQ_SOURCE)
+    str r1, [r4, #VIC_VECTCNTL1]
+    mov r1, #1
+    mov r2, r1, lsl #TIMER0_IRQ_SOURCE
+    mov r3, r1, lsl #TIMER1_IRQ_SOURCE
+    orr r2, r2, r3
+    str r2, [r4, #VIC_INTENABLE]
+
+    ldr r4, =TIMER0
+    mov r1, #2                    @ hold reset while configuring
+    str r1, [r4, #TTCR]
+    mov r1, #0
+    str r1, [r4, #TPR]
+    mov r1, #10
+    str r1, [r4, #TMR0]
+    mov r1, #7                    @ MR0 interrupt + reset + stop-on-match
+    str r1, [r4, #TMCR]
+    mov r1, #1
+    str r1, [r4, #TTCR]
+
+    ldr r4, =TIMER1
+    mov r1, #2
+    str r1, [r4, #TTCR]
+    mov r1, #1                    @ divide PCLK by two
+    str r1, [r4, #TPR]
+    mov r1, #12
+    str r1, [r4, #TMR1]
+    mov r1, #40                   @ MR1 interrupt + stop-on-match
+    str r1, [r4, #TMCR]
+    mov r1, #1
+    str r1, [r4, #TTCR]
+
+    @ IRQs are masked at reset. Unmask after vectors and handlers are ready.
+    mrs r2, cpsr
+    bic r2, r2, #0x80
+    msr cpsr_c, r2
+    ldr r0, =TIMER0_RESULT
+    ldr r1, =TIMER1_RESULT
+    ldr r5, =20000
+6:  ldr r2, [r0]
+    ldr r3, [r1]
+    cmp r2, #1
+    cmpeq r3, #1
+    beq 7f
+    subs r5, r5, #1
+    bne 6b
+7:  mov r0, #1
+    cmp r2, #1
+    movne r0, #0
+    cmp r3, #1
+    movne r0, #0
+    ldr r4, =TIMER0
+    ldr r1, [r4, #TIR]
+    cmp r1, #0
+    movne r0, #0
+    ldr r4, =TIMER1
+    ldr r1, [r4, #TIR]
+    cmp r1, #0
+    movne r0, #0
+    ldr r4, =VIC
+    ldr r1, [r4, #VIC_IRQSTATUS]
+    cmp r1, #0
+    movne r0, #0
+    bl verdict
+
+    @ 10. PL190 software IRQ: reprogram slot 0 for source 5, enable it,
+    @     clear the source in the exception handler and write vectored EOI.
+    ldr r4, =VIC
+    mov r1, #0
+    mov r2, #1
+    mov r2, r2, lsl #TIMER0_IRQ_SOURCE
+    mov r3, #1
+    mov r3, r3, lsl #TIMER1_IRQ_SOURCE
+    orr r2, r2, r3
+    str r2, [r4, #VIC_INTENABLECLEAR]
+    str r1, [r4, #VIC_VECTCNTL1]
+    ldr r0, =SOFTIRQ_RESULT
     mov r1, #0
     str r1, [r0]
     ldr r1, =irq_handler
@@ -256,12 +372,7 @@ _start:
     mov r1, r1, lsl #IRQ_SOURCE
     str r1, [r4, #VIC_INTENABLE]
     str r1, [r4, #VIC_SOFTINT]
-    @ IRQs are masked at reset. Unmask only after the vector and handler are
-    @ fully installed; ARM7 takes the pending request at the next boundary.
-    mrs r2, cpsr
-    bic r2, r2, #0x80
-    msr cpsr_c, r2
-    ldr r0, =IRQ_RESULT
+    ldr r0, =SOFTIRQ_RESULT
     ldr r1, [r0]
     cmp r1, #2
     moveq r0, #1
@@ -308,15 +419,10 @@ puts0:
     str r1, [r6, #RBR]
     b puts0
 
-@ ARM7 IRQ vector: check the active source, then let the VIC return the
-@ programmed handler address directly into PC.
+@ ARM7 IRQ vector: preserve the interrupted shared registers, then let the VIC
+@ return the programmed handler address directly into PC.
 irq_vector:
-    ldr r0, =VIC + VIC_IRQSTATUS
-    ldr r1, [r0]
-    mov r2, #1
-    mov r2, r2, lsl #IRQ_SOURCE
-    tst r1, r2
-    beq irq_unexpected
+    stmfd sp!, {r0-r3, r12}
     ldr r0, =VIC + VIC_VECTADDR
     ldr pc, [r0]
 
@@ -328,12 +434,69 @@ irq_handler:
     mov r1, #1
     mov r1, r1, lsl #IRQ_SOURCE
     str r1, [r0]
-    ldr r0, =IRQ_RESULT
+    ldr r0, =SOFTIRQ_RESULT
     mov r1, #2
     str r1, [r0]
     ldr r0, =VIC + VIC_VECTADDR
     mov r1, #0
     str r1, [r0]
+    ldmfd sp!, {r0-r3, r12}
+    subs pc, lr, #4
+
+timer0_irq_handler:
+    mov r2, #1
+    ldr r0, =VIC + VIC_IRQSTATUS
+    ldr r1, [r0]
+    mov r3, #1
+    mov r3, r3, lsl #TIMER0_IRQ_SOURCE
+    tst r1, r3
+    movne r2, #1
+    moveq r2, #0
+    ldr r0, =TIMER0
+    ldr r1, [r0, #TIR]
+    tst r1, #1
+    moveq r2, #0
+    ldr r1, [r0, #TTC]
+    cmp r1, #0                    @ MR0 reset-on-match resets TC
+    movne r2, #0
+    mov r1, #1
+    str r1, [r0, #TIR]            @ write-one-to-clear MR0
+    mov r1, #0
+    str r1, [r0, #TTCR]           @ stop before the next MR0 match
+    ldr r0, =TIMER0_RESULT
+    str r2, [r0]
+    ldr r0, =VIC + VIC_VECTADDR
+    mov r1, #0
+    str r1, [r0]
+    ldmfd sp!, {r0-r3, r12}
+    subs pc, lr, #4
+
+timer1_irq_handler:
+    mov r2, #1
+    ldr r0, =VIC + VIC_IRQSTATUS
+    ldr r1, [r0]
+    mov r3, #1
+    mov r3, r3, lsl #TIMER1_IRQ_SOURCE
+    tst r1, r3
+    movne r2, #1
+    moveq r2, #0
+    ldr r0, =TIMER1
+    ldr r1, [r0, #TIR]
+    tst r1, #2
+    moveq r2, #0
+    ldr r1, [r0, #TTC]
+    cmp r1, #12                   @ MR1 fires at this count
+    movne r2, #0
+    mov r1, #2
+    str r1, [r0, #TIR]            @ write-one-to-clear MR1
+    mov r1, #0
+    str r1, [r0, #TTCR]
+    ldr r0, =TIMER1_RESULT
+    str r2, [r0]
+    ldr r0, =VIC + VIC_VECTADDR
+    mov r1, #0
+    str r1, [r0]
+    ldmfd sp!, {r0-r3, r12}
     subs pc, lr, #4
 
 @ r0 = 1 → 'P', else 'F', on the UART at r6.
