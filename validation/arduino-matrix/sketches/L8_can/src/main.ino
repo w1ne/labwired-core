@@ -160,8 +160,10 @@ static bool lw_can_probe() {
 #define LW_HAS_CAN 1
 
 #elif defined(STM32F407xx) || defined(STM32F40_41xxx) || defined(ARDUINO_DISCO_F407VG) || \
-    defined(ARDUINO_BLACK_F407VE) || defined(ARDUINO_BLACK_F407VG) || defined(ARDUINO_DIYMORE_F407VGT)
-// F4 bxCAN1 @ 0x40006400; RCC APB1ENR @ 0x40023800+0x40, CAN1EN bit 25 (RM0090)
+    defined(ARDUINO_BLACK_F407VE) || defined(ARDUINO_BLACK_F407VG) || defined(ARDUINO_DIYMORE_F407VGT) || \
+    defined(STM32F446xx) || defined(ARDUINO_NUCLEO_F446RE)
+// F4 bxCAN1 @ 0x40006400; RCC APB1ENR @ 0x40023800+0x40, CAN1EN bit 25
+// (RM0090 for the F407, RM0390 §6.3.13 / §30 for the F446: same block).
 static bool lw_can_probe() {
   const uint32_t can = 0x40006400u;
   const uint32_t rcc = 0x40023800u;

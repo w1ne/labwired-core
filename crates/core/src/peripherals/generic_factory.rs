@@ -722,6 +722,10 @@ pub fn try_build(
                 m("rcc_apb1enr_mask"),
                 m("rcc_apb2enr_mask"),
             );
+            // F42x/F446 PLLSAI + DCKCFGR/DCKCFGR2 (`pllsai: true`).
+            if p_cfg.config.get("pllsai").and_then(|v| v.as_bool()) == Some(true) {
+                rcc.set_f4_pllsai(true);
+            }
             // HSE is a board component. U5 reference platforms have none
             // fitted unless the chip yaml says `hse: true`.
             if let Some(present) = p_cfg.config.get("hse").and_then(|v| v.as_bool()) {
@@ -1113,7 +1117,19 @@ pub fn try_build(
                 Some("stm32wba") | Some("wba") => Box::new(crate::peripherals::pwr::PwrWba::new()),
                 // F4 has only PWR_CR/PWR_CSR (RM0368 §5.4) — a distinct reset
                 // shape from the L4 CR1..CR4 / PUCRx set.
-                Some("stm32f4") | Some("f4") => Box::new(crate::peripherals::pwr::PwrF4::new()),
+                // `over_drive: true` adds the F42x/F446 ODEN/ODSWEN handshake.
+                Some("stm32f4") | Some("f4") => {
+                    if p_cfg
+                        .config
+                        .get("over_drive")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        Box::new(crate::peripherals::pwr::PwrF4::with_over_drive())
+                    } else {
+                        Box::new(crate::peripherals::pwr::PwrF4::new())
+                    }
+                }
                 _ => Box::new(crate::peripherals::pwr::Pwr::new()),
             }
         }
