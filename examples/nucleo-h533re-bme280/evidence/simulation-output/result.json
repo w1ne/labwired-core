@@ -1,0 +1,1518 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 300000,
+  "cycles": 300000,
+  "instructions": 300000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 300000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 300000
+    }
+  },
+  "limits": {
+    "max_steps": 300000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioa:5",
+          "min_edges": 32
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      96,
+      2097152,
+      32,
+      96,
+      0,
+      0,
+      0,
+      537001968,
+      0,
+      0,
+      0,
+      0,
+      1107427352,
+      537001968,
+      500000,
+      134220090
+    ],
+    "pc": 134220090,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "37b69466287081650d9f4f846bee56a448df6a528dd0d351f6f9ae957c95db0a",
+  "config": {
+    "firmware": "examples/nucleo-h533re-bme280/../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-h533re-bme280",
+    "system": "examples/nucleo-h533re-bme280/../../configs/systems/nucleo-h533re-bme280.yaml",
+    "script": "examples/nucleo-h533re-bme280/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1140984832,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1107427328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1107428352,
+        "registers": [
+          {
+            "name": "GPIOB_MODER",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOB_OTYPER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOB_OSPEEDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOB_PUPDR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOB_IDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOB_ODR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOB_BSRR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOB_LCKR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOB_AFRL",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOB_AFRH",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOB_BRR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOB_HSLVR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOB_SECCFGR",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "native",
+        "base": 1073763328,
+        "registers": [
+          {
+            "name": "I2C_CR1",
+            "offset": 0,
+            "size": 32,
+            "value": 1,
+            "fields": [
+              {
+                "name": "PE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "TXIE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXIE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDRIE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACKIE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOPIE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "ERRIE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "DNF",
+                "bits": [
+                  11,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "ANFOFF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXDMAEN",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXDMAEN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBC",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "NOSTRETCH",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUPEN",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "GCEN",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "SMBHEN",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "SMBDEN",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "ALERTEN",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "PECEN",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "FMP",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDRACLR",
+                "bits": [
+                  30,
+                  30
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOPFACLR",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "I2C_CR2",
+            "offset": 4,
+            "size": 32,
+            "value": 33621230,
+            "fields": [
+              {
+                "name": "SADD",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 238
+              },
+              {
+                "name": "RD_WRN",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 1
+              },
+              {
+                "name": "ADD10",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "HEAD10R",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "START",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOP",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACK",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "NBYTES",
+                "bits": [
+                  23,
+                  16
+                ],
+                "value": 1
+              },
+              {
+                "name": "RELOAD",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "AUTOEND",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 1
+              },
+              {
+                "name": "PECBYTE",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "I2C_OAR1",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OA1",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "OA1MODE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "OA1EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "I2C_OAR2",
+            "offset": 12,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OA2",
+                "bits": [
+                  7,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "OA2MSK",
+                "bits": [
+                  10,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OA2EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "I2C_TIMINGR",
+            "offset": 16,
+            "size": 32,
+            "value": 4030796563,
+            "fields": [
+              {
+                "name": "SCLL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 19
+              },
+              {
+                "name": "SCLH",
+                "bits": [
+                  15,
+                  8
+                ],
+                "value": 19
+              },
+              {
+                "name": "SDADEL",
+                "bits": [
+                  19,
+                  16
+                ],
+                "value": 1
+              },
+              {
+                "name": "SCLDEL",
+                "bits": [
+                  23,
+                  20
+                ],
+                "value": 4
+              },
+              {
+                "name": "PRESC",
+                "bits": [
+                  31,
+                  28
+                ],
+                "value": 15
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "I2C_TIMEOUTR",
+            "offset": 20,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TIMEOUTA",
+                "bits": [
+                  11,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIDLE",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIMOUTEN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIMEOUTB",
+                "bits": [
+                  27,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "TEXTEN",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "I2C_ISR",
+            "offset": 24,
+            "size": 32,
+            "value": 65,
+            "fields": [
+              {
+                "name": "TXE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "TXIS",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDR",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACKF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOPF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TC",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "TCR",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "BERR",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "ARLO",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVR",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "PECERR",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIMEOUT",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "ALERT",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "BUSY",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "DIR",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDCODE",
+                "bits": [
+                  23,
+                  17
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "I2C_ICR",
+            "offset": 28,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ADDRCF",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACKCF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOPCF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BERRCF",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "ARLOCF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVRCF",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "PECCF",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIMOUTCF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "ALERTCF",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "I2C_PECR",
+            "offset": 32,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PEC",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "I2C_RXDR",
+            "offset": 36,
+            "size": 32,
+            "value": 96,
+            "fields": [
+              {
+                "name": "RXDATA",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 96
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "I2C_TXDR",
+            "offset": 40,
+            "size": 32,
+            "value": 208,
+            "fields": [
+              {
+                "name": "TXDATA",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 208
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x77",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157296,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "bme280",
+        "device_type": "bme280",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c1",
+          "address": 119
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "bme280",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (64000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 300000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioa",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 138339,
+            "value": 1
+          },
+          {
+            "cycle": 138340,
+            "value": 0
+          },
+          {
+            "cycle": 138341,
+            "value": 1
+          },
+          {
+            "cycle": 138342,
+            "value": 0
+          },
+          {
+            "cycle": 138343,
+            "value": 1
+          },
+          {
+            "cycle": 138344,
+            "value": 0
+          },
+          {
+            "cycle": 138345,
+            "value": 1
+          },
+          {
+            "cycle": 138346,
+            "value": 0
+          },
+          {
+            "cycle": 138347,
+            "value": 1
+          },
+          {
+            "cycle": 138348,
+            "value": 0
+          },
+          {
+            "cycle": 138349,
+            "value": 1
+          },
+          {
+            "cycle": 138350,
+            "value": 0
+          },
+          {
+            "cycle": 138351,
+            "value": 1
+          },
+          {
+            "cycle": 138352,
+            "value": 0
+          },
+          {
+            "cycle": 138353,
+            "value": 1
+          },
+          {
+            "cycle": 138354,
+            "value": 0
+          },
+          {
+            "cycle": 138355,
+            "value": 1
+          },
+          {
+            "cycle": 138356,
+            "value": 0
+          },
+          {
+            "cycle": 138357,
+            "value": 1
+          },
+          {
+            "cycle": 138358,
+            "value": 0
+          },
+          {
+            "cycle": 138359,
+            "value": 1
+          },
+          {
+            "cycle": 138360,
+            "value": 0
+          },
+          {
+            "cycle": 138361,
+            "value": 1
+          },
+          {
+            "cycle": 138362,
+            "value": 0
+          },
+          {
+            "cycle": 138363,
+            "value": 1
+          },
+          {
+            "cycle": 138364,
+            "value": 0
+          },
+          {
+            "cycle": 138365,
+            "value": 1
+          },
+          {
+            "cycle": 138366,
+            "value": 0
+          },
+          {
+            "cycle": 138367,
+            "value": 1
+          },
+          {
+            "cycle": 138368,
+            "value": 0
+          },
+          {
+            "cycle": 138369,
+            "value": 1
+          },
+          {
+            "cycle": 138370,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 38,
+            "state": "0"
+          },
+          {
+            "cycle": 138339,
+            "state": "1"
+          },
+          {
+            "cycle": 138340,
+            "state": "0"
+          },
+          {
+            "cycle": 138341,
+            "state": "1"
+          },
+          {
+            "cycle": 138342,
+            "state": "0"
+          },
+          {
+            "cycle": 138343,
+            "state": "1"
+          },
+          {
+            "cycle": 138344,
+            "state": "0"
+          },
+          {
+            "cycle": 138345,
+            "state": "1"
+          },
+          {
+            "cycle": 138346,
+            "state": "0"
+          },
+          {
+            "cycle": 138347,
+            "state": "1"
+          },
+          {
+            "cycle": 138348,
+            "state": "0"
+          },
+          {
+            "cycle": 138349,
+            "state": "1"
+          },
+          {
+            "cycle": 138350,
+            "state": "0"
+          },
+          {
+            "cycle": 138351,
+            "state": "1"
+          },
+          {
+            "cycle": 138352,
+            "state": "0"
+          },
+          {
+            "cycle": 138353,
+            "state": "1"
+          },
+          {
+            "cycle": 138354,
+            "state": "0"
+          },
+          {
+            "cycle": 138355,
+            "state": "1"
+          },
+          {
+            "cycle": 138356,
+            "state": "0"
+          },
+          {
+            "cycle": 138357,
+            "state": "1"
+          },
+          {
+            "cycle": 138358,
+            "state": "0"
+          },
+          {
+            "cycle": 138359,
+            "state": "1"
+          },
+          {
+            "cycle": 138360,
+            "state": "0"
+          },
+          {
+            "cycle": 138361,
+            "state": "1"
+          },
+          {
+            "cycle": 138362,
+            "state": "0"
+          },
+          {
+            "cycle": 138363,
+            "state": "1"
+          },
+          {
+            "cycle": 138364,
+            "state": "0"
+          },
+          {
+            "cycle": 138365,
+            "state": "1"
+          },
+          {
+            "cycle": 138366,
+            "state": "0"
+          },
+          {
+            "cycle": 138367,
+            "state": "1"
+          },
+          {
+            "cycle": 138368,
+            "state": "0"
+          },
+          {
+            "cycle": 138369,
+            "state": "1"
+          },
+          {
+            "cycle": 138370,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 32
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioa",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2524,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 2524,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 0.48,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131072,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 131056,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131072,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 131056,
+    "heap_base": 536870912,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 300000,
+    "instructions": 300000,
+    "steps_executed": 300000,
+    "memory_reads": 215,
+    "memory_writes": 6,
+    "peripheral_accesses": 19805,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134219992,
+        "count": 39,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134219998,
+        "count": 39,
+        "symbol": "firmware_nucleo_h533re_bme280::wait_for"
+      },
+      {
+        "pc": 134220000,
+        "count": 39,
+        "symbol": "firmware_nucleo_h533re_bme280::wait_for"
+      },
+      {
+        "pc": 134220004,
+        "count": 39,
+        "symbol": "firmware_nucleo_h533re_bme280::wait_for"
+      },
+      {
+        "pc": 134220014,
+        "count": 39,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134220016,
+        "count": 39,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134220018,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220022,
+        "count": 39,
+        "symbol": "firmware_nucleo_h533re_bme280::wait_for"
+      },
+      {
+        "pc": 134220024,
+        "count": 39,
+        "symbol": "firmware_nucleo_h533re_bme280::wait_for"
+      },
+      {
+        "pc": 134220046,
+        "count": 39,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134220048,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220052,
+        "count": 39,
+        "symbol": "firmware_nucleo_h533re_bme280::wait_for"
+      },
+      {
+        "pc": 134220054,
+        "count": 39,
+        "symbol": "firmware_nucleo_h533re_bme280::wait_for"
+      },
+      {
+        "pc": 134220090,
+        "count": 33,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      }
+    ]
+  }
+}

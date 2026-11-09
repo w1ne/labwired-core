@@ -14,3 +14,9 @@ name = "firmware-nucleo-h533re-smoke"
 path = "src/main.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-nucleo-h533re-bme280"
+path = "src/bme280.rs"
+test = false
+bench = false

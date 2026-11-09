@@ -1,5 +1,5 @@
-# Focused STM32H533RET6 profile for the NUCLEO-H533RE LD2 smoke.
-# Only the memory and peripherals needed by this test are exposed. SRAM1 is
+# Focused STM32H533RET6 profile for NUCLEO-H533RE LD2 and I2C1 sensor smokes.
+# Only the memory and peripherals needed by these tests are exposed. SRAM1 is
 # modeled; SRAM2, SRAM3, backup SRAM, TrustZone attribution, and other H533
 # peripherals are outside this profile.
 #
@@ -26,6 +26,8 @@ ram:
 
 pins:
   PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+  PB6: { gpio: "gpiob", bit: 6, functions: [{ type: i2c, peripheral: i2c1, role: scl }] }
+  PB7: { gpio: "gpiob", bit: 7, functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
 
 peripherals:
   - id: "rcc"
@@ -42,6 +44,25 @@ peripherals:
     config:
       profile: "stm32v2"
     clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x42020400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h563/gpiob.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 1 }
+
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 51
+    config:
+      debug_schema: "../peripherals/stm32h563/i2c1.yaml"
+      profile: "h5"
+    clock: { reg: "apb1lenr", bit: 21 }
 
   - id: "systick"
     type: "systick"

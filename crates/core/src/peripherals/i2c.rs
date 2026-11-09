@@ -1351,11 +1351,7 @@ impl L4I2c {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let reg_val = self.read_reg(reg_offset);
-        if byte_offset < 2 {
-            ((reg_val >> (byte_offset * 8)) & 0xFF) as u8
-        } else {
-            0
-        }
+        ((reg_val >> (byte_offset * 8)) & 0xFF) as u8
     }
 
     /// Master receiver: clock one byte in from the addressed slave into RXDR

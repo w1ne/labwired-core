@@ -132,6 +132,7 @@ on:
       - "configs/systems/nucleo-wba25ce1-smoke.yaml"
       - "configs/systems/nucleo-h503rb.yaml"
       - "configs/systems/nucleo-h533re.yaml"
+      - "configs/systems/nucleo-h533re-bme280.yaml"
       - "configs/chips/stm32h755zi-nucleo-m7-smoke.yaml"
       - "configs/systems/nucleo-h755zi-q.yaml"
       - "configs/chips/stm32f334c8-f3348-disco-smoke.yaml"
@@ -160,6 +161,7 @@ on:
       - "examples/nucleo-wba25ce1/**"
       - "examples/nucleo-h503rb/**"
       - "examples/nucleo-h533re/**"
+      - "examples/nucleo-h533re-bme280/**"
       - "examples/nucleo-h755zi-q/**"
       - "examples/stm32h573i-dk/**"
       - "examples/nucleo-c5a3zg/**"
@@ -556,6 +558,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-h533re/onboarding-smoke.yaml
             system: configs/systems/nucleo-h533re.yaml
+          - id: nucleo-h533re-bme280
+            crate: firmware-nucleo-h533re-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-h533re-bme280/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h533re-bme280.yaml
           - id: stm32h573i-dk
             crate: firmware-stm32h573i-dk-smoke
             target: thumbv8m.main-none-eabi

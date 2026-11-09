@@ -2,9 +2,11 @@
 
 This focused profile boots Cortex-M33 firmware on the STM32H533RET6 and
 exercises the board's active-high user LED LD2 on PA5. It exposes the H5 RCC,
-GPIOA, SysTick, and the 128 KiB SRAM1 bank used by the smoke. The remaining
-H533 SRAM banks, TrustZone configuration, VCP, button, USB, and other MCU
-peripherals are outside the profile.
+GPIOA, SysTick, and the 128 KiB SRAM1 bank used by this LED smoke. The shared
+focused chip descriptor also exposes GPIOB and H5 I2C1 for the separate
+[BME280 system profile](../nucleo-h533re-bme280/README.md). The remaining H533
+SRAM banks, TrustZone configuration, VCP, button, USB, and other MCU
+peripherals are outside these profiles.
 
 ## Reproduce
 

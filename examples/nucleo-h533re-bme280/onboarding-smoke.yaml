@@ -1,0 +1,13 @@
+# Read the BME280 chip ID over the NUCLEO-H533RE's Arduino I2C1 route.
+# LD2 pulses only after the sensor returns the expected 0x60 ID.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-h533re-bme280"
+  system: "../../configs/systems/nucleo-h533re-bme280.yaml"
+limits:
+  max_steps: 300000
+assertions:
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 32
+  - expected_stop_reason: max_steps

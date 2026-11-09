@@ -1,0 +1,17 @@
+# NUCLEO-H533RE (MB1814) plus an Adafruit BME280 breakout on Arduino I2C1.
+# UM3121 maps D15/SCL to PB6 and D14/SDA to PB7. The board's LD2 is on PA5.
+name: "nucleo-h533re-bme280"
+chip: "../chips/stm32h533re-nucleo-gpio-smoke.yaml"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
