@@ -202,6 +202,11 @@ pub struct Flash {
     // snapshots restore as not-swapped (reset state).
     #[serde(default)]
     swapped: bool,
+
+    // F1: FLASH_AR, the page address a PER+STRT erase targets (RM0008 §3.3.4,
+    // PM0075 §2.3.2). Only stored while the F1 program gate is on.
+    #[serde(default)]
+    f1_ar: u32,
 }
 
 /// In-progress H5 quad-word write buffer (16 bytes at a 16-aligned base).
@@ -219,6 +224,22 @@ struct U5WriteBuffer {
     base: u64,
     words_written: u8,
     bytes: [u8; 16],
+}
+
+/// Outcome of feeding one flash-region store to the F1 program gate
+/// ([`Flash::f1_program_store`]). The bus acts on this:
+/// * `Commit`        — write `value` to the half-word at `offset`. The gate has
+///   already checked that the target is erased (or `value` is 0), so the AND
+///   the bus applies equals the new value. EOP is already set.
+/// * `Dropped`       — PG clear, or a programming error (PGERR set); nothing
+///   stored.
+/// * `NotHalfWord`   — a byte or word store while PG is set; the FPEC answers
+///   with a bus error (PM0075 §2.3.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum F1ProgAction {
+    Commit { offset: u64, value: u16 },
+    Dropped,
+    NotHalfWord,
 }
 
 /// Outcome of feeding one flash-region store to the U5 program state machine
@@ -267,6 +288,22 @@ enum KeyUnlockState {
 
 const FLASH_KEY1: u32 = 0x4567_0123;
 const FLASH_KEY2: u32 = 0xCDEF_89AB;
+
+/// STM32F1 FPEC bits (RM0008 §3.4, PM0075 §2.4).
+mod f1 {
+    pub const FLASH_BASE: u32 = 0x0800_0000;
+    /// Low/medium-density page size (RM0008 §3.3.3, Table 5). High-density
+    /// and connectivity-line parts use 2 KiB pages; no such F1 arms the gate.
+    pub const PAGE_SIZE: u64 = 0x400;
+    pub const SR_PGERR: u32 = 1 << 2;
+    pub const SR_EOP: u32 = 1 << 5;
+    pub const CR_PG: u32 = 1 << 0;
+    pub const CR_PER: u32 = 1 << 1;
+    pub const CR_MER: u32 = 1 << 2;
+    pub const CR_STRT: u32 = 1 << 6;
+    pub const CR_LOCK: u32 = 1 << 7;
+    pub const CR_OPTWRE: u32 = 1 << 9;
+}
 const OPTKEY1: u32 = 0x0819_2A3B;
 const OPTKEY2: u32 = 0x4C5D_6E7F;
 
@@ -325,6 +362,7 @@ impl Flash {
             u5_wbuf: None,
             read_while_write: false,
             swapped: false,
+            f1_ar: 0,
         }
     }
 
@@ -492,6 +530,89 @@ impl Flash {
         self.error_flags && matches!(self.layout, FlashRegisterLayout::Stm32U5)
     }
 
+    /// True when the F1 program gate is on (`error_flags: true` on an
+    /// `stm32f1` FLASH). The bus then routes flash-region stores through
+    /// [`Self::f1_program_store`] and applies a PER/MER erase at the CR write
+    /// that starts it. Off ⇒ the F1 FPEC stays the register-only model.
+    pub fn f1_error_flags_enabled(&self) -> bool {
+        self.error_flags && matches!(self.layout, FlashRegisterLayout::Stm32F1)
+    }
+
+    /// True when the bus must send flash-region stores to this FLASH: the U5
+    /// quad-word gate or the F1 half-word gate is on.
+    pub fn program_gate_enabled(&self) -> bool {
+        self.u5_error_flags_enabled() || self.f1_error_flags_enabled()
+    }
+
+    /// Feed one flash-region store into the F1 half-word programming gate.
+    ///
+    /// `flash_offset` is the byte offset in main flash, `width` the access size
+    /// in bytes, and `existing` the half-word the flash holds there now.
+    /// Silicon shape (PM0075 §2.3.3, RM0008 §3.3.3):
+    ///   * CR.PG clear ⇒ the store is dropped, no flag.
+    ///   * A store that is not a half-word ⇒ bus error.
+    ///   * The target half-word is not erased (0xFFFF) and the value is not
+    ///     0x0000 ⇒ PGERR, nothing stored.
+    ///   * Otherwise the half-word is programmed and EOP is set. BSY never
+    ///     stays set: the program completes inside the store.
+    pub fn f1_program_store(
+        &mut self,
+        flash_offset: u64,
+        width: u8,
+        value: u32,
+        existing: u16,
+    ) -> F1ProgAction {
+        if self.cr & f1::CR_PG == 0 {
+            return F1ProgAction::Dropped;
+        }
+        if width != 2 {
+            return F1ProgAction::NotHalfWord;
+        }
+        let value = value as u16;
+        if existing != 0xFFFF && value != 0 {
+            self.sr |= f1::SR_PGERR;
+            return F1ProgAction::Dropped;
+        }
+        self.sr |= f1::SR_EOP;
+        F1ProgAction::Commit {
+            offset: flash_offset & !1,
+            value,
+        }
+    }
+
+    /// F1 CR write with the program gate on (RM0008 §3.4.5, PM0075 §2.4.5).
+    /// LOCK is set-only and relocks the key sequence; a locked CR ignores
+    /// every other bit. OPTWRE can only be cleared. STRT starts the selected
+    /// erase at once: PER erases the 1 KiB page named by AR, MER the whole
+    /// main flash. The erase is recorded as a pending op that the bus applies
+    /// before the next instruction. STRT self-clears and EOP is set.
+    fn f1_write_cr_gated(&mut self, value: u32) {
+        if self.cr & f1::CR_LOCK != 0 {
+            return;
+        }
+        let optwre = self.cr & value & f1::CR_OPTWRE;
+        self.cr = (value & !(f1::CR_OPTWRE | f1::CR_STRT)) | optwre;
+        if self.cr & f1::CR_LOCK != 0 {
+            self.key_state = KeyUnlockState::Locked;
+        }
+        if value & f1::CR_STRT == 0 || self.cr & f1::CR_LOCK != 0 {
+            return;
+        }
+        let op = if self.cr & f1::CR_MER != 0 {
+            FlashOp::EraseBothBanks
+        } else if self.cr & f1::CR_PER != 0 {
+            let page = u64::from(self.f1_ar.wrapping_sub(f1::FLASH_BASE)) / f1::PAGE_SIZE;
+            FlashOp::EraseSector {
+                bank: 0,
+                sector: page as u32,
+            }
+        } else {
+            return;
+        };
+        self.pending_op.set(Some(op));
+        self.sr |= f1::SR_EOP;
+    }
+
     /// (bank_size, sector/page_size) for the active layout. The machine layer
     /// uses this to apply a pending [`FlashOp::EraseSector`] to the backing
     /// store with the right geometry — H5 and U5 happen to share 1 MiB banks
@@ -499,6 +620,9 @@ impl Flash {
     pub fn flash_geometry(&self) -> (u64, u64) {
         match self.layout {
             FlashRegisterLayout::Stm32U5 => (u5::BANK_SIZE, u5::PAGE_SIZE),
+            // One bank: an F1 EraseSector is always bank 0, so only the page
+            // size matters.
+            FlashRegisterLayout::Stm32F1 => (h5::BANK_SIZE, f1::PAGE_SIZE),
             _ => (h5::BANK_SIZE, h5::SECTOR_SIZE),
         }
     }
@@ -685,6 +809,7 @@ impl Flash {
             u5_wbuf: None,
             read_while_write: false,
             swapped: false,
+            f1_ar: 0,
         }
     }
 
@@ -903,8 +1028,18 @@ impl Flash {
                 }
                 // SR: EOP / PGERR / WRPRTERR are rc_w1. BSY (bit 0) RO.
                 0x0C => self.sr &= !(value & 0x0000_0034),
-                0x10 => self.cr = value,
-                0x14 => {} // AR — accept; sim doesn't program flash pages
+                0x10 if self.error_flags => self.f1_write_cr_gated(value),
+                0x10 => {
+                    self.cr = value;
+                    // Setting LOCK relocks the key sequence (RM0008 §3.4.5):
+                    // the next unlock must start again at KEY1.
+                    if value & f1::CR_LOCK != 0 {
+                        self.key_state = KeyUnlockState::Locked;
+                    }
+                }
+                // AR — the page a PER erase targets. Register-only without
+                // the program gate.
+                0x14 => self.f1_ar = value,
                 _ => {
                     crate::census_reg!("flash:Flash", offset, "write");
                 }
@@ -1644,5 +1779,139 @@ mod u5_wrong_key_tests {
             0,
             "later key writes are ignored on this peripheral instance"
         );
+    }
+}
+
+#[cfg(test)]
+mod f1_program_gate_tests {
+    use super::{f1, F1ProgAction, Flash, FlashOp, FlashRegisterLayout};
+    use crate::Peripheral;
+
+    fn unlocked() -> Flash {
+        let mut f = Flash::new_with_layout(FlashRegisterLayout::Stm32F1).with_error_flags(true);
+        f.write_u32(0x04, super::FLASH_KEY1).unwrap();
+        f.write_u32(0x04, super::FLASH_KEY2).unwrap();
+        assert_eq!(f.read_reg(0x10) & f1::CR_LOCK, 0);
+        f
+    }
+
+    #[test]
+    fn gate_is_opt_in_and_f1_only() {
+        let off = Flash::new_with_layout(FlashRegisterLayout::Stm32F1);
+        assert!(!off.f1_error_flags_enabled());
+        assert!(!off.program_gate_enabled());
+        let l4 = Flash::new_with_layout(FlashRegisterLayout::Stm32L4).with_error_flags(true);
+        assert!(!l4.f1_error_flags_enabled());
+        assert!(unlocked().program_gate_enabled());
+    }
+
+    #[test]
+    fn store_without_pg_is_dropped() {
+        let mut f = unlocked();
+        assert_eq!(
+            f.f1_program_store(0x10, 2, 0x1234, 0xFFFF),
+            F1ProgAction::Dropped
+        );
+        assert_eq!(f.read_reg(0x0C), 0);
+    }
+
+    #[test]
+    fn half_word_programs_erased_flash_and_sets_eop() {
+        let mut f = unlocked();
+        f.write_u32(0x10, f1::CR_PG).unwrap();
+        assert_eq!(
+            f.f1_program_store(0xFC00, 2, 0xA55A, 0xFFFF),
+            F1ProgAction::Commit {
+                offset: 0xFC00,
+                value: 0xA55A
+            }
+        );
+        assert_eq!(f.read_reg(0x0C) & f1::SR_EOP, f1::SR_EOP);
+        // EOP is rc_w1.
+        f.write_u32(0x0C, f1::SR_EOP).unwrap();
+        assert_eq!(f.read_reg(0x0C), 0);
+    }
+
+    #[test]
+    fn programming_a_non_erased_half_word_sets_pgerr() {
+        let mut f = unlocked();
+        f.write_u32(0x10, f1::CR_PG).unwrap();
+        assert_eq!(
+            f.f1_program_store(0x20, 2, 0x1234, 0x00FF),
+            F1ProgAction::Dropped
+        );
+        assert_eq!(f.read_reg(0x0C) & f1::SR_PGERR, f1::SR_PGERR);
+        // Writing 0x0000 over programmed data is allowed (PM0075 §2.3.3).
+        assert!(matches!(
+            f.f1_program_store(0x20, 2, 0, 0x00FF),
+            F1ProgAction::Commit { value: 0, .. }
+        ));
+    }
+
+    #[test]
+    fn byte_and_word_stores_while_pg_are_bus_errors() {
+        let mut f = unlocked();
+        f.write_u32(0x10, f1::CR_PG).unwrap();
+        assert_eq!(
+            f.f1_program_store(0x20, 1, 0x12, 0xFFFF),
+            F1ProgAction::NotHalfWord
+        );
+        assert_eq!(
+            f.f1_program_store(0x20, 4, 0x12, 0xFFFF),
+            F1ProgAction::NotHalfWord
+        );
+    }
+
+    #[test]
+    fn per_strt_records_the_page_named_by_ar() {
+        let mut f = unlocked();
+        f.write_u32(0x10, f1::CR_PER).unwrap();
+        f.write_u32(0x14, 0x0801_FC00).unwrap();
+        f.write_u32(0x10, f1::CR_PER | f1::CR_STRT).unwrap();
+        assert_eq!(
+            f.drain_pending_op(),
+            Some(FlashOp::EraseSector {
+                bank: 0,
+                sector: 127
+            })
+        );
+        // STRT self-clears; EOP is set.
+        assert_eq!(f.read_reg(0x10) & f1::CR_STRT, 0);
+        assert_eq!(f.read_reg(0x0C) & f1::SR_EOP, f1::SR_EOP);
+        assert_eq!(f.flash_geometry().1, 0x400);
+    }
+
+    #[test]
+    fn mer_strt_records_a_mass_erase() {
+        let mut f = unlocked();
+        f.write_u32(0x10, f1::CR_MER | f1::CR_STRT).unwrap();
+        assert_eq!(f.drain_pending_op(), Some(FlashOp::EraseBothBanks));
+    }
+
+    #[test]
+    fn locked_cr_ignores_writes_and_relock_restarts_the_key_sequence() {
+        let mut f = Flash::new_with_layout(FlashRegisterLayout::Stm32F1).with_error_flags(true);
+        f.write_u32(0x10, f1::CR_PER | f1::CR_STRT).unwrap();
+        assert_eq!(f.read_reg(0x10), f1::CR_LOCK);
+        assert_eq!(f.drain_pending_op(), None);
+
+        let mut f = unlocked();
+        f.write_u32(0x10, f1::CR_LOCK).unwrap();
+        assert_eq!(f.read_reg(0x10) & f1::CR_LOCK, f1::CR_LOCK);
+        // HAL_FLASH_Unlock after HAL_FLASH_Lock: KEY1 then KEY2 again.
+        f.write_u32(0x04, super::FLASH_KEY1).unwrap();
+        f.write_u32(0x04, super::FLASH_KEY2).unwrap();
+        assert_eq!(f.read_reg(0x10) & f1::CR_LOCK, 0);
+    }
+
+    #[test]
+    fn relock_restarts_the_key_sequence_without_the_gate() {
+        let mut f = Flash::new_with_layout(FlashRegisterLayout::Stm32F1);
+        f.write_u32(0x04, super::FLASH_KEY1).unwrap();
+        f.write_u32(0x04, super::FLASH_KEY2).unwrap();
+        f.write_u32(0x10, f1::CR_LOCK).unwrap();
+        f.write_u32(0x04, super::FLASH_KEY1).unwrap();
+        f.write_u32(0x04, super::FLASH_KEY2).unwrap();
+        assert_eq!(f.read_reg(0x10) & f1::CR_LOCK, 0);
     }
 }
