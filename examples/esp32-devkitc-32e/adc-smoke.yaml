@@ -1,0 +1,11 @@
+# ESP32-DevKitC-32E ADC1 one-shot: GPIO36/ADC1_CH0 samples the board-input pot.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/devkitc32e_adc/firmware.elf"
+  system: "../../configs/systems/esp32-devkitc-32e-adc.yaml"
+limits:
+  max_steps: 8000000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_min_steps: 1500000
+assertions:
+  - uart_contains: "ESP32_DEVKITC32E_ADC1_CH0=2047"

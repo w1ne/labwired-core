@@ -1,0 +1,20 @@
+# ESP32-DevKitC-32E with a potentiometer wiper on GPIO36 / ADC1_CH0.
+# The board's J2 pin 3 (VP) is GPIO36 and the ESP32 ADC1 channel 0.
+name: "esp32-devkitc-32e-adc"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "pot"
+    type: "potentiometer"
+    connection: "sens_sar_adc"
+    config:
+      channel: 0
+board_io:
+  - id: "pot"
+    kind: "adc_input"
+    peripheral: "sens_sar_adc"
+    pin: 0
+    signal: "input"
+    active_high: true
+    device_type: "potentiometer"

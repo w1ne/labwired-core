@@ -1,9 +1,9 @@
 # Narrow ESP32-DevKitC-32E onboarding profile.
 #
-# The profiles exercise classic ESP32 GPIO23, UART0 console output, and I2C0
-# with an external BME280. The USB-to-UART bridge and pin-level UART TX/RX
-# signals, Wi-Fi/Bluetooth, timers, SPI, and the 5 V power LED are outside
-# this profile.
+# The profiles exercise classic ESP32 GPIO23, UART0 console output, I2C0 with
+# an external BME280, and ADC1 channel 0 on GPIO36. The USB-to-UART bridge and
+# pin-level UART TX/RX signals, Wi-Fi/Bluetooth, timers, SPI, and the 5 V power
+# LED are outside this profile.
 name: "esp32-devkitc-32e-gpio-smoke"
 arch: "xtensa-lx6"
 cpu_hz: 240000000
@@ -23,6 +23,8 @@ pins:
   GPIO23: { gpio: "gpio", bit: 23, functions: [{ type: gpio, peripheral: gpio }] }
   GPIO21: { gpio: "gpio", bit: 21 }
   GPIO22: { gpio: "gpio", bit: 22 }
+  # J2 pin 3 / VP, SENSOR_VP, ADC1_CH0.
+  GPIO36: { gpio: "gpio", bit: 36 }
 
 peripherals:
   - id: "uart0"
@@ -45,3 +47,10 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/esp32/i2c0.yaml"
+
+  - id: "sens_sar_adc"
+    type: "esp32_sar_adc"
+    base_address: 0x3FF48800
+    size: "256B"
+    config:
+      debug_schema: "../peripherals/esp32/sens.yaml"
