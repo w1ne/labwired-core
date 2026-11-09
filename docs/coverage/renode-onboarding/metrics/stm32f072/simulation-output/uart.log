@@ -17,7 +17,9 @@ tim16 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
 tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
 exti pads idle=1 presses=1 pa_quiet=1 pf1=1 pc13=1 ok
 spi1 frame=0x01901600 ds=1 data=1 pend=1 alone=1 released=1 ok
+spi1 TXEIE pend=1 released=1 ok
 spi2 frame=0x06401600 ds=1 data=1 pend=1 alone=1 released=1 ok
+spi2 TXEIE pend=1 released=1 ok
 dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok
 i2c1 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok
 spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok

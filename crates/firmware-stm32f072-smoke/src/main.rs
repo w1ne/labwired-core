@@ -529,27 +529,61 @@ fn max31855_frame(base: u32, port: u32, pin: u32) -> Option<u32> {
     idle.then_some(word)
 }
 
-/// Each SPI reads its own device's frame twice — polled, then with RXNEIE,
-/// which must pend the SPI's own NVIC line and no other SPI's. Afterwards
-/// the RX FIFO is empty (FRLVL = 0).
+/// Read a frame with RXNEIE active. Sample the pending line before each DR
+/// read and confirm the final read clears the level while RXNEIE stays on.
+fn max31855_frame_with_irq(base: u32, irq: u32, port: u32, pin: u32) -> Option<(u32, bool, bool)> {
+    cs(port, pin, true);
+    let mut word = 0u32;
+    let mut irq_seen = false;
+    for _ in 0..4 {
+        if !wait(base + S_SR, SPI_SR_TXE, SPI_SR_TXE) {
+            cs(port, pin, false);
+            return None;
+        }
+        wr8(base + S_DR, 0);
+        if !wait(base + S_SR, SPI_SR_RXNE, SPI_SR_RXNE) {
+            cs(port, pin, false);
+            return None;
+        }
+        irq_seen |= pending(irq) && rd(base + S_SR) & SPI_SR_RXNE != 0;
+        word = (word << 8) | u32::from(rd8(base + S_DR));
+    }
+    let idle = wait(base + S_SR, SPI_SR_BSY, 0);
+    cs(port, pin, false);
+    let released = !pending(irq)
+        && rd(base + S_SR) & (SPI_SR_RXNE | SPI_SR_FRLVL) == 0
+        && rd(base + S_CR2) & (1 << 6) != 0;
+    idle.then_some((word, irq_seen, released))
+}
+
+/// Each SPI reads its own device's frame, then verifies the FIFO SPI's TXEIE
+/// and RXNEIE levels on its own NVIC line. TXEIE must release when disabled;
+/// the DR read must release RXNE while RXNEIE remains enabled.
 fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) -> bool {
     cs_output(port, pin);
     spi_enable(base);
     let ds = rd(base + S_CR2) & 0x1F00 == SPI_CR2_8BIT;
     let frame = max31855_frame(base, port, pin).unwrap_or(0xDEAD_BEEF);
+    unpend(irq);
     let quiet = !pending(irq);
 
-    unpend(irq);
+    wr(base + S_CR2, SPI_CR2_8BIT | (1 << 7)); // TXEIE
+    let txe_irq = rd(base + S_SR) & SPI_SR_TXE != 0 && pending(irq);
+    wr(base + S_CR2, SPI_CR2_8BIT);
+    let txe_released = !pending(irq);
+
     wr(base + S_CR2, SPI_CR2_8BIT | (1 << 6)); // RXNEIE
-    let again = max31855_frame(base, port, pin);
-    let data = frame == want && again == Some(want);
-    let pend = quiet && pending(irq);
+    let again = max31855_frame_with_irq(base, irq, port, pin);
+    let again_frame = again.map(|(frame, _, _)| frame);
+    let rxne_irq = again.is_some_and(|(_, seen, _)| seen);
+    let rxne_released = again.is_some_and(|(_, _, released)| released);
+    let data = frame == want && again_frame == Some(want);
+    let pend = quiet && rxne_irq;
     let alone = SPIS
         .iter()
         .all(|&(_, _, other, _, _, _)| other == irq || !pending(other));
     wr(base + S_CR2, SPI_CR2_8BIT);
-    unpend(irq);
-    let released = !pending(irq) && rd(base + S_SR) & (SPI_SR_RXNE | SPI_SR_FRLVL) == 0;
+    let released = rxne_released && !pending(irq);
 
     puts(name);
     puts(" frame=");
@@ -560,8 +594,13 @@ fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) ->
     flag("pend", pend);
     flag("alone", alone);
     flag("released", released);
-    let ok = ds && data && pend && alone && released;
+    let ok = ds && data && pend && alone && released && txe_irq && txe_released;
     verdict(ok);
+    puts(name);
+    puts(" TXEIE ");
+    flag("pend", txe_irq);
+    flag("released", txe_released);
+    verdict(txe_irq && txe_released);
     ok
 }
 
