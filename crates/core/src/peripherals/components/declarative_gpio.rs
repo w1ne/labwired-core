@@ -213,10 +213,9 @@ impl DeclarativeGpioDevice {
             listens_for_pin_sets,
             moved: Vec::new(),
             seed_input_clamp: descriptor.behavior.seed_input_clamp,
-            // Pin/Pins *and* Input: a keypad is firmware-clocked on pad edges
-            // and stimulus-clocked on `set_input`, with no timer of its own.
-            // Treating Input like Pin keeps `grid_eligible` meaning "no
-            // autonomous clock" so `needs_per_cycle_service` can opt out.
+            // Pin/Pins *and* Input count as host/firmware-clocked: no
+            // autonomous timer of the part's own. Open-drain matrix parts
+            // (keypad) still need the tick — see `needs_per_cycle_service`.
             grid_eligible: descriptor.behavior.timers.is_empty()
                 && descriptor.behavior.rules.iter().all(|r| {
                     matches!(
@@ -379,6 +378,12 @@ impl DeclarativeGpioDevice {
         let pin = &self.driven[i];
         let _ = pins.drive_input_bit(pin.addr, pin.bit, level);
         pins.drive_idr_bit(pin.addr, pin.bit, level);
+    }
+
+    fn samples_open_drain(&self) -> bool {
+        self.pin_sampling
+            .values()
+            .any(|s| *s == labwired_config::PinSampling::OpenDrainRelease)
     }
 
     /// Read-only view of the rule machine, for tests and diagnostics.
@@ -665,13 +670,17 @@ impl BusResidentDevice for DeclarativeGpioDevice {
     ///
     /// A part that owns NO TIMER and is only pin/input-clocked (`grid_eligible`)
     /// can only change when firmware stores to an output register or the host
-    /// writes a stimulus channel. `edge_service_addrs` services the store path
-    /// synchronously; `SystemBus::set_input` flushes driven pads after the
-    /// stimulus path (same shape as `sync_button_inputs`). A tick pass would
-    /// resample pads that cannot have moved. The TM1637, bare 7-segment digit,
-    /// and membrane keypad are this class — left at the trait's `true`, a board
-    /// carrying any of them would force `requires_cycle_accurate()` and pin
-    /// `max_safe_tick_interval()` to 1.
+    /// writes a stimulus channel — *unless* it samples open-drain nets. The
+    /// TM1637 and bare 7-segment digit are the pure edge/stimulus class:
+    /// `edge_service_addrs` covers the store path and `set_input` flush covers
+    /// stimulus. A tick pass would resample pads that cannot have moved. Left
+    /// at the trait's `true`, a board carrying either would force
+    /// `requires_cycle_accurate()` and pin `max_safe_tick_interval()` to 1.
+    ///
+    /// A membrane keypad is *not* that class: its rows/cols use
+    /// `open_drain_release` sampling, so the net level can move without an MMIO
+    /// edge the write hook sees. It must keep the per-cycle pass (trait default
+    /// `true`), matching the oracle keypad and `keypad_migration_parity`.
     ///
     /// ⚠️ A `gpio_device` with `timers:` MUST NOT say false — its clock only
     /// advances on the tick. Exact-timing schedules (DHT) also stay true:
@@ -683,12 +692,15 @@ impl BusResidentDevice for DeclarativeGpioDevice {
     fn needs_per_cycle_service(&self) -> bool {
         // Exact-timing schedules (DHT22 `timing: exact`) still need the tick —
         // their bitbang clock is not a PeripheralTickGrid resident deadline.
-        // Empty schedules (keypad) or all-grid schedules may opt out when the
-        // part is otherwise pin/input-clocked: edge_service_addrs + set_input
-        // flush cover every change.
+        // Empty schedules or all-grid schedules may opt out when the part is
+        // otherwise pin/input-clocked *and* does not sample open-drain nets:
+        // edge_service_addrs + set_input flush cover every change. Open-drain
+        // matrix parts (keypad) stay on the tick.
         !self.timers.is_empty()
             || !(self.driven.is_empty()
-                || self.grid_eligible && (self.schedules.is_empty() || self.has_grid_schedules()))
+                || self.grid_eligible
+                    && !self.samples_open_drain()
+                    && (self.schedules.is_empty() || self.has_grid_schedules()))
     }
 
     /// No timers and only pad/input rules (`grid_eligible`) means every change
