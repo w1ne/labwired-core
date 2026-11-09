@@ -1071,10 +1071,12 @@ fn check_adc() -> Result<(), &'static str> {
 
 // ── pwm: run a LEDC timer and observe a live counter + overflow ────────────
 //
-// configs/chips/esp32c6.yaml wires ledc @0x6000_7000 (type esp32c3_ledc) — the
-// same live LED PWM timer engine as the C3. The registers it drives
-// (TIMER0_CONF@0xA0, TIMER0_VALUE@0xA4, INT_RAW@0xC0, INT_CLR@0xCC) are
-// offset-identical; the C6's extra gamma/event/compare/capture tail is not
+// configs/chips/esp32c6.yaml wires ledc @0x6000_7000 (type esp32c6_ledc) — the
+// C3 live LED PWM timer engine on the C6 field geometry. The registers it
+// drives (TIMER0_CONF@0xA0, TIMER0_VALUE@0xA4, INT_RAW@0xC0, INT_CLR@0xCC) are
+// offset-identical, but TIMERx_CONF is not bit-identical: DUTY_RES is [4:0],
+// CLK_DIV [22:5], PAUSE 23, RST 24 (soc/esp32c6/register/soc/ledc_reg.h; the
+// C3 is [3:0]/[21:4]/22/23). The gamma/event/compare/capture tail is not
 // touched. C6 delta: source = 45.
 //
 // What is proven: with the timer released from reset the counter advances,
@@ -1089,11 +1091,11 @@ fn check_ledc() -> Result<(), &'static str> {
     const TIMER0_VALUE: u32 = LEDC_BASE + 0xA4;
     const INT_RAW: u32 = LEDC_BASE + 0xC0;
     const INT_CLR: u32 = LEDC_BASE + 0xCC;
-    const PAUSE: u32 = 1 << 22;
-    const RST: u32 = 1 << 23;
+    const PAUSE: u32 = 1 << 23;
+    const RST: u32 = 1 << 24;
     const LSTIMER0_OVF: u32 = 1 << 0;
-    // CONF = DUTY_RES | (CLK_DIV_field << 4); CLK_DIV integer part = field>>8.
-    let conf = |duty_res: u32, div_int: u32| (duty_res & 0xF) | (((div_int & 0x3FF) << 8) << 4);
+    // CONF = DUTY_RES | (CLK_DIV_field << 5); CLK_DIV integer part = field>>8.
+    let conf = |duty_res: u32, div_int: u32| (duty_res & 0x1F) | (((div_int & 0x3FF) << 8) << 5);
 
     // DUTY_RES = 14 → period 16384 counts at divider 1 (same choice as the C3
     // fixture: many distinct sample points per period, so the counter is

@@ -144,10 +144,11 @@ What each line proves:
   one-shot conversion self-clears `ONETIME_START`, latches `SAR1_DONE`, and
   `SAR1DATA_STATUS` carries a channel-dependent 12-bit sample plus the packed
   channel id; channels 3 and 5 differ predictably.
-- `pwm` — LEDC (`esp32c3_ledc` at `0x6000_7000`, source 45): TIMER0's live
+- `pwm` — LEDC (`esp32c6_ledc` at `0x6000_7000`, source 45): TIMER0's live
   counter advances with elapsed cycles, wraps at the programmed `2^DUTY_RES`
   period and latches `LSTIMER0_OVF`; `PAUSE` freezes the counter and stops new
-  overflows.
+  overflows. The fixture uses the C6 `TIMERx_CONF` bits (PAUSE 23, RST 24,
+  CLK_DIV [22:5]).
 - `wdt` — TIMG0 MWDT (`esp32c6_mwdt` + `with_mwdt`): `WDTWPROTECT` resets to
   the key (unlocked); locking it makes `WDTCONFIG0..5` writes drop while
   `WDTFEED` stays writable; `WDTCONFIG1` round-trips; with `STG0_HOLD`

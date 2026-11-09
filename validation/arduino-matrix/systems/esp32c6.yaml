@@ -1,0 +1,19 @@
+# Arduino matrix system — ESP32-C6-DevKitC-1 (arduino-esp32 3.x variant pins).
+# INA219 on Wire for L3; MAX31855 on SPI for L4; L0–L2 ignore both.
+name: "arduino-matrix-esp32c6"
+chip: "../../../configs/chips/esp32c6.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on default Arduino Wire (SDA=23, SCL=22).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c0"
+    route: { sda: "GPIO23", scl: "GPIO22" }
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on default Arduino SPI (spi2, SS=18).
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi2"
+    config:
+      cs_pin: "GPIO18"
+board_io: []

@@ -158,6 +158,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // C6 EXTMEM / MSPI cache controller (DONE/freeze handshakes).
     "esp32c6_extmem",
     "esp32c6_systimer",
+    // C6 RMT — the shared C3 model at C6 matrix source 49.
+    "esp32c6_rmt",
+    "esp32c6_ledc",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",

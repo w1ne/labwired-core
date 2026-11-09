@@ -27,6 +27,7 @@ This is the product bar beyond unit tests and UART-only CI fixtures.
 | esp32 | ✅ L0–L4 | ❌ no ESP Zephyr path yet | ✅ Arduino | L4 SPI MISO from kits; FreeRTOS dual-core |
 | esp32c3 | ✅ L0–L4 | ❌ | ✅ Arduino | L4 SPI green; RISC-V FreeRTOS |
 | esp32s3 | ✅ L0–L4 | ❌ | ✅ Arduino | L4 via spi2_s3 Esp32s3Spi; dual-core |
+| esp32c6 | ✅ L0–L8 (9/9) | ❌ | ✅ Arduino (INA219 on GPIO23/22) | Arduino-ESP32 3.x (IDF 5.5, CI pins espressif32@8.0.0) on the in-tree C6 mask ROM. L2 = RGB LED_BUILTIN through RMT TX (C3 model, source 49). L3 = `Wire.begin(23, 22)` (variant SDA/SCL) reads the INA219 config 0x399F + bus 0x19CA. L6 = `analogWrite(2, 128)`: 1 kHz / 50 % pad edges on GPIO2 (LEDC on the PCR XTAL clock). L5 = oneshot APB_SARADC: `analogRead(A0)` 256, `A1` 529 (REG_CLK_EN gate, PWDET stub). L8 = TWAI0 @0x6000B000 (S3/C3 TWAI model, source 46) self-RX of ID 0x123 / 0xA5 |
 | nrf52832 | ✅ L0–L4 | ✅ | ✅ Arduino; Zephyr system+i2c0 | L4 legacy SPI; TWIM overlay Zephyr L3 |
 | nrf52840 | ✅ L0–L4 | ✅ | ✅ both | L4 legacy SPI; Zephyr L3 green |
 | nrf5340 | ❌ | ✅ | ❌ no I2C model | Add Arduino when PIO path exists |
