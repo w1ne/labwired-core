@@ -30,7 +30,7 @@ assertions:
       max_abs_rpm: 4000.0
   - motor_state:
       id: drive_motor
-      control_state: "off:external-enable"
+      control_state: "fault:inverter"
       fault_contains: inverter
   - shutdown_latency:
       from_stimulus:

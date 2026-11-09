@@ -59,7 +59,10 @@ concurrency:
 jobs:
   python-sdk:
     name: python-sdk (wheel + pytest, 0 skipped)
-    runs-on: ubuntu-latest
+    # The cp39-abi3 floor requires CPython 3.9. Ubuntu-latest is now
+    # Ubuntu 26.04, where actions/setup-python does not ship Python 3.9.
+    # Pin the runner instead of silently raising the tested ABI floor.
+    runs-on: ubuntu-22.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
