@@ -8,7 +8,8 @@
 # (PC10) and D10 (PC17) off at ASF's PIO_OUTPUT_1 (active low), and BP2
 # (PA5) on ASF's pull-up + rising-edge interrupt: the stimuli press it (no
 # pend) and release it (PIOA line 11 pends, the PIO_ISR read releases it).
-# Board summary 0x5A4501FF at 0x2001FF04. PC10 toggles in the idle loop.
+# USART0 also asserts/releases TXRDY IRQ 14 through IER/IDR. Board summary
+# 0x5A4503FF is written at 0x2001FF04; PC10 toggles in the idle loop.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-renode-smoke"
@@ -53,6 +54,7 @@ assertions:
       - "bp2 pressed"
       - "bp2 imr=20 idle=1 pressed=1 quiet=1 release_pend=1 isr=20 cleared=1 ok"
       - "bp2 released level=1 ok"
+      - "usart0 txrdy imr=2 pend=1 released=1 ok"
       - "SAM4S XPLAINED BOARD PASS"
   - gpio_edges:
       pin: "pioC:10"
@@ -63,6 +65,6 @@ assertions:
       size: 4
   - memory_value:
       address: 0x2001FF04
-      expected_value: 0x5A4501FF
+      expected_value: 0x5A4503FF
       size: 4
   - expected_stop_reason: max_steps

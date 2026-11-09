@@ -1,0 +1,146 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-sam4s-xplained-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-sam4s-xplained-smoke)
+error[E0308]: mismatched types
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:420:8
+    |
+420 |     wr(USART0 + US_CR, US_CR_RSTRX | US_CR_RSTTX);
+    |     -- ^^^^^^^^^^^^^^ expected `*mut u32`, found `u32`
+    |     |
+    |     arguments to this function are incorrect
+    |
+    = note: expected raw pointer `*mut u32`
+                      found type `u32`
+note: function defined here
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:131:4
+    |
+131 | fn wr(p: *mut u32, v: u32) {
+    |    ^^ -----------
+
+error[E0308]: mismatched types
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:421:8
+    |
+421 |     wr(USART0 + US_MR, US_MR_8N1);
+    |     -- ^^^^^^^^^^^^^^ expected `*mut u32`, found `u32`
+    |     |
+    |     arguments to this function are incorrect
+    |
+    = note: expected raw pointer `*mut u32`
+                      found type `u32`
+note: function defined here
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:131:4
+    |
+131 | fn wr(p: *mut u32, v: u32) {
+    |    ^^ -----------
+
+error[E0308]: mismatched types
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:422:8
+    |
+422 |     wr(USART0 + US_BRGR, 2); // 4 MHz reset clock / (16 * 115200), rounded.
+    |     -- ^^^^^^^^^^^^^^^^ expected `*mut u32`, found `u32`
+    |     |
+    |     arguments to this function are incorrect
+    |
+    = note: expected raw pointer `*mut u32`
+                      found type `u32`
+note: function defined here
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:131:4
+    |
+131 | fn wr(p: *mut u32, v: u32) {
+    |    ^^ -----------
+
+error[E0308]: mismatched types
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:423:8
+    |
+423 |     wr(USART0 + US_CR, US_CR_RXEN | US_CR_TXEN);
+    |     -- ^^^^^^^^^^^^^^ expected `*mut u32`, found `u32`
+    |     |
+    |     arguments to this function are incorrect
+    |
+    = note: expected raw pointer `*mut u32`
+                      found type `u32`
+note: function defined here
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:131:4
+    |
+131 | fn wr(p: *mut u32, v: u32) {
+    |    ^^ -----------
+
+error[E0308]: mismatched types
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:425:8
+    |
+425 |     wr(USART0 + US_IER, US_CSR_TXRDY);
+    |     -- ^^^^^^^^^^^^^^^ expected `*mut u32`, found `u32`
+    |     |
+    |     arguments to this function are incorrect
+    |
+    = note: expected raw pointer `*mut u32`
+                      found type `u32`
+note: function defined here
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:131:4
+    |
+131 | fn wr(p: *mut u32, v: u32) {
+    |    ^^ -----------
+
+error[E0308]: mismatched types
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:427:18
+    |
+427 |     let imr = rd(USART0 + US_IMR);
+    |               -- ^^^^^^^^^^^^^^^ expected `*mut u32`, found `u32`
+    |               |
+    |               arguments to this function are incorrect
+    |
+    = note: expected raw pointer `*mut u32`
+                      found type `u32`
+note: function defined here
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:127:4
+    |
+127 | fn rd(p: *mut u32) -> u32 {
+    |    ^^ -----------
+
+error[E0308]: mismatched types
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:429:8
+    |
+429 |     wr(USART0 + US_IDR, US_CSR_TXRDY);
+    |     -- ^^^^^^^^^^^^^^^ expected `*mut u32`, found `u32`
+    |     |
+    |     arguments to this function are incorrect
+    |
+    = note: expected raw pointer `*mut u32`
+                      found type `u32`
+note: function defined here
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:131:4
+    |
+131 | fn wr(p: *mut u32, v: u32) {
+    |    ^^ -----------
+
+error[E0308]: mismatched types
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:431:12
+    |
+431 |         rd(USART0 + US_IMR) == 0 && unsafe { read_volatile(NVIC_ISPR0) } & (1 << ID_USART0) == 0;
+    |         -- ^^^^^^^^^^^^^^^ expected `*mut u32`, found `u32`
+    |         |
+    |         arguments to this function are incorrect
+    |
+    = note: expected raw pointer `*mut u32`
+                      found type `u32`
+note: function defined here
+   --> crates/firmware-sam4s-xplained-smoke/src/renode_smoke.rs:127:4
+    |
+127 | fn rd(p: *mut u32) -> u32 {
+    |    ^^ -----------
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `firmware-sam4s-xplained-smoke` (bin "firmware-sam4s-xplained-renode-smoke") due to 8 previous errors

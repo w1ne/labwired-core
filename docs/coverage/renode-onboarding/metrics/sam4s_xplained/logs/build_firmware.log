@@ -1,16 +1,17 @@
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
-workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
-workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
-workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
-workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
-workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.23s
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-sam4s-xplained-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-sam4s-xplained-smoke)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.80s

@@ -60,6 +60,7 @@
           "bp2 pressed",
           "bp2 imr=20 idle=1 pressed=1 quiet=1 release_pend=1 isr=20 cleared=1 ok",
           "bp2 released level=1 ok",
+          "usart0 txrdy imr=2 pend=1 released=1 ok",
           "SAM4S XPLAINED BOARD PASS"
         ]
       },
@@ -89,7 +90,7 @@
       "assertion": {
         "memory_value": {
           "address": 537001732,
-          "expected_value": 1514471935,
+          "expected_value": 1514472447,
           "mask": null,
           "size": 4
         }
@@ -106,21 +107,21 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      13598,
+      13687,
       537001732,
-      511,
       1,
+      49,
       1024,
-      1074662972,
       1074663988,
-      537001936,
-      46139,
+      1074662972,
+      537001928,
+      1073889280,
+      3758154240,
+      2,
+      1023,
       1,
-      0,
-      32,
-      2000000,
-      537001936,
-      4212599,
+      537001928,
+      4214143,
       4195416
     ],
     "pc": 4195416,
@@ -136,7 +137,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "3f3e6b775ee4fbd027ef993bacea8de676386aae7ed3e2899cd5b095f130eb83",
+  "firmware_hash": "223a0495197ac5e1d1c897e9852a57590de64ca903696072b1540cecd527b91c",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s_xplained.yaml",
@@ -308,59 +309,59 @@
             "value": 1
           },
           {
-            "cycle": 2200708,
+            "cycle": 2200975,
             "value": 0
           },
           {
-            "cycle": 2260714,
+            "cycle": 2260981,
             "value": 1
           },
           {
-            "cycle": 2320721,
+            "cycle": 2320988,
             "value": 0
           },
           {
-            "cycle": 2380727,
+            "cycle": 2380994,
             "value": 1
           },
           {
-            "cycle": 2440734,
+            "cycle": 2441001,
             "value": 0
           },
           {
-            "cycle": 2500740,
+            "cycle": 2501007,
             "value": 1
           },
           {
-            "cycle": 2560747,
+            "cycle": 2561014,
             "value": 0
           },
           {
-            "cycle": 2620753,
+            "cycle": 2621020,
             "value": 1
           },
           {
-            "cycle": 2680760,
+            "cycle": 2681027,
             "value": 0
           },
           {
-            "cycle": 2740766,
+            "cycle": 2741033,
             "value": 1
           },
           {
-            "cycle": 2800773,
+            "cycle": 2801040,
             "value": 0
           },
           {
-            "cycle": 2860779,
+            "cycle": 2861046,
             "value": 1
           },
           {
-            "cycle": 2920786,
+            "cycle": 2921053,
             "value": 0
           },
           {
-            "cycle": 2980792,
+            "cycle": 2981059,
             "value": 1
           }
         ],
@@ -372,59 +373,59 @@
             "state": "1"
           },
           {
-            "cycle": 2200708,
+            "cycle": 2200975,
             "state": "0"
           },
           {
-            "cycle": 2260714,
+            "cycle": 2260981,
             "state": "1"
           },
           {
-            "cycle": 2320721,
+            "cycle": 2320988,
             "state": "0"
           },
           {
-            "cycle": 2380727,
+            "cycle": 2380994,
             "state": "1"
           },
           {
-            "cycle": 2440734,
+            "cycle": 2441001,
             "state": "0"
           },
           {
-            "cycle": 2500740,
+            "cycle": 2501007,
             "state": "1"
           },
           {
-            "cycle": 2560747,
+            "cycle": 2561014,
             "state": "0"
           },
           {
-            "cycle": 2620753,
+            "cycle": 2621020,
             "state": "1"
           },
           {
-            "cycle": 2680760,
+            "cycle": 2681027,
             "state": "0"
           },
           {
-            "cycle": 2740766,
+            "cycle": 2741033,
             "state": "1"
           },
           {
-            "cycle": 2800773,
+            "cycle": 2801040,
             "state": "0"
           },
           {
-            "cycle": 2860779,
+            "cycle": 2861046,
             "state": "1"
           },
           {
-            "cycle": 2920786,
+            "cycle": 2921053,
             "state": "0"
           },
           {
-            "cycle": 2980792,
+            "cycle": 2981059,
             "state": "1"
           }
         ],
@@ -606,33 +607,39 @@
       },
       {
         "text": "bp2 wait",
-        "cycle_lo": 214532,
-        "cycle": 214533,
-        "end_cycle": 214574
+        "cycle_lo": 214533,
+        "cycle": 214534,
+        "end_cycle": 214575
       },
       {
         "text": "bp2 pressed",
-        "cycle_lo": 2000009,
-        "cycle": 2000010,
+        "cycle_lo": 2000010,
+        "cycle": 2000011,
         "end_cycle": 2000068
       },
       {
         "text": "bp2 imr=20 idle=1 pressed=1 quiet=1 release_pend=1 isr=20 cleared=1 ok",
-        "cycle_lo": 2200026,
-        "cycle": 2200027,
-        "end_cycle": 2200441
+        "cycle_lo": 2200021,
+        "cycle": 2200022,
+        "end_cycle": 2200439
       },
       {
         "text": "bp2 released level=1 ok",
-        "cycle_lo": 2200446,
-        "cycle": 2200447,
-        "end_cycle": 2200567
+        "cycle_lo": 2200444,
+        "cycle": 2200445,
+        "end_cycle": 2200565
+      },
+      {
+        "text": "usart0 txrdy imr=2 pend=1 released=1 ok",
+        "cycle_lo": 2200620,
+        "cycle": 2200621,
+        "end_cycle": 2200834
       },
       {
         "text": "SAM4S XPLAINED BOARD PASS",
-        "cycle_lo": 2200579,
-        "cycle": 2200580,
-        "end_cycle": 2200705
+        "cycle_lo": 2200846,
+        "cycle": 2200847,
+        "end_cycle": 2200972
       }
     ],
     "dropped_lines": 0
@@ -665,14 +672,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 38060,
+    "text_bytes": 39604,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 38060,
+    "flash_used_bytes": 39604,
     "ram_static_bytes": 0,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 131072,
-    "flash_used_pct": 3.63,
+    "flash_used_pct": 3.78,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -682,15 +689,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 131072,
-    "main_stack_high_water_bytes": 48,
-    "main_stack_free_min_bytes": 131012,
+    "main_stack_high_water_bytes": 56,
+    "main_stack_free_min_bytes": 131004,
     "main_stack_base": 536870912,
     "main_stack_top": 537001984,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 131072,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 131012,
+    "heap_free_min_bytes": 131004,
     "heap_base": 536870912,
     "heap_top": 537001984
   },
@@ -698,25 +705,25 @@
     "cycles": 3000000,
     "instructions": 3000000,
     "steps_executed": 3000000,
-    "memory_reads": 6575,
-    "memory_writes": 86,
-    "peripheral_accesses": 3479522,
+    "memory_reads": 6859,
+    "memory_writes": 90,
+    "peripheral_accesses": 3479612,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 4195412,
-        "count": 1057,
-        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
-      },
-      {
         "pc": 4195414,
-        "count": 1055,
+        "count": 1056,
         "symbol": "firmware_sam4s_xplained_renode_smoke::spin"
       },
       {
         "pc": 4195416,
-        "count": 1054,
+        "count": 1056,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 4195412,
+        "count": 1053,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       },
       {
         "pc": 4207090,
@@ -724,7 +731,7 @@
         "symbol": "firmware_sam4s_xplained_renode_smoke::wait"
       },
       {
-        "pc": 4207092,
+        "pc": 4207098,
         "count": 537,
         "symbol": "core::ptr::read_volatile"
       },
@@ -734,9 +741,9 @@
         "symbol": "firmware_sam4s_xplained_renode_smoke::wait"
       },
       {
-        "pc": 4207102,
+        "pc": 4207106,
         "count": 537,
-        "symbol": "firmware_sam4s_xplained_renode_smoke::wait"
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
         "pc": 4207108,
@@ -744,9 +751,14 @@
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 4207110,
+        "pc": 4207114,
         "count": 537,
-        "symbol": "<i32>::overflowing_add"
+        "symbol": "firmware_sam4s_xplained_renode_smoke::wait"
+      },
+      {
+        "pc": 4207092,
+        "count": 536,
+        "symbol": "core::ptr::read_volatile"
       },
       {
         "pc": 4207094,
@@ -759,9 +771,9 @@
         "symbol": "firmware_sam4s_xplained_renode_smoke::wait"
       },
       {
-        "pc": 4207098,
+        "pc": 4207102,
         "count": 536,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_sam4s_xplained_renode_smoke::wait"
       },
       {
         "pc": 4207104,
@@ -769,17 +781,12 @@
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 4207106,
+        "pc": 4207110,
         "count": 536,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+        "symbol": "<i32>::overflowing_add"
       },
       {
         "pc": 4207112,
-        "count": 536,
-        "symbol": "firmware_sam4s_xplained_renode_smoke::wait"
-      },
-      {
-        "pc": 4207114,
         "count": 536,
         "symbol": "firmware_sam4s_xplained_renode_smoke::wait"
       }
@@ -787,7 +794,7 @@
     "stalled_poll": {
       "peripheral": "pmc",
       "offset": 24,
-      "accesses": 19209
+      "accesses": 18942
     }
   }
 }

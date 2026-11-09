@@ -28,4 +28,5 @@ bp2 wait
 bp2 pressed
 bp2 imr=20 idle=1 pressed=1 quiet=1 release_pend=1 isr=20 cleared=1 ok
 bp2 released level=1 ok
+usart0 txrdy imr=2 pend=1 released=1 ok
 SAM4S XPLAINED BOARD PASS

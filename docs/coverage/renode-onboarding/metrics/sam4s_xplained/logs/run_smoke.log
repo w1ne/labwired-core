@@ -1,6 +1,6 @@
-[2m2026-11-09T16:42:46.273924Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/sam4s_xplained.yaml
-[2m2026-11-09T16:42:46.277158Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x400401
+2026-11-09T21:46:01.297067Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sam4s_xplained.yaml
+2026-11-09T21:46:01.299805Z  INFO labwired_loader: ELF Entry Point: 0x400401
 labwired-cli test: idle_ff=on (event_scheduler=on)
-[2m2026-11-09T16:42:47.954520Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
-[2m2026-11-09T16:42:48.117553Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
-PASS  5/5 checks · sam4s_xplained-smoke · 3000000 steps · 2.44s
+2026-11-09T21:46:03.159173Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-09T21:46:03.318487Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+PASS  5/5 checks · sam4s_xplained-smoke · 3000000 steps · 2.64s

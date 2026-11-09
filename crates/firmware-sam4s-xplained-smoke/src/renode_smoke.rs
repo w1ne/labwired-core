@@ -23,9 +23,11 @@
 //! * BP2 (PA5) — ASF's PIO_PULLUP | PIO_IT_RISE_EDGE: the press (falling)
 //!   does not pend PIOA's line 11, the release (rising) does, and the
 //!   PIO_ISR read releases it. The stimuli press and release the button.
+//! * USART0 — US_IER enables TXRDY on NVIC line 14; US_IDR drops the mask and
+//!   releases the level pending bit.
 //!
 //! Every board check sets a bit in a second summary word at 0x2001FF04;
-//! 0x5A4501FF means all nine passed. PC10 then toggles in the idle loop.
+//! 0x5A4503FF means all ten passed. PC10 then toggles in the idle loop.
 
 #![no_std]
 #![no_main]
@@ -64,12 +66,27 @@ const BP2: u32 = 1 << 5;
 const UART0_SR: *const u32 = 0x400E_0614 as *const u32;
 const UART0_THR: *mut u32 = 0x400E_061C as *mut u32;
 
+const USART0: u32 = 0x4002_4000;
+const US_CR: u32 = 0x00;
+const US_MR: u32 = 0x04;
+const US_IER: u32 = 0x08;
+const US_IDR: u32 = 0x0C;
+const US_IMR: u32 = 0x10;
+const US_BRGR: u32 = 0x20;
+const US_CR_RSTRX: u32 = 1 << 2;
+const US_CR_RSTTX: u32 = 1 << 3;
+const US_CR_RXEN: u32 = 1 << 4;
+const US_CR_TXEN: u32 = 1 << 6;
+const US_MR_8N1: u32 = 0x8C0;
+const US_CSR_TXRDY: u32 = 1 << 1;
+
 const NVIC_ISPR0: *const u32 = 0xE000_E200 as *const u32;
 const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
 
 /// Peripheral ids (= NVIC lines = PMC_PCSR0 bits).
 const ID_PIOA: u32 = 11;
 const ID_TC0: u32 = 23;
+const ID_USART0: u32 = 14;
 
 const BOARD_SUMMARY: *mut u32 = 0x2001_FF04 as *mut u32;
 
@@ -107,6 +124,10 @@ fn pio(port: u32, reg: u32) -> *mut u32 {
 
 fn tc(n: u32, reg: u32) -> *mut u32 {
     (0x4001_0000 + 0x4000 * (n / 3) + 0x40 * (n % 3) + reg) as *mut u32
+}
+
+fn usart0(reg: u32) -> *mut u32 {
+    (USART0 + reg) as *mut u32
 }
 
 fn rd(p: *mut u32) -> u32 {
@@ -400,8 +421,33 @@ fn board() -> ! {
     put_flag("bp2 released level=", level);
     finish("", level, 8, &mut summary);
 
+    // 10. USART0 TXRDY is a level source on NVIC 14. Enabling its mask
+    // asserts the line; disabling TXRDY releases the pending NVIC level.
+    wr(usart0(US_CR), US_CR_RSTRX | US_CR_RSTTX);
+    wr(usart0(US_MR), US_MR_8N1);
+    wr(usart0(US_BRGR), 2); // 4 MHz reset clock / (16 * 115200), rounded.
+    wr(usart0(US_CR), US_CR_RXEN | US_CR_TXEN);
+    unsafe { write_volatile(NVIC_ICPR0, 1 << ID_USART0) };
+    wr(usart0(US_IER), US_CSR_TXRDY);
+    spin(8);
+    let imr = rd(usart0(US_IMR));
+    let pended = unsafe { read_volatile(NVIC_ISPR0) } & (1 << ID_USART0) != 0;
+    wr(usart0(US_IDR), US_CSR_TXRDY);
+    let released =
+        rd(usart0(US_IMR)) == 0 && unsafe { read_volatile(NVIC_ISPR0) } & (1 << ID_USART0) == 0;
+    puts("usart0 txrdy imr=");
+    put_hex(imr, 1);
+    put_flag(" pend=", pended);
+    put_flag(" released=", released);
+    finish(
+        "",
+        imr == US_CSR_TXRDY && pended && released,
+        9,
+        &mut summary,
+    );
+
     unsafe { write_volatile(BOARD_SUMMARY, 0x5A45_0000 | summary) };
-    puts(if summary == 0x1FF {
+    puts(if summary == 0x3FF {
         "SAM4S XPLAINED BOARD PASS\n"
     } else {
         "SAM4S XPLAINED BOARD FAIL\n"
