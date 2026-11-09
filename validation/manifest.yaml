@@ -1312,6 +1312,13 @@ boards:
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: stm32h563
+    # 2026-11-09 (L4/G4/WB ADC, hw-onboarding): changes the shared adc.rs
+    # digest. Only the `stm32l4` layout changes: CR rs bits keep written
+    # zeros (H7 mask), ADSTP/JADSTP/ADDIS complete, ADCAL self-clears when
+    # CCR.CKMODE != 0, and ADSTART converts the SQR1.SQ1 channel. With
+    # CKMODE = 0 ADCAL still latches (nucleo_l476rg_adc capture passes). The
+    # F1/F4/H7/U5/G0 layouts are unchanged. This is a reviewed model-drift
+    # acknowledgment, NOT a new silicon capture; no capture or ack date moves.
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
     # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
     # existing constructors retain their legacy profile. The bus completion
@@ -2448,8 +2455,13 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 1cf8837b47ec1cbc8750a7d85e04f6a664821a64a6b6595d108933ec7a135f75
+    # 2026-11-09 (feat/stm32g0-adc-chselr): adc.rs adds a separate `stm32g0`
+    # layout (CHSELR, CFGR1, CALFACT) for the G0/C0 ADC, selected only by
+    # `profile: stm32g0`; `g0` no longer aliases the L4 layout. The F1, L4
+    # and H7 register maps and conversion paths are byte-for-byte unchanged.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: a0e4e609e8540bc51eef8521872a4561741c95b7a36e538f467f36851aed0360
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -3557,6 +3569,13 @@ boards:
     drift_ack: 2026-11-06
 
   - id: nucleo-l476rg
+    # 2026-11-09 (L4/G4/WB ADC, hw-onboarding): changes the shared adc.rs
+    # digest. Only the `stm32l4` layout changes: CR rs bits keep written
+    # zeros (H7 mask), ADSTP/JADSTP/ADDIS complete, ADCAL self-clears when
+    # CCR.CKMODE != 0, and ADSTART converts the SQR1.SQ1 channel. With
+    # CKMODE = 0 ADCAL still latches (nucleo_l476rg_adc capture passes). The
+    # F1/F4/H7/U5/G0 layouts are unchanged. This is a reviewed model-drift
+    # acknowledgment, NOT a new silicon capture; no capture or ack date moves.
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
     # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
     # existing constructors retain their legacy profile. The bus completion
@@ -4663,8 +4682,13 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 522b4fc22955059d1baeb90ac01cce43945353e195371493fee02b9142c894bc
+    # 2026-11-09 (feat/stm32g0-adc-chselr): adc.rs adds a separate `stm32g0`
+    # layout (CHSELR, CFGR1, CALFACT) for the G0/C0 ADC, selected only by
+    # `profile: stm32g0`; `g0` no longer aliases the L4 layout. The F1, L4
+    # and H7 register maps and conversion paths are byte-for-byte unchanged.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: 7ccf306f260b253c824871f2de2b5c9d31b2837410c3c537e9343c71ae3df676
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5160,7 +5184,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: ea8cc4cf06aec2383febd72a9949a7ff5af2728d14514370b5e07e91853e7f54
+    drift_ack_digest: 8a13d4de711df3223c72633b4543866c645a2f689021775643f71618625426b0
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5716,7 +5740,16 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
+    # 2026-11-09 (feat/stm32-l4-l0-adc, hw-onboarding): adc.rs and
+    #   configs/chips/stm32l073.yaml. The L073 ADC moves from the `stm32l4`
+    #   profile to `stm32l0`, which names the existing `Stm32G0` CHSELR layout
+    #   (RM0367 §14.12 is a subset of that map at the same offsets). The L4
+    #   layout's CR handler also changes (rs mask, ADSTP/ADDIS complete, ADCAL
+    #   clears when CCR.CKMODE != 0, SQR1.SQ1 channel); this board no longer
+    #   reaches it. The silicon reg_oracle capture has no ADC block, and the
+    #   firmware_survival l073 tests pass. ACK, NOT A SILICON CAPTURE; live
+    #   re-capture remains pending.
+    drift_ack: 2026-11-09
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -5795,6 +5828,13 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f103
+    # 2026-11-09 (L4/G4/WB ADC, hw-onboarding): changes the shared adc.rs
+    # digest. Only the `stm32l4` layout changes: CR rs bits keep written
+    # zeros (H7 mask), ADSTP/JADSTP/ADDIS complete, ADCAL self-clears when
+    # CCR.CKMODE != 0, and ADSTART converts the SQR1.SQ1 channel. With
+    # CKMODE = 0 ADCAL still latches (nucleo_l476rg_adc capture passes). The
+    # F1/F4/H7/U5/G0 layouts are unchanged. This is a reviewed model-drift
+    # acknowledgment, NOT a new silicon capture; no capture or ack date moves.
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
     # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
     # existing constructors retain their legacy profile. The bus completion
@@ -6917,8 +6957,13 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 2ff8315cb06b1105dc0c52eb3b6cadc903c288459b32f36eb5fe6d1618f2c834
+    # 2026-11-09 (feat/stm32g0-adc-chselr): adc.rs adds a separate `stm32g0`
+    # layout (CHSELR, CFGR1, CALFACT) for the G0/C0 ADC, selected only by
+    # `profile: stm32g0`; `g0` no longer aliases the L4 layout. The F1, L4
+    # and H7 register maps and conversion paths are byte-for-byte unchanged.
+    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: 0bfe2aa591dd19b25e698e47f66c31a1085f2ea923c445e50c1245cfe8b9587d
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are

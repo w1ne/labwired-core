@@ -64,8 +64,8 @@
     "source_rev": "96ed4c6a01647736bd33ac8a5445b2fd0a2d4b35"
   },
   "stm32g071.elf": {
-    "sha256": "706e1f6cbc37c7d81885cbe785f6962123a710597eba2c39fc4e7bd3c225e92e",
-    "source_rev": "a1c9ec61e7f4308a4fc1b371324feffe98b3ea22"
+    "sha256": "c1782aad10f88e45e91f30ce458e8bb5391153a9c801aed42cca038b7679b321",
+    "source_rev": "d47b33294acb0b90247e52181159685cd2adf543"
   },
   "stm32g431rb.elf": {
     "sha256": "f81414b4fa4fc17950224f4943994c92c27dd14f8551c4063a6f9d8da4fa905c",
@@ -84,8 +84,8 @@
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32l073.elf": {
-    "sha256": "055da349dc3ed3c6c4dce15319ba57849deaf834c02e97870b5777a836c43bd0",
-    "source_rev": "6b5b23d5458d4870eda70a9861aab79689c5f0a1"
+    "sha256": "9454e8d92cf835d2789b212ca3510052016741e8cfca1d006b47b24c595c5819",
+    "source_rev": "48688bfcd7d5201c12cc00658456e0b42a64a2b0"
   },
   "stm32l476.elf": {
     "sha256": "45101137fb7a49c91010713ea822169e8003c3eb4720f628fc96e2fd1c986328",

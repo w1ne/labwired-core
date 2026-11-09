@@ -54,6 +54,36 @@ static bool samples_ok(int v0, int v1) {
   // avr.rs ADC mid-scale 512 (10-bit). Exact.
   return v0 == 512 && v1 == 512;
 
+#elif defined(ARDUINO_NUCLEO_L073RZ)
+  // adc profile stm32l0 (the G0 CHSELR block; the L0 map is its subset): the
+  // matrix system holds A0 (PA0 = ADC_IN0) at 1651 mV, a 12-bit code of 2048.
+  // Core 2.x (ststm32 19.7.1, the CI pin) picks its internal read resolution
+  // from HAL ADC_RESOLUTION_10B and converts at 10 bits: 512. Core 3.x keys
+  // on LL_ADC_RESOLUTION_10B, which wiring_analog.c does not see on the L0,
+  // so it converts at 12 bits (the binary's _internalReadResolution is 0x0C)
+  // and mapResolution() returns ((2048 + 1) >> 2) - 1 = 511, which holds only
+  // for codes 2047..2050. Both exact; the unheld fixed source (3.0 V) reads
+  // 930, no conversion 0.
+#  if defined(STM32_CORE_VERSION_MAJOR) && STM32_CORE_VERSION_MAJOR >= 3
+  return v0 == 511 && v1 == 511;
+#  else
+  return v0 == 512 && v1 == 512;
+#  endif
+
+#elif defined(ARDUINO_NUCLEO_G071RB) || defined(ARDUINO_NUCLEO_G0B1RE)
+  // adc profile stm32g0: the matrix system holds A0 (PA0 = ADC1_IN0) at
+  // 1651 mV. 12-bit against 3.3 V is 2048; stm32duino returns 10 bits: 512.
+  // Exact; the unheld fixed source (3.0 V) reads 930, no conversion 0.
+  return v0 == 512 && v1 == 512;
+
+#elif defined(ARDUINO_NUCLEO_L476RG) || defined(ARDUINO_NUCLEO_G474RE) || \
+    defined(ARDUINO_P_NUCLEO_WB55RG)
+  // adc profile stm32l4: the matrix system holds A0 at 1651 mV (L476 PA0 =
+  // ADC1_IN5; G474 PA0 = ADC1_IN1; WB55 PC0 = ADC1_IN1), and SQR1.SQ1
+  // selects it. 12-bit against 3.3 V is 2048; stm32duino returns 10 bits:
+  // 512. Exact; the unheld fixed source (3.0 V) reads 930, no conversion 0.
+  return v0 == 512 && v1 == 512;
+
 #elif defined(ARDUINO_ARCH_RP2040)
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).
   return v0 == 0 && v1 == 0;

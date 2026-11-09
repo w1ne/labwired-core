@@ -291,6 +291,10 @@ boards:
     pwm_watch: "gpioa:0"
     pwm_min_edges: 20
     family: stm32
+    # L5: the `stm32l0` ADC profile converts CHSELR's channel; the system
+    # holds A0 = PA0 = ADC_IN0 at 1651 mV and the sketch requires exactly 512
+    # on stm32duino 2.x (CI pin 19.7.1) and 511 on 3.x (see the sketch).
+    # On the old `stm32l4` profile stock analogRead(A0) printed "0 0".
     sketches_skip: [L8_can]
     sketches_skip_reason:
       L8_can: "No CAN peripheral on L0 series"
