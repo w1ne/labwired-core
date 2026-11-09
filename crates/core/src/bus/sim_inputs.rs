@@ -389,11 +389,7 @@ impl SystemBus {
     /// Mirrors [`Self::sync_button_inputs`]: the level is applied at the
     /// stimulus point so a walk-free / tick-opted-out resident (keypad) does not
     /// need the per-cycle pass to make a press visible to firmware.
-    pub(crate) fn flush_gpio_device_inputs(
-        &mut self,
-        component: Option<&str>,
-        channel: &str,
-    ) {
+    pub(crate) fn flush_gpio_device_inputs(&mut self, component: Option<&str>, channel: &str) {
         if self.gpio_devices.is_empty() {
             return;
         }
