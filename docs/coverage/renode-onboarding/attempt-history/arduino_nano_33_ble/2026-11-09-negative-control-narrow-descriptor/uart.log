@@ -1,0 +1,2 @@
+ARDUINO NANO 33 BLE SMOKE
+cpu=nrf52840 uart=uarte0

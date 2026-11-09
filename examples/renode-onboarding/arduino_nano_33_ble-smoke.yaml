@@ -1,6 +1,11 @@
-# Arduino Nano 33 BLE smoke against its imported Renode system descriptor.
-# The fixture checks UARTE0 output and GPIO0 OUT readbacks for the RGB and
-# built-in LED pins; it does not claim a modeled LSM9DS1 or LED device.
+# Arduino Nano 33 BLE smoke against its Renode board row, which loads the
+# nrf52840 silicon profile (Renode: boards/arduino_nano_33_ble.repl uses
+# cpus/nrf52840.repl) plus the board LEDs. The firmware runs the nrf52840 chip
+# row's eight blocks (shared renode_checks.rs: FICR/NVMC, CLOCK HFXO/LFXO,
+# GPIO P0.13 readback, GPIOTE task toggles at the pad, TIMER0, RTC0, RNG, PPI
+# EGU0->EGU1), then lights the active-low RGB LED one channel at a time with
+# the LED bits of GPIO0 OUT read back, and blinks D13. It does not claim a
+# modeled LSM9DS1 or ArduCAM (no engine models; not declared).
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabihf/release/firmware-arduino-nano-33-ble-smoke"
@@ -8,12 +13,33 @@ inputs:
 limits:
   max_steps: 4000000
 assertions:
-  - uart_contains: "ARDUINO NANO 33 BLE SMOKE"
   - uart_ordered:
+      - "ARDUINO NANO 33 BLE SMOKE"
       - "cpu=nrf52840 uart=uarte0"
+      - "ficr part=52840 nvmc ready=1 ok"
+      - "clock hfstat=00010001 lfstat=00010001 ok"
+      - "gpio p0.13 in=00002000/00000000 ok"
+      - "gpiote out0 p0.14 in=10 out=0 ok"
+      - "timer0 cmp=1 cap>=50 1 clear=00000000 ok"
+      - "rtc0 cmp=1 counter>=4 1 ok"
+      - "rng valrdy=11 bytes<=ff ok"
+      - "ppi egu0->egu1 off=0 on=1 ok"
       - "rgb=red out=00012040"
       - "rgb=green out=01002040"
       - "rgb=blue out=01012000"
-      - "hb=0 out=01012000"
-      - "hb=1 out=01012000"
+      - "rgb off out=01012040 ok"
+      - "NANO33BLE PASS"
+  - memory_value:
+      address: 0x2003FF00
+      expected_value: 0x528401FF
+      size: 4
+  - gpio_edges:
+      pin: "gpio0:24"
+      min_edges: 2
+  - gpio_edges:
+      pin: "gpio0:6"
+      min_edges: 2
+  - gpio_edges:
+      pin: "gpio0:13"
+      min_edges: 4
   - expected_stop_reason: max_steps

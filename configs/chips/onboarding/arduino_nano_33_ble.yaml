@@ -3,23 +3,16 @@
 #
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
-
+#
+# Arduino Nano 33 BLE (platforms/boards/arduino_nano_33_ble.repl). Renode
+# builds the board as `using "platforms/cpus/nrf52840.repl"` plus the RGB LED
+# on gpio0 (P0.24/16/06), an LSM9DS1 IMU (TWI0 0x6B, magnetometer 0x1E) and an
+# ArduCAM Mini 2MP Plus (SPI2 + TWI0 0x30). The silicon is the imported
+# nrf52840 profile, included whole rather than copied so the two rows cannot
+# drift; see nrf52840.yaml for its peripherals.
+#
+# The LEDs are GPIO pin connections in Renode, so they live in the system file
+# as board_io. The LSM9DS1 and the ArduCAM have no engine model and are not
+# declared. The previous narrowed profile declared only UARTE0 and P0.
+include: nrf52840.yaml
 name: arduino_nano_33_ble
-arch: arm
-flash:
-  base: 0
-  size: 1048576B
-ram:
-  base: 536870912
-  size: 262144B
-# The imported LSM9DS1 and bus-attached LED entries are zero-answering stubs.
-# Keep this profile to the real memory map and model-backed smoke surface.
-peripherals:
-- id: uart0
-  type: nrf52840_uart
-  bus: sysbus
-  base_address: 1073750016
-- id: gpio0
-  type: nrf52840_gpio
-  bus: sysbus
-  base_address: 1342177280

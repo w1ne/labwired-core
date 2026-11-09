@@ -11,7 +11,7 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1151,
+    "pass_claimed_peripherals_total": 1245,
     "pass_claimed_peripherals_median": 2,
     "median_elapsed_ms": 1366,
     "median_elapsed_seconds": 1.366,
@@ -356,31 +356,32 @@
       "script": "examples/renode-onboarding/arduino_nano_33_ble-smoke.yaml",
       "system": "configs/systems/onboarding/arduino_nano_33_ble.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:47:31Z",
-      "finished_at_utc": "2026-11-05T14:47:33Z",
+      "started_at_utc": "2026-11-09T08:55:04Z",
+      "finished_at_utc": "2026-11-09T08:55:07Z",
       "elapsed_seconds": 3,
-      "elapsed_ms": 2450,
+      "elapsed_ms": 2848,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.286,
-        "build_firmware": 0.548,
-        "run_smoke": 1.606
+        "build_cli": 0.353,
+        "build_firmware": 0.262,
+        "run_smoke": 2.219
       },
       "stages_ms": {
-        "build_cli": 286,
-        "build_firmware": 548,
-        "run_smoke": 1606
+        "build_cli": 353,
+        "build_firmware": 262,
+        "run_smoke": 2219
       },
       "_artifact_path": "arduino_nano_33_ble",
       "zero_answering_windows": [],
-      "claimed_peripherals": 2,
+      "claimed_peripherals": 49,
       "smoke_assertion_kinds": [
-        "uart_contains",
         "uart_ordered",
+        "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"
@@ -5324,24 +5325,24 @@
       "script": "examples/renode-onboarding/nrf52840-smoke.yaml",
       "system": "configs/systems/onboarding/nrf52840.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-08T12:52:24Z",
-      "finished_at_utc": "2026-11-08T12:52:26Z",
+      "started_at_utc": "2026-11-09T08:55:09Z",
+      "finished_at_utc": "2026-11-09T08:55:12Z",
       "elapsed_seconds": 3,
-      "elapsed_ms": 2757,
+      "elapsed_ms": 2988,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.404,
-        "build_firmware": 0.293,
-        "run_smoke": 2.045
+        "build_cli": 0.651,
+        "build_firmware": 0.287,
+        "run_smoke": 2.025
       },
       "stages_ms": {
-        "build_cli": 404,
-        "build_firmware": 293,
-        "run_smoke": 2045
+        "build_cli": 651,
+        "build_firmware": 287,
+        "run_smoke": 2025
       },
       "_artifact_path": "nrf52840",
       "zero_answering_windows": [],
@@ -5371,30 +5372,31 @@
       "script": "examples/renode-onboarding/nrf52840dk_nrf52840-smoke.yaml",
       "system": "configs/systems/onboarding/nrf52840dk_nrf52840.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-06T21:39:42Z",
-      "finished_at_utc": "2026-11-06T21:41:35Z",
-      "elapsed_seconds": 114,
-      "elapsed_ms": 113847,
+      "started_at_utc": "2026-11-09T08:51:38Z",
+      "finished_at_utc": "2026-11-09T08:55:02Z",
+      "elapsed_seconds": 204,
+      "elapsed_ms": 203815,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 109.923,
-        "build_firmware": 2.261,
-        "run_smoke": 1.649
+        "build_cli": 201.027,
+        "build_firmware": 0.266,
+        "run_smoke": 2.51
       },
       "stages_ms": {
-        "build_cli": 109923,
-        "build_firmware": 2261,
-        "run_smoke": 1649
+        "build_cli": 201027,
+        "build_firmware": 266,
+        "run_smoke": 2510
       },
       "_artifact_path": "nrf52840dk_nrf52840",
       "zero_answering_windows": [],
-      "claimed_peripherals": 2,
+      "claimed_peripherals": 49,
       "smoke_assertion_kinds": [
-        "uart_contains",
+        "uart_ordered",
+        "memory_value",
         "gpio_edges",
         "expected_stop_reason"
       ],

@@ -465,7 +465,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 2bb6053f13bb3ea6457a41c0d286ada5dce8b2d1adbad9c7b1e7dcd89fc27b99
+    drift_ack_digest: 43d1e01e16661caa76c823abde1d3e3b70d83d27d1906c8630715a4efb46b1b4
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -690,7 +690,14 @@ boards:
     # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
     # not ARMv6-M, so its SCB and fault escalation are unchanged.
     # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    drift_ack: 2026-11-08
+    # 2026-11-09 (lane/renode-coverage, round 410): nrf52/gpiote.rs Event
+    # mode decides the edge from the reported new level (the bus reports only
+    # pins whose IN changed) instead of a per-channel level that started at 0
+    # and was never seeded from the pad, which dropped the first HiToLo edge
+    # of a pin idling high (pulled-up active-low button). GPIOTE Task mode and
+    # every asserted silicon block are unchanged; unit tests + nRF52840 DK
+    # Renode smoke cover it. ACK, NOT A SILICON CAPTURE; re-capture pending.
+    drift_ack: 2026-11-09
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -1053,7 +1060,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 2bb6053f13bb3ea6457a41c0d286ada5dce8b2d1adbad9c7b1e7dcd89fc27b99
+    drift_ack_digest: 43d1e01e16661caa76c823abde1d3e3b70d83d27d1906c8630715a4efb46b1b4
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1278,7 +1285,14 @@ boards:
     # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
     # not ARMv6-M, so its SCB and fault escalation are unchanged.
     # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    drift_ack: 2026-11-08
+    # 2026-11-09 (lane/renode-coverage, round 410): nrf52/gpiote.rs Event
+    # mode decides the edge from the reported new level (the bus reports only
+    # pins whose IN changed) instead of a per-channel level that started at 0
+    # and was never seeded from the pad, which dropped the first HiToLo edge
+    # of a pin idling high (pulled-up active-low button). GPIOTE Task mode and
+    # every asserted silicon block are unchanged; unit tests + nRF52840 DK
+    # Renode smoke cover it. ACK, NOT A SILICON CAPTURE; re-capture pending.
+    drift_ack: 2026-11-09
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other

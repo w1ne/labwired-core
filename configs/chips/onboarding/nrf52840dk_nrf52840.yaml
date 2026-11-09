@@ -1,26 +1,17 @@
-# Narrow imported nRF52840 DK smoke profile. The initial imported descriptor
-# listed peripherals outside this smoke path; keep UARTE0, P0 and its LED0
-# attachment, which are exercised by the shared nRF52840 fixture.
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
 #
-# UARTE0 and P0 bases come from the vendor SVD recorded in the Renode coverage
-# state. The memory windows are the bounded execution window used by the
-# existing nRF52840 smoke, not a density or complete-device claim.
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# nRF52840 DK / PCA10056 (platforms/boards/nrf52840dk_nrf52840.repl). Renode
+# builds the board as `using "platforms/cpus/nrf52840.repl"` plus four LEDs
+# (P0.13-16) and four buttons (P0.11/12/24/25) wired to gpio0. The silicon is
+# the imported nrf52840 profile, included whole rather than copied so the two
+# rows cannot drift; see nrf52840.yaml for its peripherals.
+#
+# The LEDs and buttons are GPIO pin connections in Renode, not bus
+# peripherals, so they live in the system file as board_io. The previous
+# narrowed profile declared only UARTE0 and P0.
+include: nrf52840.yaml
 name: nrf52840dk_nrf52840
-arch: arm
-flash:
-  base: 0x00000000
-  size: 1MiB
-ram:
-  base: 0x20000000
-  size: 256KiB
-peripherals:
-  - id: uart0
-    type: nrf52840_uart
-    base_address: 0x40002000
-    irq: 2
-  - id: gpio0
-    type: nrf52840_gpio
-    base_address: 0x50000000
-  # Renode's led0 is a GPIO pin connection (gpio0 pin 13), not a bus
-  # peripheral; imported here it became a 4 KiB zero window at sysbus 0xD.
-  # Board LEDs are modelled through board_io, so it is not declared.

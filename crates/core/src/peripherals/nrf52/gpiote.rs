@@ -24,9 +24,10 @@
 //!   `gpio::NRF52_GPIO_PAD_LATCH`), so other pins keep their levels, and it
 //!   reaches the PAD through the pin claim, which wins over the port's own
 //!   DIR/OUT (bus wiring: `wire_nrf52_pads`).
-//! - **Event observation**: EVENTS_IN is *not* driven from GPIO input
-//!   changes (no input-pin model yet). Firmware that polls EVENTS_IN
-//!   without PPI seeing edges will never see them fire.
+//! - **Event observation**: an Event-mode channel sets EVENTS_IN[i] (and
+//!   pends the GPIOTE line when INTEN has it) on a matching edge of its pin,
+//!   from the bus's GPIO edge pass (`observe_gpio_change`). PORT/DETECT/
+//!   LATCH (the low-power sense path) is not modelled.
 
 use std::sync::Arc;
 
@@ -98,11 +99,6 @@ pub struct Nrf52Gpiote {
     /// Queued GPIO writes accumulated since the last tick(); drained into
     /// the bus's cross-peripheral mmio_writes on every tick.
     pending_gpio_writes: Vec<(u32, u32)>,
-
-    /// Per-channel last-known input level, used to detect rising/falling
-    /// edges against the GPIO IN registers that the bus snapshots each
-    /// tick.  Initialized lazily when CONFIG is written.
-    channel_in_level: [u32; 8],
 
     /// EVENTS_IN[i] offsets queued by `observe_gpio_change`; drained into
     /// the next tick's fired_events so PPI sees them and IRQ is pended
@@ -451,15 +447,18 @@ impl Peripheral for Nrf52Gpiote {
                 if ch_pin != pin || ch_port != port {
                     continue;
                 }
+                // The bus reports only pins whose IN level changed, so the
+                // new level IS the edge direction. Comparing against a
+                // remembered per-channel level instead (initialised to 0, never
+                // seeded from the pad) dropped the first HiToLo edge of a pin
+                // idling high — every pulled-up, active-low button.
                 let polarity = (cfg >> CONFIG_POLARITY_SHIFT) & CONFIG_POLARITY_MASK;
-                let prev = self.channel_in_level[ch] as u8;
                 let edge_match = match polarity {
-                    POLARITY_LO_TO_HI => prev == 0 && new_level == 1,
-                    POLARITY_HI_TO_LO => prev == 1 && new_level == 0,
-                    POLARITY_TOGGLE => prev != new_level,
+                    POLARITY_LO_TO_HI => new_level == 1,
+                    POLARITY_HI_TO_LO => new_level == 0,
+                    POLARITY_TOGGLE => true,
                     _ => false,
                 };
-                self.channel_in_level[ch] = new_level as u32;
                 if edge_match {
                     self.events_in[ch] = 1;
                     self.pending_in_events
@@ -615,6 +614,44 @@ mod tests {
                 13 | 1 << 8
             )]
         );
+    }
+
+    /// A pin idling HIGH (pulled-up, active-low button) must fire a HiToLo
+    /// channel on its first press. The bus reports only changed pins, so a
+    /// reported level 0 is a falling edge; the release must not fire it.
+    #[test]
+    fn event_hi_to_lo_fires_on_first_press_of_pin_idling_high() {
+        let mut g = gpiote();
+        let cfg = 1 // MODE = Event
+            | ((11 & CONFIG_PSEL_MASK) << CONFIG_PSEL_SHIFT)
+            | ((POLARITY_HI_TO_LO & CONFIG_POLARITY_MASK) << CONFIG_POLARITY_SHIFT);
+        g.write_u32(OFF_CONFIG_0 + 4, cfg).unwrap();
+        g.write_u32(OFF_INTENSET, 1 << 1).unwrap();
+
+        assert!(g.observe_gpio_change(&[(0, 11, 0)]), "press latched");
+        assert_eq!(g.read_u32(OFF_EVENTS_IN_0 + 4).unwrap(), 1);
+        let res = g.tick();
+        assert!(res.irq, "INTEN IN1 pends the line");
+        assert_eq!(res.fired_events, vec![OFF_EVENTS_IN_0 as u32 + 4]);
+
+        g.write_u32(OFF_EVENTS_IN_0 + 4, 0).unwrap();
+        assert!(!g.observe_gpio_change(&[(0, 11, 1)]), "release is LoToHi");
+        assert_eq!(g.read_u32(OFF_EVENTS_IN_0 + 4).unwrap(), 0);
+        // Other port, same pin number: not this channel.
+        assert!(!g.observe_gpio_change(&[(1, 11, 0)]));
+    }
+
+    #[test]
+    fn event_toggle_fires_on_both_edges() {
+        let mut g = gpiote();
+        let cfg = 1
+            | ((3 & CONFIG_PSEL_MASK) << CONFIG_PSEL_SHIFT)
+            | ((POLARITY_TOGGLE & CONFIG_POLARITY_MASK) << CONFIG_POLARITY_SHIFT);
+        g.write_u32(OFF_CONFIG_0, cfg).unwrap();
+        assert!(g.observe_gpio_change(&[(0, 3, 1)]));
+        g.write_u32(OFF_EVENTS_IN_0, 0).unwrap();
+        assert!(g.observe_gpio_change(&[(0, 3, 0)]));
+        assert_eq!(g.read_u32(OFF_EVENTS_IN_0).unwrap(), 1);
     }
 
     #[test]
