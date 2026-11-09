@@ -328,7 +328,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // ESP32-classic BROM function addresses (per ESP-IDF rom/esp32.rom.ld).
     // Returning 0 means "POWERON_RESET" — adequate for first-boot init.
     // ESP32-classic BROM thunks (addresses per ESP-IDF rom/esp32.rom.ld).
-    rom_bank.register(0x4000_81d4, rom_thunks::rtc_get_reset_reason);
+    rom_bank.register(0x4000_81d4, rom_thunks::esp32_rtc_get_reset_reason);
     rom_bank.register(0x4000_2a40, rom_thunks::nop_return_zero); // Cache_Read_Disable
     rom_bank.register(0x4000_29ac, rom_thunks::nop_return_zero); // Cache_Read_Enable
                                                                  // libc-equivalents the firmware links against ROM copies of:
@@ -707,6 +707,14 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         // pwm0 (0x3FF5_E000) is now the real MCPWM0 model registered above.
         ("ledc2", 0x3FF6_8000),
         ("rmt", 0x3FF5_6000),
+        // Radio front-end and baseband (FE2, FE, NRX, BB). No radio is
+        // modelled. ESP-IDF's `rtc_sleep_init` clears their FORCE_PU bits
+        // (FE2_TX_INTERP_CTRL, FE_GEN_CTRL, NRXPD_CTRL, BBPD_CTRL) before
+        // every light or deep sleep, so the windows must decode.
+        ("fe2", 0x3FF4_5000),
+        ("fe", 0x3FF4_6000),
+        ("nrx", 0x3FF5_C000),
+        ("bb", 0x3FF5_D000),
         // pcnt (0x3FF5_7000) is the real Esp32Pcnt model from
         // ESP32_PERIPHERALS: a stub at the same base registered here would win.
     ] {
