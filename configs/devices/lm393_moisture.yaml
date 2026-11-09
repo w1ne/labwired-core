@@ -1,0 +1,54 @@
+# Resistive soil/moisture probe MODULE with an onboard LM393 comparator —
+# declarative `gpio_device`.
+#
+# The probe is a voltage divider: wetter soil (more conductivity) pulls the
+# sense node toward ground. The LM393 compares that node against a trimpot
+# threshold and drives DOUT:
+#
+#   moisture >= threshold  →  DOUT LOW   (wet / conductive)
+#   moisture <  threshold  →  DOUT HIGH  (dry)
+#
+# Threshold is fixed at 50 % for the twin (the physical trimpot is not a
+# SimInput). Drive the `moisture` channel (0..100 %); Acc maps
+# "moisture DOUT HIGH/LOW" onto moisture 0/100. AOUT is not modelled — leave
+# it unwired; firmware that needs an analog reading uses the capacitive
+# `soil-moisture` part instead.
+type: lm393-moisture
+
+behavior:
+  primitive: gpio_device
+  seed_input_clamp: true
+  output_update: final_level
+  outputs: [DOUT]
+  output_pins: { DOUT: dout_pin }
+  pin_config_defaults: { dout_pin: PA0 }
+  # Default moisture is 0 (bone-dry) → DOUT HIGH. pin_defaults must match
+  # because seed_input does not fire `on: { input: }` rules.
+  pin_defaults: { DOUT: true }
+  rules:
+    - on: { input: moisture }
+      do:
+        # HIGH when dry (moisture < 50), LOW when wet (moisture >= 50).
+        - { pin: DOUT, level: "input(moisture) < 50" }
+
+metadata:
+  label: LM393 Moisture Module
+  summary: Resistive soil/moisture module with LM393 comparator DOUT (LOW=wet, HIGH=dry).
+  detail: >-
+    Module-level model of the common resistive soil-moisture breakout with an
+    onboard LM393: DOUT is HIGH when the soil is drier than the (fixed 50 %)
+    threshold and LOW when wetter. Drive the `moisture` channel (0..100 %) at
+    runtime; starts at 0 % (dry → DOUT HIGH). AOUT is not modelled — compare
+    DOUT in firmware, or use the capacitive `soil-moisture` part for AOUT.
+  category: gpio
+  config_keys:
+    - { name: dout_pin, ty: str, doc: "DOUT GPIO pin (e.g. \"PA0\" / \"8\"). Defaults to PA0." }
+  inputs:
+    - { key: moisture, label: Moisture, unit: "%", min: 0, max: 100, default: 0, config_key: moisture }
+
+emit:
+  device_type: lm393-moisture
+  connection: gpio
+  config:
+    - { key: dout_pin, from_part_pin: [DOUT] }
+    - { key: moisture, from_attr: moisture, default: 0 }
