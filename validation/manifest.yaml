@@ -9824,10 +9824,10 @@ boards:
     doc: docs/boards/nrf5340.md
     chip: configs/chips/nrf5340.yaml
     tier: sim-validated
-    note: "Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival, with the ELF-independent clock/alias twin in tests/nrf5340_clock_boot.rs. Reuses the shared Nordic CLOCK/UARTE/RTC behavioural models at the 0x5000_0000 non-secure peripheral alias; the whole boot is bus-violation-free (LABWIRED_TRACE_VIOLATIONS=1). Network core, radio, TrustZone/SPU enforcement, and analog trims are not modeled (FICR/UICR/regulator/trim blocks are benign stubs). No nRF5340 silicon diff — no bench board."
+    note: "Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival. The ELF-independent nrf5340_clock_boot gate checks the secure cpuapp 0x5000_0000 mapping, HFCLK/LFCLK polls, and a TWIM1 EasyDMA repeated-START read of BMI270 CHIP_ID 0x24 on SDA P1.02 / SCL P1.03. Network core, radio, TrustZone/SPU enforcement, physical I²C edge narration, and analog trims are not modeled. No nRF5340 silicon diff — no bench board."
     offline_tests:
       - "firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)"
-      - "nrf5340_clock_boot (HFCLK/LFCLK started-event polls + non-secure alias mapping)"
+      - "nrf5340_clock_boot (secure cpuapp mapping + HFCLK/LFCLK polls + TWIM1/BMI270 EasyDMA read)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs

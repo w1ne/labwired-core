@@ -139,12 +139,12 @@ _No tier-1 fixture or hosted model-verification gate. A compiled RV32E/ILP32E ba
 
 ### `nrf5340`
 
-_No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). Nine peripheral blocks are benign boot stubs._
+_No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; the PR-gated nrf5340_clock_boot test attaches the declarative BMI270 model and reads CHIP_ID 0x24 with a repeated-START transaction. Nine peripheral blocks remain benign boot stubs._
 
 **Functional device/protocol reads** (real driver, decoded value):
 - Unmodified Zephyr v3.7 hello_world boots + prints over UARTE0 EasyDMA — `nrf5340-zephyr` · firmware_survival::test_nrf5340_zephyr_survival (PR gate)
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO`, `TIMER0-2`, `RTC0`
+**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO`, `TIMER0-2`, `RTC0`, `TWIM1 + BMI270 CHIP_ID EasyDMA transaction`
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR` (nrf5340_*_stub) — STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path.

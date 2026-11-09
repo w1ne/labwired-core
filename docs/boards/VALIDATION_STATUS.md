@@ -26,7 +26,7 @@ The models column is a content digest over everything that board's `models` list
 | `microbit-v2` | 🟡 smoke-manual | — | `bc79dca7c100436b` | no silicon capture |
 | `rp2040` | ⚪ structural | — | `5f1ce0e3a9395e38` | no silicon capture |
 | `rp2350` | 🟡 smoke-manual | — | `04b42dc3af8ce648` | no silicon capture |
-| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `b6600f9e037285ae` | no silicon capture |
+| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `6ed45b18ecf329ab` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `04e6480028670079` | no silicon capture |
 | `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `80862b6cfb7b9183` | no silicon capture |
 | `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `868d9276713280bb` | no silicon capture |
@@ -211,10 +211,10 @@ The models column is a content digest over everything that board's `models` list
 ## `nrf5340` — 🔵 sim-validated (deep model, no HW diff)
 
 - Doc: [`docs/boards/nrf5340.md`](nrf5340.md)  ·  Chip: `configs/chips/nrf5340.yaml`
-- Note: Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival, with the ELF-independent clock/alias twin in tests/nrf5340_clock_boot.rs. Reuses the shared Nordic CLOCK/UARTE/RTC behavioural models at the 0x5000_0000 non-secure peripheral alias; the whole boot is bus-violation-free (LABWIRED_TRACE_VIOLATIONS=1). Network core, radio, TrustZone/SPU enforcement, and analog trims are not modeled (FICR/UICR/regulator/trim blocks are benign stubs). No nRF5340 silicon diff — no bench board.
+- Note: Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival. The ELF-independent nrf5340_clock_boot gate checks the secure cpuapp 0x5000_0000 mapping, HFCLK/LFCLK polls, and a TWIM1 EasyDMA repeated-START read of BMI270 CHIP_ID 0x24 on SDA P1.02 / SCL P1.03. Network core, radio, TrustZone/SPU enforcement, physical I²C edge narration, and analog trims are not modeled. No nRF5340 silicon diff — no bench board.
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)
-  - offline (CI): nrf5340_clock_boot (HFCLK/LFCLK started-event polls + non-secure alias mapping)
+  - offline (CI): nrf5340_clock_boot (secure cpuapp mapping + HFCLK/LFCLK polls + TWIM1/BMI270 EasyDMA read)
 - Drift status: **no silicon capture**
 
 ## `stm32h735` — 🔵 sim-validated (deep model, no HW diff)
