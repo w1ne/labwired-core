@@ -91,9 +91,11 @@ fn rsf_resynchronises_after_the_hal_clears_it() {
     }
 }
 
-#[cfg(feature = "event-scheduler")]
 #[test]
 fn counter_advances_one_second_per_72m_cycles() {
+    if !labwired_core::cycle_clock::event_scheduler_enabled() {
+        return;
+    }
     let mut machine = idle_machine();
     let bus = &mut machine.bus;
     enable_rtc_clock(bus);
@@ -117,9 +119,11 @@ fn counter_advances_one_second_per_72m_cycles() {
 /// each counter second pends RTC_IRQn (3) and, at the alarm match,
 /// RTC_Alarm_IRQn (41). The NVIC lines stay disabled, so the pends stay
 /// visible in ISPR.
-#[cfg(feature = "event-scheduler")]
 #[test]
 fn second_and_alarm_interrupts_pend_their_nvic_lines() {
+    if !labwired_core::cycle_clock::event_scheduler_enabled() {
+        return;
+    }
     const RTC_CRH: u64 = 0x4000_2800;
     const RTC_ALRH: u64 = 0x4000_2820;
     const RTC_ALRL: u64 = 0x4000_2824;

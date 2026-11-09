@@ -490,7 +490,8 @@ mod tests {
         assert_ne!(read32(&r, 0x04) & RSF, 0);
     }
 
-    #[cfg(feature = "event-scheduler")]
+    /// Scheduler-mode behaviour; each test returns early when the
+    /// `event-scheduler` feature is off (the counter does not run there).
     mod clocked {
         use super::*;
 
@@ -517,6 +518,9 @@ mod tests {
 
         #[test]
         fn counter_runs_one_second_per_32768_rtcclk() {
+            if !crate::cycle_clock::event_scheduler_enabled() {
+                return;
+            }
             let (mut r, clock) = clocked();
             init(&mut r, 45_296, 0xFFFF_FFFF);
             assert_eq!(cnt(&r), 45_296);
@@ -533,6 +537,9 @@ mod tests {
 
         #[test]
         fn counter_holds_still_until_the_first_write() {
+            if !crate::cycle_clock::event_scheduler_enabled() {
+                return;
+            }
             let (mut r, clock) = clocked();
             clock.publish(10 * HZ);
             assert_eq!(cnt(&r), 0, "not clocked yet: CNT stays at reset");
@@ -543,6 +550,9 @@ mod tests {
 
         #[test]
         fn rsf_sets_one_rtcclk_after_clear() {
+            if !crate::cycle_clock::event_scheduler_enabled() {
+                return;
+            }
             let (mut r, clock) = clocked();
             clock.publish(1000);
             w(&mut r, 0x04, 0);
@@ -553,6 +563,9 @@ mod tests {
 
         #[test]
         fn secf_and_alrf_latch_and_clear_by_writing_zero() {
+            if !crate::cycle_clock::event_scheduler_enabled() {
+                return;
+            }
             let (mut r, clock) = clocked();
             init(&mut r, 10, 12);
             clock.publish(HZ);
@@ -586,6 +599,9 @@ mod tests {
 
         #[test]
         fn no_event_until_an_interrupt_is_enabled() {
+            if !crate::cycle_clock::event_scheduler_enabled() {
+                return;
+            }
             let (mut r, _clock) = clocked();
             init(&mut r, 10, 12);
             assert!(r.take_scheduled_events().is_empty());
@@ -593,6 +609,9 @@ mod tests {
 
         #[test]
         fn secie_pends_the_global_irq_once_per_second() {
+            if !crate::cycle_clock::event_scheduler_enabled() {
+                return;
+            }
             let (mut r, clock) = clocked();
             init(&mut r, 10, 0xFFFF_FFFF);
             w(&mut r, 0x00, 1); // SECIE
@@ -617,6 +636,9 @@ mod tests {
 
         #[test]
         fn alrie_pends_global_and_alarm_irq_at_the_match_only() {
+            if !crate::cycle_clock::event_scheduler_enabled() {
+                return;
+            }
             let (mut r, clock) = clocked();
             r.alarm_irq = Some(41);
             init(&mut r, 10, 12);
@@ -631,6 +653,9 @@ mod tests {
 
         #[test]
         fn a_flag_latched_by_a_write_still_pends() {
+            if !crate::cycle_clock::event_scheduler_enabled() {
+                return;
+            }
             // The second passes, then firmware writes before the event drains:
             // the write latches SECF, and the event must still pend it.
             let (mut r, clock) = clocked();
@@ -646,6 +671,9 @@ mod tests {
 
         #[test]
         fn enabling_an_interrupt_on_a_latched_flag_pends_at_once() {
+            if !crate::cycle_clock::event_scheduler_enabled() {
+                return;
+            }
             let (mut r, clock) = clocked();
             init(&mut r, 0, 0xFFFF_FFFF);
             clock.publish(3 * HZ);
@@ -658,6 +686,9 @@ mod tests {
 
         #[test]
         fn a_cleared_flag_pends_nothing() {
+            if !crate::cycle_clock::event_scheduler_enabled() {
+                return;
+            }
             let (mut r, clock) = clocked();
             init(&mut r, 0, 0xFFFF_FFFF);
             w(&mut r, 0x00, 1);
@@ -671,6 +702,9 @@ mod tests {
 
         #[test]
         fn counter_overflow_sets_owf() {
+            if !crate::cycle_clock::event_scheduler_enabled() {
+                return;
+            }
             let (mut r, clock) = clocked();
             init(&mut r, 0xFFFF_FFFF, 5);
             clock.publish(HZ);
