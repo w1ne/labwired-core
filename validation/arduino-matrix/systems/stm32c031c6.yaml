@@ -1,0 +1,16 @@
+# Arduino matrix system — NUCLEO-C031C6 (UM2953): INA219 on Wire (I2C1,
+# D14/D15 = PB9/PB8) for L3, MAX31855 on SPI (SPI1, D13/D12/D11) for L4.
+name: "arduino-matrix-stm32c031c6"
+chip: "../../../configs/chips/stm32c031c6.yaml"
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PB0"
+board_io: []

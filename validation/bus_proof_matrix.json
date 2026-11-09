@@ -1375,6 +1375,30 @@
         "lane": "none"
       }
     },
+    "stm32c031c6": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L0_serial_boot/src/main.ino",
+        "test": "LW_L0_OK",
+        "signal": "stock STM32duino sketch (ststm32@19.7.1, nucleo_c031c6) prints LW_L0_OK through USART2 (PA2, ST-LINK VCP) after the HSE 48 MHz switch; the matrix asserts the UART sink contains it (examples/nucleo-c031c6/evidence/arduino-matrix).",
+        "lane": "core-arduino-matrix-smoke (board stm32c031c6): validation/arduino-matrix/run_matrix.py + labwired test"
+      },
+      "spi": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino",
+        "test": "LW_L4_OK",
+        "signal": "stock SPI.transfer on SPI1 reads the MAX31855 device's own 32-bit frame (exact default frame required for LW_L4_OK).",
+        "lane": "core-arduino-matrix-smoke (board stm32c031c6): validation/arduino-matrix/run_matrix.py + labwired test"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "INA219_EXPECT_CONFIG",
+        "signal": "stock Wire on I2C1 (PB8/PB9) reads the INA219's CONFIG 0x399F and BUS 0x19CA registers (exact tier; a full run shows no LW_L3_PARTIAL_NO_RX).",
+        "lane": "core-arduino-matrix-smoke (board stm32c031c6): validation/arduino-matrix/run_matrix.py + labwired test"
+      }
+    },
     "stm32g071": {
       "in_boards": true,
       "uart": {

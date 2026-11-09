@@ -1,0 +1,32 @@
+labwired: target/debug/labwired
+boards:   stm32c031c6
+sketches: L0_serial_boot, L1_serial_loop, L2_blink_serial, L3_i2c_sensor, L4_spi_sensor, L5_adc, L6_pwm, L7_timer, L8_can
+out:      /home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix
+
+==> stm32c031c6 × L0_serial_boot
+    compile: cache hit (firmware.elf)
+    run: pass
+==> stm32c031c6 × L1_serial_loop
+    compile: cache hit (firmware.elf)
+    run: pass
+==> stm32c031c6 × L2_blink_serial
+    compile: cache hit (firmware.elf)
+    run: pass
+==> stm32c031c6 × L3_i2c_sensor
+    compile: cache hit (firmware.elf)
+    run: pass
+==> stm32c031c6 × L4_spi_sensor
+    compile: cache hit (firmware.elf)
+    run: pass
+==> stm32c031c6 × L5_adc: skip (No C0 ADC (CHSELR) model: analogRead returns 0 on every pin; a pass would be vacuous)
+==> stm32c031c6 × L6_pwm
+    compile: cache hit (firmware.elf)
+    run: pass
+==> stm32c031c6 × L7_timer
+    compile: cache hit (firmware.elf)
+    run: pass
+==> stm32c031c6 × L8_can: skip (STM32C031C6 has no CAN peripheral)
+
+Done in 7s — 7 pass / 2 skip / 0 fail (cells 9; gate treats skip as non-fail)
+Scoreboard: /home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/scoreboard.md
+Docs scoreboard unchanged (partial run; not full 25×9)

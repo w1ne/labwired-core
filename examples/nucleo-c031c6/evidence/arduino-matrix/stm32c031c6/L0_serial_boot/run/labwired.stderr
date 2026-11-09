@@ -1,0 +1,5 @@
+[2m2026-11-09T07:28:38.906671Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../../configs/chips/stm32c031c6.yaml
+[2m2026-11-09T07:28:38.985688Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8002b11
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  1/1 checks · test · 52470 steps · 0.02s

@@ -1,0 +1,275 @@
+# LabWired - STM32C031C6 chip configuration (stock stm32duino profile)
+#
+# Source references:
+# - RM0490 Rev 5 (STM32C0x1 reference manual): memory map, RCC, GPIO, USART,
+#   I2C, SPI, TIM, ADC, DMA/DMAMUX register blocks. The C0 reuses the G0 IP
+#   blocks at the G0 addresses and IRQ numbers; it drops the PLL, DAC, LPTIM,
+#   TIM2/6/7/15, a second I2C/SPI and USART3+.
+# - DS13867 (STM32C031x4/x6 datasheet): 32 KiB flash @0x08000000, 12 KiB SRAM
+#   @0x20000000, Cortex-M0+ up to 48 MHz, DEV_ID 0x453.
+# - ST CMSIS `stm32c031xx.h` (STMicroelectronics/cmsis-device-c0): `*_BASE` and
+#   IRQn values below.
+# - UM2953 Rev 2 (NUCLEO-C031C6): HSE 48 MHz, LD4 on PA5, VCP on USART2
+#   PA2/PA3 — board wiring lives in the system manifest.
+#
+# This profile carries what a stock Arduino_Core_STM32 sketch touches; it is
+# exercised by the Arduino matrix row `stm32c031c6` (validation/arduino-matrix,
+# evidence in examples/nucleo-c031c6/evidence/arduino-matrix).
+
+name: "stm32c031c6"
+arch: "arm"
+core: "cortex-m0+"
+# NUCLEO_C031C6 SystemClock_Config runs SYSCLK from the 48 MHz HSE.
+cpu_hz: 48_000_000
+flash:
+  base: 0x08000000
+  size: "32KB"
+ram:
+  base: 0x20000000
+  size: "12KB"
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32c0"
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+
+  # FLASH interface @ 0x40022000 (RM0490 §3.7). The L4-shaped model is
+  # reused for ACR latency/KEYR/SR; C0 option-byte bits are not tuned.
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      profile: "l4"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+
+  # --- GPIO (IOPORT bus @ 0x50000000, like L0) ----------------------------
+  # stm32c031xx.h defines GPIOA..GPIOD and GPIOF (no GPIOE). The `stm32v2`
+  # register layout matches the C0 GPIO map (RM0490 §8).
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x50000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    # RCC_IOPENR.GPIOAEN (bit 0), RM0490 §6.4.12.
+    clock: { reg: "iopenr", bit: 0 }
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x50000400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "iopenr", bit: 1 }
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x50000800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "iopenr", bit: 2 }
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x50000C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "iopenr", bit: 3 }
+  - id: "gpiof"
+    type: "gpio"
+    base_address: 0x50001400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "iopenr", bit: 5 }
+
+  # --- USART / LPUART (modern stm32v2 layout: ISR 0x1C, TDR 0x28) ---------
+  # The C031 carries USART1 and USART2 only (RM0490 §26). USART2 on PA2/PA3
+  # is the NUCLEO's ST-LINK VCP console. IRQs from stm32c031xx.h IRQn_Type
+  # (USART1=27, USART2=28).
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 27
+    config:
+      profile: "stm32v2"
+    # RCC_APBENR2.USART1EN (bit 14), RM0490 §6.4.15.
+    clock: { reg: "apbenr2", bit: 14 }
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 28
+    config:
+      profile: "stm32v2"
+    # RCC_APBENR1.USART2EN (bit 17), RM0490 §6.4.14.
+    clock: { reg: "apbenr1", bit: 17 }
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 23
+    config:
+      profile: "stm32l4"
+      # I2C1 on PA9/PA10/PB6-PB9 is AF6, the same rows as the G0 table.
+      pad_map: "stm32g0"
+    clock: { reg: "apbenr1", bit: 21 }
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 25
+    config:
+      profile: "stm32_fifo"
+      # SPI1 on PA4-PA7/PA15/PB3-PB5 is AF0, the same rows as the G0 table.
+      pad_map: "stm32g0"
+    clock: { reg: "apbenr2", bit: 12 }
+  # --- Timers: TIM1 (advanced), TIM3, TIM14, TIM16, TIM17 — the C031 has no
+  # TIM2/6/7/15. Channel outputs reach their pads through the C0 AF table
+  # (`pad_map: stm32c0`, bus/attach.rs STM32C0_TIMER_PADS): LD4/PA5 is
+  # TIM1_CH1 on AF5, so stock analogWrite(LED_BUILTIN) is a pad waveform.
+  - id: "tim1_pwm"
+    type: "timer"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 13
+    config:
+      pad_map: "stm32c0"
+      advanced: true
+    clock: { reg: "apbenr2", bit: 11 }
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 16
+    config:
+      pad_map: "stm32c0"
+      width: 16
+    clock: { reg: "apbenr1", bit: 1 }
+  - id: "tim14"
+    type: "timer"
+    base_address: 0x40002000
+    size: "1KB"
+    irq: 19
+    config:
+      pad_map: "stm32c0"
+      width: 16
+    clock: { reg: "apbenr2", bit: 15 }
+  - id: "tim16"
+    type: "timer"
+    base_address: 0x40014400
+    size: "1KB"
+    irq: 21
+    config:
+      pad_map: "stm32c0"
+      width: 16
+    clock: { reg: "apbenr2", bit: 17 }
+  - id: "tim17"
+    type: "timer"
+    base_address: 0x40014800
+    size: "1KB"
+    irq: 22
+    config:
+      pad_map: "stm32c0"
+      width: 16
+    clock: { reg: "apbenr2", bit: 18 }
+  # ADC: REGISTER FILE ONLY on this part. The L4-shaped engine does not
+  # decode the C0's CFGR1/CHSELR layout; stock analogRead() returns without
+  # hanging but reads 0 on every pin. Declared so the HAL's ADC bring-up has
+  # a window to talk to; the Arduino matrix skips L5 rather than pass it.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    irq: 12
+    config:
+      profile: "stm32l4"
+    clock: { reg: "apbenr2", bit: 20 }
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"
+    clock: { reg: "ahbenr", bit: 0 }
+
+  # --- DMAMUX (RM0490 §10): channel x feeds DMA1 channel x+1 (3 channels on
+  # the C031); CxCR.DMAREQ_ID selects the request (16 SPI1_RX, 17 SPI1_TX).
+  # Shares DMA1's clock enable (RCC_AHBENR.DMA1EN). Identification registers
+  # are not populated.
+  - id: "dmamux"
+    type: "dmamux"
+    base_address: 0x40020800
+    size: "1KB"
+    clock: { reg: "ahbenr", bit: 0 }
+    config:
+      dma: "dma1"
+      channels: 3
+      requests:
+        spi1_rx: 16
+        spi1_tx: 17
+
+  # --- Watchdogs / RTC ------------------------------------------------------
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+    irq: 2
+    clock: { reg: "apbenr1", bit: 10 }
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+  - id: "wwdg"
+    type: "wwdg"
+    base_address: 0x40002C00
+    size: "1KB"
+    irq: 0
+    clock: { reg: "apbenr1", bit: 11 }
+
+  # --- CRC (AHB @ 0x40023000; 32-bit IDR — RM0490 §13) ---------------------
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    config:
+      idr_width: 32
+    clock: { reg: "ahbenr", bit: 12 }
+
+  # --- EXTI / SYSCFG --------------------------------------------------------
+  # C0 EXTI is the G0 split-pending register file (RTSR1 0x00, FTSR1 0x04,
+  # RPR1 0x0C, FPR1 0x10, EXTICR1..4 0x60, IMR1 0x80) routed to EXTI0_1 /
+  # EXTI2_3 / EXTI4_15 (IRQ 5 / 6 / 7, RM0490 vector table).
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40021800
+    size: "1KB"
+    config:
+      profile: "stm32g0"
+  - id: "syscfg"
+    type: "syscfg"
+    base_address: 0x40010000
+    size: "1KB"
+    clock: { reg: "apbenr2", bit: 0 }
+
+  # --- Core / debug ---------------------------------------------------------
+  # DBGMCU is an APB peripheral at 0x40015800 on Cortex-M0+. DEV_ID 0x453 is
+  # the ST-published STM32C031 identifier (RM0490 DBGMCU_IDCODE); it is a
+  # documented constant, not read off a bench die.
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0x40015800
+    size: "1KB"
+    config:
+      idcode: 0x00000453
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
