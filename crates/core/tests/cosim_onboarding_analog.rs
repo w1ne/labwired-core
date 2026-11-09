@@ -31,6 +31,7 @@ const IDLE_CHANNEL: u8 = 7;
 
 /// Onboarding profiles whose ADC is converted end to end here.
 const CONVERTED: &[&str] = &[
+    "a20",
     "alif_ae822fa0e5597bs0",
     "ambiq-apollo4",
     "arduino_nano_33_ble",
@@ -412,7 +413,21 @@ enum Family {
     /// 14 bits, the 12-bit code (mV * 4096 / VRH) shifted left 2; VRH from
     /// the descriptor's `vref_mv` (5 V).
     Mpc55xxEqadc { vref_mv: u32 },
+    /// Allwinner sunxi LRADC (`sunxi_lradc`), the Linux
+    /// `sun4i-lradc-keys.c` open with the NetBSD `CHAN_SELECT` 2 (both
+    /// channels): `CTRL = FIRST_CONVERT_DLY(2) | LEVELA_B_CNT(1) | HOLD_EN |
+    /// SAMPLE_RATE(0) | ENABLE`, then each read clears `INTS`, waits for
+    /// `CHANn_DATA`, takes `DATAn & 0x3f` and writes `INTS` back. 6 bits,
+    /// 63 / VREF, VREF = supply * 2 / 3 (2 V from the 3.0 V rail).
+    SunxiLradc { vref_mv: u32 },
 }
+
+/// sunxi LRADC offsets and bits (Linux `sun4i-lradc-keys.c`).
+const LRADC_CTRL: u64 = 0x00;
+const LRADC_INTC: u64 = 0x04;
+const LRADC_INTS: u64 = 0x08;
+const LRADC_DATA0: u64 = 0x0C;
+const LRADC_OPEN: u32 = (2 << 24) | (2 << 22) | (1 << 8) | (1 << 6) | 1;
 
 /// MPC55xx eQADC offsets, bits and command fields (MPC5567 header
 /// `EQADC_tag`; OpenSAR `Adc_eQADC.c`).
@@ -788,6 +803,16 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
                     .and_then(|v| v.as_u64())
                     .map_or(5000, |mv| mv as u32),
             }
+        } else if kind == "sunxi_lradc" {
+            let get = |key: &str, default: u64| {
+                p.config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(default) as u32
+            };
+            Family::SunxiLradc {
+                vref_mv: get("supply_mv", 3000) * get("vref_num", 2) / get("vref_den", 3),
+            }
         } else if kind == "renesas_adc_c" {
             Family::RenesasAdcC {
                 vref_mv: p
@@ -929,6 +954,9 @@ impl Converter {
             // 12 bits, 2^12 / VRH (5 V), truncated, clamped: the 3.3 V
             // dividers stay below full scale. The sweep reads RFPOP >> 2.
             Family::Mpc55xxEqadc { vref_mv } => (mv * 4096 / vref_mv).min(4095),
+            // 6 bits, 63 / VREF (2 V), truncated, clamped: the -10 °C
+            // divider (2.79 V) saturates, 25/80 °C resolve.
+            Family::SunxiLradc { vref_mv } => (mv * 63 / vref_mv).min(63),
             // Against GND: raw 32768 * V / 1.2 V floored and limited to
             // 32767, 12 significant bits (low 4 cleared), halved by the
             // offset/gain stage at reset OFFSET/GAIN.
@@ -954,7 +982,10 @@ impl Converter {
         match self.family {
             // AIN0 and AIN1: the two pads with a divide-by-5 channel.
             // DA1459x: SEL_P 0/1 are pads P1_0/P1_1.
-            Family::Eoss3 | Family::Max32650 | Family::Da14Gpadc => [0, 1],
+            // LRADC0/LRADC1: the LRADC has only two channels.
+            Family::Eoss3 | Family::Max32650 | Family::Da14Gpadc | Family::SunxiLradc { .. } => {
+                [0, 1]
+            }
             // ADC4 (PA4) and ADC5 (PA5): the W108 has ADC0..5 only.
             Family::Stm32w108Adc => [4, 5],
             // VAUX5 and VAUX6: the DRP channel is 0x10 + n.
@@ -1082,6 +1113,22 @@ impl Converter {
                     self.id
                 );
                 bus.write_u32(self.base + W108_DMACR, 1 << 4).expect("RST");
+            }
+            Family::SunxiLradc { .. } => {
+                // Configured but ENABLE = 0: no sample.
+                bus.write_u32(self.base + LRADC_CTRL, LRADC_OPEN & !1)
+                    .expect("CTRL without ENABLE");
+                bus.tick_peripherals();
+                assert_eq!(
+                    bus.read_u32(self.base + LRADC_INTS).unwrap(),
+                    0,
+                    "{}: no sample while ENABLE = 0",
+                    self.id
+                );
+                bus.write_u32(self.base + LRADC_CTRL, LRADC_OPEN)
+                    .expect("sun4i_lradc_open");
+                bus.write_u32(self.base + LRADC_INTC, 0x101)
+                    .expect("INTC = DATA0 | DATA1");
             }
             Family::Mpc55xxEqadc { .. } => {
                 // A command in a disabled CFIFO (MODE 0) waits: no result.
@@ -3186,6 +3233,20 @@ impl Converter {
                 bus.write_u32(self.base + W108_CR, 0).expect("ADC off");
                 u32::from(bus.read_u16(W108_BUFFER).unwrap())
             }
+            Family::SunxiLradc { .. } => {
+                let ints = self.base + LRADC_INTS;
+                let data = 1u32 << (8 * channel);
+                bus.write_u32(ints, !0).expect("clear INTS");
+                bus.tick_peripherals();
+                let pending = bus.read_u32(ints).unwrap();
+                assert_ne!(pending & data, 0, "{}: CHAN{channel}_DATA", self.id);
+                let value = bus
+                    .read_u32(self.base + LRADC_DATA0 + 4 * u64::from(channel))
+                    .unwrap()
+                    & 0x3F;
+                bus.write_u32(ints, pending).expect("write INTS back");
+                value
+            }
             Family::Mpc55xxEqadc { .. } => {
                 let cmd = EQADC_EOQ | EQADC_LST_128 | (u32::from(channel) << 8);
                 assert_eq!(
@@ -4269,7 +4330,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 172,
+        instances, 173,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -4277,7 +4338,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 77,
+        without_adc, 76,
         "onboarding profiles that declare no modelled ADC"
     );
 }

@@ -156,6 +156,7 @@ pub mod stm32l1_adc;
 pub mod stm32u5_sysmem;
 pub mod stm32w108_adc;
 pub mod stub;
+pub mod sunxi_lradc;
 pub mod syscfg;
 pub mod systick;
 pub mod timer;

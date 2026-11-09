@@ -462,6 +462,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "stm32l1_adc",
     // NXP LPC2000 10-bit ADC, ADCR/ADDR (LPC2119..2294 UM ch. 17).
     "lpc2000_adc",
+    // Allwinner sunxi LRADC, CTRL/INTC/INTS/DATA0/1 (Linux sun4i-lradc-keys.c).
+    "sunxi_lradc",
     // Renesas RZ ADC_C, ADM0..3/ADINT/ADSTS/ADCRn (RZ/G FSP adc_c_iodefine.h).
     "renesas_adc_c",
     // Alif Ensemble/Balletto ADC12 (alif_ensemble-cmsis-dfp ADC_Type, adc.h).
@@ -2113,6 +2115,22 @@ pub fn try_build(
                 .and_then(|v| v.as_u64())
                 .map_or(3300, |v| v as u32),
         )),
+        // `supply_mv`: the `vref-supply` rail (3.0 V on A10/A20 boards);
+        // `vref_num`/`vref_den`: the internal divider (2/3 A10 variant).
+        "sunxi_lradc" => {
+            let get = |key: &str, default: u32| {
+                p_cfg
+                    .config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .map_or(default, |v| v as u32)
+            };
+            Box::new(crate::peripherals::sunxi_lradc::SunxiLradc::new(
+                get("supply_mv", 3000),
+                get("vref_num", 2),
+                get("vref_den", 3),
+            ))
+        }
         "stm32w108_adc" => Box::new(crate::peripherals::stm32w108_adc::Stm32w108Adc::new(
             p_cfg
                 .config
