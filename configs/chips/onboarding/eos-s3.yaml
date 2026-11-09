@@ -4,19 +4,47 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# Bounded Cortex-M4F + memory + PL011 execution profile based on Renode's
-# platforms/cpus/eos-s3.repl. Its 512 KiB M4 memory is mapped at 0 and mirrored
-# at 0x20000000; this descriptor exposes the tested code and SRAM windows.
+# QuickLogic EOS S3 Cortex-M4F profile from Renode platforms/cpus/eos-s3.repl.
+#
+# Memory: the M4 has ONE 512 KiB SRAM (Renode `m4mem`), mapped at 0x20000000
+# and mirrored at 0x0. The bootloader copies the application from SPI flash
+# into it; there is no on-chip flash. So `flash` is empty, `ram` is the SRAM,
+# and the low view is a same-backing mirror: a store at 0x0+n is the store at
+# 0x20000000+n. (The import mapped two separate 512 KiB stores, so a write
+# through one view never showed in the other.)
+#
+# Declared: PL011 UART (polled; its IRQ reaches the NVIC only through the
+# EOS S3 interrupt controller at 0x40004800, which has no model), the eight
+# M4 GPIOs in MISC_CTRL (IO_INPUT 0x40005100 / IO_OUTPUT 0x40005104; qorc-sdk
+# HAL/inc/eoss3_dev.h, HAL/src/eoss3_hal_gpio.c), and the 4 KiB SDMA SRAM.
+# Not declared (no model): interrupt controller and GPIO interrupts, IO_MUX
+# pad controls, simple periodic timer, ADC, DesignWare SPI + SPI DMA, packet
+# FIFO, uDMA + bridge, FFE and its I2C masters, voice block, PMU, CRU.
 name: eos-s3
 arch: arm
+core: cortex-m4
 flash:
   base: 0
-  size: 524288B
+  size: 0
 ram:
-  base: 536870912
-  size: 524288B
+  base: 0x20000000
+  size: 512KB
+flash_boot_alias: false
+memory_regions:
+- name: m4mem_low
+  base: 0x0
+  size: 512KB
+  alias_of: 0x20000000
+- name: sdma_sram
+  base: 0x4000F000
+  size: 4KB
 peripherals:
 - id: uart
   type: pl011
-  bus: sysbus
-  base_address: 1073807360
+  base_address: 0x40010000
+- id: gpio
+  type: gpio
+  base_address: 0x40005100
+  size: 8B
+  config:
+    profile: eos_s3

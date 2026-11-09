@@ -4,19 +4,13 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# Bounded Cortex-M4F + memory + PL011 execution profile based on Renode's
-# platforms/boards/eos-s3-quickfeather.repl and platforms/cpus/eos-s3.repl.
-# LEDs, button and sensor are omitted because this smoke does not exercise them.
 name: eos-s3-quickfeather
 arch: arm
-flash:
-  base: 0
-  size: 524288B
-ram:
-  base: 536870912
-  size: 524288B
-peripherals:
-- id: uart
-  type: pl011
-  bus: sysbus
-  base_address: 1073807360
+# QuickLogic QuickFeather. Renode platforms/boards/eos-s3-quickfeather.repl is
+# cpus/eos-s3.repl plus three LEDs, a user button and an MC3635 accelerometer,
+# so the chip surface is the eos-s3 onboarding profile, included whole.
+# Board LEDs and the button are not declared: Renode wires the LEDs to
+# GPIO 4/5/6, while qorc-sdk BSP/quickfeather/src/leds.c drives IO_OUTPUT
+# bits 1/4/6; the two sources disagree. MC3635 sits behind the FFE I2C
+# master, which has no model.
+include: eos-s3.yaml

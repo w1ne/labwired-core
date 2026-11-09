@@ -122,6 +122,10 @@ pub enum GpioRegisterLayout {
     /// IODIR @0x8, IOCLR @0xC. One instance = one port; LPC2294 has four at a
     /// 0x10 stride from 0xE0028000 (RTEMS `bsps/arm/rtl22xx/include/lpc22xx.h`).
     Lpc2xxx,
+    /// QuickLogic EOS S3 MISC IO: IO_INPUT @0x0, IO_OUTPUT @0x4, eight GPIOs
+    /// (`MISC_CTRL` +0x100/+0x104 = 0x4000_5100; qorc-sdk `HAL/inc/eoss3_dev.h`
+    /// and `HAL/src/eoss3_hal_gpio.c`, Renode `EOSS3_IntrCtrl` misc region).
+    EosS3,
 }
 
 impl FromStr for GpioRegisterLayout {
@@ -143,8 +147,9 @@ impl FromStr for GpioRegisterLayout {
             "ra_port" | "ra4m1" | "renesas_port" => Ok(Self::RaPort),
             "imxrt" | "imxrt_gpio" => Ok(Self::Imxrt),
             "lpc2xxx" | "lpc21xx" | "lpc22xx" => Ok(Self::Lpc2xxx),
+            "eos_s3" | "eoss3" | "eos_s3_misc" => Ok(Self::EosS3),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, efm32s0, efm32s1, sam_port, ra_port, imxrt",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, efm32s0, efm32s1, sam_port, ra_port, imxrt, lpc2xxx, eos_s3",
                 value
             )),
         }
@@ -1581,6 +1586,49 @@ impl Lpc2xxxGpio {
     }
 }
 
+// ── QuickLogic EOS S3 MISC IO ────────────────────────────────────────────────
+// The eight M4-side GPIOs live in two MISC_CTRL words: IO_INPUT @0x100 and
+// IO_OUTPUT @0x104 (qorc-sdk `eoss3_dev.h`; `HAL_GPIO_Read` reads bit n of
+// IO_INPUT, `HAL_GPIO_Write` read-modify-writes bit n of IO_OUTPUT). The port
+// window starts at IO_INPUT. IO_OUTPUT holds bits [7:0] and drives the pads;
+// IO_INPUT reads the pad inputs only, as in Renode's `EOSS3_IntrCtrl`. Not
+// modelled: the IO_MUX pad controls (output enable, receive enable, pulls),
+// so every pad is driven from IO_OUTPUT, and the GPIO interrupt registers in
+// the interrupt controller at 0x4000_4800.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct EosS3Gpio {
+    io_output: u32,
+    /// Input latch (host/button injection), read through IO_INPUT.
+    pin_in: u32,
+    /// Pins the outside world is holding. Not a register.
+    #[serde(skip)]
+    external: u32,
+}
+
+impl EosS3Gpio {
+    const PINS: u32 = 0xFF;
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x0 => self.pin_in & Self::PINS,
+            0x4 => self.io_output,
+            _ => {
+                crate::census_reg!("gpio:EosS3Gpio", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x4 => self.io_output = value & Self::PINS,
+            _ => {
+                crate::census_reg!("gpio:EosS3Gpio", offset, "write");
+            }
+        }
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 pub enum GpioFamily {
     Stm32F1(F1Gpio),
@@ -1593,6 +1641,7 @@ pub enum GpioFamily {
     RaPort(RaPortGpio),
     Imxrt(ImxrtGpio),
     Lpc2xxx(Lpc2xxxGpio),
+    EosS3(EosS3Gpio),
 }
 
 impl GpioFamily {
@@ -1608,6 +1657,7 @@ impl GpioFamily {
             Self::RaPort(g) => g.read_reg(offset),
             Self::Imxrt(g) => g.read_reg(offset),
             Self::Lpc2xxx(g) => g.read_reg(offset),
+            Self::EosS3(g) => g.read_reg(offset),
         }
     }
 
@@ -1623,6 +1673,7 @@ impl GpioFamily {
             Self::RaPort(g) => g.write_reg(offset, value),
             Self::Imxrt(g) => g.write_reg(offset, value),
             Self::Lpc2xxx(g) => g.write_reg(offset, value),
+            Self::EosS3(g) => g.write_reg(offset, value),
         }
     }
 
@@ -1704,6 +1755,13 @@ impl GpioFamily {
                 apply(&mut g.pin_in);
                 g.external |= bit;
             }
+            Self::EosS3(g) => {
+                if pin >= 8 {
+                    return false;
+                }
+                apply(&mut g.pin_in);
+                g.external |= bit;
+            }
         }
         true
     }
@@ -1733,6 +1791,7 @@ impl GpioFamily {
                 g.latch_interrupts(before, after);
             }
             Self::Lpc2xxx(g) => g.external &= !bit,
+            Self::EosS3(g) => g.external &= !bit,
         }
     }
 
@@ -1887,6 +1946,8 @@ impl GpioFamily {
                 bit(g.psr_view())
             }),
             Self::Lpc2xxx(g) => Some(bit(g.iopin_view())),
+            // Every pad is driven from IO_OUTPUT (IO_MUX not modelled).
+            Self::EosS3(g) => (pin < 8).then(|| bit(g.io_output)),
         }
     }
 }
@@ -2085,6 +2146,9 @@ impl GpioPort {
                     GpioMode::Input
                 }
             }
+            // EOS S3: no direction register in this block; the IO_MUX pad
+            // output enable is not modelled, so IO_OUTPUT drives every pad.
+            GpioFamily::EosS3(_) => GpioMode::Output,
             // Series-2 EFR32: 4-bit mode nibble per pin (MODEL/MODEH).
             // 0 DISABLED is a hi-Z pin — closest to Analog here; 1..3 are the
             // input modes; >= 4 the output modes. No AF verdict: the ROUTE
@@ -2242,6 +2306,8 @@ impl GpioPort {
             }
             // LPC2xxx pull resistors are not modelled.
             GpioFamily::Lpc2xxx(_) => None,
+            // EOS S3 pulls are IO_MUX pad controls, not modelled.
+            GpioFamily::EosS3(_) => None,
         }
     }
 
@@ -2441,6 +2507,7 @@ impl GpioPort {
             GpioRegisterLayout::RaPort => GpioFamily::RaPort(RaPortGpio::default()),
             GpioRegisterLayout::Imxrt => GpioFamily::Imxrt(ImxrtGpio::default()),
             GpioRegisterLayout::Lpc2xxx => GpioFamily::Lpc2xxx(Lpc2xxxGpio::default()),
+            GpioRegisterLayout::EosS3 => GpioFamily::EosS3(EosS3Gpio::default()),
         })
     }
 
@@ -2599,6 +2666,7 @@ impl GpioPort {
             GpioFamily::RaPort(_) => 0x00,
             GpioFamily::Imxrt(_) => 0x00,   // DR
             GpioFamily::Lpc2xxx(_) => 0x04, // IOSET reads the output latch
+            GpioFamily::EosS3(_) => 0x04,   // IO_OUTPUT
         };
         family.saturating_sub(self.window_offset)
     }
@@ -2619,6 +2687,7 @@ impl GpioPort {
             GpioFamily::RaPort(_) => 0x04,  // PCNTR2 PIDR[15:0]
             GpioFamily::Imxrt(_) => 0x08,   // PSR
             GpioFamily::Lpc2xxx(_) => 0x00, // IOPIN
+            GpioFamily::EosS3(_) => 0x00,   // IO_INPUT
         };
         family.saturating_sub(self.window_offset)
     }
@@ -2686,6 +2755,7 @@ impl GpioPort {
             GpioFamily::RaPort(_) => GpioRegisterLayout::RaPort,
             GpioFamily::Imxrt(_) => GpioRegisterLayout::Imxrt,
             GpioFamily::Lpc2xxx(_) => GpioRegisterLayout::Lpc2xxx,
+            GpioFamily::EosS3(_) => GpioRegisterLayout::EosS3,
         }
     }
 
@@ -2965,6 +3035,7 @@ impl crate::pins::PinPort for GpioPort {
             | GpioFamily::RaPort(_)
             | GpioFamily::Efr32s2(_)
             | GpioFamily::Efm32s0(_) => 16,
+            GpioFamily::EosS3(_) => 8,
             GpioFamily::Nrf52(g) => g.num_pins.min(32) as u8,
             _ => 32,
         }
@@ -3450,6 +3521,7 @@ impl crate::Peripheral for GpioPort {
             GpioFamily::RaPort(g) => serde_json::to_value(g),
             GpioFamily::Imxrt(g) => serde_json::to_value(g),
             GpioFamily::Lpc2xxx(g) => serde_json::to_value(g),
+            GpioFamily::EosS3(g) => serde_json::to_value(g),
         }
         .unwrap_or(serde_json::Value::Null)
     }
@@ -3650,6 +3722,31 @@ mod routing_tests {
         assert_eq!(g.read_u32(0x0).unwrap(), (1 << 10) | (1 << 5));
         g.write_u32(0x0, 0).unwrap(); // IOPIN write: not modelled
         assert_eq!(g.read_u32(0x4).unwrap(), 1 << 10);
+        assert_eq!(g.odr_offset(), 0x4);
+        assert_eq!(g.idr_offset(), 0x0);
+    }
+
+    /// EOS S3 MISC IO: IO_OUTPUT keeps bits [7:0] and drives the pads;
+    /// IO_INPUT reads the injected pad inputs only and ignores writes.
+    #[test]
+    fn eos_s3_io_input_io_output() {
+        let mut g = GpioPort::new_with_layout(GpioRegisterLayout::EosS3);
+        g.write_u32(0x4, 0xFFFF_FF50).unwrap(); // IO_OUTPUT
+        assert_eq!(g.read_u32(0x4).unwrap(), 0x50);
+        assert_eq!(g.read_gpio_pad(4), Some(true));
+        assert_eq!(g.read_gpio_pad(5), Some(false));
+        assert_eq!(g.read_gpio_pad(8), None);
+        assert_eq!(
+            g.read_u32(0x0).unwrap(),
+            0,
+            "IO_INPUT does not echo IO_OUTPUT"
+        );
+        assert!(g.set_gpio_input(1, true));
+        assert!(!g.set_gpio_input(8, true));
+        assert_eq!(g.read_u32(0x0).unwrap(), 1 << 1);
+        g.write_u32(0x0, 0xFF).unwrap(); // IO_INPUT is read-only
+        assert_eq!(g.read_u32(0x0).unwrap(), 1 << 1);
+        assert_eq!(g.gpio_routing(4).unwrap().mode, GpioMode::Output);
         assert_eq!(g.odr_offset(), 0x4);
         assert_eq!(g.idr_offset(), 0x0);
     }

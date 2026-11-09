@@ -1,0 +1,295 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "EOS S3 Cortex-M4F PL011 smoke"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "EOS S3 checks PPPPPP DONE"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 537394944,
+          "expected_value": 3763535935,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:4",
+          "min_edges": 6
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      0,
+      1073807360,
+      0,
+      190731757,
+      0,
+      70,
+      4294967295,
+      537394872,
+      1564082177,
+      1073803264,
+      0,
+      70,
+      1564083199,
+      537394872,
+      4294967289,
+      1810
+    ],
+    "pc": 1810,
+    "xpsr": 1090519040,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "ea2ba8ecb2dfdc70b1d5f020685d1215034156fa1a4b8cb0052daee3ed5b37c2",
+  "config": {
+    "firmware": "/home/andrii/worktrees/labwired-core/renode/target/thumbv7em-none-eabi/release/firmware-eos-s3-smoke",
+    "system": "/tmp/r417/nc-old-descriptor/systems/sys.yaml",
+    "script": "/tmp/r417/nc-old-descriptor/script.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4000f000",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "write"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "fault_verdict": {
+    "summary": "HardFault escalated from a precise BusFault: data access at 0x4000_F000 (BFAR valid), at PC 0x0000_052A in `core::ptr::write_volatile` (mod.rs:2178).",
+    "kind": "hard_fault",
+    "escalated": true,
+    "origin": "bus_fault",
+    "causes": [
+      {
+        "register": "HFSR",
+        "flag": "FORCED",
+        "meaning": "a configurable fault escalated to HardFault"
+      },
+      {
+        "register": "BFSR",
+        "flag": "PRECISERR",
+        "meaning": "data access"
+      }
+    ],
+    "precise": true,
+    "fault_address": "0x4000F000",
+    "fault_address_source": "BFAR",
+    "pc": "0x0000052A",
+    "lr": "0xA11A5001",
+    "exc_return": {
+      "value": "0xFFFFFFF9",
+      "return_to": "thread",
+      "stack": "msp",
+      "fp_frame": false
+    },
+    "frame": {
+      "sp": "0x2007FEC0",
+      "r0": "0x00000000",
+      "r1": "0x40010000",
+      "r2": "0x00000000",
+      "r3": "0x0B5E55ED",
+      "r12": "0x5D3A03FF",
+      "lr": "0xA11A5001",
+      "pc": "0x0000052A",
+      "xpsr": "0x41000000"
+    },
+    "location": {
+      "function": "core::ptr::write_volatile",
+      "file": "/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ptr/mod.rs",
+      "line": 2178
+    },
+    "registers": {
+      "hfsr": "0x40000000",
+      "cfsr": "0x00008200",
+      "mmfsr": "0x00",
+      "bfsr": "0x82",
+      "ufsr": "0x0000",
+      "mmfar": "0x00000000",
+      "bfar": "0x4000F000"
+    }
+  },
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 100000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio",
+        "pin": 4,
+        "transitions": [],
+        "gaps": [],
+        "mode": "unknown",
+        "edge_count": 0
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio",
+      "number": 4,
+      "mode": "unknown",
+      "func": null,
+      "output": null,
+      "input": null,
+      "pad": null,
+      "drive": null
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1952,
+    "data_bytes": 0,
+    "bss_bytes": 4,
+    "flash_used_bytes": 1952,
+    "ram_static_bytes": 4,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 524288,
+    "flash_used_pct": 0.37,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 261884,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 261828,
+    "main_stack_base": 537133060,
+    "main_stack_top": 537394944,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 261884,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 261828,
+    "heap_base": 537133060,
+    "heap_top": 537394944
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 118,
+    "memory_writes": 19,
+    "peripheral_accesses": 0,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1810,
+        "count": 390,
+        "symbol": "HardFault_"
+      }
+    ]
+  }
+}

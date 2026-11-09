@@ -36,6 +36,32 @@
     },
     {
       "assertion": {
+        "uart_contains": "EOS S3 checks PPPPPP DONE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 537394944,
+          "expected_value": 3763535935,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:4",
+          "min_edges": 6
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -44,24 +70,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
+      10,
       1073807360,
-      107,
-      49,
+      104,
+      32,
+      80,
+      69,
+      79,
+      537394928,
       101,
-      0,
-      0,
-      0,
-      537395184,
-      0,
-      0,
-      0,
-      0,
-      111,
-      537395184,
-      1233,
-      1218
+      107,
+      80,
+      80,
+      83,
+      537394912,
+      80,
+      1762
     ],
-    "pc": 1218,
+    "pc": 1762,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -74,7 +100,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "74deaf136c48edaf4200062a1403dc1ef03a7c7a6e9dedd661b1b4331dbe6f15",
+  "firmware_hash": "2b885be1e4ef729fa6c33372bfe1144dde9d2e30f083201272af831d28dc5c7d",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-eos-s3-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/eos-s3.yaml",
@@ -86,6 +112,13 @@
         "name": "uart",
         "kind": "native",
         "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 1073762560,
         "registers": [],
         "artifacts": []
       },
@@ -129,26 +162,147 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 100000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio",
+        "pin": 4,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 95,
+            "value": 1
+          },
+          {
+            "cycle": 99,
+            "value": 0
+          },
+          {
+            "cycle": 113,
+            "value": 1
+          },
+          {
+            "cycle": 119,
+            "value": 0
+          },
+          {
+            "cycle": 172,
+            "value": 1
+          },
+          {
+            "cycle": 175,
+            "value": 0
+          },
+          {
+            "cycle": 178,
+            "value": 1
+          },
+          {
+            "cycle": 181,
+            "value": 0
+          },
+          {
+            "cycle": 184,
+            "value": 1
+          },
+          {
+            "cycle": 187,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "0",
+        "states": [
+          {
+            "cycle": 95,
+            "state": "1"
+          },
+          {
+            "cycle": 99,
+            "state": "0"
+          },
+          {
+            "cycle": 113,
+            "state": "1"
+          },
+          {
+            "cycle": 119,
+            "state": "0"
+          },
+          {
+            "cycle": 172,
+            "state": "1"
+          },
+          {
+            "cycle": 175,
+            "state": "0"
+          },
+          {
+            "cycle": 178,
+            "state": "1"
+          },
+          {
+            "cycle": 181,
+            "state": "0"
+          },
+          {
+            "cycle": 184,
+            "state": "1"
+          },
+          {
+            "cycle": 187,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 10
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio",
+      "number": 4,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
   "uart_lines": {
     "lines": [
       {
         "text": "EOS S3 Cortex-M4F PL011 smoke",
         "cycle_lo": 0,
-        "cycle": 10000
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "EOS S3 checks PPPPPP DONE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 1240,
+    "text_bytes": 1952,
     "data_bytes": 0,
-    "bss_bytes": 0,
-    "flash_used_bytes": 1240,
-    "ram_static_bytes": 0,
-    "flash_total_bytes": 524288,
+    "bss_bytes": 4,
+    "flash_used_bytes": 1952,
+    "ram_static_bytes": 4,
+    "flash_total_bytes": 0,
     "ram_total_bytes": 524288,
-    "flash_used_pct": 0.24,
+    "flash_used_pct": 0.0,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -157,31 +311,31 @@
   },
   "memory": {
     "main_stack_method": "paint",
-    "main_stack_limit_bytes": 524288,
-    "main_stack_high_water_bytes": 16,
-    "main_stack_free_min_bytes": 524272,
-    "main_stack_base": 536870912,
-    "main_stack_top": 537395200,
+    "main_stack_limit_bytes": 261884,
+    "main_stack_high_water_bytes": 28,
+    "main_stack_free_min_bytes": 261856,
+    "main_stack_base": 537133060,
+    "main_stack_top": 537394944,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
-    "heap_limit_bytes": 524288,
+    "heap_limit_bytes": 261884,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 524272,
-    "heap_base": 536870912,
-    "heap_top": 537395200
+    "heap_free_min_bytes": 261856,
+    "heap_base": 537133060,
+    "heap_top": 537394944
   },
   "metrics": {
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 92,
-    "memory_writes": 6,
-    "peripheral_accesses": 29,
+    "memory_reads": 338,
+    "memory_writes": 21,
+    "peripheral_accesses": 77,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1218,
-        "count": 390,
+        "pc": 1762,
+        "count": 1,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
       }
     ]

@@ -4,19 +4,13 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# Bounded Cortex-M4F + memory + PL011 execution profile based on Renode's
-# platforms/boards/eos-s3-qomu.repl and platforms/cpus/eos-s3.repl. The board
-# LEDs and USB serial endpoint are omitted because this smoke does not exercise them.
 name: eos-s3-qomu
 arch: arm
-flash:
-  base: 0
-  size: 524288B
-ram:
-  base: 536870912
-  size: 524288B
-peripherals:
-- id: uart
-  type: pl011
-  bus: sysbus
-  base_address: 1073807360
+# QuickLogic Qomu. Renode platforms/boards/eos-s3-qomu.repl is cpus/eos-s3.repl
+# plus three LEDs and a USB serial port in the FPGA fabric (0x40020000), and it
+# detaches the PL011 (`uart: @ none`) because the board routes no UART pins.
+# The silicon PL011 is still present, so the eos-s3 chip surface is included
+# whole; a Qomu user cannot see that UART on the board. Not declared: the
+# fabric USB serial port (no model) and the LEDs (GPIO 0/1/3 per Renode only;
+# no second source).
+include: eos-s3.yaml

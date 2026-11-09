@@ -345,8 +345,8 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/focaltech_ft9001-smoke.yaml
             system: configs/systems/onboarding/focaltech_ft9001.yaml
-          # EOS S3 smokes cover only the corrected M4 code/SRAM windows and
-          # the model-backed PL011; generated peripheral claims are omitted.
+          # EOS S3 smokes: the SRAM mirror at 0x0 (both directions), SDMA
+          # SRAM, MISC IO GPIO and the PL011. Board rows include the chip.
           - id: eos-s3
             crate: firmware-eos-s3-smoke
             target: thumbv7em-none-eabi

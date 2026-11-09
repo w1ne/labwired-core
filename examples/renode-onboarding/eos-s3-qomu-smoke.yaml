@@ -1,4 +1,5 @@
-# Core Cortex-M4F and PL011 smoke against the imported EOS S3 Qomu system.
+# EOS S3 smoke against the imported eos-s3-qomu system: SRAM mirror at 0x0 in both
+# directions, SDMA SRAM, MISC IO_OUTPUT/IO_INPUT, GPIO 4 pulses, PL011 output.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-eos-s3-smoke"
@@ -7,4 +8,12 @@ limits:
   max_steps: 100000
 assertions:
   - uart_contains: "EOS S3 Cortex-M4F PL011 smoke"
+  - uart_contains: "EOS S3 checks PPPPPP DONE"
+  - memory_value:
+      address: 0x2007FF00
+      expected_value: 0xE053003F
+      size: 4
+  - gpio_edges:
+      pin: "gpio:4"
+      min_edges: 6
   - expected_stop_reason: max_steps
