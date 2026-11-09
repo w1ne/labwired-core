@@ -54,7 +54,8 @@ pub(in crate::cpu::cortex_m) fn handle<B: Bus + ?Sized>(
     }
     match bus.read_u32(0x10) {
         Ok(w) if w & 0x00FF_FFFF == ROM_MAGIC => {}
-        _ => return None,
+        Ok(_) => return None,
+        Err(e) => return Some(Err(e)),
     }
     let args = [cpu.r0, cpu.r1, cpu.r2, cpu.r3];
     let out = if imm8 >= 0xE0 {
