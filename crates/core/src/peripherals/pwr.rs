@@ -642,6 +642,163 @@ impl crate::Peripheral for PwrF4 {
     }
 }
 
+/// STM32F1 PWR (RM0008 §5.4): PWR_CR + PWR_CSR, both reset 0.
+///
+/// The F1 surface is not the L4 one: on L4 CR1 resets to 0x200 (VOS range 1),
+/// but on F1 bit 9 of PWR_CR is reserved and the register resets to 0. It is
+/// not the F4 one either: F1 has no VOS and no VOSRDY.
+///
+/// PWR_CR.DBP (bit 8) unlocks backup-domain writes. The bus shares it with the
+/// F1 BKP model through `bind_backup_domain_write_enable`, so BKP writes made
+/// before firmware sets DBP are dropped, as on silicon.
+///
+/// CWUF (bit 2) and CSBF (bit 3) are write-1 strobes that clear CSR.WUF / SBF
+/// and always read 0. A system reset clears CR (so DBP re-locks the backup
+/// domain) and WUF. SBF survives it: RM0008 clears SBF only on POR/PDR or CSBF.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct PwrF1 {
+    cr: u32,
+    csr: u32,
+    /// PWR_CR.DBP shared with the F1 BKP backup-register write protection.
+    #[serde(skip)]
+    dbp_flag: Option<Arc<AtomicBool>>,
+}
+
+const F1_CR_DBP: u32 = 1 << 8;
+const F1_CR_CWUF: u32 = 1 << 2;
+const F1_CR_CSBF: u32 = 1 << 3;
+const F1_CSR_WUF: u32 = 1 << 0;
+const F1_CSR_SBF: u32 = 1 << 1;
+const F1_CSR_EWUP: u32 = 1 << 8;
+
+impl PwrF1 {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn publish_dbp(&self) {
+        if let Some(flag) = &self.dbp_flag {
+            flag.store(self.cr & F1_CR_DBP != 0, Ordering::Relaxed);
+        }
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cr,
+            0x04 => self.csr,
+            _ => {
+                crate::census_reg!("pwr:PwrF1", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // CR writable bits: DBP(8), PLS[7:5], PVDE(4), PDDS(1), LPDS(0).
+            // CWUF(2)/CSBF(3) are strobes and are never stored.
+            0x00 => {
+                if value & F1_CR_CWUF != 0 {
+                    self.csr &= !F1_CSR_WUF;
+                }
+                if value & F1_CR_CSBF != 0 {
+                    self.csr &= !F1_CSR_SBF;
+                }
+                self.cr = value & 0x0000_01F3;
+                self.publish_dbp();
+            }
+            // CSR: only EWUP (bit 8) is writable; WUF/SBF/PVDO are status.
+            0x04 => self.csr = (self.csr & !F1_CSR_EWUP) | (value & F1_CSR_EWUP),
+            _ => {
+                crate::census_reg!("pwr:PwrF1", offset, "write");
+            }
+        }
+    }
+}
+
+impl crate::Peripheral for PwrF1 {
+    fn bind_backup_domain_write_enable(&mut self, enabled: Arc<AtomicBool>) {
+        self.dbp_flag = Some(enabled);
+        self.publish_dbp();
+    }
+
+    fn on_system_reset(&mut self) {
+        self.cr = 0;
+        self.csr &= F1_CSR_SBF;
+        self.publish_dbp();
+    }
+
+    // Inert walk: pure register bank, no tick() behaviour.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
+    }
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        let mut v = self.read_reg(reg);
+        let mask: u32 = 0xFF << (byte * 8);
+        v = (v & !mask) | ((value as u32) << (byte * 8));
+        self.write_reg(reg, v);
+        Ok(())
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod f1_tests {
+    use super::PwrF1;
+    use crate::Peripheral;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    #[test]
+    fn pwr_f1_reset_matches_rm0008() {
+        let pwr = PwrF1::new();
+        assert_eq!(
+            pwr.read_u32(0x00).unwrap(),
+            0,
+            "PWR_CR reset (not L4's 0x200)"
+        );
+        assert_eq!(pwr.read_u32(0x04).unwrap(), 0, "PWR_CSR reset");
+        assert_eq!(pwr.read_u32(0x08).unwrap(), 0, "no register at 0x08");
+    }
+
+    #[test]
+    fn pwr_f1_dbp_drives_the_shared_flag_and_system_reset_relocks() {
+        let mut pwr = PwrF1::new();
+        let flag = Arc::new(AtomicBool::new(true));
+        pwr.bind_backup_domain_write_enable(flag.clone());
+        assert!(!flag.load(Ordering::Relaxed), "bind publishes DBP = 0");
+        pwr.write_u32(0x00, 1 << 8).unwrap();
+        assert!(flag.load(Ordering::Relaxed), "DBP set");
+        assert_eq!(pwr.read_u32(0x00).unwrap(), 1 << 8);
+        pwr.on_system_reset();
+        assert!(!flag.load(Ordering::Relaxed), "system reset clears DBP");
+        assert_eq!(pwr.read_u32(0x00).unwrap(), 0);
+    }
+
+    #[test]
+    fn pwr_f1_strobes_read_zero_and_only_ewup_is_writable() {
+        let mut pwr = PwrF1::new();
+        pwr.write_u32(0x00, 0xFFFF_FFFF).unwrap();
+        assert_eq!(
+            pwr.read_u32(0x00).unwrap(),
+            0x1F3,
+            "CWUF/CSBF/reserved read 0"
+        );
+        pwr.write_u32(0x04, 0xFFFF_FFFF).unwrap();
+        assert_eq!(pwr.read_u32(0x04).unwrap(), 1 << 8, "CSR: EWUP only");
+    }
+}
+
 #[cfg(test)]
 mod f4_tests {
     use super::PwrF4;
