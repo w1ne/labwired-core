@@ -36,7 +36,7 @@
     },
     {
       "assertion": {
-        "uart_contains": "UT32 checks PPPPPPPPPPP DONE"
+        "uart_contains": "UT32 checks PPPPPPPPPPPP DONE"
       },
       "passed": true
     },
@@ -50,7 +50,7 @@
       "assertion": {
         "memory_value": {
           "address": 536968960,
-          "expected_value": 1580337151,
+          "expected_value": 1580339199,
           "mask": null,
           "size": 4
         }
@@ -95,11 +95,11 @@
       0,
       0,
       0,
-      536968864,
-      16781109,
-      16781088
+      536968840,
+      16781481,
+      16781430
     ],
-    "pc": 16781088,
+    "pc": 16781430,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -112,7 +112,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "40fe4fa18c48722964f92c3a56286284a2e7cb1ed42186b85ba3fe90c5ace826",
+  "firmware_hash": "7e3dc775132951f3efc43ebb69a083014c479341777a12df213c1106cfc7b3f1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-ut32m0r500-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/ut32m0r500.yaml",
@@ -198,7 +198,17 @@
         "artifacts": []
       }
     ],
-    "devices": []
+    "devices": [
+      {
+        "id": "gpio2_irq_button",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
   },
   "fidelity": [
     {
@@ -221,33 +231,76 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 1154,
+            "cycle": 1001,
             "value": 1
           },
           {
-            "cycle": 3240,
+            "cycle": 1363,
             "value": 0
           },
           {
-            "cycle": 5323,
+            "cycle": 1365,
             "value": 1
           },
           {
-            "cycle": 7405,
+            "cycle": 3451,
             "value": 0
           },
           {
-            "cycle": 9488,
+            "cycle": 5534,
             "value": 1
           },
           {
-            "cycle": 11570,
+            "cycle": 7616,
+            "value": 0
+          },
+          {
+            "cycle": 9699,
+            "value": 1
+          },
+          {
+            "cycle": 11781,
             "value": 0
           }
         ],
         "gaps": [],
+        "initial_state": "0",
+        "states": [
+          {
+            "cycle": 1001,
+            "state": "1"
+          },
+          {
+            "cycle": 1363,
+            "state": "x"
+          },
+          {
+            "cycle": 1365,
+            "state": "1"
+          },
+          {
+            "cycle": 3451,
+            "state": "x"
+          },
+          {
+            "cycle": 5534,
+            "state": "1"
+          },
+          {
+            "cycle": 7616,
+            "state": "x"
+          },
+          {
+            "cycle": 9699,
+            "state": "1"
+          },
+          {
+            "cycle": 11781,
+            "state": "x"
+          }
+        ],
         "mode": "output",
-        "edge_count": 6
+        "edge_count": 8
       }
     ]
   },
@@ -261,7 +314,7 @@
       "output": false,
       "input": false,
       "pad": false,
-      "drive": "0"
+      "drive": "x"
     }
   ],
   "uart_lines": {
@@ -269,34 +322,48 @@
       {
         "text": "UT32M0R500 Cortex-M0+ UART0 smoke",
         "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle": 1000,
+        "end_cycle": 1000
       },
       {
-        "text": "UT32 checks PPPPPPPPPPP DONE",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "text": "UT32 checks PPPPPPPPPPPP DONE",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "UT32 UART1 line",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
       }
     ],
     "dropped_lines": 0
   },
+  "stimuli": [
+    {
+      "channel": "pressed",
+      "component": "gpio2_irq_button",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000
+    }
+  ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 3936,
+    "text_bytes": 4308,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 3936,
+    "flash_used_bytes": 4308,
     "ram_static_bytes": 0,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 98304,
-    "flash_used_pct": 6.01,
+    "flash_used_pct": 6.57,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -306,15 +373,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 98048,
-    "main_stack_high_water_bytes": 96,
-    "main_stack_free_min_bytes": 97952,
+    "main_stack_high_water_bytes": 120,
+    "main_stack_free_min_bytes": 97928,
     "main_stack_base": 536870912,
     "main_stack_top": 536968960,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 98048,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 97952,
+    "heap_free_min_bytes": 97928,
     "heap_base": 536870912,
     "heap_top": 536968960
   },
@@ -322,20 +389,25 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 1161,
-    "memory_writes": 45,
-    "peripheral_accesses": 280,
+    "memory_reads": 1316,
+    "memory_writes": 58,
+    "peripheral_accesses": 326,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 16780264,
+        "pc": 16780522,
         "count": 39,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
       },
       {
-        "pc": 16781088,
-        "count": 15,
+        "pc": 16781430,
+        "count": 12,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 16778224,
+        "count": 3,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       }
     ]
   }

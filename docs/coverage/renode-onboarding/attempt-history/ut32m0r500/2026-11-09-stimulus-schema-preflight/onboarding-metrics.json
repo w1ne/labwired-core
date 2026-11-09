@@ -1,0 +1,37 @@
+{
+  "target_id": "ut32m0r500",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "config_error"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-ut32m0r500-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/renode-onboarding/ut32m0r500-smoke.yaml",
+  "system": "configs/systems/onboarding/ut32m0r500.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-09T18:58:58Z",
+  "finished_at_utc": "2026-11-09T19:01:21Z",
+  "elapsed_seconds": 143,
+  "elapsed_ms": 142628,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "'stimuli' require schema_version '1.2' (got '1.0')",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 141.626,
+    "build_firmware": 0.6,
+    "run_smoke": 0.346
+  },
+  "stages_ms": {
+    "build_cli": 141626,
+    "build_firmware": 600,
+    "run_smoke": 346
+  }
+}

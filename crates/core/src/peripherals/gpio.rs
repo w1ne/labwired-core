@@ -1913,10 +1913,11 @@ impl Da14Gpio {
 // Deviations from Renode, which follows neither point: DATA reads the pad on
 // output pins too (Renode returns 0 there; the Arm CMSDK TRM samples the
 // pin), and the masked byte arrays are modelled (Renode tags them; the app
-// note §3.5.2 describes them). Not modelled: the interrupt OUTPUT to the NVIC
-// (INTSTATUS latches, nothing is raised), alternate-function routing (an
-// ALTFUNC pad reports AF and this port does not drive it), open drain, the
-// PID/CID words at 0xFD0.. (read 0, census).
+// note §3.5.2 describes them). The combined IRQ output is modelled as
+// `INTSTATUS & INTEN`; UT32 GPIO1's optional dedicated per-pin IRQ outputs
+// are not. Also not modelled: alternate-function routing (an ALTFUNC pad
+// reports AF and this port does not drive it), open drain, the PID/CID words
+// at 0xFD0.. (read 0, census).
 #[derive(Debug, serde::Serialize)]
 pub struct CmsdkGpio {
     out: u32,
@@ -3790,6 +3791,16 @@ impl crate::Peripheral for GpioPort {
         false
     }
 
+    /// CMSDK AHB GPIO exposes a combined level IRQ for the enabled, latched
+    /// pin interrupts. The bus reconciles it after register writes and
+    /// external pad changes, so this register bank needs no per-cycle walk.
+    fn irq_line_level(&self) -> Option<bool> {
+        match &self.family {
+            GpioFamily::Cmsdk(g) => Some(g.int_en & g.int_status != 0),
+            _ => None,
+        }
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let offset = self.sub_word_offset(offset);
         let reg_offset = offset & !3;
@@ -4400,6 +4411,27 @@ mod routing_tests {
         assert_eq!(g.read_u32(0x38).unwrap() & (1 << 3), 0, "INTCLEAR");
         let gpio2 = GpioPort::new_cmsdk(0xFFFF);
         assert_eq!(gpio2.read_u32(0x18).unwrap(), 0xFFFF, "ALTFUNC reset");
+    }
+
+    #[test]
+    fn cmsdk_combined_irq_tracks_enabled_latched_status() {
+        let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Cmsdk);
+        assert_eq!(g.irq_line_level(), Some(false));
+
+        // Configure pin 3 for a rising-edge interrupt and present its low
+        // baseline before enabling the source.
+        g.write_u32(0x28, 1 << 3).unwrap(); // INTTYPESET
+        g.write_u32(0x30, 1 << 3).unwrap(); // INTPOLSET
+        assert!(g.set_gpio_input(3, false));
+        g.write_u32(0x20, 1 << 3).unwrap(); // INTENSET
+        assert_eq!(g.irq_line_level(), Some(false));
+
+        assert!(g.set_gpio_input(3, true));
+        assert_eq!(g.read_u32(0x38).unwrap() & (1 << 3), 1 << 3);
+        assert_eq!(g.irq_line_level(), Some(true));
+
+        g.write_u32(0x38, 1 << 3).unwrap(); // INTSTATUS/INTCLEAR
+        assert_eq!(g.irq_line_level(), Some(false));
     }
 
     /// EOS S3 MISC IO: IO_OUTPUT keeps bits [7:0] and drives the pads;

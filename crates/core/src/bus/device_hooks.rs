@@ -211,6 +211,14 @@ impl SystemBus {
             self.collect_scheduled_events(idx);
         }
         self.deliver_wire_input_edges(idx);
+        // A GPIO pad transition may latch a peripheral-local level interrupt
+        // (CMSDK AHB GPIO INTSTATUS is the current user). Unlike a timer event,
+        // this source is fully determined by the new pad state, so reconcile
+        // it at the same boundary as an MMIO write instead of waiting for a
+        // per-cycle peripheral walk.
+        if change.is_some() {
+            self.reconcile_irq_levels_after_write(idx);
+        }
         change
     }
 

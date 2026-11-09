@@ -20,7 +20,9 @@
 //!  10 sram     a pattern at the top of the 96 KiB SRAM reads back
 //!  11 timer    SP804 timer0 channel 1 and timer1 channel 2 count down, set
 //!              RIS/MIS, and clear their interrupt latches
-//! The summary word 0x5E32_0000 | pass mask (all pass: 0x5E32_07FF) goes to
+//!  12 gpioirq  a stimulated GPIO2 pin 13 rising edge pends NVIC IRQ 24;
+//!              clearing INTSTATUS drops the level-pended NVIC bit
+//! The summary word 0x5E32_0000 | pass mask (all pass: 0x5E32_0FFF) goes to
 //! 0x2001_7F00. GPIO2 pin 13 (GPIO 45, the app note's output) then pulses
 //! three times, and UART1 prints one line last.
 
@@ -56,6 +58,7 @@ const OUTENCLR: u32 = 0x14;
 const ALTFUNCSET: u32 = 0x18;
 const ALTFUNCCLR: u32 = 0x1C;
 const INTENSET: u32 = 0x20;
+const INTENCLR: u32 = 0x24;
 const INTTYPESET: u32 = 0x28;
 const INTPOLSET: u32 = 0x30;
 const INTSTATUS: u32 = 0x38;
@@ -63,8 +66,12 @@ const PULL_ENABLE: u32 = 0x40;
 const PULL_UP_DOWN: u32 = 0x44;
 const MASKLOWBYTE: u32 = 0x400;
 const MASKHIGHBYTE: u32 = 0x800;
+const NVIC_ISER0: u32 = 0xE000_E100;
+const NVIC_ISPR0: u32 = 0xE000_E200;
 
 const GPIO45: u32 = 13; // GPIO2 pin 13
+const GPIO45_IRQ: u32 = 1 << GPIO45;
+const GPIO45_NVIC_IRQ: u32 = 1 << 24;
 
 const SRAM_TOP_WORD: u32 = 0x2001_7FFC;
 const SUMMARY: u32 = 0x2001_7F00;
@@ -152,6 +159,34 @@ fn check_int_edge() -> bool {
     idle && latched && rd(GPIO1 + INTSTATUS) & (1 << 1) == 0
 }
 
+fn arm_gpio2_irq() {
+    // Keep the level source pending for inspection rather than taking an
+    // exception with no vector handler in this register-level smoke.
+    unsafe { core::arch::asm!("cpsid i", options(nostack, preserves_flags)) };
+    wr(GPIO2 + INTSTATUS, GPIO45_IRQ);
+    wr(GPIO2 + INTTYPESET, GPIO45_IRQ);
+    wr(GPIO2 + INTPOLSET, GPIO45_IRQ);
+    wr(GPIO2 + INTENSET, GPIO45_IRQ);
+    wr(NVIC_ISER0, GPIO45_NVIC_IRQ);
+}
+
+fn check_gpio2_irq() -> bool {
+    let mut pending = false;
+    for _ in 0..100_000 {
+        if rd(NVIC_ISPR0) & GPIO45_NVIC_IRQ != 0 {
+            pending = true;
+            break;
+        }
+    }
+    let latched = rd(GPIO2 + INTSTATUS) & GPIO45_IRQ != 0;
+    let input_high = rd(GPIO2 + DATA) & GPIO45_IRQ != 0;
+    wr(GPIO2 + INTSTATUS, GPIO45_IRQ);
+    let cleared = rd(GPIO2 + INTSTATUS) & GPIO45_IRQ == 0 && rd(NVIC_ISPR0) & GPIO45_NVIC_IRQ == 0;
+    wr(GPIO2 + INTENCLR, GPIO45_IRQ);
+    unsafe { core::arch::asm!("cpsie i", options(nostack, preserves_flags)) };
+    pending && latched && input_high && cleared
+}
+
 fn check_sram_top() -> bool {
     wr(SRAM_TOP_WORD, 0x5A5A_C3C3);
     let ok = rd(SRAM_TOP_WORD) == 0x5A5A_C3C3;
@@ -191,11 +226,13 @@ fn check_sp804() -> bool {
 
 #[entry]
 fn main() -> ! {
+    let altfunc = check_altfunc();
+    arm_gpio2_irq();
     puts(UART0, b"UT32M0R500 Cortex-M0+ UART0 smoke\n");
 
     let checks = [
         check_reset(),
-        check_altfunc(),
+        altfunc,
         check_pull(true),
         check_pull(false),
         check_output(),
@@ -205,6 +242,7 @@ fn main() -> ! {
         check_int_edge(),
         check_sram_top(),
         check_sp804(),
+        check_gpio2_irq(),
     ];
 
     let mut mask = 0u32;

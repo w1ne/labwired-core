@@ -16,11 +16,11 @@
       0,
       0,
       0,
-      536968864,
-      16781109,
-      16781088
+      536968840,
+      16781481,
+      16781430
     ],
-    "pc": 16781088,
+    "pc": 16781430,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "40fe4fa18c48722964f92c3a56286284a2e7cb1ed42186b85ba3fe90c5ace826",
+  "firmware_hash": "7e3dc775132951f3efc43ebb69a083014c479341777a12df213c1106cfc7b3f1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-ut32m0r500-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/ut32m0r500.yaml",

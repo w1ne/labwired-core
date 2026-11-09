@@ -6,8 +6,9 @@
 # alternateFunctionResetValue). Not declared (no model in this
 # engine): bootrom, EDAC SRAM, ADC, CAN0/1, and the
 # Renode Tag-only blocks (RTC, PWM, SPI, DACs, watchdog, I2C, NFC).
-# Not modelled on the declared blocks: GPIO interrupt OUTPUT to the NVIC
-# (INTSTATUS latches only) and alternate-function pad routing.
+# GPIO0 and GPIO2 expose their Renode combined interrupt outputs on NVIC 22
+# and 24. GPIO1's optional dedicated per-pin IRQ outputs are not claimed.
+# Alternate-function pad routing is also not modelled.
 name: ut32m0r500
 arch: arm
 core: cortex-m0+
@@ -46,6 +47,7 @@ peripherals:
   type: gpio
   base_address: 0x40020000
   size: 4KB
+  irq: 22
   config:
     profile: cmsdk
 - id: gpio_bank1
@@ -58,6 +60,7 @@ peripherals:
   type: gpio
   base_address: 0x40022000
   size: 4KB
+  irq: 24
   config:
     profile: cmsdk
     reset_altfunc: 0xFFFF
