@@ -65,7 +65,7 @@ The models column is a content digest over everything that board's `models` list
 | `stm32f072` | 🟡 smoke-manual | — | `f8c9ee80e14c41e6` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `add8a03b565c41a8` | no silicon capture |
 | `vegaboard-ri5cy` | 🟡 smoke-manual | — | `b7a36aec9abafada` | no silicon capture |
-| `mpfs095t` | 🟡 smoke-manual | — | `c46dd583929d5058` | no silicon capture |
+| `mpfs095t` | 🟡 smoke-manual | — | `874a6d2a3f2ec5d9` | no silicon capture |
 | `am6234` | 🟡 smoke-manual | — | `ff62e4a6aca6b404` | no silicon capture |
 | `r5f52618bgfp` | 🟡 smoke-manual | — | `73cc106af7c80c2d` | no silicon capture |
 | `pic32mz2048efm144` | 🟡 smoke-manual | — | `2e3a78b657df52dd` | no silicon capture |
