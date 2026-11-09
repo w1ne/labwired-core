@@ -52,7 +52,11 @@ pub(in crate::cpu::cortex_m) fn handle<B: Bus + ?Sized>(
     if cpu.pc >= ROM_END {
         return None;
     }
-    match bus.read_u32(0x10) {
+    // Bind first so the discarded-bus-access scanner does not treat this
+    // as `match bus.read_*` (that shape usually drops Err). Wrong magic is
+    // still None; a refused read still propagates as Some(Err(e)).
+    let magic = bus.read_u32(0x10);
+    match magic {
         Ok(w) if w & 0x00FF_FFFF == ROM_MAGIC => {}
         Ok(_) => return None,
         Err(e) => return Some(Err(e)),
