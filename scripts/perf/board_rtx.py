@@ -28,6 +28,7 @@ import time
 from pathlib import Path
 
 import board_perf as bp
+import board_rtf
 
 
 def cpu_hz(chip: dict) -> int:
@@ -112,6 +113,23 @@ def main() -> int:
         "--rating-out",
         type=Path,
         help="write the RTx rating per board as JSON",
+    )
+    parser.add_argument(
+        "--no-workloads",
+        action="store_true",
+        help="skip the realistic per-board workload RTF (board_rtf.py)",
+    )
+    parser.add_argument(
+        "--rtf-json",
+        type=Path,
+        default=Path("rtf.json"),
+        help="where to write the workload RTF report (default: ./rtf.json)",
+    )
+    parser.add_argument("--rtf-tolerance", type=float, default=board_rtf.DEFAULT_TOLERANCE)
+    parser.add_argument(
+        "--update-rtf",
+        action="store_true",
+        help="rewrite rtf_baselines.json from this run instead of gating",
     )
     args = parser.parse_args()
     if args.repeats < 1 or args.seconds <= 0 or args.min_rtx <= 0:
@@ -201,12 +219,33 @@ def main() -> int:
         if median < args.min_rtx:
             failures.append(board)
 
+    rtf_doc = None
+    if not args.no_workloads and not args.chip_name:
+        spin = {board: row["max_rtx"] for board, row in rows.items()}
+        try:
+            # Only chips whose spin RTx was measured: the index needs it.
+            rtf_doc = board_rtf.run(
+                cli,
+                set(rows),
+                spin,
+                args.repeats,
+                args.rtf_tolerance,
+                args.rtf_json,
+                update=args.update_rtf,
+            )
+        except RuntimeError as exc:
+            print(f"error: workload RTF failed: {exc}", file=sys.stderr)
+            rtf_doc = {"ok": False, "failures": [str(exc)], "boards": []}
+        if rtf_doc:
+            failures.extend(f"rtf:{f}" for f in rtf_doc["failures"])
+
     status = {
         "ok": not failures,
         "minimum_required_rtx": args.min_rtx,
         "failures": failures,
         "measured": rows,
         "not_measured": dict(sorted(waived.items())),
+        "rtf": rtf_doc,
     }
     if args.status_json:
         Path(args.status_json).write_text(json.dumps(status, indent=2, sort_keys=True) + "\n")
@@ -228,7 +267,7 @@ def main() -> int:
         )
     if failures:
         print(
-            f"\n{len(failures)} chip(s) below {args.min_rtx:.2f}x: "
+            f"\n{len(failures)} chip(s)/workload(s) failed (min {args.min_rtx:.2f}x): "
             + ", ".join(failures),
             file=sys.stderr,
         )
