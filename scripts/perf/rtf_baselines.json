@@ -1,14 +1,18 @@
 {
   "c3_i2c_uart": {
-    "index": 0.0006844
+    "index": 0.001212,
+    "source": "CI board-throughput run 42653202653 (main 02d50a5 + this PR)"
   },
   "f411_timer_uart": {
-    "index": 0.0006642
+    "index": 0.0006415,
+    "source": "CI board-throughput run 42653202653 (main 02d50a5 + this PR)"
   },
   "pico_oled_pwm": {
-    "index": 0.06277
+    "index": 0.0776,
+    "source": "CI board-throughput run 42653202653 (main 02d50a5 + this PR)"
   },
   "uno_feeder": {
-    "index": 0.000544
+    "index": 0.0003379,
+    "source": "CI board-throughput run 42653202653 (main 02d50a5 + this PR)"
   }
 }
