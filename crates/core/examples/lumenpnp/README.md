@@ -113,3 +113,24 @@ cargo test -p labwired-core --features event-scheduler --example lumenpnp_captur
 ```
 
 The build produces `target/release/examples/lumenpnp_capture`. The explicit source revision is embedded in each run's verdict. Capture evidence also includes the executable, runner source, vacuum source, firmware, chip, CAD source, geometry contract and receipt hashes.
+
+## Repair X STEP in the same Machine and guided CAD checkpoints
+
+The repair-x scenario disconnects the existing X driver STEP input while the
+MCU continues to emit GPIO edges. After the safe fault 40, it reconnects
+that driver and resets the MCU while keeping the stepper position, plant and
+mechanical model. Three placements are completed in the same Machine instance.
+
+With --operator-gated and --scenario repair-x, the runner emits a JSONL
+MOTION_POSE every 0.5 simulated seconds. It pauses at X_STEP_REPAIR_REQUIRED
+and accepts only REPAIR_X_STEP, then pauses with an attached part at
+CAD_POSE_CHECKPOINT and accepts only CONTINUE. The operator evaluates each
+xyzab checkpoint via the separate KernelCAD MCP service. The native check
+external_pose_checkpoint_acknowledged proves an input acknowledgment, not
+a cryptographically verified CAD execution receipt.
+
+All four scenarios pass at 1000, 500 and 250 us. A real guided run with
+separate KernelCAD evaluations at [20,20,50,0,0] and [50,60,25,0,0]
+finished at [290,250,25,45,90], with 32/32 native checks passed.
+Full swept-collision verification and physical load qualification remain
+outside the simulator's demonstrated scope.

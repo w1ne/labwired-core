@@ -334,6 +334,14 @@ fn main() -> Result<()> {
         ),
         "unknown scenario"
     );
+    // Optional explicit operator interlock. It never changes the core motion
+    // model or accepts shell commands. Only two fixed acknowledgments are
+    // admitted while the SAME Machine is paused at a measured state.
+    let operator_gated = std::env::args().any(|arg| arg == "--operator-gated");
+    ensure!(
+        !operator_gated || scenario == "repair-x",
+        "operator gating is supported only for repair-x"
+    );
     let max_seconds: f64 = argument("--seconds")
         .unwrap_or_else(|| "60".into())
         .parse()?;
@@ -512,6 +520,8 @@ fn main() -> Result<()> {
     let mut x_model_steps_before_repair = 0i64;
     let mut recovery_gpio_mismatch_ticks = 0u64;
     let mut firmware_epoch_s = 0.0;
+    let mut last_pose_stream_s = -1.0f64;
+    let mut cad_checkpoint_sent = false;
     let mut repaired = false;
     let mut fault_observed_safe = false;
     let mut fault_x_static = false;
@@ -778,6 +788,53 @@ fn main() -> Result<()> {
             progress = Instant::now();
             progress_time = time_s;
         }
+        if operator_gated && time_s - last_pose_stream_s >= 0.500 {
+            println!(
+                "{}",
+                json!({
+                    "event":"MOTION_POSE","time_s":time_s,"machine_cycles":machine.total_cycles,
+                    "xyzab":axis_values,"phase":obs[2],"fault":obs[15],
+                    "pressure_pa":pressures,"attached":attached,
+                    "repaired":repaired
+                })
+            );
+            std::io::stdout().flush()?;
+            last_pose_stream_s = time_s;
+        }
+        if operator_gated
+            && repaired
+            && !cad_checkpoint_sent
+            && obs[0] == 0x504e5035
+            && obs[2] == BOARD_TRAVEL
+            && geometry.attached(0).is_some()
+        {
+            cad_checkpoint_sent = true;
+            println!(
+                "{}",
+                json!({
+                    "event":"CAD_POSE_CHECKPOINT","time_s":time_s,"machine_cycles":machine.total_cycles,
+                    "xyzab":axis_values,"pressure_pa":pressures,
+                    "attached_head_a":attached[0],
+                    "cad_project":"ZbbGJ2TP","cad_revision":4,
+                    "required_ack":"CONTINUE"
+                })
+            );
+            std::io::stdout().flush()?;
+            let mut ack = String::new();
+            ensure!(
+                std::io::stdin().read_line(&mut ack)? > 0 && ack.trim() == "CONTINUE",
+                "operator must acknowledge CAD pose with CONTINUE"
+            );
+            writeln!(
+                events,
+                "{}",
+                json!({
+                    "time_s":time_s,"event":"CAD_POSE_ACK",
+                    "xyzab":axis_values,
+                    "external_cad_result":"acknowledged_by_operator_not_verified_in_core"
+                })
+            )?;
+        }
         if let Some((phase, fault)) = terminal_state {
             if obs[0] != 0x504e5035 || obs[2] != phase || obs[15] != fault {
                 terminal_state_mismatch_samples += 1;
@@ -809,6 +866,25 @@ fn main() -> Result<()> {
                 // Repair the physical STEP path WITHOUT replacing the motor,
                 // analog solver, machine, or geometry state. An operator then
                 // resets the same MCU; the fault was latched by firmware.
+                if operator_gated {
+                    println!(
+                        "{}",
+                        json!({
+                            "event":"X_STEP_REPAIR_REQUIRED","time_s":time_s,
+                            "machine_cycles":machine.total_cycles,
+                            "xyzab":axis_values,"fault":obs[15],
+                            "driver_x_steps":model_counts[0],
+                            "mcu_x_rising_edges":rising_counts[0],
+                            "same_machine":true,"required_ack":"REPAIR_X_STEP"
+                        })
+                    );
+                    std::io::stdout().flush()?;
+                    let mut ack = String::new();
+                    ensure!(
+                        std::io::stdin().read_line(&mut ack)? > 0 && ack.trim() == "REPAIR_X_STEP",
+                        "operator must acknowledge physical repair with REPAIR_X_STEP"
+                    );
+                }
                 x_steps_before_repair = edge_counts[0];
                 x_model_steps_before_repair = model_counts[0];
                 machine
@@ -924,6 +1000,9 @@ fn main() -> Result<()> {
                     .observed_of::<StepDirMotor>()
                     .any(|motor| motor.id() == "X" && motor.step_connected())
         );
+        if operator_gated {
+            checks["external_pose_checkpoint_acknowledged"] = json!(cad_checkpoint_sent);
+        }
         checks["same_machine_time_monotonic"] = json!(repair_at_s
             .zip(first_fault_at_s)
             .is_some_and(|(repair, fault)| repair > fault && duration_s > repair));
@@ -982,6 +1061,8 @@ fn main() -> Result<()> {
         "repaired_in_same_machine_at_s":repair_at_s,
         "recovery_gpio_mismatch_ticks":recovery_gpio_mismatch_ticks,
         "repair_x_driver_original_step_count":x_model_steps_before_repair,
+        "operator_gated":operator_gated,
+        "cad_pose_checkpoint_acknowledged":cad_checkpoint_sent,
         "terminal_state_at_s":final_mark,"step_edges_after_terminal_state":step_edges_after_terminal,
         "terminal_observation_s":terminal_observation_s,"terminal_observation_required_s":TERMINAL_OBSERVATION_S,
         "terminal_state_mismatch_samples":terminal_state_mismatch_samples,
