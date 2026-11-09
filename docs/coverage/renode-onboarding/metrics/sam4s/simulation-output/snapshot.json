@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
+      12757,
+      4095,
+      2,
+      8,
       1074660884,
-      10,
-      2147483648,
+      4294966756,
+      8,
+      536936416,
       0,
-      0,
-      0,
-      0,
-      536936432,
-      0,
-      0,
-      0,
-      0,
-      0,
-      536936432,
-      4196247,
-      4196234
+      536935936,
+      1074664532,
+      1,
+      8,
+      536936416,
+      4213841,
+      4214542
     ],
-    "pc": 4196234,
-    "xpsr": 16777216,
+    "pc": 4214542,
+    "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 1500000,
+  "cycles": 1500000,
+  "instructions": 1500000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 1500000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 1500000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 1500000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "2b329ac01ae71aa9e86ba653476a650636d1f0d1a465108710ff02921a95c67a",
+  "firmware_hash": "1d0c7a73338083c018e39746653d81d42317f571e9f328b2274b98a0612b75a8",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s.yaml",

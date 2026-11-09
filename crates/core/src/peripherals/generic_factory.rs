@@ -427,6 +427,10 @@ pub const MODEL_TYPES: &[&str] = &[
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
+    // SAM4S system controller: watchdog, reset controller, flash controller.
+    "sam4s_wdt",
+    "sam4s_rstc",
+    "sam4s_eefc",
     // Cortex-M7 L1 cache maintenance window + the SCB cache-ID geometry.
     "cortex_m7_cache",
     // Cortex-M FP extension: FPCCR/FPCAR/FPDSCR/MVFR + FP context stacking.
@@ -2099,6 +2103,18 @@ pub fn try_build(
         "mpfs_spi" => Box::new(crate::peripherals::mpfs_spi::MpfsSpi::new()),
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
+        "sam4s_wdt" => Box::new(crate::peripherals::sam::sysc4s::Sam4sWdt::new()),
+        "sam4s_rstc" => Box::new(crate::peripherals::sam::sysc4s::Sam4sRstc::new()),
+        "sam4s_eefc" => {
+            // The GETD descriptor reports the plane size, so the part's flash
+            // size must be stated; there is no family default.
+            let Some(bytes) = p_cfg.config.get("flash_bytes").and_then(|v| v.as_u64()) else {
+                anyhow::bail!("sam4s_eefc needs config.flash_bytes (the part's flash size)");
+            };
+            Box::new(crate::peripherals::sam::sysc4s::Sam4sEefc::new(
+                bytes as u32,
+            ))
+        }
         "cortex_m7_cache" => {
             let kb = |key: &str| -> anyhow::Result<u32> {
                 p_cfg

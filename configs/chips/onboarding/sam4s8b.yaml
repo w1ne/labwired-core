@@ -4,22 +4,73 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# ATSAM4S8B (64-pin): 512 KiB flash, 128 KiB SRAM. The 64-pin package has
+# no PIOC, so pioC from the 100-pin repl is not declared.
+#
+# Declared: the blocks this engine models out of Renode's
+# platforms/cpus/sam4s.repl — PMC, UART0/1 and USART0/1 (`sam_usart`),
+# PIOA-B, both SAM_TC blocks (`sam4s_tc`), and the system controller's
+# WDT, RSTC and EEFC (`sam4s_wdt`/`sam4s_rstc`/`sam4s_eefc`, see
+# crates/core/src/peripherals/sam/sysc4s.rs for what each refuses).
+# Renode's ADC, DACC, CRCCU, SPI and TWI0/1 have no model here and are not
+# declared. cpu_hz is the 4 MHz fast-RC clock the part resets on.
+# Sources: Atmel-11100 SAM4S datasheet (memory map, peripheral identifiers,
+# configuration summary); Renode platforms/cpus/sam4s.repl.
 name: sam4s8b
 arch: arm
 core: cortex-m4
+cpu_hz: 4000000
 flash:
-  base: 4194304
-  size: 524288B
+  base: 0x00400000
+  size: 512KB
 ram:
-  base: 536870912
-  size: 131072B
+  base: 0x20000000
+  size: 128KB
 peripherals:
+- id: tc0_1_2
+  type: sam4s_tc
+  base_address: 0x40010000
+  size: 256
+  irq: 23
+- id: tc3_4_5
+  type: sam4s_tc
+  base_address: 0x40014000
+  size: 256
+  irq: 26
+- id: usart0
+  type: sam_usart
+  base_address: 0x40024000
+- id: usart1
+  type: sam_usart
+  base_address: 0x40028000
 - id: pmc
   type: sam4s_pmc
-  bus: sysbus
-  base_address: 1074660352
+  base_address: 0x400E0400
   size: 512
 - id: uart0
   type: sam_usart
-  bus: sysbus
-  base_address: 1074660864
+  base_address: 0x400E0600
+- id: uart1
+  type: sam_usart
+  base_address: 0x400E0800
+- id: eefc
+  type: sam4s_eefc
+  base_address: 0x400E0A00
+  size: 512
+  config:
+    flash_bytes: 524288
+- id: pioA
+  type: sam4s_pio
+  base_address: 0x400E0E00
+- id: pioB
+  type: sam4s_pio
+  base_address: 0x400E1000
+- id: rstc
+  type: sam4s_rstc
+  base_address: 0x400E1400
+  size: 16
+- id: wdt
+  type: sam4s_wdt
+  base_address: 0x400E1450
+  size: 16
+  irq: 4

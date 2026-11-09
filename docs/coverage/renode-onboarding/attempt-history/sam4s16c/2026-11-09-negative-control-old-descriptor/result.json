@@ -1,0 +1,248 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 1500000,
+  "cycles": 1500000,
+  "instructions": 1500000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1500000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1500000
+    }
+  },
+  "limits": {
+    "max_steps": 1500000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_ordered": [
+          "SAM4S16C RENODE SMOKE",
+          "eefc fmr=00000500 ok",
+          "eefc getd size=",
+          "eefc gpnvm=2 set=3 glb=2 clb=0 ok",
+          "eefc fsr badkey=3 after=1 ok",
+          "rstc sr=00010000 wdt mr=3fff2fff ok",
+          "rstc software reset",
+          "SAM4S16C RENODE SMOKE",
+          "rstc rsttyp=3 ok",
+          "wdt arm wdv=2",
+          "SAM4S16C RENODE SMOKE",
+          "wdt rsttyp=2 mr=3fff2fff ok",
+          "wdt window sr=2 pended released ok",
+          "wdt mr once=00801100 ok",
+          "pmc pcsr0=",
+          "pio ports=3 ok",
+          "tc0 rc pend=1 ok",
+          "SAM4S16C PASS"
+        ]
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 537001728,
+          "expected_value": 1514147839,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      0,
+      1074661896,
+      48,
+      0,
+      1074660884,
+      0,
+      0,
+      537001960,
+      0,
+      537001472,
+      1074664532,
+      0,
+      0,
+      537001960,
+      4195409,
+      4200740
+    ],
+    "pc": 4200740,
+    "xpsr": 1090519040,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "9a5bece42d16d3942603a913d3200137593a54469f81107470454b672a981039",
+  "config": {
+    "firmware": "/home/andrii/worktrees/labwired-core/renode/target/thumbv7em-none-eabi/release/firmware-sam4s16c-smoke",
+    "system": "/tmp/nc/sam4s16c-sys.yaml",
+    "script": "/tmp/nc/sam4s16c-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "pmc",
+        "kind": "native",
+        "base": 1074660352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1074660864,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "SAM4S16C RENODE SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "eefc fmr=00000000 FAIL",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 20436,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 20436,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 1.95,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131072,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 131044,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131072,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 131044,
+    "heap_base": 536870912,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 1500000,
+    "instructions": 1500000,
+    "steps_executed": 1500000,
+    "memory_reads": 393,
+    "memory_writes": 9,
+    "peripheral_accesses": 499993,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 4200732,
+        "count": 1953,
+        "symbol": "firmware_sam4s16c_smoke::family::eefc"
+      },
+      {
+        "pc": 4200740,
+        "count": 1953,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 4200750,
+        "count": 1953,
+        "symbol": "core::ptr::read_volatile"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "uart0",
+      "offset": 1032,
+      "accesses": 499894
+    }
+  }
+}

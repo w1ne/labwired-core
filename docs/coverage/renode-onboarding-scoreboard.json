@@ -11,10 +11,10 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1245,
+    "pass_claimed_peripherals_total": 1277,
     "pass_claimed_peripherals_median": 2,
-    "median_elapsed_ms": 1366,
-    "median_elapsed_seconds": 1.366,
+    "median_elapsed_ms": 1385,
+    "median_elapsed_seconds": 1.385,
     "threshold_seconds": 3600,
     "threshold_met": 226,
     "descriptors_present": 245,
@@ -6947,7 +6947,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 1500000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -6956,30 +6956,31 @@
       "script": "examples/renode-onboarding/sam4s-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:49:39Z",
-      "finished_at_utc": "2026-11-05T14:49:40Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1373,
+      "started_at_utc": "2026-11-09T09:32:46Z",
+      "finished_at_utc": "2026-11-09T09:36:37Z",
+      "elapsed_seconds": 231,
+      "elapsed_ms": 230788,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.313,
-        "build_firmware": 0.714,
-        "run_smoke": 0.332
+        "build_cli": 229.255,
+        "build_firmware": 0.299,
+        "run_smoke": 1.216
       },
       "stages_ms": {
-        "build_cli": 313,
-        "build_firmware": 714,
-        "run_smoke": 332
+        "build_cli": 229255,
+        "build_firmware": 299,
+        "run_smoke": 1216
       },
       "_artifact_path": "sam4s",
       "zero_answering_windows": [],
-      "claimed_peripherals": 2,
+      "claimed_peripherals": 13,
       "smoke_assertion_kinds": [
-        "uart_contains",
+        "uart_ordered",
+        "memory_value",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"
@@ -6992,7 +6993,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 1500000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -7001,30 +7002,31 @@
       "script": "examples/renode-onboarding/sam4s16c-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s16c.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:49:41Z",
-      "finished_at_utc": "2026-11-05T14:49:42Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1263,
+      "started_at_utc": "2026-11-09T09:36:40Z",
+      "finished_at_utc": "2026-11-09T09:36:42Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2314,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.314,
-        "build_firmware": 0.633,
-        "run_smoke": 0.303
+        "build_cli": 0.535,
+        "build_firmware": 0.361,
+        "run_smoke": 1.403
       },
       "stages_ms": {
-        "build_cli": 314,
-        "build_firmware": 633,
-        "run_smoke": 303
+        "build_cli": 535,
+        "build_firmware": 361,
+        "run_smoke": 1403
       },
       "_artifact_path": "sam4s16c",
       "zero_answering_windows": [],
-      "claimed_peripherals": 2,
+      "claimed_peripherals": 13,
       "smoke_assertion_kinds": [
-        "uart_contains",
+        "uart_ordered",
+        "memory_value",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"
@@ -7037,7 +7039,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 1500000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -7046,30 +7048,31 @@
       "script": "examples/renode-onboarding/sam4s8b-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s8b.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:49:42Z",
-      "finished_at_utc": "2026-11-05T14:49:43Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1183,
+      "started_at_utc": "2026-11-09T09:36:44Z",
+      "finished_at_utc": "2026-11-09T09:36:47Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2502,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.305,
-        "build_firmware": 0.585,
-        "run_smoke": 0.283
+        "build_cli": 0.417,
+        "build_firmware": 0.275,
+        "run_smoke": 1.794
       },
       "stages_ms": {
-        "build_cli": 305,
-        "build_firmware": 585,
-        "run_smoke": 283
+        "build_cli": 417,
+        "build_firmware": 275,
+        "run_smoke": 1794
       },
       "_artifact_path": "sam4s8b",
       "zero_answering_windows": [],
-      "claimed_peripherals": 2,
+      "claimed_peripherals": 12,
       "smoke_assertion_kinds": [
-        "uart_contains",
+        "uart_ordered",
+        "memory_value",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"

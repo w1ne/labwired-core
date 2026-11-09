@@ -27,6 +27,7 @@ pub mod rtc21;
 pub mod sercom_i2cm;
 pub mod sercom_spi;
 pub mod sercom_usart;
+pub mod sysc4s;
 pub mod tc;
 pub mod tc21;
 pub mod tc4s;
