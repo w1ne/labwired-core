@@ -2680,12 +2680,16 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
+    # Re-stamped 2026-11-08 for the C6 LEDC split (shared esp32c3/ledc.rs +
+    # gpio.rs): the C3 decodes with C3_LAYOUT, which is the previous constants,
+    # and its LEDC unit/waveform tests are unchanged. Ack, not a recapture.
     # 2026-11-08 (round 342): twai0 moved from `declarative` to the S3 TWAI
     # behavioural model (esp32s3/twai.rs, irq 25), so the Arduino L8 self-RX
     # cell runs. esp32c3_reset_values_match_silicon asserts no TWAI register;
     # the live capture reads the clock-gated window as bus junk (0x0008fe10).
     # This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: a73359c16e2293056b103c1ea775a20f0b5a4ce2fb3bc2e99127f3a92669e3db
+    # Re-stamped 2026-11-08 (round 347) over both changes above after merging main.
+    drift_ack_digest: ed30d3aceb28d77159219fbdba22d2cb1e926aafbd16261cacbb4e46c254777b
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -10240,6 +10244,7 @@ boards:
       # 2026-10-29 (#1526): USB Serial/JTAG now registered on C6 via shared
       # UsbSerialJtag::new_esp32c6. SIM-DERIVED board — no silicon ack implied.
       - crates/core/src/peripherals/esp32s3/usb_serial_jtag.rs
+      - crates/core/src/peripherals/esp32s3/twai.rs
       - crates/core/src/peripherals/esp32/timg.rs
       - crates/core/src/peripherals/esp32c3/apb_saradc.rs
       - crates/core/src/peripherals/esp32c3/gpio.rs
@@ -10289,6 +10294,9 @@ boards:
       - crates/core/src/peripherals/esp32c6/modem_lpcon.rs
       - crates/core/src/peripherals/esp_systimer.rs
       - crates/core/src/peripherals/stub.rs
+      # 2026-11-07: RMT is the shared C3 model at C6 source 49 (`esp32c6_rmt`).
+      # SIM-DERIVED — no silicon ack implied.
+      - crates/core/src/peripherals/esp32c3/rmt.rs
   - id: litex-vexriscv
     # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
     # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity

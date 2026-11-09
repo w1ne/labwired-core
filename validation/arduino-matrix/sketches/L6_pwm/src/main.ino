@@ -41,6 +41,11 @@
 // NUCLEO-G0B1RE LD4 is PA5 = DAC1_OUT2 and the twin has no DAC1, so
 // analogWrite(LED_BUILTIN) would take the DAC path. Use TIM2_CH1 on PA0.
 #    define LW_PWM_PIN PA0
+#  elif defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C3) || \
+      defined(CONFIG_IDF_TARGET_ESP32S3)
+// The C6/C3/S3 DevKit LED_BUILTIN is a WS2812 (GPIO8/GPIO8/GPIO48) driven by
+// RMT, so analogWrite on it never exercises the LEDC. Use plain GPIO2.
+#    define LW_PWM_PIN 2
 #  elif defined(ARDUINO_BLUEPILL_F103C8)
 // Blue Pill LED is PC13, which has no timer channel on F103, so analogWrite
 // would fall back to digitalWrite. Use TIM2_CH1 on PA0 (no remap).
