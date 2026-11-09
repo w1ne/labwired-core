@@ -458,6 +458,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "npcx_adc",
     // GR716 on-chip ADC, eight control units (GR716-DS-UM §12, Phoenix-RTOS).
     "gr716_adc",
+    // STM32L1 ADC1 + common CSR/CCR (STM32L151.svd, STM32CubeL1 HAL).
+    "stm32l1_adc",
     // MSP430 ADC12 (F1/F2) and ADC12_A (F5) (mspsim ADC12.java, TI headers).
     "msp430_adc12",
     "msp430_adc12_a",
@@ -2035,6 +2037,14 @@ pub fn try_build(
                 .get("vref_mv")
                 .and_then(|v| v.as_u64())
                 .map_or(2500, |v| v as u32),
+        )),
+        // `vref_mv`: VREF+, 3300 mV (the STM32 convention in `adc.rs`).
+        "stm32l1_adc" => Box::new(crate::peripherals::stm32l1_adc::Stm32l1Adc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(3300, |v| v as u32),
         )),
         "renesasda14_gpadc" => {
             Box::new(crate::peripherals::renesas_da14_gpadc::RenesasDa14Gpadc::new())

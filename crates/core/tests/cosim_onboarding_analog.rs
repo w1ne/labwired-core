@@ -142,6 +142,7 @@ const CONVERTED: &[&str] = &[
     "stm32h753",
     "stm32l071",
     "stm32l072",
+    "stm32l151",
     "stm32l552",
     "stm32wba52",
     "ut32m0r500",
@@ -346,7 +347,30 @@ enum Family {
     /// control unit n pad n, so each pad converts on its own unit. 11 bits
     /// over the 0 V to 2.5 V single-ended range.
     Gr716Adc,
+    /// STM32L1 ADC1 (`stm32l1_adc`), the STM32CubeL1 HAL flow: `CR2.ADON`,
+    /// poll `SR.ADONS`, rank 1 in `SQR5`, `SWSTART`, poll `EOC`, read `DR`.
+    /// 12 bits against VREF+ 3.3 V.
+    Stm32L1Adc,
 }
+
+/// STM32L1 ADC offsets and bits (STM32L151.svd v1.4).
+const L1_SR: u64 = 0x00;
+const L1_CR1: u64 = 0x04;
+const L1_CR2: u64 = 0x08;
+const L1_SQR1: u64 = 0x30;
+const L1_SQR5: u64 = 0x40;
+const L1_JSQR: u64 = 0x44;
+const L1_JDR1: u64 = 0x48;
+const L1_DR: u64 = 0x58;
+const L1_CSR: u64 = 0x300;
+const L1_EOC: u32 = 1 << 1;
+const L1_JEOC: u32 = 1 << 2;
+const L1_ADONS: u32 = 1 << 6;
+const L1_ADON: u32 = 1 << 0;
+const L1_EOCS: u32 = 1 << 10;
+const L1_SCAN: u32 = 1 << 8;
+const L1_JSWSTART: u32 = 1 << 22;
+const L1_SWSTART: u32 = 1 << 30;
 
 /// GR716 ADC control-unit offsets and bits (GR716-DS-UM v1.29 §12.3,
 /// Phoenix-RTOS grlib-multi adc.c).
@@ -578,6 +602,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::NpcxAdc
         } else if kind == "gr716_adc" {
             Family::Gr716Adc
+        } else if kind == "stm32l1_adc" {
+            Family::Stm32L1Adc
         } else if kind == "nxp_lpadc" {
             Family::NxpLpadc {
                 ctype_mode: p.config.get("layout").and_then(|v| v.as_str()) == Some("ctype_mode"),
@@ -622,6 +648,7 @@ impl Converter {
             | Family::Stm32L4
             | Family::Stm32V2
             | Family::Stm32Adc4
+            | Family::Stm32L1Adc
             | Family::Sam4s
             | Family::SamAfec => (mv * 4095 / 3300).min(4095),
             // 12-bit, rounded to nearest.
@@ -760,6 +787,29 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::Stm32L1Adc => {
+                // SWSTART before ADON converts nothing; ADON raises ADONS,
+                // which HAL ADC_Enable polls, mirrored in the common CSR.
+                bus.write_u32(self.base + L1_SQR5, u32::from(NTC_CHANNEL))
+                    .expect("SQR5");
+                bus.write_u32(self.base + L1_CR2, L1_SWSTART)
+                    .expect("SWSTART without ADON");
+                assert_eq!(
+                    bus.read_u32(self.base + L1_SR).unwrap(),
+                    0,
+                    "{}: no conversion before ADON",
+                    self.id
+                );
+                bus.write_u32(self.base + L1_CR2, L1_ADON).expect("ADON");
+                for reg in [L1_SR, L1_CSR] {
+                    assert_eq!(
+                        bus.read_u32(self.base + reg).unwrap() & L1_ADONS,
+                        L1_ADONS,
+                        "{}: ADONS at {reg:#x}",
+                        self.id
+                    );
+                }
+            }
             Family::Gr716Adc => {
                 // AS without AE converts nothing on any unit.
                 let unit = self.base + GR716_UNIT * u64::from(NTC_CHANNEL);
@@ -2085,10 +2135,87 @@ impl Converter {
                 );
                 single
             }
+            Family::Stm32L1Adc => {
+                let single = self.routed_channels().map(|ch| self.convert(bus, ch));
+                let [ntc, diode] = single;
+                let idle = self.convert(bus, IDLE_CHANNEL);
+                // One SWSTART over SQ1..SQ8 (SQR5 into SQR4) with EOCS: each
+                // DR read hands over the next rank. Without EOCS, DR holds
+                // the last rank.
+                let group = [
+                    NTC_CHANNEL,
+                    DIODE_CHANNEL,
+                    IDLE_CHANNEL,
+                    DIODE_CHANNEL,
+                    NTC_CHANNEL,
+                    IDLE_CHANNEL,
+                    DIODE_CHANNEL,
+                    NTC_CHANNEL,
+                ];
+                let want = [ntc, diode, idle, diode, ntc, idle, diode, ntc];
+                assert_eq!(
+                    self.scan_l1(bus, &group, true),
+                    want,
+                    "{}: SCAN with EOCS steps SQ1..SQ8 into DR",
+                    self.id
+                );
+                assert_eq!(
+                    self.scan_l1(bus, &group[..2], false),
+                    [diode],
+                    "{}: SCAN without EOCS leaves the last rank in DR",
+                    self.id
+                );
+                // Injected: JL = 1 converts JSQ3, JSQ4 into JDR1, JDR2.
+                let jsqr =
+                    (1 << 20) | (u32::from(DIODE_CHANNEL) << 10) | (u32::from(NTC_CHANNEL) << 15);
+                bus.write_u32(self.base + L1_JSQR, jsqr).expect("JSQR");
+                bus.write_u32(self.base + L1_SR, !L1_JEOC)
+                    .expect("clear JEOC");
+                bus.write_u32(self.base + L1_CR2, L1_ADON | L1_JSWSTART)
+                    .expect("JSWSTART");
+                assert_ne!(bus.read_u32(self.base + L1_SR).unwrap() & L1_JEOC, 0);
+                assert_eq!(
+                    [L1_JDR1, L1_JDR1 + 4].map(|r| bus.read_u32(self.base + r).unwrap()),
+                    [diode, ntc],
+                    "{}: injected ranks in JDR1..2",
+                    self.id
+                );
+                single
+            }
             _ => self
                 .routed_channels()
                 .map(|channel| self.convert(bus, channel)),
         }
+    }
+
+    /// STM32L1 regular scan over `channels` (`SQ1` first, packed from
+    /// `SQR5` down as `ADC_SQR5_RK`..`ADC_SQR1_RK` do). With `eocs` every
+    /// rank is polled on `EOC` and read; without it the one end-of-sequence
+    /// `DR` is returned.
+    fn scan_l1(&self, bus: &mut SystemBus, channels: &[u8], eocs: bool) -> Vec<u32> {
+        let mut sqr = [0u32; 5];
+        for (rank, &ch) in channels.iter().enumerate() {
+            sqr[4 - rank / 6] |= u32::from(ch) << (5 * (rank % 6));
+        }
+        sqr[0] |= (channels.len() as u32 - 1) << 20;
+        for (k, v) in sqr.iter().enumerate() {
+            bus.write_u32(self.base + L1_SQR1 + 4 * k as u64, *v)
+                .expect("SQRx");
+        }
+        bus.write_u32(self.base + L1_CR1, L1_SCAN)
+            .expect("CR1.SCAN");
+        let cr2 = L1_ADON | if eocs { L1_EOCS } else { 0 };
+        bus.write_u32(self.base + L1_CR2, cr2 | L1_SWSTART)
+            .expect("SWSTART");
+        let mut codes = Vec::new();
+        while bus.read_u32(self.base + L1_SR).unwrap() & L1_EOC != 0 {
+            codes.push(bus.read_u32(self.base + L1_DR).expect("DR"));
+        }
+        bus.write_u32(self.base + L1_CR1, 0).expect("restore CR1");
+        bus.write_u32(self.base + L1_SQR1, 0).expect("restore SQR1");
+        bus.write_u32(self.base + L1_CR2, L1_ADON)
+            .expect("restore CR2");
+        codes
     }
 
     /// `(CFGR1, CHSELR, channel order)` for the multi-channel scans each v2
@@ -2571,6 +2698,31 @@ impl Converter {
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {
         match self.family {
+            Family::Stm32L1Adc => {
+                // HAL_ADC_ConfigChannel (rank 1), Start, PollForConversion,
+                // GetValue; flags clear by writing their complement.
+                bus.write_u32(self.base + L1_SQR5, u32::from(channel))
+                    .expect("SQR5 SQ1");
+                bus.write_u32(self.base + L1_SR, !L1_EOC)
+                    .expect("clear EOC");
+                let cr2 = bus.read_u32(self.base + L1_CR2).unwrap();
+                bus.write_u32(self.base + L1_CR2, cr2 | L1_ADON | L1_SWSTART)
+                    .expect("SWSTART");
+                assert_ne!(
+                    bus.read_u32(self.base + L1_SR).unwrap() & L1_EOC,
+                    0,
+                    "{}: IN{channel} sets EOC",
+                    self.id
+                );
+                let code = bus.read_u32(self.base + L1_DR).expect("DR");
+                assert_eq!(
+                    bus.read_u32(self.base + L1_SR).unwrap() & L1_EOC,
+                    0,
+                    "{}: the DR read clears EOC",
+                    self.id
+                );
+                code
+            }
             Family::Gr716Adc => {
                 // Phoenix-RTOS adc_configure + adc_convert on unit `channel`.
                 let unit = self.base + GR716_UNIT * u64::from(channel);
@@ -3279,6 +3431,7 @@ fn assert_stm32_series_map(board: &str, converter: &Converter) {
         Some("f1") => "Stm32F1",
         Some("f2" | "f4" | "f7") => "Stm32F4",
         Some("h7") => "Stm32H7",
+        Some("l1") => "Stm32L1Adc",
         Some("l4" | "l5") => "Stm32L4",
         Some("wb") if series.starts_with("wba") => "Stm32Adc4",
         _ => panic!("{board}: no reference-manual ADC map recorded for this STM32 series"),
@@ -3402,6 +3555,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::S32k3AdcSar
                 | Family::NpcxAdc
                 | Family::Gr716Adc
+                | Family::Stm32L1Adc
                 | Family::NxpLpadc { .. }
                 | Family::RaAdc { .. }
         ) {
@@ -3489,7 +3643,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 149,
+        instances, 150,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -3497,7 +3651,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 94,
+        without_adc, 93,
         "onboarding profiles that declare no modelled ADC"
     );
 }

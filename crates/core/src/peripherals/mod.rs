@@ -148,6 +148,7 @@ pub(crate) mod spi_bitbus;
 pub mod spi_loopback;
 pub mod spi_waveform;
 pub mod stm32f4_dma;
+pub mod stm32l1_adc;
 pub mod stm32u5_sysmem;
 pub mod stub;
 pub mod syscfg;
