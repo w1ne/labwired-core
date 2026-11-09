@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.000754">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.047329">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="a282da97f8258543747d4eba6e1f1554fd4684824b1ebe24893675522500517a"/>
+    <property name="firmware_hash" value="5f7933c30faecce91564c5dff01d04342ec7b958f9bbf0f8905de344d6ed7e18"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.000754">
+  <testcase classname="labwired" name="run" time="0.047329">
   </testcase>
-  <testcase classname="labwired" name="assertion 1: uart_contains: EZR32 Wonder Gecko UART0 smoke" time="0.000000">
+  <testcase classname="labwired" name="assertion 1: uart_contains: SLWSTK6220A RENODE SMOKE" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;uart1 status=40 ok&quot;, &quot;usart1 status=40 ok&quot;, &quot;usart2 status=40 ok&quot;, &quot;SLWSTK6220A RENODE SMOKE&quot;, &quot;gpio pe…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpioe:2 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x20007f00=0xef3200ff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

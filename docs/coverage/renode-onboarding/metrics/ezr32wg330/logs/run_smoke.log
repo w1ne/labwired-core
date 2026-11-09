@@ -1,5 +1,6 @@
-2026-11-05T14:48:20.474207Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/ezr32wg330.yaml
-2026-11-05T14:48:20.475000Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+[2m2026-11-09T11:34:27.063423Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/ezr32wg330.yaml
+[2m2026-11-09T11:34:27.065590Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-PASS  2/2 checks · ezr32wg330-smoke · 100000 steps · 0.00s
+[2m2026-11-09T11:34:27.067303Z[0m [33m WARN[0m [2mlabwired_core::peripherals::gpio[0m[2m:[0m EFM32 GPIO PINLOCKN 0xfffe: pin lock is stored but not enforced
+PASS  5/5 checks · ezr32wg330-smoke · 400000 steps · 0.05s

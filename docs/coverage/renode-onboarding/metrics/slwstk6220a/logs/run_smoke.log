@@ -1,5 +1,6 @@
-2026-11-05T14:49:54.021227Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/slwstk6220a.yaml
-2026-11-05T14:49:54.022051Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+[2m2026-11-09T11:34:10.689456Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/slwstk6220a.yaml
+[2m2026-11-09T11:34:10.691935Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-PASS  2/2 checks · slwstk6220a-smoke · 100000 steps · 0.00s
+[2m2026-11-09T11:34:10.694057Z[0m [33m WARN[0m [2mlabwired_core::peripherals::gpio[0m[2m:[0m EFM32 GPIO PINLOCKN 0xfffe: pin lock is stored but not enforced
+PASS  5/5 checks · slwstk6220a-smoke · 400000 steps · 0.05s

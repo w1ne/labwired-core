@@ -1,18 +1,14 @@
-# Bounded profile for the imported SLWSTK6220A board. The imported board
-# description identifies a Cortex-M4F core. Preserve the imported code and RAM
-# windows, and expose only UART0, the peripheral exercised by this smoke.
-# Other generated board peripherals remain unclaimed until they are tested.
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
 name: slwstk6220a
 arch: arm
-core: cortex-m4f
-flash:
-  base: 134217728
-  size: 262144B
-ram:
-  base: 536870912
-  size: 32768B
-peripherals:
-- id: uart0
-  type: efm32_uart
-  bus: sysbus
-  base_address: 1073799168
+# SLWSTK6220A (EZR32 Wonder Gecko 868 MHz kit). Renode
+# platforms/boards/silabs/slwstk6220a.repl is ezr32wg330.repl plus LEDs and
+# buttons on the GPIO port and an SI7021 on i2c0, so the chip surface is the
+# ezr32wg330 onboarding profile, included whole. The SI7021 is not declared
+# (I2C0 has no model here).
+include: ezr32wg330.yaml

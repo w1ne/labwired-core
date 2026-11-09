@@ -1,35 +1,36 @@
+//! EZR32LG330 / EZR32WG330 (Leopard / Wonder Gecko + Si4460) Renode-parity
+//! smoke. Both rows map the same blocks (Renode ezr32wg330.repl pulls in
+//! ezr32lg330.repl), so one image serves both.
+//!
+//! UART1, USART1 and USART2 each send one line first; UART0 is then the
+//! console for the Series-0 GPIO/TIMER checks shared with the EFM32GG995
+//! smoke (`firmware-efm32gg995-smoke/src/s0.rs`). The systems declare no
+//! debug_uart, so the runner captures every UART. LED0 is PE2 (Renode
+//! slwstk6220a.repl). Summary word at 0x2000_7F00.
 #![no_std]
 #![no_main]
 
-use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-// UART0 is the only peripheral retained in the imported LG330/WG330 profiles.
-const UART0_CMD: *mut u32 = 0x4000_E00C as *mut u32;
-const UART0_STATUS: *const u32 = 0x4000_E010 as *const u32;
-const UART0_TXDATA: *mut u32 = 0x4000_E034 as *mut u32;
+#[path = "../../firmware-efm32gg995-smoke/src/s0.rs"]
+mod s0;
 
-const CMD_TXEN: u32 = 1 << 0;
-const STATUS_TXBL: u32 = 1 << 6;
-
-fn putc(byte: u8) {
-    unsafe {
-        let mut remaining = 100_000u32;
-        while read_volatile(UART0_STATUS) & STATUS_TXBL == 0 && remaining > 0 {
-            remaining -= 1;
-        }
-        write_volatile(UART0_TXDATA, byte as u32);
-    }
-}
+mod ezr32_uarts;
 
 #[entry]
 fn main() -> ! {
-    unsafe { write_volatile(UART0_CMD, CMD_TXEN) };
-    for byte in b"EZR32 330 UART0 smoke\r\n" {
-        putc(*byte);
-    }
-    loop {
-        core::hint::spin_loop();
-    }
+    ezr32_uarts::announce(&[
+        ("uart1", 0x4000_E400),
+        ("usart1", 0x4000_C400),
+        ("usart2", 0x4000_C800),
+    ]);
+    s0::run(&s0::Board {
+        console: 0x4000_E000,
+        banner: "EZR32 330 RENODE SMOKE",
+        family: "EZR32 330",
+        summary: 0x2000_7F00,
+        led: (4, 2),
+        timers: 4,
+    })
 }

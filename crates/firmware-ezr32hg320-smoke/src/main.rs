@@ -1,35 +1,27 @@
+//! EZR32HG320 (Happy Gecko + Si4460, Cortex-M0+) Renode-parity smoke.
+//!
+//! USART0 is the console; the Series-0 GPIO/TIMER checks are shared with the
+//! EFM32GG995 smoke (`firmware-efm32gg995-smoke/src/s0.rs`). Renode's
+//! ezr32hg320.repl maps three TIMERs, so the TIMER3 check is skipped. No
+//! Renode board repl names HG320 LEDs, so PF4/PF5 (as on the EFM32HG350
+//! smoke) carry the push-pull check; pad bonding is not modelled. Summary word at 0x2000_1F00.
 #![no_std]
 #![no_main]
 
-use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-// The imported EZR32HG320 profile exposes the modeled USART0 window.
-const USART0_CMD: *mut u32 = 0x4000_C00C as *mut u32;
-const USART0_STATUS: *const u32 = 0x4000_C010 as *const u32;
-const USART0_TXDATA: *mut u32 = 0x4000_C034 as *mut u32;
-
-const CMD_TXEN: u32 = 1 << 0;
-const STATUS_TXBL: u32 = 1 << 6;
-
-fn putc(byte: u8) {
-    unsafe {
-        let mut remaining = 100_000u32;
-        while read_volatile(USART0_STATUS) & STATUS_TXBL == 0 && remaining > 0 {
-            remaining -= 1;
-        }
-        write_volatile(USART0_TXDATA, byte as u32);
-    }
-}
+#[path = "../../firmware-efm32gg995-smoke/src/s0.rs"]
+mod s0;
 
 #[entry]
 fn main() -> ! {
-    unsafe { write_volatile(USART0_CMD, CMD_TXEN) };
-    for byte in b"EZR32HG320 USART0 smoke\r\n" {
-        putc(*byte);
-    }
-    loop {
-        core::hint::spin_loop();
-    }
+    s0::run(&s0::Board {
+        console: 0x4000_C000,
+        banner: "EZR32HG320 RENODE SMOKE",
+        family: "EZR32HG",
+        summary: 0x2000_1F00,
+        led: (5, 4),
+        timers: 3,
+    })
 }
