@@ -30,17 +30,38 @@
   "assertions": [
     {
       "assertion": {
-        "uart_contains": "DA14592 M33 UART0 smoke; mul=323"
+        "uart_contains": "DA14592 M33 UART0 smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "DA14592 UART1 line"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "DA14592 checks PPPPPPPPPP DONE"
       },
       "passed": true
     },
     {
       "assertion": {
         "memory_value": {
-          "address": 536870912,
-          "expected_value": 323,
+          "address": 536968960,
+          "expected_value": 3658744831,
           "mask": null,
           "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:5",
+          "min_edges": 6
         }
       },
       "passed": true
@@ -55,25 +76,25 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      34,
       1342308372,
-      4294957296,
-      2147483648,
-      0,
-      0,
-      0,
-      536969200,
-      0,
-      0,
-      0,
-      0,
-      2236,
-      536969200,
       10,
-      2218
+      2147483648,
+      80,
+      80,
+      80,
+      80,
+      536968944,
+      25,
+      4892,
+      10,
+      4294867296,
+      80,
+      536968916,
+      536969212,
+      4860
     ],
-    "pc": 2218,
-    "xpsr": 1627389952,
+    "pc": 4860,
+    "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -85,7 +106,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "3eedc2a40939040b1d8bf90d913b59c299c81958f43e4a20f1dcf4b61240edd3",
+  "firmware_hash": "5650cbf0a9567ba6488219978b93af2a2056a7f913cd870e4401a40defb36c8c",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-renesas-da14592-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-da14592.yaml",
@@ -97,6 +118,20 @@
         "name": "uart0",
         "kind": "native",
         "base": 1342308352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 1342308608,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 1342309888,
         "registers": [],
         "artifacts": []
       },
@@ -140,10 +175,124 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 100000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 63,
+            "value": 1
+          },
+          {
+            "cycle": 66,
+            "value": 0
+          },
+          {
+            "cycle": 420,
+            "value": 1
+          },
+          {
+            "cycle": 421,
+            "value": 0
+          },
+          {
+            "cycle": 422,
+            "value": 1
+          },
+          {
+            "cycle": 423,
+            "value": 0
+          },
+          {
+            "cycle": 424,
+            "value": 1
+          },
+          {
+            "cycle": 425,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 61,
+            "state": "0"
+          },
+          {
+            "cycle": 63,
+            "state": "1"
+          },
+          {
+            "cycle": 66,
+            "state": "0"
+          },
+          {
+            "cycle": 420,
+            "state": "1"
+          },
+          {
+            "cycle": 421,
+            "state": "0"
+          },
+          {
+            "cycle": 422,
+            "state": "1"
+          },
+          {
+            "cycle": 423,
+            "state": "0"
+          },
+          {
+            "cycle": 424,
+            "state": "1"
+          },
+          {
+            "cycle": 425,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 8
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
   "uart_lines": {
     "lines": [
       {
-        "text": "DA14592 M33 UART0 smoke; mul=323",
+        "text": "DA14592 M33 UART0 smoke",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "DA14592 checks PPPPPPPPPP DONE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "DA14592 UART1 line",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -153,14 +302,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 2272,
+    "text_bytes": 4920,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 2272,
+    "flash_used_bytes": 4920,
     "ram_static_bytes": 0,
     "flash_total_bytes": 294912,
     "ram_total_bytes": 98304,
-    "flash_used_pct": 0.77,
+    "flash_used_pct": 1.67,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -169,31 +318,31 @@
   },
   "memory": {
     "main_stack_method": "paint",
-    "main_stack_limit_bytes": 98304,
-    "main_stack_high_water_bytes": 16,
-    "main_stack_free_min_bytes": 98284,
+    "main_stack_limit_bytes": 98048,
+    "main_stack_high_water_bytes": 44,
+    "main_stack_free_min_bytes": 98000,
     "main_stack_base": 536870912,
-    "main_stack_top": 536969216,
+    "main_stack_top": 536968960,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
-    "heap_limit_bytes": 98304,
-    "heap_high_water_bytes": 4,
-    "heap_free_min_bytes": 98284,
+    "heap_limit_bytes": 98048,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 98000,
     "heap_base": 536870912,
-    "heap_top": 536969216
+    "heap_top": 536968960
   },
   "metrics": {
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 98,
-    "memory_writes": 7,
-    "peripheral_accesses": 68,
+    "memory_reads": 742,
+    "memory_writes": 21,
+    "peripheral_accesses": 188,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 2218,
-        "count": 390,
+        "pc": 4860,
+        "count": 3,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
       }
     ]

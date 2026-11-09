@@ -2574,8 +2574,15 @@ boards:
     # new GpioFamily variant with its own match arms. No register, mask or
     # reset value of this chip's GPIO layout changed.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 420): gpio.rs gains the
+    # opt-in `da14` layout (DA14592 P0/P1 DATA/SET/RESET/MODE), a new
+    # GpioFamily variant with its own match arms, and `data_word_of`, which
+    # returns (offset, pin) unchanged for every other layout; bus/routing.rs
+    # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
+    # of this chip's GPIO layout changed.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: db9ca4d0cd6f9d190f513f119a0adae799a0a8575b6ae1c544921db453fba317
+    drift_ack_digest: 239e825dce7d81664f938886718ad30f439c6738a981cfbb8ebee0b27bb43e2a
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -4897,8 +4904,15 @@ boards:
     # new GpioFamily variant with its own match arms. No register, mask or
     # reset value of this chip's GPIO layout changed.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 420): gpio.rs gains the
+    # opt-in `da14` layout (DA14592 P0/P1 DATA/SET/RESET/MODE), a new
+    # GpioFamily variant with its own match arms, and `data_word_of`, which
+    # returns (offset, pin) unchanged for every other layout; bus/routing.rs
+    # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
+    # of this chip's GPIO layout changed.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 36f2a7f539cff3df755bdc85439e8d51200fddeb8d68c3b8af3daadfaaa3ab95
+    drift_ack_digest: 0a8bc6306a878243f2db64f2d76b7f1e2f20525cd72b2f65e3ecd5b5b260e3c8
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -6061,8 +6075,15 @@ boards:
     # new GpioFamily variant with its own match arms. No register, mask or
     # reset value of this chip's GPIO layout changed.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 420): gpio.rs gains the
+    # opt-in `da14` layout (DA14592 P0/P1 DATA/SET/RESET/MODE), a new
+    # GpioFamily variant with its own match arms, and `data_word_of`, which
+    # returns (offset, pin) unchanged for every other layout; bus/routing.rs
+    # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
+    # of this chip's GPIO layout changed.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 725c2afcd2502ed9265c1e68e46be53fb4c06b9314f60ab4bc0e6cf280aaa1f9
+    drift_ack_digest: a5aca9648e06e329dac874594b8c06ecf8b5be3defa257ec24327765c19cbf94
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -7367,8 +7388,15 @@ boards:
     # new GpioFamily variant with its own match arms. No register, mask or
     # reset value of this chip's GPIO layout changed.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 420): gpio.rs gains the
+    # opt-in `da14` layout (DA14592 P0/P1 DATA/SET/RESET/MODE), a new
+    # GpioFamily variant with its own match arms, and `data_word_of`, which
+    # returns (offset, pin) unchanged for every other layout; bus/routing.rs
+    # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
+    # of this chip's GPIO layout changed.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 35501a1ba7ba745c09cec483095f9993a931080b388aa3d1598937e3517a7ba3
+    drift_ack_digest: d02b9d2c7158a40d4ba989a499ec025ccf53d41f652385598ae80376b9501907
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -8542,8 +8570,15 @@ boards:
     # new GpioFamily variant with its own match arms. No register, mask or
     # reset value of this chip's GPIO layout changed.
     # ACK, NOT A SILICON CAPTURE; re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 420): gpio.rs gains the
+    # opt-in `da14` layout (DA14592 P0/P1 DATA/SET/RESET/MODE), a new
+    # GpioFamily variant with its own match arms, and `data_word_of`, which
+    # returns (offset, pin) unchanged for every other layout; bus/routing.rs
+    # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
+    # of this chip's GPIO layout changed.
+    # ACK, NOT A SILICON CAPTURE; re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: 331ea82d01ca10cef2583bc97dfe1e4568ada678fd255682fec48dfb739c197e
+    drift_ack_digest: 53e32b82ef183e84e06ba949b120ef7f21c36ba1c853b13a273df0e673611a93
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other

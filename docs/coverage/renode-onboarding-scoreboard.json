@@ -11,10 +11,10 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1451,
+    "pass_claimed_peripherals_total": 1453,
     "pass_claimed_peripherals_median": 2,
-    "median_elapsed_ms": 1524,
-    "median_elapsed_seconds": 1.524,
+    "median_elapsed_ms": 1567,
+    "median_elapsed_seconds": 1.567,
     "threshold_seconds": 3600,
     "threshold_met": 226,
     "descriptors_present": 245,
@@ -6274,31 +6274,32 @@
       "script": "examples/renode-onboarding/renesas-da14592-smoke.yaml",
       "system": "configs/systems/onboarding/renesas-da14592.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:49:22Z",
-      "finished_at_utc": "2026-11-05T14:49:24Z",
+      "started_at_utc": "2026-11-09T15:58:21Z",
+      "finished_at_utc": "2026-11-09T15:58:23Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1360,
+      "elapsed_ms": 1865,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.329,
-        "build_firmware": 0.682,
-        "run_smoke": 0.337
+        "build_cli": 0.62,
+        "build_firmware": 0.523,
+        "run_smoke": 0.682
       },
       "stages_ms": {
-        "build_cli": 329,
-        "build_firmware": 682,
-        "run_smoke": 337
+        "build_cli": 620,
+        "build_firmware": 523,
+        "run_smoke": 682
       },
       "_artifact_path": "renesas-da14592",
       "zero_answering_windows": [],
-      "claimed_peripherals": 1,
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
+        "gpio_edges",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"

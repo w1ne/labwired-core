@@ -1,47 +1,69 @@
-# Validation Report: renesas-da14592
+# Renesas DA14592 validation status
 
-**Architecture:** ARM Cortex-M33.
+## Current measurement (2026-11-09)
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+The imported renesas-da14592 system booted `firmware-renesas-da14592-smoke`
+on the main Cortex-M33 for **100,000 instructions** and passed **6/6 smoke
+assertions**. The firmware runs ten register checks and prints one letter
+per check; the UART0 capture is `DA14592 checks PPPPPPPPPP DONE`, and the
+summary word at 0x20017F00 is 0xDA1403FF. UART1 prints one line. P0.5 shows
+6 edges. The result, UART capture, JUnit assertions, snapshot and build/run
+logs are under
+[`docs/coverage/renode-onboarding/metrics/renesas-da14592/`](../coverage/renode-onboarding/metrics/renesas-da14592/).
 
-```text
-[2m2026-10-18T14:40:20.470813Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:40:20.471302Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/renesas-da14592.yaml
-[2m2026-10-18T14:40:20.475040Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'renesasda14_gpio' (peripheral 'gpio') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:40:20.475298Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:40:20.475439Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:40:20.475466Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:40:20.475471Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:40:20.476338Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:40:20.476346Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:40:20.476351Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:40:20.476418Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:40:20.476445Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:40:20.476452Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:40:20.476456Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:40:20.476460Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:40:20.476463Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2024.54
-```
+Checks (source: `crates/firmware-renesas-da14592-smoke/src/main.rs`):
 
+0-1. UART0/UART1 LSR reset to THRE | TEMT (0x60).
+2. P0_00_MODE and P1_15_MODE reset to 0x200 (input, pull-down); P0_DATA
+   and P1_DATA read 0.
+3. P0.5 as output: P0_SET drives it high, P0_SET reads 0, P0_RESET drives
+   it low. P0.6 (still an input with pull-down) ignores the SET bit.
+4. P1.2 as output through P1_SET/P1_RESET; P0_DATA is not touched.
+5. P0.3 input reads 1 with PUPD pull-up and 0 with pull-down.
+6. P0_WEAK_CTRL and P1_WEAK_CTRL are separate 16-bit words.
+7. SRAM at 0x20000000 and its 0x800000 view are one store.
+8. The ROM view at 0x900000 shows the vector table at 0x0.
+9. eFlash data at 0x31000000 is seen at 0xA00000; the last SRAM word
+   (0x20017FFC) holds a value.
 
-## Hardware Coverage Report
+## Declared surface
 
-| Peripheral ID | Base Address | Type |
+Sources: Renode `platforms/cpus/renesas-da14592.repl` (memory map, instance
+bases), Renode `RenesasDA14_GPIO.cs` (GPIO register map) and Zephyr
+`drivers/gpio/gpio_smartbond.c` (driver use of DATA/SET/RESET/MODE).
+
+| Block | Base | Model |
 |---|---|---|
-| `timer1` | `0x50010300` | `renesasda14_gpt` |
-| `timer2` | `0x50010400` | `renesasda14_gpt` |
-| `timer3` | `0x50010500` | `renesasda14_gpt` |
-| `timer4` | `0x50020a00` | `renesasda14_gpt` |
-| `uart0` | `0x50020000` | `renesasda14_uart` |
-| `uart1` | `0x50020100` | `renesasda14_uart` |
-| `gpadc` | `0x50040900` | `stub` |
-| `gpio` | `0x50020600` | `renesasda14_gpio` |
-| `dma` | `0x50060200` | `renesasda14_dma` |
-| `i2c` | `0x50020300` | `stub` |
-| `clock_gen` | `0x50000000` | `stub` |
-| `xtal32m_regs` | `0x50010000` | `stub` |
-| `spi` | `0x50020200` | `stub` |
-| `gp_regs` | `0x50050300` | `stub` |
+| ROM 288 KiB | 0x00000000, mirror 0x00900000 | memory |
+| SRAM 96 KiB | 0x20000000, mirror 0x00800000 | memory |
+| eFlash data 0x40800 B | 0x31000000, mirror 0x00A00000 | memory |
+| uart0 / uart1 | 0x50020000 / 0x50020100 (256 B each) | `renesasda14_uart` (DW APB 16550), polled |
+| gpio (P0 + P1) | 0x50020600 (512 B) | `gpio` profile `da14` |
 
-**Total Peripherals:** 14
+The GPIO model takes one instance for both ports. Pad `16 * port + n` is
+Pport.n, so P1.2 is pad 18 (`gpio:18`). Renode's RESET-register handler ORs
+`~value` into the latch; the model clears the written bits, as Zephyr's
+`gpio_smartbond_port_clear_bits_raw` expects. PID != 0 reports the pad as
+an alternate function; that PID 0 is GPIO is an assumption from DA1469x
+(no DA1459x source checked). The DAP adapter does not bind board I/O to
+this block (one offset pair cannot address both ports).
+
+Not declared (no model in this engine): the auxiliary Cortex-M0+ CMAC core,
+GPT timers 1-4, system watchdog, GPADC, DMA, DesignWare I2C, SPI, clock
+generation and XTAL32M registers, general-purpose registers, QSPI and
+eFlash controllers, pad latches, wake-up controller, and the CHIP_ID tags.
+UART and GPIO interrupts are not modelled, so no NVIC lines are declared.
+
+## Negative controls
+
+Under
+[`attempt-history/renesas-da14592/`](../coverage/renode-onboarding/attempt-history/renesas-da14592/):
+
+- old descriptor (UART0 only, no mirrors): BusFault at 0x00800100 (SRAM
+  low view), 1/6. The UART1 and GPIO accesses before it did not fault,
+  because UART0's default window covered them. This round gives both UARTs
+  256-byte windows.
+- no GPIO block (256-byte UART windows): BusFault at 0x50020618
+  (P0_00_MODE), 1/6.
+- SRAM/ROM/eFlash-data low views as separate memories: checks 7-9 fail,
+  4/6, summary 0xDA14007F.

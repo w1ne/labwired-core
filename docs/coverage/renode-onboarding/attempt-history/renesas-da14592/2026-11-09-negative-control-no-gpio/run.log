@@ -1,0 +1,14 @@
+2026-11-09T15:52:23.566877Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/chip.yaml
+2026-11-09T15:52:23.568959Z  INFO labwired_loader: ELF Entry Point: 0x801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-09T15:52:23.574000Z ERROR labwired_cli::execute: --watch-gpio: peripheral "gpio" not found on the bus; channel will stay flat
+2026-11-09T15:52:23.576598Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "DA14592 M33 UART0 smoke" }) (captured len=0)
+2026-11-09T15:52:23.576622Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "DA14592 UART1 line" }) (captured len=0)
+2026-11-09T15:52:23.576628Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "DA14592 checks PPPPPPPPPP DONE" }) (captured len=0)
+2026-11-09T15:52:23.576635Z ERROR labwired_cli::execute: Memory assertion failed at 0x20017f00 (size 4): expected 0xda1403ff, got 0x0 (mask 0xffffffff)
+2026-11-09T15:52:23.576642Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536968960, expected_value: 3658744831, mask: None, size: Some(4), node: None } }) (captured len=0)
+2026-11-09T15:52:23.576656Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpio:5", min_edges: 6 } }) (captured len=0)
+FAIL  1/6 checks · script · 100000 steps · 0.00s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x5002_0618 (BFAR valid), at PC 0x0000_0888 in `core::ptr::read_volatile` (mod.rs:2091), called from `main`.
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x50020618

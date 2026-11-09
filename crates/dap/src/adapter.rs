@@ -1744,6 +1744,9 @@ fn gpio_offsets_for_peripheral(
             odr_offset: 0x18,
             ra_output_packed: false,
         }),
+        // DA14 P0 and P1 data sit in two words of one block; a single
+        // offset pair cannot address both ports, so skip the binding.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Da14 => None,
         // nRF52 GPIO register layout isn't mapped for DAP board-IO bindings;
         // skip it gracefully (callers use `?`, so None drops the binding).
         labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf52 => None,

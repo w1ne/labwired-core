@@ -130,6 +130,11 @@ pub enum GpioRegisterLayout {
     /// aliases, IN @0x24, IN_EN @0x30, PDPU_SEL0/1 pulls. One instance = one
     /// 32-pin port (MSDK `MAX32650/Include/gpio_regs.h`, `gpio_reva.c`).
     Max32650,
+    /// Renesas (Dialog) DA14592 GPIO: P0 and P1 (16 pads each) share one
+    /// block with interleaved DATA/SET/RESET words and one MODE word per pad.
+    /// One instance = both ports; pad `16 * port + n` is Pport.n (Renode
+    /// `RenesasDA14_GPIO`, Zephyr `gpio_smartbond.c`).
+    Da14,
 }
 
 impl FromStr for GpioRegisterLayout {
@@ -153,8 +158,9 @@ impl FromStr for GpioRegisterLayout {
             "lpc2xxx" | "lpc21xx" | "lpc22xx" => Ok(Self::Lpc2xxx),
             "eos_s3" | "eoss3" | "eos_s3_misc" => Ok(Self::EosS3),
             "max32650" | "max3265x" | "mxc_gpio_me10" => Ok(Self::Max32650),
+            "da14" | "da1459x" | "smartbond" => Ok(Self::Da14),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, efm32s0, efm32s1, sam_port, ra_port, imxrt, lpc2xxx, eos_s3, max32650",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, efm32s0, efm32s1, sam_port, ra_port, imxrt, lpc2xxx, eos_s3, max32650, da14",
                 value
             )),
         }
@@ -1764,6 +1770,130 @@ impl Max32650Gpio {
     }
 }
 
+// ── Renesas (Dialog) DA14592 GPIO ────────────────────────────────────────────
+// One block for both ports (Renode platforms/cpus/renesas-da14592.repl
+// `gpio` @0x5002_0600, 0x200 bytes; register map from Renode
+// `RenesasDA14_GPIO.cs`, driver use from Zephyr `drivers/gpio/gpio_smartbond.c`,
+// which documents the same interleaving on DA1469x): P0_DATA @0x00,
+// P1_DATA @0x04, P0/P1_SET_DATA @0x08/0x0C, P0/P1_RESET_DATA @0x10/0x14,
+// Px_yy_MODE @0x18 + 4 * (16 * x + yy), GPIO_CLK_SEL @0xA0, P0/P1_WEAK_CTRL
+// @0xA4/0xA8. MODE: PID [5:0] (pad function), PUPD [9:8] (0 input, 1 input
+// pull-up, 2 input pull-down, 3 output), PPOD [10] (open drain). Reset MODE
+// 0x200 (input with pull-down). DATA reads the pad level and a write loads
+// the output latch; SET/RESET read 0 and a 1 sets/clears that latch bit.
+// Renode's RESET handler ORs `~value` into the latch; Zephyr's
+// `gpio_smartbond_port_clear_bits_raw` writes the mask to clear it, so the
+// model clears. Assumption: PID 0 is the GPIO function (DA1469x
+// HW_GPIO_FUNC_GPIO = 0; no DA1459x source checked), so PID != 0 reports AF.
+// Not modelled: pad latches (CRG_TOP Px_PAD_LATCH), wake-up controller,
+// peripheral routing for PID != 0, drive strength (WEAK_CTRL is stored).
+#[derive(Debug, serde::Serialize)]
+pub struct Da14Gpio {
+    /// Output latch: bits [15:0] P0, [31:16] P1.
+    out: u32,
+    #[serde(skip)]
+    mode: [u32; 32],
+    clk_sel: u32,
+    weak_ctrl: [u32; 2],
+    /// Input latch (host/button injection). Not a register.
+    pin_in: u32,
+    /// Pins the outside world is holding. Not a register.
+    #[serde(skip)]
+    external: u32,
+}
+
+impl Default for Da14Gpio {
+    fn default() -> Self {
+        Self {
+            out: 0,
+            mode: [Self::MODE_RESET; 32],
+            clk_sel: 0,
+            weak_ctrl: [0; 2],
+            pin_in: 0,
+            external: 0,
+        }
+    }
+}
+
+impl Da14Gpio {
+    const MODE_RESET: u32 = 0x200;
+    const MODE_MASK: u32 = 0x73F; // PID [5:0], PUPD [9:8], PPOD [10]
+    const PUPD_PULL_UP: u32 = 1;
+    const PUPD_PULL_DOWN: u32 = 2;
+    const PUPD_OUTPUT: u32 = 3;
+
+    fn pupd(&self, pin: usize) -> u32 {
+        (self.mode[pin] >> 8) & 3
+    }
+
+    fn mask_where(&self, f: impl Fn(usize) -> bool) -> u32 {
+        (0..32).filter(|&p| f(p)).fold(0, |m, p| m | (1u32 << p))
+    }
+
+    /// Output pads that drive: push-pull always, open drain only when low.
+    fn driven_mask(&self) -> u32 {
+        let outputs = self.mask_where(|p| self.pupd(p) == Self::PUPD_OUTPUT);
+        let open_drain = self.mask_where(|p| self.mode[p] & (1 << 10) != 0);
+        outputs & !(open_drain & self.out)
+    }
+
+    fn pull_of(&self, pin: u8) -> Option<bool> {
+        match self.pupd(pin as usize) {
+            Self::PUPD_PULL_UP => Some(true),
+            Self::PUPD_PULL_DOWN => Some(false),
+            _ => None,
+        }
+    }
+
+    /// The pad level: driven pads read the latch, pulled pads nothing
+    /// outside holds read the rail, everything else the external level.
+    fn pad_level(&self) -> u32 {
+        let driven = self.driven_mask();
+        let up = self.mask_where(|p| self.pupd(p) == Self::PUPD_PULL_UP);
+        let down = self.mask_where(|p| self.pupd(p) == Self::PUPD_PULL_DOWN);
+        let from_pull = (up | down) & !driven & !self.external;
+        let from_latch = !driven & !from_pull;
+        (self.out & driven) | (up & from_pull) | (self.pin_in & from_latch)
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.pad_level() & 0xFFFF,
+            0x04 => self.pad_level() >> 16,
+            0x08..=0x14 if offset % 4 == 0 => 0, // SET / RESET read 0
+            0x18..=0x94 if offset % 4 == 0 => self.mode[((offset - 0x18) / 4) as usize],
+            0xA0 => self.clk_sel,
+            0xA4 => self.weak_ctrl[0],
+            0xA8 => self.weak_ctrl[1],
+            _ => {
+                crate::census_reg!("gpio:Da14Gpio", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        let v = value & 0xFFFF;
+        match offset {
+            0x00 => self.out = (self.out & 0xFFFF_0000) | v,
+            0x04 => self.out = (self.out & 0xFFFF) | (v << 16),
+            0x08 => self.out |= v,
+            0x0C => self.out |= v << 16,
+            0x10 => self.out &= !v,
+            0x14 => self.out &= !(v << 16),
+            0x18..=0x94 if offset % 4 == 0 => {
+                self.mode[((offset - 0x18) / 4) as usize] = value & Self::MODE_MASK
+            }
+            0xA0 => self.clk_sel = value & 0x70F,
+            0xA4 => self.weak_ctrl[0] = v,
+            0xA8 => self.weak_ctrl[1] = v,
+            _ => {
+                crate::census_reg!("gpio:Da14Gpio", offset, "write");
+            }
+        }
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 pub enum GpioFamily {
     Stm32F1(F1Gpio),
@@ -1778,6 +1908,7 @@ pub enum GpioFamily {
     Lpc2xxx(Lpc2xxxGpio),
     EosS3(EosS3Gpio),
     Max32650(Max32650Gpio),
+    Da14(Da14Gpio),
 }
 
 impl GpioFamily {
@@ -1795,6 +1926,7 @@ impl GpioFamily {
             Self::Lpc2xxx(g) => g.read_reg(offset),
             Self::EosS3(g) => g.read_reg(offset),
             Self::Max32650(g) => g.read_reg(offset),
+            Self::Da14(g) => g.read_reg(offset),
         }
     }
 
@@ -1812,6 +1944,7 @@ impl GpioFamily {
             Self::Lpc2xxx(g) => g.write_reg(offset, value),
             Self::EosS3(g) => g.write_reg(offset, value),
             Self::Max32650(g) => g.write_reg(offset, value),
+            Self::Da14(g) => g.write_reg(offset, value),
         }
     }
 
@@ -1904,6 +2037,10 @@ impl GpioFamily {
                 apply(&mut g.pin_in);
                 g.external |= bit;
             }
+            Self::Da14(g) => {
+                apply(&mut g.pin_in);
+                g.external |= bit;
+            }
         }
         true
     }
@@ -1935,6 +2072,7 @@ impl GpioFamily {
             Self::Lpc2xxx(g) => g.external &= !bit,
             Self::EosS3(g) => g.external &= !bit,
             Self::Max32650(g) => g.external &= !bit,
+            Self::Da14(g) => g.external &= !bit,
         }
     }
 
@@ -2092,6 +2230,7 @@ impl GpioFamily {
             // Every pad is driven from IO_OUTPUT (IO_MUX not modelled).
             Self::EosS3(g) => (pin < 8).then(|| bit(g.io_output)),
             Self::Max32650(g) => Some(bit(g.pad_level())),
+            Self::Da14(g) => Some(bit(g.pad_level())),
         }
     }
 }
@@ -2305,6 +2444,18 @@ impl GpioPort {
                     GpioMode::Input
                 }
             }
+            // DA14: PID != 0 hands the pad to a peripheral (routing not
+            // modelled); PID 0 is GPIO with PUPD = 3 the output mode.
+            GpioFamily::Da14(g) => {
+                let p = pin as usize;
+                if g.mode[p] & 0x3F != 0 {
+                    GpioMode::Af
+                } else if g.pupd(p) == Da14Gpio::PUPD_OUTPUT {
+                    GpioMode::Output
+                } else {
+                    GpioMode::Input
+                }
+            }
             // Series-2 EFR32: 4-bit mode nibble per pin (MODEL/MODEH).
             // 0 DISABLED is a hi-Z pin — closest to Analog here; 1..3 are the
             // input modes; >= 4 the output modes. No AF verdict: the ROUTE
@@ -2468,6 +2619,8 @@ impl GpioPort {
             GpioFamily::Max32650(g) => (g.driven_mask() & (1u32 << pin) == 0)
                 .then(|| g.pull_of(pin))
                 .flatten(),
+            // DA14: PUPD 1 up / 2 down (input modes only, so never driven).
+            GpioFamily::Da14(g) => g.pull_of(pin),
         }
     }
 
@@ -2544,6 +2697,15 @@ impl GpioPort {
                     input()
                 }
             }
+            // DA14: PPOD (MODE bit 10) makes an output pad open drain.
+            GpioFamily::Da14(g) => match self.pad_mode(pin)? {
+                GpioMode::Output => output(
+                    (g.out >> pin) & 1 != 0,
+                    g.mode[pin as usize] & (1 << 10) != 0,
+                ),
+                GpioMode::Af => af(),
+                _ => input(),
+            },
             _ => match self.pad_mode(pin)? {
                 // The remaining families model push-pull only.
                 GpioMode::Output => output(self.read_gpio_output_bit(pin)?, false),
@@ -2669,6 +2831,7 @@ impl GpioPort {
             GpioRegisterLayout::Lpc2xxx => GpioFamily::Lpc2xxx(Lpc2xxxGpio::default()),
             GpioRegisterLayout::EosS3 => GpioFamily::EosS3(EosS3Gpio::default()),
             GpioRegisterLayout::Max32650 => GpioFamily::Max32650(Max32650Gpio::default()),
+            GpioRegisterLayout::Da14 => GpioFamily::Da14(Da14Gpio::default()),
         })
     }
 
@@ -2829,6 +2992,8 @@ impl GpioPort {
             GpioFamily::Lpc2xxx(_) => 0x04,  // IOSET reads the output latch
             GpioFamily::EosS3(_) => 0x04,    // IO_OUTPUT
             GpioFamily::Max32650(_) => 0x18, // OUT
+            // P0_DATA; a P1 pad is one word up (see `data_word_of`).
+            GpioFamily::Da14(_) => 0x00,
         };
         family.saturating_sub(self.window_offset)
     }
@@ -2851,8 +3016,19 @@ impl GpioPort {
             GpioFamily::Lpc2xxx(_) => 0x00,  // IOPIN
             GpioFamily::EosS3(_) => 0x00,    // IO_INPUT
             GpioFamily::Max32650(_) => 0x24, // IN
+            GpioFamily::Da14(_) => 0x00,     // P0_DATA (see odr_offset)
         };
         family.saturating_sub(self.window_offset)
+    }
+
+    /// The data word and bit that hold `pin`, given this port's ODR or IDR
+    /// offset. One word per port everywhere except DA14, whose single block
+    /// keeps P1 (pads 16..31) in the word after P0's.
+    pub fn data_word_of(&self, offset: u64, pin: u8) -> (u64, u8) {
+        match self.family {
+            GpioFamily::Da14(_) if pin >= 16 => (offset + 4, pin - 16),
+            _ => (offset, pin),
+        }
     }
 
     /// Register layout of this port (used by the SPI pad-wiring helper to
@@ -2920,6 +3096,7 @@ impl GpioPort {
             GpioFamily::Lpc2xxx(_) => GpioRegisterLayout::Lpc2xxx,
             GpioFamily::EosS3(_) => GpioRegisterLayout::EosS3,
             GpioFamily::Max32650(_) => GpioRegisterLayout::Max32650,
+            GpioFamily::Da14(_) => GpioRegisterLayout::Da14,
         }
     }
 
@@ -3687,6 +3864,7 @@ impl crate::Peripheral for GpioPort {
             GpioFamily::Lpc2xxx(g) => serde_json::to_value(g),
             GpioFamily::EosS3(g) => serde_json::to_value(g),
             GpioFamily::Max32650(g) => serde_json::to_value(g),
+            GpioFamily::Da14(g) => serde_json::to_value(g),
         }
         .unwrap_or(serde_json::Value::Null)
     }
@@ -3927,6 +4105,53 @@ mod routing_tests {
         assert_eq!(g.gpio_routing(14).unwrap().mode, GpioMode::Af);
         assert_eq!(g.odr_offset(), 0x18);
         assert_eq!(g.idr_offset(), 0x24);
+    }
+
+    /// DA14592 GPIO: interleaved P0/P1 DATA/SET/RESET, per-pad MODE (PUPD
+    /// pulls and output, PID != 0 reports AF), reset MODE 0x200 pull-down.
+    #[test]
+    fn da14_data_set_reset_mode_pulls() {
+        let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Da14);
+        assert_eq!(g.read_u32(0x18).unwrap(), 0x200, "P0_00_MODE reset");
+        assert_eq!(g.read_u32(0x94).unwrap(), 0x200, "P1_15_MODE reset");
+        assert_eq!(g.read_u32(0x00).unwrap(), 0, "pull-downs at reset");
+        g.write_u32(0x18 + 4 * 5, 0x300).unwrap(); // P0_05 output
+        g.write_u32(0x58 + 4 * 2, 0x300).unwrap(); // P1_02 output
+        g.write_u32(0x08, (1 << 5) | (1 << 6)).unwrap(); // P0_SET
+        g.write_u32(0x0C, 1 << 2).unwrap(); // P1_SET
+        assert_eq!(g.read_u32(0x08).unwrap(), 0, "SET reads 0");
+        assert_eq!(g.read_u32(0x00).unwrap(), 1 << 5, "P0_DATA: driven pad");
+        assert_eq!(g.read_u32(0x04).unwrap(), 1 << 2, "P1_DATA: driven pad");
+        assert_eq!(g.read_gpio_pad(18), Some(true), "P1.2 is pad 18");
+        g.write_u32(0x10, 1 << 5).unwrap(); // P0_RESET clears only P0.5
+        assert_eq!(g.read_u32(0x00).unwrap(), 0);
+        assert_eq!(g.read_u32(0x04).unwrap(), 1 << 2, "P1 untouched");
+        g.write_u32(0x14, 1 << 2).unwrap();
+        assert_eq!(g.read_u32(0x04).unwrap(), 0);
+        g.write_u32(0x18 + 4 * 3, 0x100).unwrap(); // P0_03 input pull-up
+        assert_eq!(g.read_u32(0x00).unwrap(), 1 << 3);
+        assert!(g.set_gpio_input(3, false));
+        assert_eq!(
+            g.read_u32(0x00).unwrap() & (1 << 3),
+            0,
+            "outside beats pull"
+        );
+        assert_eq!(g.gpio_routing(5).unwrap().mode, GpioMode::Output);
+        assert_eq!(g.gpio_routing(3).unwrap().mode, GpioMode::Input);
+        g.write_u32(0x18 + 4 * 9, 0x201).unwrap(); // P0_09 PID 1
+        assert_eq!(g.gpio_routing(9).unwrap().mode, GpioMode::Af);
+        g.write_u32(0x00, 0xFFFF_FFFF).unwrap(); // P0_DATA write: P0 latch only
+        g.write_u32(0x18 + 4 * 7, 0x700).unwrap(); // P0_07 open drain output
+        assert_eq!(
+            g.read_u32(0x00).unwrap() & (1 << 7),
+            0,
+            "OD high is released"
+        );
+        g.write_u32(0x10, 1 << 7).unwrap();
+        assert_eq!(g.read_u32(0x00).unwrap() & (1 << 7), 0, "OD low drives");
+        assert_eq!(g.read_u32(0x04).unwrap(), 0, "P1 latch kept");
+        g.write_u32(0xA4, 0x1_0010).unwrap();
+        assert_eq!(g.read_u32(0xA4).unwrap(), 0x10, "WEAK_CTRL 16 bits");
     }
 
     /// EOS S3 MISC IO: IO_OUTPUT keeps bits [7:0] and drives the pads;

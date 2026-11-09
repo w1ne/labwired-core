@@ -394,6 +394,41 @@ impl Rig for Max32650 {
     }
 }
 
+struct Da14;
+impl Rig for Da14 {
+    fn name(&self) -> &'static str {
+        "GpioPort da14"
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
+            crate::peripherals::gpio::GpioRegisterLayout::Da14,
+        ))
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        // Zephyr gpio_smartbond_pin_configure: latch through SET/RESET first,
+        // then Px_yy_MODE PUPD (0 in, 1 up, 2 down, 3 out); PPOD bit 10.
+        let mode_reg = 0x18 + 4 * u64::from(pin);
+        let (word, bit) = (u64::from(pin / 16) * 4, pin % 16);
+        let latch = |port: &mut dyn Peripheral, level: bool| {
+            w32(port, if level { 0x08 } else { 0x10 } + word, 1 << bit)
+        };
+        match mode {
+            Mode::Input(Pull::None) => w32(port, mode_reg, 0x000),
+            Mode::Input(Pull::Up) => w32(port, mode_reg, 0x100),
+            Mode::Input(Pull::Down) => w32(port, mode_reg, 0x200),
+            Mode::PushPull(level) => {
+                latch(port, level);
+                w32(port, mode_reg, 0x300);
+            }
+            Mode::OpenDrain(level) => {
+                latch(port, level);
+                w32(port, mode_reg, 0x700);
+            }
+        }
+        true
+    }
+}
+
 #[derive(Default)]
 struct RaPort {
     pfs: Option<crate::peripherals::ra_pfs::RaPfs>,
@@ -893,6 +928,7 @@ fn rigs() -> Vec<Box<dyn Rig>> {
         Box::new(Imxrt::default()),
         Box::new(Lpc2xxx),
         Box::new(Max32650),
+        Box::new(Da14),
         Box::new(Avr),
         Box::new(Pic24),
         Box::new(Rp2040),

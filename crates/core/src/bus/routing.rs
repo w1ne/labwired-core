@@ -83,6 +83,7 @@ impl SystemBus {
             {
                 let odr_off = gpio.odr_offset();
                 let bit = Self::ra_port_odr_bit(gpio, *bit)?;
+                let (odr_off, bit) = gpio.data_word_of(odr_off, bit);
                 return Some((base + odr_off, bit));
             }
             // Generic GPIO blocks publish their latch offsets through the
@@ -103,6 +104,7 @@ impl SystemBus {
                 {
                     let odr_off = gpio.odr_offset();
                     if let Some(bit) = Self::ra_port_odr_bit(gpio, bit) {
+                        let (odr_off, bit) = gpio.data_word_of(odr_off, bit);
                         return Some((base + odr_off, bit));
                     }
                 }
@@ -260,12 +262,12 @@ impl SystemBus {
                 let idx = bus.find_peripheral_index_by_name(gpio_name)?;
                 let base = bus.peripherals[idx].base;
                 let dev = bus.peripherals[idx].dev.as_ref();
-                if let Some(idr_off) = dev
+                if let Some((idr_off, bit)) = dev
                     .as_any()
                     .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-                    .map(|g| g.idr_offset())
+                    .map(|g| g.data_word_of(g.idr_offset(), *bit))
                 {
-                    return Some((base + idr_off, *bit));
+                    return Some((base + idr_off, bit));
                 }
                 let offsets = dev.gpio_port_offsets()?;
                 return Some((base + offsets.input, *bit));
@@ -275,11 +277,11 @@ impl SystemBus {
         if let Some((port_name, bit)) = Self::parse_stm32_pin(pin) {
             if let Some(idx) = bus.find_peripheral_index_by_name(&port_name) {
                 let base = bus.peripherals[idx].base;
-                if let Some(idr_off) = bus.peripherals[idx]
+                if let Some((idr_off, bit)) = bus.peripherals[idx]
                     .dev
                     .as_any()
                     .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-                    .map(|g| g.idr_offset())
+                    .map(|g| g.data_word_of(g.idr_offset(), bit))
                 {
                     return Some((base + idr_off, bit));
                 }
