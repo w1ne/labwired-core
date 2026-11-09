@@ -567,6 +567,44 @@ boards:
       L8_can: "EFR32MG26 has no CAN controller"
 
 
+  - id: ch32v003
+    chip: ch32v003f4p6-ch32fun-smoke
+    system: systems/ch32v003.yaml
+    # WCH's official core (openwch/arduino_core_ch32) via the community ch32v
+    # platform. Not in the PlatformIO registry; pinned like the other WCH rows.
+    pio:
+      platform: https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7
+      board: genericCH32V003F4P6
+      framework: arduino
+      # platform.json names the framework by branch, so pin it here too.
+      platform_packages:
+        - "framework-arduino-openwch-ch32 @ https://github.com/Community-PIO-CH32V/arduino_core_ch32.git#3820604346d0a9f0ee9a72cab8b7583e488e6674"
+      # The CH32V003F4 variant leaves LED_BUILTIN as PNUM_NOT_DEFINED, and
+      # digitalWrite() on it compiles to a trap. PD0 is a pin choice (the
+      # ch32v003fun blink pin), not a board fact. L6 drives TIM2_CH1 on its
+      # default pad PD4 (variant PeripheralPins.c PinMap_TIM).
+      build_flags: ["-DLED_BUILTIN=PD0", "-DLW_PWM_PIN=PD4"]
+    max_steps: 3000000
+    budget_reason: "48 MHz RV32EC; L0 ~1M steps to LW_L0_OK"
+    led_watch: "gpiod:0"
+    led_min_edges: 2
+    # Stock analogWrite(PD4, 128) must toggle the pad. A pin that falls back to
+    # digitalWrite (no TIM route) holds one level and fails this.
+    pwm_watch: "gpiod:4"
+    pwm_min_edges: 4
+    family: wch
+    notes: "QingKe V2A RV32EC: PFIC, STK, HPE, XW compressed insns"
+    sketches_skip: [L7_timer, L8_can]
+    sketches_skip_reason:
+      # Measured 2026-11-07, re-measured 2026-11-09 on the lane model:
+      # LW_L7_FAIL t0=1991 t1=3999 t2=3778 t3=4999.
+      L7_timer: >-
+        Upstream core bug, not a model gap: getCurrentMicros() (ch32/clock.c)
+        computes (CMP+1-CNT), which assumes a down-counter, but the V2 STK
+        counts up (WCH's own Delay_Ms polls CNTIF from CNT=0), so micros()
+        runs backwards inside each millisecond
+      L8_can: "No CAN on CH32V003"
+
   - id: ch32v203
     chip: ch32v203c8t6-ch32fun-smoke
     system: systems/ch32v203.yaml

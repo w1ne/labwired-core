@@ -1,0 +1,12 @@
+schema_version: '1.0'
+inputs:
+  firmware: validation/arduino-matrix/out/ch32v003/L3_i2c_sensor/firmware.elf
+  system: validation/arduino-matrix/systems/ch32v003.yaml
+limits:
+  max_steps: 3000000
+  max_uart_bytes: 65536
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000
+  stop_when_assertions_pass_min_steps: 0
+assertions:
+- uart_contains: LW_L3_OK

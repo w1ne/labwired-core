@@ -70,6 +70,7 @@ jobs:
           - arduino-nano-every
           - arduino-leonardo
           - teensy41
+          - ch32v003
           - ch32v203
           - ch32v307
           - ch32x035
@@ -150,7 +151,7 @@ jobs:
             # The Teensy 4.1 row was measured on teensy 6.0.0 (Teensyduino 1.62).
             teensy41)    platform=teensy@6.0.0 ;;
             # Not in the registry; same pin as boards.yaml.
-            ch32v203|ch32v307|ch32x035) platform=https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7 ;;
+            ch32v003|ch32v203|ch32v307|ch32x035) platform=https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7 ;;
             *)
               echo "::error::no PlatformIO platform mapped for board '${{ matrix.board }}'"
               exit 1

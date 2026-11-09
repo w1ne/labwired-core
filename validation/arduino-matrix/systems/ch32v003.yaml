@@ -1,0 +1,35 @@
+# Arduino matrix system — CH32V003F4P6 (full lane profile) plus the L3 I2C,
+# L4 SPI and L5 ADC kits.
+name: "arduino-matrix-ch32v003"
+chip: "../../../configs/chips/ch32v003f4p6-ch32fun-smoke.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on the variant's default Wire bus
+  # (i2c1; SDA PC1, SCL PC2).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on the variant's default SPI (spi1).
+  # PIN_SPI_SS is PC4 (variant_CH32V003F4.h). Single-device bus: CS is
+  # soft-ignored by SpiDevice v1 broadcast.
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PC4"
+# Matrix L5_adc: A0 = PA2 = ADC channel 0 (variant_CH32V003F4.h PIN_A0;
+# RM ADC channel table) held at 1000 mV. 10-bit against VDD = 3.3 V:
+# 1000 / 3300 * 1024 = 310.3 (1023 scale: 310.0), so analogRead(A0) = 310
+# under either transfer convention. The core reads RDATAR raw on V00x (no
+# ADC_CTLR_ADCAL calibration offset) at ADC_RESOLUTION 10, so no remapping.
+peripherals:
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    clock: { reg: apb2enr, bit: 9 }
+    config:
+      profile: ch32v003
+      input_mv: { 0: 1000 }
+board_io: []

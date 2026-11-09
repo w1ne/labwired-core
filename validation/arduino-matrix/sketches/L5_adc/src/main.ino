@@ -108,6 +108,13 @@ static bool samples_ok(int v0, int v1) {
   // the model's unseeded fixed source (3.0 V) would read 930, no conversion 0.
   return v0 == 512 && v1 == 512;
 
+#elif defined(CH32V003)
+  // adc profile ch32v003: the matrix system holds A0 (PA2 = ADC channel 0)
+  // at 1000 mV. 10-bit against 3.3 V is 310, and WCH's core returns RDATAR
+  // raw on V00x. Exact; the unseeded F1 path (DR counting up) and no
+  // conversion (0) both fail.
+  return v0 == 310 && v1 == 310;
+
 #elif defined(ARDUINO_ARCH_RP2040)
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).
   return v0 == 0 && v1 == 0;
