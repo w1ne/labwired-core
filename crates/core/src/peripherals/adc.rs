@@ -2823,8 +2823,9 @@ mod scheduler_diff {
             "h7".parse::<AdcRegisterLayout>().unwrap(),
             AdcRegisterLayout::Stm32L4
         );
-        // The families that genuinely DO share the L4 block still do.
-        for name in ["l4", "stm32l4", "f7", "g0"] {
+        // The families that genuinely DO share the L4 block still do. G0 has
+        // its own CHSELR block (`g0_layout_is_selected_by_name_and_is_not_the_l4`).
+        for name in ["l4", "stm32l4", "f7"] {
             assert_eq!(
                 name.parse::<AdcRegisterLayout>().unwrap(),
                 AdcRegisterLayout::Stm32L4,
