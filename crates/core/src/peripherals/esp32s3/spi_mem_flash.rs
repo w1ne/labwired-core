@@ -266,11 +266,19 @@ impl SpiMemFlash {
             self.flash_status &= !STATUS_WEL;
         }
         if cmd & FLASH_PP != 0 {
-            // Dedicated page-program: ADDR holds the byte address, W0.. the
-            // payload, MOSI_DLEN the bit length. Without this, Preferences
-            // putBytes completes the poll but never lands in flash.
-            let addr = self.reg(ADDR) as usize;
-            let data = self.take_mosi_bytes(self.mosi_bytes());
+            // Dedicated page-program: W0.. holds the payload and ADDR packs
+            // the byte address in [23:0] with the byte count in [31:24].
+            // ESP-IDF's `spi_flash_hal_program_page` writes exactly that
+            // (`(addr & 0xFFFFFF) | (len << 24)`) and never sets MOSI_DLEN, so
+            // reading ADDR whole put every Preferences / NVS write past the
+            // end of the array, where it vanished.
+            let addr_reg = self.reg(ADDR);
+            let addr = (addr_reg & 0x00FF_FFFF) as usize;
+            let nbytes = match (addr_reg >> 24) as usize {
+                0 => self.mosi_bytes(),
+                n => n,
+            };
+            let data = self.take_mosi_bytes(nbytes);
             self.program_flash_bytes(addr, &data);
             self.flash_status &= !(STATUS_WEL | STATUS_WIP);
         }
@@ -292,7 +300,8 @@ impl SpiMemFlash {
         }
         if std::env::var("LABWIRED_SPI_DEBUG").is_ok() {
             eprintln!(
-                "spimem1: dedicated cmd CMD=0x{cmd:08x} status=0x{:04x} → complete",
+                "spimem1: dedicated cmd CMD=0x{cmd:08x} ADDR=0x{:08x} status=0x{:04x} → complete",
+                self.reg(ADDR),
                 self.flash_status
             );
         }
@@ -725,5 +734,24 @@ mod tests {
         // invalidate
         c.write_u32(MMU_ITEM_CONTENT, 0).unwrap();
         assert_eq!(mmu.entries.lock().unwrap()[3], 0);
+    }
+
+    /// The register sequence ESP-IDF 5's `spi_flash_hal_program_page` runs on
+    /// the C3/S3/C6 (disassembled from a stock arduino-esp32 3.x S3 image):
+    /// W0.. = payload, `ADDR = (addr & 0xFFFFFF) | (len << 24)`, then
+    /// `CMD.FLASH_PP`; `MOSI_DLEN` is never written. Reading ADDR whole put
+    /// every Preferences write past the end of the array.
+    #[test]
+    fn dedicated_page_program_decodes_the_packed_address() {
+        let flash = Arc::new(Mutex::new(vec![0xFFu8; 0x1_0000]));
+        let mut c = SpiMemFlash::new(flash.clone());
+        c.write_u32(W0, 0x4433_2211).unwrap();
+        c.write_u32(W0 + 4, 0x0000_0055).unwrap();
+        c.write_u32(ADDR, 0x9060 | (5 << 24)).unwrap();
+        c.write_u32(CMD, FLASH_WREN).unwrap();
+        c.write_u32(CMD, FLASH_PP).unwrap();
+        assert_eq!(c.read_u32(CMD).unwrap(), 0);
+        let f = flash.lock().unwrap();
+        assert_eq!(&f[0x9060..0x9066], &[0x11, 0x22, 0x33, 0x44, 0x55, 0xFF]);
     }
 }

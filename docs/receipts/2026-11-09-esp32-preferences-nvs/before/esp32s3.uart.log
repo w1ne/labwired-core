@@ -1,0 +1,6 @@
+LW_NVS_BOOT
+begin=1 boots=0 put=4 readback=0
+name=
+ctr=0 boots=0 name= free=630
+removed=1
+LW_NVS_FAIL
