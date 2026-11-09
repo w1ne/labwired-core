@@ -221,12 +221,23 @@ def main() -> int:
 
     rtf_doc = None
     if not args.no_workloads and not args.chip_name:
-        spin = {board: row["max_rtx"] for board, row in rows.items()}
+        # The 1 s spin above takes tens of ms, so process startup and host
+        # noise swing it by 2x. Re-time each workload chip's spin for ~1 s of
+        # wall clock (best of N) as the host-speed reference for the index.
+        spin = {}
+        for chip in sorted({w.chip for w in board_rtf.WORKLOADS} & set(rows)):
+            hz = rows[chip]["clock_hz"]
+            steps = round(hz * max(1.0, rows[chip]["median_rtx"]))
+            walls = [
+                run_once(cli, chip, firmware[covered[chip]], steps)[0]
+                for _ in range(args.repeats)
+            ]
+            spin[chip] = (steps / hz) / min(walls)
         try:
             # Only chips whose spin RTx was measured: the index needs it.
             rtf_doc = board_rtf.run(
                 cli,
-                set(rows),
+                set(spin),
                 spin,
                 args.repeats,
                 args.rtf_tolerance,

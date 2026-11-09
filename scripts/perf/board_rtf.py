@@ -16,7 +16,7 @@ a fixed guest time and reports:
 
 Wall clock depends on the runner, so the gate compares a host-independent
 index instead: ``index = best workload RTF / best spin RTx`` of the same chip
-in the same run.
+in the same run, the spin timed over ~1 s of wall clock.
 A workload whose index drops more than ``--rtf-tolerance`` (default 25%)
 below ``rtf_baselines.json`` fails. Workload sources, systems and ELFs live
 in ``tests/fixtures/rtf/<id>/``.
@@ -158,7 +158,7 @@ def judge(rows: list[dict], spin_rtx: dict[str, float], baselines: dict,
     """Attach ``index``/``baseline_index`` to rows; return failure messages.
 
     ``index`` is the best workload RTF over the best spin RTx of the same chip
-    in the same run. Host contention only ever slows a run down, so the best
+    in the same run (``spin_rtx``, timed over ~1 s of wall clock). Host contention only ever slows a run down, so the best
     of N is the stable estimate; dividing by spin cancels the runner's speed.
     """
     failures = []
