@@ -331,12 +331,12 @@ boards:
     led_watch: "gpioa:5"
     led_min_edges: 2
     family: stm32
-    # L5 is skipped, not passed: the L0 ADC is the CHSELR block, and the
-    # `stm32l4` profile reads SQR1, so stock analogRead(A0) prints "0 0",
-    # which the generic oracle would accept. PR #1722 adds the F0/L0 model.
-    sketches_skip: [L5_adc, L8_can]
+    # L5: the `stm32l0` ADC profile converts CHSELR's channel; the system
+    # holds A0 = PA0 = ADC_IN0 at 1651 mV and the sketch requires exactly 512
+    # on stm32duino 2.x (CI pin 19.7.1) and 511 on 3.x (see the sketch).
+    # On the old `stm32l4` profile stock analogRead(A0) printed "0 0".
+    sketches_skip: [L8_can]
     sketches_skip_reason:
-      L5_adc: "No L0 (CHSELR) ADC model on this lane: analogRead returns 0; a pass would be vacuous (PR #1722)"
       L8_can: "No CAN peripheral on L0 series"
 
   - id: stm32l476
