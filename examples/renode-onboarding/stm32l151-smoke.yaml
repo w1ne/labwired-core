@@ -4,7 +4,9 @@
 # width, counting and update interrupt on the right NVIC line; SPI1..3 each
 # reading its own MAX31855 frame (polled, then SPI1 again through DMA1
 # channels 2/3 with the channel-2 line), and I2C1 reading a TMP102 plus a
-# NACK on the error line. The two fixture switches (PH1, PC13) are pressed
+# NACK on the error line; then two MAX31855s sharing SPI1 behind GPIO chip
+# selects PA4 / PB0, each answering only when selected, and a frame cut short
+# by CS↑ that the next CS↓ restarts. The two fixture switches (PH1, PC13) are pressed
 # by the stimuli below; the first stimuli set the SPI2/SPI3 thermocouples.
 # It does not claim RCC, I2S, I2C2, DMA2, RTC or ADC.
 schema_version: "1.2"
@@ -20,6 +22,9 @@ stimuli:
   - target: { component: "tc_spi3", channel: "temperature" }
     trigger: !after_cycles { cycles: 1000 }
     value: -25.0
+  - target: { component: "tc_spi1b", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 50.0
   - target: { component: "sw_ph1", channel: "pressed" }
     trigger: !after_cycles { cycles: 1500000 }
     value: 1.0
@@ -60,11 +65,12 @@ assertions:
       - "spi3 frame=0xFE701600 data=1 pend=1 alone=1 released=1 ok"
       - "dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok"
       - "i2c1 tmp102=0x00001900 oar=1 data=1 ev=1 af=1 er_pend=1 ev_quiet=1 stop=1 released=1 ok"
-      - "summary 0x1511FFFF"
+      - "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok"
+      - "summary 0x1513FFFF"
       - "DONE"
   - memory_value:
       address: 0x20008000
-      expected_value: 0x1511FFFF
+      expected_value: 0x1513FFFF
       size: 4
   - gpio_edges:
       pin: "gpioh:0"

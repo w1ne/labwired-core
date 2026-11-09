@@ -1627,6 +1627,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// The GPIO chip-select labels this SPI controller routes edges for, or
+    /// empty when it routes none. A non-empty answer makes the bus watch the
+    /// ports owning those pins and call [`Self::sync_gpio_chip_selects`]
+    /// after each write to one (see `bus/spi_cs.rs`).
+    fn gpio_chip_select_pins(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Re-read the chip-select GPIOs named by [`Self::gpio_chip_select_pins`]
+    /// and deliver the CS edges that moved. Not a tick: it must not advance
+    /// time or move bytes.
+    fn sync_gpio_chip_selects(&mut self, _bus: &dyn Bus) {}
+
     /// Hand this peripheral the bus's shared [`CycleClock`] so `&self` reads
     /// can lazily sync `Cell`-held counter state to the published "now"
     /// (batch-boundary freshness — exact at batch boundaries, < one

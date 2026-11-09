@@ -52,6 +52,7 @@ mod resident_device;
 mod routing;
 mod samd51_storage;
 pub mod sim_inputs;
+mod spi_cs;
 mod tick;
 mod timed_can;
 mod timer_kernel_clock;
@@ -792,6 +793,10 @@ pub struct SystemBus {
     /// that host their select pads (see `bus/analog_mux.rs`). Empty by
     /// default -> zero cost.
     pub analog_muxes: Vec<crate::peripherals::components::declarative_analog_mux::AnalogMux>,
+    /// STM32 SPI controllers whose devices name a GPIO `cs_pin`. A write to a
+    /// port owning one of those pins delivers the CS edges (see
+    /// `bus/spi_cs.rs`). Empty by default -> zero cost.
+    pub(crate) spi_cs_watches: Vec<spi_cs::SpiCsWatch>,
     /// Reusable CAN diagnostic clients declared as external devices. They
     /// inject configured CAN frames into a named FDCAN peripheral once it is
     /// running, so ECU examples can be driven by a virtual off-board tester

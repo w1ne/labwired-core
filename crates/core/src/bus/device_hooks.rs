@@ -340,6 +340,9 @@ impl SystemBus {
         // A select pad of an analog mux may have moved: re-route before the
         // next instruction can start a conversion.
         self.route_analog_muxes_on_write(idx);
+        // A chip-select pad may have moved: deliver the CS edge before the
+        // next SPI frame.
+        self.route_spi_cs_on_write(idx);
         // A store to a GPIO input register (a device driving a pad through
         // `drive_idr_bit`) is an external edge like `set_gpio_input`.
         if self.timer_capture_wired {

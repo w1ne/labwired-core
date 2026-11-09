@@ -4146,6 +4146,7 @@ impl SystemBus {
             }
             devices.push(wrapped);
         }
+        self.note_spi_cs_watch(idx);
         Ok(())
     }
 

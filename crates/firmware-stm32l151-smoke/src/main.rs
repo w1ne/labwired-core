@@ -6,8 +6,8 @@
 //! Register offsets, bases and IRQ numbers are ST's CMSIS `stm32l151xd.h`.
 //!
 //! The fixture system puts a MAX31855 on each SPI (thermocouple 25, 100 and
-//! -25 °C, so each bus answers with its own frame) and a TMP102 at 0x48 on
-//! I2C1.
+//! -25 °C, so each bus answers with its own frame), a second MAX31855 on SPI1
+//! behind its own chip select (PB0, 50 °C) and a TMP102 at 0x48 on I2C1.
 //!
 //! Interrupts stay disabled in the NVIC: each check reads the line's
 //! ISPR bit, which proves the block reaches the right NVIC input without a
@@ -79,6 +79,8 @@ const SPI1: u32 = 0x4001_3000;
 
 /// (name, base, NVIC line, CS port, CS pin, expected MAX31855 frame).
 /// Frames: thermocouple << 18 (0.25 °C/LSB) | internal 22 °C << 4.
+/// The second SPI1 slave (CS PB0): 50 °C thermocouple, 22 °C cold junction.
+const SPI1_B_FRAME: u32 = 0x0320_1600;
 const SPIS: [(&str, u32, u32, u32, u32, u32); 3] = [
     ("spi1", SPI1, 35, GPIOA, 4, 0x0190_1600),
     ("spi2", 0x4000_3800, 36, GPIOB, 12, 0x0640_1600),
@@ -407,9 +409,7 @@ fn max31855_frame(base: u32, port: u32, pin: u32) -> Option<u32> {
 }
 
 /// Each SPI reads its own device's frame twice — polled, then with RXNEIE,
-/// which must pend the SPI's own NVIC line and no other SPI's. Whole 4-byte
-/// frames only: the engine does not deliver GPIO chip-select edges to STM32
-/// SPI slaves, so the MAX31855 frames itself every four bytes.
+/// which must pend the SPI's own NVIC line and no other SPI's.
 fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) -> bool {
     cs_output(port, pin);
     spi_enable(base);
@@ -437,6 +437,39 @@ fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) ->
     flag("alone", alone);
     flag("released", released);
     let ok = data && pend && alone && released;
+    verdict(ok);
+    ok
+}
+
+/// Two MAX31855s share SPI1, told apart only by their GPIO chip selects
+/// (PA4, PB0): each answers with its own frame while the other is released.
+/// Then a frame cut short by CS↑ after two bytes: the next CS↓ must restart
+/// the MAX31855 at bit 31, so the following whole frame is not rotated.
+fn check_spi1_shared_cs() -> bool {
+    let a = max31855_frame(SPI1, GPIOA, 4).unwrap_or(0xDEAD_BEEF);
+    let b = max31855_frame(SPI1, GPIOB, 0).unwrap_or(0xDEAD_BEEF);
+    let a_ok = a == SPIS[0].5;
+    let b_ok = b == SPI1_B_FRAME;
+
+    cs(GPIOA, 4, true);
+    let _ = spi_xfer(SPI1, 0);
+    let _ = spi_xfer(SPI1, 0);
+    let _ = wait(SPI1 + S_SR, SPI_SR_BSY, 0);
+    cs(GPIOA, 4, false);
+    let after = max31855_frame(SPI1, GPIOA, 4).unwrap_or(0xDEAD_BEEF);
+    let restart = after == SPIS[0].5;
+
+    puts("spi1 shared a=");
+    hex(a);
+    puts(" b=");
+    hex(b);
+    puts(" after_cut=");
+    hex(after);
+    puts(" ");
+    flag("a", a_ok);
+    flag("b", b_ok);
+    flag("restart", restart);
+    let ok = a_ok && b_ok && restart;
     verdict(ok);
     ok
 }
@@ -613,11 +646,17 @@ fn main() -> ! {
         mark(2 + i as u32, check_timer(name, base, irq, width));
     }
     mark(11, check_exti_pads());
+    // Park the second SPI1 slave's CS high before SPI1 is used at all. A CS
+    // pad that is not yet a GPIO output leaves its device on the bus (the
+    // engine cannot tell an undriven pad from hardware NSS), so on SPI1 it
+    // would answer over the PA4 device.
+    cs_output(GPIOB, 0);
     for (i, &(name, base, irq, port, pin, want)) in SPIS.iter().enumerate() {
         mark(12 + i as u32, check_spi(name, base, irq, port, pin, want));
     }
     mark(15, check_dma_spi1());
     mark(16, check_i2c1());
+    mark(17, check_spi1_shared_cs());
     let summary = summary | 0x1510_0000;
     wr(SUMMARY, summary);
     puts("summary ");
