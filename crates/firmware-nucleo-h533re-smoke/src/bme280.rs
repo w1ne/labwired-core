@@ -104,7 +104,7 @@ fn main() -> ! {
         );
 
         // HSI64/PCLK1 64 MHz: PRESC=15 and 20 SCL ticks per phase gives
-        // approximately 100 kHz, with SCLDEL=1.25 us and SDADEL=0.
+        // approximately 100 kHz, with SCLDEL=1.25 us and SDADEL=0.25 us.
         write_volatile(I2C1_TIMINGR, 0xF041_1313);
         write_volatile(I2C1_CR1, 1); // PE
     }
