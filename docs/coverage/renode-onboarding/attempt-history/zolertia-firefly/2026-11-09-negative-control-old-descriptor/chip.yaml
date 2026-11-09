@@ -1,0 +1,40 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Bounded Zolertia Firefly profile: the board uses a CC2538 Cortex-M3 and a
+# separate CC1200 radio. The radio, timers, SSI, GPIO, flash controller, and
+# other imported peripherals are omitted; this profile claims CPU/memory and
+# only the model-backed PL011-compatible UART0 used by the smoke.
+#
+# TI's CC2538 datasheet specifies 512 KiB flash and 32 KiB RAM. Renode's
+# platforms/cpus/cc2538.repl currently maps a 256 KiB RAM window; this profile
+# uses the silicon capacity. The direct-ELF smoke does not execute the mask ROM.
+name: zolertia-firefly
+arch: arm
+core: cortex-m3
+cpu_hz: 16000000
+flash:
+  base: 0x00200000
+  size: 512KB
+ram:
+  base: 0x20000000
+  size: 32KB
+flash_boot_alias: false
+# The CC2538 has mask ROM at zero. The direct-ELF smoke does not execute its
+# contents; this zero-filled aperture only maps the loader's reset-vector probe.
+memory_regions:
+  - name: rom
+    base: 0x00000000
+    size: 128KB
+peripherals:
+- id: uart0
+  type: uart
+  bus: sysbus
+  base_address: 0x4000C000
+  size: 4KB
+  irq: 5
+  config:
+    profile: pl011

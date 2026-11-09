@@ -1,52 +1,59 @@
-# Validation Report: zolertia-firefly
+# Zolertia Firefly validation status
 
-**Architecture:** ARM Cortex-M3.
+## Current measurement (2026-11-09)
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+The imported Zolertia Firefly system booted `firmware-zolertia-firefly-smoke`
+for **400,000 instructions** and passed **7/7 smoke assertions**: nine
+register checks (`FIREFLY checks PPPPPPPPP DONE`), summary 0xF1EF01FF at
+0x20007F00, 8+ edges on the red LED (PD5), one line on UART1, and
+`fidelity_clean`. Evidence is under
+[`docs/coverage/renode-onboarding/metrics/zolertia-firefly/`](../coverage/renode-onboarding/metrics/zolertia-firefly/).
 
-```text
-[2m2026-10-18T14:40:39.866581Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:40:39.867784Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/zolertia-firefly.yaml
-[2m2026-10-18T14:40:39.868771Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'cc2538_gpio' (peripheral 'gpioA') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:40:39.868803Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'cc2538_gpio' (peripheral 'gpioB') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:40:39.868814Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'cc2538_gpio' (peripheral 'gpioC') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:40:39.868824Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'cc2538_gpio' (peripheral 'gpioD') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:40:39.868949Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:40:39.869013Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:40:39.869020Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:40:39.869024Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:40:39.869942Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:40:39.870000Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:40:39.870037Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:40:39.874349Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Progress: 10000 steps, current IPS: 1880338.22
-[2m2026-10-18T14:40:39.878953Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:40:39.879028Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x454
-[2m2026-10-18T14:40:39.879058Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 20000
-[2m2026-10-18T14:40:39.879090Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 20004
-[2m2026-10-18T14:40:39.879117Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 1982466.47
-```
+## Chip surface
 
+The board descriptor includes the modelled `configs/chips/cc2538sf53.yaml`
+whole (UART0/1, GPIO A-D, SYS_CTRL, IOC, flash controller, sleep timer,
+SOC_ADC, SSI0/1, I2C, GPTimer0-3, RF core, AES, uDMA, clean-room ROM).
+Renode `platforms/boards/zolertia-firefly.repl` is `cpus/cc2538.repl` plus a
+CC1200 on `ssi0`.
 
-## Hardware Coverage Report
+Not declared: the CC1200 sub-GHz radio. LabWired has no CC1200 model.
 
-| Peripheral ID | Base Address | Type |
+## Smoke checks
+
+| # | Check | What it proves |
 |---|---|---|
-| `cc1200` | `0x00000000` | `cc1200` |
-| `uDma` | `0x400ff000` | `udma` |
-| `uart0` | `0x4000c000` | `pl011` |
-| `watchdog` | `0x400d5000` | `cc2538watchdog` |
-| `sleepTimer` | `0x400d5040` | `cc2538sleeptimer` |
-| `uart1` | `0x4000d000` | `pl011` |
-| `gpioA` | `0x400d9000` | `cc2538_gpio` |
-| `gpioB` | `0x400da000` | `cc2538_gpio` |
-| `gpioC` | `0x400db000` | `cc2538_gpio` |
-| `gpioD` | `0x400dc000` | `cc2538_gpio` |
-| `radio` | `0x40088000` | `cc2538rf` |
-| `bitband` | `0x22000000` | `bitbanding` |
-| `crypto` | `0x4008b000` | `cc2538_cryptoprocessor` |
-| `flashCtrl` | `0x400d3000` | `cc2538flashcontroller` |
-| `ssi0` | `0x40008000` | `cc2538_ssi` |
-| `ssi1` | `0x40009000` | `cc2538_ssi` |
+| 1 | clk | CLOCK_STA reports the 16-MHz HF-RC reset clock |
+| 2 | leds | each LED on/off through a one-pin GPIO_DATA mask; the 3-pin mask reads only the written pin |
+| 3 | dir | GPIO_D DIR reads back the LED mask |
+| 4 | button | PA3 reads 1 (released) |
+| 5 | ssi0 | SSI0 internal loopback returns 0xA5, 0x3C |
+| 6 | gpt0 | GPTimer0 32-bit periodic: three time-outs |
+| 7 | sleep | the 32-kHz sleep timer advances |
+| 8 | uart1 | UART1 divisors read back (IBRD 8, FBRD 44) |
+| 9 | sram | a pattern at the top of the 32 KiB SRAM reads back |
 
-**Total Peripherals:** 16
+Check 4 does not prove the button model: the IOC reset pull-up also reads 1.
+
+## Board I/O
+
+Source: Contiki-NG `arch/platform/zoul/firefly/board.h` and
+`arch/platform/zoul/dev/leds-arch.c` (`negative_logic = false`).
+
+| id | Pad | Polarity |
+|---|---|---|
+| led_red | PD5 | active high |
+| led_green | PD4 | active high |
+| led_blue | PD3 | active high |
+| button_user | PA3 | active low (shared with the boot-loader backdoor) |
+
+Renode's `zolertia-firefly.repl` declares no LEDs or button.
+
+## Negative controls
+
+Under `docs/coverage/renode-onboarding/attempt-history/zolertia-firefly/`:
+
+- `2026-11-09-negative-control-old-descriptor`: the previous descriptor
+  (CPU, memory, UART0 only). BusFault at 0x400D2028 (SYS_CTRL), 1/7.
+- `2026-11-09-negative-control-no-gpiod`: this descriptor without GPIO D.
+  BusFault at 0x400DC420 (GPIO_D AFSEL), 1/7.

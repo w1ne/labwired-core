@@ -12,10 +12,10 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1428`
+- pass_claimed_peripherals_total: `1451`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1521`
-- median_elapsed_seconds: `1.521`
+- median_elapsed_ms: `1524`
+- median_elapsed_seconds: `1.524`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -261,7 +261,7 @@
 | `x86` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `2` | n/a | 1: `hpet:hpet` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no IA-32 (x86) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `xtensa-sample-controller` | `pass` | `True` | `yes` | `yes` | `480168` | `480.168` | `True` | `observable` | `0` | `memory_value` | 0 | `n/a` | n/a | n/a |
 | `zedboard` | `pass` | `True` | `yes` | `yes` | `1906` | `1.906` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `zolertia-firefly` | `pass` | `True` | `yes` | `yes` | `1036` | `1.036` | `True` | `observable` | `1` | `uart_contains`, `fidelity_clean` | 0 | `n/a` | n/a | n/a |
+| `zolertia-firefly` | `pass` | `True` | `yes` | `yes` | `1502` | `1.502` | `True` | `observable` | `24` | `uart_contains`, `memory_value`, `gpio_edges`, `fidelity_clean` | 0 | `n/a` | n/a | n/a |
 | `zynq-7000` | `pass` | `True` | `yes` | `yes` | `138530` | `138.53` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `zynqmp` | `pass` | `True` | `yes` | `yes` | `246519` | `246.519` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `zynqmp-zcu102-revA` | `pass` | `True` | `yes` | `yes` | `607` | `0.607` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |

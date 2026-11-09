@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 100000,
+    "instructions": 400000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/zolertia-firefly-smoke.yaml",
   "system": "configs/systems/onboarding/zolertia-firefly.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:50:40Z",
-  "finished_at_utc": "2026-11-05T14:50:41Z",
+  "started_at_utc": "2026-11-09T15:04:47Z",
+  "finished_at_utc": "2026-11-09T15:04:48Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1036,
+  "elapsed_ms": 1502,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.296,
-    "build_firmware": 0.433,
-    "run_smoke": 0.295
+    "build_cli": 0.409,
+    "build_firmware": 0.551,
+    "run_smoke": 0.526
   },
   "stages_ms": {
-    "build_cli": 296,
-    "build_firmware": 433,
-    "run_smoke": 295
+    "build_cli": 409,
+    "build_firmware": 551,
+    "run_smoke": 526
   }
 }

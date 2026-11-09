@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1073791000,
-      46,
-      1073741824,
       10,
+      13,
+      4058972416,
+      1,
+      1073795096,
+      255,
       0,
-      0,
-      0,
-      536903664,
-      0,
-      0,
-      0,
-      0,
-      2098360,
-      536903664,
-      2098353,
-      2098338
+      536903408,
+      536903676,
+      1074643072,
+      1,
+      56,
+      1,
+      536903368,
+      2100661,
+      2101272
     ],
-    "pc": 2098338,
-    "xpsr": 1627389952,
+    "pc": 2101272,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "9a32f57073e75386cd69ff7fe0f5dc86b7f780ee646d222b84e349f5d64564f8",
+  "firmware_hash": "8b83e804aa9c2160fa5a979e609a3726a5e5e92df0e6f63226ece4c11713f228",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-zolertia-firefly-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/zolertia-firefly.yaml",

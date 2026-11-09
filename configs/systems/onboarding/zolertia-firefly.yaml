@@ -7,4 +7,35 @@
 name: zolertia-firefly
 chip: ../../chips/onboarding/zolertia-firefly.yaml
 cpu_hz: 16000000
+# Board I/O from Contiki-NG arch/platform/zoul/firefly/board.h: LED1 red PD5,
+# LED2 green PD4, LED3 blue PD3; BUTTON_USER PA3 (S1, shared with the
+# boot-loader backdoor). arch/platform/zoul/dev/leds-arch.c sets
+# negative_logic = false for all three LEDs, so they are active high. The
+# button pulls PA3 to ground when pressed (active low, IOC reset pull-up).
+# Renode's zolertia-firefly.repl declares no LEDs or button.
 external_devices: []
+board_io:
+  - id: "led_red"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "led_green"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 4
+    signal: "output"
+    active_high: true
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 3
+    signal: "output"
+    active_high: true
+  - id: "button_user"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 3
+    signal: "input"
+    active_high: false
