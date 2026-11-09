@@ -451,7 +451,7 @@ impl SystemBus {
             if h5_gate_idx.is_none() && flash.h5_error_flags_enabled() {
                 h5_gate_idx = Some(index);
             }
-            if u5_gate_idx.is_none() && flash.u5_error_flags_enabled() {
+            if u5_gate_idx.is_none() && flash.program_gate_enabled() {
                 u5_gate_idx = Some(index);
             }
         }

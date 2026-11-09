@@ -2448,8 +2448,12 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 1cf8837b47ec1cbc8750a7d85e04f6a664821a64a6b6595d108933ec7a135f75
+    # 2026-11-09 (feat/f1-flash-program-round374): flash.rs gains an F1-only
+    # program gate and an F1 arm in flash_geometry(). Every H5 branch is
+    # unchanged; this board's reads, writes, erase and swap paths see no change.
+    # ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-11-09
+    drift_ack_digest: d5e6282fc9a5e382222b304dcc962a47ad90908a6397b051587f53c988bc4e67
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6917,8 +6921,17 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 2ff8315cb06b1105dc0c52eb3b6cadc903c288459b32f36eb5fe6d1618f2c834
+    # 2026-11-09 (feat/f1-flash-program-round374): flash.rs adds the opt-in F1
+    # program gate (`error_flags: true`, now set on this board's chip yaml):
+    # PG half-word programming, PER page erase (AR) and MER mass erase reach
+    # the flash backing store; locked CR ignores writes; LOCK relocks the key
+    # sequence. bus/accessors.rs routes flash stores and the CR word write to
+    # it. Reset values and the register map are unchanged. Evidence: flash lib
+    # tests, src/tests/stm32f103_flash.rs, stock EEPROM.h put/get on C8 (page
+    # 0x0800FC00) and NUCLEO-F103RB. ACK, NOT A SILICON CAPTURE; no bench flash
+    # program/erase capture exists yet.
+    drift_ack: 2026-11-09
+    drift_ack_digest: 69f49615c38a87148c130fdc4ccce9dca1f3a690c9d5d49bedb70e80a38777ce
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are

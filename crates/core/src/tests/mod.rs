@@ -127,6 +127,8 @@ pub mod stm32_spi_waveform;
 #[cfg(test)]
 pub mod stm32_uart_waveform;
 #[cfg(test)]
+pub mod stm32f103_flash;
+#[cfg(test)]
 pub mod stm32f1_bus_visibility;
 #[cfg(test)]
 pub mod stm32h5_spi_visibility;

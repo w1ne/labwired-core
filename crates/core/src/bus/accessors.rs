@@ -408,9 +408,26 @@ impl SystemBus {
     }
 
     /// The body. Outlined so the common "no U5 gate" path costs one test.
+    /// The same index carries the F1 half-word gate (see [`f1_store`]).
     #[inline(never)]
     fn u5_program_store_cold(&mut self, addr: u64, width: u8, value: u32) -> Option<SimResult<()>> {
         let flash_idx = self.u5_program_gate_idx?;
+        let entry = self.peripherals.get_mut(flash_idx)?;
+        let ctrl_base = entry.base;
+        let flash_dev = entry
+            .dev
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<crate::peripherals::flash::Flash>())?;
+        if flash_dev.f1_error_flags_enabled() {
+            let outcome = f1_store(flash_dev, &mut self.flash, ctrl_base, addr, width, value)?;
+            if outcome.memory_changed {
+                self.note_memory_write();
+            }
+            if let Some(bytes) = outcome.programmed {
+                self.notify_peripheral_store(addr, &bytes);
+            }
+            return Some(outcome.result);
+        }
         // Resolve the flash-region offset this store targets, if any. The
         // backing buffer is addressed at `flash.base_addr`; the boot alias
         // (addr < buffer len) mirrors the same offset.
@@ -424,14 +441,8 @@ impl SystemBus {
         } else {
             None
         }?;
-        let action = self
-            .peripherals
-            .get_mut(flash_idx)
-            .and_then(|p| p.dev.as_any_mut())
-            .and_then(|a| a.downcast_mut::<crate::peripherals::flash::Flash>())
-            .map(|f| f.u5_program_store(region_off, width, value));
-        match action {
-            Some(crate::peripherals::flash::U5ProgAction::Commit { base, bytes }) => {
+        match flash_dev.u5_program_store(region_off, width, value) {
+            crate::peripherals::flash::U5ProgAction::Commit { base, bytes } => {
                 for (i, &nb) in bytes.iter().enumerate() {
                     let qoff = base + i as u64;
                     let existing = self
@@ -447,9 +458,7 @@ impl SystemBus {
             }
             // Buffered / SizeError / SequenceError / Locked / NotProgramming:
             // nothing stored (the machine already updated NSSR).
-            Some(_) => Some(Ok(())),
-            // Downcast failed (should not happen): fall through.
-            None => None,
+            _ => Some(Ok(())),
         }
     }
 
@@ -1916,4 +1925,90 @@ impl crate::Bus for SystemBus {
             self.recompute_esp32_classic_irq_lines();
         }
     }
+}
+
+/// What [`f1_store`] did, for the bus to report after the FLASH borrow ends.
+struct F1StoreOutcome {
+    result: SimResult<()>,
+    /// The backing store changed (erase or program): invalidate decode caches.
+    memory_changed: bool,
+    /// The programmed half-word, for store observers.
+    programmed: Option<[u8; 2]>,
+}
+
+/// STM32F1 FPEC gate (RM0008 §3.3, PM0075 §2.3). Two kinds of store reach it:
+/// * a word store to FLASH_CR. The gate performs it, then applies the PER/MER
+///   erase it starts to the backing store at once, so the erase is visible
+///   before the next instruction (HAL programs right after it);
+/// * a store to main flash, which goes through `Flash::f1_program_store`.
+///
+/// Every other store returns `None` and takes the normal path.
+fn f1_store(
+    flash_dev: &mut crate::peripherals::flash::Flash,
+    mem: &mut crate::memory::LinearMemory,
+    ctrl_base: u64,
+    addr: u64,
+    width: u8,
+    value: u32,
+) -> Option<F1StoreOutcome> {
+    use crate::peripherals::flash::{F1ProgAction, FlashOp};
+    if addr == ctrl_base + 0x10 && width == 4 {
+        if let Err(e) = crate::Peripheral::write_u32(flash_dev, 0x10, value) {
+            return Some(F1StoreOutcome {
+                result: Err(e),
+                memory_changed: false,
+                programmed: None,
+            });
+        }
+        let memory_changed = match flash_dev.drain_pending_op() {
+            Some(FlashOp::EraseSector { sector, .. }) => {
+                let (_, page) = flash_dev.flash_geometry();
+                // A page outside the mapped flash erases nothing.
+                mem.fill(u64::from(sector) * page, page, 0xFF);
+                true
+            }
+            Some(_) => {
+                let len = mem.data.len() as u64;
+                mem.fill(0, len, 0xFF);
+                true
+            }
+            None => false,
+        };
+        return Some(F1StoreOutcome {
+            result: Ok(()),
+            memory_changed,
+            programmed: None,
+        });
+    }
+    mem.read_u8(addr)?;
+    let off = addr - mem.base_addr;
+    let half = mem.base_addr + (off & !1);
+    let existing = u16::from_le_bytes([
+        mem.read_u8(half).unwrap_or(0xFF),
+        mem.read_u8(half + 1).unwrap_or(0xFF),
+    ]);
+    Some(
+        match flash_dev.f1_program_store(off, width, value, existing) {
+            F1ProgAction::Commit { offset, value } => {
+                let bytes = value.to_le_bytes();
+                mem.write_u8(mem.base_addr + offset, bytes[0]);
+                mem.write_u8(mem.base_addr + offset + 1, bytes[1]);
+                F1StoreOutcome {
+                    result: Ok(()),
+                    memory_changed: true,
+                    programmed: Some(bytes),
+                }
+            }
+            F1ProgAction::Dropped => F1StoreOutcome {
+                result: Ok(()),
+                memory_changed: false,
+                programmed: None,
+            },
+            F1ProgAction::NotHalfWord => F1StoreOutcome {
+                result: Err(SimulationError::MemoryViolation(addr)),
+                memory_changed: false,
+                programmed: None,
+            },
+        },
+    )
 }
