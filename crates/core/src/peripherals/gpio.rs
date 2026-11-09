@@ -126,6 +126,10 @@ pub enum GpioRegisterLayout {
     /// (`MISC_CTRL` +0x100/+0x104 = 0x4000_5100; qorc-sdk `HAL/inc/eoss3_dev.h`
     /// and `HAL/src/eoss3_hal_gpio.c`, Renode `EOSS3_IntrCtrl` misc region).
     EosS3,
+    /// Analog Devices (Maxim) MAX32650 GPIO: EN/OUT_EN/OUT with SET/CLR
+    /// aliases, IN @0x24, IN_EN @0x30, PDPU_SEL0/1 pulls. One instance = one
+    /// 32-pin port (MSDK `MAX32650/Include/gpio_regs.h`, `gpio_reva.c`).
+    Max32650,
 }
 
 impl FromStr for GpioRegisterLayout {
@@ -148,8 +152,9 @@ impl FromStr for GpioRegisterLayout {
             "imxrt" | "imxrt_gpio" => Ok(Self::Imxrt),
             "lpc2xxx" | "lpc21xx" | "lpc22xx" => Ok(Self::Lpc2xxx),
             "eos_s3" | "eoss3" | "eos_s3_misc" => Ok(Self::EosS3),
+            "max32650" | "max3265x" | "mxc_gpio_me10" => Ok(Self::Max32650),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, efm32s0, efm32s1, sam_port, ra_port, imxrt, lpc2xxx, eos_s3",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, efm32s0, efm32s1, sam_port, ra_port, imxrt, lpc2xxx, eos_s3, max32650",
                 value
             )),
         }
@@ -1629,6 +1634,136 @@ impl EosS3Gpio {
     }
 }
 
+// ── Analog Devices (Maxim) MAX32650 GPIO ─────────────────────────────────────
+// One 32-pin port. Offsets from MSDK `MAX32650/Include/gpio_regs.h`; driver
+// use from `PeriphDrivers/Source/GPIO/gpio_reva.c` and `gpio_me10.c`:
+// EN @0x00 (1 = GPIO function, 0 = alternate function) with EN_SET/EN_CLR
+// @0x04/0x08, OUT_EN @0x0C with SET/CLR @0x10/0x14, OUT @0x18 with the
+// write-only OUT_SET/OUT_CLR @0x1C/0x20, IN @0x24, IN_EN @0x30, PDPU_SEL0/1
+// @0x60/0x64, AF_SEL @0x68 with SET/CLR @0x6C/0x70, DS_SEL0/1 @0xB0/0xB4,
+// PSSEL @0xB8, VSSEL @0xC0. A pad is driven while EN and OUT_EN are both
+// set; IN reads the pad level masked by IN_EN. `MXC_GPIO_Config` selects a
+// pull-up with PDPU_SEL0 = 1, PDPU_SEL1 = 0 and a pull-down with the
+// reverse; PSSEL (weak/strong) only changes the strength. Reset: EN and
+// IN_EN all ones, the rest 0 (Renode `MAX32650_GPIO`; the MSDK SVD has no
+// per-register reset values, and Renode's OUT_EN reset 0x0800_0000 has no
+// second source, so it is not adopted). Not modelled: the interrupt and
+// wake-up registers 0x28..0x5C (read 0, census) and the alternate-function
+// routing (an EN = 0 pad reports AF and is not driven by this port).
+#[derive(Debug, serde::Serialize)]
+pub struct Max32650Gpio {
+    en: u32,
+    out_en: u32,
+    out: u32,
+    in_en: u32,
+    pdpu_sel0: u32,
+    pdpu_sel1: u32,
+    af_sel: u32,
+    ds_sel0: u32,
+    ds_sel1: u32,
+    pssel: u32,
+    vssel: u32,
+    /// Input latch (host/button injection). Not a register.
+    pin_in: u32,
+    /// Pins the outside world is holding. Not a register.
+    #[serde(skip)]
+    external: u32,
+}
+
+impl Default for Max32650Gpio {
+    fn default() -> Self {
+        Self {
+            en: u32::MAX,
+            out_en: 0,
+            out: 0,
+            in_en: u32::MAX,
+            pdpu_sel0: 0,
+            pdpu_sel1: 0,
+            af_sel: 0,
+            ds_sel0: 0,
+            ds_sel1: 0,
+            pssel: 0,
+            vssel: 0,
+            pin_in: 0,
+            external: 0,
+        }
+    }
+}
+
+impl Max32650Gpio {
+    fn driven_mask(&self) -> u32 {
+        self.en & self.out_en
+    }
+
+    /// Pads with exactly one of PDPU_SEL0 (up) / PDPU_SEL1 (down) set.
+    fn pulled_mask(&self) -> u32 {
+        self.pdpu_sel0 ^ self.pdpu_sel1
+    }
+
+    fn pull_of(&self, pin: u8) -> Option<bool> {
+        let bit = 1u32 << pin;
+        (self.pulled_mask() & bit != 0).then_some(self.pdpu_sel0 & bit != 0)
+    }
+
+    /// The pad level: driven pads read OUT, pulled pads nothing outside
+    /// holds read the rail, everything else the latched external level.
+    fn pad_level(&self) -> u32 {
+        let driven = self.driven_mask();
+        let from_pull = self.pulled_mask() & !driven & !self.external;
+        let from_latch = !driven & !from_pull;
+        (self.out & driven) | (self.pdpu_sel0 & from_pull) | (self.pin_in & from_latch)
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 | 0x04 | 0x08 => self.en,
+            0x0C | 0x10 | 0x14 => self.out_en,
+            0x18 => self.out,
+            0x1C | 0x20 => 0, // OUT_SET / OUT_CLR are write-only
+            0x24 => self.pad_level() & self.in_en,
+            0x30 => self.in_en,
+            0x60 => self.pdpu_sel0,
+            0x64 => self.pdpu_sel1,
+            0x68 | 0x6C | 0x70 => self.af_sel,
+            0xB0 => self.ds_sel0,
+            0xB4 => self.ds_sel1,
+            0xB8 => self.pssel,
+            0xC0 => self.vssel,
+            _ => {
+                crate::census_reg!("gpio:Max32650Gpio", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.en = value,
+            0x04 => self.en |= value,
+            0x08 => self.en &= !value,
+            0x0C => self.out_en = value,
+            0x10 => self.out_en |= value,
+            0x14 => self.out_en &= !value,
+            0x18 => self.out = value,
+            0x1C => self.out |= value,
+            0x20 => self.out &= !value,
+            0x30 => self.in_en = value,
+            0x60 => self.pdpu_sel0 = value,
+            0x64 => self.pdpu_sel1 = value,
+            0x68 => self.af_sel = value,
+            0x6C => self.af_sel |= value,
+            0x70 => self.af_sel &= !value,
+            0xB0 => self.ds_sel0 = value,
+            0xB4 => self.ds_sel1 = value,
+            0xB8 => self.pssel = value,
+            0xC0 => self.vssel = value,
+            _ => {
+                crate::census_reg!("gpio:Max32650Gpio", offset, "write");
+            }
+        }
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 pub enum GpioFamily {
     Stm32F1(F1Gpio),
@@ -1642,6 +1777,7 @@ pub enum GpioFamily {
     Imxrt(ImxrtGpio),
     Lpc2xxx(Lpc2xxxGpio),
     EosS3(EosS3Gpio),
+    Max32650(Max32650Gpio),
 }
 
 impl GpioFamily {
@@ -1658,6 +1794,7 @@ impl GpioFamily {
             Self::Imxrt(g) => g.read_reg(offset),
             Self::Lpc2xxx(g) => g.read_reg(offset),
             Self::EosS3(g) => g.read_reg(offset),
+            Self::Max32650(g) => g.read_reg(offset),
         }
     }
 
@@ -1674,6 +1811,7 @@ impl GpioFamily {
             Self::Imxrt(g) => g.write_reg(offset, value),
             Self::Lpc2xxx(g) => g.write_reg(offset, value),
             Self::EosS3(g) => g.write_reg(offset, value),
+            Self::Max32650(g) => g.write_reg(offset, value),
         }
     }
 
@@ -1762,6 +1900,10 @@ impl GpioFamily {
                 apply(&mut g.pin_in);
                 g.external |= bit;
             }
+            Self::Max32650(g) => {
+                apply(&mut g.pin_in);
+                g.external |= bit;
+            }
         }
         true
     }
@@ -1792,6 +1934,7 @@ impl GpioFamily {
             }
             Self::Lpc2xxx(g) => g.external &= !bit,
             Self::EosS3(g) => g.external &= !bit,
+            Self::Max32650(g) => g.external &= !bit,
         }
     }
 
@@ -1948,6 +2091,7 @@ impl GpioFamily {
             Self::Lpc2xxx(g) => Some(bit(g.iopin_view())),
             // Every pad is driven from IO_OUTPUT (IO_MUX not modelled).
             Self::EosS3(g) => (pin < 8).then(|| bit(g.io_output)),
+            Self::Max32650(g) => Some(bit(g.pad_level())),
         }
     }
 }
@@ -2149,6 +2293,18 @@ impl GpioPort {
             // EOS S3: no direction register in this block; the IO_MUX pad
             // output enable is not modelled, so IO_OUTPUT drives every pad.
             GpioFamily::EosS3(_) => GpioMode::Output,
+            // MAX32650: EN = 0 hands the pad to an alternate function
+            // (AF_SEL picks which; routing not modelled), else OUT_EN.
+            GpioFamily::Max32650(g) => {
+                let bit = 1u32 << pin;
+                if g.en & bit == 0 {
+                    GpioMode::Af
+                } else if g.out_en & bit != 0 {
+                    GpioMode::Output
+                } else {
+                    GpioMode::Input
+                }
+            }
             // Series-2 EFR32: 4-bit mode nibble per pin (MODEL/MODEH).
             // 0 DISABLED is a hi-Z pin — closest to Analog here; 1..3 are the
             // input modes; >= 4 the output modes. No AF verdict: the ROUTE
@@ -2308,6 +2464,10 @@ impl GpioPort {
             GpioFamily::Lpc2xxx(_) => None,
             // EOS S3 pulls are IO_MUX pad controls, not modelled.
             GpioFamily::EosS3(_) => None,
+            // MAX32650: PDPU_SEL0 up / PDPU_SEL1 down, on an undriven pad.
+            GpioFamily::Max32650(g) => (g.driven_mask() & (1u32 << pin) == 0)
+                .then(|| g.pull_of(pin))
+                .flatten(),
         }
     }
 
@@ -2508,6 +2668,7 @@ impl GpioPort {
             GpioRegisterLayout::Imxrt => GpioFamily::Imxrt(ImxrtGpio::default()),
             GpioRegisterLayout::Lpc2xxx => GpioFamily::Lpc2xxx(Lpc2xxxGpio::default()),
             GpioRegisterLayout::EosS3 => GpioFamily::EosS3(EosS3Gpio::default()),
+            GpioRegisterLayout::Max32650 => GpioFamily::Max32650(Max32650Gpio::default()),
         })
     }
 
@@ -2664,9 +2825,10 @@ impl GpioPort {
             GpioFamily::SamPort(_) => 0x10, // OUT
             // PCNTR1 holds PODR in [31:16]; consumers sample bit (pin+16).
             GpioFamily::RaPort(_) => 0x00,
-            GpioFamily::Imxrt(_) => 0x00,   // DR
-            GpioFamily::Lpc2xxx(_) => 0x04, // IOSET reads the output latch
-            GpioFamily::EosS3(_) => 0x04,   // IO_OUTPUT
+            GpioFamily::Imxrt(_) => 0x00,    // DR
+            GpioFamily::Lpc2xxx(_) => 0x04,  // IOSET reads the output latch
+            GpioFamily::EosS3(_) => 0x04,    // IO_OUTPUT
+            GpioFamily::Max32650(_) => 0x18, // OUT
         };
         family.saturating_sub(self.window_offset)
     }
@@ -2681,13 +2843,14 @@ impl GpioPort {
             GpioFamily::Nrf52(_) if self.nrf54l_offsets => 0x00C,
             GpioFamily::Nrf52(_) => 0x510,
             GpioFamily::Kinetis(_) => 0x10,
-            GpioFamily::Efr32s2(_) => 0x14, // DIN
-            GpioFamily::Efm32s0(_) => 0x1C, // DIN
-            GpioFamily::SamPort(_) => 0x20, // IN
-            GpioFamily::RaPort(_) => 0x04,  // PCNTR2 PIDR[15:0]
-            GpioFamily::Imxrt(_) => 0x08,   // PSR
-            GpioFamily::Lpc2xxx(_) => 0x00, // IOPIN
-            GpioFamily::EosS3(_) => 0x00,   // IO_INPUT
+            GpioFamily::Efr32s2(_) => 0x14,  // DIN
+            GpioFamily::Efm32s0(_) => 0x1C,  // DIN
+            GpioFamily::SamPort(_) => 0x20,  // IN
+            GpioFamily::RaPort(_) => 0x04,   // PCNTR2 PIDR[15:0]
+            GpioFamily::Imxrt(_) => 0x08,    // PSR
+            GpioFamily::Lpc2xxx(_) => 0x00,  // IOPIN
+            GpioFamily::EosS3(_) => 0x00,    // IO_INPUT
+            GpioFamily::Max32650(_) => 0x24, // IN
         };
         family.saturating_sub(self.window_offset)
     }
@@ -2756,6 +2919,7 @@ impl GpioPort {
             GpioFamily::Imxrt(_) => GpioRegisterLayout::Imxrt,
             GpioFamily::Lpc2xxx(_) => GpioRegisterLayout::Lpc2xxx,
             GpioFamily::EosS3(_) => GpioRegisterLayout::EosS3,
+            GpioFamily::Max32650(_) => GpioRegisterLayout::Max32650,
         }
     }
 
@@ -3522,6 +3686,7 @@ impl crate::Peripheral for GpioPort {
             GpioFamily::Imxrt(g) => serde_json::to_value(g),
             GpioFamily::Lpc2xxx(g) => serde_json::to_value(g),
             GpioFamily::EosS3(g) => serde_json::to_value(g),
+            GpioFamily::Max32650(g) => serde_json::to_value(g),
         }
         .unwrap_or(serde_json::Value::Null)
     }
@@ -3724,6 +3889,44 @@ mod routing_tests {
         assert_eq!(g.read_u32(0x4).unwrap(), 1 << 10);
         assert_eq!(g.odr_offset(), 0x4);
         assert_eq!(g.idr_offset(), 0x0);
+    }
+
+    /// MAX32650 GPIO: EN/OUT_EN/OUT SET-CLR aliases, IN masked by IN_EN,
+    /// PDPU_SEL pulls on undriven pads, EN = 0 reports AF.
+    #[test]
+    fn max32650_en_outen_out_in_pulls() {
+        let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Max32650);
+        assert_eq!(g.read_u32(0x00).unwrap(), u32::MAX, "EN resets to GPIO");
+        assert_eq!(g.read_u32(0x30).unwrap(), u32::MAX, "IN_EN resets on");
+        g.write_u32(0x10, 1 << 14).unwrap(); // OUT_EN_SET
+        g.write_u32(0x1C, (1 << 14) | (1 << 15)).unwrap(); // OUT_SET
+        g.write_u32(0x20, 1 << 15).unwrap(); // OUT_CLR
+        assert_eq!(g.read_u32(0x18).unwrap(), 1 << 14);
+        assert_eq!(g.read_u32(0x1C).unwrap(), 0, "OUT_SET is write-only");
+        assert_eq!(g.read_u32(0x0C).unwrap(), 1 << 14);
+        assert_eq!(
+            g.read_u32(0x24).unwrap(),
+            1 << 14,
+            "IN reads the driven pad"
+        );
+        assert_eq!(g.read_gpio_pad(14), Some(true));
+        assert_eq!(g.gpio_routing(14).unwrap().mode, GpioMode::Output);
+        assert_eq!(g.gpio_routing(3).unwrap().mode, GpioMode::Input);
+        g.write_u32(0x60, 1 << 3).unwrap(); // PDPU_SEL0: pull-up on P3
+        assert_eq!(g.read_u32(0x24).unwrap() & (1 << 3), 1 << 3);
+        assert!(g.set_gpio_input(3, false));
+        assert_eq!(
+            g.read_u32(0x24).unwrap() & (1 << 3),
+            0,
+            "outside beats pull"
+        );
+        g.write_u32(0x30, 0).unwrap(); // IN_EN off
+        assert_eq!(g.read_u32(0x24).unwrap(), 0);
+        g.write_u32(0x08, 1 << 14).unwrap(); // EN_CLR: P14 to AF
+        assert_eq!(g.read_u32(0x04).unwrap(), !(1u32 << 14));
+        assert_eq!(g.gpio_routing(14).unwrap().mode, GpioMode::Af);
+        assert_eq!(g.odr_offset(), 0x18);
+        assert_eq!(g.idr_offset(), 0x24);
     }
 
     /// EOS S3 MISC IO: IO_OUTPUT keeps bits [7:0] and drives the pads;

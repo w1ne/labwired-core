@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/max32652-evkit-smoke.yaml",
   "system": "configs/systems/onboarding/max32652-evkit.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:48:50Z",
-  "finished_at_utc": "2026-11-05T14:48:51Z",
+  "started_at_utc": "2026-11-09T14:10:13Z",
+  "finished_at_utc": "2026-11-09T14:10:14Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1040,
+  "elapsed_ms": 1157,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.302,
-    "build_firmware": 0.447,
-    "run_smoke": 0.28
+    "build_cli": 0.497,
+    "build_firmware": 0.282,
+    "run_smoke": 0.364
   },
   "stages_ms": {
-    "build_cli": 302,
-    "build_firmware": 447,
-    "run_smoke": 280
+    "build_cli": 497,
+    "build_firmware": 282,
+    "run_smoke": 364
   }
 }

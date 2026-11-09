@@ -1738,6 +1738,12 @@ fn gpio_offsets_for_peripheral(
             odr_offset: 0x04,
             ra_output_packed: false,
         }),
+        // MAX32650 GPIO: IN @0x24, OUT @0x18.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Max32650 => Some(GpioOffsets {
+            idr_offset: 0x24,
+            odr_offset: 0x18,
+            ra_output_packed: false,
+        }),
         // nRF52 GPIO register layout isn't mapped for DAP board-IO bindings;
         // skip it gracefully (callers use `?`, so None drops the binding).
         labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf52 => None,

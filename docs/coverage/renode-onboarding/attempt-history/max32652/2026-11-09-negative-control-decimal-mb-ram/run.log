@@ -1,0 +1,16 @@
+2026-11-09T14:10:31.611610Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/chip.yaml
+2026-11-09T14:10:31.615210Z  INFO labwired_loader: ELF Entry Point: 0x10000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-09T14:10:31.616282Z ERROR labwired_cli::execute: Simulation error at step 0: Memory access violation at 0x200fefe0
+2026-11-09T14:10:31.617371Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "MAX32652 UART0 smoke" }) (captured len=0)
+2026-11-09T14:10:31.617391Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "MAX32652 UART1 line" }) (captured len=0)
+2026-11-09T14:10:31.617394Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "MAX32652 UART2 line" }) (captured len=0)
+2026-11-09T14:10:31.617398Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "MAX32652 checks PPPPPPPPPP DONE" }) (captured len=0)
+2026-11-09T14:10:31.617403Z ERROR labwired_cli::execute: Memory assertion failed to read address 0x200ff000 (size 4): Memory access violation at 0x200ff000
+2026-11-09T14:10:31.617407Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537915392, expected_value: 2737177599, mask: None, size: Some(4), node: None } }) (captured len=0)
+2026-11-09T14:10:31.617422Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "port2:25", min_edges: 6 } }) (captured len=0)
+2026-11-09T14:10:31.617427Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }) (captured len=0)
+FAIL  0/7 checks · smoke · 0 steps · 0.00s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x200F_EFFC (BFAR valid).
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x200FEFFC

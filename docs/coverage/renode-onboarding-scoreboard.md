@@ -12,7 +12,7 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1416`
+- pass_claimed_peripherals_total: `1428`
 - pass_claimed_peripherals_median: `2`
 - median_elapsed_ms: `1521`
 - median_elapsed_seconds: `1.521`
@@ -120,8 +120,8 @@
 | `litex_zephyr_vexriscv_i2s` | `pass` | `True` | `yes` | `yes` | `1043` | `1.043` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `lpc2294` | `pass` | `True` | `yes` | `yes` | `979` | `0.979` | `True` | `observable` | `8` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `mars_zx3` | `pass` | `True` | `yes` | `yes` | `1589` | `1.589` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `max32652` | `pass` | `True` | `yes` | `yes` | `762` | `0.762` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `max32652-evkit` | `pass` | `True` | `yes` | `yes` | `1040` | `1.04` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `max32652` | `pass` | `True` | `yes` | `yes` | `1001` | `1.001` | `True` | `observable` | `7` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `max32652-evkit` | `pass` | `True` | `yes` | `yes` | `1157` | `1.157` | `True` | `observable` | `7` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `microwatt` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `1` | n/a | 1: `uart:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no OpenPOWER (Microwatt) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `mimxrt1064_evk` | `pass` | `True` | `yes` | `yes` | `788` | `0.788` | `True` | `observable` | `3` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `mimxrt700_evk` | `pass` | `True` | `yes` | `yes` | `1596` | `1.596` | `True` | `observable` | `1` | `uart_contains`, `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |

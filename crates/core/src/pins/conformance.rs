@@ -362,6 +362,38 @@ impl Rig for Lpc2xxx {
     }
 }
 
+struct Max32650;
+impl Rig for Max32650 {
+    fn name(&self) -> &'static str {
+        "GpioPort max32650"
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
+            crate::peripherals::gpio::GpioRegisterLayout::Max32650,
+        ))
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        // MSDK MXC_GPIO_Config: IN_EN on, EN_SET (GPIO function), then
+        // OUT_EN_SET/CLR; pulls in PDPU_SEL0 (up) / PDPU_SEL1 (down). No open
+        // drain in the model.
+        bit_to(port, 0x30, pin, true);
+        w32(port, 0x04, 1 << pin);
+        match mode {
+            Mode::Input(pull) => {
+                bit_to(port, 0x60, pin, pull == Pull::Up);
+                bit_to(port, 0x64, pin, pull == Pull::Down);
+                w32(port, 0x14, 1 << pin);
+            }
+            Mode::PushPull(level) => {
+                w32(port, if level { 0x1C } else { 0x20 }, 1 << pin);
+                w32(port, 0x10, 1 << pin);
+            }
+            Mode::OpenDrain(_) => return false,
+        }
+        true
+    }
+}
+
 #[derive(Default)]
 struct RaPort {
     pfs: Option<crate::peripherals::ra_pfs::RaPfs>,
@@ -860,6 +892,7 @@ fn rigs() -> Vec<Box<dyn Rig>> {
         Box::new(RaPort::default()),
         Box::new(Imxrt::default()),
         Box::new(Lpc2xxx),
+        Box::new(Max32650),
         Box::new(Avr),
         Box::new(Pic24),
         Box::new(Rp2040),

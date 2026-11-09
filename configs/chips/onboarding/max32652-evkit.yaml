@@ -6,14 +6,8 @@
 
 name: max32652-evkit
 arch: arm
-flash:
-  base: 268435456
-  size: 3145728B
-ram:
-  base: 536870912
-  size: 1048576B
-peripherals:
-- id: uart0
-  type: max32650_uart
-  bus: sysbus
-  base_address: 1074012160
+# MAX32652 EVKIT. Renode platforms/boards/max32652-evkit.repl is
+# cpus/max32652.repl plus two LEDs and two buttons on GPIO2, so the chip
+# surface is the max32652 onboarding profile, included whole. The board
+# LEDs and buttons are in configs/systems/onboarding/max32652-evkit.yaml.
+include: max32652.yaml

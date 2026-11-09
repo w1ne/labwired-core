@@ -1209,9 +1209,8 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/nrf52840dk_nrf52840-smoke.yaml
             system: configs/systems/onboarding/nrf52840dk_nrf52840.yaml
-          # Both imported MAX32652 profiles expose only their model-backed
-          # UART0 and memory windows; generated stub and unsupported GPIO
-          # declarations are omitted until those models exist.
+          # MAX32652 smokes: UART0-2 and the MAX32650 GPIO ports (EN/OUT/IN,
+          # IN_EN, PDPU_SEL pulls). The EVKIT row includes the chip.
           - id: max32652
             crate: firmware-max32652-smoke
             target: thumbv7em-none-eabi

@@ -1,0 +1,22 @@
+name: max32652
+arch: arm
+core: cortex-m4
+flash:
+  base: 268435456
+  size: 3145728B
+ram:
+  base: 536870912
+  size: 1048576B
+peripherals:
+- id: uart0
+  type: max32650_uart
+  base_address: 1074012160
+  size: 4KB
+- id: uart1
+  type: max32650_uart
+  base_address: 1074016256
+  size: 4KB
+- id: uart2
+  type: max32650_uart
+  base_address: 1074020352
+  size: 4KB
