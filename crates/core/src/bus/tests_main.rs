@@ -5786,15 +5786,15 @@ fn uds_tester_expect_nrc_negative_response_completes() {
 ///
 /// `service_gpio_devices` lives inside the phase-1 body that
 /// `per_cycle_tick_is_trivial` skips, so a device needing that pass makes the
-/// tick non-trivial by definition. Before this, a keypad / rotary encoder /
-/// DHT22 on a walk-deleted bus was silently inert: attach succeeded,
-/// `list_inputs` advertised its channel, `set_input` returned Ok, and the pin
-/// never moved.
+/// tick non-trivial by definition. Before this, a rotary encoder / DHT22 on a
+/// walk-deleted bus was silently inert: attach succeeded, `list_inputs`
+/// advertised its channel, `set_input` returned Ok, and the pin never moved.
 ///
-/// A button is the deliberate exception — its level is applied when the contact
-/// is driven, not per cycle — so adding a push button must NOT cost the bus its
-/// fast path. Both halves are asserted here so neither can drift: the exemption
-/// is what makes the fix affordable, and the rule is what makes it correct.
+/// Buttons and the membrane keypad are deliberate exceptions — their levels are
+/// applied at the stimulus point (`sync_button_inputs` /
+/// `flush_gpio_device_inputs`) and on MMIO edges, not per cycle — so adding
+/// either must NOT cost the bus its fast path. A timer-owning part (HX711) still
+/// must. All three halves are asserted here so none can drift.
 #[cfg(feature = "event-scheduler")]
 #[test]
 fn gpio_devices_decide_whether_the_per_cycle_tick_is_trivial() {
@@ -5819,10 +5819,11 @@ fn gpio_devices_decide_whether_the_per_cycle_tick_is_trivial() {
         "a button must not cost the bus its walk-free fast path"
     );
 
-    // A keypad is scanned every tick: the fast path must yield.
+    // A keypad is edge+stimulus clocked: attaching one must KEEP the fast path
+    // (same exemption shape as the button above).
     let row_odr: [(u64, u8); 4] = std::array::from_fn(|r| (0x4800_0014, r as u8));
     let col_idr: [(u64, u8); 4] = std::array::from_fn(|c| (0x4800_0410, c as u8));
-    let desc = labwired_config::DeviceDescriptor::embedded("keypad")
+    let kp_desc = labwired_config::DeviceDescriptor::embedded("keypad")
         .unwrap()
         .unwrap();
     let bind = |role: &str, pads: [(u64, u8); 4]| {
@@ -5839,14 +5840,41 @@ fn gpio_devices_decide_whether_the_per_cycle_tick_is_trivial() {
     };
     let pad = DeclarativeGpioDevice::new(
         "kp".into(),
-        &desc,
+        &kp_desc,
         bind("rows", row_odr),
         bind("cols", col_idr),
         1_000_000,
-        crate::peripherals::components::declarative_i2c::owned_channels(&desc),
+        crate::peripherals::components::declarative_i2c::owned_channels(&kp_desc),
     )
     .unwrap();
     bus.gpio_devices.push(Box::new(pad));
+    assert!(
+        bus.per_cycle_tick_is_trivial(),
+        "a keypad must not cost the bus its walk-free fast path"
+    );
+
+    // HX711 owns a timer: the fast path must yield.
+    let hx_desc = labwired_config::DeviceDescriptor::embedded("hx711")
+        .unwrap()
+        .unwrap();
+    let hx = DeclarativeGpioDevice::new(
+        "hx".into(),
+        &hx_desc,
+        vec![crate::peripherals::components::declarative_gpio::BoundPin {
+            role: "SCK".into(),
+            addr: 0x4800_0014,
+            bit: 8,
+        }],
+        vec![crate::peripherals::components::declarative_gpio::BoundPin {
+            role: "DOUT".into(),
+            addr: 0x4800_0410,
+            bit: 0,
+        }],
+        1_000_000,
+        crate::peripherals::components::declarative_i2c::owned_channels(&hx_desc),
+    )
+    .unwrap();
+    bus.gpio_devices.push(Box::new(hx));
     assert!(
         !bus.per_cycle_tick_is_trivial(),
         "a device needing the per-tick service pass makes the tick non-trivial"
