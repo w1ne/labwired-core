@@ -1543,4 +1543,78 @@ behavior:
         let text = format!("{err:#}");
         assert!(text.contains("rules[0].when"), "{text}");
     }
+
+    #[test]
+    fn lm393_moisture_dout_tracks_moisture_vs_threshold() {
+        let desc = DeviceDescriptor::embedded("lm393-moisture")
+            .unwrap()
+            .expect("lm393-moisture is embedded");
+        validate_descriptor(&desc).expect("descriptor validates");
+        let mut dev = DeclarativeGpioDevice::new(
+            "moist".into(),
+            &desc,
+            Vec::new(),
+            vec![BoundPin {
+                role: "DOUT".into(),
+                addr: 0x2000,
+                bit: 0,
+            }],
+            16_000_000,
+            super::super::declarative_i2c::owned_channels(&desc),
+        )
+        .expect("constructs");
+        let mut pads = FakePads::default();
+
+        // Default moisture 0 (dry) → pin_defaults DOUT HIGH; service flushes.
+        dev.service(&mut pads, 0);
+        assert_eq!(
+            pads.output_bit(0x2000, 0),
+            Some(true),
+            "dry default → DOUT HIGH"
+        );
+
+        // Acc "moisture DOUT HIGH" → moisture 0 stays HIGH.
+        SimInput::set_input(&mut dev, "moisture", 0.0).unwrap();
+        dev.service(&mut pads, 1);
+        assert_eq!(
+            pads.output_bit(0x2000, 0),
+            Some(true),
+            "moisture 0 → DOUT HIGH"
+        );
+
+        // Just under the fixed 50 % threshold stays dry.
+        SimInput::set_input(&mut dev, "moisture", 49.0).unwrap();
+        dev.service(&mut pads, 2);
+        assert_eq!(
+            pads.output_bit(0x2000, 0),
+            Some(true),
+            "moisture 49 → DOUT HIGH"
+        );
+
+        // At/above threshold → wet → DOUT LOW (Acc "moisture DOUT LOW" → 100).
+        SimInput::set_input(&mut dev, "moisture", 50.0).unwrap();
+        dev.service(&mut pads, 3);
+        assert_eq!(
+            pads.output_bit(0x2000, 0),
+            Some(false),
+            "moisture 50 → DOUT LOW"
+        );
+
+        SimInput::set_input(&mut dev, "moisture", 100.0).unwrap();
+        dev.service(&mut pads, 4);
+        assert_eq!(
+            pads.output_bit(0x2000, 0),
+            Some(false),
+            "moisture 100 → DOUT LOW"
+        );
+
+        // Back to dry.
+        SimInput::set_input(&mut dev, "moisture", 0.0).unwrap();
+        dev.service(&mut pads, 5);
+        assert_eq!(
+            pads.output_bit(0x2000, 0),
+            Some(true),
+            "moisture 0 again → DOUT HIGH"
+        );
+    }
 }
