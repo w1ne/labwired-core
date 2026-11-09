@@ -233,7 +233,19 @@ fn c6_rom_data_init_writes() -> &'static [(u32, &'static [u8])] {
     ]
 }
 
+/// `rom_default_spiflash_legacy_data` in `esp32c6_rev0_rom.elf`: the
+/// `esp_rom_spiflash_chip_t` that `rom_spiflash_legacy_data` points at, i.e.
+/// what ESP-IDF calls `g_rom_flashchip`.
+pub const ROM_DEFAULT_SPIFLASH_LEGACY_DATA: u32 = 0x4087_FA08;
+
 /// Write ROM `.data` interface pointers into HP SRAM (fast-boot only).
+///
+/// Also fills the ROM flash-chip descriptor. On silicon the 2nd-stage
+/// bootloader sets it from the image header; fast boot does not run one, so
+/// `chip_size` stayed 0. `esp_flash_init_default_chip` copies that size into
+/// `esp_flash_default_chip`, and every later `esp_flash_read` (partition
+/// reads, `nvs_flash_init`, `Preferences.begin`) then failed with
+/// `ESP_ERR_INVALID_ARG`.
 pub fn seed_rom_data(bus: &mut SystemBus) {
     use crate::Bus;
     for (dst, bytes) in c6_rom_data_init_writes() {
@@ -244,6 +256,7 @@ pub fn seed_rom_data(bus: &mut SystemBus) {
             }
         }
     }
+    super::esp_partition_table::seed_rom_flashchip(bus, ROM_DEFAULT_SPIFLASH_LEGACY_DATA);
 }
 
 /// Install the C6 Arduino flash substrate when `chip` is a C6; no-op otherwise.
@@ -355,6 +368,30 @@ mod tests {
         assert_eq!(v, expected, "tlsf table entry @ ROM+0x34");
     }
 
+    /// `rom_spiflash_legacy_data` points at the ROM flash-chip descriptor, and
+    /// that descriptor's `chip_size` is what `esp_flash_default_chip.size`
+    /// becomes. Left 0, every `esp_flash_read` (so `Preferences.begin`) fails.
+    #[test]
+    fn seed_rom_data_fills_the_rom_flash_chip_size() {
+        let mut bus = c6_bus();
+        seed_rom_data(&mut bus);
+        let word = |bus: &SystemBus, at: u64| {
+            let mut b = [0u8; 4];
+            for (i, byte) in b.iter_mut().enumerate() {
+                *byte = bus.read_u8(at + i as u64).expect("read");
+            }
+            u32::from_le_bytes(b)
+        };
+        let chip = word(&bus, 0x4087_ffec);
+        assert_eq!(chip, ROM_DEFAULT_SPIFLASH_LEGACY_DATA);
+        assert_eq!(
+            word(&bus, chip as u64 + 4),
+            MODELLED_FLASH_SIZE,
+            "chip_size"
+        );
+        assert_eq!(word(&bus, chip as u64 + 12), 4 * 1024, "sector_size");
+    }
+
     #[test]
     fn is_esp32c6_matches_chip_name() {
         let mut chip = ChipDescriptor::from_file(repo_root().join("configs/chips/esp32c6.yaml"))
@@ -426,18 +463,17 @@ mod tests {
         const FLASH_PP: u32 = 1 << 25;
         const ADDR: u64 = 0x04;
         const USER2: u64 = 0x20;
-        const MOSI_DLEN: u64 = 0x24;
         const MISO_DLEN: u64 = 0x28;
         const W0: u64 = 0x58;
         const CMD: u64 = 0x00;
 
+        // `spi_flash_hal_program_page`: ADDR = (addr & 0xFFFFFF) | (len << 24),
+        // no MOSI_DLEN.
         let payload: u32 = 0xA1B2_C3D4;
         bus.write_u32(SPI0_BASE + CMD, FLASH_WREN).expect("WREN");
-        bus.write_u32(SPI0_BASE + ADDR, nvs_off as u32)
+        bus.write_u32(SPI0_BASE + ADDR, nvs_off as u32 | (4 << 24))
             .expect("ADDR");
         bus.write_u32(SPI0_BASE + W0, payload).expect("W0");
-        bus.write_u32(SPI0_BASE + MOSI_DLEN, 32 - 1)
-            .expect("MOSI_DLEN");
         bus.write_u32(SPI0_BASE + CMD, FLASH_PP).expect("PP");
         assert_eq!(
             bus.read_u32(SPI0_BASE + CMD).expect("CMD after PP"),
