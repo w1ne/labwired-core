@@ -59,7 +59,10 @@ concurrency:
 jobs:
   python-sdk:
     name: python-sdk (wheel + pytest, 0 skipped)
-    runs-on: ubuntu-latest
+    # setup-python 3.9 has no Ubuntu 26.04 build (observed on Actions run
+    # 42553378473). Keep the cp39-abi3 minimum-version test on a runner
+    # with a published 3.9 interpreter; do not silently test 3.12 instead.
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
