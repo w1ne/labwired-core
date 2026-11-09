@@ -322,8 +322,9 @@ impl SystemBus {
         let mut devices = std::mem::take(&mut self.gpio_devices);
         // Edge/stimulus-clocked residents (`needs_per_cycle_service == false`)
         // already run from the MMIO write hook and from `flush_gpio_device_inputs`.
-        // Re-servicing them every tick was the pet-feeder keypad hotspot (~70% of
-        // host time in peripheral-tick) with no behavioural effect.
+        // Re-servicing them every tick was pure host cost with no behavioural
+        // effect (displays, pybadge buttons). Open-drain matrix parts (keypad)
+        // stay on this walk.
         for device in &mut devices {
             if device.needs_per_cycle_service() {
                 device.service(self, now);
