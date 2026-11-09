@@ -2837,7 +2837,7 @@ boards:
     # the live capture reads the clock-gated window as bus junk (0x0008fe10).
     # This acknowledges model drift, NOT a recapture.
     # Re-stamped 2026-11-08 (round 347) over both changes above after merging main.
-    drift_ack_digest: ed30d3aceb28d77159219fbdba22d2cb1e926aafbd16261cacbb4e46c254777b
+    drift_ack_digest: 9023e9030af4a02d4ab4c84217df775409d7bbeeb770967e5e815991dbbb1f80
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3702,7 +3702,14 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-06
+    # 2026-11-09 (#1757 classic TIMG alarms): watched peripherals/esp32/timg.rs
+    # (the shared TIMG model; the C3 uses it for RTCCALICFG calibration).
+    # Alarms are opt-in via `with_alarms`, enabled only by the classic
+    # esp32_timg factory at 0x3FF5_F000/0x3FF6_0000; the C3 factory in
+    # generic_factory.rs does not opt in. On the merged tree: lib timg 44/44,
+    # esp32c3_rtc_slow_calibration 1/1, esp32c3_reset_conformance 2/2.
+    # ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-09
 
   - id: nucleo-l476rg
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
