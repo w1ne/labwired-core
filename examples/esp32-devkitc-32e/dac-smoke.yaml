@@ -1,0 +1,15 @@
+# ESP32-DevKitC-32E DAC1: Arduino dacWrite(25, 128) on J2 pin 9.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/devkitc32e_dac/firmware.elf"
+  system: "../../configs/systems/esp32-devkitc-32e-dac.yaml"
+limits:
+  max_steps: 9000000
+assertions:
+  - uart_contains: "ESP32_DEVKITC32E_DAC1_CODE=128"
+  - memory_value:
+      address: 0x3FF48484
+      size: 32
+      expected_value: 0x04040000
+      mask: 0x07FC0000
+  - expected_stop_reason: max_steps

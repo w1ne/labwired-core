@@ -29,6 +29,8 @@ const TOUCH_MUX_SEL: u32 = 1 << 19;
 const TOUCH_FUN_IE: u32 = 1 << 13;
 const TOUCH_HOLD: u32 = 1 << 31;
 const DAC_MUX_SEL: u32 = 1 << 17;
+const DAC_ENABLE: u32 = 1 << 18;
+const DAC_VALUE_SHIFT: u32 = 19;
 const DAC_FUN_IE: u32 = 1 << 11;
 const RUE: u32 = 1 << 27;
 const RDE: u32 = 1 << 28;
@@ -458,6 +460,30 @@ fn runtime_snapshot_restores_through_the_shared_state() {
     assert!(EspRtcIo::new_esp32s3()
         .restore_runtime_snapshot(&blob)
         .is_err());
+}
+
+/// The classic RTC_IO DAC exposes a live analog output on each channel and
+/// remains undriven until firmware powers that channel up. The S3 has no
+/// classic 8-bit DAC output.
+#[test]
+fn classic_dac_output_probe_tracks_enable_and_output_code() {
+    let mut rtc = EspRtcIo::new_esp32();
+    let dac1 = rtc.analog_output_probe(0).expect("classic DAC1");
+    let dac2 = rtc.analog_output_probe(1).expect("classic DAC2");
+    assert!(rtc.analog_output_probe(2).is_none());
+    assert_eq!(dac1(), None, "reset channel is undriven");
+
+    rtc.write_u32(PAD_DAC1, DAC_ENABLE | (128 << DAC_VALUE_SHIFT))
+        .unwrap();
+    assert_eq!(dac1(), Some(1656), "128 / 255 of a 3.3 V reference");
+    assert_eq!(dac2(), None, "the other channel is independent");
+
+    rtc.write_u32(PAD_DAC1, 255 << DAC_VALUE_SHIFT).unwrap();
+    assert_eq!(dac1(), None, "clearing XPD_DAC releases the output");
+    rtc.write_u32(PAD_DAC2, DAC_ENABLE | (255 << DAC_VALUE_SHIFT))
+        .unwrap();
+    assert_eq!(dac2(), Some(3300));
+    assert!(EspRtcIo::new_esp32s3().analog_output_probe(0).is_none());
 }
 
 /// Past the 0xCC-byte block, below the 0x400 the bus window keeps for it,

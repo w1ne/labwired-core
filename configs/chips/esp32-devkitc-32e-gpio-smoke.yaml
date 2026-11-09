@@ -1,7 +1,8 @@
 # Narrow ESP32-DevKitC-32E onboarding profile.
 #
 # The profiles exercise classic ESP32 GPIO23, UART0 console output, I2C0 with
-# an external BME280, ADC1 channel 0 on GPIO36, and LEDC PWM on GPIO23. The
+# an external BME280, ADC1 channel 0 on GPIO36, DAC1/2 on GPIO25/26, and LEDC
+# PWM on GPIO23. The
 # USB-to-UART bridge and pin-level UART TX/RX signals, Wi-Fi/Bluetooth, general
 # timers, SPI, and the 5 V power LED are outside this profile.
 name: "esp32-devkitc-32e-gpio-smoke"
@@ -27,6 +28,20 @@ pins:
   GPIO22: { gpio: "gpio", bit: 22 }
   # J2 pin 3 / VP, SENSOR_VP, ADC1_CH0.
   GPIO36: { gpio: "gpio", bit: 36 }
+  # J2 pins 9/10: GPIO25/DAC1 and GPIO26/DAC2. The analog outputs live in
+  # PAD_DAC1/2 of RTC_IO, not on the digital GPIO matrix.
+  GPIO25:
+    gpio: "gpio"
+    bit: 25
+    functions:
+      - { type: gpio, peripheral: gpio }
+      - { type: dac, peripheral: rtcio, role: dac1 }
+  GPIO26:
+    gpio: "gpio"
+    bit: 26
+    functions:
+      - { type: gpio, peripheral: gpio }
+      - { type: dac, peripheral: rtcio, role: dac2 }
 
 peripherals:
   - id: "uart0"
@@ -56,6 +71,13 @@ peripherals:
     size: "256B"
     config:
       debug_schema: "../peripherals/esp32/sens.yaml"
+
+  - id: "rtcio"
+    type: "esp32_rtc_io"
+    base_address: 0x3FF48400
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32/rtc_io.yaml"
 
   - id: "ledc"
     type: "esp32_ledc"

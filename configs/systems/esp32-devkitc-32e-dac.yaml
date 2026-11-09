@@ -1,0 +1,9 @@
+# Exact ESP32-DevKitC-32E / ESP32-WROOM-32E profile for the classic 8-bit DAC.
+# GPIO25/DAC1 is on J2 pin 9; GPIO26/DAC2 is on J2 pin 10. No extra board
+# fixture is needed for direct voltage output.
+name: "esp32-devkitc-32e-dac"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices: []
+board_io: []

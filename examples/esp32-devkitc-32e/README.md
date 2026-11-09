@@ -1,8 +1,8 @@
-# ESP32-DevKitC-32E GPIO, UART0, BME280 I2C, RMT, ADC, and LEDC smokes
+# ESP32-DevKitC-32E GPIO, UART0, BME280 I2C, RMT, ADC, DAC, and LEDC smokes
 
 **Demand rank:** ESP32 is rank 1 in the standing list (38% of reported MCU
-use). The current LEDC smoke adds the stock `ledcAttach` / `ledcWrite` servo
-path to the existing board coverage. This is peripheral depth on the
+use). The current DAC smoke adds the stock `dacWrite` direct-output path to
+the existing board coverage. This is peripheral depth on the
 highest-demand family, not a new MCU target or board variant.
 
 ## Board and modeled scope
@@ -22,6 +22,7 @@ with a resistor from GPIO23 to GND.
 | J3 pin 2 (GPIO23) | LEDC high-speed channel 0 PWM output | LEDC smoke runs 50 Hz, 14-bit PWM to an external SG90-class servo twin and requires committed duty plus GPIO edges |
 | GPIO23 header | RMT channel 0 TX matrix output | RMT smoke sends red to an external WS2812 pixel and waits for TX_END |
 | GPIO18 header | RMT channel 1 TX matrix output | RMT smoke sends green to a second pixel and waits for TX_END |
+| J2 pin 9 (GPIO25) | DAC1 direct 8-bit analog output | DAC smoke calls `dacWrite(25, 128)` and checks the DAC code and enable bit |
 
 The BME280 breakout uses the standard `0x77` address and is powered directly
 from board 3V3/GND. Firmware reads ID register `0xD0` (`0x60`) and the raw
@@ -54,8 +55,16 @@ UART0 controller is modeled. The board's USB-to-UART bridge and the pin-level
 UART TX/RX waveforms are not, so console capture does not prove USB serial
 behavior or a signal at the board header. Wi-Fi/Bluetooth, SPI, timers, flash
 boot behavior, and the 5 V power LED are outside these profiles. The LEDC
-profile does not claim general-purpose timer coverage. I2S0/1,
-UHCI0, PCNT, APB_CTRL and DPORT analog-AHB retain fallback windows.
+profile does not claim general-purpose timer coverage. The base ESP32 descriptor
+still has zero-answering system stubs for I2S0, I2S1, and UHCI0; this board
+profile does not claim those peripherals.
+
+The DAC profile covers static 8-bit direct output on GPIO25/DAC1 and GPIO26/DAC2.
+The model scales the code against a 3.3 V reference and exposes the voltage
+through its analog output probe; code 128 is 1656 mV. DMA stream output and the
+cosine generator remain outside this profile. The firmware smoke programs DAC1
+with Arduino's `dacWrite` API and checks its RTC_IO DAC register bits. A focused
+model unit test checks voltage scaling and disabled-channel behavior.
 
 ## Copy-paste firmware example
 
@@ -219,3 +228,30 @@ The current lifecycle and stock check is in
 why the exact board and WROOM-32E variant satisfy the no-obsolete-parts rule.
 The current-round ADC availability and GPIO36 source check is recorded in
 [`evidence/adc/vendor-status.md`](evidence/adc/vendor-status.md).
+
+Run the DAC output smoke from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-devkitc-32e-dac \
+  --script examples/esp32-devkitc-32e/dac-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-dac.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/dac \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-dac-smoke.sh
+```
+
+Copy-paste Arduino example for a fixed midpoint on DAC1 (GPIO25 / J2 pin 9):
+
+```cpp
+#include <Arduino.h>
+
+void setup() {
+  dacWrite(25, 128);  // Nominal output: 1.656 V at a 3.3 V reference.
+}
+
+void loop() {}
+```
+
+GPIO26 / DAC2 is on J2 pin 10. The model drives the selected pin only when
+firmware enables the DAC channel. Smoke logs and model-verification evidence
+are committed under `evidence/dac/`.

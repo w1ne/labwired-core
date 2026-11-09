@@ -111,6 +111,12 @@ const IN: u64 = 0x24;
 /// `RTC_GPIO_PIN0_REG`, stride 4: PAD_DRIVER (2), INT_TYPE [9:7],
 /// WAKEUP_ENABLE (10) on both parts.
 const PIN0: u64 = 0x28;
+/// Classic ESP32 8-bit DAC output fields in PAD_DAC1 / PAD_DAC2.
+const ESP32_PAD_DAC: [u64; 2] = [0x84, 0x88];
+const ESP32_DAC_ENABLE: u32 = 1 << 18;
+const ESP32_DAC_VALUE_SHIFT: u32 = 19;
+const ESP32_DAC_VALUE_MASK: u32 = 0xFF;
+const ESP32_DAC_VREF_MV: u32 = 3300;
 
 /// Which part a layout describes. A GPIO model only takes the RTC pads of
 /// its own part.
@@ -602,6 +608,27 @@ impl RtcIoPads {
         self.index(off).map(|i| st.words[i]).unwrap_or(0)
     }
 
+    /// Classic ESP32's static RTC DAC level, in millivolts. The output is
+    /// undriven until XPD_DAC powers the channel; DMA and cosine mode are not
+    /// part of this direct-output path.
+    fn dac_output_mv(&self, channel: u8) -> Option<u16> {
+        if self.layout.chip != RtcChip::Esp32 {
+            return None;
+        }
+        let off = *ESP32_PAD_DAC.get(channel as usize)?;
+        let st = self.read_state();
+        self.dac_output_mv_from(&st, off)
+    }
+
+    fn dac_output_mv_from(&self, st: &State, off: u64) -> Option<u16> {
+        let word = self.word(st, off);
+        if word & ESP32_DAC_ENABLE == 0 {
+            return None;
+        }
+        let code = (word >> ESP32_DAC_VALUE_SHIFT) & ESP32_DAC_VALUE_MASK;
+        Some((code * ESP32_DAC_VREF_MV / 255) as u16)
+    }
+
     fn store(&self, st: &mut State, off: u64, value: u32) {
         if let Some(i) = self.index(off) {
             let wmask = self.layout.regs[i].2;
@@ -899,6 +926,14 @@ impl Peripheral for EspRtcIo {
         Some(self.pads())
     }
 
+    fn analog_output_probe(&self, channel: u8) -> Option<crate::AnalogProbe> {
+        if self.pads.chip() != RtcChip::Esp32 || channel > 1 {
+            return None;
+        }
+        let pads = Arc::clone(&self.pads);
+        Some(Arc::new(move || pads.dac_output_mv(channel)))
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         let st = self.pads.read_state();
         serde_json::json!({
@@ -907,6 +942,8 @@ impl Peripheral for EspRtcIo {
             "status": self.pads.word(&st, STATUS),
             "in": self.pads.rtc_in(&st) << self.pads.layout.shift,
             "rtc_pads": self.pads.view().rtc,
+            "dac1_output_mv": self.pads.dac_output_mv_from(&st, ESP32_PAD_DAC[0]),
+            "dac2_output_mv": self.pads.dac_output_mv_from(&st, ESP32_PAD_DAC[1]),
         })
     }
 
