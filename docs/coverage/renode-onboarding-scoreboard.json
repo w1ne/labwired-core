@@ -11,7 +11,7 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 964,
+    "pass_claimed_peripherals_total": 966,
     "pass_claimed_peripherals_median": 2,
     "median_elapsed_ms": 1354,
     "median_elapsed_seconds": 1.354,
@@ -10131,28 +10131,28 @@
       "script": "examples/renode-onboarding/stm32l071-smoke.yaml",
       "system": "configs/systems/onboarding/stm32l071.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T05:05:48Z",
-      "finished_at_utc": "2026-11-09T05:05:50Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2343,
+      "started_at_utc": "2026-11-09T05:39:47Z",
+      "finished_at_utc": "2026-11-09T05:42:51Z",
+      "elapsed_seconds": 185,
+      "elapsed_ms": 184535,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.366,
-        "build_firmware": 0.333,
-        "run_smoke": 1.629
+        "build_cli": 181.402,
+        "build_firmware": 0.24,
+        "run_smoke": 2.879
       },
       "stages_ms": {
-        "build_cli": 366,
-        "build_firmware": 333,
-        "run_smoke": 1629
+        "build_cli": 181402,
+        "build_firmware": 240,
+        "run_smoke": 2879
       },
       "_artifact_path": "stm32l071",
       "zero_answering_windows": [],
-      "claimed_peripherals": 27,
+      "claimed_peripherals": 28,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -10179,28 +10179,28 @@
       "script": "examples/renode-onboarding/stm32l072-smoke.yaml",
       "system": "configs/systems/onboarding/stm32l072.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-09T05:05:52Z",
-      "finished_at_utc": "2026-11-09T05:05:54Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2179,
+      "started_at_utc": "2026-11-09T05:44:13Z",
+      "finished_at_utc": "2026-11-09T05:44:17Z",
+      "elapsed_seconds": 4,
+      "elapsed_ms": 3445,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.389,
-        "build_firmware": 0.325,
-        "run_smoke": 1.452
+        "build_cli": 0.346,
+        "build_firmware": 0.243,
+        "run_smoke": 2.843
       },
       "stages_ms": {
-        "build_cli": 389,
-        "build_firmware": 325,
-        "run_smoke": 1452
+        "build_cli": 346,
+        "build_firmware": 243,
+        "run_smoke": 2843
       },
       "_artifact_path": "stm32l072",
       "zero_answering_windows": [],
-      "claimed_peripherals": 29,
+      "claimed_peripherals": 30,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",

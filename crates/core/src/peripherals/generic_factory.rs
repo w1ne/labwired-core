@@ -1593,9 +1593,18 @@ pub fn try_build(
             Box::new(g)
         }
         "adc" => {
-            let layout: crate::peripherals::adc::AdcRegisterLayout =
-                SystemBus::parse_profile_or_default(p_cfg, "ADC")?;
-            Box::new(crate::peripherals::adc::Adc::new_with_layout(layout))
+            // The F0/L0 CHSELR block shares no sequencer with `adc.rs`'s
+            // SQRx families, so it is its own model.
+            use crate::peripherals::stm32f0_adc::{Stm32F0Adc, Stm32F0AdcFamily};
+            match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("stm32f0") => Box::new(Stm32F0Adc::new(Stm32F0AdcFamily::F0)),
+                Some("stm32l0") => Box::new(Stm32F0Adc::new(Stm32F0AdcFamily::L0)),
+                _ => {
+                    let layout: crate::peripherals::adc::AdcRegisterLayout =
+                        SystemBus::parse_profile_or_default(p_cfg, "ADC")?;
+                    Box::new(crate::peripherals::adc::Adc::new_with_layout(layout))
+                }
+            }
         }
         "pio" => {
             let mut pio = crate::peripherals::pio::Pio::new();

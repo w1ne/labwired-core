@@ -18,8 +18,12 @@
 # master), DMA1 (7 channels on lines 9/10/10/11/11/11/11; SPI requests
 # selected through CSELR) and CRC.
 #
-# Not claimed: ADC (the L0 CHSELR ADC has no engine model; Renode models
-# it), COMP, LPTIM1, RTC, IWDG/WWDG, FLASH/EEPROM interface, PWR, FIREWALL
+# Also the ADC (the CHSELR block, `profile: stm32l0`: calibration, the
+# software-triggered sequence in both scan directions, 12/8-bit
+# results, EOC/EOS/OVR, the analog watchdog, V_REFINT on IN17 and the
+# temperature sensor on IN18, line 12, DMA1 channel 1).
+#
+# Not claimed: COMP, LPTIM1, RTC, IWDG/WWDG, FLASH/EEPROM interface, PWR, FIREWALL
 # and the EXTI lines 16..29.
 name: stm32l071
 arch: arm
@@ -230,6 +234,7 @@ peripherals:
   config:
     channel_irqs: [9, 10, 10, 11, 11, 11, 11]
     requests:
+      adc_rx: [1, 0]
       spi1_rx: [2, 1]
       spi1_tx: [3, 1]
       spi2_rx: [4, 2]
@@ -241,3 +246,11 @@ peripherals:
   clock: { reg: ahbenr, bit: 12 }
   config:
     idr_width: 8
+- id: adc
+  type: adc
+  base_address: 0x40012400
+  size: 1KB
+  irq: 12
+  clock: { reg: apb2enr, bit: 9 }
+  config:
+    profile: stm32l0
