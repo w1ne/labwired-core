@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 250000,
-  "cycles": 500536,
+  "cycles": 500556,
   "instructions": 250000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -57,6 +57,17 @@
     },
     {
       "assertion": {
+        "memory_value": {
+          "address": 1070203136,
+          "expected_value": 18431,
+          "mask": 131071,
+          "size": 32
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -66,21 +77,21 @@
     "type": "risc_v",
     "registers": [
       0,
-      1107297202,
+      1107297258,
       1070464928,
       1070204928,
       0,
       2684317695,
-      1107297014,
+      1107297062,
       0,
       256,
       0,
       0,
       256,
       1,
-      1610629160,
       0,
       4294938623,
+      671084202,
       1610649600,
       128,
       1070464944,
@@ -98,7 +109,7 @@
       0,
       0
     ],
-    "pc": 1107297212,
+    "pc": 1107297268,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -134,7 +145,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "7110b7af7424e94cc279a3a5d2c1e8a05cea51faac84f53e3112698eaf100367",
+  "firmware_hash": "5be8d212abaa3699e060c4935420f99e61f02ec99c10db3ee4d9e09d006ca0eb",
   "config": {
     "firmware": "examples/esp8684-devkitm-1-h4x/../../target/riscv32imc-unknown-none-elf/release/firmware-esp8684-devkitm1-h4x-smoke",
     "system": "examples/esp8684-devkitm-1-h4x/../../configs/systems/esp8684-devkitm-1-h4x.yaml",
@@ -2443,9 +2454,77 @@
           }
         ],
         "artifacts": []
+      },
+      {
+        "name": "apb_saradc",
+        "kind": "native",
+        "base": 1610874880,
+        "registers": [
+          {
+            "name": "ONETIME_SAMPLE",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SAR1_DATA_STATUS",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "INT_ENA",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "INT_ST",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          }
+        ],
+        "artifacts": []
       }
     ],
-    "devices": []
+    "devices": [
+      {
+        "id": "pot",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "apb_saradc",
+          "channel": 2
+        },
+        "artifacts": []
+      }
+    ]
   },
   "fidelity": [
     {
@@ -2468,51 +2547,51 @@
         "initial": 1,
         "transitions": [
           {
-            "cycle": 190,
+            "cycle": 208,
             "value": 0
           },
           {
-            "cycle": 1095,
+            "cycle": 1113,
             "value": 1
           },
           {
-            "cycle": 2015,
+            "cycle": 2033,
             "value": 0
           },
           {
-            "cycle": 2920,
+            "cycle": 2938,
             "value": 1
           },
           {
-            "cycle": 3840,
+            "cycle": 3858,
             "value": 0
           },
           {
-            "cycle": 4745,
+            "cycle": 4763,
             "value": 1
           },
           {
-            "cycle": 5665,
+            "cycle": 5683,
             "value": 0
           },
           {
-            "cycle": 6570,
+            "cycle": 6588,
             "value": 1
           },
           {
-            "cycle": 7490,
+            "cycle": 7508,
             "value": 0
           },
           {
-            "cycle": 8395,
+            "cycle": 8413,
             "value": 1
           },
           {
-            "cycle": 9315,
+            "cycle": 9333,
             "value": 0
           },
           {
-            "cycle": 10220,
+            "cycle": 10238,
             "value": 1
           }
         ],
@@ -2520,55 +2599,55 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 170,
+            "cycle": 188,
             "state": "1"
           },
           {
-            "cycle": 190,
+            "cycle": 208,
             "state": "0"
           },
           {
-            "cycle": 1095,
+            "cycle": 1113,
             "state": "1"
           },
           {
-            "cycle": 2015,
+            "cycle": 2033,
             "state": "0"
           },
           {
-            "cycle": 2920,
+            "cycle": 2938,
             "state": "1"
           },
           {
-            "cycle": 3840,
+            "cycle": 3858,
             "state": "0"
           },
           {
-            "cycle": 4745,
+            "cycle": 4763,
             "state": "1"
           },
           {
-            "cycle": 5665,
+            "cycle": 5683,
             "state": "0"
           },
           {
-            "cycle": 6570,
+            "cycle": 6588,
             "state": "1"
           },
           {
-            "cycle": 7490,
+            "cycle": 7508,
             "state": "0"
           },
           {
-            "cycle": 8395,
+            "cycle": 8413,
             "state": "1"
           },
           {
-            "cycle": 9315,
+            "cycle": 9333,
             "state": "0"
           },
           {
-            "cycle": 10220,
+            "cycle": 10238,
             "state": "1"
           }
         ],
@@ -2583,51 +2662,51 @@
         "initial": 1,
         "transitions": [
           {
-            "cycle": 11146,
+            "cycle": 11164,
             "value": 0
           },
           {
-            "cycle": 12051,
+            "cycle": 12069,
             "value": 1
           },
           {
-            "cycle": 12971,
+            "cycle": 12989,
             "value": 0
           },
           {
-            "cycle": 13876,
+            "cycle": 13894,
             "value": 1
           },
           {
-            "cycle": 14796,
+            "cycle": 14814,
             "value": 0
           },
           {
-            "cycle": 15701,
+            "cycle": 15719,
             "value": 1
           },
           {
-            "cycle": 16621,
+            "cycle": 16639,
             "value": 0
           },
           {
-            "cycle": 17526,
+            "cycle": 17544,
             "value": 1
           },
           {
-            "cycle": 18446,
+            "cycle": 18464,
             "value": 0
           },
           {
-            "cycle": 19351,
+            "cycle": 19369,
             "value": 1
           },
           {
-            "cycle": 20271,
+            "cycle": 20289,
             "value": 0
           },
           {
-            "cycle": 21176,
+            "cycle": 21194,
             "value": 1
           }
         ],
@@ -2635,55 +2714,55 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 170,
+            "cycle": 188,
             "state": "1"
           },
           {
-            "cycle": 11146,
+            "cycle": 11164,
             "state": "0"
           },
           {
-            "cycle": 12051,
+            "cycle": 12069,
             "state": "1"
           },
           {
-            "cycle": 12971,
+            "cycle": 12989,
             "state": "0"
           },
           {
-            "cycle": 13876,
+            "cycle": 13894,
             "state": "1"
           },
           {
-            "cycle": 14796,
+            "cycle": 14814,
             "state": "0"
           },
           {
-            "cycle": 15701,
+            "cycle": 15719,
             "state": "1"
           },
           {
-            "cycle": 16621,
+            "cycle": 16639,
             "state": "0"
           },
           {
-            "cycle": 17526,
+            "cycle": 17544,
             "state": "1"
           },
           {
-            "cycle": 18446,
+            "cycle": 18464,
             "state": "0"
           },
           {
-            "cycle": 19351,
+            "cycle": 19369,
             "state": "1"
           },
           {
-            "cycle": 20271,
+            "cycle": 20289,
             "state": "0"
           },
           {
-            "cycle": 21176,
+            "cycle": 21194,
             "state": "1"
           }
         ],
@@ -2698,51 +2777,51 @@
         "initial": 1,
         "transitions": [
           {
-            "cycle": 22102,
+            "cycle": 22120,
             "value": 0
           },
           {
-            "cycle": 23007,
+            "cycle": 23025,
             "value": 1
           },
           {
-            "cycle": 23927,
+            "cycle": 23945,
             "value": 0
           },
           {
-            "cycle": 24832,
+            "cycle": 24850,
             "value": 1
           },
           {
-            "cycle": 25752,
+            "cycle": 25770,
             "value": 0
           },
           {
-            "cycle": 26657,
+            "cycle": 26675,
             "value": 1
           },
           {
-            "cycle": 27577,
+            "cycle": 27595,
             "value": 0
           },
           {
-            "cycle": 28482,
+            "cycle": 28500,
             "value": 1
           },
           {
-            "cycle": 29402,
+            "cycle": 29420,
             "value": 0
           },
           {
-            "cycle": 30307,
+            "cycle": 30325,
             "value": 1
           },
           {
-            "cycle": 31227,
+            "cycle": 31245,
             "value": 0
           },
           {
-            "cycle": 32132,
+            "cycle": 32150,
             "value": 1
           }
         ],
@@ -2750,55 +2829,55 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 170,
+            "cycle": 188,
             "state": "1"
           },
           {
-            "cycle": 22102,
+            "cycle": 22120,
             "state": "0"
           },
           {
-            "cycle": 23007,
+            "cycle": 23025,
             "state": "1"
           },
           {
-            "cycle": 23927,
+            "cycle": 23945,
             "state": "0"
           },
           {
-            "cycle": 24832,
+            "cycle": 24850,
             "state": "1"
           },
           {
-            "cycle": 25752,
+            "cycle": 25770,
             "state": "0"
           },
           {
-            "cycle": 26657,
+            "cycle": 26675,
             "state": "1"
           },
           {
-            "cycle": 27577,
+            "cycle": 27595,
             "state": "0"
           },
           {
-            "cycle": 28482,
+            "cycle": 28500,
             "state": "1"
           },
           {
-            "cycle": 29402,
+            "cycle": 29420,
             "state": "0"
           },
           {
-            "cycle": 30307,
+            "cycle": 30325,
             "state": "1"
           },
           {
-            "cycle": 31227,
+            "cycle": 31245,
             "state": "0"
           },
           {
-            "cycle": 32132,
+            "cycle": 32150,
             "state": "1"
           }
         ],
@@ -2844,10 +2923,10 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 1316,
+    "text_bytes": 1372,
     "data_bytes": 0,
     "bss_bytes": 8192,
-    "flash_used_bytes": 1316,
+    "flash_used_bytes": 1372,
     "ram_static_bytes": 8192,
     "flash_total_bytes": 4194304,
     "ram_total_bytes": 262144,
@@ -2864,26 +2943,26 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 500536,
+    "cycles": 500556,
     "instructions": 250000,
     "steps_executed": 250000,
-    "memory_reads": 65,
-    "memory_writes": 74,
-    "peripheral_accesses": 47,
+    "memory_reads": 10863,
+    "memory_writes": 75,
+    "peripheral_accesses": 51,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1107297212,
+        "pc": 1107297268,
         "count": 859,
         "symbol": "main"
       },
       {
-        "pc": 1107296974,
+        "pc": 1107297022,
         "count": 78,
         "symbol": "firmware_esp8684_devkitm1_h4x_smoke::delay"
       },
       {
-        "pc": 1107296972,
+        "pc": 1107297020,
         "count": 39,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       }

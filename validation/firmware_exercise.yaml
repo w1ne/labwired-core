@@ -1790,8 +1790,10 @@ chips:
 
   - id: esp8684-devkitm-1-h4x-smoke
     arch: rv32imc
-    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
-    functional: []
+    headline: "Local board smoke drives RGB GPIO0/1/8 and reads an external 1.65 V input on GPIO2 / ADC1_CH2 through the ADC1 one-shot handshake. Hosted catalog verification and ESP8684 silicon capture are unavailable; reused reset seeds are C3-captured. Radio, USB, UART bridge, and ADC calibration/continuous/DMA paths remain outside this profile."
+    functional:
+      - "APB_SARADC ADC1 one-shot START/DONE/data path with ADC1_CH2 selected; the 1.65 V potentiometer fixture yields deterministic raw code 2047 and channel tag 2."
+      - "Board RGB LED channels are exercised through direct GPIO/IO_MUX on GPIO0, GPIO1, and GPIO8."
     advanced_unit_only: []
     advanced_dead: []
     shim: []

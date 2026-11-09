@@ -1,0 +1,74 @@
+# ESP8684 TRM v1.3, Chapter 23. This is the ADC1 one-shot surface exercised by
+# the narrow DevKitM-1 H4X profile; it does not describe continuous/DMA modes.
+peripheral: ESP8684 ADC1 one-shot subset
+version: 0.1.0
+registers:
+- id: ONETIME_SAMPLE
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 436207616
+  fields:
+  - name: SARADC_ONETIME_ATTEN
+    bit_range: [24, 23]
+    description: Attenuation selected for one-time sampling.
+  - name: SARADC_ONETIME_CHANNEL
+    bit_range: [28, 25]
+    description: ADC1 channel selected for one-time sampling.
+  - name: SARADC_ONETIME_START
+    bit_range: [29, 29]
+    description: Starts one-time sampling; hardware clears the bit on completion.
+  - name: SARADC1_ONETIME_SAMPLE
+    bit_range: [31, 31]
+    description: Selects ADC1 one-time sampling.
+  side_effects: null
+- id: SAR1_DATA_STATUS
+  address_offset: 44
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SARADC_ADC1_DATA
+    bit_range: [16, 0]
+    description: ADC1 sample data and channel tag.
+  side_effects: null
+- id: INT_ENA
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SARADC_ADC1_DONE_INT_ENA
+    bit_range: [31, 31]
+    description: Enables the ADC1 one-shot completion interrupt.
+  side_effects: null
+- id: INT_RAW
+  address_offset: 68
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SARADC_ADC1_DONE_INT_RAW
+    bit_range: [31, 31]
+    description: Set when ADC1 completes one-shot sampling.
+  side_effects: null
+- id: INT_ST
+  address_offset: 72
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SARADC_ADC1_DONE_INT_ST
+    bit_range: [31, 31]
+    description: Enabled ADC1 completion interrupt state.
+  side_effects: null
+- id: INT_CLR
+  address_offset: 76
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: SARADC_ADC1_DONE_INT_CLR
+    bit_range: [31, 31]
+    description: Clears the latched ADC1 completion interrupt.
+  side_effects: null

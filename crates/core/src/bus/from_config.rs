@@ -1177,6 +1177,15 @@ impl SystemBus {
                     );
                     Box::new(crate::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc::new(src))
                 }
+                // ESP8684/C2 ADC1 uses the same one-shot register offsets and
+                // handshake (TRM v1.3 ch. 23) as the shared C3 model, but its
+                // interrupt source is 32 rather than the C3's 43.
+                "esp32c2_apb_saradc" => {
+                    let src = p_cfg.irq.unwrap_or(
+                        crate::peripherals::esp32c3::apb_saradc::ESP32C2_APB_SARADC_INTR_SOURCE_ID,
+                    );
+                    Box::new(crate::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc::new(src))
+                }
                 // ESP32-C3 behavioral LEDC (LED PWM) controller. Drives the
                 // four low-speed timers as live up-counters that advance with
                 // elapsed cycles and latch LSTIMERx_OVF on wrap; the C3 chip

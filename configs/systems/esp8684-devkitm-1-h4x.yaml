@@ -1,9 +1,15 @@
-# ESP8684-DevKitM-1-H4X board smoke profile.
-# The profile models the three common-anode RGB LED channels only.
+# ESP8684-DevKitM-1-H4X board smoke profile with a potentiometer test input.
+# The board has a discrete RGB LED; the potentiometer is an external fixture
+# wired to GPIO2 / ADC1_CH2.
 name: "esp8684-devkitm-1-h4x"
 chip: "../chips/esp8684-devkitm-1-h4x-smoke.yaml"
 cpu_hz: 120_000_000
-external_devices: []
+external_devices:
+  - id: "pot"
+    type: "potentiometer"
+    connection: "apb_saradc"
+    config:
+      channel: 2
 board_io:
   - id: "rgb_red"
     kind: "led"
@@ -23,3 +29,10 @@ board_io:
     pin: 8
     signal: "output"
     active_high: false
+  - id: "pot"
+    kind: "adc_input"
+    peripheral: "apb_saradc"
+    pin: 2
+    signal: "input"
+    active_high: true
+    device_type: "potentiometer"

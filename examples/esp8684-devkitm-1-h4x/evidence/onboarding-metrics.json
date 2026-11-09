@@ -6,23 +6,23 @@
   "script": "examples/esp8684-devkitm-1-h4x/onboarding-smoke.yaml",
   "system": "configs/systems/esp8684-devkitm-1-h4x.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T09:32:40Z",
-  "finished_at_utc": "2026-11-05T09:33:17Z",
-  "elapsed_seconds": 38,
-  "elapsed_ms": 37716,
+  "started_at_utc": "2026-11-09T22:54:38Z",
+  "finished_at_utc": "2026-11-09T22:55:56Z",
+  "elapsed_seconds": 78,
+  "elapsed_ms": 77512,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 36.819,
-    "build_firmware": 0.536,
-    "run_smoke": 0.35
+    "build_cli": 74.99,
+    "build_firmware": 1.434,
+    "run_smoke": 1.039
   },
   "stages_ms": {
-    "build_cli": 36819,
-    "build_firmware": 536,
-    "run_smoke": 350
+    "build_cli": 74990,
+    "build_firmware": 1434,
+    "run_smoke": 1039
   }
 }

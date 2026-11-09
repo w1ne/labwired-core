@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! ESP32-C3 SAR ADC controller (`APB_SARADC`, `0x6004_0000`) — behavioral
-//! one-shot (RTC) conversion engine.
+//! ESP32-C3 and ESP8684/C2 SAR ADC controller (`APB_SARADC`, `0x6004_0000`)
+//! — behavioral one-shot conversion engine. The C2 profile uses only ADC1 and
+//! the one-shot register surface documented in the ESP8684 TRM.
 //!
 //! This is the controller the IDF `adc_oneshot` driver drives for ad-hoc
 //! reads, DISTINCT from the cal-completion helper in `sar_adc.rs` (which only
@@ -49,6 +50,8 @@ pub const APB_SARADC_SIZE: u64 = 0x1000;
 /// `APB_SARADC` interrupt-matrix source on the C3 (`APB_ADC_INT_MAP` at
 /// `interrupt_core0.yaml` offset 172 = `4 * 43`).
 pub const APB_SARADC_INTR_SOURCE_ID: u32 = 43;
+/// ESP8684/C2 ADC interrupt source from ESP8684 TRM v1.3, Table 8.3-1.
+pub const ESP32C2_APB_SARADC_INTR_SOURCE_ID: u32 = 32;
 
 const SAR1DATA_STATUS: u64 = 0x2C;
 const SAR2DATA_STATUS: u64 = 0x30;
@@ -109,7 +112,8 @@ fn channel_sample(channel: u32) -> u32 {
 /// Sentinel: no external analog injection for this channel (use `channel_sample`).
 const NO_INJECT: u16 = 0xFFFF;
 
-/// ADC1 channels on the C3: GPIO0..GPIO4 → CH0..CH4. Room for headroom.
+/// ADC1 channels on C3 and ESP8684/C2: GPIO0..GPIO4 → CH0..CH4.
+/// Room for headroom.
 const ADC1_CHANNEL_SLOTS: usize = 16;
 
 pub struct Esp32c3ApbSarAdc {
@@ -252,8 +256,8 @@ impl Esp32c3ApbSarAdc {
 
 impl Peripheral for Esp32c3ApbSarAdc {
     /// ADC1 CH0..CH4 (GPIO0..GPIO4). `ONETIME_CHANNEL` is four bits wide, but
-    /// the C3 bonds out five ADC1 inputs; the rest of `channel_inputs` is
-    /// headroom, not channels.
+    /// both the C3 and ESP8684/C2 bond out five ADC1 inputs; the rest of
+    /// `channel_inputs` is headroom, not channels.
     fn adc_channel_count(&self) -> Option<u8> {
         Some(5)
     }

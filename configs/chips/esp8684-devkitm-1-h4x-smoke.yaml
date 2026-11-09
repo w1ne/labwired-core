@@ -1,5 +1,5 @@
 # Narrow smoke profile for Espressif's ESP8684-DevKitM-1-H4X.
-# Only the three discrete onboard RGB LED GPIO channels are exposed.
+# Exposes the three discrete onboard RGB LED channels and ADC1_CH2 on GPIO2.
 name: "esp8684-devkitm-1-h4x-smoke"
 arch: "riscv"
 core: "rv32imc"
@@ -16,7 +16,11 @@ ram:
 pins:
   GPIO0: { gpio: "gpio", bit: 0 }
   GPIO1: { gpio: "gpio", bit: 1 }
+  GPIO2: { gpio: "gpio", bit: 2 }
   GPIO8: { gpio: "gpio", bit: 8 }
+
+analog_pins:
+  GPIO2: { peripheral: "apb_saradc", channel: 2 }
 
 peripherals:
   - id: "gpio"
@@ -32,3 +36,13 @@ peripherals:
     size: "256"
     config:
       debug_schema: "../peripherals/esp32c2/io_mux.yaml"
+
+  # ADC1 one-shot conversions share the C3 APB_SARADC one-shot register
+  # surface. This descriptor exposes the C2 ADC1 path used by the smoke.
+  - id: "apb_saradc"
+    type: "esp32c2_apb_saradc"
+    base_address: 0x60040000
+    size: "4KB"
+    irq: 32
+    config:
+      debug_schema: "../peripherals/esp32c2/apb_saradc.yaml"

@@ -4,21 +4,21 @@
     "type": "risc_v",
     "registers": [
       0,
-      1107297202,
+      1107297258,
       1070464928,
       1070204928,
       0,
       2684317695,
-      1107297014,
+      1107297062,
       0,
       256,
       0,
       0,
       256,
       1,
-      1610629160,
       0,
       4294938623,
+      671084202,
       1610649600,
       128,
       1070464944,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 1107297212,
+    "pc": 1107297268,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 250000,
-  "cycles": 500536,
+  "cycles": 500556,
   "instructions": 250000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "7110b7af7424e94cc279a3a5d2c1e8a05cea51faac84f53e3112698eaf100367",
+  "firmware_hash": "5be8d212abaa3699e060c4935420f99e61f02ec99c10db3ee4d9e09d006ca0eb",
   "config": {
     "firmware": "examples/esp8684-devkitm-1-h4x/../../target/riscv32imc-unknown-none-elf/release/firmware-esp8684-devkitm1-h4x-smoke",
     "system": "examples/esp8684-devkitm-1-h4x/../../configs/systems/esp8684-devkitm-1-h4x.yaml",
