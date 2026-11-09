@@ -11,10 +11,10 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 914,
+    "pass_claimed_peripherals_total": 964,
     "pass_claimed_peripherals_median": 2,
-    "median_elapsed_ms": 1346,
-    "median_elapsed_seconds": 1.346,
+    "median_elapsed_ms": 1354,
+    "median_elapsed_seconds": 1.354,
     "threshold_seconds": 3600,
     "threshold_met": 226,
     "descriptors_present": 245,
@@ -10122,7 +10122,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 800000,
+        "instructions": 4000000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -10131,30 +10131,32 @@
       "script": "examples/renode-onboarding/stm32l071-smoke.yaml",
       "system": "configs/systems/onboarding/stm32l071.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:50:28Z",
-      "finished_at_utc": "2026-11-05T14:50:29Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1077,
+      "started_at_utc": "2026-11-09T05:05:48Z",
+      "finished_at_utc": "2026-11-09T05:05:50Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2343,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.292,
-        "build_firmware": 0.476,
-        "run_smoke": 0.298
+        "build_cli": 0.366,
+        "build_firmware": 0.333,
+        "run_smoke": 1.629
       },
       "stages_ms": {
-        "build_cli": 292,
-        "build_firmware": 476,
-        "run_smoke": 298
+        "build_cli": 366,
+        "build_firmware": 333,
+        "run_smoke": 1629
       },
       "_artifact_path": "stm32l071",
       "zero_answering_windows": [],
-      "claimed_peripherals": 3,
+      "claimed_peripherals": 27,
       "smoke_assertion_kinds": [
         "uart_contains",
+        "uart_ordered",
+        "memory_value",
         "gpio_edges",
         "expected_stop_reason"
       ],
@@ -10168,7 +10170,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 800000,
+        "instructions": 4000000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -10177,30 +10179,32 @@
       "script": "examples/renode-onboarding/stm32l072-smoke.yaml",
       "system": "configs/systems/onboarding/stm32l072.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:50:29Z",
-      "finished_at_utc": "2026-11-05T14:50:30Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1070,
+      "started_at_utc": "2026-11-09T05:05:52Z",
+      "finished_at_utc": "2026-11-09T05:05:54Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2179,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.294,
-        "build_firmware": 0.462,
-        "run_smoke": 0.302
+        "build_cli": 0.389,
+        "build_firmware": 0.325,
+        "run_smoke": 1.452
       },
       "stages_ms": {
-        "build_cli": 294,
-        "build_firmware": 462,
-        "run_smoke": 302
+        "build_cli": 389,
+        "build_firmware": 325,
+        "run_smoke": 1452
       },
       "_artifact_path": "stm32l072",
       "zero_answering_windows": [],
-      "claimed_peripherals": 3,
+      "claimed_peripherals": 29,
       "smoke_assertion_kinds": [
         "uart_contains",
+        "uart_ordered",
+        "memory_value",
         "gpio_edges",
         "expected_stop_reason"
       ],

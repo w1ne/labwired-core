@@ -1,29 +1,243 @@
-# Imported STM32L071 family execution profile.
+# STM32L071 (Cortex-M0+) profile for the imported Renode platform
+# (platforms/cpus/stm32l071.repl).
 #
-# This execution profile maps a 64 KiB flash window and 20 KiB SRAM window;
-# the exact density variant is not resolved here. Only peripherals exercised
-# by the matching smoke are declared; the original Renode import also listed
-# blocks this engine does not model or that the smoke does not exercise.
+# Memory: 192 KiB flash at 0x08000000 and 20 KiB SRAM at 0x20000000, the
+# STM32L071xZ and the same windows as Renode's repl (flash 0x30000, SRAM
+# 0x5000). The 6 KiB data EEPROM at 0x08080000 is not mapped.
+#
+# Bases, IRQ numbers and register layouts follow RM0377 and ST's CMSIS
+# `stm32l071xx.h`. The L071 is the L0x1 access line: no DAC, RNG, USB, CRS,
+# TSC or LCD (Renode's repl has none of those either).
+#
+# Claimed and exercised by examples/renode-onboarding/stm32l071-smoke.yaml:
+# RCC (the L0 map: IOPENR at 0x2C, AHBENR/APB2ENR/APB1ENR at 0x30/34/38;
+# clock gates enforced), USART1/2/4/5 and LPUART1 ("v2" layout; USART4/5
+# share line 14), GPIOA-E/H, SYSCFG EXTICR (PH = code 5) + EXTI lines 0..15
+# on the grouped vectors 5/6/7, TIM2/3/6/7/21/22 (16-bit, update line),
+# SPI1/SPI2 (the classic SPI, master), I2C1/2/3 (the "v2" TIMINGR/ISR I2C,
+# master), DMA1 (7 channels on lines 9/10/10/11/11/11/11; SPI requests
+# selected through CSELR) and CRC.
+#
+# Not claimed: ADC (the L0 CHSELR ADC has no engine model; Renode models
+# it), COMP, LPTIM1, RTC, IWDG/WWDG, FLASH/EEPROM interface, PWR, FIREWALL
+# and the EXTI lines 16..29.
 name: stm32l071
 arch: arm
+core: cortex-m0+
+cpu_hz: 32_000_000
 flash:
-  base: 134217728
-  size: 65536B
+  base: 0x08000000
+  size: 192KB
 ram:
-  base: 536870912
-  size: 20480B
+  base: 0x20000000
+  size: 20KB
 peripherals:
-- id: gpioPortA
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1342177280
+- id: rcc
+  type: rcc
+  base_address: 0x40021000
+  size: 1KB
+  config:
+    profile: stm32l0
+- id: usart1
+  type: uart
+  base_address: 0x40013800
+  size: 1KB
+  irq: 27
+  clock: { reg: apb2enr, bit: 14 }
   config:
     profile: stm32v2
-- id: rcc
-  type: stm32l0_rcc
-  bus: sysbus
-  base_address: 1073876992
 - id: usart2
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073759232
+  type: uart
+  base_address: 0x40004400
+  size: 1KB
+  irq: 28
+  clock: { reg: apb1enr, bit: 17 }
+  config:
+    profile: stm32v2
+- id: usart4
+  type: uart
+  base_address: 0x40004C00
+  size: 1KB
+  irq: 14
+  clock: { reg: apb1enr, bit: 19 }
+  config:
+    profile: stm32v2
+- id: usart5
+  type: uart
+  base_address: 0x40005000
+  size: 1KB
+  irq: 14
+  clock: { reg: apb1enr, bit: 20 }
+  config:
+    profile: stm32v2
+- id: lpuart1
+  type: uart
+  base_address: 0x40004800
+  size: 1KB
+  irq: 29
+  clock: { reg: apb1enr, bit: 18 }
+  config:
+    profile: stm32v2
+- id: gpioa
+  type: gpio
+  base_address: 0x50000000
+  size: 1KB
+  clock: { reg: iopenr, bit: 0 }
+  config:
+    profile: stm32v2
+    reset_moder: 0xEBFFFCFF
+    reset_ospeedr: 0x0C000000
+    reset_pupdr: 0x24000000
+- id: gpiob
+  type: gpio
+  base_address: 0x50000400
+  size: 1KB
+  clock: { reg: iopenr, bit: 1 }
+  config:
+    profile: stm32v2
+    reset_moder: 0xFFFFFFFF
+- id: gpioc
+  type: gpio
+  base_address: 0x50000800
+  size: 1KB
+  clock: { reg: iopenr, bit: 2 }
+  config:
+    profile: stm32v2
+    reset_moder: 0xFFFFFFFF
+- id: gpiod
+  type: gpio
+  base_address: 0x50000C00
+  size: 1KB
+  clock: { reg: iopenr, bit: 3 }
+  config:
+    profile: stm32v2
+    reset_moder: 0xFFFFFFFF
+- id: gpioe
+  type: gpio
+  base_address: 0x50001000
+  size: 1KB
+  clock: { reg: iopenr, bit: 4 }
+  config:
+    profile: stm32v2
+    reset_moder: 0xFFFFFFFF
+- id: gpioh
+  type: gpio
+  base_address: 0x50001C00
+  size: 1KB
+  clock: { reg: iopenr, bit: 7 }
+  config:
+    profile: stm32v2
+    reset_moder: 0xFFFFFFFF
+- id: syscfg
+  type: syscfg
+  base_address: 0x40010000
+  size: 1KB
+  clock: { reg: apb2enr, bit: 0 }
+  config:
+    profile: stm32l0
+- id: exti
+  type: exti
+  base_address: 0x40010400
+  size: 1KB
+  config:
+    profile: stm32l0
+    lines: 30
+- id: tim2
+  type: timer
+  base_address: 0x40000000
+  size: 1KB
+  irq: 15
+  clock: { reg: apb1enr, bit: 0 }
+- id: tim3
+  type: timer
+  base_address: 0x40000400
+  size: 1KB
+  irq: 16
+  clock: { reg: apb1enr, bit: 1 }
+- id: tim6
+  type: timer
+  base_address: 0x40001000
+  size: 1KB
+  irq: 17
+  clock: { reg: apb1enr, bit: 4 }
+  config:
+    basic: true
+- id: tim7
+  type: timer
+  base_address: 0x40001400
+  size: 1KB
+  irq: 18
+  clock: { reg: apb1enr, bit: 5 }
+  config:
+    basic: true
+- id: tim21
+  type: timer
+  base_address: 0x40010800
+  size: 1KB
+  irq: 20
+  clock: { reg: apb2enr, bit: 2 }
+- id: tim22
+  type: timer
+  base_address: 0x40011400
+  size: 1KB
+  irq: 22
+  clock: { reg: apb2enr, bit: 5 }
+- id: spi1
+  type: spi
+  base_address: 0x40013000
+  size: 1KB
+  irq: 25
+  clock: { reg: apb2enr, bit: 12 }
+  config:
+    profile: stm32
+- id: spi2
+  type: spi
+  base_address: 0x40003800
+  size: 1KB
+  irq: 26
+  clock: { reg: apb1enr, bit: 14 }
+  config:
+    profile: stm32
+- id: i2c1
+  type: i2c
+  base_address: 0x40005400
+  size: 1KB
+  irq: 23
+  clock: { reg: apb1enr, bit: 21 }
+  config:
+    profile: stm32l4
+- id: i2c2
+  type: i2c
+  base_address: 0x40005800
+  size: 1KB
+  irq: 24
+  clock: { reg: apb1enr, bit: 22 }
+  config:
+    profile: stm32l4
+- id: i2c3
+  type: i2c
+  base_address: 0x40007800
+  size: 1KB
+  irq: 21
+  clock: { reg: apb1enr, bit: 30 }
+  config:
+    profile: stm32l4
+- id: dma1
+  type: dma
+  base_address: 0x40020000
+  size: 1KB
+  clock: { reg: ahbenr, bit: 0 }
+  config:
+    channel_irqs: [9, 10, 10, 11, 11, 11, 11]
+    requests:
+      spi1_rx: [2, 1]
+      spi1_tx: [3, 1]
+      spi2_rx: [4, 2]
+      spi2_tx: [5, 2]
+- id: crc
+  type: crc
+  base_address: 0x40023000
+  size: 1KB
+  clock: { reg: ahbenr, bit: 12 }
+  config:
+    idr_width: 8

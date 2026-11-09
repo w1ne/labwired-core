@@ -13,50 +13,44 @@
 //! DR untouched until firmware writes CR.RNGEN.
 
 use crate::SimResult;
+use std::cell::Cell;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Rng {
     cr: u32,
     sr: u32,
-    /// Internal LFSR state. Seeded so that the first DR read after
-    /// `RNGEN | clock-error-detection` produces a fixed value, making
-    /// firmware tests reproducible across runs.
-    lfsr: u32,
+    /// xorshift32 state. A `DR` read draws the next word, and reads take
+    /// `&self`, hence the `Cell`. Fixed seed, so runs are reproducible.
+    lfsr: Cell<u32>,
 }
 
-#[allow(dead_code)] // next_word/read_reg/write_reg are reserved for an
-                    // interior-mutability rewrite of read_u32. See module
-                    // docs above for the current pragmatic compromise.
 impl Rng {
     pub fn new() -> Self {
         Self {
             cr: 0,
             sr: 0,
-            lfsr: 0xACE1_5EED,
+            lfsr: Cell::new(0xACE1_5EED),
         }
     }
 
-    fn next_word(&mut self) -> u32 {
-        // xorshift32 — fast, no zero-state, deterministic.
-        let mut x = self.lfsr;
+    /// Next xorshift32 word (never zero: the state never reaches zero).
+    fn draw(&self) -> u32 {
+        let mut x = self.lfsr.get();
         x ^= x << 13;
         x ^= x >> 17;
         x ^= x << 5;
-        self.lfsr = x;
+        self.lfsr.set(x);
         x
     }
 
-    fn read_reg(&mut self, offset: u64) -> u32 {
+    /// `DR` while `CR.RNGEN` is set draws a fresh word; `DRDY` stays set
+    /// (the next word is ready at once). With RNGEN clear `DR` reads 0.
+    fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.cr,
             0x04 => self.sr,
-            0x08 if (self.cr & 0x4) != 0 => {
-                // RNGEN set — deliver a word and clear DRDY (bit 0)
-                // to mimic the FIFO drain behaviour of real silicon.
-                let v = self.next_word();
-                self.sr &= !1;
-                v
-            }
+            0x08 if self.cr & 0x4 != 0 => self.draw(),
+            0x08 => 0,
             _ => {
                 crate::census_reg!("rng:Rng", offset, "read");
                 0
@@ -67,10 +61,12 @@ impl Rng {
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
             0x00 => {
-                self.cr = value & 0x0000_001D; // RNGEN, IE, CED, BOOST
-                if (value & 0x4) != 0 {
-                    // Set DRDY immediately so a subsequent read delivers data.
+                // RNGEN, IE, CED, BOOST; DRDY follows RNGEN.
+                self.cr = value & 0x0000_001D;
+                if value & 0x4 != 0 {
                     self.sr |= 1;
+                } else {
+                    self.sr &= !1;
                 }
             }
             0x04 => {
@@ -97,12 +93,18 @@ impl crate::Peripheral for Rng {
         false
     }
 
-    fn read(&self, _offset: u64) -> SimResult<u8> {
-        // RNG.DR has side-effects (drains a word) so a const-self byte
-        // read isn't ideal. Most firmware does word reads; for byte-level
-        // we model the side-effect by routing through a const trick:
-        // reads of CR/SR are safe; DR read returns 0 for sub-word access.
-        Ok(0)
+    /// Byte reads of CR/SR return their bytes. `DR` is a 32-bit register
+    /// (RM0376 §22.8.3: word access only); a byte read of it returns 0 and
+    /// draws nothing.
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        let v = match reg {
+            0x00 => self.cr,
+            0x04 => self.sr,
+            _ => 0,
+        };
+        Ok(((v >> (byte * 8)) & 0xFF) as u8)
     }
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let reg = offset & !3;
@@ -121,34 +123,30 @@ impl crate::Peripheral for Rng {
         Ok(())
     }
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
-        // u32 reads need to drive the side-effect on DR. The trait
-        // exposes &self though, so we can't mutate. Work around by
-        // interior-mutability via UnsafeCell... or just punt: most
-        // firmware uses while(SR.DRDY)==0; loop and then read DR. For
-        // the simulator's deterministic case we fold DR generation
-        // into the SR read path: a u32 read of DR returns the next
-        // word and the SR read after returns DRDY=1 again.
-        //
-        // Pragmatic compromise: DR reads return a fixed first sample
-        // and rotate the LFSR via the non-mutating helper below.
-        match offset {
-            0x00 => Ok(self.cr),
-            0x04 => Ok(self.sr),
-            // DR: deliver a deterministic sample derived purely from CR.
-            // Each consecutive read returns the same value — firmware
-            // that needs distinct samples must use the byte-level path
-            // or the bus-level read_u32 is upgraded to call write_u8 first.
-            0x08 => {
-                if (self.cr & 0x4) != 0 {
-                    Ok(0xCAFE_BABE)
-                } else {
-                    Ok(0)
-                }
-            }
-            _ => Ok(0),
-        }
+        Ok(self.read_reg(offset))
     }
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Peripheral;
+
+    #[test]
+    fn each_dr_read_draws_a_new_word_only_while_enabled() {
+        let mut rng = Rng::new();
+        assert_eq!(rng.read_u32(0x08).unwrap(), 0);
+        rng.write_u32(0x00, 0x4).unwrap();
+        assert_eq!(rng.read_u32(0x04).unwrap() & 1, 1, "DRDY with RNGEN");
+        let a = rng.read_u32(0x08).unwrap();
+        let b = rng.read_u32(0x08).unwrap();
+        assert!(a != 0 && b != 0 && a != b, "{a:#x} {b:#x}");
+        assert_eq!(rng.read_u32(0x04).unwrap() & 1, 1, "DRDY stays set");
+        rng.write_u32(0x00, 0).unwrap();
+        assert_eq!(rng.read_u32(0x04).unwrap() & 1, 0);
+        assert_eq!(rng.read_u32(0x08).unwrap(), 0);
     }
 }

@@ -2529,8 +2529,14 @@ boards:
     # is driven high is skipped. No SPI register, flag or IRQ changed; a
     # device with no resolvable CS output keeps the old pass-through.
     # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
+    # 2026-11-09 (lane/renode-coverage, round 403): rng.rs — each RNG_DR
+    # read now draws a new xorshift word (was a constant 0xCAFEBABE) and
+    # DRDY follows CR.RNGEN; CR/SR offsets and resets unchanged. dac.rs is
+    # rewritten (DOR1/DOR2 at 0x2C/0x30), but this board declares no DAC. No
+    # H5 conformance case reads RNG_DR. ACK, NOT A SILICON CAPTURE;
+    # re-capture pending.
     drift_ack: 2026-11-09
-    drift_ack_digest: e7e1c4bf53305df94ce09f837e17ed19b8205bc3bbb88f35496a0fc696c35160
+    drift_ack_digest: 84720531c9b22227a8c677e2156d8b3504fec3510f61ae6034899f7b2af05605
 
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
