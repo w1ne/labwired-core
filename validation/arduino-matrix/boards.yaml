@@ -265,6 +265,31 @@ boards:
     sketches_skip_reason:
       L8_can: "STM32G071 has no CAN peripheral"
 
+  - id: stm32c031c6
+    chip: stm32c031c6
+    system: systems/stm32c031c6.yaml
+    # ststm32 19.7.1 (the CI pin; 20.0.0 makes SPI.begin() a no-op) has the
+    # C0 Arduino core but no nucleo_c031c6 board JSON, so pio-boards/ carries
+    # 20.0.0's copy.
+    pio: { platform: ststm32@19.7.1, board: nucleo_c031c6, framework: arduino }
+    max_steps: 20000000
+    budget_reason: "NUCLEO-C031C6 48 MHz HSE: L3 Wire.begin i2c_computeTiming ~11.3M, L6 ~1.5M, rest <0.2M"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
+    # L6: LD4/PA5 is TIM1_CH1 (AF5) and the C0 has no DAC, so stock
+    # analogWrite(LED_BUILTIN) takes the timer path; the probe is the pad.
+    pwm_watch: "gpioa:5"
+    pwm_min_edges: 4
+    family: stm32
+    # L5 is skipped, not passed: stock analogRead(A0) completes but reads
+    # "0 0" — the L4-shaped ADC model does not decode the C0's CFGR1/CHSELR
+    # register file, and the generic oracle would accept equal samples.
+    sketches_skip: [L5_adc, L6_pwm, L8_can]
+    sketches_skip_reason:
+      L6_pwm: "Lane predates main #1734 (STM32 timer AF pad routing); the C0 pad table ships in the main PR — on the lane PA5 shows 0 edges"
+      L5_adc: "No C0 ADC (CHSELR) model: analogRead returns 0 on every pin; a pass would be vacuous"
+      L8_can: "STM32C031C6 has no CAN peripheral"
+
   - id: stm32h563
     chip: stm32h563
     system: systems/stm32h563.yaml

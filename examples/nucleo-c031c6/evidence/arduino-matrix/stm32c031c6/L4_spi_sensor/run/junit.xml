@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="2" failures="0" errors="0" time="0.049628">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="AssertionsPassed"/>
+    <property name="firmware_hash" value="2755302f068e325b44a0a584a4f9f3a8525e9ea04467a47c01b5f55792108baf"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.049628">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: LW_L4_OK" time="0.000000">
+  </testcase>
+</testsuite>

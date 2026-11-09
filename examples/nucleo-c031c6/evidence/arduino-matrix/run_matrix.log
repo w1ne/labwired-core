@@ -1,0 +1,30 @@
+labwired: target/debug/labwired
+boards:   stm32c031c6
+sketches: L0_serial_boot, L1_serial_loop, L2_blink_serial, L3_i2c_sensor, L4_spi_sensor, L5_adc, L6_pwm, L7_timer, L8_can
+out:      /home/andrii/worktrees/labwired-core/hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix
+
+==> stm32c031c6 × L0_serial_boot
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32c031c6 × L1_serial_loop
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32c031c6 × L2_blink_serial
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32c031c6 × L3_i2c_sensor
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32c031c6 × L4_spi_sensor
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32c031c6 × L5_adc: skip (No C0 ADC (CHSELR) model: analogRead returns 0 on every pin; a pass would be vacuous)
+==> stm32c031c6 × L6_pwm: skip (Lane predates main #1734 (STM32 timer AF pad routing); the C0 pad table ships in the main PR — on the lane PA5 shows 0 edges)
+==> stm32c031c6 × L7_timer
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32c031c6 × L8_can: skip (STM32C031C6 has no CAN peripheral)
+
+Done in 27s — 6 pass / 3 skip / 0 fail (cells 9; gate treats skip as non-fail)
+Scoreboard: /home/andrii/worktrees/labwired-core/hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/scoreboard.md
+Docs scoreboard unchanged (partial run; not full 37×9)

@@ -127,8 +127,9 @@ pub enum RccRegisterLayout {
     /// silicon-pinned AHBENR mask would discard — so the enable registers are
     /// stored unmasked, like an un-pinned F4 part.
     Stm32F0,
-    /// STM32C0 onboarding subset (RM0490 Rev 5). Currently only
-    /// RCC_IOPENR@0x34 is exposed for the NUCLEO-C071RB GPIO smoke.
+    /// STM32C0 (RM0490 Rev 5): the G0 register file at the G0 offsets, minus
+    /// the PLL. CR resets to 0x0000_1540 (HSIDIV /4, HSION, HSIRDY) and
+    /// SW=010 is not a ready source.
     Stm32C0,
     /// STM32C5 onboarding subset (RM0522 Rev 1). Currently only
     /// RCC_AHB2ENR@0x8C bit 0 (GPIOAEN) is modeled for the NUCLEO-C5A3ZG
@@ -2565,6 +2566,10 @@ pub struct G0Rcc {
     /// G0B1/G0C1: HSI48ON(22)→HSI48RDY(23) and CCIPR2 exist. False on G071.
     #[serde(skip)]
     hsi48: bool,
+    /// STM32C0 (RM0490): no PLL — PLLON/PLLRDY (CR bits 24/25) and PLLCFGR
+    /// (0x0C) are reserved, and CFGR SW=010 selects no source on the C031.
+    #[serde(skip)]
+    no_pll: bool,
 }
 
 impl G0Rcc {
@@ -2587,6 +2592,18 @@ impl G0Rcc {
         s
     }
 
+    /// STM32C0 (RM0490 Rev 5 §6.4.1): RCC_CR resets to 0x0000_1540 —
+    /// HSIDIV[13:11]=010 (HSI48/4 = 12 MHz HSISYS), HSION bit 8, HSIRDY bit 10.
+    fn new_c0() -> Self {
+        let mut s = Self {
+            cr: 0x0000_1540,
+            no_pll: true,
+            ..Default::default()
+        };
+        s.cr = s.ready(s.cr);
+        s
+    }
+
     /// G0 CR ready rule: HSION(8)→HSIRDY(10), HSEON(16)→HSERDY(17),
     /// PLLON(24)→PLLRDY(25). HSEBYP is not gated on here — the L4 model's
     /// bypass gate exists because CubeL4 polls it; the G0 smoke path and the
@@ -2594,7 +2611,8 @@ impl G0Rcc {
     /// HSI48ON(22)→HSI48RDY(23).
     fn ready(&self, mut cr: u32) -> u32 {
         let g0b1: &[(u32, u32)] = if self.hsi48 { &[(22, 23)] } else { &[] };
-        for &(on, rdy) in [(8u32, 10u32), (16, 17), (24, 25)].iter().chain(g0b1) {
+        let pll: &[(u32, u32)] = if self.no_pll { &[] } else { &[(24, 25)] };
+        for &(on, rdy) in [(8u32, 10u32), (16, 17)].iter().chain(pll).chain(g0b1) {
             if cr & (1 << on) != 0 {
                 cr |= 1 << rdy;
             } else {
@@ -2611,7 +2629,7 @@ impl RccModel for G0Rcc {
             0x00 => self.cr,
             0x04 => self.icscr,
             0x08 => self.cfgr,
-            0x0C => self.pllcfgr,
+            0x0C if !self.no_pll => self.pllcfgr,
             0x18 => self.cier,
             0x1C => self.cifr,
             0x20 => self.cicr,
@@ -2651,7 +2669,7 @@ impl RccModel for G0Rcc {
                 let ready = match sw {
                     0 => self.cr & (1 << 10) != 0,
                     1 => self.cr & (1 << 17) != 0,
-                    2 => self.cr & (1 << 25) != 0,
+                    2 => !self.no_pll && self.cr & (1 << 25) != 0,
                     3 => self.csr & (1 << 1) != 0,
                     4 => self.bdcr & (1 << 1) != 0,
                     _ => false,
@@ -2663,7 +2681,7 @@ impl RccModel for G0Rcc {
                 };
                 self.cfgr = (value & !(0x7 << 3)) | sws;
             }
-            0x0C => self.pllcfgr = value,
+            0x0C if !self.no_pll => self.pllcfgr = value,
             0x18 => self.cier = value,
             0x1C => self.cifr = value,
             // CICR is write-1-to-clear against CIFR (RM0444 §5.4.7).
@@ -2707,40 +2725,6 @@ impl RccModel for G0Rcc {
         }
         if let Some(live) = &self.live_clocks {
             live.publish(self.cr, self.cfgr, self.pllcfgr, self.ccipr);
-        }
-    }
-
-    fn snapshot(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
-    }
-}
-
-// ── STM32C0 ────────────────────────────────────────────────────────────────
-// NUCLEO-C071RB onboarding currently needs only the GPIOA clock gate. RM0490
-// Rev 5 §6.4.12 gives RCC_IOPENR at offset 0x34, reset 0, with GPIOAEN at bit 0.
-// Keep this profile deliberately small: the C0 clock tree and other RCC
-// registers are outside this smoke model.
-#[derive(Debug, Default, serde::Serialize)]
-pub struct C0Rcc {
-    iopenr: u32,
-}
-
-impl RccModel for C0Rcc {
-    fn read_reg(&self, offset: u64) -> u32 {
-        match offset {
-            0x34 => self.iopenr,
-            _ => {
-                crate::census_reg!("rcc:C0Rcc", offset, "read");
-                0
-            }
-        }
-    }
-
-    fn write_reg(&mut self, offset: u64, value: u32) {
-        if offset == 0x34 {
-            self.iopenr = value;
-        } else {
-            crate::census_reg!("rcc:C0Rcc", offset, "write");
         }
     }
 
@@ -3163,7 +3147,7 @@ pub enum Rcc {
     Stm32G4(G4Rcc),
     Stm32G0(G0Rcc),
     Stm32F0(F0Rcc),
-    Stm32C0(C0Rcc),
+    Stm32C0(G0Rcc),
     Stm32C5(C5Rcc),
     Stm32U0(U0Rcc),
     Stm32U3(U3Rcc),
@@ -3196,7 +3180,7 @@ impl Rcc {
             RccRegisterLayout::Stm32G0 => Self::Stm32G0(G0Rcc::new()),
             RccRegisterLayout::Stm32G0b1 => Self::Stm32G0(G0Rcc::new_g0b1()),
             RccRegisterLayout::Stm32F0 => Self::Stm32F0(F0Rcc::new()),
-            RccRegisterLayout::Stm32C0 => Self::Stm32C0(C0Rcc::default()),
+            RccRegisterLayout::Stm32C0 => Self::Stm32C0(G0Rcc::new_c0()),
             RccRegisterLayout::Stm32C5 => Self::Stm32C5(C5Rcc::default()),
             RccRegisterLayout::Stm32U0 => Self::Stm32U0(U0Rcc::default()),
             RccRegisterLayout::Stm32U3 => Self::Stm32U3(U3Rcc::default()),
@@ -3401,10 +3385,16 @@ impl Rcc {
                 "csr" => Some(0x60),
                 _ => None,
             },
-            // C0 smoke profile: only IOPENR is currently modeled (RM0490
-            // Rev 5 §6.4.12); unlike G0 it deliberately has no clock-tree map.
+            // C0: the G0 offsets (RM0490 Rev 5 §6.4 / CMSIS stm32c031xx.h
+            // RCC_TypeDef). RCC_CSR1/CSR2 sit where the G0 has BDCR/CSR.
             Self::Stm32C0(_) => match r.as_str() {
+                "cr" => Some(0x00),
                 "iopenr" => Some(0x34),
+                "ahbenr" => Some(0x38),
+                "apbenr1" | "apb1enr" | "apb1enr1" => Some(0x3C),
+                "apbenr2" | "apb2enr" => Some(0x40),
+                "csr1" | "bdcr" => Some(0x5C),
+                "csr2" | "csr" => Some(0x60),
                 _ => None,
             },
             // C5 GPIO smoke subset: only AHB2ENR is modeled (RM0522 Rev 1).
@@ -3552,7 +3542,9 @@ impl crate::Peripheral for Rcc {
     }
 
     fn stm32_uart_pad_af_override(&self) -> Option<u8> {
-        matches!(self, Self::Stm32G0(_)).then_some(1)
+        // C0 keeps the G0 USART pads: PA2 USART2_TX and PA9 USART1_TX at
+        // AF1 (DS13867 alternate-function table).
+        matches!(self, Self::Stm32G0(_) | Self::Stm32C0(_)).then_some(1)
     }
 
     /// The RCC is this chip's clock controller: resolve `clock:` register names
@@ -4957,6 +4949,35 @@ mod tests {
         );
         g071.write_u32(0x58, 0x0000_2000).unwrap();
         assert_eq!(g071.read_u32(0x58).unwrap(), 0, "no CCIPR2 on G071");
+    }
+
+    /// STM32C0 (RM0490 Rev 5 §6.4): the G0 offsets with no PLL. The stock
+    /// NUCLEO_C031C6 SystemClock_Config sets HSEON, waits HSERDY, then
+    /// SW=001 and waits SWS=001; a PLL bring-up must never complete.
+    #[test]
+    fn test_rcc_c0_reset_hse_switch_and_no_pll() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32C0);
+        assert_eq!(rcc.read_u32(0x00).unwrap(), 0x0000_1540, "C0 CR reset");
+        assert_eq!(rcc.rcc_reg_offset("iopenr"), Some(0x34));
+        assert_eq!(rcc.rcc_reg_offset("apbenr1"), Some(0x3C));
+        assert_eq!(rcc.rcc_reg_offset("apbenr2"), Some(0x40));
+        assert_eq!(rcc.rcc_reg_offset("csr2"), Some(0x60));
+
+        rcc.write_u32(0x00, 0x1540 | (1 << 16) | (1 << 24)).unwrap();
+        let cr = rcc.read_u32(0x00).unwrap();
+        assert_ne!(cr & (1 << 17), 0, "HSERDY follows HSEON");
+        assert_eq!(cr & (1 << 25), 0, "no PLLRDY: the C0 has no PLL");
+        rcc.write_u32(0x0C, 0x1234_5678).unwrap();
+        assert_eq!(rcc.read_u32(0x0C).unwrap(), 0, "PLLCFGR is reserved");
+
+        rcc.write_u32(0x08, 0b010).unwrap();
+        assert_eq!(
+            (rcc.read_u32(0x08).unwrap() >> 3) & 0x7,
+            0,
+            "SW=010 never lands"
+        );
+        rcc.write_u32(0x08, 0b001).unwrap();
+        assert_eq!((rcc.read_u32(0x08).unwrap() >> 3) & 0x7, 0b001, "SWS=HSE");
     }
 
     /// The F030 clock bring-up STM32Cube and generated programs run (RM0360
