@@ -17,6 +17,348 @@ pub(crate) const ESP32S3_UART_INSTANCE_NAMES: [[&str; 2]; 3] = [
     ["uart2_s3", "uart2"],
 ];
 
+/// One STM32 V2 timer channel pad: `(timer, port, pin, AF, channel 0-based,
+/// func)`.
+type TimerAfPad = (&'static str, char, u8, u8, u8, &'static str);
+
+/// F4 timer channel pads (STM32F401 DS9716 / F411 DS10314 / F405-7 DS8626
+/// "Alternate function mapping": AF1 = TIM1/TIM2, AF2 = TIM3/TIM4/TIM5, AF3 =
+/// TIM9/TIM10/TIM11), for timers declaring `input_capture: stm32f4`. Shared by
+/// the capture (input) and output passes.
+const STM32F4_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 8, 1, 0, "TIM1_CH1"),
+    ("tim1", 'a', 9, 1, 1, "TIM1_CH2"),
+    ("tim1", 'a', 10, 1, 2, "TIM1_CH3"),
+    ("tim1", 'a', 11, 1, 3, "TIM1_CH4"),
+    ("tim1", 'e', 9, 1, 0, "TIM1_CH1"),
+    ("tim1", 'e', 11, 1, 1, "TIM1_CH2"),
+    ("tim1", 'e', 13, 1, 2, "TIM1_CH3"),
+    ("tim1", 'e', 14, 1, 3, "TIM1_CH4"),
+    ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 1, 1, 1, "TIM2_CH2"),
+    ("tim2", 'b', 3, 1, 1, "TIM2_CH2"),
+    ("tim2", 'a', 2, 1, 2, "TIM2_CH3"),
+    ("tim2", 'b', 10, 1, 2, "TIM2_CH3"),
+    ("tim2", 'a', 3, 1, 3, "TIM2_CH4"),
+    ("tim3", 'a', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'b', 4, 2, 0, "TIM3_CH1"),
+    ("tim3", 'c', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'a', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 5, 2, 1, "TIM3_CH2"),
+    ("tim3", 'c', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 0, 2, 2, "TIM3_CH3"),
+    ("tim3", 'c', 8, 2, 2, "TIM3_CH3"),
+    ("tim3", 'b', 1, 2, 3, "TIM3_CH4"),
+    ("tim3", 'c', 9, 2, 3, "TIM3_CH4"),
+    ("tim4", 'b', 6, 2, 0, "TIM4_CH1"),
+    ("tim4", 'd', 12, 2, 0, "TIM4_CH1"),
+    ("tim4", 'b', 7, 2, 1, "TIM4_CH2"),
+    ("tim4", 'd', 13, 2, 1, "TIM4_CH2"),
+    ("tim4", 'b', 8, 2, 2, "TIM4_CH3"),
+    ("tim4", 'd', 14, 2, 2, "TIM4_CH3"),
+    ("tim4", 'b', 9, 2, 3, "TIM4_CH4"),
+    ("tim4", 'd', 15, 2, 3, "TIM4_CH4"),
+    ("tim5", 'a', 0, 2, 0, "TIM5_CH1"),
+    ("tim5", 'a', 1, 2, 1, "TIM5_CH2"),
+    ("tim5", 'a', 2, 2, 2, "TIM5_CH3"),
+    ("tim5", 'a', 3, 2, 3, "TIM5_CH4"),
+    ("tim9", 'a', 2, 3, 0, "TIM9_CH1"),
+    ("tim9", 'a', 3, 3, 1, "TIM9_CH2"),
+    ("tim9", 'e', 5, 3, 0, "TIM9_CH1"),
+    ("tim9", 'e', 6, 3, 1, "TIM9_CH2"),
+    ("tim10", 'b', 8, 3, 0, "TIM10_CH1"),
+    ("tim11", 'b', 9, 3, 0, "TIM11_CH1"),
+];
+
+/// STM32G0 timer channel pads, selected by the timer's `pad_map: stm32g0`.
+/// Read off stm32duino's `PinMap_TIM` for the G071R/G081R variant
+/// (`variants/STM32G0xx/G071R(6-8)T_G071RB(I-T)_G081RB(I-T)/PeripheralPins.c`,
+/// generated from ST's open pin data): TIM2 on AF2, TIM3 on AF1. A G0 moves
+/// TIM2/TIM3 off the F4 AF numbers, so the F4 table must not be guessed here.
+const STM32G0_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim2", 'a', 0, 2, 0, "TIM2_CH1"),
+    ("tim2", 'a', 5, 2, 0, "TIM2_CH1"),
+    ("tim2", 'a', 15, 2, 0, "TIM2_CH1"),
+    ("tim2", 'c', 4, 2, 0, "TIM2_CH1"),
+    ("tim2", 'a', 1, 2, 1, "TIM2_CH2"),
+    ("tim2", 'b', 3, 2, 1, "TIM2_CH2"),
+    ("tim2", 'c', 5, 2, 1, "TIM2_CH2"),
+    ("tim2", 'a', 2, 2, 2, "TIM2_CH3"),
+    ("tim2", 'b', 10, 2, 2, "TIM2_CH3"),
+    ("tim2", 'c', 6, 2, 2, "TIM2_CH3"),
+    ("tim2", 'a', 3, 2, 3, "TIM2_CH4"),
+    ("tim2", 'b', 11, 2, 3, "TIM2_CH4"),
+    ("tim2", 'c', 7, 2, 3, "TIM2_CH4"),
+    ("tim3", 'a', 6, 1, 0, "TIM3_CH1"),
+    ("tim3", 'b', 4, 1, 0, "TIM3_CH1"),
+    ("tim3", 'c', 6, 1, 0, "TIM3_CH1"),
+    ("tim3", 'a', 7, 1, 1, "TIM3_CH2"),
+    ("tim3", 'b', 5, 1, 1, "TIM3_CH2"),
+    ("tim3", 'c', 7, 1, 1, "TIM3_CH2"),
+    ("tim3", 'b', 0, 1, 2, "TIM3_CH3"),
+    ("tim3", 'c', 8, 1, 2, "TIM3_CH3"),
+    ("tim3", 'b', 1, 1, 3, "TIM3_CH4"),
+    ("tim3", 'c', 9, 1, 3, "TIM3_CH4"),
+];
+
+/// STM32G4 timer channel pads, selected by the timer's `pad_map: stm32g4`.
+/// Read off stm32duino's `PinMap_TIM` for the G474R variant
+/// (`variants/STM32G4xx/G473R(B-C)T_G473RETx(Z)_G474R(B-C-E)T_G483RET_G484RET/PeripheralPins.c`):
+/// TIM2 on AF1 (AF10 for PA9/PA10), TIM3 on AF2 (AF10 for PB7).
+const STM32G4_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 1, 1, 1, "TIM2_CH2"),
+    ("tim2", 'b', 3, 1, 1, "TIM2_CH2"),
+    ("tim2", 'a', 2, 1, 2, "TIM2_CH3"),
+    ("tim2", 'a', 9, 10, 2, "TIM2_CH3"),
+    ("tim2", 'b', 10, 1, 2, "TIM2_CH3"),
+    ("tim2", 'a', 3, 1, 3, "TIM2_CH4"),
+    ("tim2", 'a', 10, 10, 3, "TIM2_CH4"),
+    ("tim2", 'b', 11, 1, 3, "TIM2_CH4"),
+    ("tim3", 'a', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'b', 4, 2, 0, "TIM3_CH1"),
+    ("tim3", 'c', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'a', 4, 2, 1, "TIM3_CH2"),
+    ("tim3", 'a', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 5, 2, 1, "TIM3_CH2"),
+    ("tim3", 'c', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 0, 2, 2, "TIM3_CH3"),
+    ("tim3", 'c', 8, 2, 2, "TIM3_CH3"),
+    ("tim3", 'b', 1, 2, 3, "TIM3_CH4"),
+    ("tim3", 'b', 7, 10, 3, "TIM3_CH4"),
+    ("tim3", 'c', 9, 2, 3, "TIM3_CH4"),
+];
+
+/// STM32L0 timer channel pads, selected by the timer's `pad_map: stm32l0`.
+/// Read off stm32duino's `PinMap_TIM` for the L072R/L073R variant
+/// (`variants/STM32L0xx/L072R(B-Z)T_L073R(B-Z)T_L083R(B-Z)T/PeripheralPins.c`):
+/// TIM2 on AF2 (AF5 for PA5/PA15), TIM3 on AF2 (AF4 for PB5).
+/// Only TIM1-TIM5 OCx rows; the complementary OCxN pads are not generated
+/// by the timer model, so they are left out.
+const STM32L0_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim2", 'a', 0, 2, 0, "TIM2_CH1"),
+    ("tim2", 'a', 5, 5, 0, "TIM2_CH1"),
+    ("tim2", 'a', 15, 5, 0, "TIM2_CH1"),
+    ("tim2", 'a', 1, 2, 1, "TIM2_CH2"),
+    ("tim2", 'b', 3, 2, 1, "TIM2_CH2"),
+    ("tim2", 'a', 2, 2, 2, "TIM2_CH3"),
+    ("tim2", 'b', 10, 2, 2, "TIM2_CH3"),
+    ("tim2", 'a', 3, 2, 3, "TIM2_CH4"),
+    ("tim2", 'b', 11, 2, 3, "TIM2_CH4"),
+    ("tim3", 'a', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'b', 4, 2, 0, "TIM3_CH1"),
+    ("tim3", 'c', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'a', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 5, 4, 1, "TIM3_CH2"),
+    ("tim3", 'c', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 0, 2, 2, "TIM3_CH3"),
+    ("tim3", 'c', 8, 2, 2, "TIM3_CH3"),
+    ("tim3", 'b', 1, 2, 3, "TIM3_CH4"),
+    ("tim3", 'c', 9, 2, 3, "TIM3_CH4"),
+];
+
+/// STM32L4 timer channel pads, selected by the timer's `pad_map: stm32l4`.
+/// Read off stm32duino's `PinMap_TIM` for the L476R variant
+/// (`variants/STM32L4xx/L475R(C-E-G)T_L476R(C-E-G)T_L486RGT/PeripheralPins.c`):
+/// TIM1/TIM2 on AF1, TIM3/TIM4/TIM5 on AF2.
+/// Only TIM1-TIM5 OCx rows; the complementary OCxN pads are not generated
+/// by the timer model, so they are left out.
+const STM32L4_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 8, 1, 0, "TIM1_CH1"),
+    ("tim1", 'a', 9, 1, 1, "TIM1_CH2"),
+    ("tim1", 'a', 10, 1, 2, "TIM1_CH3"),
+    ("tim1", 'a', 11, 1, 3, "TIM1_CH4"),
+    ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 1, 1, 1, "TIM2_CH2"),
+    ("tim2", 'b', 3, 1, 1, "TIM2_CH2"),
+    ("tim2", 'a', 2, 1, 2, "TIM2_CH3"),
+    ("tim2", 'b', 10, 1, 2, "TIM2_CH3"),
+    ("tim2", 'a', 3, 1, 3, "TIM2_CH4"),
+    ("tim2", 'b', 11, 1, 3, "TIM2_CH4"),
+    ("tim3", 'a', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'b', 4, 2, 0, "TIM3_CH1"),
+    ("tim3", 'c', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'a', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 5, 2, 1, "TIM3_CH2"),
+    ("tim3", 'c', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 0, 2, 2, "TIM3_CH3"),
+    ("tim3", 'c', 8, 2, 2, "TIM3_CH3"),
+    ("tim3", 'b', 1, 2, 3, "TIM3_CH4"),
+    ("tim3", 'c', 9, 2, 3, "TIM3_CH4"),
+    ("tim4", 'b', 6, 2, 0, "TIM4_CH1"),
+    ("tim4", 'b', 7, 2, 1, "TIM4_CH2"),
+    ("tim4", 'b', 8, 2, 2, "TIM4_CH3"),
+    ("tim4", 'b', 9, 2, 3, "TIM4_CH4"),
+    ("tim5", 'a', 0, 2, 0, "TIM5_CH1"),
+    ("tim5", 'a', 1, 2, 1, "TIM5_CH2"),
+    ("tim5", 'a', 2, 2, 2, "TIM5_CH3"),
+    ("tim5", 'a', 3, 2, 3, "TIM5_CH4"),
+];
+
+/// STM32WB timer channel pads, selected by the timer's `pad_map: stm32wb`.
+/// Read off stm32duino's `PinMap_TIM` for the WB55R variant
+/// (`variants/STM32WBxx/WB55R(C-E-G)V/PeripheralPins.c`):
+/// TIM1/TIM2 on AF1; no TIM3-5 on a WB55.
+/// Only TIM1-TIM5 OCx rows; the complementary OCxN pads are not generated
+/// by the timer model, so they are left out.
+const STM32WB_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 8, 1, 0, "TIM1_CH1"),
+    ("tim1", 'a', 9, 1, 1, "TIM1_CH2"),
+    ("tim1", 'a', 10, 1, 2, "TIM1_CH3"),
+    ("tim1", 'a', 11, 1, 3, "TIM1_CH4"),
+    ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 1, 1, 1, "TIM2_CH2"),
+    ("tim2", 'b', 3, 1, 1, "TIM2_CH2"),
+    ("tim2", 'a', 2, 1, 2, "TIM2_CH3"),
+    ("tim2", 'b', 10, 1, 2, "TIM2_CH3"),
+    ("tim2", 'a', 3, 1, 3, "TIM2_CH4"),
+    ("tim2", 'b', 11, 1, 3, "TIM2_CH4"),
+];
+
+/// STM32WBA timer channel pads, selected by the timer's `pad_map: stm32wba`.
+/// Read off stm32duino's `PinMap_TIM` for the WBA52C variant
+/// (`variants/STM32WBAxx/WBA52C(E-G)U_WBA54C(E-G)U/PeripheralPins.c`):
+/// TIM1/TIM2 on AF1, TIM3 on AF2, on a pinout unlike any other family here.
+/// Only TIM1-TIM5 OCx rows; the complementary OCxN pads are not generated
+/// by the timer model, so they are left out.
+const STM32WBA_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 11, 1, 0, "TIM1_CH1"),
+    ("tim1", 'b', 8, 1, 0, "TIM1_CH1"),
+    ("tim1", 'a', 12, 1, 1, "TIM1_CH2"),
+    ("tim1", 'b', 4, 1, 2, "TIM1_CH3"),
+    ("tim1", 'b', 3, 1, 3, "TIM1_CH4"),
+    ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
+    ("tim2", 'b', 6, 1, 0, "TIM2_CH1"),
+    ("tim2", 'b', 12, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 8, 1, 1, "TIM2_CH2"),
+    ("tim2", 'a', 7, 1, 2, "TIM2_CH3"),
+    ("tim2", 'a', 6, 1, 3, "TIM2_CH4"),
+    ("tim3", 'a', 2, 2, 0, "TIM3_CH1"),
+    ("tim3", 'a', 10, 2, 0, "TIM3_CH1"),
+    ("tim3", 'b', 5, 2, 0, "TIM3_CH1"),
+    ("tim3", 'a', 1, 2, 1, "TIM3_CH2"),
+    ("tim3", 'a', 9, 2, 1, "TIM3_CH2"),
+    ("tim3", 'a', 0, 2, 2, "TIM3_CH3"),
+    ("tim3", 'b', 14, 2, 2, "TIM3_CH3"),
+    ("tim3", 'b', 9, 2, 3, "TIM3_CH4"),
+    ("tim3", 'b', 13, 2, 3, "TIM3_CH4"),
+];
+
+/// STM32U5 timer channel pads, selected by the timer's `pad_map: stm32u5`.
+/// Read off stm32duino's `PinMap_TIM` for the U575Z variant
+/// (`variants/STM32U5xx/U575Z(G-I)TxQ_U585ZITxQ/PeripheralPins.c`):
+/// TIM1/TIM2 on AF1, TIM3/TIM4/TIM5 on AF2.
+/// The U545R variant's rows are a subset of these.
+/// Only TIM1-TIM5 OCx rows; the complementary OCxN pads are not generated
+/// by the timer model, so they are left out.
+const STM32U5_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 8, 1, 0, "TIM1_CH1"),
+    ("tim1", 'e', 9, 1, 0, "TIM1_CH1"),
+    ("tim1", 'a', 9, 1, 1, "TIM1_CH2"),
+    ("tim1", 'e', 11, 1, 1, "TIM1_CH2"),
+    ("tim1", 'a', 10, 1, 2, "TIM1_CH3"),
+    ("tim1", 'e', 13, 1, 2, "TIM1_CH3"),
+    ("tim1", 'a', 11, 1, 3, "TIM1_CH4"),
+    ("tim1", 'e', 14, 1, 3, "TIM1_CH4"),
+    ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 1, 1, 1, "TIM2_CH2"),
+    ("tim2", 'b', 3, 1, 1, "TIM2_CH2"),
+    ("tim2", 'a', 2, 1, 2, "TIM2_CH3"),
+    ("tim2", 'b', 10, 1, 2, "TIM2_CH3"),
+    ("tim2", 'a', 3, 1, 3, "TIM2_CH4"),
+    ("tim2", 'b', 11, 1, 3, "TIM2_CH4"),
+    ("tim3", 'a', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'b', 4, 2, 0, "TIM3_CH1"),
+    ("tim3", 'c', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'e', 3, 2, 0, "TIM3_CH1"),
+    ("tim3", 'a', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 5, 2, 1, "TIM3_CH2"),
+    ("tim3", 'c', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'e', 4, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 0, 2, 2, "TIM3_CH3"),
+    ("tim3", 'c', 8, 2, 2, "TIM3_CH3"),
+    ("tim3", 'e', 5, 2, 2, "TIM3_CH3"),
+    ("tim3", 'b', 1, 2, 3, "TIM3_CH4"),
+    ("tim3", 'c', 9, 2, 3, "TIM3_CH4"),
+    ("tim3", 'e', 6, 2, 3, "TIM3_CH4"),
+    ("tim4", 'b', 6, 2, 0, "TIM4_CH1"),
+    ("tim4", 'd', 12, 2, 0, "TIM4_CH1"),
+    ("tim4", 'b', 7, 2, 1, "TIM4_CH2"),
+    ("tim4", 'd', 13, 2, 1, "TIM4_CH2"),
+    ("tim4", 'b', 8, 2, 2, "TIM4_CH3"),
+    ("tim4", 'd', 14, 2, 2, "TIM4_CH3"),
+    ("tim4", 'b', 9, 2, 3, "TIM4_CH4"),
+    ("tim4", 'd', 15, 2, 3, "TIM4_CH4"),
+    ("tim5", 'a', 0, 2, 0, "TIM5_CH1"),
+    ("tim5", 'f', 6, 2, 0, "TIM5_CH1"),
+    ("tim5", 'a', 1, 2, 1, "TIM5_CH2"),
+    ("tim5", 'f', 7, 2, 1, "TIM5_CH2"),
+    ("tim5", 'a', 2, 2, 2, "TIM5_CH3"),
+    ("tim5", 'f', 8, 2, 2, "TIM5_CH3"),
+    ("tim5", 'a', 3, 2, 3, "TIM5_CH4"),
+    ("tim5", 'f', 9, 2, 3, "TIM5_CH4"),
+];
+
+/// STM32H5 timer channel pads, selected by the timer's `pad_map: stm32h5`.
+/// Read off stm32duino's `PinMap_TIM` for the H563Z variant
+/// (`variants/STM32H5xx/H563Z(G-I)T_H573ZIT/PeripheralPins.c`):
+/// TIM1/TIM2 on AF1,
+/// TIM3/TIM4/TIM5 on AF2.
+/// Only TIM1-TIM5 OCx rows; the complementary OCxN pads are not generated
+/// by the timer model, so they are left out.
+const STM32H5_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 8, 1, 0, "TIM1_CH1"),
+    ("tim1", 'e', 9, 1, 0, "TIM1_CH1"),
+    ("tim1", 'a', 9, 1, 1, "TIM1_CH2"),
+    ("tim1", 'e', 11, 1, 1, "TIM1_CH2"),
+    ("tim1", 'a', 10, 1, 2, "TIM1_CH3"),
+    ("tim1", 'e', 13, 1, 2, "TIM1_CH3"),
+    ("tim1", 'a', 11, 1, 3, "TIM1_CH4"),
+    ("tim1", 'e', 14, 1, 3, "TIM1_CH4"),
+    ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),
+    ("tim2", 'a', 1, 1, 1, "TIM2_CH2"),
+    ("tim2", 'b', 3, 1, 1, "TIM2_CH2"),
+    ("tim2", 'a', 2, 1, 2, "TIM2_CH3"),
+    ("tim2", 'b', 10, 1, 2, "TIM2_CH3"),
+    ("tim2", 'a', 3, 1, 3, "TIM2_CH4"),
+    ("tim2", 'c', 4, 1, 3, "TIM2_CH4"),
+    ("tim3", 'a', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'b', 4, 2, 0, "TIM3_CH1"),
+    ("tim3", 'c', 6, 2, 0, "TIM3_CH1"),
+    ("tim3", 'a', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 5, 2, 1, "TIM3_CH2"),
+    ("tim3", 'c', 7, 2, 1, "TIM3_CH2"),
+    ("tim3", 'b', 0, 2, 2, "TIM3_CH3"),
+    ("tim3", 'c', 8, 2, 2, "TIM3_CH3"),
+    ("tim3", 'b', 1, 2, 3, "TIM3_CH4"),
+    ("tim3", 'c', 9, 2, 3, "TIM3_CH4"),
+    ("tim4", 'b', 6, 2, 0, "TIM4_CH1"),
+    ("tim4", 'd', 12, 2, 0, "TIM4_CH1"),
+    ("tim4", 'b', 7, 2, 1, "TIM4_CH2"),
+    ("tim4", 'd', 13, 2, 1, "TIM4_CH2"),
+    ("tim4", 'b', 8, 2, 2, "TIM4_CH3"),
+    ("tim4", 'd', 14, 2, 2, "TIM4_CH3"),
+    ("tim4", 'b', 9, 2, 3, "TIM4_CH4"),
+    ("tim4", 'c', 2, 2, 3, "TIM4_CH4"),
+    ("tim4", 'd', 15, 2, 3, "TIM4_CH4"),
+    ("tim5", 'a', 0, 2, 0, "TIM5_CH1"),
+    ("tim5", 'a', 1, 2, 1, "TIM5_CH2"),
+    ("tim5", 'a', 2, 2, 2, "TIM5_CH3"),
+    ("tim5", 'a', 3, 2, 3, "TIM5_CH4"),
+];
+
 impl SystemBus {
     /// Attach an I²C slave without a physical route. This remains suitable for
     /// fixed-pin controllers and low-level test fixtures; ESP32-C3 rejects it
@@ -412,9 +754,9 @@ impl SystemBus {
     /// 45..50), so `ledcWrite`/`analogWrite` duty is a waveform on the pad
     /// `ledc_channel_config` routed.
     ///
-    /// ⚠️ The C6 reuses both the C3 LEDC and the C3 GPIO model, but its matrix
-    /// numbers 45/46 as I²C, so a C6 GPIO layout declines the binding and no
-    /// wire cell is created.
+    /// The C6 reuses both the C3 LEDC engine and the C3 GPIO model; its GPIO
+    /// layout numbers the six outputs 0..5 (its 45/46 are I²C), so the same
+    /// pass binds them there.
     pub(crate) fn wire_esp32c3_ledc_pads(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
         use crate::peripherals::esp32c3::ledc::Esp32c3Ledc;
@@ -2651,53 +2993,6 @@ impl SystemBus {
             ("tim4", 'b', 8, 2, "TIM4_CH3"),
             ("tim4", 'b', 9, 3, "TIM4_CH4"),
         ];
-        // (timer, port, pin, AF, channel 0-based, func)
-        const F4: &[(&str, char, u8, u8, u8, &str)] = &[
-            ("tim1", 'a', 8, 1, 0, "TIM1_CH1"),
-            ("tim1", 'a', 9, 1, 1, "TIM1_CH2"),
-            ("tim1", 'a', 10, 1, 2, "TIM1_CH3"),
-            ("tim1", 'a', 11, 1, 3, "TIM1_CH4"),
-            ("tim1", 'e', 9, 1, 0, "TIM1_CH1"),
-            ("tim1", 'e', 11, 1, 1, "TIM1_CH2"),
-            ("tim1", 'e', 13, 1, 2, "TIM1_CH3"),
-            ("tim1", 'e', 14, 1, 3, "TIM1_CH4"),
-            ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
-            ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
-            ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),
-            ("tim2", 'a', 1, 1, 1, "TIM2_CH2"),
-            ("tim2", 'b', 3, 1, 1, "TIM2_CH2"),
-            ("tim2", 'a', 2, 1, 2, "TIM2_CH3"),
-            ("tim2", 'b', 10, 1, 2, "TIM2_CH3"),
-            ("tim2", 'a', 3, 1, 3, "TIM2_CH4"),
-            ("tim3", 'a', 6, 2, 0, "TIM3_CH1"),
-            ("tim3", 'b', 4, 2, 0, "TIM3_CH1"),
-            ("tim3", 'c', 6, 2, 0, "TIM3_CH1"),
-            ("tim3", 'a', 7, 2, 1, "TIM3_CH2"),
-            ("tim3", 'b', 5, 2, 1, "TIM3_CH2"),
-            ("tim3", 'c', 7, 2, 1, "TIM3_CH2"),
-            ("tim3", 'b', 0, 2, 2, "TIM3_CH3"),
-            ("tim3", 'c', 8, 2, 2, "TIM3_CH3"),
-            ("tim3", 'b', 1, 2, 3, "TIM3_CH4"),
-            ("tim3", 'c', 9, 2, 3, "TIM3_CH4"),
-            ("tim4", 'b', 6, 2, 0, "TIM4_CH1"),
-            ("tim4", 'd', 12, 2, 0, "TIM4_CH1"),
-            ("tim4", 'b', 7, 2, 1, "TIM4_CH2"),
-            ("tim4", 'd', 13, 2, 1, "TIM4_CH2"),
-            ("tim4", 'b', 8, 2, 2, "TIM4_CH3"),
-            ("tim4", 'd', 14, 2, 2, "TIM4_CH3"),
-            ("tim4", 'b', 9, 2, 3, "TIM4_CH4"),
-            ("tim4", 'd', 15, 2, 3, "TIM4_CH4"),
-            ("tim5", 'a', 0, 2, 0, "TIM5_CH1"),
-            ("tim5", 'a', 1, 2, 1, "TIM5_CH2"),
-            ("tim5", 'a', 2, 2, 2, "TIM5_CH3"),
-            ("tim5", 'a', 3, 2, 3, "TIM5_CH4"),
-            ("tim9", 'a', 2, 3, 0, "TIM9_CH1"),
-            ("tim9", 'a', 3, 3, 1, "TIM9_CH2"),
-            ("tim9", 'e', 5, 3, 0, "TIM9_CH1"),
-            ("tim9", 'e', 6, 3, 1, "TIM9_CH2"),
-            ("tim10", 'b', 8, 3, 0, "TIM10_CH1"),
-            ("tim11", 'b', 9, 3, 0, "TIM11_CH1"),
-        ];
 
         use crate::peripherals::timer::TimerInputStage;
         // Timer by name (`tim1_pwm`: several chip yamls suffix the advanced
@@ -2724,7 +3019,7 @@ impl SystemBus {
                     }
                 }
             }
-            for &(tim, p, pin, af, ch, func) in F4 {
+            for &(tim, p, pin, af, ch, func) in STM32F4_TIMER_PADS {
                 if p == port {
                     if let Some((t_idx, TimerInputStage::F4)) = timer(self, tim) {
                         routes.push((t_idx, pin, Some(af), ch, func));
@@ -2745,29 +3040,35 @@ impl SystemBus {
         self.timer_capture_wired |= wired;
     }
 
-    /// Route each STM32F1 timer's channel OUTPUTS (OC1..OC4) onto the GPIO
-    /// pads that carry them, so a pad configured as an alternate-function
-    /// output reads — and the logic analyzer records — the PWM / output-compare
+    /// Route each STM32 timer's channel OUTPUTS (OC1..OC4) onto the GPIO pads
+    /// that carry them, so a pad configured as an alternate-function output
+    /// reads — and the logic analyzer records — the PWM / output-compare
     /// waveform the timer generates, instead of the idle output latch.
     ///
-    /// F1 only: the pads are the fixed DEFAULT map (RM0008 Rev 21 §9.3.7
-    /// Tables 43-46, `AFIO_MAPR` remaps not decoded — the same honest gap the
-    /// SPI/I²C/USART/capture tables carry): TIM1 CH1-4 = PA8-PA11, TIM2 CH1-4
-    /// = PA0-PA3, TIM3 CH1-4 = PA6/PA7/PB0/PB1, TIM4 CH1-4 = PB6-PB9. A pad
-    /// carries a timer output only while it is an AF output (CRL/CRH `MODE !=
-    /// 0`, `CNF >= 0b10`, RM0008 §9.1.11 Table 20 "TIMx_CHx output compare:
-    /// alternate function push-pull").
+    /// * **F1 ports**: the fixed DEFAULT map (RM0008 Rev 21 §9.3.7 Tables
+    ///   43-46, `AFIO_MAPR` remaps not decoded — the same honest gap the
+    ///   SPI/I²C/USART/capture tables carry): TIM1 CH1-4 = PA8-PA11, TIM2
+    ///   CH1-4 = PA0-PA3, TIM3 CH1-4 = PA6/PA7/PB0/PB1, TIM4 CH1-4 = PB6-PB9.
+    ///   A pad carries a timer output only while it is an AF output (CRL/CRH
+    ///   `MODE != 0`, `CNF >= 0b10`, RM0008 §9.1.11 Table 20 "TIMx_CHx output
+    ///   compare: alternate function push-pull"). Several of these pads carry
+    ///   another peripheral's DEFAULT function too (PA7 SPI1_MOSI, PA9
+    ///   USART1_TX, PA2 USART2_TX, PB6/PB7 I2C1); DS5319 Rev 20 Table 5 note 4
+    ///   leaves that to firmware ("only one peripheral should be enabled at a
+    ///   time").
+    /// * **V2 ports**: the pad's AFR nibble must select the timer. The table
+    ///   is the F4 one for a timer declaring `input_capture: stm32f4` (as the
+    ///   capture pass), or the one its `pad_map:` names (`stm32g0`,
+    ///   `stm32g4`, `stm32l0`, `stm32l4`, `stm32wb`, `stm32wba`, `stm32u5`,
+    ///   `stm32h5`). A V2 timer with neither is routed nowhere, fail-closed.
     ///
-    /// Several of these pads carry another peripheral's DEFAULT function too
-    /// (PA7 SPI1_MOSI, PA9 USART1_TX, PA2 USART2_TX, PB6/PB7 I2C1). DS5319 Rev
-    /// 20 Table 5 note 4 leaves that to firmware ("only one peripheral should
-    /// be enabled at a time"), so the timer routes are CONDITIONAL
-    /// ([`crate::Peripheral::bind_timer_output_pad`]): a channel whose output is
-    /// enabled owns the pad, and one that is not leaves it to the other
-    /// peripheral (or to nothing).
+    /// Every route is CONDITIONAL
+    /// ([`crate::Peripheral::bind_timer_output_pad`]): a channel whose output
+    /// is enabled owns the pad, and one that is not (or is capturing) leaves it
+    /// to the other peripheral, the capture route, or nothing.
     pub(crate) fn wire_stm32_timer_output_pads(&mut self) {
         // (timer, port, pin, channel 0-based, func)
-        const F1: &[(&str, char, u8, usize, &str)] = &[
+        const F1: &[(&str, char, u8, u8, &str)] = &[
             ("tim1", 'a', 8, 0, "TIM1_CH1"),
             ("tim1", 'a', 9, 1, "TIM1_CH2"),
             ("tim1", 'a', 10, 2, "TIM1_CH3"),
@@ -2786,31 +3087,76 @@ impl SystemBus {
             ("tim4", 'b', 9, 3, "TIM4_CH4"),
         ];
         use crate::peripherals::timer::TimerInputStage;
+        let timer = |bus: &Self, name: &str| {
+            bus.find_peripheral_index_by_name(name)
+                .or_else(|| bus.find_peripheral_index_by_name(&format!("{name}_pwm")))
+        };
         for &(tim, port, pin, ch, func) in F1 {
-            let Some(t_idx) = self
-                .find_peripheral_index_by_name(tim)
-                .or_else(|| self.find_peripheral_index_by_name(&format!("{tim}_pwm")))
-            else {
+            let Some(t_idx) = timer(self, tim) else {
                 continue;
             };
-            // Only an F1-generation timer (no CCxNP); the port refuses a row
-            // unless it is an F1 port itself.
-            if self.peripherals[t_idx].dev.timer_input_stage() != Some(TimerInputStage::F1) {
-                continue;
-            }
-            let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}")) else {
-                continue;
-            };
-            let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
-                continue;
-            };
-            if self.peripherals[gpio_idx]
-                .dev
-                .bind_timer_output_pad(&lines, pin, ch, func)
+            // Only an F1-generation timer with no declared V2 pad map.
+            let dev = &self.peripherals[t_idx].dev;
+            if dev.timer_input_stage() == Some(TimerInputStage::F1)
+                && dev.timer_output_family().is_none()
             {
-                // A pad can carry it: the timer starts generating its outputs.
-                self.peripherals[t_idx].dev.timer_output_lines(true);
+                self.bind_stm32_timer_output_row(t_idx, port, pin, None, ch, func);
             }
+        }
+        for (table, family) in [
+            (STM32F4_TIMER_PADS, None),
+            (STM32G0_TIMER_PADS, Some("stm32g0")),
+            (STM32G4_TIMER_PADS, Some("stm32g4")),
+            (STM32L0_TIMER_PADS, Some("stm32l0")),
+            (STM32L4_TIMER_PADS, Some("stm32l4")),
+            (STM32WB_TIMER_PADS, Some("stm32wb")),
+            (STM32WBA_TIMER_PADS, Some("stm32wba")),
+            (STM32U5_TIMER_PADS, Some("stm32u5")),
+            (STM32H5_TIMER_PADS, Some("stm32h5")),
+        ] {
+            for &(tim, port, pin, af, ch, func) in table {
+                let Some(t_idx) = timer(self, tim) else {
+                    continue;
+                };
+                let dev = &self.peripherals[t_idx].dev;
+                // The F4 table rides on `input_capture: stm32f4` with no
+                // `pad_map`; the G0/G4 tables on their own `pad_map`.
+                let owns = dev.timer_output_family() == family
+                    && (family.is_some() || dev.timer_input_stage() == Some(TimerInputStage::F4));
+                if owns {
+                    self.bind_stm32_timer_output_row(t_idx, port, pin, Some(af), ch, func);
+                }
+            }
+        }
+    }
+
+    /// One row of [`Self::wire_stm32_timer_output_pads`]. The port refuses a
+    /// row whose shape is not its own: an F1 port takes only fixed-map rows
+    /// (`af: None`), a V2 port only AF rows.
+    fn bind_stm32_timer_output_row(
+        &mut self,
+        t_idx: usize,
+        port: char,
+        pin: u8,
+        af: Option<u8>,
+        ch: u8,
+        func: &'static str,
+    ) {
+        let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}")) else {
+            return;
+        };
+        let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
+            return;
+        };
+        if self.peripherals[gpio_idx].dev.bind_timer_output_pad(
+            &lines,
+            pin,
+            af,
+            usize::from(ch),
+            func,
+        ) {
+            // A pad can carry it: the timer starts generating its outputs.
+            self.peripherals[t_idx].dev.timer_output_lines(true);
         }
     }
 
@@ -2879,6 +3225,7 @@ impl SystemBus {
             if self.peripherals[gpio_idx].dev.bind_timer_output_pad(
                 &lines,
                 pin,
+                None,
                 wo,
                 FUNCS[usize::from(tc)][wo],
             ) {
@@ -2913,6 +3260,7 @@ impl SystemBus {
                 if self.peripherals[gpio_idx].dev.bind_timer_output_pad(
                     &lines,
                     pin,
+                    None,
                     line,
                     LINE_NAMES[line],
                 ) {

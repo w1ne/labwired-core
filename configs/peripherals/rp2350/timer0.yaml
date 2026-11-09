@@ -1,4 +1,4 @@
-peripheral: TIMER
+peripheral: TIMER0
 version: 0.1.0
 registers:
 - id: TIMEHW
@@ -11,7 +11,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: TIMELW
   address_offset: 4
@@ -23,7 +22,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: TIMEHR
   address_offset: 8
@@ -35,7 +33,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: TIMELR
   address_offset: 12
@@ -47,7 +44,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: ALARM0
   address_offset: 16
@@ -59,7 +55,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: ALARM1
   address_offset: 20
@@ -71,7 +66,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: ALARM2
   address_offset: 24
@@ -83,7 +77,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: ALARM3
   address_offset: 28
@@ -95,7 +88,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: ARMED
   address_offset: 32
@@ -107,7 +99,6 @@ registers:
     bit_range:
     - 3
     - 0
-    description: null
   side_effects: null
 - id: TIMERAWH
   address_offset: 36
@@ -119,7 +110,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: TIMERAWL
   address_offset: 40
@@ -131,7 +121,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: DBGPAUSE
   address_offset: 44
@@ -139,16 +128,16 @@ registers:
   access: READ_WRITE
   reset_value: 7
   fields:
-  - name: DBG0
-    bit_range:
-    - 1
-    - 1
-    description: Pause when processor 0 is in debug mode
   - name: DBG1
     bit_range:
     - 2
     - 2
     description: Pause when processor 1 is in debug mode
+  - name: DBG0
+    bit_range:
+    - 1
+    - 1
+    description: Pause when processor 0 is in debug mode
   side_effects: null
 - id: PAUSE
   address_offset: 48
@@ -160,119 +149,124 @@ registers:
     bit_range:
     - 0
     - 0
-    description: null
   side_effects: null
-- id: INTR
+- id: LOCKED
   address_offset: 52
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: ALARM_0
+  - name: LOCKED
     bit_range:
     - 0
     - 0
-    description: null
-  - name: ALARM_1
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: ALARM_2
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: ALARM_3
-    bit_range:
-    - 3
-    - 3
-    description: null
   side_effects: null
-- id: INTE
+- id: SOURCE
   address_offset: 56
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: ALARM_0
+  - name: CLK_SYS
     bit_range:
     - 0
     - 0
-    description: null
-  - name: ALARM_1
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: ALARM_2
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: ALARM_3
-    bit_range:
-    - 3
-    - 3
-    description: null
   side_effects: null
-- id: INTF
+- id: INTR
   address_offset: 60
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: ALARM_0
-    bit_range:
-    - 0
-    - 0
-    description: null
-  - name: ALARM_1
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: ALARM_2
-    bit_range:
-    - 2
-    - 2
-    description: null
   - name: ALARM_3
     bit_range:
     - 3
     - 3
-    description: null
+  - name: ALARM_2
+    bit_range:
+    - 2
+    - 2
+  - name: ALARM_1
+    bit_range:
+    - 1
+    - 1
+  - name: ALARM_0
+    bit_range:
+    - 0
+    - 0
   side_effects: null
-- id: INTS
+- id: INTE
   address_offset: 64
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: ALARM_0
-    bit_range:
-    - 0
-    - 0
-    description: null
-  - name: ALARM_1
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: ALARM_2
-    bit_range:
-    - 2
-    - 2
-    description: null
   - name: ALARM_3
     bit_range:
     - 3
     - 3
-    description: null
+  - name: ALARM_2
+    bit_range:
+    - 2
+    - 2
+  - name: ALARM_1
+    bit_range:
+    - 1
+    - 1
+  - name: ALARM_0
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: INTF
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALARM_3
+    bit_range:
+    - 3
+    - 3
+  - name: ALARM_2
+    bit_range:
+    - 2
+    - 2
+  - name: ALARM_1
+    bit_range:
+    - 1
+    - 1
+  - name: ALARM_0
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: INTS
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALARM_3
+    bit_range:
+    - 3
+    - 3
+  - name: ALARM_2
+    bit_range:
+    - 2
+    - 2
+  - name: ALARM_1
+    bit_range:
+    - 1
+    - 1
+  - name: ALARM_0
+    bit_range:
+    - 0
+    - 0
   side_effects: null
 interrupts:
-  TIMER_IRQ_0: 0
-  TIMER_IRQ_2: 2
-  TIMER_IRQ_1: 1
-  TIMER_IRQ_3: 3
+  TIMER0_IRQ_0: 0
+  TIMER0_IRQ_1: 1
+  TIMER0_IRQ_2: 2
+  TIMER0_IRQ_3: 3
 timing: null

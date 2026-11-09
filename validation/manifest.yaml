@@ -2449,7 +2449,7 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: 0b25393d311c2c3a038ce6e03ad0856e7d36776a28f151bf5a53570b044f05f4
+    drift_ack_digest: 1cf8837b47ec1cbc8750a7d85e04f6a664821a64a6b6595d108933ec7a135f75
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -2680,12 +2680,16 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
+    # Re-stamped 2026-11-08 for the C6 LEDC split (shared esp32c3/ledc.rs +
+    # gpio.rs): the C3 decodes with C3_LAYOUT, which is the previous constants,
+    # and its LEDC unit/waveform tests are unchanged. Ack, not a recapture.
     # 2026-11-08 (round 342): twai0 moved from `declarative` to the S3 TWAI
     # behavioural model (esp32s3/twai.rs, irq 25), so the Arduino L8 self-RX
     # cell runs. esp32c3_reset_values_match_silicon asserts no TWAI register;
     # the live capture reads the clock-gated window as bus junk (0x0008fe10).
     # This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: a73359c16e2293056b103c1ea775a20f0b5a4ce2fb3bc2e99127f3a92669e3db
+    # Re-stamped 2026-11-08 (round 347) over both changes above after merging main.
+    drift_ack_digest: ed30d3aceb28d77159219fbdba22d2cb1e926aafbd16261cacbb4e46c254777b
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -4660,7 +4664,7 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: 983045bcaae89f1c6acf27a43248dfacbc7400cc40f841f1ec7e99ee00f0aa0f
+    drift_ack_digest: 522b4fc22955059d1baeb90ac01cce43945353e195371493fee02b9142c894bc
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5156,7 +5160,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: b80d2e3e65890e4964818135bddd7c7ffd2eeb02190e4f2794742592aa3998bc
+    drift_ack_digest: ea8cc4cf06aec2383febd72a9949a7ff5af2728d14514370b5e07e91853e7f54
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6914,7 +6918,7 @@ boards:
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-07
-    drift_ack_digest: 7a043bd038ddd21849f776d1045751c51539548e502b89e513411cb5cb00bf24
+    drift_ack_digest: 2ff8315cb06b1105dc0c52eb3b6cadc903c288459b32f36eb5fe6d1618f2c834
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7431,7 +7435,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 99095c94a36c9666ae2a203f56c5a9b2889d6a72e160c0b23bab05e4a5a973c1
+    drift_ack_digest: c48957351eac4ba820c510649ab09854c1e6e43a277e02f35d9113ae04d4d4a6
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -10244,6 +10248,7 @@ boards:
       # 2026-10-29 (#1526): USB Serial/JTAG now registered on C6 via shared
       # UsbSerialJtag::new_esp32c6. SIM-DERIVED board — no silicon ack implied.
       - crates/core/src/peripherals/esp32s3/usb_serial_jtag.rs
+      - crates/core/src/peripherals/esp32s3/twai.rs
       - crates/core/src/peripherals/esp32/timg.rs
       - crates/core/src/peripherals/esp32c3/apb_saradc.rs
       - crates/core/src/peripherals/esp32c3/gpio.rs
@@ -10293,6 +10298,9 @@ boards:
       - crates/core/src/peripherals/esp32c6/modem_lpcon.rs
       - crates/core/src/peripherals/esp_systimer.rs
       - crates/core/src/peripherals/stub.rs
+      # 2026-11-07: RMT is the shared C3 model at C6 source 49 (`esp32c6_rmt`).
+      # SIM-DERIVED — no silicon ack implied.
+      - crates/core/src/peripherals/esp32c3/rmt.rs
   - id: litex-vexriscv
     # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
     # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity

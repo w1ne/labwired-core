@@ -44,6 +44,7 @@ jobs:
           - esp32
           - esp32c3
           - esp32s3
+          - esp32c6
           - nrf52832
           - nrf52840
           - rp2040
@@ -127,6 +128,10 @@ jobs:
             # registry `raspberrypi` has no RP2350 boards). Same string as
             # boards.yaml, so the installed package is the one PIO resolves.
             rp2350)      platform=https://github.com/maxgerhardt/platform-raspberrypi.git#5d4561a05e3b212660ac6fdd3fbfb328d1988aa1 ;;
+            # ESP32-C6 has no Arduino core before arduino-esp32 3.x (IDF 5),
+            # so it alone takes espressif32 8.0.0; every other ESP32 row
+            # stays on the 7.0.1 build it was green on.
+            esp32c6)     platform=espressif32@8.0.0 ;;
             esp32*)      platform=espressif32@7.0.1 ;;
             atmega328p)  platform=atmelavr@5.3.0 ;;
             *)
