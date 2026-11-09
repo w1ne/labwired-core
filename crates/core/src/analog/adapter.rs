@@ -23,9 +23,9 @@
 //!       trace_samples: 20000
 //! ```
 //!
-//! `netlist`, `vdd`, `probes` and `sources` are spelled exactly as the ngspice
-//! wrapper spells them, so a manifest switches engines by changing `adapter:`
-//! and nothing else.
+//! `netlist`, `vdd`, `probes` and `sources` share their spelling with the
+//! ngspice wrapper. A routed resistor is an in-core extension: its numeric
+//! input is resistance in ohms and requires a finite positive value.
 //!
 //! ## Step semantics
 //!
@@ -83,7 +83,7 @@ pub struct AnalogConfig {
     pub integration: Integration,
     /// LabWired output name → node voltage or supported element-current expression.
     pub probes: BTreeMap<String, String>,
-    /// LabWired input name → circuit element (`V`, `I`, `S` or an NTC `R`).
+    /// LabWired input name → `V`, `I`, or `S`; an `R` accepts ohms, or Celsius for an NTC.
     pub sources: BTreeMap<String, String>,
     /// Extra trace-only expressions, beyond the routed outputs.
     pub trace: Vec<String>,
@@ -198,6 +198,7 @@ fn string_map(value: &Value, what: &str) -> Result<BTreeMap<String, String>, Ana
 enum InputTarget {
     VoltageSource(usize),
     CurrentSource(usize),
+    Resistance(usize),
     Thermistor(usize),
     /// Every switch sharing one control name.
     Switches(Vec<usize>),
@@ -265,12 +266,18 @@ impl AnalogCosimAdapter {
                 InputTarget::CurrentSource(index)
             } else if let Some(index) = solver.thermistor_index(element) {
                 InputTarget::Thermistor(index)
+            } else if let Some(index) = solver.resistor_index(element) {
+                let ohms = solver.circuit().resistors[index].ohms;
+                if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+                    return Err(AnalogError::Config(format!("routed resistor `{element}` must have a positive finite initial resistance")));
+                }
+                InputTarget::Resistance(index)
             } else if let Some(index) = solver.switch_index(element) {
                 InputTarget::Switches(vec![index])
             } else {
                 return Err(AnalogError::Config(format!(
                     "config.sources.{input} names `{element}`, which the netlist does not declare \
-                     as a V, I, S or NTC resistor"
+                     as a V, I, S, or resistor element (an NTC resistor accepts temperature inputs)"
                 )));
             };
             inputs.insert(input.clone(), target);
@@ -407,6 +414,17 @@ impl AnalogCosimAdapter {
                 let amps = self.numeric(name, value, "amps")?;
                 self.solver.set_current_source(index, amps);
             }
+            InputTarget::Resistance(index) => {
+                if matches!(value, CosimSignalValue::Bool(_)) {
+                    return Err(SimulationError::Other(format!(
+                        "analog input `{name}` drives a resistor; a boolean has no resistance in ohms"
+                    )));
+                }
+                let ohms = self.numeric(name, value, "ohms")?;
+                self.solver.set_resistance(index, ohms).map_err(|error| {
+                    SimulationError::Other(format!("analog input `{name}`: {error}"))
+                })?;
+            }
             InputTarget::Thermistor(index) => {
                 if matches!(value, CosimSignalValue::Bool(_)) {
                     return Err(SimulationError::Other(format!(
@@ -483,13 +501,23 @@ impl CosimAdapter for AnalogCosimAdapter {
         Ok(CosimStepResult { outputs })
     }
 
-    /// A switch control is a logic level; a voltage or current source takes
-    /// its number as given. An input the circuit does not use has no kind.
+    fn input_initial_value(&self, name: &str) -> Option<CosimSignalValue> {
+        match self.inputs.get(name)? {
+            InputTarget::Resistance(index) => Some(CosimSignalValue::F64(
+                self.solver.circuit().resistors[*index].ohms,
+            )),
+            _ => None,
+        }
+    }
+
+    /// A switch is boolean; sources and resistors are numeric. NTC numbers are
+    /// degrees Celsius. An input the circuit does not use has no kind.
     fn input_kind(&self, name: &str) -> Option<CosimInputKind> {
         Some(match self.inputs.get(name)? {
             InputTarget::Switches(_) => CosimInputKind::Bool,
             InputTarget::VoltageSource(_)
             | InputTarget::CurrentSource(_)
+            | InputTarget::Resistance(_)
             | InputTarget::Thermistor(_) => CosimInputKind::Number,
         })
     }
