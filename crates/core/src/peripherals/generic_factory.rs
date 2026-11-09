@@ -1959,13 +1959,29 @@ pub fn try_build(
         )),
         // `vref_mv`: the VREFH the board ties the reference to (1.8 V on
         // the MIMXRT595-EVK); every CFG.REFSEL option converts against it.
-        "nxp_lpadc" => Box::new(crate::peripherals::nxp_lpadc::NxpLpadc::new(
-            p_cfg
-                .config
-                .get("vref_mv")
-                .and_then(|v| v.as_u64())
-                .map_or(1800, |v| v as u32),
-        )),
+        // `layout: ctype_mode` selects the i.MX RT700 revision (CMDL.CTYPE/
+        // MODE, two triggers, CAL_REQ/CALOFS); the default is the RT500's.
+        "nxp_lpadc" => {
+            use crate::peripherals::nxp_lpadc::{Layout, NxpLpadc};
+            let layout = match p_cfg.config.get("layout").and_then(|v| v.as_str()) {
+                None | Some("diff_cscale") => Layout::DiffCscale,
+                Some("ctype_mode") => Layout::CtypeMode,
+                Some(other) => {
+                    return Err(anyhow::anyhow!(
+                        "nxp_lpadc {}: unknown layout {other:?} (diff_cscale, ctype_mode)",
+                        p_cfg.id
+                    ))
+                }
+            };
+            Box::new(NxpLpadc::with_layout(
+                layout,
+                p_cfg
+                    .config
+                    .get("vref_mv")
+                    .and_then(|v| v.as_u64())
+                    .map_or(1800, |v| v as u32),
+            ))
+        }
         "msp430_adc12" => Box::new(crate::peripherals::msp430_adc12::Msp430Adc12::new(
             crate::peripherals::msp430_adc12::Adc12Layout::Adc12,
         )),

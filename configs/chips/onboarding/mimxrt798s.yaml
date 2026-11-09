@@ -104,3 +104,26 @@ peripherals:
   size: 64B
   config:
     profile: kinetis
+# LPADC0 on `nxp_lpadc` with the RT700 `ctype_mode` layout (CMDL.CTYPE/MODE,
+# two triggers, CAL_REQ/CALOFS). mcux-devices-rt MIMXRT798S_cm33_core0_COMMON.h
+# ADC0_BASE_NS 0x4020C000 (secure 0x5020C000), ADC_IRQn 15; resets from
+# mcux-soc-svd MIMXRT798S_cm33_core0.xml. VREFH 1.8 V is an assumption carried
+# over from the RT500 EVK: no RT700 board file states vref-mv.
+- id: adc0
+  type: nxp_lpadc
+  base_address: 0x4020C000
+  size: 4KB
+  irq: 15
+  config:
+    layout: ctype_mode
+    vref_mv: 1800
+# A-side LPADC0 pads, hal_nxp @cc9b44ae MIMXRT798SGFOB-pinctrl.h (ADC0_CHn on
+# PIO10_x); the EVK routes CH0A/CH1A (Zephyr mimxrt700_evk pinmux_lpadc0 and
+# the adc_api overlay). ADC0_CH18..22 and the second ADC0_CH0 on PIO10_15 are
+# left out: the header does not say which side they sit on.
+analog_pins:
+  PIO10_0:  { peripheral: adc0, channel: 0 }   # ADC0_CH0 = CH0A
+  PIO10_2:  { peripheral: adc0, channel: 1 }   # ADC0_CH1 = CH1A
+  PIO10_4:  { peripheral: adc0, channel: 2 }   # ADC0_CH2 = CH2A
+  PIO10_12: { peripheral: adc0, channel: 4 }   # ADC0_CH4 = CH4A
+  PIO10_14: { peripheral: adc0, channel: 5 }   # ADC0_CH5 = CH5A
