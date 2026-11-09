@@ -6917,8 +6917,16 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 2ff8315cb06b1105dc0c52eb3b6cadc903c288459b32f36eb5fe6d1618f2c834
+    # 2026-11-09 (feat/stm32f103-rtc-runs-2026-11-09): rtc_f1.rs was a static
+    # register bank: CNT never counted and RSF never set again after the HAL
+    # cleared it (HAL_RTC_WaitForSynchro timed out). CNT/DIV/SECF/ALRF/OWF are
+    # now derived lazily from the bus cycle clock (32.768 kHz LSE / PRL+1 at
+    # 72 MHz), RSF re-sets one RTCCLK after a clear, and CNT/PRL/ALR writes
+    # need CRL.CNF. Pinned values unchanged: CRH=0, CNTH=CNTL=0 at reset, CRL
+    # still 0x0020 at reset (CRL stays unpinned). ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
+    drift_ack: 2026-11-09
+    drift_ack_digest: 8898c25fceb5fb07dbf4e82fb162d33125311980d3eb72cb50deefc5176bc15d
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
