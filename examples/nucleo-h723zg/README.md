@@ -24,6 +24,17 @@ scripts/onboarding_smoke.sh \
 The committed build and simulation output is in `evidence/`. ST's live product
 and purchase status is recorded in [`evidence/vendor-status.md`](evidence/vendor-status.md).
 
+## Arduino framework coverage
+
+The separate `stm32h723zg` matrix profile models the additional H7 blocks used
+by stock stm32duino firmware. With `ststm32@19.7.1`, the NUCLEO-H723ZG passes
+L0–L7: USART3 serial, LD1 GPIO, INA219 over I2C1, MAX31855 over SPI1, ADC1
+through A0/PA3, and TIM2 PWM/timer behavior. The committed run summary and
+per-sketch logs are in
+[`evidence/arduino-matrix/README.md`](evidence/arduino-matrix/README.md).
+L8 CAN is explicitly skipped because this engine does not yet model the H7
+M_CAN/FDCAN block; that peripheral is omitted from the matrix chip profile.
+
 ## Sources and model boundary
 
 - ST [UM2407 Rev 6](https://www.st.com/resource/en/user_manual/um2407-stm32h7-nucleo144-board-stmicroelectronics.pdf): NUCLEO-H723ZG is the MB1364 board; LD1 is active-high on PB0 by default, and the default ST-LINK VCP uses USART3 PD8/PD9.

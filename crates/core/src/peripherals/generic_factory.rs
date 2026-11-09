@@ -69,6 +69,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "simctl",
     "crc",
     "crs",
+    // Must be listed: the fuzzy `contains("adc")` fallback would otherwise
+    // coerce it onto the STM32 ADC instance register map.
+    "stm32_adc_common",
     "rtc",
     "rtc_f1",
     "rtc_v3",
@@ -1220,7 +1223,15 @@ pub fn try_build(
                 .unwrap_or(32);
             Box::new(crate::peripherals::crc::Crc::new().with_idr_width(idr_width))
         }
-        "crs" => Box::new(crate::peripherals::crs::Crs::new()),
+        "stm32_adc_common" => Box::new(crate::peripherals::adc_common::AdcCommon::new()),
+        "crs" => {
+            // `config: { trim_bits: 6 }` = the STM32H7 CRS (TRIM[13:8]);
+            // default is the U5's 7-bit TRIM[14:8].
+            match p_cfg.config.get("trim_bits").and_then(|v| v.as_u64()) {
+                Some(6) => Box::new(crate::peripherals::crs::Crs::new_trim6()),
+                _ => Box::new(crate::peripherals::crs::Crs::new()),
+            }
+        }
         "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
         "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
         "rtc_v3" => Box::new(crate::peripherals::rtc_v3::RtcV3::new()),
@@ -1416,7 +1427,25 @@ pub fn try_build(
         "adc" => {
             let layout: crate::peripherals::adc::AdcRegisterLayout =
                 SystemBus::parse_profile_or_default(p_cfg, "ADC")?;
-            Box::new(crate::peripherals::adc::Adc::new_with_layout(layout))
+            let mut adc = crate::peripherals::adc::Adc::new_with_layout(layout);
+            // `config: { input_mv: { <channel>: <mV> } }` holds a fixed level
+            // on a channel (a board divider, or a matrix kit's A0 source).
+            if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                for (k, v) in map {
+                    match (k.as_u64(), v.as_u64()) {
+                        (Some(ch), Some(mv))
+                            if ch < u64::from(adc.channel_count()) && mv < 0xFFFF =>
+                        {
+                            adc.set_channel_input(ch as u8, mv as u16)
+                        }
+                        _ => anyhow::bail!(
+                            "ADC input_mv wants {{ <channel 0..{}>: <mV> }}",
+                            adc.channel_count() - 1
+                        ),
+                    }
+                }
+            }
+            Box::new(adc)
         }
         "pio" => {
             let mut pio = crate::peripherals::pio::Pio::new();
@@ -1473,10 +1502,14 @@ pub fn try_build(
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32l0") => {
             Box::new(crate::peripherals::syscfg::Stm32L0Syscfg::new())
         }
+        // STM32H7 SYSCFG: EXTICR routing and CCCSR compensation-cell enable/
+        // READY handshake are modelled; analog calibration values are not.
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32h7") => {
+            Box::new(crate::peripherals::syscfg::Stm32H7Syscfg::new())
+        }
         // SYSCFG elsewhere — mostly EXTI source select (harmless read-0 stub), plus the H7
-        // I/O compensation cell the H7 HAL enables + polls during rcc.freeze:
-        // CCCSR @ 0x20, READY = bit 8. Seed it so the poll exits (EN is a
-        // read-modify-write the stub drops, but the READY read returns the seed).
+        // I/O compensation cell behavior is handled by the profile-specific model above.
+        // Keep the old seeded fallback for legacy non-H7 descriptors.
         "syscfg" => {
             let mut s = crate::peripherals::stub::StubPeripheral::new(0x00);
             s.values.insert(0x20, 0x0000_0100);
@@ -2132,5 +2165,31 @@ mod registry_agreement {
                  future regressions. Strike the entry. Reason on record:\n  {reason}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod adc_input_tests {
+    use super::try_build;
+    use crate::bus::bus_trace::BusTrace;
+    use labwired_config::{PeripheralConfig, SystemManifest};
+
+    #[test]
+    fn adc_factory_applies_fixed_input_mv_to_h7_channel() {
+        let cfg: PeripheralConfig = serde_yaml::from_str(
+            "id: adc1\ntype: adc\nbase_address: 0\nconfig:\n  profile: h7\n  input_mv:\n    15: 1651\n",
+        )
+        .expect("parse ADC fixture");
+        let mut adc = try_build("adc", &cfg, &SystemManifest::default(), &BusTrace::new())
+            .expect("build ADC")
+            .expect("ADC factory handles this type");
+
+        adc.write_u32(0x08, 0).unwrap(); // leave deep power-down
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN -> LDORDY
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADEN -> ADRDY
+        adc.write_u32(0x00, 0x1C).unwrap(); // clear EOC/EOS/OVR only
+        adc.write_u32(0x30, 15 << 6).unwrap(); // SQ1 = channel 15
+        adc.write_u32(0x08, (1 << 28) | (1 << 2)).unwrap(); // HAL-style ADSTART write
+        assert_eq!(adc.read_u32(0x40).unwrap(), 32768);
     }
 }

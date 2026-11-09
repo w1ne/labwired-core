@@ -54,6 +54,13 @@ static bool samples_ok(int v0, int v1) {
   // avr.rs ADC mid-scale 512 (10-bit). Exact.
   return v0 == 512 && v1 == 512;
 
+#elif defined(ARDUINO_NUCLEO_H723ZG)
+  // adc profile h7: the matrix system holds A0 (PA3 = ADC1_INP15) at 1651 mV.
+  // The ADC's 12-bit input quantizer maps this to 2048, scaled to 32768 at
+  // 16 bits. stm32duino maps that to the 10-bit Arduino default: 512. Exact;
+  // the model's unseeded fixed source (3.0 V) would read 930, no conversion 0.
+  return v0 == 512 && v1 == 512;
+
 #elif defined(ARDUINO_ARCH_RP2040)
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).
   return v0 == 0 && v1 == 0;
@@ -101,6 +108,18 @@ void setup() {
   Serial0.print(v0);
   Serial0.print(F(" "));
   Serial0.println(v1);
+#endif
+#if defined(ARDUINO_NUCLEO_H723ZG)
+  Serial.print(F("LW_L5_REG_ISR 0x"));
+  Serial.println(ADC1->ISR, HEX);
+  Serial.print(F("LW_L5_REG_CR 0x"));
+  Serial.println(ADC1->CR, HEX);
+  Serial.print(F("LW_L5_REG_CFGR 0x"));
+  Serial.println(ADC1->CFGR, HEX);
+  Serial.print(F("LW_L5_REG_SQR1 0x"));
+  Serial.println(ADC1->SQR1, HEX);
+  Serial.print(F("LW_L5_REG_DR 0x"));
+  Serial.println(ADC1->DR, HEX);
 #endif
 }
 

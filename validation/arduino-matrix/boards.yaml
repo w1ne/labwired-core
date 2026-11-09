@@ -278,6 +278,30 @@ boards:
     pwm_min_edges: 20
     family: stm32
     # L5: adc profile stm32h7; L8: FDCAN enter_loopback sequence
+  - id: stm32h723zg
+    chip: stm32h723zg
+    system: systems/stm32h723zg.yaml
+    # Pinned like CI (core-arduino-matrix-smoke maps stm32* to 19.7.1):
+    # ststm32 20.0.0 makes SPI.begin() a no-op and L4 spins on a null SPI.
+    pio: { platform: ststm32@19.7.1, board: nucleo_h723zg, framework: arduino }
+    max_steps: 20000000
+    budget_reason: "NUCLEO-H723ZG 550 MHz HSE-bypass PLL1; first measurement pending"
+    # LD1 (green) = PB0 = LED_BUILTIN (UM2407, variant_NUCLEO_H723ZG.h).
+    led_watch: "gpiob:0"
+    led_min_edges: 2
+    # H7 LD1/PB0 is TIM1_CH2N (not wired yet); stock analogWrite on PA0/TIM2_CH1
+    # must toggle the header pad, not just print OK.
+    pwm_watch: "gpioa:0"
+    pwm_min_edges: 20
+    family: stm32
+    notes: "Stock stm32duino NUCLEO_H723ZG (HSE bypass 8 MHz, PLL1 550 MHz, VOS0)"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: >-
+        No H7 FDCAN model: the engine's fdcan model is the H5 fixed-layout
+        FDCAN, while the H7's is the full M_CAN with a configurable message RAM
+        at 0x4000AC00 (RM0468), so the H723 profile does not declare FDCAN
+
   - id: stm32l073
     chip: stm32l073
     system: systems/stm32l073.yaml

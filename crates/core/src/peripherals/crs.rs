@@ -22,12 +22,19 @@
 //! * HSI48 trimming itself is not simulated (no trim loop / FECAP movement).
 //! * The APB1RSTR force-reset pulse `HAL_RCCEx_CRSConfig` issues first is not
 //!   modelled: CRS state survives it instead of returning to reset values.
+//!
+//! The STM32H7 CRS (RM0468 §8.8, `stm32h723xx.h`) is the same block with a
+//! 6-bit TRIM[13:8] instead of the U5's 7-bit TRIM[14:8]: CR resets to
+//! 0x0000_2000 and bit 14 is reserved. [`Crs::new_trim6`] builds that variant
+//! (YAML `config: { trim_bits: 6 }`).
 
 use crate::SimResult;
 
 /// CR writable bits: SYNCOKIE(0), SYNCWARNIE(1), ERRIE(2), ESYNCIE(3),
 /// CEN(5), AUTOTRIMEN(6), SWSYNC(7), TRIM(14:8); bit 4 is reserved (SVD).
 const CR_WRITABLE_MASK: u32 = 0x0000_7FEF;
+/// The same with the H7's 6-bit TRIM[13:8]: bit 14 is reserved.
+const CR_WRITABLE_MASK_TRIM6: u32 = 0x0000_3FEF;
 /// CFGR writable bits: RELOAD(15:0), FELIM(23:16), SYNCDIV(26:24),
 /// SYNCSRC(29:28), SYNCPOL(31); bits 27/30 are reserved.
 const CFGR_WRITABLE_MASK: u32 = 0xB7FF_FFFF;
@@ -39,6 +46,12 @@ pub struct Crs {
     cr: u32,
     cfgr: u32,
     isr: u32,
+    #[serde(default = "default_cr_writable")]
+    cr_writable: u32,
+}
+
+fn default_cr_writable() -> u32 {
+    CR_WRITABLE_MASK
 }
 
 impl Crs {
@@ -47,6 +60,17 @@ impl Crs {
             cr: 0x0000_4000,
             cfgr: 0x2022_BB7F,
             isr: 0,
+            cr_writable: CR_WRITABLE_MASK,
+        }
+    }
+
+    /// STM32H7 CRS: 6-bit TRIM, CR reset 0x0000_2000 (TRIM = 0x20, the
+    /// `RCC_CRS_HSI48CALIBRATION_DEFAULT` of the H7 HAL). CFGR/ISR as the U5.
+    pub fn new_trim6() -> Self {
+        Self {
+            cr: 0x0000_2000,
+            cr_writable: CR_WRITABLE_MASK_TRIM6,
+            ..Self::new()
         }
     }
 
@@ -69,7 +93,7 @@ impl Crs {
             // state — it is dropped from the stored value and latches the
             // SYNCOKF flag like the software sync event it generates.
             0x00 => {
-                self.cr = value & CR_WRITABLE_MASK & !(1 << 7);
+                self.cr = value & self.cr_writable & !(1 << 7);
                 if value & (1 << 7) != 0 {
                     self.isr |= 1 << 0;
                 }
@@ -182,5 +206,20 @@ mod tests {
         assert_eq!(crs.read_u32(0x08).unwrap() & 1, 1, "ISR write ignored");
         crs.write_u32(0x0C, 1).unwrap();
         assert_eq!(crs.read_u32(0x08).unwrap() & 1, 0, "SYNCOKF cleared");
+    }
+
+    /// H7 variant (RM0468, `stm32h723xx.h`: CRS_CR_TRIM_Msk = 0x3F00): CR
+    /// resets with TRIM = 0x20 and bit 14 is reserved.
+    #[test]
+    fn crs_trim6_variant_matches_h7_layout() {
+        let mut crs = Crs::new_trim6();
+        assert_eq!(crs.read_u32(0x00).unwrap(), 0x0000_2000, "H7 CR reset");
+        assert_eq!(crs.read_u32(0x04).unwrap(), 0x2022_BB7F, "CFGR reset");
+        crs.write_u32(0x00, 0x0000_7F60).unwrap();
+        assert_eq!(
+            crs.read_u32(0x00).unwrap(),
+            0x0000_3F60,
+            "TRIM[13:8] + AUTOTRIMEN + CEN stick, bit 14 does not"
+        );
     }
 }

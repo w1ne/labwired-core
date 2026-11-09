@@ -1,0 +1,5 @@
+2026-11-09T06:09:51.994227Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../../configs/chips/stm32h723zg.yaml
+2026-11-09T06:09:52.089742Z  INFO labwired_loader: ELF Entry Point: 0x8005bad
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  1/1 checks · test · 1655357 steps · 1.21s
