@@ -304,6 +304,10 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
         "litex_ibex",
         "the simulation-only input_pin_bank has no firmware-visible LiteX GPIO register",
     ),
+    (
+        "litex_microwatt",
+        "the simulation-only input_pin_bank has no firmware-visible LiteX/Microwatt GPIO register",
+    ),
 ];
 
 /// Absolute input-register address of the covered port, from the vendor
@@ -562,12 +566,12 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 225;
+const COVERED: usize = 226;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
 const SILICON_REGISTER: usize = 117;
 /// Profiles outside this input endpoint sweep: the three H7 profiles and
-/// CrossLink-NX have ADC coverage; sixteen profiles have no analog endpoint.
-const NO_GPIO_ENDPOINT: usize = 20;
+/// CrossLink-NX have ADC coverage; fifteen profiles have no analog endpoint.
+const NO_GPIO_ENDPOINT: usize = 19;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -1034,7 +1038,12 @@ fn every_onboarding_profile_with_an_input_endpoint_takes_routed_ntc_and_diode_le
             "{board} is listed as unreached but is not covered"
         );
     }
-    for board in ["ice40up5k-mdp-evn", "litex_common", "litex_ibex"] {
+    for board in [
+        "ice40up5k-mdp-evn",
+        "litex_common",
+        "litex_ibex",
+        "litex_microwatt",
+    ] {
         assert!(
             covered.iter().any(|covered_board| covered_board == board),
             "the next uncovered onboarding profile {board} must have routed analog input coverage"
