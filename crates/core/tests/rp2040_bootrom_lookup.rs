@@ -72,6 +72,8 @@ const CODES: &[(u32, u32, &str)] = &[
     (0x3443, 0x49, "C4 memcpy44"),
     (0x4649, 0x35, "IF connect_internal_flash"),
     (0x5845, 0x35, "EX flash_exit_xip"),
+    (0x4552, 0x0113, "RE flash_range_erase"),
+    (0x5052, 0x012b, "RP flash_range_program"),
     (0x4346, 0x35, "FC flash_flush_cache"),
     (0x5843, 0x35, "CX flash_enter_cmd_xip"),
     (0x4255, 0x31, "UB reset_usb_boot"),
@@ -440,4 +442,73 @@ fn bitops_and_softfloat_tables_match_the_datasheet() {
     machine.cpu.r1 = 16;
     run_rom_fn(&mut machine, float2fix);
     assert_eq!(machine.cpu.r0, 0x8000);
+}
+
+/// Datasheet 2.8.3: `RE` fills the mapped XIP window with 0xFF; `RP` programs
+/// by bitwise-AND (NOR flash can only clear bits). The address is the flash
+/// offset, not the 0x10000000 window address.
+#[test]
+fn flash_range_erase_and_program_the_xip_window() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let (chip, manifest) = load_pico();
+    let mut machine = machine_from(&chip, &manifest);
+    plant_lookup(&mut machine);
+
+    const OFF: u32 = 0x400;
+    const XIP: u32 = 0x1000_0000;
+    const N: usize = 16;
+    const SRC: u32 = 0x2000_3000;
+
+    write_bytes(&mut machine.bus, XIP + OFF - 1, &[0xA5]);
+    write_bytes(&mut machine.bus, XIP + OFF, &[0x11; N]);
+    write_bytes(&mut machine.bus, XIP + OFF + N as u32, &[0x5A]);
+
+    let re = run_lookup(&mut machine, 0x4552);
+    assert_eq!(re, 0x0113, "RE pointer");
+    machine.cpu.r0 = OFF;
+    machine.cpu.r1 = N as u32;
+    machine.cpu.r2 = 0x1000;
+    machine.cpu.r3 = 0x20;
+    run_rom_fn(&mut machine, re);
+    for i in 0..N {
+        assert_eq!(
+            machine.bus.read_u8(u64::from(XIP + OFF) + i as u64).unwrap(),
+            0xFF,
+            "erased {i}"
+        );
+    }
+    assert_eq!(machine.bus.read_u8(u64::from(XIP + OFF - 1)).unwrap(), 0xA5);
+    assert_eq!(
+        machine.bus.read_u8(u64::from(XIP + OFF) + N as u64).unwrap(),
+        0x5A
+    );
+
+    write_bytes(&mut machine.bus, SRC, &[0x0F; N]);
+    let rp = run_lookup(&mut machine, 0x5052);
+    assert_eq!(rp, 0x012b, "RP pointer");
+    machine.cpu.r0 = OFF;
+    machine.cpu.r1 = SRC;
+    machine.cpu.r2 = N as u32;
+    run_rom_fn(&mut machine, rp);
+    for i in 0..N {
+        assert_eq!(
+            machine.bus.read_u8(u64::from(XIP + OFF) + i as u64).unwrap(),
+            0x0F,
+            "programmed {i}"
+        );
+    }
+
+    write_bytes(&mut machine.bus, SRC, &[0xF0; N]);
+    machine.cpu.r0 = OFF;
+    machine.cpu.r1 = SRC;
+    machine.cpu.r2 = N as u32;
+    run_rom_fn(&mut machine, rp);
+    for i in 0..N {
+        assert_eq!(
+            machine.bus.read_u8(u64::from(XIP + OFF) + i as u64).unwrap(),
+            0x00,
+            "AND {i}"
+        );
+    }
+    assert_eq!(machine.bus.read_u8(u64::from(XIP + OFF - 1)).unwrap(), 0xA5);
 }
