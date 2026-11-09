@@ -92,6 +92,8 @@ const CONVERTED: &[&str] = &[
     "nucleo_f767zi",
     "nucleo_h753zi",
     "nucleo_wba52cg",
+    "nuvoton_npcx9",
+    "nuvoton_npcx9m6fb_evb",
     "nxp-k6xf",
     "nxp-s32k388",
     "nxp-s32k388evb",
@@ -329,7 +331,33 @@ enum Family {
     /// `VALID`, `CEOCFR0`/`ISR` write-1-cleared. P5..P7 exist on all three
     /// instances. 12 bits against VREFH 3.3 V.
     S32k3AdcSar,
+    /// Nuvoton NPCX9 ADC: Zephyr `adc_npcx_init` timing writes, then
+    /// `adc_npcx_start_scan` (`ADCEN`, `STOP`, clear `EOCCEV`, `ADCCS`,
+    /// `ADCMD` = scan, `INTECCEN`, `START`) for the routed pair, and the
+    /// Chromium EC channel-mode read (`ASCADD`, `EOCEV`, `CHNDAT.NEW`) for one
+    /// channel. 10 bits against 2816 mV.
+    NpcxAdc,
 }
+
+/// NPCX ADC offsets (Zephyr reg_def.h `struct adc_reg`, npcx9 soc.h) and bits.
+const NPCX_ADCSTS: u64 = 0x00;
+const NPCX_ADCCNF: u64 = 0x02;
+const NPCX_ATCTL: u64 = 0x04;
+const NPCX_ASCADD: u64 = 0x06;
+const NPCX_ADCCS: u64 = 0x08;
+const NPCX_ADCCNF2: u64 = 0x20;
+const NPCX_GENDLY: u64 = 0x22;
+const NPCX_MEAST: u64 = 0x26;
+const NPCX_CHNDAT0: u64 = 0x40;
+const NPCX_EOCEV: u16 = 1 << 0;
+const NPCX_EOCCEV: u16 = 1 << 1;
+const NPCX_ADCEN: u16 = 1 << 0;
+const NPCX_ADCMD_SCAN: u16 = 1 << 1;
+const NPCX_START: u16 = 1 << 4;
+const NPCX_INTECEN: u16 = 1 << 6;
+const NPCX_INTECCEN: u16 = 1 << 7;
+const NPCX_STOP: u16 = 1 << 11;
+const NPCX_NEW: u16 = 1 << 15;
 
 /// NXP LPADC offsets (MIMXRT595S_cm33.h `ADC_Type`) and bits.
 const LPADC_CTRL: u64 = 0x10;
@@ -522,6 +550,8 @@ fn converters(chip: &ChipDescriptor) -> Result<Vec<Converter>, String> {
             Family::S32k1Adc
         } else if kind == "s32k3_adc_sar" {
             Family::S32k3AdcSar
+        } else if kind == "npcx_adc" {
+            Family::NpcxAdc
         } else if kind == "nxp_lpadc" {
             Family::NxpLpadc {
                 ctype_mode: p.config.get("layout").and_then(|v| v.as_str()) == Some("ctype_mode"),
@@ -618,6 +648,10 @@ impl Converter {
             // 12 bits (RESN 01), 1 LSB = VREFH (3.3 V) / 4096, truncated,
             // clamped; unpacked as `Adc_Sar_GetMaskedResult` does.
             Family::S32k3AdcSar => (mv * 4096 / 3300).min(4095),
+            // 10 bits, Chromium EC ADC_MAX_VOLT 2816 over ADC_READ_MAX + 1
+            // codes, truncated, clamped; the -10 °C divider (2.816 V) lands
+            // on full scale, 25/80 °C resolve.
+            Family::NpcxAdc => (mv * 1024 / 2816).min(1023),
         }
     }
 
@@ -697,6 +731,28 @@ impl Converter {
     fn power_up(&self, bus: &mut SystemBus) {
         match self.family {
             Family::Stm32F4 | Family::Sam4s => {}
+            Family::NpcxAdc => {
+                // A START before ADCEN converts nothing.
+                bus.write_u16(self.base + NPCX_ASCADD, u16::from(NTC_CHANNEL))
+                    .expect("ASCADD");
+                bus.write_u16(self.base + NPCX_ADCCNF, NPCX_START)
+                    .expect("START without ADCEN");
+                assert_eq!(
+                    bus.read_u16(self.base + NPCX_ADCSTS).unwrap(),
+                    0,
+                    "{}: no conversion before ADCEN",
+                    self.id
+                );
+                // adc_npcx_init: SCLKDIV, DLY, then the regular-speed values.
+                bus.write_u16(self.base + NPCX_ATCTL, (3 << 8) | 7)
+                    .expect("ATCTL");
+                bus.write_u16(self.base + NPCX_ADCCNF2, 0x8B07)
+                    .expect("ADCCNF2");
+                bus.write_u16(self.base + NPCX_GENDLY, 0x0100)
+                    .expect("GENDLY");
+                bus.write_u16(self.base + NPCX_MEAST, 0x0001)
+                    .expect("MEAST");
+            }
             Family::S32k3AdcSar => {
                 // Adc_Sar_Ip_Powerdown: PWDN, ADCSTATUS = power-down. A
                 // normal chain started now converts nothing.
@@ -1341,6 +1397,60 @@ impl Converter {
     /// One firmware-style conversion per routed channel: `[ntc, diode]`.
     fn convert_routed(&self, bus: &mut SystemBus) -> [u32; 2] {
         match self.family {
+            Family::NpcxAdc => {
+                // Zephyr adc_npcx_start_scan over the pair and the idle pad;
+                // the ISR waits on EOCCEV, then reads each CHNDAT.
+                let cnf = self.base + NPCX_ADCCNF;
+                bus.write_u16(cnf, NPCX_ADCEN | NPCX_STOP)
+                    .expect("ADCEN, STOP");
+                bus.write_u16(self.base + NPCX_ADCSTS, NPCX_EOCCEV)
+                    .expect("clear EOCCEV");
+                let [ntc, diode] = self.routed_channels();
+                let idle = self.idle_channel();
+                bus.write_u16(
+                    self.base + NPCX_ADCCS,
+                    (1 << ntc) | (1 << diode) | (1 << idle),
+                )
+                .expect("ADCCS");
+                bus.write_u16(cnf, NPCX_ADCEN | NPCX_ADCMD_SCAN | NPCX_INTECCEN)
+                    .expect("scan mode");
+                bus.write_u16(
+                    cnf,
+                    NPCX_ADCEN | NPCX_ADCMD_SCAN | NPCX_INTECCEN | NPCX_START,
+                )
+                .expect("START scan");
+                let status = bus.read_u16(self.base + NPCX_ADCSTS).unwrap();
+                assert_eq!(
+                    status & NPCX_EOCCEV,
+                    NPCX_EOCCEV,
+                    "{}: the scan cycle ends in EOCCEV",
+                    self.id
+                );
+                bus.write_u16(self.base + NPCX_ADCSTS, status)
+                    .expect("ADCSTS w1c");
+                assert_eq!(
+                    bus.read_u16(self.base + NPCX_ADCSTS).unwrap(),
+                    0,
+                    "{}: status cleared by writing it back",
+                    self.id
+                );
+                let dat = |bus: &mut SystemBus, ch: u8| {
+                    let v = bus
+                        .read_u16(self.base + NPCX_CHNDAT0 + 2 * u64::from(ch))
+                        .expect("CHNDAT");
+                    assert_ne!(v & NPCX_NEW, 0, "{}: CH{ch} NEW", self.id);
+                    u32::from(v & 0x3FF)
+                };
+                let codes = [dat(bus, ntc), dat(bus, diode)];
+                assert_eq!(
+                    dat(bus, idle),
+                    0,
+                    "{}: unrouted CH{idle} converts to zero",
+                    self.id
+                );
+                bus.write_u16(cnf, 0).expect("ADCEN off");
+                codes
+            }
             Family::NxpLpadc { ctype_mode } => {
                 // Zephyr's chain: CMD1 (NTC) -> CMD2 (diode) -> CMD3 (the
                 // unrouted pad), started once by trigger 0. The RT700 runs
@@ -2417,6 +2527,31 @@ impl Converter {
 
     fn convert(&self, bus: &mut SystemBus, channel: u8) -> u32 {
         match self.family {
+            Family::NpcxAdc => {
+                // Chromium EC start_single_and_wait + adc_read_channel.
+                let cnf = self.base + NPCX_ADCCNF;
+                bus.write_u16(cnf, NPCX_ADCEN | NPCX_STOP).expect("STOP");
+                bus.write_u16(self.base + NPCX_ASCADD, u16::from(channel))
+                    .expect("ASCADD.SADDR");
+                bus.write_u16(self.base + NPCX_ADCSTS, NPCX_EOCEV)
+                    .expect("clear EOCEV");
+                bus.write_u16(cnf, NPCX_ADCEN | NPCX_INTECEN | NPCX_START)
+                    .expect("START channel mode");
+                assert_eq!(
+                    bus.read_u16(self.base + NPCX_ADCSTS).unwrap() & NPCX_EOCEV,
+                    NPCX_EOCEV,
+                    "{}: CH{channel} raises EOCEV",
+                    self.id
+                );
+                let dat = bus
+                    .read_u16(self.base + NPCX_CHNDAT0 + 2 * u64::from(channel))
+                    .expect("CHNDAT");
+                assert_ne!(dat & NPCX_NEW, 0, "{}: CH{channel} NEW", self.id);
+                bus.write_u16(self.base + NPCX_ADCSTS, NPCX_EOCEV)
+                    .expect("EOCEV w1c");
+                bus.write_u16(cnf, 0).expect("ADCEN off");
+                u32::from(dat & 0x3FF)
+            }
             Family::S32k3AdcSar => {
                 // Adc_Sar_Ip_StartConversion (one-shot normal chain), poll
                 // ISR.ECH, Adc_Sar_Ip_GetConvData.
@@ -3188,6 +3323,7 @@ fn assert_converter_routes_generic_analog(
                 | Family::KinetisAdc16
                 | Family::S32k1Adc
                 | Family::S32k3AdcSar
+                | Family::NpcxAdc
                 | Family::NxpLpadc { .. }
                 | Family::RaAdc { .. }
         ) {
@@ -3275,7 +3411,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "onboarding profiles with an ADC LabWired cannot convert yet"
     );
     assert_eq!(
-        instances, 145,
+        instances, 147,
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
@@ -3283,7 +3419,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "simavr profiles with a CPU-owned AVR ADC or comparator, driven in cosim_onboarding_avr_analog.rs"
     );
     assert_eq!(
-        without_adc, 98,
+        without_adc, 96,
         "onboarding profiles that declare no modelled ADC"
     );
 }

@@ -454,6 +454,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "s32k3_adc_sar",
     // NXP LPADC command/trigger SAR ADC (MIMXRT595S_cm33.h, fsl_lpadc.c).
     "nxp_lpadc",
+    // Nuvoton NPCX9 10-bit ADC (Zephyr reg_def.h/adc_npcx.c, Chromium EC).
+    "npcx_adc",
     // MSP430 ADC12 (F1/F2) and ADC12_A (F5) (mspsim ADC12.java, TI headers).
     "msp430_adc12",
     "msp430_adc12_a",
@@ -2016,6 +2018,14 @@ pub fn try_build(
             crate::peripherals::msp430_adc12::Adc12Layout::Adc12A,
         )),
         "xilinx_xadc" => Box::new(crate::peripherals::xilinx_xadc::XilinxXadc::new()),
+        // `vref_mv`: full scale, Zephyr npcx.dtsi `vref-mv` = 2816 by default.
+        "npcx_adc" => Box::new(crate::peripherals::npcx_adc::NpcxAdc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(2816, |v| v as u32),
+        )),
         "renesasda14_gpadc" => {
             Box::new(crate::peripherals::renesas_da14_gpadc::RenesasDa14Gpadc::new())
         }
