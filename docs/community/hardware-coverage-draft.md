@@ -29,7 +29,7 @@ NRND. The page remains unpublished pending Andrii's approval.
 | **#1 ESP32, 38%** | [ESP-Mosaico V1.2 / ESP32-S31](../../examples/esp-mosaico-v1-2/README.md); [Espressif ESP32-P4X Function EV](../../examples/esp32p4x-function-ev-board/README.md); [Waveshare ESP32-C3-Zero](../../examples/waveshare-esp32c3-zero/README.md); [ESP32-S3-DevKitC-1 N16R8 v1.0](../../examples/esp32-s3-devkitc-1-n16r8/README.md); [ESP32-S3-DevKitC-1 LEDC servo system](../../examples/esp32-s3-devkitc-servo/README.md) | S31 GPIO7 function-button input drives GPIO8 haptic-control transitions; P4X GPIO8 transitions at J1 pin 5; C3-Zero GPIO10 waveform decoded as a red WS2812 pixel; DevKitC v1.0 RMT drives the GPIO48 pixel; the servo profile captures a 49.92 Hz LEDC waveform on GPIO4 and decodes a lit RGB pixel | [S31 preorder listing, checked 2026-11-09](../../examples/esp-mosaico-v1-2/evidence/vendor-status.md); [P4X listing, checked 2026-11-06](../../examples/esp32p4x-function-ev-board/evidence/vendor-status.md); [Waveshare listing, checked 2026-11-06](../../examples/waveshare-esp32c3-zero/evidence/vendor-status.md); [Espressif status, checked 2026-11-06](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/vendor-status.md); [N16R8 stock, checked 2026-11-06](../../examples/esp32-s3-devkitc-servo/evidence/vendor-status.md) |
 | **#2 ATmega328 family, 30%** | [ATmega328PB Xplained Mini](../../examples/atmega328pb-xplained-mini/README.md) (active sibling; the survey does not separate PB) | USART0 CDC transcript and the board's D200/PB5 LED transitions. ATmega328P remains excluded because it is NRND. | [Live MCU status and board stock, checked 2026-11-06](../../examples/atmega328pb-xplained-mini/evidence/vendor-status.md) |
 | **#3 STM32F103, 17%** | [NUCLEO-F103RB](../../examples/nucleo-f103rb/README.md) | USART2 output and LD2 on PA5 | [ST status and stock, checked 2026-11-03](../../examples/nucleo-f103rb/evidence/vendor-status.md) |
-| **#4 other STM32, 13%** | [STM32G071B-DISCO](../../examples/stm32g071b-disco/README.md) | USART3 output on the ST-LINK virtual COM route | [ST status and stock, checked 2026-11-03](../../examples/stm32g071b-disco/evidence/vendor-status.md) |
+| **#4 other STM32, 13%** | [STM32G071B-DISCO](../../examples/stm32g071b-disco/README.md); [NUCLEO-H723ZG + BME280](../../examples/nucleo-h723zg-bme280/README.md) | G071B-DISCO USART3 output on the ST-LINK virtual COM route; H723ZG reads BME280 ID `0x60` over I2C1 on PB8/PB9 and gates LD1 pulses on the read | [G071B-DISCO status and stock, checked 2026-11-03](../../examples/stm32g071b-disco/evidence/vendor-status.md); [H723ZG and BME280 status, checked 2026-11-09](../../examples/nucleo-h723zg-bme280/evidence/vendor-status.md) |
 | **#5 RP2040, 12%; RP2350 is the current successor in target #2** | [Raspberry Pi Pico](../../examples/pico/README.md); [Pico 2 / RP2350](../../examples/pico2/README.md) | Pico: UART0, GP25 LED, and internal temperature ADC. Pico 2: UART0, GP25 LED, and GP26/ADC0 conversion from a modeled potentiometer. RP2350 was not a separate survey row. | [Pico availability checked 2026-11-06](../../examples/pico/evidence/vendor-status.md); [Pico 2 checked 2026-11-09](../../examples/pico2/evidence/adc/vendor-status.md) |
 
 ### #1 — ESP32: ESP-Mosaico V1.2 / ESP32-S31
@@ -227,6 +227,41 @@ transcript. The focused model includes the core, RCC, GPIOB, and USART3; the
 OLED, USB-C/Power Delivery, joystick, reed sensor, and ST-LINK implementation
 are outside its scope. See the [board guide](../../examples/stm32g071b-disco/README.md)
 and [committed run evidence](../../examples/stm32g071b-disco/evidence/).
+
+### #4 — other STM32: NUCLEO-H723ZG with BME280
+
+Install the Adafruit BME280 library and Unified Sensor dependency, select
+**NUCLEO-H723ZG**, and connect the breakout to 3V3, GND, Arduino D15/SCL (PB8),
+and D14/SDA (PB9). The default `Wire` bus uses I2C1 on those pins:
+
+```cpp
+#include <Wire.h>
+#include <Adafruit_BME280.h>
+
+Adafruit_BME280 bme;
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+  if (!bme.begin(0x77, &Wire)) {
+    Serial.println("BME280 not found");
+    while (true) delay(10);
+  }
+  Serial.println("NUCLEO_H723ZG_BME280_OK");
+}
+
+void loop() {
+  Serial.print("Temperature C: ");
+  Serial.println(bme.readTemperature());
+  delay(2000);
+}
+```
+
+The committed local smoke reads the BME280 ID (`0x60`) through I2C1 and gates
+LD1 transitions on that read. It covers the tested sensor path only; it is not
+a physical-board check. See the [board quickstart](../../examples/nucleo-h723zg-bme280/README.md),
+[live availability receipt](../../examples/nucleo-h723zg-bme280/evidence/vendor-status.md),
+and [committed evidence](../../examples/nucleo-h723zg-bme280/evidence/).
 
 ### #5 — RP2040: Raspberry Pi Pico
 

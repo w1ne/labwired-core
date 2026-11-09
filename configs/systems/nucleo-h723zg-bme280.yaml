@@ -1,0 +1,18 @@
+# NUCLEO-H723ZG with an external Adafruit BME280 on Arduino I2C1.
+# UM2407 / the NUCLEO-H723ZG Arduino variant map D15/SCL to PB8 and D14/SDA to PB9.
+name: "nucleo-h723zg-bme280"
+chip: "../chips/stm32h723zg-nucleo-smoke.yaml"
+debug_uart: "usart3"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_ld1"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true

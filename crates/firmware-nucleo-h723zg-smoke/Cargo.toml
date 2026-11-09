@@ -14,3 +14,9 @@ name = "firmware-nucleo-h723zg-smoke"
 path = "src/main.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-nucleo-h723zg-bme280"
+path = "src/bme280.rs"
+test = false
+bench = false

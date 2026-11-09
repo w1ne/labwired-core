@@ -4,10 +4,16 @@ This smoke profile boots firmware for the STM32H723ZGT6 and exercises two
 board paths: the active-high LD1 on PB0 and the default ST-LINK virtual COM port
 through USART3 TX on PD8. The receive pin PD9 is pin-mapped but not exercised.
 
-The descriptor is intentionally narrow. It models the reset-clock RCC, GPIOB,
-GPIOD, USART3, and the DTCM region used by the smoke image. Other SRAM banks,
-the other user LEDs and button, USB, Ethernet, and the rest of the H723
-peripheral estate are not claimed by this profile.
+The board smoke exercises the reset-clock RCC, GPIOB/GPIOD, USART3, and the
+DTCM region used by its firmware. The shared focused chip descriptor also
+exposes I2C1 on PB8/PB9 for the optional sensor profile below; the base system
+does not attach a sensor. Other SRAM banks, the other user LEDs and button,
+USB, Ethernet, and the rest of the H723 peripheral estate are not claimed by
+these focused profiles.
+
+For an external sensor design on this board, see the separate
+[BME280/I2C1 profile](../nucleo-h723zg-bme280/README.md), which uses PB8/PB9
+and gates LD1 activity on the sensor's actual I2C chip-ID response.
 
 ## Reproduce
 

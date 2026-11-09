@@ -1,0 +1,14 @@
+# Read the BME280 chip ID over the NUCLEO-H723ZG's Arduino I2C1 route.
+# LD1 pulses only if the modeled sensor returns the expected 0x60 ID.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-h723zg-bme280"
+  system: "../../configs/systems/nucleo-h723zg-bme280.yaml"
+limits:
+  max_steps: 300000
+assertions:
+  - uart_contains: "NUCLEO_H723ZG_BME280_OK ID=0x60 I2C1=PB8/PB9"
+  - gpio_edges:
+      pin: "gpiob:0"
+      min_edges: 32
+  - expected_stop_reason: max_steps
