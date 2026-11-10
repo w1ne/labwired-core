@@ -18,6 +18,8 @@
 //!          (25 °C = 0x1900), plus TXE/RXNE buffer IRQs, master-transmit and
 //!          master-receive BTF event IRQs, absent-address NACK and error IRQ
 //!          checks
+//!   I2C2   a separate TMP102 repeated-start read, SB/ADDR/BTF event IRQs and
+//!          TXE isolation on the imported second controller instance
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
 //!   USART1 TXEIE and RXNEIE assert and release their NVIC line
 //! A summary word goes to RAM at 0x20017F00 (one bit per block passed).
@@ -61,6 +63,14 @@ const I2C_SR1: u32 = I2C1 + 0x14;
 const I2C_SR2: u32 = I2C1 + 0x18;
 const I2C_CCR: u32 = I2C1 + 0x1C;
 const I2C_TRISE: u32 = I2C1 + 0x20;
+const I2C2: u32 = 0x4000_5800;
+const I2C2_CR1: u32 = I2C2;
+const I2C2_CR2: u32 = I2C2 + 0x04;
+const I2C2_DR: u32 = I2C2 + 0x10;
+const I2C2_SR1: u32 = I2C2 + 0x14;
+const I2C2_SR2: u32 = I2C2 + 0x18;
+const I2C2_CCR: u32 = I2C2 + 0x1C;
+const I2C2_TRISE: u32 = I2C2 + 0x20;
 
 const SPI1: u32 = 0x4001_3000;
 const SPI_CR1: u32 = SPI1;
@@ -75,6 +85,7 @@ const SPI1_IRQ_BIT: u32 = 1 << (35 - 32);
 const USART1_IRQ_BIT: u32 = 1 << (37 - 32);
 const I2C1_EV_IRQ_BIT: u32 = 1 << 31;
 const I2C1_ER_IRQ_BIT: u32 = 1;
+const I2C2_EV_IRQ_BIT: u32 = 1 << 1;
 
 const RESULT: u32 = 0x2001_7F00;
 
@@ -116,11 +127,11 @@ pub extern "C" fn Reset() -> ! {
 }
 
 fn main() -> ! {
-    // GPIOA + GPIOC on AHB1; TIM2, USART2, I2C1 on APB1; USART1 + SPI1 on APB2.
+    // GPIOA + GPIOC on AHB1; TIM2, USART2, I2C1/2 on APB1; USART1 + SPI1 on APB2.
     wr(RCC_AHB1ENR, rd(RCC_AHB1ENR) | (1 << 0) | (1 << 2));
     wr(
         RCC_APB1ENR,
-        rd(RCC_APB1ENR) | (1 << 0) | (1 << 17) | (1 << 21),
+        rd(RCC_APB1ENR) | (1 << 0) | (1 << 17) | (1 << 21) | (1 << 22),
     );
     wr(RCC_APB2ENR, rd(RCC_APB2ENR) | (1 << 12));
     // HSI = 16 MHz, 115200 baud: USARTDIV 8.6875 -> 0x8B.
@@ -131,8 +142,8 @@ fn main() -> ! {
     let mut passed = 0u32;
 
     let ahb = rd(RCC_AHB1ENR) & 0x5;
-    let apb = rd(RCC_APB1ENR) & ((1 << 0) | (1 << 17) | (1 << 21));
-    let rcc_ok = ahb == 0x5 && apb == 0x0022_0001;
+    let apb = rd(RCC_APB1ENR) & ((1 << 0) | (1 << 17) | (1 << 21) | (1 << 22));
+    let rcc_ok = ahb == 0x5 && apb == 0x0062_0001;
     line(b"rcc apb1=", apb, rcc_ok);
     passed |= rcc_ok as u32;
 
@@ -172,6 +183,26 @@ fn main() -> ! {
     send(if i2c_ok { b" ok\r\n" } else { b" FAIL\r\n" });
     passed |= (i2c_ok as u32) << 3;
 
+    let (i2c2_temperature, i2c2_sb_irq, i2c2_addr_irq, i2c2_txe_isolated, i2c2_btf_irq) =
+        smoke_i2c2();
+    let i2c2_ok = i2c2_temperature == 0x1900
+        && i2c2_sb_irq
+        && i2c2_addr_irq
+        && i2c2_txe_isolated
+        && i2c2_btf_irq;
+    send(b"i2c2 tmp102=");
+    put_hex32(u32::from(i2c2_temperature));
+    send(b" sb_irq=");
+    send(if i2c2_sb_irq { b"1" } else { b"0" });
+    send(b" addr_irq=");
+    send(if i2c2_addr_irq { b"1" } else { b"0" });
+    send(b" txe_isolated=");
+    send(if i2c2_txe_isolated { b"1" } else { b"0" });
+    send(b" btf_irq=");
+    send(if i2c2_btf_irq { b"1" } else { b"0" });
+    send(if i2c2_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+    passed |= (i2c2_ok as u32) << 7;
+
     let spi_ok = smoke_spi1();
     passed |= (spi_ok as u32) << 4;
 
@@ -181,7 +212,7 @@ fn main() -> ! {
     passed |= (usart1_rx_irq_ok as u32) << 6;
 
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0x7F {
+    send(if passed == 0xFF {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
@@ -574,6 +605,83 @@ fn smoke_i2c1_receive_btf() -> (u16, bool, bool, bool) {
     let lsb = rd(I2C_DR) as u8;
     let data = u16::from_be_bytes([msb, lsb]);
     (data, btf_irq, rxne_isolated, btf_released && idle)
+}
+
+/// Exercise the imported F401's second legacy I2C controller with its own
+/// TMP102 and event vector. This catches instance wiring/configuration mistakes
+/// that an I2C1-only transaction cannot see.
+fn smoke_i2c2() -> (u16, bool, bool, bool, bool) {
+    const PE: u32 = 1;
+    const ACK: u32 = 1 << 10;
+    const START: u32 = 1 << 8;
+    const STOP: u32 = 1 << 9;
+    const SB: u32 = 1;
+    const ADDR: u32 = 1 << 1;
+    const BTF: u32 = 1 << 2;
+    const RXNE: u32 = 1 << 6;
+
+    wr(I2C2_CR2, 16 | (1 << 9)); // ITEVTEN only
+    wr(I2C2_CCR, 80);
+    wr(I2C2_TRISE, 17);
+    wr(I2C2_CR1, PE);
+
+    wr(I2C2_CR1, PE | START);
+    if !wait(I2C2_SR1, SB, SB) {
+        return (0xFFFF, false, false, false, false);
+    }
+    let sb_irq = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
+    wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
+    wr(I2C2_DR, 0x92); // independent TMP102 at 0x49, write
+    if !wait(I2C2_SR1, ADDR, ADDR) {
+        return (0xFFFF, sb_irq, false, false, false);
+    }
+    let addr_irq = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
+    let _ = rd(I2C2_SR1);
+    let _ = rd(I2C2_SR2); // clear ADDR; TXE is not an ITEVTEN source
+    wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
+    let mut txe_isolated = true;
+    for _ in 0..16 {
+        let _ = rd(I2C2_SR1);
+        txe_isolated &= rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
+    }
+
+    wr(I2C2_DR, 0); // temperature register pointer
+    if !wait(I2C2_SR1, BTF, BTF) {
+        return (0xFFFF, sb_irq, addr_irq, txe_isolated, false);
+    }
+    let btf_irq = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
+
+    // Repeated START, then read the independent sensor's two-byte result.
+    wr(I2C2_CR1, PE | ACK | START);
+    if !wait(I2C2_SR1, SB, SB) {
+        return (0xFFFF, sb_irq, addr_irq, txe_isolated, btf_irq);
+    }
+    wr(I2C2_DR, 0x93);
+    if !wait(I2C2_SR1, ADDR, ADDR) {
+        return (0xFFFF, sb_irq, addr_irq, txe_isolated, btf_irq);
+    }
+    let _ = rd(I2C2_SR1);
+    let _ = rd(I2C2_SR2);
+    if !wait(I2C2_SR1, RXNE, RXNE) {
+        return (0xFFFF, sb_irq, addr_irq, txe_isolated, btf_irq);
+    }
+    let msb = rd(I2C2_DR) as u8;
+    wr(I2C2_CR1, PE); // NACK the final byte
+    wr(I2C2_CR1, PE | STOP);
+    if !wait(I2C2_SR1, RXNE, RXNE) {
+        return (0xFFFF, sb_irq, addr_irq, txe_isolated, btf_irq);
+    }
+    let lsb = rd(I2C2_DR) as u8;
+    if !wait(I2C2_SR2, 0x0002, 0) {
+        return (0xFFFF, sb_irq, addr_irq, txe_isolated, btf_irq);
+    }
+    (
+        u16::from_be_bytes([msb, lsb]),
+        sb_irq,
+        addr_irq,
+        txe_isolated,
+        btf_irq,
+    )
 }
 
 /// The fixture MAX31855 is on SPI1 with PA4 as GPIO chip select. Check the

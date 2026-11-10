@@ -17,6 +17,11 @@ external_devices:
     connection: i2c1
     config:
       i2c_address: 0x48
+  - id: tmp102_i2c2
+    type: tmp102
+    connection: i2c2
+    config:
+      i2c_address: 0x49
 board_io:
   - id: "led_pc13"
     kind: "led"
