@@ -139,8 +139,9 @@ cargo build -p labwired-cli -p labwired-dap --release --locked
   arm64. Use the immutable version tag in CI. The workflow also updates its
   moving convenience tag.
 - [ ] Confirm the anonymous GHCR pull and released runner/action smoke tests
-  passed. If a first publication fails because the package is private, set the
-  package visibility to public and rerun the failed checks for that same tag.
+  passed natively on both Linux amd64 and arm64. If a first publication fails
+  because the package is private, set the package visibility to public and
+  rerun the failed checks for that same tag.
 - [ ] Confirm [PyPI](https://pypi.org/project/labwired/) contains `X.Y.Z` with
   five `cp39-abi3` wheels and one sdist: Linux x86_64/aarch64, macOS arm64/x86_64,
   and Windows x64.
