@@ -215,3 +215,118 @@ fn stm32h735_smoke_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
         );
     }
 }
+
+#[test]
+fn stm32h735_mosfet_drain_bulk_charge_reaches_adc1_with_an_unrelated_diode() {
+    let system_path = root("configs/systems/stm32h735-smoke.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load STM32H735 profile");
+    let analog = SystemManifest::from_file(root(
+        "examples/stm32h735-smoke/analog-mosfet-junction-charge.yaml",
+    ))
+    .expect("load generic MOSFET junction-charge and diode netlists");
+    profile.cosim_models = analog.cosim_models;
+    let chip = labwired_config::ChipDescriptor::from_file(
+        system_path.parent().unwrap().join(&profile.chip),
+    )
+    .expect("load STM32H735 descriptor");
+    for (pad, channel) in [("PA0", 16), ("PA1", 17)] {
+        assert_eq!(
+            chip.analog_pins
+                .get(pad)
+                .map(|route| (route.peripheral.as_str(), route.channel)),
+            Some(("adc1", channel)),
+            "{pad} must resolve to STM32H735 ADC1_INP{channel}"
+        );
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build STM32H735 system bus");
+    let ahb1enr = bus.read_u32(RCC_AHB1ENR).expect("read RCC AHB1ENR");
+    bus.write_u32(RCC_AHB1ENR, ahb1enr | (1 << 5))
+        .expect("enable ADC1/ADC2 clock");
+    bus.write_u32(ADC_CR, 0).expect("leave ADC deep power-down");
+    bus.write_u32(ADC_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC_CR, (1 << 28) | (1 << 31))
+        .expect("calibrate ADC1");
+    bus.write_u32(ADC_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(
+        bus.read_u32(ADC_ISR).expect("read ADC1 ready status") & 1,
+        0,
+        "ADC1 must report ADRDY before conversion"
+    );
+    bus.write_u32(ADC_CFGR, 2 << 2)
+        .expect("select 12-bit H7 conversion resolution");
+    bus.write_u32(ADC_PCSEL, (1 << 16) | (1 << 17))
+        .expect("select MOSFET and diode ADC channels");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries MOSFET and diode netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic netlists must resolve PA0/PA1 to ADC1 channels 16/17"
+    );
+    let expected_diode_v = diode_load_line_voltage();
+    session
+        .set_signal_number("ui.mosfet_bulk.drain_current_a", 0.0)
+        .expect("initialize the MOSFET drain current");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle the zero-current MOSFET and diode branches");
+    assert_eq!(initial_steps.len(), 2, "both analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    assert!(
+        signal_voltage(&session, "board.analog.pa0_volts").abs() < 1e-12,
+        "the zero-current drain starts at ground"
+    );
+
+    session
+        .set_signal_number("ui.mosfet_bulk.drain_current_a", 1e-3)
+        .expect("step 1 mA through the MOSFET drain-bulk junction");
+    let mut expected_drain_v = 0.0;
+    for step in 0..12 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the MOSFET junction-charge transient");
+        assert_eq!(steps.len(), 2, "MOSFET and diode solve at every step");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        // CBD=1 nF, Rload=1 kΩ, and dt=1 us give a 1/2 backward-Euler
+        // recurrence toward the 1 V DC load line after the 1 mA current step.
+        expected_drain_v = 0.5 * expected_drain_v + 0.5;
+        let drain_v = signal_voltage(&session, "board.analog.pa0_volts");
+        assert!(
+            (drain_v - expected_drain_v).abs() < 2e-8,
+            "CBD drain transient at step {step}: expected {expected_drain_v} V, got {drain_v} V"
+        );
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode remains at its DC load line"
+        );
+
+        for (channel, voltage_v) in [(16, drain_v), (17, diode_v)] {
+            let expected = expected_adc12_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected as u16,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                h7_adc_convert(&mut bus, channel),
+                expected,
+                "ADC1 channel {channel} must report the routed {voltage_v} V"
+            );
+        }
+        assert_eq!(adc_channel_count(&mut bus, 18), u16::MAX);
+    }
+    assert!(
+        (signal_voltage(&session, "board.analog.pa0_volts") - 1.0).abs() < 3e-4,
+        "the junction capacitance changes the transient but not the 1 V DC load line"
+    );
+}

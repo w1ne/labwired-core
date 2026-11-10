@@ -1,0 +1,42 @@
+# A generic level-1 NMOS drain-bulk depletion capacitor feeds H735 ADC1_INP16.
+# A current step exposes its transient; an unrelated Shockley diode stays on
+# ADC1_INP17 as the second routed analog device.
+name: stm32h735-smoke-mosfet-junction-charge
+chip: ../../configs/chips/stm32h735.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: mosfet_drain_bulk_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      drain_current_a: ui.mosfet_bulk.drain_current_a
+    outputs:
+      drain_voltage: board.analog.pa0_volts
+    config:
+      substeps: 1
+      netlist_text: |
+        Istep 0 drain dc 0
+        Rload drain 0 1k
+        M1 drain 0 0 0 NMOS_BULK w=100u l=10u
+        .model NMOS_BULK NMOS(VTO=5 KP=20u LAMBDA=0 CBD=1n PB=1 MJ=0)
+      probes:
+        drain_voltage: v(drain)
+      sources:
+        drain_current_a: Istep
+      vdd: 3.3
+  - id: diode_load_line
+    adapter: analog
+    step_ns: 1000
+    outputs:
+      diode_voltage: board.analog.pa1_volts
+    config:
+      substeps: 1
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        diode_voltage: v(sense)
+      vdd: 3.3
