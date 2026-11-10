@@ -29,6 +29,16 @@ fn workspace_root() -> PathBuf {
 
 /// Run `labwired test` over a temp-dir system + script and return `result.json`.
 fn run(name: &str, system_yaml: &str, script_yaml: &str) -> serde_json::Value {
+    run_with_args(name, system_yaml, script_yaml, &[], "1")
+}
+
+fn run_with_args(
+    name: &str,
+    system_yaml: &str,
+    script_yaml: &str,
+    args: &[&str],
+    hosted_fast: &str,
+) -> serde_json::Value {
     let dir = labwired_cli::test_support::unique_temp_dir(&format!("labwired-clock-{name}"));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("system.yaml"), system_yaml).unwrap();
@@ -40,6 +50,8 @@ fn run(name: &str, system_yaml: &str, script_yaml: &str) -> serde_json::Value {
         .arg("--output-dir")
         .arg(&dir)
         .arg("--no-uart-stdout")
+        .args(args)
+        .env("LABWIRED_HOSTED_FAST", hosted_fast)
         .output()
         .expect("run labwired");
     let result = std::fs::read_to_string(dir.join("result.json")).unwrap_or_else(|_| {
@@ -170,6 +182,11 @@ fn an_avr_max_cycles_limit_stops_on_its_machine_cycle() {
         let details = &result["stop_reason_details"];
         assert_eq!(details["triggered_limit"]["value"], limit, "{details}");
         let observed = details["observed"]["value"].as_u64().expect("observed");
+        assert_eq!(
+            result["cycles"], observed,
+            "reported cycles must use the limit clock"
+        );
+        assert_eq!(result["metrics"]["cycles"], observed);
         assert!(
             (limit..=limit + 3).contains(&observed),
             "max_cycles {limit} stopped at machine cycle {observed}"
@@ -179,5 +196,50 @@ fn an_avr_max_cycles_limit_stops_on_its_machine_cycle() {
             "AVR instructions take more than one cycle on average, so fewer steps than \
              cycles: {result}"
         );
+    }
+}
+
+/// Mixed 16/32-bit Thumb instructions must not make the reported count exceed
+/// the clock that enforced the budget. The observer used to count Thumb32 as
+/// two cycles while the machine advanced by one, even without an idle skip.
+#[test]
+fn arm_cycle_reports_match_the_budget_clock() {
+    for (hosted_fast, args) in [
+        ("1", &[][..]),
+        ("0", &[][..]),
+        ("0", &["--trace", "--trace-max", "64"][..]),
+    ] {
+        for (max_steps, limit, reason) in [
+            (500_000_u64, 10_001_u64, "max_cycles"),
+            (200_000, 200_000, "max_steps"),
+        ] {
+            let result = run_with_args(
+                "arm-cycle-report",
+                &format!(
+                    "name: arm-cycle-report\nchip: \"{}\"\nexternal_devices: []\n",
+                    workspace_root()
+                        .join("configs/chips/stm32f103.yaml")
+                        .display()
+                ),
+                &format!(
+                "schema_version: \"1.0\"\ninputs:\n  firmware: \"{}\"\n  system: ./system.yaml\n\
+                 limits:\n  max_steps: {max_steps}\n  max_cycles: {limit}\nassertions:\n  \
+                 - expected_stop_reason: {reason}\n",
+                workspace_root().join("tests/fixtures/stm32f103-blinky.elf").display()
+            ),
+                args,
+                hosted_fast,
+            );
+            assert_eq!(result["status"], "pass", "{result}");
+            assert_eq!(result["stop_reason"], reason, "{result}");
+            assert_eq!(
+                result["cycles"], limit,
+                "reported cycles must use the limit clock"
+            );
+            assert_eq!(result["metrics"]["cycles"], limit);
+            if reason == "max_cycles" {
+                assert_eq!(result["stop_reason_details"]["observed"]["value"], limit);
+            }
+        }
     }
 }
