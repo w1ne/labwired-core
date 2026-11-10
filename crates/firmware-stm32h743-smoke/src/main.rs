@@ -205,11 +205,11 @@ unsafe extern "C" fn pend_exception_irq_with_sentinels() {
 /// caller's CONTROL and callee-saved registers after exception return.
 #[cfg(feature = "stm32h743-exception-frame")]
 #[unsafe(naked)]
-unsafe extern "C" fn pend_exception_irq_with_psp_sentinels() {
+unsafe extern "C" fn pend_exception_irq_with_psp_sentinels(psp_top: u32) {
     core::arch::naked_asm!(
         "push {{r4-r7}}",
         "mrs r6, control",
-        "ldr r7, =0x2001F000",
+        "mov r7, r0",
         "msr psp, r7",
         "movs r7, #2",
         "msr control, r7",
@@ -319,7 +319,7 @@ fn check_cortex_m7_exception_frame() -> bool {
             options(nomem, nostack, preserves_flags)
         )
     };
-    unsafe { pend_exception_irq_with_psp_sentinels() };
+    unsafe { pend_exception_irq_with_psp_sentinels(0x2001_F000) };
     let msp_after_psp_irq: u32;
     let psp_after: u32;
     unsafe {
@@ -360,6 +360,66 @@ fn check_cortex_m7_exception_frame() -> bool {
         && psp_after == psp_before_irq
         && msp_after_psp_irq == msp_before_psp_irq;
 
+    // A four-byte-aligned Thread PSP must receive one alignment word on
+    // exception entry when CCR.STKALIGN is set. The stacked xPSR marks that
+    // padding, and exception return restores the original odd-word PSP.
+    unsafe {
+        for index in 0..14 {
+            write_volatile(record.add(index), 0);
+        }
+    }
+    let msp_before_aligned_psp_irq: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_before_aligned_psp_irq,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    unsafe { pend_exception_irq_with_psp_sentinels(0x2001_F004) };
+    let msp_after_aligned_psp_irq: u32;
+    let aligned_psp_after: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            "mrs {}, psp",
+            out(reg) msp_after_aligned_psp_irq,
+            out(reg) aligned_psp_after,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    let aligned_psp_exc_return = read_record(8);
+    let aligned_psp_frame_sp = read_record(9);
+    let aligned_psp_ipsr = read_record(10);
+    let aligned_psp_active_during = read_record(11);
+    let aligned_psp_pending_during = read_record(12);
+    let aligned_psp_before_irq = read_record(13);
+    let aligned_psp_xpsr = read_record(7);
+    let aligned_psp_frame_ok = read_record(0) == 0x11
+        && read_record(1) == 0x22
+        && read_record(2) == 0x33
+        && read_record(3) == 0x44
+        && read_record(4) == 0x55
+        && read_record(5) & 1 != 0
+        && (0x0800_0000..0x0810_0000).contains(&read_record(6))
+        && aligned_psp_xpsr & 0x0100_0000 != 0
+        && aligned_psp_xpsr & 0x0000_0200 != 0
+        && aligned_psp_exc_return == 0xffff_fffd
+        && aligned_psp_before_irq & 7 == 4
+        && aligned_psp_frame_sp == aligned_psp_before_irq.wrapping_sub(36)
+        && aligned_psp_frame_sp & 7 == 0
+        && (0x2000_0000..0x2002_0000).contains(&aligned_psp_frame_sp);
+    let aligned_psp_active_and_pending_ok = aligned_psp_ipsr == 16 + EXCEPTION_IRQ
+        && aligned_psp_active_during & EXCEPTION_IRQ_BIT != 0
+        && aligned_psp_pending_during & EXCEPTION_IRQ_BIT == 0;
+    let aligned_psp_returned = unsafe { read_volatile(NVIC_ISPR0) } & EXCEPTION_IRQ_BIT == 0
+        && unsafe { read_volatile(NVIC_IABR0) } & EXCEPTION_IRQ_BIT == 0;
+    let aligned_psp_ok = aligned_psp_frame_ok
+        && aligned_psp_active_and_pending_ok
+        && aligned_psp_returned
+        && aligned_psp_after == aligned_psp_before_irq
+        && msp_after_aligned_psp_irq == msp_before_aligned_psp_irq;
+
     unsafe {
         write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT);
         write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT);
@@ -372,7 +432,8 @@ fn check_cortex_m7_exception_frame() -> bool {
         && active_and_pending_ok
         && returned
         && vtor_restored
-        && psp_ok;
+        && psp_ok
+        && aligned_psp_ok;
 
     send(b"cortex-m7 irq ipsr=");
     send_hex32(ipsr);
@@ -424,6 +485,34 @@ fn check_cortex_m7_exception_frame() -> bool {
     send(if psp_returned { b"1" } else { b"0" });
     send(b" exc_return=");
     send_hex32(psp_exc_return);
+    send(b"\r\ncortex-m7 psp align exception=");
+    send(
+        if aligned_psp_frame_ok && aligned_psp_active_and_pending_ok {
+            b"1"
+        } else {
+            b"0"
+        },
+    );
+    send(b" frame=");
+    send(if aligned_psp_frame_ok { b"1" } else { b"0" });
+    send(b" stack=");
+    send(if aligned_psp_after == aligned_psp_before_irq {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b" msp=");
+    send(if msp_after_aligned_psp_irq == msp_before_aligned_psp_irq {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b" return=");
+    send(if aligned_psp_returned { b"1" } else { b"0" });
+    send(b" xpsr=");
+    send_hex32(aligned_psp_xpsr);
+    send(b" sp=");
+    send_hex32(aligned_psp_frame_sp);
     send(b"\r\n");
     ok
 }
