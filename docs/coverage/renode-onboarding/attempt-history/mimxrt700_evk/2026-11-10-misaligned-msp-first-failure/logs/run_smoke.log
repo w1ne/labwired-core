@@ -1,0 +1,27 @@
+2026-11-10T17:55:48.591271Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/mimxrt700_evk.yaml
+2026-11-10T17:55:48.691938Z  INFO labwired_loader: ELF Entry Point: 0x38000801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-10T17:55:48.715078Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'flexcomm0'
+2026-11-10T17:55:49.606820Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8" }) (captured len=566)
+2026-11-10T17:55:49.606849Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=" }) (captured len=566)
+2026-11-10T17:55:49.606853Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["flexcomm0 pselid=00103070->00103071->00103079", "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001", "pass=000007ff"] }) (captured len=566)
+2026-11-10T17:55:49.606861Z ERROR labwired_cli::execute: Memory assertion failed at 0x2000000c (size 4): expected 0x700003ff, got 0x0 (mask 0xffffffff)
+2026-11-10T17:55:49.606865Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }) (captured len=566)
+2026-11-10T17:55:49.606872Z ERROR labwired_cli::execute: Memory assertion failed at 0x20000020 (size 4): expected 0x200000e0, got 0x200001e0 (mask 0xffffffff)
+2026-11-10T17:55:49.606874Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }) (captured len=566)
+2026-11-10T17:55:49.606877Z ERROR labwired_cli::execute: Memory assertion failed at 0x2000002c (size 4): expected 0x200000d8, got 0x200001d8 (mask 0xffffffff)
+2026-11-10T17:55:49.606879Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }) (captured len=566)
+2026-11-10T17:55:49.606882Z ERROR labwired_cli::execute: Memory assertion failed at 0x20000030 (size 4): expected 0x200000fc, got 0x200001fc (mask 0xffffffff)
+2026-11-10T17:55:49.606884Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }) (captured len=566)
+2026-11-10T17:55:49.606888Z ERROR labwired_cli::execute: Memory assertion failed at 0x2000003c (size 4): expected 0x200000dc, got 0x200001dc (mask 0xffffffff)
+2026-11-10T17:55:49.606890Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }) (captured len=566)
+2026-11-10T17:55:49.606893Z ERROR labwired_cli::execute: Memory assertion failed at 0x20000040 (size 4): expected 0x200000fc, got 0x200001fc (mask 0xffffffff)
+2026-11-10T17:55:49.606895Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }) (captured len=566)
+2026-11-10T17:55:49.606898Z ERROR labwired_cli::execute: Memory assertion failed at 0x20000044 (size 4): expected 0x1f, got 0xf (mask 0xffffffff)
+2026-11-10T17:55:49.606900Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }) (captured len=566)
+2026-11-10T17:55:49.606903Z ERROR labwired_cli::execute: Memory assertion failed at 0x20000048 (size 4): expected 0x9bdf1357, got 0xfffffff9 (mask 0xffffffff)
+2026-11-10T17:55:49.606912Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }) (captured len=566)
+2026-11-10T17:55:49.606915Z ERROR labwired_cli::execute: Memory assertion failed at 0x2000004c (size 4): expected 0x1000200, got 0x38001032 (mask 0x1000200)
+2026-11-10T17:55:49.606918Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }) (captured len=566)
+FAIL  12/24 checks · mimxrt700_evk-smoke · 7000000 steps · 0.89s

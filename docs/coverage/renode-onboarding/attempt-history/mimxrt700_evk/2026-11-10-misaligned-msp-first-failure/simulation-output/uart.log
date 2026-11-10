@@ -1,0 +1,3 @@
+MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE
+rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=38000c4e frame_xpsr=01000000 padded_context=0000000f padded_xpsr=01000200 padded_sp=200001d8 unaligned_context=0000001f unaligned_xpsr=21000000 unaligned_sp=200001dc msp_context=0000000f msp_r0=fffffff9 msp_xpsr=38001032 msp_sp=200000d4 msp_after=200000fc msp_restored=2057ff80 msp_pad=01000200 FAIL
+flexcomm0 pselid=00103070

@@ -21,6 +21,13 @@ const UNALIGNED_EXCEPTION_CONTEXT: *mut u32 = 0x2000_0034 as *mut u32;
 const UNALIGNED_EXCEPTION_FRAME_XPSR: *mut u32 = 0x2000_0038 as *mut u32;
 const UNALIGNED_EXCEPTION_FRAME_SP: *mut u32 = 0x2000_003C as *mut u32;
 const UNALIGNED_EXCEPTION_PSP_AFTER: *mut u32 = 0x2000_0040 as *mut u32;
+const MSP_EXCEPTION_CONTEXT: *mut u32 = 0x2000_0044 as *mut u32;
+const MSP_EXCEPTION_FRAME_R0: *mut u32 = 0x2000_0048 as *mut u32;
+const MSP_EXCEPTION_FRAME_XPSR: *mut u32 = 0x2000_004C as *mut u32;
+const MSP_EXCEPTION_FRAME_SP: *mut u32 = 0x2000_0050 as *mut u32;
+const MSP_EXCEPTION_AFTER: *mut u32 = 0x2000_0054 as *mut u32;
+const MSP_EXCEPTION_RESTORED: *mut u32 = 0x2000_0058 as *mut u32;
+const MSP_EXCEPTION_PADDING: *mut u32 = 0x2000_005C as *mut u32;
 
 const FLEXCOMM0: usize = 0x4011_0000;
 const SCB_CCR: usize = 0xE000_ED14;
@@ -351,6 +358,83 @@ fn exercise_irq_exception_without_stack_alignment() -> bool {
     handler_entered && context == 0b1_1111
 }
 
+/// Deliver FLEXCOMM0 from Thread mode on a four-byte-aligned MSP. The smoke
+/// inspects the frame after exception return, once the thread stack is restored.
+fn exercise_irq_exception_on_misaligned_msp() -> bool {
+    IRQ_CASE.store(4, Ordering::Relaxed);
+    IRQ_ENTRY.store(0, Ordering::Relaxed);
+    IRQ_EXC_RETURN.store(0, Ordering::Relaxed);
+
+    let msp_top = (addr_of_mut!(PSP_STACK) as u32 + (PSP_STACK_WORDS as u32) * 4) & !7;
+    let msp_thread = msp_top - 4;
+    let msp_before: u32;
+    let msp_after: u32;
+    let msp_restored: u32;
+    let ccr_after: u32;
+
+    unsafe {
+        let ccr = read_volatile(SCB_CCR as *const u32);
+        write_volatile(SCB_CCR as *mut u32, ccr | SCB_CCR_STKALIGN);
+        ccr_after = read_volatile(SCB_CCR as *const u32);
+        core::arch::asm!(
+            "mrs {saved_msp}, msp",
+            "msr msp, {thread_msp}",
+            "movw r0, #0x1357",
+            "movt r0, #0x9bdf",
+            "str {irq_bit}, [{iser}]",
+            "movw {count}, #10000",
+            "1:",
+            "ldr {seen}, [{entry}]",
+            "cmp {seen}, {mark}",
+            "beq 2f",
+            "subs {count}, #1",
+            "bne 1b",
+            "2:",
+            "mrs {msp_after}, msp",
+            "msr msp, {saved_msp}",
+            "isb",
+            "mrs {msp_restored}, msp",
+            saved_msp = out(reg) msp_before,
+            thread_msp = in(reg) msp_thread,
+            msp_after = out(reg) msp_after,
+            msp_restored = out(reg) msp_restored,
+            irq_bit = in(reg) FLEXCOMM0_IRQ_BIT,
+            iser = in(reg) NVIC_ISER0 as u32,
+            count = out(reg) _,
+            seen = out(reg) _,
+            entry = in(reg) addr_of!(IRQ_ENTRY) as u32,
+            mark = in(reg) FLEXCOMM0_HANDLER_MARK,
+            out("r0") _,
+            options(nostack),
+        );
+    }
+
+    let frame_sp = msp_thread - 9 * 4;
+    let frame = frame_sp as *const u32;
+    let frame_r0 = unsafe { read_volatile(frame) };
+    let frame_xpsr = unsafe { read_volatile(frame.add(7)) };
+    let padding_word = unsafe { read_volatile(frame.add(8)) };
+    let frame_ok = frame_r0 == 0x9BDF_1357
+        && frame_xpsr & 0x0100_0200 == 0x0100_0200
+        && frame_xpsr & 0x1FF == 0
+        && padding_word == 0;
+    let context = u32::from(ccr_after & SCB_CCR_STKALIGN != 0)
+        | (u32::from(IRQ_EXC_RETURN.load(Ordering::Relaxed) == 0xFFFF_FFF9) << 1)
+        | (u32::from(msp_after == msp_thread) << 2)
+        | (u32::from(msp_restored == msp_before) << 3)
+        | (u32::from(frame_ok) << 4);
+    unsafe {
+        write_volatile(MSP_EXCEPTION_CONTEXT, context);
+        write_volatile(MSP_EXCEPTION_FRAME_R0, frame_r0);
+        write_volatile(MSP_EXCEPTION_FRAME_XPSR, frame_xpsr);
+        write_volatile(MSP_EXCEPTION_FRAME_SP, frame_sp);
+        write_volatile(MSP_EXCEPTION_AFTER, msp_after);
+        write_volatile(MSP_EXCEPTION_RESTORED, msp_restored);
+        write_volatile(MSP_EXCEPTION_PADDING, padding_word);
+    }
+    IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_HANDLER_MARK && context == 0b1_1111
+}
+
 fn wait_nvic_irq_pending(expected: bool) -> bool {
     for _ in 0..10_000 {
         if nvic_irq_pending() == expected {
@@ -420,6 +504,7 @@ fn smoke_lpuart_rx() -> bool {
     let irq_exc_return = IRQ_EXC_RETURN.load(Ordering::Relaxed);
     let irq_padded_psp_context_restored = exercise_irq_exception_on_misaligned_psp();
     let irq_unaligned_psp_context_restored = exercise_irq_exception_without_stack_alignment();
+    let irq_padded_msp_context_restored = exercise_irq_exception_on_misaligned_msp();
 
     let first = rd(LPUART_DATA) & 0xFF;
     let second_still_queued = rd(LPUART_STAT) & STAT_RDRF != 0;
@@ -446,6 +531,7 @@ fn smoke_lpuart_rx() -> bool {
         && irq_psp_context_restored
         && irq_padded_psp_context_restored
         && irq_unaligned_psp_context_restored
+        && irq_padded_msp_context_restored
         && first == b'R' as u32
         && second_still_queued
         && rx_masked_with_data
@@ -504,6 +590,20 @@ fn smoke_lpuart_rx() -> bool {
     hex(IRQ_UNALIGNED_XPSR.load(Ordering::Relaxed));
     puts(" unaligned_sp=");
     hex(IRQ_UNALIGNED_SP.load(Ordering::Relaxed));
+    puts(" msp_context=");
+    hex(unsafe { read_volatile(MSP_EXCEPTION_CONTEXT) });
+    puts(" msp_r0=");
+    hex(unsafe { read_volatile(MSP_EXCEPTION_FRAME_R0) });
+    puts(" msp_xpsr=");
+    hex(unsafe { read_volatile(MSP_EXCEPTION_FRAME_XPSR) });
+    puts(" msp_sp=");
+    hex(unsafe { read_volatile(MSP_EXCEPTION_FRAME_SP) });
+    puts(" msp_after=");
+    hex(unsafe { read_volatile(MSP_EXCEPTION_AFTER) });
+    puts(" msp_restored=");
+    hex(unsafe { read_volatile(MSP_EXCEPTION_RESTORED) });
+    puts(" msp_pad=");
+    hex(unsafe { read_volatile(MSP_EXCEPTION_PADDING) });
     puts(if ok { " ok\r\n" } else { " FAIL\r\n" });
     ok
 }
@@ -573,6 +673,9 @@ fn main() -> ! {
     if unsafe { read_volatile(UNALIGNED_EXCEPTION_CONTEXT) } == 0b1_1111 {
         pass |= 1 << 9;
     }
+    if unsafe { read_volatile(MSP_EXCEPTION_CONTEXT) } == 0b1_1111 {
+        pass |= 1 << 10;
+    }
 
     puts("flexcomm0 pselid=");
     hex(pselid_reset);
@@ -630,21 +733,37 @@ unsafe fn DefaultHandler(irqn: i16) {
         let stacked_xpsr = unsafe { read_volatile(frame.add(7)) };
         IRQ_EXC_RETURN.store(exc_return, Ordering::Relaxed);
         IRQ_ENTRY.store((ipsr << 16) | (irqn as u32 + 1), Ordering::Relaxed);
-        if IRQ_CASE.load(Ordering::Relaxed) == 2 {
-            IRQ_PADDED_R0.store(stacked_r0, Ordering::Relaxed);
-            IRQ_PADDED_PC.store(stacked_pc, Ordering::Relaxed);
-            IRQ_PADDED_XPSR.store(stacked_xpsr, Ordering::Relaxed);
-            IRQ_PADDED_SP.store(psp, Ordering::Relaxed);
-        } else if IRQ_CASE.load(Ordering::Relaxed) == 3 {
-            IRQ_UNALIGNED_R0.store(stacked_r0, Ordering::Relaxed);
-            IRQ_UNALIGNED_PC.store(stacked_pc, Ordering::Relaxed);
-            IRQ_UNALIGNED_XPSR.store(stacked_xpsr, Ordering::Relaxed);
-            IRQ_UNALIGNED_SP.store(psp, Ordering::Relaxed);
+        let irq_case = IRQ_CASE.load(Ordering::Relaxed);
+        if irq_case == 4 {
+            // MSP frames are inspected by the interrupted thread after return;
+            // the Rust handler prologue itself uses MSP.
         } else {
-            IRQ_STACKED_R0.store(stacked_r0, Ordering::Relaxed);
-            IRQ_STACKED_PC.store(stacked_pc, Ordering::Relaxed);
-            IRQ_STACKED_XPSR.store(stacked_xpsr, Ordering::Relaxed);
-            IRQ_STACKED_SP.store(psp, Ordering::Relaxed);
+            let psp: u32;
+            core::arch::asm!(
+                "mrs {psp}, PSP",
+                psp = out(reg) psp,
+                options(nomem, nostack, preserves_flags),
+            );
+            let frame = psp as *const u32;
+            let stacked_r0 = read_volatile(frame);
+            let stacked_pc = read_volatile(frame.add(6));
+            let stacked_xpsr = read_volatile(frame.add(7));
+            if irq_case == 2 {
+                IRQ_PADDED_R0.store(stacked_r0, Ordering::Relaxed);
+                IRQ_PADDED_PC.store(stacked_pc, Ordering::Relaxed);
+                IRQ_PADDED_XPSR.store(stacked_xpsr, Ordering::Relaxed);
+                IRQ_PADDED_SP.store(psp, Ordering::Relaxed);
+            } else if irq_case == 3 {
+                IRQ_UNALIGNED_R0.store(stacked_r0, Ordering::Relaxed);
+                IRQ_UNALIGNED_PC.store(stacked_pc, Ordering::Relaxed);
+                IRQ_UNALIGNED_XPSR.store(stacked_xpsr, Ordering::Relaxed);
+                IRQ_UNALIGNED_SP.store(psp, Ordering::Relaxed);
+            } else {
+                IRQ_STACKED_R0.store(stacked_r0, Ordering::Relaxed);
+                IRQ_STACKED_PC.store(stacked_pc, Ordering::Relaxed);
+                IRQ_STACKED_XPSR.store(stacked_xpsr, Ordering::Relaxed);
+                IRQ_STACKED_SP.store(psp, Ordering::Relaxed);
+            }
         }
         unsafe { write_volatile(NVIC_ICER0 as *mut u32, FLEXCOMM0_IRQ_BIT) };
     }
