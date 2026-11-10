@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic MNA devices route through the NUCLEO-F103RB e-paper profile into ADC1.
+//! Generic MNA devices route through STM32F103 board profiles into ADC1.
 
 mod common;
 use common::root;
@@ -44,6 +44,57 @@ fn diode_load_line_voltage() -> f64 {
     }
     let junction_v = (low + high) / 2.0;
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
+}
+
+/// Independent forward-active Gummel–Poon load line, with optional Early effect.
+fn bjt_collector_voltage(base_drive_v: f64, early_voltage_v: Option<f64>) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-15;
+    const BF: f64 = 100.0;
+    const BR: f64 = 4.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let early_factor = early_voltage_v.map_or(1.0, |vaf| 1.0 - vbc / vaf);
+        let transport = IS_A * (forward - reverse) * early_factor;
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = (low + high) / 2.0;
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        (low + high) / 2.0
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = (low + high) / 2.0;
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe((low + high) / 2.0)
 }
 
 /// Independent level-1 NMOS load line using the ngspice `mos1temp` laws for
@@ -150,6 +201,143 @@ fn stm32f103_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
 fn expected_adc_count(voltage_v: f64) -> u16 {
     let millivolts = (voltage_v * 1000.0).round() as u32;
     (millivolts * 4095 / 3300).min(4095) as u16
+}
+
+/// Extend the basic NUCLEO-F103RB NTC route with a Shockley diode and matched
+/// Gummel–Poon branches to exercise generic netlist routing and ADC conversion.
+#[test]
+fn nucleo_f103rb_bjt_early_effect_reaches_pa2_pa3_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-f103rb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F103RB");
+    assert_eq!(profile.name, "nucleo-f103rb");
+    assert_eq!(
+        profile
+            .board_io
+            .iter()
+            .map(|io| (io.id.as_str(), io.peripheral.as_str(), io.pin))
+            .collect::<Vec<_>>(),
+        [("led_ld2", "gpioa", 5), ("button_b1", "gpioc", 13)],
+        "the analog overlay preserves the board's user LED and button"
+    );
+
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb-epaper/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode netlists");
+    let bjt = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb/analog-bjt-early-effect-system.yaml",
+    ))
+    .expect("load matched generic Gummel–Poon NPN branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(bjt.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103RB descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc1");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F103RB bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries NTC, diode, and matched BJT netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all generic devices must resolve through PA0..PA3 ADC routes"
+    );
+    for channel in 0..=4 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC to nominal temperature");
+    session
+        .set_signal_number("ui.bjt.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+    let expected_ntc_v = 1.65;
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut early_samples = Vec::new();
+    let mut reference_samples = Vec::new();
+
+    for base_drive_v in [0.0_f64, 0.7, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route all generic analog netlists");
+        assert_eq!(steps.len(), 4, "all four netlists cross the time boundary");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let early_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let reference_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let expected_early_v = bjt_collector_voltage(base_drive_v, Some(50.0));
+        let expected_reference_v = bjt_collector_voltage(base_drive_v, None);
+
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "the unrelated 25 °C NTC divider remains at {expected_ntc_v} V, got {ntc_v} V"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated Shockley load line should be {expected_diode_v} V, got {diode_v} V"
+        );
+        assert!(
+            (early_v - expected_early_v).abs() < 5e-5,
+            "VAF=50 Gummel–Poon load line at base drive {base_drive_v} V should be {expected_early_v} V, got {early_v} V"
+        );
+        assert!(
+            (reference_v - expected_reference_v).abs() < 5e-5,
+            "no-Early-effect load line at base drive {base_drive_v} V should be {expected_reference_v} V, got {reference_v} V"
+        );
+        if base_drive_v >= 0.7 {
+            assert!(
+                early_v < reference_v - 0.005,
+                "finite VAF increases collector current and lowers collector voltage: {early_v} V vs {reference_v} V"
+            );
+        }
+
+        for (channel, volts) in [(0, ntc_v), (1, diode_v), (2, early_v), (3, reference_v)] {
+            let expected_count = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f103_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 channel {channel} must report its solved voltage"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            0xFFFF,
+            "the neighboring ADC1 channel remains undriven"
+        );
+        early_samples.push(early_v);
+        reference_samples.push(reference_v);
+    }
+
+    assert!(
+        early_samples[1] > early_samples[2] && early_samples[2] > early_samples[3],
+        "increasing base drive lowers the Early-effect collector voltage: {early_samples:?}"
+    );
+    assert!(
+        reference_samples[1] > reference_samples[2] && reference_samples[2] > reference_samples[3],
+        "increasing base drive lowers the reference collector voltage: {reference_samples:?}"
+    );
 }
 
 /// Reuse the generic Beta NTC divider and unrelated Shockley diode netlists on
