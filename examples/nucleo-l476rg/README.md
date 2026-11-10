@@ -67,6 +67,13 @@ This proves external analog voltages can drive the board's modeled digital
 inputs. It does not prove firmware ADC conversions or an ADC pad-to-channel
 mapping.
 
+[`analog-bjt-early-effect.yaml`](analog-bjt-early-effect.yaml) adds a generic
+Gummel–Poon NPN load-line pair to PA2 and PA3. One branch enables `VAF=50`,
+while the reference branch leaves Early effect disabled. The co-simulation
+test compares both solved collector voltages with independent load-line
+calculations while the NTC and diode remain routed to PA0 and PA1. This is a
+model test; it does not claim an ADC conversion or silicon analog capture.
+
 ## What's modelled
 
 | Peripheral | Status      | Hardware-validated against           |
