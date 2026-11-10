@@ -16,6 +16,9 @@ const NVIC_ISPR0: usize = 0xE000_E200;
 const NVIC_ICPR0: usize = 0xE000_E280;
 const FLEXCOMM0_IRQ_BIT: u32 = 1 << 7;
 const FLEXCOMM0_IRQN: i16 = 7;
+const FLEXCOMM0_EXCEPTION_NUMBER: u32 = 16 + FLEXCOMM0_IRQN as u32;
+const FLEXCOMM0_HANDLER_MARK: u32 =
+    (FLEXCOMM0_EXCEPTION_NUMBER << 16) | (FLEXCOMM0_IRQN as u32 + 1);
 const LPUART_VERID: usize = 0x00;
 const LPUART_PARAM: usize = 0x04;
 const LPUART_BAUD: usize = 0x10;
@@ -125,9 +128,10 @@ fn smoke_lpuart_rx() -> bool {
     // Enable the already-pending external IRQ and require the Cortex-M
     // exception path to call DefaultHandler. The handler disables IRQ 7
     // before returning so the still-asserted RX level cannot retrigger it.
+    // The handler also records IPSR, which is exception number 16 + IRQn.
     enable_nvic_irq();
     let irq_handler_entered =
-        (0..10_000).any(|_| IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_IRQN as u32 + 1);
+        (0..10_000).any(|_| IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_HANDLER_MARK);
 
     let first = rd(LPUART_DATA) & 0xFF;
     let second_still_queued = rd(LPUART_STAT) & STAT_RDRF != 0;
@@ -185,6 +189,8 @@ fn smoke_lpuart_rx() -> bool {
     putc(if irq_released { b'1' } else { b'0' });
     puts(" handler=");
     putc(if irq_handler_entered { b'1' } else { b'0' });
+    puts(" ipsr=");
+    hex(IRQ_ENTRY.load(Ordering::Relaxed) >> 16);
     puts(if ok { " ok\r\n" } else { " FAIL\r\n" });
     ok
 }
@@ -239,7 +245,7 @@ fn main() -> ! {
     if smoke_lpuart_rx() {
         pass |= 1 << 4;
     }
-    if IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_IRQN as u32 + 1 {
+    if IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_HANDLER_MARK {
         pass |= 1 << 5;
     }
 
@@ -273,7 +279,15 @@ fn main() -> ! {
 #[exception]
 unsafe fn DefaultHandler(irqn: i16) {
     if irqn == FLEXCOMM0_IRQN {
-        IRQ_ENTRY.store(irqn as u32 + 1, Ordering::Relaxed);
+        let ipsr: u32;
+        unsafe {
+            core::arch::asm!(
+                "mrs {ipsr}, IPSR",
+                ipsr = out(reg) ipsr,
+                options(nomem, nostack, preserves_flags),
+            );
+        }
+        IRQ_ENTRY.store((ipsr << 16) | (irqn as u32 + 1), Ordering::Relaxed);
         unsafe { write_volatile(NVIC_ICER0 as *mut u32, FLEXCOMM0_IRQ_BIT) };
     }
 }
