@@ -1316,10 +1316,21 @@ impl<C: Cpu> Machine<C> {
     ///
     /// The nRF54L TWIM is never in the controller list (it does not opt in), so
     /// its slaves are advanced exactly once — by TWIM itself, off the GRTC.
+    #[inline(always)]
     fn advance_central_i2c_time(&mut self) {
-        if self.i2c_time_controller_indices.is_empty() {
+        // Keep the no-work path outside the clock/fan-out routine's register
+        // saves. Most CPU steps do not cross a derived microsecond boundary.
+        if self.i2c_time_controller_indices.is_empty()
+            || (self.i2c_time_source_index.is_none()
+                && self.total_cycles < self.next_i2c_time_cycle)
+        {
             return;
         }
+        self.advance_central_device_time_due();
+    }
+
+    #[inline(never)]
+    fn advance_central_device_time_due(&mut self) {
         let (now, derived) = match self.i2c_time_source_index {
             Some(src) => match self.bus.peripherals[src].dev.sim_time_us() {
                 Some(now) => (now, false),
@@ -1329,11 +1340,6 @@ impl<C: Cpu> Machine<C> {
                 let hz = self.bus.cpu_hz;
                 if hz == 0 {
                     // No declared core clock ⇒ nothing honest to derive from.
-                    return;
-                }
-                // The derived µs clock only changes at a µs boundary. Skip the
-                // u128 divide and the device fan-out on the cycles in between.
-                if self.total_cycles < self.next_i2c_time_cycle {
                     return;
                 }
                 let cycles_per_us = (hz / 1_000_000).max(1);
