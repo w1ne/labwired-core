@@ -44,7 +44,7 @@
       "assertion": {
         "uart_ordered": [
           "cpu=cortex-m33 uart=lpuart1",
-          "rxft=lpuart1 threshold=6 isolated=1 asserted=1 repended=1 cleared=1 released=1 ok",
+          "rxft=lpuart1 thresholds=8,7,6,4,2,1 boundary=1 states=111111111111 irq=1111 bytes=abcdef ok",
           "rx=lpuart1 rxne_before=1 irq_isolated=1 irq_asserted=1 reasserted=1 data=00000052,00000053 rxne_after=0 irq_released=1 ok",
           "tx_irq lpuart1 txe=1 tc=1 both=1 ok",
           "led=ld1 odr=00000080",
@@ -69,24 +69,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      172237,
+      172355,
       24,
       8,
       6554,
       32,
       1073774620,
       87,
-      537067440,
+      537067400,
       3,
       537067492,
       98,
       429496730,
-      134233305,
-      537067440,
-      134230777,
-      134232200
+      134233581,
+      537067400,
+      134231051,
+      134232478
     ],
-    "pc": 134232200,
+    "pc": 134232478,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -99,7 +99,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "9b0818f39110e1b07795a1017ae7074ced0f5f93c9d77ecd4a9758c7f98fd442",
+  "firmware_hash": "95c455f01ef286963d218ecb1a56185706669d2421f248bbc1c697567a5824d7",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-l552ze-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l552.yaml",
@@ -221,7 +221,7 @@
         "end_cycle": 10000
       },
       {
-        "text": "rxft=lpuart1 threshold=6 isolated=1 asserted=1 repended=1 cleared=1 released=1 ok",
+        "text": "rxft=lpuart1 thresholds=8,7,6,4,2,1 boundary=1 states=111111111111 irq=1111 bytes=abcdef ok",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -309,14 +309,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 15720,
+    "text_bytes": 16008,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 15720,
+    "flash_used_bytes": 16008,
     "ram_static_bytes": 0,
     "flash_total_bytes": 524288,
     "ram_total_bytes": 196608,
-    "flash_used_pct": 3.0,
+    "flash_used_pct": 3.05,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -326,15 +326,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 196608,
-    "main_stack_high_water_bytes": 68,
-    "main_stack_free_min_bytes": 196516,
+    "main_stack_high_water_bytes": 108,
+    "main_stack_free_min_bytes": 196476,
     "main_stack_base": 536870912,
     "main_stack_top": 537067520,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 196608,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 196516,
+    "heap_free_min_bytes": 196476,
     "heap_base": 536870912,
     "heap_top": 537067520
   },
@@ -342,70 +342,70 @@
     "cycles": 2000000,
     "instructions": 2000000,
     "steps_executed": 2000000,
-    "memory_reads": 2750,
-    "memory_writes": 118,
-    "peripheral_accesses": 31176,
+    "memory_reads": 2970,
+    "memory_writes": 148,
+    "peripheral_accesses": 31211,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134232202,
+        "pc": 134232474,
         "count": 2462,
-        "symbol": "firmware_l552ze_smoke::spin"
-      },
-      {
-        "pc": 134232204,
-        "count": 2461,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
-      },
-      {
-        "pc": 134232200,
-        "count": 2460,
         "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134228670,
+        "pc": 134232476,
+        "count": 2461,
+        "symbol": "firmware_l552ze_smoke::spin"
+      },
+      {
+        "pc": 134232478,
+        "count": 2460,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134228954,
+        "count": 78,
+        "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
+      },
+      {
+        "pc": 134229142,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228888,
-        "count": 78,
-        "symbol": "<i32>::overflowing_add"
-      },
-      {
-        "pc": 134228326,
+        "pc": 134228600,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228336,
+        "pc": 134228610,
         "count": 39,
         "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
       },
       {
-        "pc": 134228346,
+        "pc": 134228620,
         "count": 39,
         "symbol": "<i32>::overflowing_add"
       },
       {
-        "pc": 134228680,
-        "count": 39,
-        "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
-      },
-      {
-        "pc": 134228690,
-        "count": 39,
-        "symbol": "<i32>::overflowing_add"
-      },
-      {
-        "pc": 134228868,
+        "pc": 134228944,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228878,
+        "pc": 134228964,
+        "count": 39,
+        "symbol": "<i32>::overflowing_add"
+      },
+      {
+        "pc": 134229152,
         "count": 39,
         "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
+      },
+      {
+        "pc": 134229162,
+        "count": 39,
+        "symbol": "<i32>::overflowing_add"
       }
     ]
   }

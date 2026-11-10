@@ -184,18 +184,34 @@ fn button_level() -> u32 {
     unsafe { (read_volatile((GPIOC + IDR) as *const u32) >> 13) & 1 }
 }
 
-/// Exercise the STM32v2 RX FIFO threshold status and interrupt on the
-/// imported LPUART1 profile. The injected stream starts with six bytes for
-/// this check and leaves `R`, `S` for the separate RXNE smoke below.
+/// Exercise every STM32v2 RX FIFO threshold encoding and the threshold IRQ on
+/// the imported LPUART1 profile. The injected stream starts with six bytes
+/// for the threshold sweep and leaves `R`, `S` for the separate RXNE smoke.
 fn smoke_lpuart_rx_fifo_threshold() {
     let cr1 = unsafe { read_volatile(LPUART_CR1) };
     unsafe { write_volatile(LPUART_CR1, cr1 | USART_CR1_FIFOEN) };
 
     let cr3 = unsafe { read_volatile(LPUART_CR3) } & !(USART_CR3_RXFTCFG | USART_CR3_RXFTIE);
-    // RXFTCFG=3 selects the six-byte threshold in the STM32v2 model.
+    // The model maps RXFTCFG 5/4/3/2/1/0 to thresholds 8/7/6/4/2/1.
+    unsafe { write_volatile(LPUART_CR3, cr3 | (5 << 25)) };
+    spin(4);
+    let threshold_8 = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT != 0;
+    let mut bytes = [0u8; 6];
+    bytes[0] = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
+    spin(4);
+    let below_8 = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT == 0;
+
+    unsafe { write_volatile(LPUART_CR3, cr3 | (4 << 25)) };
+    spin(4);
+    let threshold_7 = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT != 0;
+    bytes[1] = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
+    spin(4);
+    let below_7 = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT == 0;
+
+    // At six queued bytes, check RXFTIE isolation and level re-pending.
     unsafe { write_volatile(LPUART_CR3, cr3 | (3 << 25)) };
     spin(4);
-    let threshold_before = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT != 0;
+    let threshold_6 = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT != 0;
     unsafe { write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING) };
     spin(4);
     let irq_isolated = unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING == 0;
@@ -207,45 +223,70 @@ fn smoke_lpuart_rx_fifo_threshold() {
     spin(4);
     let irq_repended = unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING != 0;
 
-    let mut first_three = [0u8; 3];
-    for byte in &mut first_three {
-        *byte = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
-    }
+    bytes[2] = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
     spin(4);
-    let threshold_cleared = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT == 0;
-    unsafe {
-        write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING);
-        write_volatile(LPUART_CR3, cr3);
-    }
+    let below_6 = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT == 0;
+    // Clear NVIC after the UART source went low; it must stay deasserted.
+    unsafe { write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING) };
     spin(4);
     let irq_released = unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING == 0;
 
-    // Drain the remaining threshold-test bytes so the following RXNE check
-    // sees exactly the injected `R`, `S` pair.
-    let mut last_three = [0u8; 3];
-    for byte in &mut last_three {
-        *byte = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
-    }
-    unsafe { write_volatile(LPUART_CR1, cr1 & !USART_CR1_FIFOEN) };
+    unsafe { write_volatile(LPUART_CR3, cr3 | (2 << 25)) };
+    spin(4);
+    let threshold_4 = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT != 0;
+    bytes[3] = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
+    bytes[4] = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
+    spin(4);
+    let below_4 = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT == 0;
 
-    let bytes_ok = first_three == *b"abc" && last_three == *b"def";
-    let ok = threshold_before
-        && irq_isolated
-        && irq_asserted
-        && irq_repended
-        && threshold_cleared
-        && irq_released
-        && bytes_ok;
-    puts(b"rxft=lpuart1 threshold=6 isolated=");
+    unsafe { write_volatile(LPUART_CR3, cr3 | (1 << 25)) };
+    spin(4);
+    let threshold_2 = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT != 0;
+
+    unsafe { write_volatile(LPUART_CR3, cr3) };
+    spin(4);
+    let threshold_1 = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT != 0;
+    bytes[5] = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
+    spin(4);
+    let threshold_1_after_pop = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT != 0;
+    unsafe { write_volatile(LPUART_CR1, cr1 & !USART_CR1_FIFOEN) };
+    spin(4);
+    let fifo_disabled_clears = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT == 0;
+    unsafe { write_volatile(LPUART_CR1, cr1) };
+
+    let bytes_ok = bytes == *b"abcdef";
+    let threshold_checks = [
+        threshold_8,
+        below_8,
+        threshold_7,
+        below_7,
+        threshold_6,
+        below_6,
+        threshold_4,
+        below_4,
+        threshold_2,
+        threshold_1,
+        threshold_1_after_pop,
+        fifo_disabled_clears,
+    ];
+    let thresholds_ok = threshold_checks.iter().all(|passed| *passed);
+    let ok =
+        thresholds_ok && irq_isolated && irq_asserted && irq_repended && irq_released && bytes_ok;
+    puts(b"rxft=lpuart1 thresholds=8,7,6,4,2,1 boundary=");
+    putc(if thresholds_ok { b'1' } else { b'0' });
+    puts(b" states=");
+    for passed in threshold_checks {
+        putc(if passed { b'1' } else { b'0' });
+    }
+    puts(b" irq=");
     putc(if irq_isolated { b'1' } else { b'0' });
-    puts(b" asserted=");
     putc(if irq_asserted { b'1' } else { b'0' });
-    puts(b" repended=");
     putc(if irq_repended { b'1' } else { b'0' });
-    puts(b" cleared=");
-    putc(if threshold_cleared { b'1' } else { b'0' });
-    puts(b" released=");
     putc(if irq_released { b'1' } else { b'0' });
+    puts(b" bytes=");
+    for byte in bytes {
+        putc(byte);
+    }
     puts(if ok { b" ok\n" } else { b" FAIL\n" });
 }
 

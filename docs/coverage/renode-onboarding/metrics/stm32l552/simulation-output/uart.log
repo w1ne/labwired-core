@@ -1,6 +1,6 @@
 NUCLEO-L552ZE-Q SMOKE
 cpu=cortex-m33 uart=lpuart1
-rxft=lpuart1 threshold=6 isolated=1 asserted=1 repended=1 cleared=1 released=1 ok
+rxft=lpuart1 thresholds=8,7,6,4,2,1 boundary=1 states=111111111111 irq=1111 bytes=abcdef ok
 rx=lpuart1 rxne_before=1 irq_isolated=1 irq_asserted=1 reasserted=1 data=00000052,00000053 rxne_after=0 irq_released=1 ok
 tx_irq lpuart1 txe=1 tc=1 both=1 ok
 led=ld1 odr=00000080
