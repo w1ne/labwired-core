@@ -954,9 +954,9 @@ pub struct Uart {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     #[serde(skip)]
     rx_buf: Arc<Mutex<VecDeque<u8>>>,
-    /// Scripted host input waiting for an STM32v2 receiver to be enabled.
+    /// Scripted host input waiting for an STM32 receiver to be enabled.
     /// It is kept separate from `rx_buf` so bytes injected before UE|RE do
-    /// not appear in RDR/ISR until the guest enables the receiver.
+    /// not appear in DR/RDR or SR/ISR until the guest enables the receiver.
     #[serde(skip)]
     rx_wire_buf: Arc<Mutex<VecDeque<u8>>>,
     echo_stdout: bool,
@@ -1736,11 +1736,14 @@ impl Uart {
         self.rx_buf.clone()
     }
 
-    /// Deliver bytes from a scripted or interactive UART peer. On STM32v2,
-    /// the peer bytes sit on the wire until both UE and RE are enabled; other
-    /// layouts retain their established input-queue behavior.
+    /// Deliver bytes from a scripted or interactive UART peer. On STM32 F1
+    /// and V2 layouts, peer bytes sit on the wire until both UE and RE are
+    /// enabled; other layouts retain their established input-queue behavior.
     pub fn inject_rx_bytes(&mut self, bytes: &[u8]) -> Result<usize, String> {
-        let queue = if matches!(self.layout, UartRegisterLayout::Stm32V2) {
+        let queue = if matches!(
+            self.layout,
+            UartRegisterLayout::Stm32F1 | UartRegisterLayout::Stm32V2
+        ) {
             &self.rx_wire_buf
         } else {
             &self.rx_buf
@@ -1752,9 +1755,15 @@ impl Uart {
         Ok(bytes.len())
     }
 
-    fn stm32v2_receiver_enabled(&self) -> bool {
-        matches!(self.layout, UartRegisterLayout::Stm32V2)
-            && self.cr1 & ((1 << 0) | (1 << 2)) == ((1 << 0) | (1 << 2))
+    fn stm32_receiver_enabled(&self) -> bool {
+        let enable_mask = match self.layout {
+            // Legacy STM32 USART: UE is CR1 bit 13, RE is bit 2.
+            UartRegisterLayout::Stm32F1 => (1 << 13) | (1 << 2),
+            // Modern STM32 USART: UE is CR1 bit 0, RE is bit 2.
+            UartRegisterLayout::Stm32V2 => (1 << 0) | (1 << 2),
+            _ => return false,
+        };
+        self.cr1 & enable_mask == enable_mask
     }
 
     /// Phase 2B.3b (issue #192): does the UART have anything that needs a
@@ -1787,7 +1796,7 @@ impl Uart {
         let rxftie_armed = matches!(self.layout, UartRegisterLayout::Stm32V2)
             && self.cr1 & (1 << 29) != 0
             && self.cr3 & (1 << 28) != 0;
-        let rx_wire_ready = self.stm32v2_receiver_enabled()
+        let rx_wire_ready = self.stm32_receiver_enabled()
             && self
                 .rx_wire_buf
                 .lock()
@@ -1842,7 +1851,7 @@ impl Uart {
     /// default), so `n` polls is the only way to produce the `n` bytes the
     /// per-cycle path would have produced, in the same order.
     fn advance_ticks(&mut self, n: u32) -> (bool, Vec<u32>) {
-        if self.stm32v2_receiver_enabled() {
+        if self.stm32_receiver_enabled() {
             if let (Ok(mut wire), Ok(mut rx)) = (self.rx_wire_buf.lock(), self.rx_buf.lock()) {
                 rx.append(&mut wire);
             }
@@ -4027,32 +4036,38 @@ mod tests {
         assert_eq!(uart.read(0x06).unwrap(), 0xC0, "RDRF clears once drained");
     }
 
-    /// Injected RX bytes are BUFFERED, not dropped, when they arrive before
-    /// the firmware has configured/enabled the receiver. This is the semantic
-    /// the test-script `uart_injections` field depends on: an `at_start`
-    /// injection is delivered before the firmware executes its first
-    /// instruction, so if the queue were gated on the enable bits the byte
-    /// would vanish and a script would silently pass on no input at all.
+    /// Scripted RX bytes arriving before firmware setup remain on the wire
+    /// until both STM32 receiver-enable bits are set. This is the semantic the
+    /// test-script `uart_injections` field depends on: an `at_start` injection
+    /// precedes the first instruction, but must not become visible in DR/SR
+    /// until UE and RE are enabled.
     #[test]
-    fn rx_bytes_injected_before_any_configuration_are_buffered_not_dropped() {
+    fn stm32f1_rx_bytes_wait_for_ue_and_re() {
         let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
-        // Nothing configured yet: CR1 is 0 (UE/TE/RE all clear).
-        assert_eq!(uart.cr1, 0);
-        uart.rx_buffer().lock().unwrap().push_back(b'Z');
+        assert_eq!(uart.inject_rx_bytes(b"RS").unwrap(), 2);
+        uart.advance_ticks(1);
+        assert_eq!(uart.read(0x00).unwrap() & (1 << 5), 0, "disabled UE/RE");
+        assert!(uart.rx_buffer().lock().unwrap().is_empty());
 
-        // RXNE (SR bit 5) already reads set — presence is derived from the
-        // queue, with no enable gating.
-        assert_eq!(uart.read(0x00).unwrap() & (1 << 5), 1 << 5);
-
-        // The firmware now enables the USART (UE|TE|RE) — the byte survived.
-        uart.write(0x0C, (1 << 2) | (1 << 3)).unwrap(); // RE|TE
+        // UE without RE still leaves the bytes on the wire.
+        uart.write(0x0C, 1 << 3).unwrap(); // TE
         uart.write(0x0D, 1 << 5).unwrap(); // UE (CR1 bit 13)
+        uart.advance_ticks(1);
+        assert_eq!(uart.read(0x00).unwrap() & (1 << 5), 0, "RE is clear");
+
+        // RE without UE also leaves the bytes on the wire.
+        uart.write(0x0C, (1 << 2) | (1 << 3)).unwrap(); // RE|TE
+        uart.write(0x0D, 0).unwrap(); // UE clear
+        uart.advance_ticks(1);
+        assert_eq!(uart.read(0x00).unwrap() & (1 << 5), 0, "UE is clear");
+
+        // Once both enables are present, the queued bytes reach DR in order.
+        uart.write(0x0D, 1 << 5).unwrap();
+        uart.advance_ticks(1);
         assert_eq!(uart.read(0x00).unwrap() & (1 << 5), 1 << 5);
-        assert_eq!(
-            uart.read(0x04).unwrap(),
-            b'Z',
-            "the early byte is still there"
-        );
+        assert_eq!(uart.read(0x04).unwrap(), b'R');
+        assert_eq!(uart.read(0x00).unwrap() & (1 << 5), 1 << 5);
+        assert_eq!(uart.read(0x04).unwrap(), b'S');
         assert_eq!(
             uart.read(0x00).unwrap() & (1 << 5),
             0,

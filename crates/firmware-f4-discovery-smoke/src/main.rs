@@ -36,6 +36,10 @@ const USART_SR: *const u32 = USART2 as *const u32;
 const USART_DR: *mut u32 = (USART2 + 0x04) as *mut u32;
 const USART_BRR: *mut u32 = (USART2 + 0x08) as *mut u32;
 const USART_CR1: *mut u32 = (USART2 + 0x0C) as *mut u32;
+const USART_RXNE: u32 = 1 << 5;
+const USART_RE: u32 = 1 << 2;
+const USART_TE: u32 = 1 << 3;
+const USART_UE: u32 = 1 << 13;
 const TXE: u32 = 1 << 7;
 
 const GPIOA: u32 = 0x4002_0000;
@@ -156,6 +160,7 @@ fn main() -> ! {
         led_drive(pin, false);
     }
     send(b"F4-DISCO SMOKE\r\n");
+    smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
 
     let mut beat: u32 = 0;
@@ -173,6 +178,42 @@ fn main() -> ! {
         beat = beat.wrapping_add(1);
         delay();
     }
+}
+
+/// Start-injected USART2 bytes remain pending until both legacy CR1 receiver
+/// enables are set. This checks UE and RE independently before draining DR.
+fn smoke_usart2_rx_enable_gate() {
+    let re_off = unsafe { read_volatile(USART_SR) } & USART_RXNE == 0;
+    unsafe { write_volatile(USART_CR1, USART_TE | USART_RE) };
+    let ue_off = unsafe {
+        read_volatile(USART_CR1) & USART_UE == 0 && read_volatile(USART_SR) & USART_RXNE == 0
+    };
+    unsafe { write_volatile(USART_CR1, USART_UE | USART_TE | USART_RE) };
+
+    let mut received = [0u8; 2];
+    let mut count = 0;
+    for _ in 0..1_000_000 {
+        if unsafe { read_volatile(USART_SR) } & USART_RXNE != 0 && count < received.len() {
+            received[count] = unsafe { read_volatile(USART_DR) } as u8;
+            count += 1;
+        }
+        if count == received.len() {
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let released = unsafe { read_volatile(USART_SR) } & USART_RXNE == 0;
+    let passed = re_off && ue_off && count == 2 && received == *b"RS" && released;
+
+    send(b"USART2 RX GATE re_off=");
+    put_dec(if re_off { 1 } else { 0 });
+    send(b" ue_off=");
+    put_dec(if ue_off { 1 } else { 0 });
+    send(b" data=");
+    put_hex32((u32::from(received[0]) << 8) | u32::from(received[1]));
+    send(b" released=");
+    put_dec(if released { 1 } else { 0 });
+    send(if passed { b" ok\r\n" } else { b" FAIL\r\n" });
 }
 
 fn smoke_spi1_irq_and_max31855() {
