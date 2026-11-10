@@ -13,7 +13,8 @@
 # pads. It does not claim the L3GD20, CAN, RTC, DAC, USB, TSC or the
 # watchdogs. AIRCR.PRIGROUP writes are checked to read zero on ARMv6-M. A
 # software-pended EXTI0_1 NVIC line then takes a real exception through a RAM
-# vector and verifies handler IPSR/IABR plus return cleanup.
+# vector and verifies handler IPSR/IABR, the eight-word Cortex-M0 stack frame,
+# EXC_RETURN, and return cleanup.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke"
@@ -62,7 +63,10 @@ assertions:
       - "dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok"
       - "crc word=0xDF8A8A2B seed=1 std=1 ok"
       - "adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok"
-      - "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 returned=1 ok"
+      - "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044 lr="
+      - " pc="
+      - " exc_return=0xFFFFFFF9 sp="
+      - " returned=1 ok"
       - "summary 0x0DC7FFFF"
       - "DONE"
   - memory_value:

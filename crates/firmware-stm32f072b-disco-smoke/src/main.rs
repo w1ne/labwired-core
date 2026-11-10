@@ -24,9 +24,9 @@
 //!
 //! Peripheral IRQ checks read each line's ISPR bit without enabling it. The
 //! final software-pended IRQ 5 takes a real Cortex-M0 exception through a RAM
-//! vector table and checks IPSR, IABR, and exception return. Every check prints
-//! one line and sets one bit of the summary word at `SUMMARY`. AIRCR.PRIGROUP
-//! is also checked as reserved on this ARMv6-M core.
+//! vector table and checks IPSR, IABR, the basic stacked frame, and exception
+//! return. Every check prints one line and sets one bit of the summary word at
+//! `SUMMARY`. AIRCR.PRIGROUP is also checked as reserved on this ARMv6-M core.
 
 #![no_std]
 #![no_main]
@@ -47,6 +47,7 @@ const IRQ_HIT: u32 = SUMMARY + 4;
 const IRQ_IPSR: u32 = SUMMARY + 8;
 const IRQ_ACTIVE: u32 = SUMMARY + 12;
 const IRQ_PENDING: u32 = SUMMARY + 16;
+const IRQ_FRAME: u32 = SUMMARY + 20;
 
 // RCC (RM0091 §6.4).
 const RCC: u32 = 0x4002_1000;
@@ -195,28 +196,74 @@ fn unpend(irq: u32) {
     wr(NVIC_ICPR0, 1 << irq);
 }
 
-/// RAM vector used by `check_exception_entry`. Keep the handler free of UART
-/// work so the evidence comes from exception entry and return themselves.
+/// RAM vector used by `check_exception_entry`. Capture the hardware-created
+/// frame before a compiler prologue can move MSP, and leave UART work to the
+/// thread-mode caller.
+#[unsafe(naked)]
 unsafe extern "C" fn smoke_exti0_1_handler() {
-    let ipsr: u32;
-    unsafe {
-        asm!(
-            "mrs {ipsr}, IPSR",
-            ipsr = out(reg) ipsr,
-            options(nomem, nostack, preserves_flags),
-        );
-        write_volatile(IRQ_IPSR as *mut u32, ipsr);
-        write_volatile(
-            IRQ_ACTIVE as *mut u32,
-            read_volatile(NVIC_IABR0 as *const u32) & (1 << EXTI0_1_IRQ),
-        );
-        write_volatile(
-            IRQ_PENDING as *mut u32,
-            read_volatile(NVIC_ISPR0 as *const u32) & (1 << EXTI0_1_IRQ),
-        );
-        write_volatile(NVIC_ICER0 as *mut u32, 1 << EXTI0_1_IRQ);
-        write_volatile(IRQ_HIT as *mut u32, 1);
-    }
+    core::arch::naked_asm!(
+        "mrs r3, ipsr",
+        "ldr r0, =0x20003008",
+        "str r3, [r0]",
+        "mrs r1, msp",
+        "ldr r0, =0x20003014",
+        "ldr r2, [r1, #0]",
+        "str r2, [r0, #0]",
+        "ldr r2, [r1, #4]",
+        "str r2, [r0, #4]",
+        "ldr r2, [r1, #8]",
+        "str r2, [r0, #8]",
+        "ldr r2, [r1, #12]",
+        "str r2, [r0, #12]",
+        "ldr r2, [r1, #16]",
+        "str r2, [r0, #16]",
+        "ldr r2, [r1, #20]",
+        "str r2, [r0, #20]",
+        "ldr r2, [r1, #24]",
+        "str r2, [r0, #24]",
+        "ldr r2, [r1, #28]",
+        "str r2, [r0, #28]",
+        "mov r2, lr",
+        "str r2, [r0, #32]",
+        "str r1, [r0, #36]",
+        "ldr r0, =0xe000e300",
+        "ldr r2, [r0]",
+        "movs r3, #0x20",
+        "ands r2, r3",
+        "ldr r0, =0x2000300c",
+        "str r2, [r0]",
+        "ldr r0, =0xe000e200",
+        "ldr r2, [r0]",
+        "ands r2, r3",
+        "ldr r0, =0x20003010",
+        "str r2, [r0]",
+        "ldr r0, =0xe000e180",
+        "movs r2, #0x20",
+        "str r2, [r0]",
+        "ldr r0, =0x20003004",
+        "movs r2, #1",
+        "str r2, [r0]",
+        "bx lr",
+    );
+}
+
+/// Set known caller-saved register values immediately before pends IRQ 5.
+/// The two saved callee-saved registers keep this helper ABI-correct while
+/// leaving the exception frame eight-byte aligned.
+#[unsafe(naked)]
+unsafe extern "C" fn pend_exti0_1_irq_with_sentinels() {
+    core::arch::naked_asm!(
+        "push {{r4, r7}}",
+        "ldr r7, =0xe000e200",
+        "movs r4, #0x20",
+        "movs r0, #0x11",
+        "movs r1, #0x22",
+        "movs r2, #0x33",
+        "movs r3, #0x44",
+        "str r4, [r7]",
+        "pop {{r4, r7}}",
+        "bx lr",
+    );
 }
 
 /// Take a software-pended IRQ 5 through the imported Cortex-M0's exception
@@ -245,8 +292,8 @@ fn check_exception_entry() -> bool {
             == ((smoke_exti0_1_handler as *const () as usize as u32) | 1)
     };
 
-    wr(NVIC_ISPR0, irq_bit);
     wr(NVIC_ISER0, irq_bit);
+    unsafe { pend_exti0_1_irq_with_sentinels() };
     for _ in 0..100_000 {
         if rd(IRQ_HIT) != 0 {
             break;
@@ -263,6 +310,26 @@ fn check_exception_entry() -> bool {
     let ipsr = rd(IRQ_IPSR);
     let active_during = rd(IRQ_ACTIVE);
     let pending_during = rd(IRQ_PENDING);
+    let frame_r0 = unsafe { read_volatile(IRQ_FRAME as *const u32) };
+    let frame_r1 = unsafe { read_volatile((IRQ_FRAME + 4) as *const u32) };
+    let frame_r2 = unsafe { read_volatile((IRQ_FRAME + 8) as *const u32) };
+    let frame_r3 = unsafe { read_volatile((IRQ_FRAME + 12) as *const u32) };
+    let frame_lr = unsafe { read_volatile((IRQ_FRAME + 20) as *const u32) };
+    let frame_pc = unsafe { read_volatile((IRQ_FRAME + 24) as *const u32) };
+    let frame_xpsr = unsafe { read_volatile((IRQ_FRAME + 28) as *const u32) };
+    let exc_return = unsafe { read_volatile((IRQ_FRAME + 32) as *const u32) };
+    let frame_sp = unsafe { read_volatile((IRQ_FRAME + 36) as *const u32) };
+    let frame_ok = frame_r0 == 0x11
+        && frame_r1 == 0x22
+        && frame_r2 == 0x33
+        && frame_r3 == 0x44
+        && frame_lr & 1 != 0
+        && (0x0800_0000..0x0802_0000).contains(&frame_pc)
+        && frame_xpsr & 0x0100_0000 != 0
+        && frame_xpsr & 0x0000_03ff == 0
+        && exc_return == 0xffff_fff9
+        && frame_sp & 7 == 0
+        && (0x2000_0000..0x2000_4000).contains(&frame_sp);
     let returned = active_after == 0 && pending_after == 0 && vtor_restored;
     let ok = vtor_installed
         && vector_installed
@@ -270,6 +337,7 @@ fn check_exception_entry() -> bool {
         && ipsr == 16 + EXTI0_1_IRQ
         && active_during == irq_bit
         && pending_during == 0
+        && frame_ok
         && returned;
 
     puts("irq exception hit=");
@@ -280,6 +348,26 @@ fn check_exception_entry() -> bool {
     hex(active_during);
     puts(" pending=");
     hex(pending_during);
+    puts(" frame=");
+    puts(if frame_ok { "1" } else { "0" });
+    puts(" regs=");
+    hex(frame_r0);
+    puts(",");
+    hex(frame_r1);
+    puts(",");
+    hex(frame_r2);
+    puts(",");
+    hex(frame_r3);
+    puts(" lr=");
+    hex(frame_lr);
+    puts(" pc=");
+    hex(frame_pc);
+    puts(" xpsr=");
+    hex(frame_xpsr);
+    puts(" exc_return=");
+    hex(exc_return);
+    puts(" sp=");
+    hex(frame_sp);
     puts(" returned=");
     puts(if returned { "1 " } else { "0 " });
     verdict(ok);

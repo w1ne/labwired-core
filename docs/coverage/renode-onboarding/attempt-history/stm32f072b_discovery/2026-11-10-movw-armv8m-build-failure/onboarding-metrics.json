@@ -1,0 +1,33 @@
+{
+  "target_id": "stm32f072b_discovery",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": "firmware-stm32f072b-disco-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/renode-onboarding/stm32f072b_discovery-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f072b_discovery.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T21:13:29Z",
+  "finished_at_utc": "2026-11-10T21:13:30Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1360,
+  "failure_stage": "build_firmware",
+  "first_error_signature": "error: <inline asm>:10:1: instruction requires: armv8m.base",
+  "failure_hint": "Firmware build failed. Start with the first compiler error in logs/build_firmware.log.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.823,
+    "build_firmware": 0.519,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": 823,
+    "build_firmware": 519,
+    "run_smoke": null
+  }
+}

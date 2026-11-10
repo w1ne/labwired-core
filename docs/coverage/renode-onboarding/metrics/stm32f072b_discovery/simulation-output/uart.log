@@ -22,6 +22,6 @@ tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
 dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok
 crc word=0xDF8A8A2B seed=1 std=1 ok
 adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok
-irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 returned=1 ok
+irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044 lr=0x08002BD5 pc=0x080001D4 xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003EF8 returned=1 ok
 summary 0x0DC7FFFF
 DONE
