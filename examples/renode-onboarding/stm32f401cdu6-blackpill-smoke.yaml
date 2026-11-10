@@ -15,10 +15,12 @@
 # read uses the legacy POS ACK-position bit, checks RXNE isolation and receive
 # BTF IRQ assertion, then generates STOP before both DR reads. It verifies
 # BUSY release, BTF release with RXNE preserved after the first read, and RXNE
-# clearing after the second read.
-# A later absent-address probe checks ER IRQ 32. Results print on
-# USART2; USART1 checks TXEIE and RXNEIE assertion/release on IRQ 37, with an
-# injected RX byte. The summary word lands at 0x20017F00 and is 0xB1AC01FF on
+# clearing after the second read. The I2C1 absent-address probe checks ER IRQ
+# 32. The I2C2 absent-address probe checks AF status, event-line isolation,
+# AF clearing and recovery without claiming a separate I2C2 error vector.
+# Results print on USART2; USART1 checks TXEIE and RXNEIE assertion/release on
+# IRQ 37, with an injected RX byte. The summary word lands at 0x20017F00 and is
+# 0xB1AC03FF on
 # success. PC13 resets low, so three on/off toggles give 5 edges, not 6. ADC,
 # EXTI, other timers and other USARTs claimed by the chip are not exercised.
 schema_version: "1.2"
@@ -43,6 +45,7 @@ assertions:
       - "i2c1 tmp102=00001900 nack=00000400 buf_irq=1 buf_release=1 ev_irq=1 ev_release=1 er_irq=1 irq_released=1 ok"
       - "i2c2 tmp102=00001900 sb_irq=1 addr_irq=1 txe_isolated=1 btf_irq=1 ok"
       - "pos=1 i2c2 btf_rx_irq=1 rxne_isolated=1 stop_before_dr=1 rxne_after_first=1 release=1 rxne_cleared=1 data=00001980 ok"
+      - "i2c2 nack=00000400 no_addr=1 ev_isolated=1 af_cleared=1 idle=1 ok"
       - "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok"
       - "usart1 txe_irq=1 released=1 ok"
       - "usart1 rxne_irq=1 data=00000052 released=1 ok"
@@ -52,6 +55,6 @@ assertions:
       min_edges: 5
   - memory_value:
       address: 0x20017F00
-      expected_value: 0xB1AC01FF
+      expected_value: 0xB1AC03FF
       size: 4
   - expected_stop_reason: max_steps
