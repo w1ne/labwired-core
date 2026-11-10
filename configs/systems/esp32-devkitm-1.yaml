@@ -1,0 +1,15 @@
+# Espressif ESP32-DevKitM-1 / ESP32-MINI-1 with UART0 plus an external GPIO23
+# indicator LED. The USB-UART bridge is not modeled; UART output is captured
+# from the ESP32 UART0 model. GPIO23 is a header pin, not a built-in LED.
+name: "esp32-devkitm-1"
+chip: "../chips/esp32-devkitm-1-smoke.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices: []
+board_io:
+  - id: "header_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 23
+    signal: "output"
+    active_high: true
