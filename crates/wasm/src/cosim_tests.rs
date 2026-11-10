@@ -1295,3 +1295,43 @@ cosim_models:
     let second = f64::from(sim.analog_trace_batch(0).samples.last().unwrap().values[0]);
     assert!((second - 4.5).abs() < 0.01, "{second}");
 }
+
+#[test]
+fn ui_temperature_changes_a_beta_thermistor_trace() {
+    let mut sim = build(
+        r#"
+name: wasm-beta-thermistor
+chip: stm32f401
+external_devices: []
+cosim_models:
+  - id: circuit
+    adapter: analog
+    step_ns: 100000
+    inputs: { temperature: ui.sensor.temperature }
+    config:
+      netlist_text: |
+        V1 in 0 dc 5
+        Rfixed in out 10k
+        Rntc out 0 10k
+      probes: { voltage: "v(out)" }
+      thermistors:
+        temperature: { resistor: Rntc, r_ref_ohms: 10000, beta_kelvin: 3950, reference_c: 25, min_c: 0, max_c: 85 }
+"#,
+    );
+    assert_eq!(
+        sim.cosim.as_ref().unwrap().signals()["ui.sensor.temperature"],
+        CosimSignalValue::F64(25.0)
+    );
+    step_until(&mut sim, CYCLES_PER_MS, 20_000);
+    let first = f64::from(sim.analog_trace_batch(0).samples.last().unwrap().values[0]);
+    assert!((first - 2.5).abs() < 0.01, "{first}");
+    sim.set_cosim_signal_number("ui.sensor.temperature", 85.0)
+        .expect("input is routed");
+    step_until(&mut sim, CYCLES_PER_MS * 2, 20_000);
+    let second = f64::from(sim.analog_trace_batch(0).samples.last().unwrap().values[0]);
+    let resistance = 10_000.0 * (3950.0_f64 * (1.0 / 358.15 - 1.0 / 298.15)).exp();
+    assert!(
+        (second - 5.0 * resistance / (10_000.0 + resistance)).abs() < 0.01,
+        "{second}"
+    );
+}
