@@ -1,8 +1,8 @@
 # Onboarding Smoke: rp2350-pico2w-bme280
 
 - status: `pass`
-- elapsed_seconds: `148`
-- elapsed_ms: `147473`
+- elapsed_seconds: `2`
+- elapsed_ms: `1159`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`
