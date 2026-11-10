@@ -145,6 +145,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | dspic33fj32mc204 | — | — | — |
 | efr32mg26 | ✓ | ✓ | — |
 | esp32 | ✓ | — | ✓ |
+| esp32-devkitc-32e-gpio-smoke | ✓ | — | ✓ |
 | esp32c3 | ✓ | ✓ | ✓ |
 | esp32c6 | ✓ | ✓ | ✓ |
 | esp32s3 | — | — | — |

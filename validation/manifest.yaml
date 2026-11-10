@@ -2858,7 +2858,7 @@ boards:
     # the live capture reads the clock-gated window as bus junk (0x0008fe10).
     # This acknowledges model drift, NOT a recapture.
     # Re-stamped 2026-11-08 (round 347) over both changes above after merging main.
-    drift_ack_digest: 9023e9030af4a02d4ab4c84217df775409d7bbeeb770967e5e815991dbbb1f80
+    drift_ack_digest: afcf8ea391f732b54fbedeea7e983b71a7ca9cc41a2c4000073c9ab7b0f93971
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3730,7 +3730,12 @@ boards:
     # generic_factory.rs does not opt in. On the merged tree: lib timg 44/44,
     # esp32c3_rtc_slow_calibration 1/1, esp32c3_reset_conformance 2/2.
     # ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-09
+    # 2026-11-10 (#1784 feat/esp32-deep-sleep): watched shared files moved
+    # (classic ESP32 RTC_CNTL timer-wake sleep + Machine deep-sleep reboot
+    # capture in lib.rs). The C3 factory does not use that classic sleep-reboot
+    # path; no C3 register map or captured reset-state window changes.
+    # ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-10
 
   - id: nucleo-l476rg
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
@@ -9622,12 +9627,16 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
+    # 2026-11-10 (#1784 feat/esp32-deep-sleep): shared lib.rs / rtc_cntl.rs
+    # moved for classic ESP32 timer-wake deep/light sleep. S3 UART0 remains
+    # outside the nine captured reset-state windows; no S3 register map or
+    # reset-value change. ACK, NOT A CAPTURE.
     # 2026-11-10 (#1759 feat/esp32-nvs-flash): watched SPI / spi_mem_flash
     # models gained program/erase + WEL behaviour so stock Preferences/NVS
     # keeps its writes. This is not an S3 reset-state recapture; the nine
     # captured S3 windows are unchanged. ACK, NOT A CAPTURE.
     drift_ack: 2026-11-10
-    drift_ack_digest: bd3f7a6bedaf222f64a8b1717d6fb0635c09f8770ee8c662144678ae64cbba93
+    drift_ack_digest: c30213b480a08adac0801cc2ebe2947169beaadcd9bd2d11b8cfd601c1286102
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
@@ -10425,6 +10434,9 @@ boards:
       # 2026-11-08: the PCNT pulse counter (was a round-trip stub), inputs from
       # the GPIO input matrix. No silicon capture on this board.
       - crates/core/src/peripherals/esp32/pcnt.rs
+      # 2026-11-09: RTC_CNTL light/deep sleep on the RTC timer (deep sleep
+      # reboots the app with RTC memory kept). No silicon capture on this board.
+      - crates/core/src/peripherals/esp32/rtc_cntl.rs
       - crates/core/src/peripherals/esp32/sar_adc.rs
       - crates/core/src/peripherals/esp32/sdio_stub.rs
       - crates/core/src/peripherals/esp32/sha.rs
