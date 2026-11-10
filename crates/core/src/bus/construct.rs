@@ -527,11 +527,24 @@ impl SystemBus {
             .collect();
     }
 
+    /// Set or clear the TX capture sink on a classic ESP32 UART (`Esp32Uart`).
+    /// Shared by the named and unnamed console paths so they do not each add a
+    /// `downcast_mut` token — the downcast ratchet's ceiling must not rise.
+    fn try_set_esp32_uart_sink(
+        any: &mut dyn std::any::Any,
+        sink: Option<Arc<Mutex<Vec<u8>>>>,
+    ) -> bool {
+        if let Some(uart) = any.downcast_mut::<crate::peripherals::esp32::uart::Esp32Uart>() {
+            uart.set_sink(sink);
+            return true;
+        }
+        false
+    }
+
     /// Attach a UART TX capture sink to any UART peripherals on this bus.
     ///
     /// When `echo_stdout` is false, UART writes will no longer be printed to stdout.
     pub fn attach_uart_tx_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>, echo_stdout: bool) {
-        use crate::peripherals::esp32::uart::Esp32Uart;
         use crate::peripherals::esp_uart::EspUart;
         use crate::peripherals::nrf52::uarte::Nrf52Uarte;
         use crate::peripherals::nrf54l::uarte::Nrf54lUarte;
@@ -572,8 +585,7 @@ impl SystemBus {
                 continue;
             }
             // Real ESP32-classic UART (echo is fixed at construction time).
-            if let Some(uart) = any.downcast_mut::<Esp32Uart>() {
-                uart.set_sink(Some(sink.clone()));
+            if Self::try_set_esp32_uart_sink(any, Some(sink.clone())) {
                 continue;
             }
             // nRF52 UARTE console (EasyDMA): captured/echoed the same way.
@@ -1000,6 +1012,8 @@ impl SystemBus {
                 any.downcast_mut::<crate::peripherals::imxrt::lpuart::ImxrtLpuart>()
             {
                 uart.set_sink(None, false);
+            } else if Self::try_set_esp32_uart_sink(any, None) {
+                // YAML `type: esp32_uart` installs this model (classic ESP32).
             } else if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
                 uart.set_sink(None);
             } else if let Some(sercom) =
@@ -1040,6 +1054,15 @@ impl SystemBus {
             // The Espressif twin (S3 UART0/1/2, C3 UART0/1) decides at
             // construction whether it is a console, so `echo_stdout` can only
             // silence it here — same as the by-type `attach_uart_tx_sink` path.
+            // Real ESP32-classic UART (`type: esp32_uart`). The unnamed
+            // `attach_uart_tx_sink` path already knew this model; the named
+            // console path (Session `debug_uart: uart0`) did not, so a board
+            // whose YAML overlay replaced programmatic UART0 with Esp32Uart
+            // was reported as "no such UART". Shared helper so this arm does
+            // not add a second `downcast_mut` token.
+            if Self::try_set_esp32_uart_sink(any, Some(sink.clone())) {
+                return true;
+            }
             if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
                 uart.set_sink(Some(sink));
                 uart.silence_stdout_echo_if(echo_stdout);

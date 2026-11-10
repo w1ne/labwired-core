@@ -1985,6 +1985,20 @@ DONE\r\n",
         valid_pc_ranges: &[],
         expected_uart_output: b"TIER1 done",
     },
+    // Narrow DevKitC-32E GPIO/sleep onboarding profile: same LX6 SoC and the
+    // same committed Tier-1 fixture as `esp32`. Kept so this descriptor +
+    // system YAML pair is loaded, parsed and dispatched by a PR-run gate.
+    SurvivalCase {
+        name: "esp32_devkitc_32e_gpio_smoke_tier1",
+        core: "xtensa-lx6",
+        family: CpuFamily::Session,
+        hal: Hal::Bare,
+        chip: "esp32-devkitc-32e-gpio-smoke",
+        system: "esp32-devkitc-32e-gpio-smoke",
+        fixture: "tier1/esp32.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"TIER1 done",
+    },
     // The S3 pair shares one fixture and one transcript: the fast-boot builder
     // consumes only `cpu_hz` from the chip descriptor, so both descriptors run
     // the same machine and these two cases are behaviourally identical. The
@@ -2224,7 +2238,9 @@ fn case_cycles(case: &SurvivalCase) -> u32 {
 /// classic ESP32). Every other FAIL line fails the gate.
 fn allowed_tier1_failures(case: &SurvivalCase) -> &'static [&'static str] {
     match case.name {
-        "esp32_tier1" => &["TIER1 dma FAIL code=esp32-no-mem2mem-dma"],
+        "esp32_tier1" | "esp32_devkitc_32e_gpio_smoke_tier1" => {
+            &["TIER1 dma FAIL code=esp32-no-mem2mem-dma"]
+        }
         _ => &[],
     }
 }
@@ -3328,6 +3344,11 @@ survival_gate!(test_stm32f401cdu6_demo_survival, "stm32f401cdu6_demo");
 survival_gate!(test_rp2350_demo_survival, "rp2350_demo");
 
 survival_gate!(test_esp32_tier1_survival, "esp32_tier1");
+
+survival_gate!(
+    test_esp32_devkitc_32e_gpio_smoke_tier1_survival,
+    "esp32_devkitc_32e_gpio_smoke_tier1"
+);
 
 survival_gate!(test_esp32s3_tier1_survival, "esp32s3_tier1");
 
