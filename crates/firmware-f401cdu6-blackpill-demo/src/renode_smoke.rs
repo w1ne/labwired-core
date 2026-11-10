@@ -197,7 +197,7 @@ fn main() -> ! {
         i2c2_txe_isolated,
         i2c2_txe_buf_irq,
         i2c2_txe_buf_released,
-        i2c2_btf_irq,
+        i2c2_btf_event_gate,
         i2c2_rxne_buf_irq,
         i2c2_rxne_buf_released,
     ) = smoke_i2c2();
@@ -207,7 +207,7 @@ fn main() -> ! {
         && i2c2_txe_isolated
         && i2c2_txe_buf_irq
         && i2c2_txe_buf_released
-        && i2c2_btf_irq
+        && i2c2_btf_event_gate
         && i2c2_rxne_buf_irq
         && i2c2_rxne_buf_released;
     send(b"i2c2 tmp102=");
@@ -222,8 +222,8 @@ fn main() -> ! {
     send(if i2c2_txe_buf_irq { b"1" } else { b"0" });
     send(b" txe_buf_release=");
     send(if i2c2_txe_buf_released { b"1" } else { b"0" });
-    send(b" btf_irq=");
-    send(if i2c2_btf_irq { b"1" } else { b"0" });
+    send(b" btf_irq_gate=");
+    send(if i2c2_btf_event_gate { b"1" } else { b"0" });
     send(b" rxne_buf_irq=");
     send(if i2c2_rxne_buf_irq { b"1" } else { b"0" });
     send(b" rxne_buf_release=");
@@ -733,7 +733,8 @@ fn smoke_i2c1_receive_btf() -> (u16, bool, bool, bool) {
 /// TMP102 and event vector. This catches instance wiring/configuration mistakes
 /// that an I2C1-only transaction cannot see. It checks that SB and ADDR stay
 /// off the EV line until ITEVTEN is enabled, isolates TXE from ITEVTEN, then
-/// checks TXE and RXNE buffer IRQ assertion/release under ITBUFEN.
+/// checks TXE and BTF event gating plus TXE/RXNE buffer IRQ behavior under
+/// ITBUFEN.
 fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
     const PE: u32 = 1;
     const ACK: u32 = 1 << 10;
@@ -806,6 +807,10 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
         txe_buf_released &= rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
     }
 
+    // BTF is an event source: keep every interrupt enable clear while the
+    // pointer byte completes, then enable ITEVTEN with BTF still set.
+    wr(I2C2_CR2, 16);
+    wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
     wr(I2C2_DR, 0); // temperature register pointer
     if !wait(I2C2_SR1, BTF, BTF) {
         return (
@@ -820,7 +825,9 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
             false,
         );
     }
-    let btf_irq = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
+    let btf_isolated = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
+    wr(I2C2_CR2, 16 | (1 << 9)); // ITEVTEN only
+    let btf_event_gate = btf_isolated && wait(NVIC_ISPR1, I2C2_EV_IRQ_BIT, I2C2_EV_IRQ_BIT);
 
     // Repeated START, then read the independent sensor's two-byte result.
     wr(I2C2_CR1, PE | ACK | START);
@@ -832,7 +839,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
             txe_isolated,
             txe_buf_irq,
             txe_buf_released,
-            btf_irq,
+            btf_event_gate,
             false,
             false,
         );
@@ -846,7 +853,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
             txe_isolated,
             txe_buf_irq,
             txe_buf_released,
-            btf_irq,
+            btf_event_gate,
             false,
             false,
         );
@@ -863,7 +870,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
             txe_isolated,
             txe_buf_irq,
             txe_buf_released,
-            btf_irq,
+            btf_event_gate,
             false,
             false,
         );
@@ -886,7 +893,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
             txe_isolated,
             txe_buf_irq,
             txe_buf_released,
-            btf_irq,
+            btf_event_gate,
             rxne_buf_irq,
             rxne_buf_released,
         );
@@ -900,7 +907,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
             txe_isolated,
             txe_buf_irq,
             txe_buf_released,
-            btf_irq,
+            btf_event_gate,
             rxne_buf_irq,
             rxne_buf_released,
         );
@@ -912,7 +919,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
         txe_isolated,
         txe_buf_irq,
         txe_buf_released,
-        btf_irq,
+        btf_event_gate,
         rxne_buf_irq,
         rxne_buf_released,
     )
