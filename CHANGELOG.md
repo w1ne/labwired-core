@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.26.0] - 2026-11-10
+## [0.26.0] - 2026-11-11
 
 ### Release highlights
 - Multi-MCU systems now exchange timed GPIO, SPI, I2C, UART and CAN traffic;
@@ -282,6 +282,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a run without any skip. The four-servo trajectory lab (two cores, loopTask
   on APP_CPU) goes from 0.03x to 2.0x real time in WASM (Node, 12 s).
 ### Fixed
+- Avoid central device-clock work before its next deadline. Empty Renesas RIIC
+  controllers no longer advance a nonexistent device clock; late device
+  attachment and absolute-counter reload behavior remain covered by tests.
 - Preserve full untapped-console messages when UART and USB output share a
   character prefix. Remove only complete mirrored lines; keep distinct UART0
   and USB-Serial-JTAG application output intact in browser diagnostics. The
@@ -297,6 +300,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Debian 12, Ubuntu 22.04 and AlmaLinux 9 with the GLIBC 2.31 floor preserved.
 - Smoke-test Python wheels on every supported native architecture, including
   the cross-built Linux ARM64 wheel, before publication.
+- Execute anonymous GHCR runner and installed-action smoke checks on native
+  Linux amd64 and ARM64 runners after publication.
 - Correct classic ESP32 RMT read-only status, address and interrupt register
   handling. Restore the documented CONF0, CONF1 and TX_LIM reset values and
   the 32-bit read/write DATE contract. Align the register coverage reference
