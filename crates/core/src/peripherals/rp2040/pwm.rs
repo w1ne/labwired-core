@@ -239,7 +239,7 @@ impl Slice {
         if self.frac_acc >= step {
             1
         } else {
-            u64::from((step - self.frac_acc + 0x0F) / 0x10).max(1)
+            u64::from((step - self.frac_acc).div_ceil(0x10)).max(1)
         }
     }
 

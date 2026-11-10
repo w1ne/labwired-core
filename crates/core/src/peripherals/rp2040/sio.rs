@@ -452,13 +452,8 @@ impl Peripheral for Rp2040Sio {
     fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
         match self.canonical(offset) {
             Some(
-                DIV_UDIVIDEND
-                | DIV_UDIVISOR
-                | DIV_SDIVIDEND
-                | DIV_SDIVISOR
-                | DIV_QUOTIENT
-                | DIV_REMAINDER
-                | DIV_CSR,
+                DIV_UDIVIDEND | DIV_UDIVISOR | DIV_SDIVIDEND | DIV_SDIVISOR | DIV_QUOTIENT
+                | DIV_REMAINDER | DIV_CSR,
             ) => MmioAccessClass::SideEffectFree,
             _ => MmioAccessClass::SideEffecting,
         }
@@ -780,11 +775,26 @@ mod tests {
     #[test]
     fn divider_window_is_side_effect_free_but_gpio_is_not() {
         let sio = Rp2040Sio::new();
-        assert_eq!(sio.mmio_access_class(DIV_UDIVIDEND), MmioAccessClass::SideEffectFree);
-        assert_eq!(sio.mmio_access_class(DIV_UDIVISOR), MmioAccessClass::SideEffectFree);
-        assert_eq!(sio.mmio_access_class(DIV_QUOTIENT), MmioAccessClass::SideEffectFree);
-        assert_eq!(sio.mmio_access_class(DIV_CSR), MmioAccessClass::SideEffectFree);
-        assert_eq!(sio.mmio_access_class(GPIO_OUT_SET), MmioAccessClass::SideEffecting);
+        assert_eq!(
+            sio.mmio_access_class(DIV_UDIVIDEND),
+            MmioAccessClass::SideEffectFree
+        );
+        assert_eq!(
+            sio.mmio_access_class(DIV_UDIVISOR),
+            MmioAccessClass::SideEffectFree
+        );
+        assert_eq!(
+            sio.mmio_access_class(DIV_QUOTIENT),
+            MmioAccessClass::SideEffectFree
+        );
+        assert_eq!(
+            sio.mmio_access_class(DIV_CSR),
+            MmioAccessClass::SideEffectFree
+        );
+        assert_eq!(
+            sio.mmio_access_class(GPIO_OUT_SET),
+            MmioAccessClass::SideEffecting
+        );
         assert_eq!(sio.mmio_access_class(CPUID), MmioAccessClass::SideEffecting);
     }
 

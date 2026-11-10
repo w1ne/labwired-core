@@ -495,10 +495,22 @@ mod tests {
     #[test]
     fn live_counter_reads_are_freerunning_timer_polls() {
         let t = Rp2040Timer::new();
-        assert_eq!(t.mmio_access_class(TIMERAWL), MmioAccessClass::FreerunningTimerPoll);
-        assert_eq!(t.mmio_access_class(TIMERAWH), MmioAccessClass::FreerunningTimerPoll);
-        assert_eq!(t.mmio_access_class(TIMELR), MmioAccessClass::FreerunningTimerPoll);
-        assert_eq!(t.mmio_access_class(TIMEHR), MmioAccessClass::FreerunningTimerPoll);
+        assert_eq!(
+            t.mmio_access_class(TIMERAWL),
+            MmioAccessClass::FreerunningTimerPoll
+        );
+        assert_eq!(
+            t.mmio_access_class(TIMERAWH),
+            MmioAccessClass::FreerunningTimerPoll
+        );
+        assert_eq!(
+            t.mmio_access_class(TIMELR),
+            MmioAccessClass::FreerunningTimerPoll
+        );
+        assert_eq!(
+            t.mmio_access_class(TIMEHR),
+            MmioAccessClass::FreerunningTimerPoll
+        );
         assert_eq!(t.mmio_access_class(ALARM0), MmioAccessClass::SideEffecting);
         assert_eq!(t.mmio_access_class(INTE), MmioAccessClass::SideEffecting);
     }

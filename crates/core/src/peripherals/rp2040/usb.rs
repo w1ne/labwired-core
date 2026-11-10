@@ -799,7 +799,10 @@ mod tests {
         let buf = 0x1c0usize;
         u.set_dpram_u32(ep_in_ctrl(1), 0x8000_0000 | (2 << 26) | buf as u32);
         u.set_dpram_u32(ep_in_buf_ctrl(1), BUF_CTRL_FULL | BUF_CTRL_AVAIL | 3);
-        assert!(u.needs_event_chain(), "a full bulk-IN buffer needs a host tick");
+        assert!(
+            u.needs_event_chain(),
+            "a full bulk-IN buffer needs a host tick"
+        );
 
         u.tick();
         assert!(
