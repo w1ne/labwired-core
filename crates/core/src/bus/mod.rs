@@ -694,6 +694,11 @@ pub struct SystemBus {
     /// Classification is **peripheral-owned** (CPU-agnostic bus); see
     /// [`Peripheral::mmio_access_class`].
     freerunning_timer_poll_mmio: std::cell::Cell<u32>,
+    /// Consecutive timer-only MMIO count across hosted Cortex-M windows.
+    /// A same-batch pair still coalesces immediately; split reads wait until
+    /// four timer-only accesses (more than one `time_us_64`) so a one-shot
+    /// timestamp cannot skip. See [`Self::take_timer_poll_coalesce_eligible`].
+    timer_poll_carry: std::cell::Cell<u32>,
     /// Batch-local count of [`MmioAccessClass::SideEffecting`] accesses.
     /// Any non-zero value disqualifies timer-poll coalesce for that batch.
     side_effecting_mmio: std::cell::Cell<u32>,

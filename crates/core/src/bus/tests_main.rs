@@ -159,6 +159,21 @@ fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     let gpio_idx = bus.find_peripheral_index_by_name("gpio").unwrap();
 
     bus.reset_mmio_activity_counters();
+    for i in 1..=3 {
+        bus.note_mmio_activity(sys_idx, 0x04);
+        assert!(
+            !bus.take_timer_poll_coalesce_eligible(),
+            "split time_us_64 ({i}/3 TIMERAW loads) must not skip"
+        );
+        bus.reset_mmio_activity_counters();
+    }
+    bus.note_mmio_activity(sys_idx, 0x04);
+    assert!(
+        bus.take_timer_poll_coalesce_eligible(),
+        "a second time_us_64 (4th consecutive timer-only access) should coalesce"
+    );
+
+    bus.reset_mmio_activity_counters();
     bus.note_mmio_activity(sys_idx, 0x04); // poll class (model decides)
     bus.note_mmio_activity(sys_idx, 0x44); // poll class
     assert!(
@@ -3898,6 +3913,7 @@ fn test_flash_boot_alias_read_and_write() {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4038,6 +4054,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4331,6 +4348,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4620,6 +4638,7 @@ fn test_peripheral_range_index_lookup() {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4765,6 +4784,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),

@@ -87,7 +87,7 @@ impl Avr {
     pub(super) fn pad_levels(&self, group: usize, bus: &dyn Bus) -> u8 {
         let pin = PORT_PIN[group];
         let ddr = self.io[(pin + 1 - 0x20) as usize];
-        let port = self.io[(pin + 2 - 0x20) as usize];
+        let port = self.port_pad_value(pin + 2, self.io[(pin + 2 - 0x20) as usize]);
         // No port window on the bus: no outside world to sense, the inputs
         // read low, exactly as the core's PINx read would fail to say more.
         let external = bus
@@ -765,5 +765,42 @@ mod tests {
         assert_eq!(skipped.cycles, stepped.cycles, "same wake cycle");
         assert_eq!(skipped.tcnt0, stepped.tcnt0);
         assert_eq!(skipped.t0_prescale_acc, stepped.t0_prescale_acc);
+    }
+
+    #[test]
+    fn pind_and_pcint_see_the_pwm_waveform_not_the_latch() {
+        // analogWrite(6, 128) at clk/1: COM0A1 + fast PWM, PD6 an output,
+        // PORTD latch low. PIND bit 6 follows OC0A; PCINT22 sees its edges.
+        let (mut cpu, mut bus) = rig();
+        write(&mut cpu, &mut bus, PD + 1, 1 << 6);
+        write(&mut cpu, &mut bus, 0x47, 128);
+        write(&mut cpu, &mut bus, 0x44, 0x83);
+        write(&mut cpu, &mut bus, 0x45, 0x01);
+        write(&mut cpu, &mut bus, ADDR_PCMSK2, 1 << 6);
+        write(&mut cpu, &mut bus, ADDR_PCICR, 1 << 2);
+        cpu.sreg = 0;
+        let mut high = 0;
+        let mut seen = [false; 2];
+        for _ in 0..512 {
+            run(&mut cpu, &mut bus, 1);
+            let level = read(&cpu, &bus, PD) & (1 << 6) != 0;
+            seen[usize::from(level)] = true;
+            high += usize::from(level);
+        }
+        assert_eq!(seen, [true, true], "PIND6 toggles with the waveform");
+        assert!((200..=312).contains(&high), "about half high: {high}");
+        assert_eq!(
+            read(&cpu, &bus, PD + 2) & (1 << 6),
+            0,
+            "PORTD keeps the latch"
+        );
+        assert_ne!(
+            cpu.pcifr & (1 << 2),
+            0,
+            "PCIF2 latched by the waveform edge"
+        );
+        cpu.sreg = 0x80;
+        run(&mut cpu, &mut bus, 4);
+        assert!(entries(&cpu)[4] >= 1, "PCINT2_vect entered");
     }
 }

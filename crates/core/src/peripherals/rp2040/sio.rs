@@ -23,7 +23,7 @@
 //! nothing drives still floats to 0. `CPUID` reads 0 (core 0).
 
 use crate::pins::{External, InputChange, PinPort};
-use crate::{Peripheral, SimResult};
+use crate::{MmioAccessClass, Peripheral, SimResult};
 use std::cell::Cell;
 
 // SIO register offsets (datasheet §2.3.1.7).
@@ -444,6 +444,21 @@ impl Peripheral for Rp2040Sio {
         false
     }
 
+    /// The hardware divider is a coprocessor: writing the operands and
+    /// reading the quotient has no pin, IRQ, or timer side effect. Arduino
+    /// `millis()` uses it (`__aeabi_uidiv` of `time_us_64`) on every empty
+    /// `loop()` iteration, so classifying it as side-effecting would block
+    /// idle-ff from coalescing the TIMERAW poll that sits next to it.
+    fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
+        match self.canonical(offset) {
+            Some(
+                DIV_UDIVIDEND | DIV_UDIVISOR | DIV_SDIVIDEND | DIV_SDIVISOR | DIV_QUOTIENT
+                | DIV_REMAINDER | DIV_CSR,
+            ) => MmioAccessClass::SideEffectFree,
+            _ => MmioAccessClass::SideEffecting,
+        }
+    }
+
     fn take_wire_input_edges(&mut self) -> Vec<crate::peripherals::pad_lines::WireInputEdge> {
         std::mem::take(&mut self.wire_edges)
     }
@@ -756,6 +771,32 @@ mod tests {
     use super::*;
 
     const PIN25: u32 = 1 << 25;
+
+    #[test]
+    fn divider_window_is_side_effect_free_but_gpio_is_not() {
+        let sio = Rp2040Sio::new();
+        assert_eq!(
+            sio.mmio_access_class(DIV_UDIVIDEND),
+            MmioAccessClass::SideEffectFree
+        );
+        assert_eq!(
+            sio.mmio_access_class(DIV_UDIVISOR),
+            MmioAccessClass::SideEffectFree
+        );
+        assert_eq!(
+            sio.mmio_access_class(DIV_QUOTIENT),
+            MmioAccessClass::SideEffectFree
+        );
+        assert_eq!(
+            sio.mmio_access_class(DIV_CSR),
+            MmioAccessClass::SideEffectFree
+        );
+        assert_eq!(
+            sio.mmio_access_class(GPIO_OUT_SET),
+            MmioAccessClass::SideEffecting
+        );
+        assert_eq!(sio.mmio_access_class(CPUID), MmioAccessClass::SideEffecting);
+    }
 
     #[test]
     fn cpuid_reads_zero() {

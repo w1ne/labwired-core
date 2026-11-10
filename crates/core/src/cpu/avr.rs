@@ -1301,7 +1301,9 @@ impl Avr {
             // high window by `data_write`.
             a if self.is_pin_reg(a) => {
                 let ddr = self.io[(addr + 1 - 0x20) as usize];
-                let port = self.io[(addr + 2 - 0x20) as usize];
+                // A pad an output-compare unit owns reads its waveform level,
+                // not the latch (the synchronizer samples the pad).
+                let port = self.port_pad_value(addr + 2, self.io[(addr + 2 - 0x20) as usize]);
                 // Propagated, not discarded: a chip yaml that maps no window
                 // for this port has no input state for this register at all,
                 // and a swallowed error would answer with a fabricated low — a
