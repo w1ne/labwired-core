@@ -4427,6 +4427,100 @@ fn fp_lazy_frame_is_saved_before_handler_fp_instruction() {
     assert_eq!(cpu.fpscr, 0x2100_0000);
 }
 
+/// A nested basic exception must leave the outer exception's lazy FP save
+/// pending. The first FP instruction in the outer handler then saves the
+/// interrupted Thread context into the original FPCAR before changing it.
+#[test]
+fn fp_lazy_save_survives_nested_exception_until_outer_handler_uses_fpu() {
+    let (mut cpu, mut bus, fp) = fp_core();
+    let nvic = Arc::new(crate::peripherals::nvic::NvicState::default());
+    // IRQ0 (exception 16) runs at 0x80; IRQ1 (exception 17) can preempt at 0x20.
+    nvic.ipr[0].store(0x0000_2080, Ordering::Relaxed);
+    cpu.set_shared_nvic_state(nvic);
+    cpu.pc = 0x1000;
+    cpu.sp = 0x8000;
+    cpu.control = 0x4;
+    for i in 0..16 {
+        cpu.fpu_s[i] = 0x4100_0000 + i as u32;
+    }
+    cpu.fpscr = 0x2100_0000;
+    let outer_frame = 0x8000 - 0x68;
+    for i in 0..17u32 {
+        bus.write_u32((outer_frame + 0x20 + i * 4) as u64, 0xDEAD_0000 + i)
+            .unwrap();
+    }
+
+    take_exception(&mut cpu, &mut bus, 16, 0x2000);
+    assert_eq!(cpu.active_exception, 16);
+    assert_eq!(cpu.lr, 0xFFFF_FFE9);
+    assert_eq!(cpu.sp, outer_frame);
+    assert_eq!(fp.fpcar(), outer_frame + 0x20);
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        1
+    );
+
+    // The nested IRQ has a basic frame because the outer handler has not
+    // used the FPU; it must not replace the outer frame's FPCAR or LSPACT.
+    cpu.pc = 0x2000;
+    let nested_frame = outer_frame - 32;
+    take_exception(&mut cpu, &mut bus, 17, 0x3000);
+    assert_eq!(cpu.active_exception, 17);
+    assert_eq!(cpu.lr, 0xFFFF_FFF1);
+    assert_eq!(cpu.sp, nested_frame);
+    assert_eq!(
+        bus.read_u32((nested_frame + 20) as u64).unwrap(),
+        0xFFFF_FFE9
+    );
+    assert_eq!(
+        bus.read_u32((nested_frame + 28) as u64).unwrap() & 0x1FF,
+        16
+    );
+    assert_eq!(fp.fpcar(), outer_frame + 0x20);
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        1
+    );
+
+    run_test_instr(&mut cpu, &mut bus, 0x0000_4770, false); // nested bx lr
+    assert_eq!(cpu.active_exception, 16);
+    assert_eq!(cpu.pc, 0x2000);
+    assert_eq!(cpu.sp, outer_frame);
+    assert_eq!(cpu.lr, 0xFFFF_FFE9);
+    assert_eq!(fp.fpcar(), outer_frame + 0x20);
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        1
+    );
+
+    // VMOV.F32 s0, s1 completes the original lazy save before changing S0.
+    run_test_instr(&mut cpu, &mut bus, 0xEEB0_0A60, true);
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        0
+    );
+    for i in 0..16u32 {
+        assert_eq!(
+            bus.read_u32((outer_frame + 0x20 + 4 * i) as u64).unwrap(),
+            0x4100_0000 + i,
+            "outer lazy save S{i}"
+        );
+    }
+    assert_eq!(
+        bus.read_u32((outer_frame + 0x60) as u64).unwrap(),
+        0x2100_0000
+    );
+
+    run_test_instr(&mut cpu, &mut bus, 0x0000_4770, false); // outer bx lr
+    assert_eq!(cpu.active_exception, 0);
+    assert_eq!(cpu.sp, 0x8000);
+    assert_eq!(cpu.control & 0x4, 0x4);
+    for i in 0..16 {
+        assert_eq!(cpu.fpu_s[i], 0x4100_0000 + i as u32, "Thread S{i} restored");
+    }
+    assert_eq!(cpu.fpscr, 0x2100_0000);
+}
+
 /// FPCA clear on an FP-extension core: basic frame, EXC_RETURN bit 4 set, and
 /// returning with it leaves FPCA clear.
 #[test]
