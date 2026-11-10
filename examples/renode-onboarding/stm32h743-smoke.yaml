@@ -1,7 +1,7 @@
 # Cortex-M7 register smoke against the narrowed imported STM32H743 profile.
 schema_version: "1.0"
 inputs:
-  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke"
+  firmware: "../../target/thumbv7em-none-eabihf/release/firmware-stm32h743-smoke"
   system: "../../configs/systems/onboarding/stm32h743.yaml"
 limits:
   max_steps: 4000000
@@ -13,6 +13,7 @@ assertions:
   - uart_contains: "cortex-m7 psp exception=1 stack=1 msp=1 return=1 exc_return=FFFFFFFD"
   - uart_contains: "cortex-m7 psp align exception=1 frame=1 stack=1 msp=1 return=1"
   - uart_contains: "cortex-m7 psp noalign exception=1 frame=1 stack=1 msp=1 return=1 ccr=1"
+  - uart_contains: "cortex-m7 fp exception=1 frame=1 stack=1 return=1 regs=1 fpscr=1 fpcar=1 exc_return=FFFFFFE9"
   - uart_contains: "cortex-m7 exception ok"
   - gpio_edges:
       pin: "gpioPortB:0"

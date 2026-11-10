@@ -1,6 +1,7 @@
 # Imported STM32H743 smoke profile. The imported Renode catalogue listed a
 # wider set of peripherals, including blocks that are stubs in this engine.
-# Keep only the H7 RCC, GPIOB/GPIOD, USART3, flash, and DTCM used by the smoke.
+# Keep only the H7 RCC, GPIOB/GPIOD, USART3, Cortex-M FPU state, flash, and
+# DTCM used by the smoke.
 # RM0433 documents the H743 memory map; 1 MiB flash is a conservative window for
 # this generic descriptor because it does not distinguish xG from xI density.
 name: stm32h743
@@ -37,3 +38,11 @@ peripherals:
     size: 1KB
     config:
       profile: stm32v2
+  - id: fpu
+    type: cortex_m_fpu
+    base_address: 0xE000EF30
+    size: 28B
+    # Arm Cortex-M7 TRM DDI 0489, Table 8-2: double-precision FPU values.
+    config:
+      mvfr0: 0x10110221
+      mvfr1: 0x12000011

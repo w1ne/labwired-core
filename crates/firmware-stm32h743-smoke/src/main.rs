@@ -15,6 +15,8 @@ const SCB_CCR: *mut u32 = 0xE000_ED14 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
 const SCB_CCR_STKALIGN: u32 = 1 << 9;
 #[cfg(feature = "stm32h743-exception-frame")]
+const SCB_CPACR: *mut u32 = 0xE000_ED88 as *mut u32;
+#[cfg(feature = "stm32h743-exception-frame")]
 const NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
 const NVIC_ICER0: *mut u32 = 0xE000_E180 as *mut u32;
@@ -40,7 +42,33 @@ static mut RAM_VECTOR_TABLE: RamVectorTable = RamVectorTable([0; 64]);
 
 // Handler scratch and the stacked frame captured before exception return.
 #[cfg(feature = "stm32h743-exception-frame")]
-static mut EXCEPTION_RECORD: [u32; 14] = [0; 14];
+static mut EXCEPTION_RECORD: [u32; 18] = [0; 18];
+
+#[cfg(feature = "stm32h743-exception-frame")]
+static FP_SENTINELS: [u32; 16] = [
+    0x1111_0000,
+    0x2222_0001,
+    0x3333_0002,
+    0x4444_0003,
+    0x5555_0004,
+    0x6666_0005,
+    0x7777_0006,
+    0x8888_0007,
+    0x9999_0008,
+    0xAAAA_0009,
+    0xBBBB_000A,
+    0xCCCC_000B,
+    0xDDDD_000C,
+    0xEEEE_000D,
+    0xFFFF_000E,
+    0xABCD_000F,
+];
+
+#[cfg(feature = "stm32h743-exception-frame")]
+static mut FP_CAPTURE: [u32; 17] = [0; 17];
+
+#[cfg(feature = "stm32h743-exception-frame")]
+const FPU_FPCAR: *const u32 = 0xE000_EF38 as *const u32;
 
 const RCC_AHB4ENR: *mut u32 = 0x5802_44E0 as *mut u32;
 const RCC_APB1LENR: *mut u32 = 0x5802_44E8 as *mut u32;
@@ -159,6 +187,21 @@ unsafe extern "C" fn smoke_exception_handler() {
         "adds r1, #4",
         "subs r2, #1",
         "bne 2b",
+        // Extended FP frames retain the basic core frame at words 0..7 and
+        // append S0-S15/FPSCR beginning at offset 0x20.
+        "ldr r3, ={record}",
+        "ldr r3, [r3, #32]",
+        "tst r3, #16",
+        "bne 3f",
+        "ldr r3, [r4, #0]",
+        "str r3, [r1, #24]",
+        "ldr r3, [r4, #4]",
+        "str r3, [r1, #28]",
+        "ldr r3, [r4, #60]",
+        "str r3, [r1, #32]",
+        "ldr r3, [r4, #64]",
+        "str r3, [r1, #36]",
+        "3:",
         "mrs r0, ipsr",
         "ldr r1, ={record}",
         "str r0, [r1, #40]",
@@ -239,10 +282,43 @@ unsafe extern "C" fn pend_exception_irq_with_psp_sentinels(psp_top: u32) {
     );
 }
 
+/// Establish caller-owned FP state before taking the next exception.
+#[cfg(feature = "stm32h743-exception-frame")]
+unsafe fn load_fp_sentinels() {
+    // Enable CP10/CP11 before the first VFP instruction, as H743 firmware
+    // does on hardware. The current SCB model does not enforce CPACR gating.
+    write_volatile(SCB_CPACR, read_volatile(SCB_CPACR) | (0xF << 20));
+    asm!("dsb", "isb", options(nostack, preserves_flags));
+    let values = core::ptr::addr_of!(FP_SENTINELS).cast::<u32>();
+    asm!(
+        "vldmia r0!, {{s0-s15}}",
+        "movw r1, #0",
+        "movt r1, #0xA000",
+        "vmsr fpscr, r1",
+        inout("r0") values => _,
+        out("r1") _,
+        options(nostack)
+    );
+}
+
+/// Copy the live caller-owned FP state after exception return to ordinary RAM.
+#[cfg(feature = "stm32h743-exception-frame")]
+unsafe fn capture_fp_sentinels() {
+    let capture = core::ptr::addr_of_mut!(FP_CAPTURE).cast::<u32>();
+    asm!(
+        "vstmia r0!, {{s0-s15}}",
+        "vmrs r1, fpscr",
+        "str r1, [r0]",
+        inout("r0") capture => _,
+        out("r1") _,
+        options(nostack)
+    );
+}
+
 #[cfg(feature = "stm32h743-exception-frame")]
 fn check_cortex_m7_exception_frame() -> bool {
     let vector_table = unsafe { core::ptr::addr_of_mut!(RAM_VECTOR_TABLE.0).cast::<u32>() };
-    let record = unsafe { core::ptr::addr_of_mut!(EXCEPTION_RECORD).cast::<u32>() };
+    let record = core::ptr::addr_of_mut!(EXCEPTION_RECORD).cast::<u32>();
     let source_vtor = unsafe { read_volatile(SCB_VTOR) };
     let source_ccr = unsafe { read_volatile(SCB_CCR) };
 
@@ -252,7 +328,7 @@ fn check_cortex_m7_exception_frame() -> bool {
         for index in 0..64 {
             write_volatile(vector_table.add(index), 0);
         }
-        for index in 0..14 {
+        for index in 0..18 {
             write_volatile(record.add(index), 0);
         }
         let handler = (smoke_exception_handler as *const () as usize as u32) | 1;
@@ -312,7 +388,7 @@ fn check_cortex_m7_exception_frame() -> bool {
     // helper keeps its own saved registers on MSP and uses a dedicated
     // doubleword-aligned PSP inside the imported H743 RAM window.
     unsafe {
-        for index in 0..14 {
+        for index in 0..18 {
             write_volatile(record.add(index), 0);
         }
     }
@@ -369,7 +445,7 @@ fn check_cortex_m7_exception_frame() -> bool {
     // exception entry when CCR.STKALIGN is set. The stacked xPSR marks that
     // padding, and exception return restores the original odd-word PSP.
     unsafe {
-        for index in 0..14 {
+        for index in 0..18 {
             write_volatile(record.add(index), 0);
         }
     }
@@ -429,7 +505,7 @@ fn check_cortex_m7_exception_frame() -> bool {
     // PSP as-is apart from the eight-word frame and must not set xPSR[9].
     unsafe {
         write_volatile(SCB_CCR, source_ccr & !SCB_CCR_STKALIGN);
-        for index in 0..14 {
+        for index in 0..18 {
             write_volatile(record.add(index), 0);
         }
     }
@@ -489,6 +565,82 @@ fn check_cortex_m7_exception_frame() -> bool {
     unsafe { write_volatile(SCB_CCR, source_ccr) };
     let ccr_restored = unsafe { read_volatile(SCB_CCR) } == source_ccr;
 
+    // First use of the FPU marks Thread mode's FP context active. The IRQ must
+    // stack the extended frame, return with EXC_RETURN[4] clear, and restore
+    // S0-S15/FPSCR before resuming this context.
+    unsafe {
+        for index in 0..18 {
+            write_volatile(record.add(index), 0);
+        }
+        load_fp_sentinels();
+    }
+    let msp_before_fp_irq: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_before_fp_irq,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    unsafe { pend_exception_irq_with_sentinels() };
+    let msp_after_fp_irq: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_after_fp_irq,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    let control_after_fp: u32;
+    unsafe {
+        asm!(
+            "mrs {}, control",
+            out(reg) control_after_fp,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    unsafe { capture_fp_sentinels() };
+    let fp_exc_return = read_record(8);
+    let fp_frame_sp = read_record(9);
+    let fp_ipsr = read_record(10);
+    let fp_active_during = read_record(11);
+    let fp_pending_during = read_record(12);
+    let fp_msp_before_irq = read_record(13);
+    let fp_fpcar = unsafe { read_volatile(FPU_FPCAR) };
+    let fp_capture = core::ptr::addr_of_mut!(FP_CAPTURE).cast::<u32>();
+    let fp_registers_restored =
+        (0..16).all(|index| unsafe { read_volatile(fp_capture.add(index)) == FP_SENTINELS[index] });
+    let fp_fpscr_restored = unsafe { read_volatile(fp_capture.add(16)) } == 0xA000_0000;
+    let fp_frame_ok = read_record(0) == 0x11
+        && read_record(1) == 0x22
+        && read_record(2) == 0x33
+        && read_record(3) == 0x44
+        && read_record(4) == 0x55
+        && read_record(5) & 1 != 0
+        && (0x0800_0000..0x0810_0000).contains(&read_record(6))
+        && read_record(7) & 0x0100_0000 != 0
+        && read_record(14) == FP_SENTINELS[0]
+        && read_record(15) == FP_SENTINELS[1]
+        && read_record(16) == FP_SENTINELS[15]
+        && read_record(17) == 0xA000_0000
+        && fp_exc_return == 0xFFFF_FFE9
+        && fp_frame_sp & 7 == 0
+        && fp_frame_sp == fp_msp_before_irq.wrapping_sub(0x68)
+        && (0x2000_0000..0x2002_0000).contains(&fp_frame_sp)
+        && fp_fpcar == fp_frame_sp.wrapping_add(0x20)
+        && control_after_fp & 0x4 != 0
+        && fp_registers_restored
+        && fp_fpscr_restored;
+    let fp_active_and_pending_ok = fp_ipsr == 16 + EXCEPTION_IRQ
+        && fp_active_during & EXCEPTION_IRQ_BIT != 0
+        && fp_pending_during & EXCEPTION_IRQ_BIT == 0;
+    let fp_returned = unsafe { read_volatile(NVIC_ISPR0) } & EXCEPTION_IRQ_BIT == 0
+        && unsafe { read_volatile(NVIC_IABR0) } & EXCEPTION_IRQ_BIT == 0;
+    let fp_ok = fp_frame_ok
+        && fp_active_and_pending_ok
+        && fp_returned
+        && msp_after_fp_irq == msp_before_fp_irq;
+
     unsafe {
         write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT);
         write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT);
@@ -504,6 +656,7 @@ fn check_cortex_m7_exception_frame() -> bool {
         && psp_ok
         && aligned_psp_ok
         && unaligned_psp_ok
+        && fp_ok
         && ccr_restored;
 
     send(b"cortex-m7 irq ipsr=");
@@ -621,6 +774,37 @@ fn check_cortex_m7_exception_frame() -> bool {
     send_hex32(unaligned_psp_xpsr);
     send(b" sp=");
     send_hex32(unaligned_psp_frame_sp);
+    send(b"\r\n");
+    send(b"cortex-m7 fp exception=");
+    send(if fp_frame_ok && fp_active_and_pending_ok {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b" frame=");
+    send(if fp_frame_ok { b"1" } else { b"0" });
+    send(b" stack=");
+    send(if msp_after_fp_irq == msp_before_fp_irq {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b" return=");
+    send(if fp_returned { b"1" } else { b"0" });
+    send(b" regs=");
+    send(if fp_registers_restored { b"1" } else { b"0" });
+    send(b" fpscr=");
+    send(if fp_fpscr_restored { b"1" } else { b"0" });
+    send(b" fpcar=");
+    send(if fp_fpcar == fp_frame_sp.wrapping_add(0x20) {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b" exc_return=");
+    send_hex32(fp_exc_return);
+    send(b" sp=");
+    send_hex32(fp_frame_sp);
     send(b"\r\n");
     ok
 }

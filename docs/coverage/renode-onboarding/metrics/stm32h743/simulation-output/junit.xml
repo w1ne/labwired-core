@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="11" failures="0" errors="0" time="0.900137">
+<testsuite name="labwired" tests="12" failures="0" errors="0" time="0.870368">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="53b76bbbb41552459578960cb90576c7211c9b6e02d701b4d59ce4a26cf5d0af"/>
+    <property name="firmware_hash" value="a3888b8d69103272b0e3863efe5a6da5c2a9e527d6011f474c47eb12a0db8247"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.900137">
+  <testcase classname="labwired" name="run" time="0.870368">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: STM32H7 register smoke" time="0.000000">
   </testcase>
@@ -21,10 +21,12 @@
   </testcase>
   <testcase classname="labwired" name="assertion 7: uart_contains: cortex-m7 psp noalign exception=1 frame=1 stack=1 msp=1 return=1 ccr=1" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 8: uart_contains: cortex-m7 exception ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 8: uart_contains: cortex-m7 fp exception=1 frame=1 stack=1 return=1 regs=1 fpscr=1 fpcar=1 exc_return=FFFFFFE9" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 9: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  <testcase classname="labwired" name="assertion 9: uart_contains: cortex-m7 exception ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 10: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 10: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

@@ -14,75 +14,67 @@ warning: profiles for the non root package will be ignored, specify profiles at 
 package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
    Compiling firmware-stm32h743-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-stm32h743-smoke)
-warning: unnecessary `unsafe` block
-   --> crates/firmware-stm32h743-smoke/src/main.rs:245:18
-    |
-245 |     let record = unsafe { core::ptr::addr_of_mut!(EXCEPTION_RECORD).cast::<u32>() };
-    |                  ^^^^^^ unnecessary `unsafe` block
-    |
-    = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
-
 warning: constant `USART_RDR` is never used
-  --> crates/firmware-stm32h743-smoke/src/main.rs:57:7
+  --> crates/firmware-stm32h743-smoke/src/main.rs:85:7
    |
-57 | const USART_RDR: *const u32 = (USART3 + 0x24) as *const u32;
+85 | const USART_RDR: *const u32 = (USART3 + 0x24) as *const u32;
    |       ^^^^^^^^^
    |
    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
 warning: constant `USART_RXNEIE` is never used
-  --> crates/firmware-stm32h743-smoke/src/main.rs:59:7
+  --> crates/firmware-stm32h743-smoke/src/main.rs:87:7
    |
-59 | const USART_RXNEIE: u32 = 1 << 5;
+87 | const USART_RXNEIE: u32 = 1 << 5;
    |       ^^^^^^^^^^^^
 
 warning: constant `USART_TXEIE` is never used
-  --> crates/firmware-stm32h743-smoke/src/main.rs:60:7
+  --> crates/firmware-stm32h743-smoke/src/main.rs:88:7
    |
-60 | const USART_TXEIE: u32 = 1 << 7;
+88 | const USART_TXEIE: u32 = 1 << 7;
    |       ^^^^^^^^^^^
 
 warning: constant `USART_TCIE` is never used
-  --> crates/firmware-stm32h743-smoke/src/main.rs:61:7
+  --> crates/firmware-stm32h743-smoke/src/main.rs:89:7
    |
-61 | const USART_TCIE: u32 = 1 << 6;
+89 | const USART_TCIE: u32 = 1 << 6;
    |       ^^^^^^^^^^
 
 warning: constant `USART_RE` is never used
-  --> crates/firmware-stm32h743-smoke/src/main.rs:64:7
+  --> crates/firmware-stm32h743-smoke/src/main.rs:92:7
    |
-64 | const USART_RE: u32 = 1 << 2;
+92 | const USART_RE: u32 = 1 << 2;
    |       ^^^^^^^^
 
 warning: constant `NVIC_ISPR1` is never used
-  --> crates/firmware-stm32h743-smoke/src/main.rs:65:7
+  --> crates/firmware-stm32h743-smoke/src/main.rs:93:7
    |
-65 | const NVIC_ISPR1: *const u32 = 0xE000_E204 as *const u32;
+93 | const NVIC_ISPR1: *const u32 = 0xE000_E204 as *const u32;
    |       ^^^^^^^^^^
 
 warning: constant `NVIC_ICPR1` is never used
-  --> crates/firmware-stm32h743-smoke/src/main.rs:66:7
+  --> crates/firmware-stm32h743-smoke/src/main.rs:94:7
    |
-66 | const NVIC_ICPR1: *mut u32 = 0xE000_E284 as *mut u32;
+94 | const NVIC_ICPR1: *mut u32 = 0xE000_E284 as *mut u32;
    |       ^^^^^^^^^^
 
 warning: constant `USART3_IRQ_BIT` is never used
-  --> crates/firmware-stm32h743-smoke/src/main.rs:67:7
+  --> crates/firmware-stm32h743-smoke/src/main.rs:95:7
    |
-67 | const USART3_IRQ_BIT: u32 = 1 << (39 - 32);
+95 | const USART3_IRQ_BIT: u32 = 1 << (39 - 32);
    |       ^^^^^^^^^^^^^^
 
 warning: constant `RXNE` is never used
-  --> crates/firmware-stm32h743-smoke/src/main.rs:69:7
+  --> crates/firmware-stm32h743-smoke/src/main.rs:97:7
    |
-69 | const RXNE: u32 = 1 << 5;
+97 | const RXNE: u32 = 1 << 5;
    |       ^^^^
 
 warning: constant `TC` is never used
-  --> crates/firmware-stm32h743-smoke/src/main.rs:70:7
+  --> crates/firmware-stm32h743-smoke/src/main.rs:98:7
    |
-70 | const TC: u32 = 1 << 6;
+98 | const TC: u32 = 1 << 6;
    |       ^^
 
-warning: `firmware-stm32h743-smoke` (bin "firmware-stm32h743-smoke") generated 11 warnings
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.96s
+warning: `firmware-stm32h743-smoke` (bin "firmware-stm32h743-smoke") generated 10 warnings
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.38s
