@@ -181,8 +181,10 @@ peripherals:
     base_address: 0xA0001000
     size: "1KB"
 
-# External ADC1 pads on the STM32F746NG (DS10916 / RM0385). The current board
-# proof uses PA0/ADC123_IN0 and PA1/ADC123_IN1; unlisted pads are not routed.
+# External ADC1 pads on the STM32F746NG (DS10916 / RM0385). The mixed-signal
+# proof uses PA0/ADC123_IN0, PA1/ADC123_IN1 and PA2/ADC123_IN2; unlisted pads
+# are not routed.
 analog_pins:
   PA0: { peripheral: "adc1", channel: 0 }
   PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }

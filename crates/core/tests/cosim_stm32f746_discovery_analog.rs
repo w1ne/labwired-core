@@ -46,6 +46,59 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+/// Independent Gummel–Poon NPN load-line reference with forward Early effect.
+/// The two scalar roots solve base-drive current and collector-load current;
+/// neither reads a voltage from the analog solver.
+fn bjt_collector_voltage(base_drive_v: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-15;
+    const BF: f64 = 100.0;
+    const BR: f64 = 4.0;
+    const VAF: f64 = 50.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let transport = IS_A * (forward - reverse) * (1.0 - vbc / VAF);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = (low + high) / 2.0;
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        (low + high) / 2.0
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = (low + high) / 2.0;
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe((low + high) / 2.0)
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -97,7 +150,7 @@ fn expected_adc_count(voltage_v: f64) -> u16 {
 }
 
 #[test]
-fn stm32f746_discovery_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
+fn stm32f746_discovery_ntc_diode_and_bjt_netlists_reach_adc1_end_to_end() {
     let system_path = root("configs/systems/stm32f7-discovery.yaml");
     let mut profile =
         SystemManifest::from_file(&system_path).expect("load STM32F7 Discovery profile");
@@ -115,21 +168,25 @@ fn stm32f746_discovery_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
         "examples/stm32f7-discovery/analog-ntc-diode-system.yaml",
     ))
     .expect("load generic NTC divider and diode netlists");
+    let bjt = SystemManifest::from_file(root("examples/stm32f7-discovery/analog-bjt-load.yaml"))
+        .expect("load generic Gummel–Poon NPN netlist");
     profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(bjt.cosim_models);
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
     let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F746 descriptor");
-    assert_eq!(chip.analog_pins["PA0"].channel, 0);
-    assert_eq!(chip.analog_pins["PA1"].channel, 1);
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
     let mut bus = SystemBus::from_config(&chip, &profile).expect("build STM32F7 Discovery bus");
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
         .expect("build analog co-simulation")
-        .expect("fixture carries both analog devices");
+        .expect("fixture carries NTC, diode, and BJT devices");
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "the generic netlists must resolve through PA0/PA1 to ADC1 channels 0/1"
+        "the generic NTC, diode, and NPN netlists must resolve to ADC1 channels 0/1/2"
     );
-    for channel in [0, 1, 2] {
+    for channel in 0..=3 {
         assert_eq!(
             adc_channel_count(&mut bus, channel),
             0xFFFF,
@@ -144,56 +201,78 @@ fn stm32f746_discovery_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
         session
             .set_signal_number("ui.ntc.temperature_c", temperature_c)
             .expect("set generic NTC temperature");
-        cycles += session.cycles_until_boundary(cycles);
-        let (steps, errors) = session
-            .advance_to(cycles, &mut bus)
-            .expect("solve and route both analog netlists");
-        assert_eq!(steps.len(), 2, "both netlists cross the 1 us boundary");
-        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+        let mut collector_samples = Vec::new();
+        for base_drive_v in [0.0_f64, 0.7, 0.8, 0.9] {
+            session
+                .set_signal_number("ui.bjt.base_v", base_drive_v)
+                .expect("set Gummel–Poon base drive");
+            cycles += session.cycles_until_boundary(cycles);
+            let (steps, errors) = session
+                .advance_to(cycles, &mut bus)
+                .expect("solve and route all three analog netlists");
+            assert_eq!(steps.len(), 3, "all devices solve at the 1 us boundary");
+            assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
 
-        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
-        let expected_ntc_v = 3.3 * 10_000.0 / (ntc_resistance_ohms(temperature_c) + 10_000.0);
-        assert!(
-            (ntc_v - expected_ntc_v).abs() < 1e-9,
-            "at {temperature_c} °C the Beta divider should be {expected_ntc_v} V, got {ntc_v} V"
-        );
-        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
-        assert!(
-            (diode_v - expected_diode_v).abs() < 2e-5,
-            "the Shockley diode load line should be {expected_diode_v} V, got {diode_v} V"
-        );
+            let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+            let expected_ntc_v = 3.3 * 10_000.0 / (ntc_resistance_ohms(temperature_c) + 10_000.0);
+            assert!(
+                (ntc_v - expected_ntc_v).abs() < 1e-9,
+                "at {temperature_c} °C the Beta divider should be {expected_ntc_v} V, got {ntc_v} V"
+            );
+            let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+            assert!(
+                (diode_v - expected_diode_v).abs() < 2e-5,
+                "the Shockley diode load line should be {expected_diode_v} V, got {diode_v} V"
+            );
 
-        for (channel, volts) in [(0, ntc_v), (1, diode_v)] {
-            let expected_count = expected_adc_count(volts);
-            assert_eq!(
-                adc_channel_count(&mut bus, channel),
-                expected_count,
-                "the solved voltage must seed ADC1 channel {channel}"
+            let collector_v = signal_voltage(&session, "board.analog.pa2_volts");
+            let expected_collector_v = bjt_collector_voltage(base_drive_v);
+            assert!(
+                (collector_v - expected_collector_v).abs() < 5e-5,
+                "Gummel–Poon NPN load line at base drive {base_drive_v} V should be \
+                 {expected_collector_v} V, got {collector_v} V"
             );
+
+            for (channel, volts) in [(0, ntc_v), (1, diode_v), (2, collector_v)] {
+                let expected_count = expected_adc_count(volts);
+                assert_eq!(
+                    adc_channel_count(&mut bus, channel),
+                    expected_count,
+                    "the solved voltage must seed ADC1 channel {channel}"
+                );
+                assert_eq!(
+                    stm32f4_adc_convert(&mut bus, channel),
+                    u32::from(expected_count),
+                    "firmware-visible ADC1 channel {channel} conversion must report its solved voltage"
+                );
+            }
             assert_eq!(
-                stm32f4_adc_convert(&mut bus, channel),
-                u32::from(expected_count),
-                "firmware-visible ADC1 channel {channel} conversion must report the solved voltage"
+                adc_channel_count(&mut bus, 3),
+                0xFFFF,
+                "the neighboring ADC1 channel remains undriven"
             );
+            collector_samples.push((base_drive_v, collector_v));
+            ntc_samples.push((ntc_v, adc_channel_count(&mut bus, 0)));
         }
-        assert_eq!(
-            adc_channel_count(&mut bus, 2),
-            0xFFFF,
-            "the neighboring ADC1 channel remains undriven"
+
+        assert!(
+            collector_samples
+                .windows(2)
+                .all(|pair| pair[1].1 < pair[0].1),
+            "increasing base drive must lower the BJT collector voltage: {collector_samples:?}"
         );
-        ntc_samples.push((ntc_v, adc_channel_count(&mut bus, 0)));
     }
 
     assert!(
-        ntc_samples[2].0 > ntc_samples[1].0 && ntc_samples[1].0 > ntc_samples[0].0,
+        ntc_samples[8].0 > ntc_samples[4].0 && ntc_samples[4].0 > ntc_samples[0].0,
         "the divider voltage rises with temperature: {ntc_samples:?}"
     );
     assert!(
-        ntc_samples[2].1 > ntc_samples[1].1 && ntc_samples[1].1 > ntc_samples[0].1,
+        ntc_samples[8].1 > ntc_samples[4].1 && ntc_samples[4].1 > ntc_samples[0].1,
         "ADC counts track the solved temperature-dependent voltage: {ntc_samples:?}"
     );
     assert_eq!(
-        ntc_samples[1].1, 2047,
-        "the 25 °C NTC divider is half scale"
+        ntc_samples[4].1, 2047,
+        "the 25 °C NTC divider remains half scale throughout the BJT sweep"
     );
 }

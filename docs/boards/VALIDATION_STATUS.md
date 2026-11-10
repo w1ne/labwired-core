@@ -47,7 +47,7 @@ The models column is a content digest over everything that board's `models` list
 | `metro-m4` | 🟡 smoke-manual | — | `5665e1684f1649a3` | no silicon capture |
 | `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `d531e89b30bc67ae` | no silicon capture |
 | `teensy-41` | 🟡 smoke-manual | — | `cc3a8d8596be6c87` | no silicon capture |
-| `stm32f7-discovery` | 🟡 smoke-manual | — | `19680b969bcd5eae` | no silicon capture |
+| `stm32f7-discovery` | 🟡 smoke-manual | — | `07e306b43954105d` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `c33841185bd6e94e` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `b7282dbe0b40cd85` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `24d891e28402dc92` | no silicon capture |
