@@ -1,23 +1,23 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 200000,
-  "cycles": 400408,
-  "instructions": 200000,
+  "steps_executed": 500000,
+  "cycles": 1001030,
+  "instructions": 500000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 200000
+      "value": 500000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 200000
+      "value": 500000
     }
   },
   "limits": {
-    "max_steps": 200000,
+    "max_steps": 500000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -28,6 +28,12 @@
     "stop_when_assertions_pass_min_steps": 0
   },
   "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "C5_UART_OK"
+      },
+      "passed": true
+    },
     {
       "assertion": {
         "gpio_edges": {
@@ -48,7 +54,7 @@
     "type": "risc_v",
     "registers": [
       0,
-      1082130480,
+      1082130550,
       1082523632,
       0,
       0,
@@ -57,10 +63,10 @@
       0,
       1611206656,
       32,
-      461,
-      6144,
+      652,
       4096,
-      0,
+      1611202560,
+      75,
       0,
       0,
       0,
@@ -80,7 +86,7 @@
       0,
       0
     ],
-    "pc": 1082130496,
+    "pc": 1082130570,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -89,7 +95,7 @@
     "mepc": 0,
     "mcause": 0,
     "mtval": 0,
-    "mtime": 200000,
+    "mtime": 500000,
     "mtimecmp": 0,
     "triggers": {
       "tselect": 0,
@@ -116,7 +122,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "d853f4d05fb741a383c84d29b0ec9ef0c853926b2a73175eafb703ffdc54ba2f",
+  "firmware_hash": "2d113a40b86f0f5cd11caae1289482d1203f3aeb0664d7343a7926ceda9e016e",
   "config": {
     "firmware": "examples/esp32c5-devkitc-1-gpio-smoke/../../target/riscv32imac-unknown-none-elf/release/firmware-esp32c5-devkitc-1-gpio-smoke",
     "system": "examples/esp32c5-devkitc-1-gpio-smoke/../../configs/systems/esp32c5-devkitc-1-n8r8-gpio.yaml",
@@ -124,6 +130,318 @@
   },
   "inspect": {
     "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1610612736,
+        "registers": [
+          {
+            "name": "FIFO",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ST",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ENA",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLKDIV",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RX_FILT",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CONF0",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CONF1",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "HWFC_CONF",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SLEEP_CONF0",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SLEEP_CONF1",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SLEEP_CONF2",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SWFC_CONF0",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SWFC_CONF1",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TXBRK_CONF",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDLE_CONF",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RS485_CONF",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_PRECNT",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_POSTCNT",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_GAPTOUT",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_CHAR",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_CONF",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TOUT_CONF",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_TX_STATUS",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_RX_STATUS",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FSM_STATUS",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "POSPULSE",
+            "offset": 116,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "NEGPULSE",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "LOWPULSE",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "HIGHPULSE",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RXD_CNT",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLK_CONF",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 140,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFIFO_STATUS",
+            "offset": 144,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "REG_UPDATE",
+            "offset": 152,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ID",
+            "offset": 156,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
       {
         "name": "gpio",
         "kind": "native",
@@ -3475,7 +3793,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 200000,
+    "now_cycle": 500000,
     "channels": [
       {
         "ch": 0,
@@ -3485,271 +3803,671 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 17,
+            "cycle": 41,
             "value": 1
           },
           {
-            "cycle": 3022,
+            "cycle": 3046,
             "value": 0
           },
           {
-            "cycle": 6028,
+            "cycle": 6052,
             "value": 1
           },
           {
-            "cycle": 9033,
+            "cycle": 9057,
             "value": 0
           },
           {
-            "cycle": 12039,
+            "cycle": 12063,
             "value": 1
           },
           {
-            "cycle": 15044,
+            "cycle": 15068,
             "value": 0
           },
           {
-            "cycle": 18050,
+            "cycle": 18074,
             "value": 1
           },
           {
-            "cycle": 21055,
+            "cycle": 21079,
             "value": 0
           },
           {
-            "cycle": 24061,
+            "cycle": 24085,
             "value": 1
           },
           {
-            "cycle": 27066,
+            "cycle": 27090,
             "value": 0
           },
           {
-            "cycle": 30072,
+            "cycle": 30096,
             "value": 1
           },
           {
-            "cycle": 33077,
+            "cycle": 33101,
             "value": 0
           },
           {
-            "cycle": 36083,
+            "cycle": 36107,
             "value": 1
           },
           {
-            "cycle": 39088,
+            "cycle": 39112,
             "value": 0
           },
           {
-            "cycle": 42094,
+            "cycle": 42118,
             "value": 1
           },
           {
-            "cycle": 45099,
+            "cycle": 45123,
             "value": 0
           },
           {
-            "cycle": 48105,
+            "cycle": 48129,
             "value": 1
           },
           {
-            "cycle": 51110,
+            "cycle": 51134,
             "value": 0
           },
           {
-            "cycle": 54116,
+            "cycle": 54140,
             "value": 1
           },
           {
-            "cycle": 57121,
+            "cycle": 57145,
             "value": 0
           },
           {
-            "cycle": 60127,
+            "cycle": 60151,
             "value": 1
           },
           {
-            "cycle": 63132,
+            "cycle": 63156,
             "value": 0
           },
           {
-            "cycle": 66138,
+            "cycle": 66162,
             "value": 1
           },
           {
-            "cycle": 69143,
+            "cycle": 69167,
             "value": 0
           },
           {
-            "cycle": 72149,
+            "cycle": 72173,
             "value": 1
           },
           {
-            "cycle": 75154,
+            "cycle": 75178,
             "value": 0
           },
           {
-            "cycle": 78160,
+            "cycle": 78184,
             "value": 1
           },
           {
-            "cycle": 81165,
+            "cycle": 81189,
             "value": 0
           },
           {
-            "cycle": 84171,
+            "cycle": 84195,
             "value": 1
           },
           {
-            "cycle": 87176,
+            "cycle": 87200,
             "value": 0
           },
           {
-            "cycle": 90182,
+            "cycle": 90206,
             "value": 1
           },
           {
-            "cycle": 93187,
+            "cycle": 93211,
             "value": 0
           },
           {
-            "cycle": 96193,
+            "cycle": 96217,
             "value": 1
           },
           {
-            "cycle": 99198,
+            "cycle": 99222,
             "value": 0
           },
           {
-            "cycle": 102204,
+            "cycle": 102228,
             "value": 1
           },
           {
-            "cycle": 105209,
+            "cycle": 105233,
             "value": 0
           },
           {
-            "cycle": 108215,
+            "cycle": 108239,
             "value": 1
           },
           {
-            "cycle": 111220,
+            "cycle": 111244,
             "value": 0
           },
           {
-            "cycle": 114226,
+            "cycle": 114250,
             "value": 1
           },
           {
-            "cycle": 117231,
+            "cycle": 117255,
             "value": 0
           },
           {
-            "cycle": 120237,
+            "cycle": 120261,
             "value": 1
           },
           {
-            "cycle": 123242,
+            "cycle": 123266,
             "value": 0
           },
           {
-            "cycle": 126248,
+            "cycle": 126272,
             "value": 1
           },
           {
-            "cycle": 129253,
+            "cycle": 129277,
             "value": 0
           },
           {
-            "cycle": 132259,
+            "cycle": 132283,
             "value": 1
           },
           {
-            "cycle": 135264,
+            "cycle": 135288,
             "value": 0
           },
           {
-            "cycle": 138270,
+            "cycle": 138294,
             "value": 1
           },
           {
-            "cycle": 141275,
+            "cycle": 141299,
             "value": 0
           },
           {
-            "cycle": 144281,
+            "cycle": 144305,
             "value": 1
           },
           {
-            "cycle": 147286,
+            "cycle": 147310,
             "value": 0
           },
           {
-            "cycle": 150292,
+            "cycle": 150316,
             "value": 1
           },
           {
-            "cycle": 153297,
+            "cycle": 153321,
             "value": 0
           },
           {
-            "cycle": 156303,
+            "cycle": 156327,
             "value": 1
           },
           {
-            "cycle": 159308,
+            "cycle": 159332,
             "value": 0
           },
           {
-            "cycle": 162314,
+            "cycle": 162338,
             "value": 1
           },
           {
-            "cycle": 165319,
+            "cycle": 165343,
             "value": 0
           },
           {
-            "cycle": 168325,
+            "cycle": 168349,
             "value": 1
           },
           {
-            "cycle": 171330,
+            "cycle": 171354,
             "value": 0
           },
           {
-            "cycle": 174336,
+            "cycle": 174360,
             "value": 1
           },
           {
-            "cycle": 177341,
+            "cycle": 177365,
             "value": 0
           },
           {
-            "cycle": 180347,
+            "cycle": 180371,
             "value": 1
           },
           {
-            "cycle": 183352,
+            "cycle": 183376,
             "value": 0
           },
           {
-            "cycle": 186358,
+            "cycle": 186382,
             "value": 1
           },
           {
-            "cycle": 189363,
+            "cycle": 189387,
             "value": 0
           },
           {
-            "cycle": 192369,
+            "cycle": 192393,
             "value": 1
           },
           {
-            "cycle": 195374,
+            "cycle": 195398,
             "value": 0
           },
           {
-            "cycle": 198380,
+            "cycle": 198404,
+            "value": 1
+          },
+          {
+            "cycle": 201409,
+            "value": 0
+          },
+          {
+            "cycle": 204415,
+            "value": 1
+          },
+          {
+            "cycle": 207420,
+            "value": 0
+          },
+          {
+            "cycle": 210426,
+            "value": 1
+          },
+          {
+            "cycle": 213431,
+            "value": 0
+          },
+          {
+            "cycle": 216437,
+            "value": 1
+          },
+          {
+            "cycle": 219442,
+            "value": 0
+          },
+          {
+            "cycle": 222448,
+            "value": 1
+          },
+          {
+            "cycle": 225453,
+            "value": 0
+          },
+          {
+            "cycle": 228459,
+            "value": 1
+          },
+          {
+            "cycle": 231464,
+            "value": 0
+          },
+          {
+            "cycle": 234470,
+            "value": 1
+          },
+          {
+            "cycle": 237475,
+            "value": 0
+          },
+          {
+            "cycle": 240481,
+            "value": 1
+          },
+          {
+            "cycle": 243486,
+            "value": 0
+          },
+          {
+            "cycle": 246492,
+            "value": 1
+          },
+          {
+            "cycle": 249497,
+            "value": 0
+          },
+          {
+            "cycle": 252503,
+            "value": 1
+          },
+          {
+            "cycle": 255508,
+            "value": 0
+          },
+          {
+            "cycle": 258514,
+            "value": 1
+          },
+          {
+            "cycle": 261519,
+            "value": 0
+          },
+          {
+            "cycle": 264525,
+            "value": 1
+          },
+          {
+            "cycle": 267530,
+            "value": 0
+          },
+          {
+            "cycle": 270536,
+            "value": 1
+          },
+          {
+            "cycle": 273541,
+            "value": 0
+          },
+          {
+            "cycle": 276547,
+            "value": 1
+          },
+          {
+            "cycle": 279552,
+            "value": 0
+          },
+          {
+            "cycle": 282558,
+            "value": 1
+          },
+          {
+            "cycle": 285563,
+            "value": 0
+          },
+          {
+            "cycle": 288569,
+            "value": 1
+          },
+          {
+            "cycle": 291574,
+            "value": 0
+          },
+          {
+            "cycle": 294580,
+            "value": 1
+          },
+          {
+            "cycle": 297585,
+            "value": 0
+          },
+          {
+            "cycle": 300591,
+            "value": 1
+          },
+          {
+            "cycle": 303596,
+            "value": 0
+          },
+          {
+            "cycle": 306602,
+            "value": 1
+          },
+          {
+            "cycle": 309607,
+            "value": 0
+          },
+          {
+            "cycle": 312613,
+            "value": 1
+          },
+          {
+            "cycle": 315618,
+            "value": 0
+          },
+          {
+            "cycle": 318624,
+            "value": 1
+          },
+          {
+            "cycle": 321629,
+            "value": 0
+          },
+          {
+            "cycle": 324635,
+            "value": 1
+          },
+          {
+            "cycle": 327640,
+            "value": 0
+          },
+          {
+            "cycle": 330646,
+            "value": 1
+          },
+          {
+            "cycle": 333651,
+            "value": 0
+          },
+          {
+            "cycle": 336657,
+            "value": 1
+          },
+          {
+            "cycle": 339662,
+            "value": 0
+          },
+          {
+            "cycle": 342668,
+            "value": 1
+          },
+          {
+            "cycle": 345673,
+            "value": 0
+          },
+          {
+            "cycle": 348679,
+            "value": 1
+          },
+          {
+            "cycle": 351684,
+            "value": 0
+          },
+          {
+            "cycle": 354690,
+            "value": 1
+          },
+          {
+            "cycle": 357695,
+            "value": 0
+          },
+          {
+            "cycle": 360701,
+            "value": 1
+          },
+          {
+            "cycle": 363706,
+            "value": 0
+          },
+          {
+            "cycle": 366712,
+            "value": 1
+          },
+          {
+            "cycle": 369717,
+            "value": 0
+          },
+          {
+            "cycle": 372723,
+            "value": 1
+          },
+          {
+            "cycle": 375728,
+            "value": 0
+          },
+          {
+            "cycle": 378734,
+            "value": 1
+          },
+          {
+            "cycle": 381739,
+            "value": 0
+          },
+          {
+            "cycle": 384745,
+            "value": 1
+          },
+          {
+            "cycle": 387750,
+            "value": 0
+          },
+          {
+            "cycle": 390756,
+            "value": 1
+          },
+          {
+            "cycle": 393761,
+            "value": 0
+          },
+          {
+            "cycle": 396767,
+            "value": 1
+          },
+          {
+            "cycle": 399772,
+            "value": 0
+          },
+          {
+            "cycle": 402778,
+            "value": 1
+          },
+          {
+            "cycle": 405783,
+            "value": 0
+          },
+          {
+            "cycle": 408789,
+            "value": 1
+          },
+          {
+            "cycle": 411794,
+            "value": 0
+          },
+          {
+            "cycle": 414800,
+            "value": 1
+          },
+          {
+            "cycle": 417805,
+            "value": 0
+          },
+          {
+            "cycle": 420811,
+            "value": 1
+          },
+          {
+            "cycle": 423816,
+            "value": 0
+          },
+          {
+            "cycle": 426822,
+            "value": 1
+          },
+          {
+            "cycle": 429827,
+            "value": 0
+          },
+          {
+            "cycle": 432833,
+            "value": 1
+          },
+          {
+            "cycle": 435838,
+            "value": 0
+          },
+          {
+            "cycle": 438844,
+            "value": 1
+          },
+          {
+            "cycle": 441849,
+            "value": 0
+          },
+          {
+            "cycle": 444855,
+            "value": 1
+          },
+          {
+            "cycle": 447860,
+            "value": 0
+          },
+          {
+            "cycle": 450866,
+            "value": 1
+          },
+          {
+            "cycle": 453871,
+            "value": 0
+          },
+          {
+            "cycle": 456877,
+            "value": 1
+          },
+          {
+            "cycle": 459882,
+            "value": 0
+          },
+          {
+            "cycle": 462888,
+            "value": 1
+          },
+          {
+            "cycle": 465893,
+            "value": 0
+          },
+          {
+            "cycle": 468899,
+            "value": 1
+          },
+          {
+            "cycle": 471904,
+            "value": 0
+          },
+          {
+            "cycle": 474910,
+            "value": 1
+          },
+          {
+            "cycle": 477915,
+            "value": 0
+          },
+          {
+            "cycle": 480921,
+            "value": 1
+          },
+          {
+            "cycle": 483926,
+            "value": 0
+          },
+          {
+            "cycle": 486932,
+            "value": 1
+          },
+          {
+            "cycle": 489937,
+            "value": 0
+          },
+          {
+            "cycle": 492943,
+            "value": 1
+          },
+          {
+            "cycle": 495948,
+            "value": 0
+          },
+          {
+            "cycle": 498954,
             "value": 1
           }
         ],
@@ -3757,280 +4475,680 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 16,
+            "cycle": 40,
             "state": "0"
           },
           {
-            "cycle": 17,
+            "cycle": 41,
             "state": "1"
           },
           {
-            "cycle": 3022,
+            "cycle": 3046,
             "state": "0"
           },
           {
-            "cycle": 6028,
+            "cycle": 6052,
             "state": "1"
           },
           {
-            "cycle": 9033,
+            "cycle": 9057,
             "state": "0"
           },
           {
-            "cycle": 12039,
+            "cycle": 12063,
             "state": "1"
           },
           {
-            "cycle": 15044,
+            "cycle": 15068,
             "state": "0"
           },
           {
-            "cycle": 18050,
+            "cycle": 18074,
             "state": "1"
           },
           {
-            "cycle": 21055,
+            "cycle": 21079,
             "state": "0"
           },
           {
-            "cycle": 24061,
+            "cycle": 24085,
             "state": "1"
           },
           {
-            "cycle": 27066,
+            "cycle": 27090,
             "state": "0"
           },
           {
-            "cycle": 30072,
+            "cycle": 30096,
             "state": "1"
           },
           {
-            "cycle": 33077,
+            "cycle": 33101,
             "state": "0"
           },
           {
-            "cycle": 36083,
+            "cycle": 36107,
             "state": "1"
           },
           {
-            "cycle": 39088,
+            "cycle": 39112,
             "state": "0"
           },
           {
-            "cycle": 42094,
+            "cycle": 42118,
             "state": "1"
           },
           {
-            "cycle": 45099,
+            "cycle": 45123,
             "state": "0"
           },
           {
-            "cycle": 48105,
+            "cycle": 48129,
             "state": "1"
           },
           {
-            "cycle": 51110,
+            "cycle": 51134,
             "state": "0"
           },
           {
-            "cycle": 54116,
+            "cycle": 54140,
             "state": "1"
           },
           {
-            "cycle": 57121,
+            "cycle": 57145,
             "state": "0"
           },
           {
-            "cycle": 60127,
+            "cycle": 60151,
             "state": "1"
           },
           {
-            "cycle": 63132,
+            "cycle": 63156,
             "state": "0"
           },
           {
-            "cycle": 66138,
+            "cycle": 66162,
             "state": "1"
           },
           {
-            "cycle": 69143,
+            "cycle": 69167,
             "state": "0"
           },
           {
-            "cycle": 72149,
+            "cycle": 72173,
             "state": "1"
           },
           {
-            "cycle": 75154,
+            "cycle": 75178,
             "state": "0"
           },
           {
-            "cycle": 78160,
+            "cycle": 78184,
             "state": "1"
           },
           {
-            "cycle": 81165,
+            "cycle": 81189,
             "state": "0"
           },
           {
-            "cycle": 84171,
+            "cycle": 84195,
             "state": "1"
           },
           {
-            "cycle": 87176,
+            "cycle": 87200,
             "state": "0"
           },
           {
-            "cycle": 90182,
+            "cycle": 90206,
             "state": "1"
           },
           {
-            "cycle": 93187,
+            "cycle": 93211,
             "state": "0"
           },
           {
-            "cycle": 96193,
+            "cycle": 96217,
             "state": "1"
           },
           {
-            "cycle": 99198,
+            "cycle": 99222,
             "state": "0"
           },
           {
-            "cycle": 102204,
+            "cycle": 102228,
             "state": "1"
           },
           {
-            "cycle": 105209,
+            "cycle": 105233,
             "state": "0"
           },
           {
-            "cycle": 108215,
+            "cycle": 108239,
             "state": "1"
           },
           {
-            "cycle": 111220,
+            "cycle": 111244,
             "state": "0"
           },
           {
-            "cycle": 114226,
+            "cycle": 114250,
             "state": "1"
           },
           {
-            "cycle": 117231,
+            "cycle": 117255,
             "state": "0"
           },
           {
-            "cycle": 120237,
+            "cycle": 120261,
             "state": "1"
           },
           {
-            "cycle": 123242,
+            "cycle": 123266,
             "state": "0"
           },
           {
-            "cycle": 126248,
+            "cycle": 126272,
             "state": "1"
           },
           {
-            "cycle": 129253,
+            "cycle": 129277,
             "state": "0"
           },
           {
-            "cycle": 132259,
+            "cycle": 132283,
             "state": "1"
           },
           {
-            "cycle": 135264,
+            "cycle": 135288,
             "state": "0"
           },
           {
-            "cycle": 138270,
+            "cycle": 138294,
             "state": "1"
           },
           {
-            "cycle": 141275,
+            "cycle": 141299,
             "state": "0"
           },
           {
-            "cycle": 144281,
+            "cycle": 144305,
             "state": "1"
           },
           {
-            "cycle": 147286,
+            "cycle": 147310,
             "state": "0"
           },
           {
-            "cycle": 150292,
+            "cycle": 150316,
             "state": "1"
           },
           {
-            "cycle": 153297,
+            "cycle": 153321,
             "state": "0"
           },
           {
-            "cycle": 156303,
+            "cycle": 156327,
             "state": "1"
           },
           {
-            "cycle": 159308,
+            "cycle": 159332,
             "state": "0"
           },
           {
-            "cycle": 162314,
+            "cycle": 162338,
             "state": "1"
           },
           {
-            "cycle": 165319,
+            "cycle": 165343,
             "state": "0"
           },
           {
-            "cycle": 168325,
+            "cycle": 168349,
             "state": "1"
           },
           {
-            "cycle": 171330,
+            "cycle": 171354,
             "state": "0"
           },
           {
-            "cycle": 174336,
+            "cycle": 174360,
             "state": "1"
           },
           {
-            "cycle": 177341,
+            "cycle": 177365,
             "state": "0"
           },
           {
-            "cycle": 180347,
+            "cycle": 180371,
             "state": "1"
           },
           {
-            "cycle": 183352,
+            "cycle": 183376,
             "state": "0"
           },
           {
-            "cycle": 186358,
+            "cycle": 186382,
             "state": "1"
           },
           {
-            "cycle": 189363,
+            "cycle": 189387,
             "state": "0"
           },
           {
-            "cycle": 192369,
+            "cycle": 192393,
             "state": "1"
           },
           {
-            "cycle": 195374,
+            "cycle": 195398,
             "state": "0"
           },
           {
-            "cycle": 198380,
+            "cycle": 198404,
+            "state": "1"
+          },
+          {
+            "cycle": 201409,
+            "state": "0"
+          },
+          {
+            "cycle": 204415,
+            "state": "1"
+          },
+          {
+            "cycle": 207420,
+            "state": "0"
+          },
+          {
+            "cycle": 210426,
+            "state": "1"
+          },
+          {
+            "cycle": 213431,
+            "state": "0"
+          },
+          {
+            "cycle": 216437,
+            "state": "1"
+          },
+          {
+            "cycle": 219442,
+            "state": "0"
+          },
+          {
+            "cycle": 222448,
+            "state": "1"
+          },
+          {
+            "cycle": 225453,
+            "state": "0"
+          },
+          {
+            "cycle": 228459,
+            "state": "1"
+          },
+          {
+            "cycle": 231464,
+            "state": "0"
+          },
+          {
+            "cycle": 234470,
+            "state": "1"
+          },
+          {
+            "cycle": 237475,
+            "state": "0"
+          },
+          {
+            "cycle": 240481,
+            "state": "1"
+          },
+          {
+            "cycle": 243486,
+            "state": "0"
+          },
+          {
+            "cycle": 246492,
+            "state": "1"
+          },
+          {
+            "cycle": 249497,
+            "state": "0"
+          },
+          {
+            "cycle": 252503,
+            "state": "1"
+          },
+          {
+            "cycle": 255508,
+            "state": "0"
+          },
+          {
+            "cycle": 258514,
+            "state": "1"
+          },
+          {
+            "cycle": 261519,
+            "state": "0"
+          },
+          {
+            "cycle": 264525,
+            "state": "1"
+          },
+          {
+            "cycle": 267530,
+            "state": "0"
+          },
+          {
+            "cycle": 270536,
+            "state": "1"
+          },
+          {
+            "cycle": 273541,
+            "state": "0"
+          },
+          {
+            "cycle": 276547,
+            "state": "1"
+          },
+          {
+            "cycle": 279552,
+            "state": "0"
+          },
+          {
+            "cycle": 282558,
+            "state": "1"
+          },
+          {
+            "cycle": 285563,
+            "state": "0"
+          },
+          {
+            "cycle": 288569,
+            "state": "1"
+          },
+          {
+            "cycle": 291574,
+            "state": "0"
+          },
+          {
+            "cycle": 294580,
+            "state": "1"
+          },
+          {
+            "cycle": 297585,
+            "state": "0"
+          },
+          {
+            "cycle": 300591,
+            "state": "1"
+          },
+          {
+            "cycle": 303596,
+            "state": "0"
+          },
+          {
+            "cycle": 306602,
+            "state": "1"
+          },
+          {
+            "cycle": 309607,
+            "state": "0"
+          },
+          {
+            "cycle": 312613,
+            "state": "1"
+          },
+          {
+            "cycle": 315618,
+            "state": "0"
+          },
+          {
+            "cycle": 318624,
+            "state": "1"
+          },
+          {
+            "cycle": 321629,
+            "state": "0"
+          },
+          {
+            "cycle": 324635,
+            "state": "1"
+          },
+          {
+            "cycle": 327640,
+            "state": "0"
+          },
+          {
+            "cycle": 330646,
+            "state": "1"
+          },
+          {
+            "cycle": 333651,
+            "state": "0"
+          },
+          {
+            "cycle": 336657,
+            "state": "1"
+          },
+          {
+            "cycle": 339662,
+            "state": "0"
+          },
+          {
+            "cycle": 342668,
+            "state": "1"
+          },
+          {
+            "cycle": 345673,
+            "state": "0"
+          },
+          {
+            "cycle": 348679,
+            "state": "1"
+          },
+          {
+            "cycle": 351684,
+            "state": "0"
+          },
+          {
+            "cycle": 354690,
+            "state": "1"
+          },
+          {
+            "cycle": 357695,
+            "state": "0"
+          },
+          {
+            "cycle": 360701,
+            "state": "1"
+          },
+          {
+            "cycle": 363706,
+            "state": "0"
+          },
+          {
+            "cycle": 366712,
+            "state": "1"
+          },
+          {
+            "cycle": 369717,
+            "state": "0"
+          },
+          {
+            "cycle": 372723,
+            "state": "1"
+          },
+          {
+            "cycle": 375728,
+            "state": "0"
+          },
+          {
+            "cycle": 378734,
+            "state": "1"
+          },
+          {
+            "cycle": 381739,
+            "state": "0"
+          },
+          {
+            "cycle": 384745,
+            "state": "1"
+          },
+          {
+            "cycle": 387750,
+            "state": "0"
+          },
+          {
+            "cycle": 390756,
+            "state": "1"
+          },
+          {
+            "cycle": 393761,
+            "state": "0"
+          },
+          {
+            "cycle": 396767,
+            "state": "1"
+          },
+          {
+            "cycle": 399772,
+            "state": "0"
+          },
+          {
+            "cycle": 402778,
+            "state": "1"
+          },
+          {
+            "cycle": 405783,
+            "state": "0"
+          },
+          {
+            "cycle": 408789,
+            "state": "1"
+          },
+          {
+            "cycle": 411794,
+            "state": "0"
+          },
+          {
+            "cycle": 414800,
+            "state": "1"
+          },
+          {
+            "cycle": 417805,
+            "state": "0"
+          },
+          {
+            "cycle": 420811,
+            "state": "1"
+          },
+          {
+            "cycle": 423816,
+            "state": "0"
+          },
+          {
+            "cycle": 426822,
+            "state": "1"
+          },
+          {
+            "cycle": 429827,
+            "state": "0"
+          },
+          {
+            "cycle": 432833,
+            "state": "1"
+          },
+          {
+            "cycle": 435838,
+            "state": "0"
+          },
+          {
+            "cycle": 438844,
+            "state": "1"
+          },
+          {
+            "cycle": 441849,
+            "state": "0"
+          },
+          {
+            "cycle": 444855,
+            "state": "1"
+          },
+          {
+            "cycle": 447860,
+            "state": "0"
+          },
+          {
+            "cycle": 450866,
+            "state": "1"
+          },
+          {
+            "cycle": 453871,
+            "state": "0"
+          },
+          {
+            "cycle": 456877,
+            "state": "1"
+          },
+          {
+            "cycle": 459882,
+            "state": "0"
+          },
+          {
+            "cycle": 462888,
+            "state": "1"
+          },
+          {
+            "cycle": 465893,
+            "state": "0"
+          },
+          {
+            "cycle": 468899,
+            "state": "1"
+          },
+          {
+            "cycle": 471904,
+            "state": "0"
+          },
+          {
+            "cycle": 474910,
+            "state": "1"
+          },
+          {
+            "cycle": 477915,
+            "state": "0"
+          },
+          {
+            "cycle": 480921,
+            "state": "1"
+          },
+          {
+            "cycle": 483926,
+            "state": "0"
+          },
+          {
+            "cycle": 486932,
+            "state": "1"
+          },
+          {
+            "cycle": 489937,
+            "state": "0"
+          },
+          {
+            "cycle": 492943,
+            "state": "1"
+          },
+          {
+            "cycle": 495948,
+            "state": "0"
+          },
+          {
+            "cycle": 498954,
             "state": "1"
           }
         ],
         "mode": "output",
-        "edge_count": 67
+        "edge_count": 167
       }
     ]
   },
@@ -4047,12 +5165,23 @@
       "drive": "1"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "C5_UART_OK",
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 230000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 72,
+    "text_bytes": 142,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 72,
+    "flash_used_bytes": 142,
     "ram_static_bytes": 0,
     "flash_total_bytes": 8388608,
     "ram_total_bytes": 393216,
@@ -4069,28 +5198,28 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 400408,
-    "instructions": 200000,
-    "steps_executed": 200000,
-    "memory_reads": 200000,
+    "cycles": 1001030,
+    "instructions": 500000,
+    "steps_executed": 500000,
+    "memory_reads": 500000,
     "memory_writes": 3,
-    "peripheral_accesses": 71,
+    "peripheral_accesses": 183,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1082130496,
-        "count": 273,
+        "pc": 1082130566,
+        "count": 703,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 1082130498,
-        "count": 273,
-        "symbol": "firmware_esp32c5_devkitc_1_gpio_smoke::delay"
+        "pc": 1082130570,
+        "count": 626,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 1082130500,
-        "count": 235,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+        "pc": 1082130568,
+        "count": 624,
+        "symbol": "firmware_esp32c5_devkitc_1_gpio_smoke::delay"
       }
     ]
   }

@@ -13,4 +13,5 @@ workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/Ca
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/Cargo.toml
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.14s
+   Compiling firmware-esp32c5-devkitc-1-gpio-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/firmware-esp32c5-devkitc-1-gpio-smoke)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.42s

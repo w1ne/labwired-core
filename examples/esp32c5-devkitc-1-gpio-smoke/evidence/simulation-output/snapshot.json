@@ -4,7 +4,7 @@
     "type": "risc_v",
     "registers": [
       0,
-      1082130480,
+      1082130550,
       1082523632,
       0,
       0,
@@ -13,10 +13,10 @@
       0,
       1611206656,
       32,
-      461,
-      6144,
+      652,
       4096,
-      0,
+      1611202560,
+      75,
       0,
       0,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 1082130496,
+    "pc": 1082130570,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -45,7 +45,7 @@
     "mepc": 0,
     "mcause": 0,
     "mtval": 0,
-    "mtime": 200000,
+    "mtime": 500000,
     "mtimecmp": 0,
     "triggers": {
       "tselect": 0,
@@ -72,23 +72,23 @@
       "tcontrol": 0
     }
   },
-  "steps_executed": 200000,
-  "cycles": 400408,
-  "instructions": 200000,
+  "steps_executed": 500000,
+  "cycles": 1001030,
+  "instructions": 500000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 200000
+      "value": 500000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 200000
+      "value": 500000
     }
   },
   "limits": {
-    "max_steps": 200000,
+    "max_steps": 500000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "d853f4d05fb741a383c84d29b0ec9ef0c853926b2a73175eafb703ffdc54ba2f",
+  "firmware_hash": "2d113a40b86f0f5cd11caae1289482d1203f3aeb0664d7343a7926ceda9e016e",
   "config": {
     "firmware": "examples/esp32c5-devkitc-1-gpio-smoke/../../target/riscv32imac-unknown-none-elf/release/firmware-esp32c5-devkitc-1-gpio-smoke",
     "system": "examples/esp32c5-devkitc-1-gpio-smoke/../../configs/systems/esp32c5-devkitc-1-n8r8-gpio.yaml",

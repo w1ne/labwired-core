@@ -13,9 +13,19 @@ const GPIO_ENABLE_W1TS: *mut u32 = (GPIO_BASE + 0x38) as *mut u32;
 const IO_MUX_GPIO5: *mut u32 = 0x6009_0014 as *mut u32;
 const GPIO5_MASK: u32 = 1 << 5;
 
+const UART0_FIFO: *mut u32 = 0x6000_0000 as *mut u32;
+const UART0_CLKDIV: *mut u32 = 0x6000_0014 as *mut u32;
+
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     unsafe {
+        // C5 UART0 is the DevKitC-1 USB-to-UART console (J3 pin 2 / U0TXD).
+        // Keep the reset divider used for the 115200-baud console path.
+        write_volatile(UART0_CLKDIV, 694);
+        for byte in b"C5_UART_OK\n" {
+            write_volatile(UART0_FIFO, *byte as u32);
+        }
+
         // Espressif C5 io_mux_reg.h: GPIO5 is IO_MUX base + 0x14 and
         // FUNC_MTDO_GPIO5 is MCU_SEL=1 at bits [14:12].
         let pad = read_volatile(IO_MUX_GPIO5);

@@ -1,6 +1,7 @@
-# ESP32-C5-DevKitC-1-N8R8 (v1.2) focused GPIO bring-up system.
-# J3 pin 9 is GPIO5. Wi-Fi/Thread/Zigbee, USB, UART bridge, flash/PSRAM boot,
-# and the GPIO27 addressable RGB LED are outside this system's modeled scope.
+# ESP32-C5-DevKitC-1-N8R8 (v1.2) focused GPIO + UART0 bring-up system.
+# GPIO5 is J3 pin 9; UART0 TX is J3 pin 2 and feeds the board's USB-UART bridge.
+# The UART sink is modeled, while pin-level UART routing is not enforced.
 name: "esp32c5-devkitc-1-n8r8-gpio"
 chip: "../chips/esp32c5.yaml"
 cpu_hz: 240_000_000
+debug_uart: "uart0"

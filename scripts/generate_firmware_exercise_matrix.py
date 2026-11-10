@@ -152,11 +152,12 @@ def render(tier1: dict, ydoc: dict) -> str:
         L.append("")
 
     # ── Part 2: beyond the rubric ──────────────────────────────────────────
-    L.append("## Beyond the rubric — functional reads, advanced peripherals, shims")
+    L.append("## Beyond the rubric — functional firmware exercises, advanced peripherals, shims")
     L.append("")
     L.append(
-        "What the rubric grid does not cover: real drivers decoding a sensor/protocol "
-        "over a bus (the gold standard), chip-specific advanced peripherals, and shims "
+        "What the rubric grid does not cover: board-level firmware smokes, functional "
+        "peripheral use, real drivers decoding a sensor/protocol over a bus (the gold "
+        "standard), chip-specific advanced peripherals, and shims "
         "(hardcoded stubs or declarative register files with no engine behind them). "
         "From `validation/firmware_exercise.yaml`."
     )
@@ -170,7 +171,7 @@ def render(tier1: dict, ydoc: dict) -> str:
             L.append("")
         func = list_field(cid, c, "functional")
         if func:
-            L.append("**Functional device/protocol reads** (real driver, decoded value):")
+            L.append("**Functional firmware exercises** (including decoded device/protocol reads):")
             for f in func:
                 gate = f.get("gate") or "none"
                 if gate not in GATE_BADGES:
