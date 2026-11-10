@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="10" failures="0" errors="0" time="0.266758">
+<testsuite name="labwired" tests="10" failures="0" errors="0" time="0.301325">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="0ff8a1091954d41a46375455eda24213aacc9fb58957d62ba472908b5dd113cc"/>
+    <property name="firmware_hash" value="be7407cfeba07ad9c2e7caf188d4bd49d44f13fd4177180c50e4be4493ed73f5"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.266758">
+  <testcase classname="labwired" name="run" time="0.301325">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_regex: ^NUCLEO-F767ZI SMOKE" time="0.000000">
   </testcase>

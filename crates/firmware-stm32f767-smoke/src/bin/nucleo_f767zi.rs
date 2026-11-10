@@ -46,6 +46,17 @@ const LEDS: [(&str, u32); 3] = [("ld1", 0), ("ld2", 7), ("ld3", 14)];
 /// B1 USER on PC13.
 const B1: u32 = 13;
 
+/// STM32v2 USART3 RX data and status registers. The board VCP is USART3 and
+/// its NVIC line is 39 on the imported STM32F777-backed profile.
+const USART3: u32 = 0x4000_4800;
+const USART3_RDR: u32 = USART3 + 0x24;
+const USART3_ISR: u32 = USART3 + 0x1C;
+const USART3_CR1: u32 = USART3;
+const USART3_IRQ: u32 = 39;
+const USART_RXNE: u32 = 1 << 5;
+const USART_RXNEIE: u32 = 1 << 5;
+const USART_RE: u32 = 1 << 2;
+
 /// Each LED as a push-pull output: three blinks through BSRR, each level
 /// visible in ODR and IDR, and only its own ODR bit set while lit.
 fn check_leds() -> bool {
@@ -115,6 +126,88 @@ fn check_b1() -> bool {
     ok
 }
 
+/// Receive the two start-injected bytes on the board's USART3 VCP. First
+/// verify RXNE does not pend the NVIC line while RXNEIE is clear, then enable
+/// it and check assertion, re-pending while the second byte remains queued,
+/// and release after both bytes are drained.
+fn check_usart3_rx() -> bool {
+    let mut first_ready = false;
+    for _ in 0..100_000 {
+        if rd(USART3_ISR) & USART_RXNE != 0 {
+            first_ready = true;
+            break;
+        }
+    }
+
+    unpend(USART3_IRQ);
+    let rxne_irq_isolated = first_ready && !pending(USART3_IRQ);
+    wr(USART3_CR1, rd(USART3_CR1) | USART_RXNEIE);
+    let mut rxne_irq_asserted = false;
+    for _ in 0..10_000 {
+        if pending(USART3_IRQ) {
+            rxne_irq_asserted = true;
+            break;
+        }
+    }
+
+    let first = if first_ready {
+        rd(USART3_RDR) & 0xFF
+    } else {
+        0
+    };
+    let second_still_pending = first_ready && rd(USART3_ISR) & USART_RXNE != 0;
+    unpend(USART3_IRQ);
+    let mut second_irq_reasserted = false;
+    for _ in 0..10_000 {
+        if pending(USART3_IRQ) {
+            second_irq_reasserted = true;
+            break;
+        }
+    }
+
+    let mut second = 0;
+    let mut second_ready = false;
+    for _ in 0..100_000 {
+        if rd(USART3_ISR) & USART_RXNE != 0 {
+            second = rd(USART3_RDR) & 0xFF;
+            second_ready = true;
+            break;
+        }
+    }
+    let cleared = rd(USART3_ISR) & USART_RXNE == 0;
+    wr(USART3_CR1, rd(USART3_CR1) & !USART_RXNEIE);
+    unpend(USART3_IRQ);
+    let mut rxne_irq_released = true;
+    for _ in 0..10_000 {
+        if pending(USART3_IRQ) {
+            rxne_irq_released = false;
+            break;
+        }
+    }
+
+    let ok = first_ready
+        && first == b'R' as u32
+        && second_ready
+        && second == b'S' as u32
+        && cleared
+        && rxne_irq_isolated
+        && rxne_irq_asserted
+        && second_still_pending
+        && second_irq_reasserted
+        && rxne_irq_released;
+    puts("usart3 rxne ");
+    flag("isolated", rxne_irq_isolated);
+    flag("asserted", rxne_irq_asserted);
+    flag("reasserted", second_irq_reasserted);
+    flag("released", rxne_irq_released);
+    flag(
+        "data",
+        first == b'R' as u32 && second == b'S' as u32 && cleared,
+    );
+    verdict(ok);
+    ok
+}
+
 #[entry]
 fn main() -> ! {
     let (rcc_reset, rcc_gate, rcc_mask) = rcc_bringup_f767();
@@ -126,6 +219,9 @@ fn main() -> ! {
     for &(_, base, _) in &UARTS {
         uart_init(base);
     }
+    // The imported smoke injects bytes directly into the USART3 receive path;
+    // enable RE while leaving RXNEIE clear for the isolation check below.
+    wr(USART3_CR1, rd(USART3_CR1) | USART_RE);
     puts("NUCLEO-F767ZI SMOKE\r\n");
     send(UARTS[2].1, b"usart3 vcp ok\r\n");
 
@@ -137,7 +233,9 @@ fn main() -> ! {
     };
     mark(0, report_rcc(rcc_reset, rcc_gate, rcc_mask));
     mark(1, check_geometry());
-    mark(2, check_usart_irqs());
+    let usart_irqs = check_usart_irqs();
+    let usart3_rx = check_usart3_rx();
+    mark(2, usart_irqs && usart3_rx);
     mark(3, check_leds());
     mark(4, check_syscfg_f767());
     mark(5, check_exti_swier() && check_exti_line24());
