@@ -118,6 +118,11 @@ fn check_b1() -> bool {
 #[entry]
 fn main() -> ! {
     let (rcc_reset, rcc_gate, rcc_mask) = rcc_bringup_f767();
+    // A TDR write before UE/TE must not appear in the captured serial stream.
+    // Exercise all eight STM32v2 UART instances in this imported profile.
+    for &(_, base, _) in &UARTS {
+        send(base, b"!");
+    }
     for &(_, base, _) in &UARTS {
         uart_init(base);
     }

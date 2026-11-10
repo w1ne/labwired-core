@@ -33,6 +33,7 @@ stimuli:
     trigger: !after_cycles { cycles: 600000 }
     value: 0.0
 assertions:
+  - uart_regex: "^NUCLEO-F767ZI SMOKE"
   - uart_contains: "NUCLEO-F767ZI SMOKE"
   - uart_contains: "usart3 vcp ok"
   - uart_ordered:
