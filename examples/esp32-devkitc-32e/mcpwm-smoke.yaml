@@ -1,0 +1,14 @@
+# ESP32-DevKitC-32E: configure classic MCPWM0 for a 50 Hz servo command.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/devkitc32e_mcpwm/firmware.elf"
+  system: "../../configs/systems/esp32-devkitc-32e-mcpwm-servo.yaml"
+limits:
+  max_steps: 9000000
+assertions:
+  - uart_contains: "ESP32_DEVKITC32E_MCPWM_SERVO_OK"
+  - memory_value:
+      address: 0x3FF5E040
+      size: 32
+      expected_value: 1500
+  - expected_stop_reason: max_steps

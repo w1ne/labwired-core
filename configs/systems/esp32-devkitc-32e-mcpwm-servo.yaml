@@ -1,0 +1,16 @@
+# ESP32-DevKitC-32E exercising MCPWM0 operator A with a modeled servo load.
+# The classic ESP32 native bus registers MCPWM0 at 0x3FF5E000; no duplicate
+# window is declared. The servo follows its duty observer, but pad-level MCPWM
+# waveforms and the servo's electrical/mechanical load are not modeled.
+name: "esp32-devkitc-32e-mcpwm-servo"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "servo"
+    type: "servo"
+    connection: "gpio"
+    config:
+      signal_pin: "GPIO23"
+      model: "sg90"
+board_io: []

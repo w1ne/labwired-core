@@ -1,12 +1,12 @@
 {
   "summary": {
-    "targets_total": 9,
-    "pass": 9,
+    "targets_total": 10,
+    "pass": 10,
     "fail": 0,
-    "median_elapsed_ms": 37367,
+    "median_elapsed_ms": 38244,
     "threshold_seconds": 3600,
-    "threshold_met": 9,
-    "median_elapsed_seconds": 37.367
+    "threshold_met": 10,
+    "median_elapsed_seconds": 38.244
   },
   "targets": [
     {
@@ -128,6 +128,36 @@
       },
       "firmware_build_script": "scripts/build-esp32-devkitc-32e-ledc-smoke.sh",
       "_artifact_path": "examples/esp32-devkitc-32e/evidence/ledc"
+    },
+    {
+      "target_id": "esp32-devkitc-32e-mcpwm",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-devkitc-32e/mcpwm-smoke.yaml",
+      "system": "configs/systems/esp32-devkitc-32e-mcpwm-servo.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-10T01:03:41Z",
+      "finished_at_utc": "2026-11-10T01:04:20Z",
+      "elapsed_seconds": 40,
+      "elapsed_ms": 39121,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 31.462,
+        "build_firmware": 4.509,
+        "run_smoke": 3.114
+      },
+      "stages_ms": {
+        "build_cli": 31462,
+        "build_firmware": 4509,
+        "run_smoke": 3114
+      },
+      "firmware_build_script": "scripts/build-esp32-devkitc-32e-mcpwm-smoke.sh",
+      "_artifact_path": "examples/esp32-devkitc-32e/evidence/mcpwm"
     },
     {
       "target_id": "esp32-devkitc-32e",

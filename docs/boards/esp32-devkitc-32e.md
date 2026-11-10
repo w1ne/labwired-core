@@ -13,6 +13,12 @@ ESP32-WROOM-32E module. The GPIO/UART profile is
   GPIO input matrix. The smoke drives eight pulses and sets GPIO16 high only
   when the PCNT readback is eight. ESP32 is rank 1; this is low-cost integration
   of an existing PCNT model on the same board, not a new board/MCU demand pick.
+- The MCPWM profile uses the existing classic ESP32 MCPWM0 model through
+  ESP-IDF's legacy `mcpwm_init` and `mcpwm_set_duty` APIs. It configures a 50 Hz /
+  7.5% center command on operator A and checks the compare register. The
+  actuator fixture follows the duty observer; the model does not emit
+  MCPWM pad-level waveforms or model servo mechanics. This smoke does not
+  assert servo-angle telemetry.
 - `configs/systems/esp32-devkitc-32e-bme280.yaml` adds an external BME280 model
   at I2C0 address `0x77`, with SDA=GPIO21 (J3 pin 6) and SCL=GPIO22 (J3 pin 3).
   The breakout uses 3V3/GND from J2/J3.
@@ -52,6 +58,11 @@ The rank-1 LEDC servo smoke is in
 [`examples/esp32-devkitc-32e/ledc-smoke.yaml`](../../examples/esp32-devkitc-32e/ledc-smoke.yaml)
 and uses the Arduino APIs shown in
 [`ledc_servo_smoke.cpp`](../../examples/esp32-devkitc-32e/firmware/src/ledc_servo_smoke.cpp).
+
+The rank-1 MCPWM smoke is in
+[`examples/esp32-devkitc-32e/mcpwm-smoke.yaml`](../../examples/esp32-devkitc-32e/mcpwm-smoke.yaml).
+It configures MCPWM0 timer 0 / operator A for a 50 Hz center-servo command;
+the board README has the copy-paste sketch and profile limitations.
 
 The rank-1 SPI OLED smoke is in
 [`examples/esp32-devkitc-32e/spi-oled-smoke.yaml`](../../examples/esp32-devkitc-32e/spi-oled-smoke.yaml)

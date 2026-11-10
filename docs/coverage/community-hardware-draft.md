@@ -216,6 +216,59 @@ void setup() {
 void loop() {}
 ```
 
+This round adds a smoke for MCPWM0 operator A to the same rank-1 DevKitC-32E
+profile. It uses Espressif's legacy driver to set a 50 Hz, 7.5% center-servo
+command and checks the compare-A register. The attached servo twin follows the
+MCPWM duty observer; pad-level waveform generation and physical servo loading
+are not modeled. The local smoke passed all three assertions; it does not read
+servo-angle telemetry. This is a coverage extension to a supported board, not
+a new MCU or vendor.
+
+Copy-paste Arduino example for an SG90-class servo signal on J3 pin 2 / GPIO23.
+Power a physical servo separately from 5 V and share ground with the board:
+
+```cpp
+#include <Arduino.h>
+#include "driver/mcpwm.h"
+#include "driver/gpio.h"
+
+void setup() {
+  constexpr gpio_num_t signal = GPIO_NUM_23;
+  if (mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, signal) != ESP_OK) return;
+
+  mcpwm_config_t config = {};
+  config.frequency = 50;
+  config.cmpr_a = 0;
+  config.cmpr_b = 0;
+  config.counter_mode = MCPWM_UP_COUNTER;
+  config.duty_mode = MCPWM_DUTY_MODE_0;
+  if (mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &config) != ESP_OK) return;
+
+  if (mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 7.5f) != ESP_OK) {
+    return;
+  }
+}
+
+void loop() {}
+```
+
+Reproduce with the committed local profile from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-devkitc-32e-mcpwm \
+  --script examples/esp32-devkitc-32e/mcpwm-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-mcpwm-servo.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/mcpwm \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-mcpwm-smoke.sh
+```
+
+The current lifecycle receipt and smoke artifacts are linked from the
+[`DevKitC guide`](../../examples/esp32-devkitc-32e/README.md).
+The connected hosted verifier could not execute this sketch because its
+connector schema rejects Arduino even though the ESP32 target lists Arduino as
+supported; the local result is not a physical-board run.
+
 ## Remaining demand-ranked entries
 
 Before this page is ready for publication, add reviewed coverage and a

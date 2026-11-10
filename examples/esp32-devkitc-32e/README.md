@@ -1,4 +1,4 @@
-# ESP32-DevKitC-32E GPIO, PCNT, UART, BME280 I2C, SPI OLED, RMT, ADC, DAC, and LEDC smokes
+# ESP32-DevKitC-32E GPIO, PCNT, UART, BME280 I2C, SPI OLED, RMT, ADC, DAC, LEDC, and MCPWM smokes
 
 **Demand rank:** ESP32 is rank 1 in the standing list (38% of reported MCU
 use). This round maps PCNT unit 0 to this board profile. Arduino firmware
@@ -6,14 +6,17 @@ generates eight rising edges on GPIO23 / J3 pin 2, counts them through PCNT,
 and sets GPIO16 / J3 pin 12 high only after reading back 8. This is low-cost
 coverage integration of an existing model on the same customer board, not a
 new board/MCU demand pick. An earlier round added the stock Arduino VSPI path
-to a 128x64 SSD1306 display.
+to a 128x64 SSD1306 display. The new MCPWM profile exercises MCPWM0 operator A
+with Espressif's legacy driver at 50 Hz and 7.5% duty for a center-position
+servo command; it is another rank-1 coverage extension using the existing
+classic ESP32 peripheral model.
 
 ## Board and modeled scope
 
 The board is Espressif's exact **ESP32-DevKitC-32E** with an ESP32-WROOM-32E
 module and 4 MB flash. The narrow board profile exposes classic ESP32 GPIO,
 PCNT unit 0, UART0 console, UART1 TX routed to GPIO16, I2C0, VSPI/SPI3, ADC1
-channel 0, DAC1/2, LEDC, and RMT TX.
+channel 0, DAC1/2, LEDC, MCPWM0 operator A, and RMT TX.
 GPIO23 maps to J3 pin 2; it is a header pin, not a built-in LED. For a physical
 blink, connect an LED in series with a resistor from GPIO23 to GND.
 
@@ -27,6 +30,7 @@ blink, connect an LED in series with a resistor from GPIO23 to GND.
 | J3 GPIO18/19/23/5, GPIO17 | VSPI/SPI3 clock, MISO, MOSI, CS, and OLED D/C | SPI OLED smoke sends SSD1306 init commands and paints the first 8-row page |
 | J2 pin 3 / VP (GPIO36) | ADC1 channel 0 | ADC smoke reads a 1650 mV potentiometer through `analogRead(36)` and expects 2047 at 12-bit resolution |
 | J3 pin 2 (GPIO23) | LEDC high-speed channel 0 PWM output | LEDC smoke runs 50 Hz, 14-bit PWM to an external SG90-class servo twin and requires committed duty plus GPIO edges |
+| J3 pin 2 (GPIO23) | MCPWM0 operator A duty observer | MCPWM smoke sets a 50 Hz, 7.5% center command and checks the compare-A register; the servo twin follows duty, while pad-level MCPWM waveforms are outside the model |
 | GPIO23 header | RMT channel 0 TX matrix output | RMT smoke sends red to an external WS2812 pixel and waits for TX_END |
 | GPIO18 header | RMT channel 1 TX matrix output | RMT smoke sends green to a second pixel and waits for TX_END |
 | J2 pin 9 (GPIO25) | DAC1 direct 8-bit analog output | DAC smoke calls `dacWrite(25, 128)` and checks the DAC code and enable bit |
@@ -51,6 +55,42 @@ attaches an external SG90 fixture; the smoke asserts the channel-0 duty shadow
 and GPIO23 edges, not servo angle telemetry. Power a physical servo from a
 separate 5 V supply and share ground with the board. The twin does not model
 servo current, torque, gearing, or mechanical load.
+
+The MCPWM profile uses MCPWM0 timer 0 / operator A at 50 Hz with a 7.5% duty
+command (about 1.5 ms of a 20 ms frame). The real register model derives the
+timer frequency and duty and notifies the external SG90 fixture, which tracks
+the commanded angle. It does not synthesize MCPWM pad edges or model actuator
+current, torque, gearing, or mechanical load. The firmware programs MCPWM only
+while LEDC remains idle; the acceptance checks the compare register and marker,
+not servo-angle telemetry.
+
+Copy-paste Arduino example for an SG90-class servo signal on GPIO23 / J3 pin 2.
+Power a physical servo separately from 5 V and connect its ground to the board:
+
+```cpp
+#include <Arduino.h>
+#include "driver/mcpwm.h"
+#include "driver/gpio.h"
+
+void setup() {
+  constexpr gpio_num_t signal = GPIO_NUM_23;
+  if (mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, signal) != ESP_OK) return;
+
+  mcpwm_config_t config = {};
+  config.frequency = 50;
+  config.cmpr_a = 0;
+  config.cmpr_b = 0;
+  config.counter_mode = MCPWM_UP_COUNTER;
+  config.duty_mode = MCPWM_DUTY_MODE_0;
+  if (mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &config) != ESP_OK) return;
+
+  if (mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 7.5f) != ESP_OK) {
+    return;
+  }
+}
+
+void loop() {}
+```
 
 The RMT model implements per-channel TX control/status offsets, RMTMEM symbol
 RAM, independent TX timing for channels 0 and 1, GPIO-matrix output routing,
@@ -184,6 +224,15 @@ UART1 TX output to GPIO16 / J3 pin 12 and sends repeated `U` bytes. The local
 test checks the console marker and at least 32 GPIO16 edges; the hosted
 verifier separately model-verifies GPIO16 transitions.
 
+The MCPWM acceptance firmware is
+[`firmware/src/mcpwm_smoke.cpp`](firmware/src/mcpwm_smoke.cpp). It uses the
+ESP-IDF legacy `mcpwm_gpio_init`, `mcpwm_init`, and `mcpwm_set_duty` APIs.
+The local smoke requires the success marker and checks MCPWM0's operator-A
+compare register equals 1500. The connected hosted verifier could not run this
+board's sketch because its runtime accepts Arduino while its connector schema
+rejects that language; details are recorded in
+[`evidence/mcpwm/hosted-verification.md`](evidence/mcpwm/hosted-verification.md).
+
 ## Reproduce
 
 From the repository root:
@@ -231,6 +280,21 @@ This smoke is a GPIO23-to-PCNT input-matrix self-loop. It does not model an
 external encoder or pulse sensor. The local logs and hosted GPIO oracle are in
 [`evidence/pcnt/`](evidence/pcnt/), and live availability is in
 [`evidence/pcnt/vendor-status.md`](evidence/pcnt/vendor-status.md).
+
+Run the MCPWM servo smoke from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-devkitc-32e-mcpwm \
+  --script examples/esp32-devkitc-32e/mcpwm-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-mcpwm-servo.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/mcpwm \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-mcpwm-smoke.sh
+```
+
+The committed run log, structured result, metrics, and live status receipt are
+under [`evidence/mcpwm/`](evidence/mcpwm/). This is local digital-twin
+evidence, not a physical-board test.
 
 Run the RMT + pixel smoke from the repository root:
 

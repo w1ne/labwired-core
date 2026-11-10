@@ -1,0 +1,111 @@
+Processing devkitc32e_mcpwm (platform: espressif32; board: esp32dev; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32dev.html
+PLATFORM: Espressif 32 (8.0.0) > Espressif ESP32 Dev Module
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES:
+ - framework-arduinoespressif32 @ 4.30312.261024 (3.3.12)
+ - framework-arduinoespressif32-esp32-libs @ 3.3.12
+ - tool-esptool @ 2.50400.0 (5.4.0)
+ - tool-riscv32-esp-elf-gdb @ 12.1.0+20221002
+ - tool-xtensa-esp-elf-gdb @ 12.1.0+20221002
+ - toolchain-riscv32-esp @ 14.2.0+20260121
+ - toolchain-xtensa-esp-elf @ 14.2.0+20260121
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 44 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in debug mode
+Compiling .pio/build/devkitc32e_mcpwm/src/mcpwm_smoke.cpp.o
+Building .pio/build/devkitc32e_mcpwm/bootloader.bin
+Generating partitions .pio/build/devkitc32e_mcpwm/partitions.bin
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/ColorFormat.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/Esp.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/FirmwareMSC.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/FunctionalInterrupt.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/HEXBuilder.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/HWCDC.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/HardwareSerial.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/HashBuilder.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/IPAddress.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/MD5Builder.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/MacAddress.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/Print.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/Stream.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/StreamString.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/StringUtils.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/Tone.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/USB.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/USBCDC.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/USBHost.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/USBMSC.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/WMath.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/WString.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/base64.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/cbuf.cpp.o
+In file included from src/mcpwm_smoke.cpp:2:
+/home/andrii/.platformio/packages/framework-arduinoespressif32-esp32-libs/include/driver/deprecated/driver/mcpwm.h:15:2: warning: #warning "legacy MCPWM driver is deprecated, please migrate to the new driver (include driver/mcpwm_prelude.h)" [-Wcpp]
+   15 | #warning "legacy MCPWM driver is deprecated, please migrate to the new driver (include driver/mcpwm_prelude.h)"
+      |  ^~~~~~~
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/chip-debug-report.cpp.o
+esptool v5.4.0
+Creating ESP32 image...
+Merged 2 ELF sections.
+Successfully created ESP32 image.
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-adc.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-bt.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-cpu.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-dac.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-gpio.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-hosted.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-i2c-ng.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-i2c-slave.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-i2c.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-ldo.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-ledc.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-log-wrapper.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-matrix.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-misc.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-periman.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-psram.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-rgb-led.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-rmt.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-sigmadelta.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-spi.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-time.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-timer.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-tinyusb.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-touch-ng.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-touch.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/esp32-hal-uart.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/firmware_msc_fat.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/freertos_stats.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/idf_openthread_mpool_wrapper.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/libb64/cdecode.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/libb64/cencode.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/main.cpp.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/stdlib_noniso.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/wiring_pulse.c.o
+Compiling .pio/build/devkitc32e_mcpwm/FrameworkArduino/wiring_shift.c.o
+Archiving .pio/build/devkitc32e_mcpwm/libFrameworkArduino.a
+Indexing .pio/build/devkitc32e_mcpwm/libFrameworkArduino.a
+Linking .pio/build/devkitc32e_mcpwm/firmware.elf
+Retrieving maximum program size .pio/build/devkitc32e_mcpwm/firmware.elf
+Checking size .pio/build/devkitc32e_mcpwm/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]   6.8% (used 22244 bytes from 327680 bytes)
+Flash: [==        ]  22.3% (used 292124 bytes from 1310720 bytes)
+Building .pio/build/devkitc32e_mcpwm/firmware.bin
+esptool v5.4.0
+Creating ESP32 image...
+Merged 3 ELF sections.
+Successfully created ESP32 image.
+========================= [SUCCESS] Took 4.32 seconds =========================
+
+Environment       Status    Duration
+----------------  --------  ------------
+devkitc32e_mcpwm  SUCCESS   00:00:04.324
+========================= 1 succeeded in 00:00:04.324 =========================
