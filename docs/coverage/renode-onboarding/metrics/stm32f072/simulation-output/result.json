@@ -71,8 +71,10 @@
           "exti pads idle=1 presses=1 pa_quiet=1 pf1=1 pc13=1 ok",
           "spi1 frame=0x01901600 ds=1 data=1 pend=1 alone=1 released=1 ok",
           "spi1 TXEIE pend=1 released=1 ok",
+          "spi1 RXNEIE asserted=1 repended=1 masked=1 unmasked=1 released=1 ok",
           "spi2 frame=0x06401600 ds=1 data=1 pend=1 alone=1 released=1 ok",
           "spi2 TXEIE pend=1 released=1 ok",
+          "spi2 RXNEIE asserted=1 repended=1 masked=1 unmasked=1 released=1 ok",
           "dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok",
           "i2c1 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok",
           "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok",
@@ -118,20 +120,20 @@
       3221225472,
       1073821724,
       3221225472,
-      69,
+      4294867296,
       13,
-      1,
+      78,
       536887280,
       0,
       0,
       0,
       0,
       0,
-      536886992,
-      134235239,
-      134235528
+      536886984,
+      134235393,
+      134235676
     ],
-    "pc": 134235528,
+    "pc": 134235676,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -144,7 +146,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "40b538235cb1d4710e84d86476898ad8af8141fb9d8be695cec53458dbd964dc",
+  "firmware_hash": "67da0086bb79b54e5ae64f71938d596172da15dce760a4dfb36f043cb60abc1e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072.yaml",
@@ -524,19 +526,19 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 1219,
+            "cycle": 1191,
             "value": 1
           },
           {
-            "cycle": 1228,
+            "cycle": 1200,
             "value": 0
           },
           {
-            "cycle": 1231,
+            "cycle": 1203,
             "value": 1
           },
           {
-            "cycle": 1239,
+            "cycle": 1211,
             "value": 0
           }
         ],
@@ -544,23 +546,23 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 1218,
+            "cycle": 1190,
             "state": "0"
           },
           {
-            "cycle": 1219,
+            "cycle": 1191,
             "state": "1"
           },
           {
-            "cycle": 1228,
+            "cycle": 1200,
             "state": "0"
           },
           {
-            "cycle": 1231,
+            "cycle": 1203,
             "state": "1"
           },
           {
-            "cycle": 1239,
+            "cycle": 1211,
             "state": "0"
           }
         ],
@@ -705,6 +707,12 @@
         "end_cycle": 2910000
       },
       {
+        "text": "spi1 RXNEIE asserted=1 repended=1 masked=1 unmasked=1 released=1 ok",
+        "cycle_lo": 2900000,
+        "cycle": 2910000,
+        "end_cycle": 2910000
+      },
+      {
         "text": "spi2 frame=0x06401600 ds=1 data=1 pend=1 alone=1 released=1 ok",
         "cycle_lo": 2900000,
         "cycle": 2910000,
@@ -712,6 +720,12 @@
       },
       {
         "text": "spi2 TXEIE pend=1 released=1 ok",
+        "cycle_lo": 2900000,
+        "cycle": 2910000,
+        "end_cycle": 2910000
+      },
+      {
+        "text": "spi2 RXNEIE asserted=1 repended=1 masked=1 unmasked=1 released=1 ok",
         "cycle_lo": 2900000,
         "cycle": 2910000,
         "end_cycle": 2910000
@@ -742,8 +756,8 @@
       },
       {
         "text": "adc in1=0x000007FF ts=0x00000709 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 dma=1 ovr=1 awd=1 off=1 ok",
-        "cycle_lo": 2940000,
-        "cycle": 2950000,
+        "cycle_lo": 2950000,
+        "cycle": 2960000,
         "end_cycle": 2960000
       },
       {
@@ -761,6 +775,9 @@
     ],
     "dropped_lines": 0
   },
+  "i2c_addresses": [
+    72
+  ],
   "stimuli": [
     {
       "channel": "position",
@@ -873,14 +890,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 19912,
+    "text_bytes": 20084,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 19912,
+    "flash_used_bytes": 20084,
     "ram_static_bytes": 0,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 15.19,
+    "flash_used_pct": 15.32,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -890,15 +907,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 16384,
-    "main_stack_high_water_bytes": 344,
-    "main_stack_free_min_bytes": 16016,
+    "main_stack_high_water_bytes": 352,
+    "main_stack_free_min_bytes": 16008,
     "main_stack_base": 536870912,
     "main_stack_top": 536887296,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 16384,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 16016,
+    "heap_free_min_bytes": 16008,
     "heap_base": 536870912,
     "heap_top": 536887296
   },
@@ -906,11 +923,21 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 144058,
-    "memory_writes": 1290,
-    "peripheral_accesses": 745720,
+    "memory_reads": 129843,
+    "memory_writes": 1394,
+    "peripheral_accesses": 749349,
     "exceptions": 0,
     "pc_samples": [
+      {
+        "pc": 134223972,
+        "count": 547,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223974,
+        "count": 547,
+        "symbol": "firmware_stm32f072_smoke::wait_level"
+      },
       {
         "pc": 134223988,
         "count": 547,
@@ -922,72 +949,62 @@
         "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
-        "pc": 134224004,
+        "pc": 134223992,
+        "count": 547,
+        "symbol": "firmware_stm32f072_smoke::wait_level"
+      },
+      {
+        "pc": 134224174,
+        "count": 547,
+        "symbol": "firmware_stm32f072_smoke::wait_level"
+      },
+      {
+        "pc": 134224298,
         "count": 547,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134224006,
-        "count": 547,
-        "symbol": "firmware_stm32f072_smoke::wait_level"
-      },
-      {
-        "pc": 134224008,
-        "count": 547,
-        "symbol": "firmware_stm32f072_smoke::wait_level"
-      },
-      {
-        "pc": 134224188,
-        "count": 547,
-        "symbol": "firmware_stm32f072_smoke::wait_level"
-      },
-      {
-        "pc": 134224304,
-        "count": 547,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134223994,
+        "pc": 134223978,
         "count": 542,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223992,
+        "pc": 134223976,
         "count": 508,
         "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
-        "pc": 134223996,
+        "pc": 134223980,
         "count": 508,
         "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
-        "pc": 134223998,
+        "pc": 134223982,
         "count": 508,
         "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
-        "pc": 134224000,
+        "pc": 134223984,
         "count": 508,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134224002,
+        "pc": 134223986,
         "count": 508,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134224172,
+        "pc": 134224182,
         "count": 508,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134224180,
+        "pc": 134224190,
         "count": 508,
         "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
-        "pc": 134224312,
+        "pc": 134224306,
         "count": 508,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       }

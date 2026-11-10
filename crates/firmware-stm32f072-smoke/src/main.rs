@@ -225,6 +225,28 @@ fn unpend(irq: u32) {
     wr(NVIC_ICPR0, 1 << irq);
 }
 
+/// Wait briefly for an enabled level source to be reflected in ISPR after a
+/// pending clear or enable write. Each volatile read advances the simulated
+/// core and gives the peripheral/NVIC level path a chance to settle.
+fn wait_pending(irq: u32, want: bool) -> bool {
+    for _ in 0..128 {
+        if pending(irq) == want {
+            return true;
+        }
+    }
+    false
+}
+
+/// Hold a disabled source under observation long enough to catch a stale
+/// pending bit or a level that reasserts while its interrupt enable is clear.
+fn pending_stays(irq: u32, want: bool) -> bool {
+    let mut stayed = true;
+    for _ in 0..16 {
+        stayed &= pending(irq) == want;
+    }
+    stayed
+}
+
 fn uart_init(base: u32) {
     wr(base + U_BRR, 0x45);
     wr(base + U_CR1, (1 << 3) | 1); // TE | UE
@@ -529,13 +551,22 @@ fn max31855_frame(base: u32, port: u32, pin: u32) -> Option<u32> {
     idle.then_some(word)
 }
 
-/// Read a frame with RXNEIE active. Sample the pending line before each DR
-/// read and confirm the final read clears the level while RXNEIE stays on.
-fn max31855_frame_with_irq(base: u32, irq: u32, port: u32, pin: u32) -> Option<(u32, bool, bool)> {
+/// Read a frame with RXNEIE active. The first byte checks IRQ assertion,
+/// re-pending after NVIC clear, masking while RXNE remains set, re-enabling,
+/// and release after the DR read.
+fn max31855_frame_with_irq(
+    base: u32,
+    irq: u32,
+    port: u32,
+    pin: u32,
+) -> Option<(u32, bool, bool, bool, bool, bool)> {
     cs(port, pin, true);
     let mut word = 0u32;
     let mut irq_seen = false;
-    for _ in 0..4 {
+    let mut irq_repended = false;
+    let mut irq_masked = false;
+    let mut irq_unmasked = false;
+    for byte_index in 0..4 {
         if !wait(base + S_SR, SPI_SR_TXE, SPI_SR_TXE) {
             cs(port, pin, false);
             return None;
@@ -545,7 +576,22 @@ fn max31855_frame_with_irq(base: u32, irq: u32, port: u32, pin: u32) -> Option<(
             cs(port, pin, false);
             return None;
         }
-        irq_seen |= pending(irq) && rd(base + S_SR) & SPI_SR_RXNE != 0;
+        let rxne = rd(base + S_SR) & SPI_SR_RXNE != 0;
+        irq_seen |= pending(irq) && rxne;
+        if byte_index == 0 {
+            // RXNE is a level source: clearing NVIC pending while RXNE and
+            // RXNEIE remain asserted must let the line pend again.
+            unpend(irq);
+            irq_repended = wait_pending(irq, true) && rd(base + S_SR) & SPI_SR_RXNE != 0;
+
+            // Masking RXNEIE must suppress the line without consuming DR;
+            // restoring it must expose the still-active source again.
+            wr(base + S_CR2, SPI_CR2_8BIT);
+            unpend(irq);
+            irq_masked = rd(base + S_SR) & SPI_SR_RXNE != 0 && pending_stays(irq, false);
+            wr(base + S_CR2, SPI_CR2_8BIT | (1 << 6)); // RXNEIE
+            irq_unmasked = wait_pending(irq, true) && rd(base + S_SR) & SPI_SR_RXNE != 0;
+        }
         word = (word << 8) | u32::from(rd8(base + S_DR));
     }
     let idle = wait(base + S_SR, SPI_SR_BSY, 0);
@@ -553,7 +599,14 @@ fn max31855_frame_with_irq(base: u32, irq: u32, port: u32, pin: u32) -> Option<(
     let released = !pending(irq)
         && rd(base + S_SR) & (SPI_SR_RXNE | SPI_SR_FRLVL) == 0
         && rd(base + S_CR2) & (1 << 6) != 0;
-    idle.then_some((word, irq_seen, released))
+    idle.then_some((
+        word,
+        irq_seen,
+        irq_repended,
+        irq_masked,
+        irq_unmasked,
+        released,
+    ))
 }
 
 /// Each SPI reads its own device's frame, then verifies the FIFO SPI's TXEIE
@@ -574,11 +627,14 @@ fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) ->
 
     wr(base + S_CR2, SPI_CR2_8BIT | (1 << 6)); // RXNEIE
     let again = max31855_frame_with_irq(base, irq, port, pin);
-    let again_frame = again.map(|(frame, _, _)| frame);
-    let rxne_irq = again.is_some_and(|(_, seen, _)| seen);
-    let rxne_released = again.is_some_and(|(_, _, released)| released);
+    let again_frame = again.map(|(frame, _, _, _, _, _)| frame);
+    let rxne_irq = again.is_some_and(|(_, seen, _, _, _, _)| seen);
+    let rxne_repended = again.is_some_and(|(_, _, repended, _, _, _)| repended);
+    let rxne_masked = again.is_some_and(|(_, _, _, masked, _, _)| masked);
+    let rxne_unmasked = again.is_some_and(|(_, _, _, _, unmasked, _)| unmasked);
+    let rxne_released = again.is_some_and(|(_, _, _, _, _, released)| released);
     let data = frame == want && again_frame == Some(want);
-    let pend = quiet && rxne_irq;
+    let pend = quiet && rxne_irq && rxne_repended && rxne_masked && rxne_unmasked;
     let alone = SPIS
         .iter()
         .all(|&(_, _, other, _, _, _)| other == irq || !pending(other));
@@ -601,6 +657,14 @@ fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) ->
     flag("pend", txe_irq);
     flag("released", txe_released);
     verdict(txe_irq && txe_released);
+    puts(name);
+    puts(" RXNEIE ");
+    flag("asserted", rxne_irq);
+    flag("repended", rxne_repended);
+    flag("masked", rxne_masked);
+    flag("unmasked", rxne_unmasked);
+    flag("released", rxne_released);
+    verdict(rxne_irq && rxne_repended && rxne_masked && rxne_unmasked && rxne_released);
     ok
 }
 

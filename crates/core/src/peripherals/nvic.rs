@@ -22,14 +22,14 @@ pub struct NvicState {
     pub ispr: [AtomicU32; 8],
     pub iabr: [AtomicU32; 8],
     pub ipr: [AtomicU32; 240], // Priority registers (simplified)
-    /// Which ISPR bits were set by a LEVEL source (a peripheral whose
-    /// `irq_line_level()` is `Some(..)`), so the bus can drop them again
-    /// when that line deasserts. On silicon a level-sensitive interrupt's
-    /// pending state follows the line: firmware that clears the status flag
-    /// inside the handler must not be re-entered for the same event. Bits
-    /// set by a software ISPR write are NOT marked here and are never
-    /// auto-cleared — a software pend of a low line is taken once, as on
-    /// hardware.
+    /// Which ISPR bits were set by an asserted LEVEL source (a peripheral
+    /// whose `irq_line_level()` is `Some(..)`). The bus drops them when that
+    /// line deasserts; clearing a still-asserted source through ICPR immediately
+    /// re-pends it. On silicon a level-sensitive interrupt's pending state
+    /// follows the line: firmware that clears the status flag inside the
+    /// handler must not be re-entered for the same event. Bits set by a
+    /// software ISPR write are NOT marked here and are never auto-cleared — a
+    /// software pend of a low line is taken once, as on hardware.
     pub level_pended: [AtomicU32; 8],
 }
 
@@ -38,6 +38,20 @@ impl NvicState {
         let previous = self.ispr[word].fetch_or(mask, Ordering::SeqCst);
         if mask & !previous != 0 && self.sev_on_pend.load(Ordering::Relaxed) {
             self.event_register.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// Clear pending bits, then immediately restore any bit whose level source
+    /// remains asserted. The `level_pended` marker is cleared separately when
+    /// the bus observes that source deasserting.
+    pub fn clear_pending(&self, word: usize, mask: u32) {
+        if word >= self.ispr.len() {
+            return;
+        }
+        self.ispr[word].fetch_and(!mask, Ordering::SeqCst);
+        let active_levels = self.level_pended[word].load(Ordering::SeqCst) & mask;
+        if active_levels != 0 {
+            self.pend(word, active_levels);
         }
     }
 
@@ -100,7 +114,7 @@ impl Nvic {
             let bit = (irq - 16) % 32;
             if idx < 8 {
                 // Clear pending, set active
-                self.state.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
+                self.state.clear_pending(idx, 1 << bit);
                 self.state.iabr[idx].fetch_or(1 << bit, Ordering::SeqCst);
             }
         }
@@ -191,9 +205,10 @@ impl Peripheral for Nvic {
             let real_idx = reg_idx - 0x100 / 4;
             self.state.pend(real_idx, mask);
         } else if (0x180..0x1A0).contains(&offset) {
-            // ICPR: Writing 1 clears the pending bit
+            // ICPR: Writing 1 clears edge/software pending bits. An asserted
+            // level source immediately re-pends, as it does on the NVIC.
             let real_idx = reg_idx - 0x180 / 4;
-            self.state.ispr[real_idx].fetch_and(!mask, Ordering::SeqCst);
+            self.state.clear_pending(real_idx, mask);
         } else if (0x300..0x6BC).contains(&offset) {
             // IPR: Priority registers
             let real_idx = (offset - 0x300) / 4;
@@ -235,5 +250,37 @@ impl Peripheral for Nvic {
             "iser": iser,
             "ispr": ispr,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn icpr_re_pends_an_asserted_level_source() {
+        let state = Arc::new(NvicState::default());
+        let mut nvic = Nvic::new(Arc::clone(&state));
+        let mask = 1 << 6;
+        state.pend(0, mask);
+        state.level_pended[0].store(mask, Ordering::SeqCst);
+
+        nvic.write(0x180, mask as u8).unwrap();
+
+        assert_eq!(state.ispr[0].load(Ordering::SeqCst) & mask, mask);
+        assert_eq!(state.level_pended[0].load(Ordering::SeqCst) & mask, mask);
+    }
+
+    #[test]
+    fn icpr_still_clears_software_pending_bits() {
+        let state = Arc::new(NvicState::default());
+        let mut nvic = Nvic::new(Arc::clone(&state));
+        let mask = 1 << 7;
+        state.pend(0, mask);
+
+        nvic.write(0x180, mask as u8).unwrap();
+
+        assert_eq!(state.ispr[0].load(Ordering::SeqCst) & mask, 0);
+        assert_eq!(state.level_pended[0].load(Ordering::SeqCst) & mask, 0);
     }
 }

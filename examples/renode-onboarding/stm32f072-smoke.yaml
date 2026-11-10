@@ -4,7 +4,8 @@
 # pad edges through the SYSCFG port mux on the grouped vectors (PF = code 5),
 # and TIM1/2/3/6/7/14/15/16/17 width, counting and update interrupt on the
 # right NVIC line; SPI1/SPI2 (FIFO SPI, 8-bit frames by byte access) each
-# reading its own MAX31855 frame (polled, then SPI1 again through DMA1
+# reading its own MAX31855 frame with TXEIE and RXNEIE assertion, NVIC
+# re-pending, mask/re-enable, and release checks (then SPI1 through DMA1
 # channels 2/3 on the shared channel-2/3 line), I2C1 reading a TMP102 plus
 # RXIE and a NACK on the combined line; two MAX31855s sharing SPI1 behind
 # GPIO chip selects PA4 / PB0; CRC-32 with the INIT reload; and the ADC
@@ -70,8 +71,10 @@ assertions:
       - "exti pads idle=1 presses=1 pa_quiet=1 pf1=1 pc13=1 ok"
       - "spi1 frame=0x01901600 ds=1 data=1 pend=1 alone=1 released=1 ok"
       - "spi1 TXEIE pend=1 released=1 ok"
+      - "spi1 RXNEIE asserted=1 repended=1 masked=1 unmasked=1 released=1 ok"
       - "spi2 frame=0x06401600 ds=1 data=1 pend=1 alone=1 released=1 ok"
       - "spi2 TXEIE pend=1 released=1 ok"
+      - "spi2 RXNEIE asserted=1 repended=1 masked=1 unmasked=1 released=1 ok"
       - "dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok"
       - "i2c1 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok"
       - "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok"
