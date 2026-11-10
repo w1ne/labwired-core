@@ -67,7 +67,7 @@ captured `NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9`; LD2 exceeded the
 
 ## Model boundary
 
-The profile declares only RCC, AFIO, GPIOA, GPIOB, USART2, and I2C1. It exercises the USART2 VCP, LD2, and one BME280 `CHIP_ID` register read through the board's PB8/PB9 route. The profile does not claim the Nucleo's button or the other STM32F103 peripherals. The BME280 model provides deterministic register responses; environmental conversion timing and changes in temperature, pressure, and humidity are outside this smoke.
+The profile declares RCC, AFIO, GPIOA, GPIOB, USART2, I2C1, and the Cortex-M3 SysTick core timer. The PR-run core-timer differential loads this exact profile and compares SysTick interrupt execution with the legacy walk; it does not extend the sensor smoke claims. It exercises the USART2 VCP, LD2, and one BME280 `CHIP_ID` register read through the board's PB8/PB9 route. The profile does not claim the Nucleo's button or the other STM32F103 peripherals. The BME280 model provides deterministic register responses; environmental conversion timing and changes in temperature, pressure, and humidity are outside this smoke.
 
 ## Vendor status and source documents
 

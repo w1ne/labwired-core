@@ -87,14 +87,14 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
             // IRAM).  `configure_xtensa` defaults to S3 wiring, which
             // leaves the ESP32 addresses unmapped and trips
             // MemoryViolation in the smoke validator.  Dispatch on the
-            // chip name so each yaml is validated against its own
-            // builder.
-            if chip.name == "esp32" {
-                let cpu = system::xtensa::configure_xtensa_esp32(&mut bus);
+            // canonical family selector so the DevKitC profiles use the
+            // classic map and S3 variants use the S3 map, just like the CLI.
+            if chip.is_esp32s3() {
+                let cpu = system::xtensa::configure_xtensa(&mut bus);
                 let mut machine = Machine::new(cpu, bus);
                 validate_registers(&mut machine, &chip)?;
             } else {
-                let cpu = system::xtensa::configure_xtensa(&mut bus);
+                let cpu = system::xtensa::configure_xtensa_esp32(&mut bus);
                 let mut machine = Machine::new(cpu, bus);
                 validate_registers(&mut machine, &chip)?;
             }
