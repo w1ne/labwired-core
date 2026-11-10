@@ -1,0 +1,16 @@
+# Raspberry Pi Pico 2 W (RP2350) with an Adafruit BME280 STEMMA QT breakout.
+# This narrow profile exercises only RP2350 I2C0 and the attached sensor.
+# CYW43439 Wi-Fi/Bluetooth, its WL_GPIO0 LED, USB, and board power are not modeled.
+name: "rp2350-pico2w-bme280"
+chip: "../chips/rp2350.yaml"
+cpu_hz: 150_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GP4"
+      scl: "GP5"
+    config:
+      i2c_address: 0x77
