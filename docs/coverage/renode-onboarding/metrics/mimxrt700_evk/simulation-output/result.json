@@ -96,10 +96,16 @@
     },
     {
       "assertion": {
+        "uart_contains": "vtor=000001ff"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_ordered": [
           "flexcomm0 pselid=00103070->00103071->00103079",
           "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001",
-          "pass=0000ffff"
+          "pass=0001ffff"
         ]
       },
       "passed": true
@@ -119,7 +125,7 @@
       "assertion": {
         "memory_value": {
           "address": 536870924,
-          "expected_value": 1879113727,
+          "expected_value": 1879179263,
           "mask": null,
           "size": 4
         }
@@ -348,6 +354,17 @@
     },
     {
       "assertion": {
+        "memory_value": {
+          "address": 536871028,
+          "expected_value": 511,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -356,11 +373,11 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      1879113727,
+      1879179263,
       1074855956,
       102,
       15,
-      65535,
+      131071,
       323,
       8912896,
       542638064,
@@ -368,12 +385,12 @@
       67174403,
       536870928,
       1074855956,
-      0,
-      542638000,
-      939571559,
-      939571680
+      3758157076,
+      542637992,
+      939574847,
+      939574968
     ],
-    "pc": 939571680,
+    "pc": 939574968,
     "xpsr": 2701131776,
     "primask": false,
     "pending_exceptions": 0,
@@ -386,7 +403,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "207da7a8e72e0d8b83b87bf67cf878a11c8569138ae63c814b6ed7f983d3e855",
+  "firmware_hash": "d632b4a5dcbabf4332c24a26271ad6b8265c304a80b727cebd81332aadb0c611",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml",
@@ -522,38 +539,50 @@
         "end_cycle": 14110000
       },
       {
-        "text": "rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=38000eee frame_xpsr=01000000 padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8 unaligned_context=0000001f unaligned_xpsr=21000000 unaligned_sp=200000dc msp_context=000003ff msp_r0=9bdf1357 msp_xpsr=21000200 msp_sp=200000d8 msp_after=200000fc msp_restored=2057fef8 msp_pad=00000000 faultmask=0000",
+        "text": "",
         "cycle_lo": 14110000,
         "cycle": 14120000,
-        "end_cycle": 20540000,
+        "end_cycle": 14140000
+      },
+      {
+        "text": "vtor=000001ff source=00000000 ram=20001000 vector=3800c6bd irq=00000017 active=00000080 restored=00000000",
+        "cycle_lo": 14140000,
+        "cycle": 14150000,
+        "end_cycle": 15460000
+      },
+      {
+        "text": "rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=38000ef4 frame_xpsr=01000000 padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8 unaligned_context=0000001f unaligned_xpsr=21000000 unaligned_sp=200000dc msp_context=000003ff msp_r0=9bdf1357 msp_xpsr=21000200 msp_sp=200000d8 msp_after=200000fc msp_restored=2057fef8 msp_pad=00000000 faultmask=0000",
+        "cycle_lo": 15460000,
+        "cycle": 15470000,
+        "end_cycle": 22060000,
         "text_truncated": true
       },
       {
         "text": "flexcomm0 pselid=00103070->00103071->00103079",
-        "cycle_lo": 20550000,
-        "cycle": 20560000,
-        "end_cycle": 21130000
+        "cycle_lo": 22070000,
+        "cycle": 22080000,
+        "end_cycle": 22640000
       },
       {
         "text": "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001",
-        "cycle_lo": 21130000,
-        "cycle": 21140000,
-        "end_cycle": 22140000
+        "cycle_lo": 22650000,
+        "cycle": 22660000,
+        "end_cycle": 23660000
       },
       {
-        "text": "pass=0000ffff",
-        "cycle_lo": 22140000,
-        "cycle": 22150000
+        "text": "pass=0001ffff",
+        "cycle_lo": 23660000,
+        "cycle": 23670000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 48236,
+    "text_bytes": 51568,
     "data_bytes": 0,
     "bss_bytes": 468,
-    "flash_used_bytes": 48236,
+    "flash_used_bytes": 51568,
     "ram_static_bytes": 468,
     "flash_total_bytes": 134217728,
     "ram_total_bytes": 5767168,
@@ -567,15 +596,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 5766700,
-    "main_stack_high_water_bytes": 260,
-    "main_stack_free_min_bytes": 5766360,
+    "main_stack_high_water_bytes": 84,
+    "main_stack_free_min_bytes": 5765336,
     "main_stack_base": 536871380,
     "main_stack_top": 542638080,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 5766700,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 5766360,
+    "heap_free_min_bytes": 5765336,
     "heap_base": 536871380,
     "heap_top": 542638080
   },
@@ -583,91 +612,96 @@
     "cycles": 24000000,
     "instructions": 24000000,
     "steps_executed": 24000000,
-    "memory_reads": 24304,
-    "memory_writes": 1030,
-    "peripheral_accesses": 7435737,
+    "memory_reads": 25983,
+    "memory_writes": 1310,
+    "peripheral_accesses": 7941884,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 939571680,
-        "count": 6602,
+        "pc": 939574968,
+        "count": 665,
         "symbol": "firmware_mimxrt700_evk_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 939571936,
+        "pc": 939575356,
+        "count": 664,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939575086,
+        "count": 627,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939575268,
         "count": 626,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 939571754,
-        "count": 624,
+        "pc": 939575044,
+        "count": 625,
         "symbol": "firmware_mimxrt700_evk_smoke::putc"
       },
       {
-        "pc": 939571788,
-        "count": 624,
+        "pc": 939575340,
+        "count": 625,
         "symbol": "firmware_mimxrt700_evk_smoke::putc"
       },
       {
-        "pc": 939571928,
+        "pc": 939575174,
+        "count": 589,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939575076,
         "count": 587,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939575124,
+        "count": 586,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939575178,
+        "count": 586,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939575184,
+        "count": 586,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939575078,
+        "count": 585,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 939571748,
+        "pc": 939575166,
+        "count": 585,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939575314,
         "count": 585,
         "symbol": "firmware_mimxrt700_evk_smoke::putc"
       },
       {
-        "pc": 939571966,
-        "count": 585,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 939571974,
-        "count": 585,
-        "symbol": "firmware_mimxrt700_evk_smoke::putc"
-      },
-      {
-        "pc": 939571796,
+        "pc": 939575224,
         "count": 549,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 939571806,
+        "pc": 939575222,
         "count": 548,
         "symbol": "firmware_mimxrt700_evk_smoke::putc"
-      },
-      {
-        "pc": 939571718,
-        "count": 547,
-        "symbol": "firmware_mimxrt700_evk_smoke::putc"
-      },
-      {
-        "pc": 939571740,
-        "count": 547,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 939571920,
-        "count": 547,
-        "symbol": "firmware_mimxrt700_evk_smoke::putc"
-      },
-      {
-        "pc": 939571982,
-        "count": 547,
-        "symbol": "firmware_mimxrt700_evk_smoke::putc"
-      },
-      {
-        "pc": 939571984,
-        "count": 547,
-        "symbol": "firmware_mimxrt700_evk_smoke::putc"
-      },
-      {
-        "pc": 939571852,
-        "count": 546,
-        "symbol": "firmware_mimxrt700_evk_smoke::putc"
       }
-    ]
+    ],
+    "stalled_poll": {
+      "peripheral": "flexcomm0",
+      "offset": 20,
+      "accesses": 8233
+    }
   }
 }

@@ -8,6 +8,10 @@ use panic_halt as _;
 
 const RESULT: *mut u32 = 0x2000_0008 as *mut u32;
 const PASS: *mut u32 = 0x2000_000C as *mut u32;
+const VTOR_CONTEXT: *mut u32 = 0x2000_0074 as *mut u32;
+const VTOR_IRQ_HIT: *mut u32 = 0x2000_0078 as *mut u32;
+const VTOR_IRQ_IPSR: *mut u32 = 0x2000_007C as *mut u32;
+const VTOR_IRQ_ACTIVE: *mut u32 = 0x2000_0080 as *mut u32;
 const EXCEPTION_CONTEXT: *mut u32 = 0x2000_0010 as *mut u32;
 const EXCEPTION_FRAME_R0: *mut u32 = 0x2000_0014 as *mut u32;
 const EXCEPTION_FRAME_PC: *mut u32 = 0x2000_0018 as *mut u32;
@@ -30,6 +34,7 @@ const MSP_EXCEPTION_RESTORED: *mut u32 = 0x2000_0058 as *mut u32;
 const MSP_EXCEPTION_PADDING: *mut u32 = 0x2000_005C as *mut u32;
 
 const FLEXCOMM0: usize = 0x4011_0000;
+const SCB_VTOR: usize = 0xE000_ED08;
 const SCB_CCR: usize = 0xE000_ED14;
 const SCB_CCR_STKALIGN: u32 = 1 << 9;
 const NVIC_ISER0: usize = 0xE000_E100;
@@ -130,6 +135,9 @@ static FAULTMASK_ACTIVE_DURING: AtomicU32 = AtomicU32::new(0);
 static FAULTMASK_PENDING_DURING: AtomicU32 = AtomicU32::new(0);
 static FAULTMASK_EQUAL_ORDER: AtomicU32 = AtomicU32::new(0);
 static FAULTMASK_LOWER_ORDER: AtomicU32 = AtomicU32::new(0);
+const VECTOR_TABLE_WORDS: usize = 256;
+const FLEXCOMM0_VECTOR_INDEX: usize = 16 + FLEXCOMM0_IRQN as usize;
+const RAM_VECTOR_BASE: u32 = 0x2000_1000;
 
 const PSP_STACK_WORDS: usize = 64;
 static mut PSP_STACK: [u32; PSP_STACK_WORDS] = [0; PSP_STACK_WORDS];
@@ -1296,6 +1304,102 @@ fn hex(v: u32) {
     }
 }
 
+/// A dedicated vector-table entry used to prove that exception dispatch reads
+/// the active SCB.VTOR table after firmware relocates it into SRAM.
+unsafe extern "C" fn relocated_flexcomm0_handler() {
+    let ipsr: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {ipsr}, IPSR",
+            ipsr = out(reg) ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        write_volatile(VTOR_IRQ_IPSR, ipsr);
+        write_volatile(
+            VTOR_IRQ_ACTIVE,
+            read_volatile(NVIC_IABR0 as *const u32) & FLEXCOMM0_IRQ_BIT,
+        );
+        write_volatile(NVIC_ICER0 as *mut u32, FLEXCOMM0_IRQ_BIT);
+        write_volatile(VTOR_IRQ_HIT, 1);
+    }
+}
+
+/// Install IRQ 7 in an aligned SRAM vector table and verify the next dispatch
+/// uses that entry before restoring the original VTOR value.
+fn exercise_vtor_relocation() -> bool {
+    unsafe {
+        write_volatile(VTOR_IRQ_HIT, 0);
+        write_volatile(VTOR_IRQ_IPSR, 0);
+        write_volatile(VTOR_IRQ_ACTIVE, 0);
+        write_volatile(NVIC_ICER0 as *mut u32, FLEXCOMM0_IRQ_BIT);
+        write_volatile(NVIC_ICPR0 as *mut u32, FLEXCOMM0_IRQ_BIT);
+    }
+
+    let source_vtor = unsafe { read_volatile(SCB_VTOR as *const u32) };
+    let ram_table = RAM_VECTOR_BASE as *mut u32;
+    let ram_vtor = ram_table as u32;
+    unsafe {
+        for index in 0..VECTOR_TABLE_WORDS {
+            write_volatile(ram_table.add(index), 0);
+        }
+    }
+    let relocated_irq_vector = (relocated_flexcomm0_handler as usize as u32) | 1;
+    unsafe {
+        write_volatile(ram_table.add(FLEXCOMM0_VECTOR_INDEX), relocated_irq_vector);
+        write_volatile(SCB_VTOR as *mut u32, ram_vtor);
+    }
+    let vtor_after_write = unsafe { read_volatile(SCB_VTOR as *const u32) };
+    let installed_irq_vector = unsafe { read_volatile(ram_table.add(FLEXCOMM0_VECTOR_INDEX)) };
+
+    unsafe {
+        write_volatile(NVIC_ISPR0 as *mut u32, FLEXCOMM0_IRQ_BIT);
+        write_volatile(NVIC_ISER0 as *mut u32, FLEXCOMM0_IRQ_BIT);
+    }
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(VTOR_IRQ_HIT) } != 0 {
+            break;
+        }
+        unsafe { core::arch::asm!("nop", options(nomem, nostack)) };
+    }
+    unsafe {
+        write_volatile(NVIC_ICER0 as *mut u32, FLEXCOMM0_IRQ_BIT);
+        write_volatile(NVIC_ICPR0 as *mut u32, FLEXCOMM0_IRQ_BIT);
+    }
+    let active_after = unsafe { read_volatile(NVIC_IABR0 as *const u32) } & FLEXCOMM0_IRQ_BIT;
+    let pending_after = unsafe { read_volatile(NVIC_ISPR0 as *const u32) } & FLEXCOMM0_IRQ_BIT;
+    unsafe { write_volatile(SCB_VTOR as *mut u32, source_vtor) };
+    let restored_vtor = unsafe { read_volatile(SCB_VTOR as *const u32) };
+
+    let context = u32::from(source_vtor & 0x3FF == 0)
+        | (u32::from(ram_vtor & 0x3FF == 0) << 1)
+        | (u32::from(installed_irq_vector == relocated_irq_vector) << 2)
+        | (u32::from(vtor_after_write == ram_vtor) << 3)
+        | (u32::from(unsafe { read_volatile(VTOR_IRQ_HIT) } == 1) << 4)
+        | (u32::from(unsafe { read_volatile(VTOR_IRQ_IPSR) } == FLEXCOMM0_EXCEPTION_NUMBER) << 5)
+        | (u32::from(unsafe { read_volatile(VTOR_IRQ_ACTIVE) } == FLEXCOMM0_IRQ_BIT) << 6)
+        | (u32::from(active_after == 0 && pending_after == 0) << 7)
+        | (u32::from(restored_vtor == source_vtor) << 8);
+    unsafe { write_volatile(VTOR_CONTEXT, context) };
+
+    puts("\r\nvtor=");
+    hex(context);
+    puts(" source=");
+    hex(source_vtor);
+    puts(" ram=");
+    hex(ram_vtor);
+    puts(" vector=");
+    hex(relocated_irq_vector);
+    puts(" irq=");
+    hex(unsafe { read_volatile(VTOR_IRQ_IPSR) });
+    puts(" active=");
+    hex(unsafe { read_volatile(VTOR_IRQ_ACTIVE) });
+    puts(" restored=");
+    hex(restored_vtor);
+    puts("\r\n");
+
+    context == 0x1FF
+}
+
 /// Exercise the imported LPUART RX FIFO, LP_FLEXCOMM receive status, CPU0
 /// NVIC pending line, and exception delivery (FLEXCOMM0 IRQ 7).
 fn smoke_lpuart_rx() -> bool {
@@ -1361,6 +1465,7 @@ fn smoke_lpuart_rx() -> bool {
     let irq_basepri_masking = exercise_basepri_masking();
     let irq_primask_masking = exercise_primask_masking();
     let irq_faultmask_masking = exercise_faultmask_masking();
+    let irq_vtor_relocation = exercise_vtor_relocation();
     let ok = receiver_off
         && queued
         && rx_masked
@@ -1376,6 +1481,7 @@ fn smoke_lpuart_rx() -> bool {
         && irq_basepri_masking
         && irq_primask_masking
         && irq_faultmask_masking
+        && irq_vtor_relocation
         && first == b'R' as u32
         && second_still_queued
         && rx_masked_with_data
@@ -1450,6 +1556,8 @@ fn smoke_lpuart_rx() -> bool {
     hex(unsafe { read_volatile(MSP_EXCEPTION_PADDING) });
     puts(" faultmask=");
     hex(unsafe { read_volatile(FAULTMASK_CONTEXT) });
+    puts(" vtor=");
+    hex(unsafe { read_volatile(VTOR_CONTEXT) });
     puts(if ok { " ok\r\n" } else { " FAIL\r\n" });
     ok
 }
@@ -1536,6 +1644,9 @@ fn main() -> ! {
     }
     if unsafe { read_volatile(FAULTMASK_CONTEXT) } == 0x3FF {
         pass |= 1 << 15;
+    }
+    if unsafe { read_volatile(VTOR_CONTEXT) } == 0x1FF {
+        pass |= 1 << 16;
     }
 
     puts("flexcomm0 pselid=");

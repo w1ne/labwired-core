@@ -3,11 +3,11 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1879113727,
+      1879179263,
       1074855956,
       102,
       15,
-      65535,
+      131071,
       323,
       8912896,
       542638064,
@@ -15,12 +15,12 @@
       67174403,
       536870928,
       1074855956,
-      0,
-      542638000,
-      939571559,
-      939571680
+      3758157076,
+      542637992,
+      939574847,
+      939574968
     ],
-    "pc": 939571680,
+    "pc": 939574968,
     "xpsr": 2701131776,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "207da7a8e72e0d8b83b87bf67cf878a11c8569138ae63c814b6ed7f983d3e855",
+  "firmware_hash": "d632b4a5dcbabf4332c24a26271ad6b8265c304a80b727cebd81332aadb0c611",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml",
