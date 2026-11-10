@@ -216,6 +216,17 @@ fn check_uart_tc_irq() {
         }
     }
 
+    // TC stays high until another TDR write. Clearing NVIC pending while
+    // TCIE remains enabled must therefore let the USART level re-pend IRQ 39.
+    unsafe { write_volatile(NVIC_ICPR1, USART3_IRQ_BIT) };
+    let mut tc_irq_reasserted = false;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR1) } & USART3_IRQ_BIT != 0 {
+            tc_irq_reasserted = true;
+            break;
+        }
+    }
+
     unsafe {
         write_volatile(USART_CR1, cr1);
         write_volatile(NVIC_ICPR1, USART3_IRQ_BIT);
@@ -228,8 +239,8 @@ fn check_uart_tc_irq() {
         }
     }
 
-    if tc_irq_isolated && tc_irq_asserted && tc_irq_released {
-        send(b"usart3 tc_irq=isolated,asserted,released ok\r\n");
+    if tc_irq_isolated && tc_irq_asserted && tc_irq_reasserted && tc_irq_released {
+        send(b"usart3 tc_irq=isolated,asserted,reasserted,released ok\r\n");
     } else {
         send(b"usart3 tc_irq=fail fail\r\n");
     }
