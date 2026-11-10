@@ -1,13 +1,19 @@
-[2m2026-11-09T05:42:49.235231Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32l071.yaml
-[2m2026-11-09T05:42:49.303572Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x80000c1
+2026-11-10T15:16:21.851668Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32l071.yaml
+2026-11-10T15:16:21.911165Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
 labwired-cli test: idle_ff=on (event_scheduler=on)
-[2m2026-11-09T05:42:49.307443Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 25 applied
-[2m2026-11-09T05:42:49.307466Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: temperature = 100 applied
-[2m2026-11-09T05:42:49.307473Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: temperature = 50 applied
-[2m2026-11-09T05:42:50.202023Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
-[2m2026-11-09T05:42:50.297474Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
-[2m2026-11-09T05:42:50.489724Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
-[2m2026-11-09T05:42:50.634685Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
-[2m2026-11-09T05:42:50.831376Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
-[2m2026-11-09T05:42:50.975444Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
-PASS  6/6 checks · stm32l071-smoke · 4000000 steps · 2.42s
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-10T15:16:21.914121Z  INFO labwired_cli::execute: stimulus: position = 25 applied
+2026-11-10T15:16:21.914135Z  INFO labwired_cli::execute: stimulus: temperature = 100 applied
+2026-11-10T15:16:21.914140Z  INFO labwired_cli::execute: stimulus: temperature = 50 applied
+2026-11-10T15:16:22.233025Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T15:16:22.247359Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T15:16:22.277774Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T15:16:22.351052Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T15:16:22.383693Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T15:16:22.456190Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T15:16:22.534647Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart1'
+2026-11-10T15:16:22.534672Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-10T15:16:22.534676Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart4'
+2026-11-10T15:16:22.534679Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart5'
+2026-11-10T15:16:22.534681Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'lpuart1'
+PASS  6/6 checks · stm32l071-smoke · 4000000 steps · 0.95s

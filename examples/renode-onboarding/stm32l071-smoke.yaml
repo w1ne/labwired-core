@@ -1,6 +1,7 @@
 # Cortex-M0+ smoke against the imported STM32L071xZ profile: RCC reset state
 # and an enforced clock gate (GPIOH), USART1/2/4/5 and LPUART1 TX and TXE
-# interrupts each on its own line (USART4/5 on the shared 14), GPIOA-E/H
+# interrupts, then start-injected RX gating/data/RXNE interrupts on all five
+# UARTs (USART4/5 share line 14), GPIOA-E/H
 # reset values and set/reset, EXTI software and pad edges through the
 # SYSCFG port mux on the grouped vectors (PH = code 5), TIM2/3/6/7/21/22
 # width, counting and update interrupt on the right NVIC line; SPI1/SPI2
@@ -23,6 +24,24 @@ inputs:
   system: "../../configs/systems/onboarding/stm32l071.yaml"
 limits:
   max_steps: 4000000
+uart_injections:
+  # Queue RX only after the earlier SPI/I2C checks have completed; the bytes
+  # remain pending on the wire until the L071 receive-enable check runs.
+  - uart: usart1
+    bytes: "RS"
+    trigger: !after_cycles { cycles: 3120000 }
+  - uart: usart2
+    bytes: "RS"
+    trigger: !after_cycles { cycles: 3120000 }
+  - uart: usart4
+    bytes: "RS"
+    trigger: !after_cycles { cycles: 3120000 }
+  - uart: usart5
+    bytes: "RS"
+    trigger: !after_cycles { cycles: 3120000 }
+  - uart: lpuart1
+    bytes: "RS"
+    trigger: !after_cycles { cycles: 3120000 }
 stimuli:
   - target: { component: "pot_in9", channel: "position" }
     trigger: !after_cycles { cycles: 1000 }
@@ -67,7 +86,9 @@ assertions:
       - "tim22 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
       - "exti pads idle=1 presses=1 pa_quiet=1 ph1=1 pc13=1 ok"
       - "spi1 frame=0x01901600 data=1 pend=1 alone=1 released=1 ok"
+      - "spi1 TXEIE pend=1 released=1 ok"
       - "spi2 frame=0x06401600 data=1 pend=1 alone=1 released=1 ok"
+      - "spi2 TXEIE pend=1 released=1 ok"
       - "dma1 spi1 frame=0x01901600 unselected=1 cselr=1 data=1 flags=1 pend=1 alone=1 released=1 ok"
       - "dma1 spi2 frame=0x06401600 unselected=1 cselr=1 data=1 flags=1 pend=1 alone=1 released=1 ok"
       - "i2c1 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok"
@@ -76,11 +97,16 @@ assertions:
       - "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok"
       - "crc word=0xDF8A8A2B seed=1 std=1 init=1 ok"
       - "adc in1=0x000007FF ts=0x0000026D cal=1 ready=1 seq=1 eos=1 pend=1 released=1 dma=1 ovr=1 awd=1 off=1 ok"
-      - "summary 0x714FFFFF"
+      - "usart rx u1 re_off=1 ue_off=1 data=0x00005253 rxne_irq=isolated,asserted,reasserted,released ok"
+      - "usart rx u2 re_off=1 ue_off=1 data=0x00005253 rxne_irq=isolated,asserted,reasserted,released ok"
+      - "usart rx u4 re_off=1 ue_off=1 data=0x00005253 rxne_irq=isolated,asserted,reasserted,released ok"
+      - "usart rx u5 re_off=1 ue_off=1 data=0x00005253 rxne_irq=isolated,asserted,reasserted,released ok"
+      - "usart rx lp1 re_off=1 ue_off=1 data=0x00005253 rxne_irq=isolated,asserted,reasserted,released ok"
+      - "summary 0x71CFFFFF"
       - "DONE"
   - memory_value:
       address: 0x20001000
-      expected_value: 0x714FFFFF
+      expected_value: 0x71CFFFFF
       size: 4
   - gpio_edges:
       pin: "gpioh:0"

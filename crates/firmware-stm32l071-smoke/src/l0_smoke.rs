@@ -14,8 +14,9 @@
 //!
 //! Interrupts stay disabled in the NVIC: each check reads the line's
 //! ISPR bit, which proves the block reaches the right NVIC input without a
-//! device vector table. Every check prints one line and sets one bit of the
-//! summary word at `SUMMARY`.
+//! device vector table. SPI checks sample TXE/RXNE IRQ levels before their
+//! sources clear. Every check prints one line and sets one bit of the summary
+//! word at `SUMMARY`.
 
 use core::arch::asm;
 use core::ptr::{read_volatile, write_volatile};
@@ -59,8 +60,14 @@ const LPUART1: u32 = 0x4000_4800;
 const U_CR1: u32 = 0x00;
 const U_BRR: u32 = 0x0C;
 const U_ISR: u32 = 0x1C;
+const U_RDR: u32 = 0x24;
 const U_TDR: u32 = 0x28;
+const USART_CR1_UE: u32 = 1 << 0;
+const USART_CR1_RE: u32 = 1 << 2;
+const USART_CR1_TE: u32 = 1 << 3;
+const USART_CR1_RXNEIE: u32 = 1 << 5;
 const USART_ISR_TXE: u32 = 1 << 7;
+const USART_ISR_RXNE: u32 = 1 << 5;
 const USART_CR1_TXEIE: u32 = 1 << 7;
 
 /// (name, base, NVIC line) — `stm32l07xxx.h` USARTx_IRQn; USART4/5 share
@@ -357,6 +364,116 @@ fn check_usart_irqs() -> bool {
     ok
 }
 
+/// Start-injected bytes remain on the wire until both UE and RE are set.
+/// Each L071 USART then exposes RXNE/data and its RXNEIE level on the
+/// configured NVIC line; USART4 and USART5 share line 14.
+fn check_usart_rx_gates() -> bool {
+    let mut ok = true;
+    for &(name, base, irq) in &USARTS {
+        unpend(irq);
+        wr(base + U_CR1, USART_CR1_UE | USART_CR1_TE);
+        let re_off = rd(base + U_ISR) & USART_ISR_RXNE == 0 && !pending(irq);
+
+        wr(base + U_CR1, USART_CR1_RE | USART_CR1_TE);
+        let ue_off = rd(base + U_ISR) & USART_ISR_RXNE == 0 && !pending(irq);
+
+        wr(base + U_CR1, USART_CR1_UE | USART_CR1_RE | USART_CR1_TE);
+        let mut first_ready = false;
+        for _ in 0..1_000_000 {
+            if rd(base + U_ISR) & USART_ISR_RXNE != 0 {
+                first_ready = true;
+                break;
+            }
+        }
+        let first = if first_ready {
+            rd(base + U_RDR) & 0xFF
+        } else {
+            0
+        };
+        let irq_isolated = first_ready
+            && USARTS
+                .iter()
+                .all(|&(_, _, other)| other == irq || !pending(other));
+
+        wr(
+            base + U_CR1,
+            USART_CR1_UE | USART_CR1_RE | USART_CR1_TE | USART_CR1_RXNEIE,
+        );
+        let mut irq_asserted = false;
+        for _ in 0..10_000 {
+            if pending(irq)
+                && USARTS
+                    .iter()
+                    .all(|&(_, _, other)| other == irq || !pending(other))
+            {
+                irq_asserted = true;
+                break;
+            }
+        }
+
+        let second_still_pending = first_ready && rd(base + U_ISR) & USART_ISR_RXNE != 0;
+        unpend(irq);
+        let mut irq_reasserted = false;
+        for _ in 0..10_000 {
+            if pending(irq)
+                && USARTS
+                    .iter()
+                    .all(|&(_, _, other)| other == irq || !pending(other))
+            {
+                irq_reasserted = true;
+                break;
+            }
+        }
+
+        let mut second = 0;
+        let mut second_ready = false;
+        for _ in 0..1_000_000 {
+            if rd(base + U_ISR) & USART_ISR_RXNE != 0 {
+                second = rd(base + U_RDR) & 0xFF;
+                second_ready = true;
+                break;
+            }
+        }
+        let rxne_cleared = rd(base + U_ISR) & USART_ISR_RXNE == 0;
+        unpend(irq);
+        let mut irq_released = true;
+        for _ in 0..10_000 {
+            if pending(irq) {
+                irq_released = false;
+                break;
+            }
+        }
+        wr(base + U_CR1, USART_CR1_UE | USART_CR1_RE | USART_CR1_TE);
+        unpend(irq);
+
+        let data = first == b'R' as u32 && second == b'S' as u32;
+        let irq_ok = irq_isolated
+            && irq_asserted
+            && second_still_pending
+            && irq_reasserted
+            && rxne_cleared
+            && irq_released;
+        let this = re_off && ue_off && first_ready && second_ready && data && irq_ok;
+        puts("usart rx ");
+        puts(name);
+        puts(" re_off=");
+        puts(if re_off { "1 " } else { "0 " });
+        puts("ue_off=");
+        puts(if ue_off { "1 " } else { "0 " });
+        puts("data=");
+        hex((first << 8) | second);
+        puts(" rxne_irq=");
+        puts(if irq_ok {
+            "isolated,asserted,reasserted,released "
+        } else {
+            "fail "
+        });
+        verdict(this);
+        ok &= this;
+    }
+    ok
+}
+
 /// RM0376 reset values: the SWD pads on port A, every other pad analog
 /// (MODER = 0xFFFFFFFF); set/reset through BSRR/BRR on port H.
 fn check_gpio() -> bool {
@@ -573,25 +690,57 @@ fn max31855_frame(base: u32, port: u32, pin: u32) -> Option<u32> {
     idle.then_some(word)
 }
 
-/// Each SPI reads its own device's frame twice — polled, then with RXNEIE,
-/// which must pend the SPI's own NVIC line and no other SPI's.
+/// Like `max31855_frame`, but sample RXNE's IRQ level before reading each
+/// byte; reading DR clears RXNE on the classic STM32 SPI.
+fn max31855_frame_with_irq(base: u32, irq: u32, port: u32, pin: u32) -> Option<(u32, bool)> {
+    cs(port, pin, true);
+    let mut word = 0u32;
+    let mut irq_seen = false;
+    for _ in 0..4 {
+        if !wait(base + S_SR, SPI_SR_TXE, SPI_SR_TXE) {
+            cs(port, pin, false);
+            return None;
+        }
+        wr(base + S_DR, 0);
+        if !wait(base + S_SR, SPI_SR_RXNE, SPI_SR_RXNE) {
+            cs(port, pin, false);
+            return None;
+        }
+        irq_seen |= pending(irq) && rd(base + S_SR) & SPI_SR_RXNE != 0;
+        word = (word << 8) | (rd(base + S_DR) & 0xFF);
+    }
+    let idle = wait(base + S_SR, SPI_SR_BSY, 0);
+    cs(port, pin, false);
+    idle.then_some((word, irq_seen))
+}
+
+/// Each SPI reads its frame, checks idle TXEIE and then samples RXNEIE while
+/// each byte remains in DR. The configured NVIC level must assert and release
+/// with those status/enable conditions.
 fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) -> bool {
     cs_output(port, pin);
     spi_enable(base);
     let frame = max31855_frame(base, port, pin).unwrap_or(0xDEAD_BEEF);
+    unpend(irq);
     let quiet = !pending(irq);
 
-    unpend(irq);
+    wr(base + S_CR2, 1 << 7); // TXEIE
+    let txe_irq = rd(base + S_SR) & SPI_SR_TXE != 0 && pending(irq);
+    wr(base + S_CR2, 0);
+    let txe_released = !pending(irq);
+
     wr(base + S_CR2, 1 << 6); // RXNEIE
-    let again = max31855_frame(base, port, pin);
-    let data = frame == want && again == Some(want);
-    let pend = quiet && pending(irq);
+    let again = max31855_frame_with_irq(base, irq, port, pin);
+    let rx_irq = again.is_some_and(|(_, seen)| seen);
+    let again_frame = again.map(|(frame, _)| frame);
+    let data = frame == want && again_frame == Some(want);
+    let pend = quiet && rx_irq;
     let alone = SPIS
         .iter()
         .all(|&(_, _, other, _, _, _)| other == irq || !pending(other));
-    wr(base + S_CR2, 0);
-    unpend(irq);
+    // Reading the final DR cleared the RXNE source while RXNEIE stayed set.
     let released = !pending(irq) && rd(base + S_SR) & SPI_SR_RXNE == 0;
+    wr(base + S_CR2, 0);
 
     puts(name);
     puts(" frame=");
@@ -603,7 +752,13 @@ fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) ->
     flag("released", released);
     let ok = data && pend && alone && released;
     verdict(ok);
-    ok
+    puts(name);
+    puts(" TXEIE ");
+    flag("pend", txe_irq);
+    flag("released", txe_released);
+    let txe_ok = txe_irq && txe_released;
+    verdict(txe_ok);
+    ok && txe_ok
 }
 
 /// Two MAX31855s share SPI1, told apart only by their GPIO chip selects
@@ -1079,6 +1234,9 @@ pub fn run(variant: Variant) -> ! {
     mark(18, check_spi1_shared_cs());
     mark(19, check_crc());
     mark(22, check_adc());
+    if variant == Variant::L071 {
+        mark(23, check_usart_rx_gates());
+    }
     let tag = if variant == Variant::L072 {
         mark(20, check_dac());
         mark(21, check_rng());

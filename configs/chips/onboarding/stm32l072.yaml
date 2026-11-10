@@ -16,9 +16,9 @@
 # clock gates enforced), USART1/2/4/5 and LPUART1 ("v2" layout; USART4/5
 # share line 14), GPIOA-E/H, SYSCFG EXTICR (PH = code 5) + EXTI lines 0..15
 # on the grouped vectors 5/6/7, TIM2/3/6/7/21/22 (16-bit, update line),
-# SPI1/SPI2 (the classic SPI, master), I2C1/2/3 (the "v2" TIMINGR/ISR I2C,
-# master), DMA1 (7 channels on lines 9/10/10/11/11/11/11; SPI requests
-# selected through CSELR) and CRC.
+# SPI1/SPI2 (the classic SPI master, TXEIE/RXNE IRQ levels), I2C1/2/3 (the
+# "v2" TIMINGR/ISR I2C master), DMA1 (7 channels on lines
+# 9/10/10/11/11/11/11; SPI requests selected through CSELR) and CRC.
 # Also the DAC (channels 1/2, software trigger) and the RNG data path
 # (needs AHBENR.RNGEN and a running HSI48; its IE interrupt is not modelled).
 #

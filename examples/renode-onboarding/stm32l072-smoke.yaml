@@ -4,11 +4,11 @@
 # reset values and set/reset, EXTI software and pad edges through the
 # SYSCFG port mux on the grouped vectors (PH = code 5), TIM2/3/6/7/21/22
 # width, counting and update interrupt on the right NVIC line; SPI1/SPI2
-# (classic SPI) each reading its own MAX31855 frame (polled, then through
-# DMA1 channels 2/3 and 4/5, which move nothing until CSELR selects the
-# SPI), I2C1/2/3 each reading its own TMP102 plus RXIE and a NACK on the
-# bus's line; two MAX31855s sharing SPI1 behind GPIO chip selects PA4 /
-# PB0; and CRC-32 with the INIT reload.
+# (classic SPI) each reading its own MAX31855 frame, checking TXEIE and the
+# RXNE IRQ before draining each byte, then through DMA1 channels 2/3 and 4/5,
+# which move nothing until CSELR selects the SPI; I2C1/2/3 each reading its own
+# TMP102 plus RXIE and a NACK on the bus's line; two MAX31855s sharing SPI1
+# behind GPIO chip selects PA4 / PB0; and CRC-32 with the INIT reload.
 # DAC channels 1/2 (direct, dual 8-bit and software-triggered loads) and
 # the HSI48-gated RNG.
 # The two fixture switches (PH1, PC13) are pressed by the stimuli below; the
@@ -69,7 +69,9 @@ assertions:
       - "tim22 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
       - "exti pads idle=1 presses=1 pa_quiet=1 ph1=1 pc13=1 ok"
       - "spi1 frame=0x01901600 data=1 pend=1 alone=1 released=1 ok"
+      - "spi1 TXEIE pend=1 released=1 ok"
       - "spi2 frame=0x06401600 data=1 pend=1 alone=1 released=1 ok"
+      - "spi2 TXEIE pend=1 released=1 ok"
       - "dma1 spi1 frame=0x01901600 unselected=1 cselr=1 data=1 flags=1 pend=1 alone=1 released=1 ok"
       - "dma1 spi2 frame=0x06401600 unselected=1 cselr=1 data=1 flags=1 pend=1 alone=1 released=1 ok"
       - "i2c1 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok"
