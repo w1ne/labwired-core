@@ -50,6 +50,7 @@ const NESTED_CONTEXT: *mut u32 = 0x2000_0060 as *mut u32;
 const DEFERRED_IRQ_BIT: u32 = 1 << 9;
 const DEFERRED_IRQN: i16 = 9;
 const DEFERRED_CONTEXT: *mut u32 = 0x2000_0064 as *mut u32;
+const BASEPRI_CONTEXT: *mut u32 = 0x2000_0068 as *mut u32;
 const LPUART_VERID: usize = 0x00;
 const LPUART_PARAM: usize = 0x04;
 const LPUART_BAUD: usize = 0x10;
@@ -103,6 +104,14 @@ static DEFERRED_OUTER_EXC_RETURN: AtomicU32 = AtomicU32::new(0);
 static DEFERRED_ACTIVE_DURING: AtomicU32 = AtomicU32::new(0);
 static DEFERRED_EQUAL_ORDER: AtomicU32 = AtomicU32::new(0);
 static DEFERRED_LOWER_ORDER: AtomicU32 = AtomicU32::new(0);
+static BASEPRI_SEQUENCE: AtomicU32 = AtomicU32::new(0);
+static BASEPRI_HIGH_IPSR: AtomicU32 = AtomicU32::new(0);
+static BASEPRI_HIGH_EXC_RETURN: AtomicU32 = AtomicU32::new(0);
+static BASEPRI_HIGH_VALUE: AtomicU32 = AtomicU32::new(0);
+static BASEPRI_ACTIVE_DURING: AtomicU32 = AtomicU32::new(0);
+static BASEPRI_PENDING_DURING: AtomicU32 = AtomicU32::new(0);
+static BASEPRI_EQUAL_ORDER: AtomicU32 = AtomicU32::new(0);
+static BASEPRI_LOWER_ORDER: AtomicU32 = AtomicU32::new(0);
 
 const PSP_STACK_WORDS: usize = 64;
 static mut PSP_STACK: [u32; PSP_STACK_WORDS] = [0; PSP_STACK_WORDS];
@@ -813,6 +822,156 @@ fn exercise_deferred_irq_priority() -> bool {
     context == 0x7F
 }
 
+/// BASEPRI allows a priority 0x20 interrupt through while holding priority
+/// 0x80 and 0xC0 pending. Clearing BASEPRI then dispatches the latter two in
+/// priority order, all from Thread mode using MSP.
+fn exercise_basepri_masking() -> bool {
+    IRQ_CASE.store(8, Ordering::Relaxed);
+    BASEPRI_SEQUENCE.store(0, Ordering::Relaxed);
+    BASEPRI_HIGH_IPSR.store(0, Ordering::Relaxed);
+    BASEPRI_HIGH_EXC_RETURN.store(0, Ordering::Relaxed);
+    BASEPRI_HIGH_VALUE.store(0, Ordering::Relaxed);
+    BASEPRI_ACTIVE_DURING.store(0, Ordering::Relaxed);
+    BASEPRI_PENDING_DURING.store(0, Ordering::Relaxed);
+    BASEPRI_EQUAL_ORDER.store(0, Ordering::Relaxed);
+    BASEPRI_LOWER_ORDER.store(0, Ordering::Relaxed);
+
+    let irq_bits = FLEXCOMM0_IRQ_BIT | NESTED_IRQ_BIT | DEFERRED_IRQ_BIT;
+    unsafe {
+        write_volatile(NVIC_ICER0 as *mut u32, irq_bits);
+        write_volatile(NVIC_ICPR0 as *mut u32, irq_bits);
+        write_volatile((NVIC_IPR0 as *mut u8).add(7), 0x80);
+        write_volatile((NVIC_IPR0 as *mut u8).add(8), 0x20);
+        write_volatile((NVIC_IPR0 as *mut u8).add(9), 0xC0);
+    }
+
+    let msp_before: u32;
+    let msp_after: u32;
+    let basepri_after: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {msp_before}, msp",
+            msp_before = out(reg) msp_before,
+            options(nostack),
+        );
+        core::arch::asm!(
+            "movs {tmp}, #128",
+            "msr basepri, {tmp}",
+            "isb",
+            "movw {tmp}, #0x380",
+            "str {tmp}, [{pending}]",
+            "str {tmp}, [{enable}]",
+            "movw {count}, #20000",
+            "1:",
+            "ldr {seen}, [{high_order}]",
+            "cmp {seen}, #0",
+            "bne 2f",
+            "subs {count}, #1",
+            "bne 1b",
+            "2:",
+            "movs {tmp}, #0",
+            "msr basepri, {tmp}",
+            "isb",
+            "movw {count_after}, #30000",
+            "3:",
+            "ldr {equal}, [{equal_order}]",
+            "cmp {equal}, #0",
+            "beq 4f",
+            "ldr {lower}, [{lower_order}]",
+            "cmp {lower}, #0",
+            "bne 5f",
+            "4:",
+            "subs {count_after}, #1",
+            "bne 3b",
+            "5:",
+            pending = in(reg) NVIC_ISPR0 as u32,
+            enable = in(reg) NVIC_ISER0 as u32,
+            high_order = in(reg) addr_of!(BASEPRI_HIGH_IPSR) as u32,
+            equal_order = in(reg) addr_of!(BASEPRI_EQUAL_ORDER) as u32,
+            lower_order = in(reg) addr_of!(BASEPRI_LOWER_ORDER) as u32,
+            count = out(reg) _,
+            count_after = out(reg) _,
+            seen = out(reg) _,
+            equal = out(reg) _,
+            lower = out(reg) _,
+            tmp = out(reg) _,
+            options(nostack),
+        );
+        core::arch::asm!(
+            "mrs {basepri_after}, basepri",
+            "mrs {msp_after}, msp",
+            msp_after = out(reg) msp_after,
+            basepri_after = out(reg) basepri_after,
+            options(nostack),
+        );
+    }
+
+    let high_ipsr = BASEPRI_HIGH_IPSR.load(Ordering::Relaxed);
+    let high_exc_return = BASEPRI_HIGH_EXC_RETURN.load(Ordering::Relaxed);
+    let high_basepri = BASEPRI_HIGH_VALUE.load(Ordering::Relaxed);
+    let active_during = BASEPRI_ACTIVE_DURING.load(Ordering::Relaxed);
+    let pending_inside_high = BASEPRI_PENDING_DURING.load(Ordering::Relaxed);
+    let equal_order = BASEPRI_EQUAL_ORDER.load(Ordering::Relaxed);
+    let lower_order = BASEPRI_LOWER_ORDER.load(Ordering::Relaxed);
+    let active_after = unsafe { read_volatile(NVIC_IABR0 as *const u32) } & irq_bits;
+    let pending_after = unsafe { read_volatile(NVIC_ISPR0 as *const u32) } & irq_bits;
+    let priorities_ok = unsafe {
+        read_volatile((NVIC_IPR0 as *const u8).add(7)) == 0x80
+            && read_volatile((NVIC_IPR0 as *const u8).add(8)) == 0x20
+            && read_volatile((NVIC_IPR0 as *const u8).add(9)) == 0xC0
+    };
+    unsafe {
+        write_volatile(NVIC_ICER0 as *mut u32, irq_bits);
+        write_volatile(NVIC_ICPR0 as *mut u32, irq_bits);
+    }
+    let context = u32::from(priorities_ok)
+        | (u32::from(
+            high_ipsr == NESTED_EXCEPTION_NUMBER && BASEPRI_SEQUENCE.load(Ordering::Relaxed) == 3,
+        ) << 1)
+        | (u32::from(high_exc_return == 0xFFFF_FFF9) << 2)
+        | (u32::from(high_basepri == 0x80 && basepri_after == 0) << 3)
+        | (u32::from(active_during == NESTED_IRQ_BIT) << 4)
+        | (u32::from(pending_inside_high & irq_bits == (FLEXCOMM0_IRQ_BIT | DEFERRED_IRQ_BIT))
+            << 5)
+        | (u32::from(equal_order == 2) << 6)
+        | (u32::from(lower_order == 3) << 7)
+        | (u32::from(active_after == 0 && pending_after == 0) << 8)
+        | (u32::from(msp_after == msp_before) << 9);
+    unsafe { write_volatile(BASEPRI_CONTEXT, context) };
+
+    puts("\r\nbasepri=");
+    hex(context);
+    puts(" high=");
+    hex(high_ipsr);
+    putc(b'/');
+    hex(high_exc_return);
+    puts(" threshold=");
+    hex(high_basepri);
+    puts(" active=");
+    hex(active_during);
+    puts(" pending=");
+    hex(pending_inside_high & irq_bits);
+    puts(" order=");
+    hex(equal_order);
+    putc(b',');
+    hex(lower_order);
+    puts(" after=");
+    hex(active_after);
+    putc(b',');
+    hex(pending_after);
+    puts(" stack=");
+    putc(if msp_after == msp_before { b'1' } else { b'0' });
+    puts(" priorities=");
+    hex(unsafe { read_volatile((NVIC_IPR0 as *const u8).add(7)) as u32 });
+    putc(b',');
+    hex(unsafe { read_volatile((NVIC_IPR0 as *const u8).add(8)) as u32 });
+    putc(b',');
+    hex(unsafe { read_volatile((NVIC_IPR0 as *const u8).add(9)) as u32 });
+    puts("\r\n");
+
+    context == 0x3FF
+}
+
 fn wait_nvic_irq_pending(expected: bool) -> bool {
     for _ in 0..10_000 {
         if nvic_irq_pending() == expected {
@@ -902,6 +1061,7 @@ fn smoke_lpuart_rx() -> bool {
     let irq_released = wait_nvic_irq_pending(false);
     let released =
         rd(LPUART_STAT) & STAT_RDRF == 0 && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0 && irq_released;
+    let irq_basepri_masking = exercise_basepri_masking();
     let ok = receiver_off
         && queued
         && rx_masked
@@ -914,6 +1074,7 @@ fn smoke_lpuart_rx() -> bool {
         && irq_padded_msp_context_restored
         && irq_nested_priority
         && irq_deferred_priority
+        && irq_basepri_masking
         && first == b'R' as u32
         && second_still_queued
         && rx_masked_with_data
@@ -1064,6 +1225,9 @@ fn main() -> ! {
     if unsafe { read_volatile(DEFERRED_CONTEXT) } == 0x7F {
         pass |= 1 << 12;
     }
+    if unsafe { read_volatile(BASEPRI_CONTEXT) } == 0x3FF {
+        pass |= 1 << 13;
+    }
 
     puts("flexcomm0 pselid=");
     hex(pselid_reset);
@@ -1094,6 +1258,57 @@ fn main() -> ! {
 
 #[exception]
 unsafe fn DefaultHandler(irqn: i16) {
+    if IRQ_CASE.load(Ordering::Relaxed) == 8 {
+        let exc_return: u32;
+        let ipsr: u32;
+        unsafe {
+            core::arch::asm!(
+                "mov {exc_return}, lr",
+                exc_return = out(reg) exc_return,
+                options(nomem, nostack, preserves_flags),
+            );
+            core::arch::asm!(
+                "mrs {ipsr}, IPSR",
+                ipsr = out(reg) ipsr,
+                options(nomem, nostack, preserves_flags),
+            );
+        }
+        if irqn == NESTED_IRQN {
+            let basepri: u32;
+            unsafe {
+                core::arch::asm!(
+                    "mrs {basepri}, BASEPRI",
+                    basepri = out(reg) basepri,
+                    options(nomem, nostack, preserves_flags),
+                );
+            }
+            BASEPRI_HIGH_IPSR.store(ipsr, Ordering::Relaxed);
+            BASEPRI_HIGH_EXC_RETURN.store(exc_return, Ordering::Relaxed);
+            BASEPRI_HIGH_VALUE.store(basepri, Ordering::Relaxed);
+            BASEPRI_ACTIVE_DURING.store(
+                unsafe { read_volatile(NVIC_IABR0 as *const u32) },
+                Ordering::Relaxed,
+            );
+            BASEPRI_PENDING_DURING.store(
+                unsafe { read_volatile(NVIC_ISPR0 as *const u32) },
+                Ordering::Relaxed,
+            );
+            BASEPRI_SEQUENCE.store(1, Ordering::SeqCst);
+            unsafe { write_volatile(NVIC_ICER0 as *mut u32, NESTED_IRQ_BIT) };
+        } else if irqn == FLEXCOMM0_IRQN {
+            let phase = BASEPRI_SEQUENCE.load(Ordering::Relaxed);
+            BASEPRI_EQUAL_ORDER.store(if phase == 1 { 2 } else { 0x101 }, Ordering::Relaxed);
+            BASEPRI_SEQUENCE.store(2, Ordering::SeqCst);
+            unsafe { write_volatile(NVIC_ICER0 as *mut u32, FLEXCOMM0_IRQ_BIT) };
+        } else if irqn == DEFERRED_IRQN {
+            let phase = BASEPRI_SEQUENCE.load(Ordering::Relaxed);
+            BASEPRI_LOWER_ORDER.store(if phase == 2 { 3 } else { 0x101 }, Ordering::Relaxed);
+            BASEPRI_SEQUENCE.store(3, Ordering::SeqCst);
+            unsafe { write_volatile(NVIC_ICER0 as *mut u32, DEFERRED_IRQ_BIT) };
+        }
+        return;
+    }
+
     if IRQ_CASE.load(Ordering::Relaxed) == 7 {
         let exc_return: u32;
         let ipsr: u32;

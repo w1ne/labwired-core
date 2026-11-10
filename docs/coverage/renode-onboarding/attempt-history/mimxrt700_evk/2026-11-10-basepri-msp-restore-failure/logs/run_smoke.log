@@ -1,0 +1,12 @@
+2026-11-10T18:54:43.254456Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/mimxrt700_evk.yaml
+2026-11-10T18:54:43.347689Z  INFO labwired_loader: ELF Entry Point: 0x38000801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-10T18:54:43.366201Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'flexcomm0'
+2026-11-10T18:54:45.558354Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "basepri=000003ff high=00000018/fffffffd threshold=00000080 active=00000100 pending=00000280 order=00000002,00000003 after=00000000,00000000 stack=1,1 priorities=00000080,00000020,000000c0" }) (captured len=1335)
+2026-11-10T18:54:45.558390Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["flexcomm0 pselid=00103070->00103071->00103079", "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001", "pass=00003fff"] }) (captured len=1335)
+2026-11-10T18:54:45.558397Z ERROR labwired_cli::execute: Memory assertion failed at 0x2000000c (size 4): expected 0x70001fff, got 0x70001fef (mask 0xffffffff)
+2026-11-10T18:54:45.558401Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879056383, mask: None, size: Some(4), node: None } }) (captured len=1335)
+2026-11-10T18:54:45.558408Z ERROR labwired_cli::execute: Memory assertion failed at 0x20000068 (size 4): expected 0x3ff, got 0x1ff (mask 0xffffffff)
+2026-11-10T18:54:45.558411Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536871016, expected_value: 1023, mask: None, size: Some(4), node: None } }) (captured len=1335)
+FAIL  27/31 checks · mimxrt700_evk-smoke · 17000000 steps · 2.19s

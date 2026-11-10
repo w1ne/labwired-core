@@ -2,14 +2,15 @@
 # TX, injected RX/NVIC, and PSP/MSP exception frames with CCR.STKALIGN enabled
 # and disabled on PSP and MSP stacks, plus nested external IRQ preemption, on
 # the exact imported MIMXRT700-EVK system. Equal- and lower-priority external
-# IRQs are also checked to remain pending until the active handler returns.
+# IRQs are also checked to remain pending until the active handler returns,
+# and BASEPRI masks equal/lower priorities while allowing a higher IRQ through.
 # LPI2C/LPSPI transactions are not modelled or claimed.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke"
   system: "../../configs/systems/onboarding/mimxrt700_evk.yaml"
 limits:
-  max_steps: 15000000
+  max_steps: 17000000
 uart_injections:
   - uart: "flexcomm0"
     bytes: "RS"
@@ -22,17 +23,18 @@ assertions:
   - uart_contains: "msp_noalign_context=0000001f msp_noalign_r0=2468ace0 msp_noalign_xpsr=01000000 msp_noalign_sp=200000dc msp_noalign_after=200000fc restore=1"
   - uart_contains: "nested=000000ff outer=00000017 nested_ipsr=00000018 exc=fffffffd,fffffff1 order=00000002,00000003 active=00000180->00000000 stack=1,1 priorities=00000080,00000020"
   - uart_contains: "deferred=0000007f outer=00000017 exc=fffffffd active=00000080 order=00000002,00000003 after=00000000 stack=1,1 priorities=00000080,00000080,000000c0"
+  - uart_contains: "basepri=000003ff high=00000018/fffffff9 threshold=00000080 active=00000100 pending=00000280 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0"
   - uart_ordered:
       - "flexcomm0 pselid=00103070->00103071->00103079"
       - "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001"
-      - "pass=00001fff"
+      - "pass=00003fff"
   - memory_value:
       address: 0x20000008
       expected_value: 0x00000143
       size: 4
   - memory_value:
       address: 0x2000000c
-      expected_value: 0x70001fff
+      expected_value: 0x70003fff
       size: 4
   - memory_value:
       address: 0x20000010
@@ -103,5 +105,9 @@ assertions:
   - memory_value:
       address: 0x20000064
       expected_value: 0x0000007f
+      size: 4
+  - memory_value:
+      address: 0x20000068
+      expected_value: 0x000003ff
       size: 4
   - expected_stop_reason: max_steps
