@@ -1,4 +1,4 @@
-# ESP32-DevKitC-32E VSPI reaches the microSD command model and initializes it.
+# ESP32-DevKitC-32E mounts the demo FAT16 image and reads /README.TXT over VSPI.
 schema_version: "1.2"
 inputs:
   firmware: "firmware/.pio/build/devkitc32e_microsd/firmware.elf"
@@ -7,7 +7,10 @@ limits:
   max_steps: 30000000
   stop_when_assertions_pass: true
 assertions:
-  - uart_contains: "ESP32_DEVKITC32E_MICROSD_INIT=PASS"
+  - uart_contains: "ESP32_DEVKITC32E_MICROSD_READ=PASS"
+  - gpio_edges:
+      pin: "gpio:17"
+      min_edges: 1
   - gpio_edges:
       pin: "gpio:16"
       min_edges: 1

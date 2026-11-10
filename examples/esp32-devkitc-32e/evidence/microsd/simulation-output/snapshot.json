@@ -3,32 +3,32 @@
   "cpu": {
     "type": "xtensa_lx7",
     "registers": [
-      2148497061,
-      1073469520,
+      2148540596,
+      1073469584,
       0,
       181,
       3007315967,
-      1061159336,
+      1061159356,
       0,
       181,
-      2148394394,
-      1073469456,
+      2148405682,
+      1073469520,
       0,
       0,
       1073472852,
       0,
       262176,
-      1073469487
+      1073469551
     ],
-    "pc": 1074288582,
+    "pc": 1074294274,
     "ps": 262176,
     "window_base": 14,
     "window_start": 22008,
     "vecbase": 1074266112
   },
-  "steps_executed": 800000,
-  "cycles": 800000,
-  "instructions": 800000,
+  "steps_executed": 10470000,
+  "cycles": 10470000,
+  "instructions": 10470000,
   "stop_reason": "assertions_passed",
   "stop_reason_details": {
     "triggered_stop_condition": "assertions_passed",
@@ -46,7 +46,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "2bf629357fead881d87dd082f6cbdb84b7c9be03512b3c797ca10850ee79f499",
+  "firmware_hash": "3184f02b7c2424d6022cb9089033002c1af8e32e5273fe0ce295a11011cbc1c2",
   "config": {
     "firmware": "examples/esp32-devkitc-32e/firmware/.pio/build/devkitc32e_microsd/firmware.elf",
     "system": "examples/esp32-devkitc-32e/../../configs/systems/esp32-devkitc-32e-microsd.yaml",

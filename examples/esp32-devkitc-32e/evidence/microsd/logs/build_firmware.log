@@ -18,6 +18,7 @@ LDF Modes: Finder ~ chain, Compatibility ~ soft
 Found 44 compatible libraries
 Scanning dependencies...
 Dependency Graph
+|-- SD @ 3.3.12
 |-- SPI @ 3.3.12
 Building in debug mode
 Compiling .pio/build/devkitc32e_microsd/src/microsd_smoke.cpp.o
@@ -25,16 +26,16 @@ Linking .pio/build/devkitc32e_microsd/firmware.elf
 Retrieving maximum program size .pio/build/devkitc32e_microsd/firmware.elf
 Checking size .pio/build/devkitc32e_microsd/firmware.elf
 Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
-RAM:   [=         ]   6.8% (used 22212 bytes from 327680 bytes)
-Flash: [==        ]  22.8% (used 298528 bytes from 1310720 bytes)
+RAM:   [=         ]   6.9% (used 22680 bytes from 327680 bytes)
+Flash: [===       ]  26.9% (used 352310 bytes from 1310720 bytes)
 Building .pio/build/devkitc32e_microsd/firmware.bin
 esptool v5.4.0
 Creating ESP32 image...
 Merged 3 ELF sections.
 Successfully created ESP32 image.
-========================= [SUCCESS] Took 3.11 seconds =========================
+========================= [SUCCESS] Took 3.60 seconds =========================
 
 Environment         Status    Duration
 ------------------  --------  ------------
-devkitc32e_microsd  SUCCESS   00:00:03.111
-========================= 1 succeeded in 00:00:03.111 =========================
+devkitc32e_microsd  SUCCESS   00:00:03.602
+========================= 1 succeeded in 00:00:03.602 =========================

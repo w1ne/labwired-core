@@ -27,10 +27,14 @@ ESP32-WROOM-32E module. The GPIO/UART profile is
   on the exact WROOM-32E variant; the smoke reads the chip ID and raw
   temperature data through the second controller. This is a low-cost profile
   extension on the existing board, not a new board/MCU demand pick.
-- The rank-1 microSD profile attaches the SPI card command model to VSPI/SPI3
-  on SCK=GPIO18, MISO=GPIO19, MOSI=GPIO23, and CS=GPIO5. Firmware checks CMD0,
-  CMD8, CMD55, and ACMD41, then raises GPIO16 when the card enters ready state.
-  The card model does not implement a filesystem or image storage.
+- Demand rank: ESP32 is rank 1 (38% MCU use). This coverage-depth update keeps
+  the same DevKitC-32E and microSD breakout, and replaces the initialization
+  check with a stock Arduino SD filesystem read. The VSPI/SPI3 card uses
+  SCK=GPIO18, MISO=GPIO19, MOSI=GPIO23, CS=GPIO5; firmware mounts the fixed
+  32 MiB SDHC image, reads `/README.TXT`, verifies its contents, raises GPIO17
+  after mount, and raises GPIO16 after the exact file read. The model is
+  read-only: it supports CMD9/CSD and CMD17 block reads, rejects writes, and
+  does not accept a configurable card image.
 - The earlier SPI addition connects an external 128x64 SSD1306 OLED using
   SCK=GPIO18, MISO=GPIO19, MOSI=GPIO23, CS=GPIO5, and
   D/C=GPIO17. Its smoke sends the controller initialization sequence and
@@ -91,11 +95,15 @@ Its committed local log reads BME280 ID `0x60` and temperature ADC `0x082DC0`
 on GPIO16/GPIO17. The simulator smoke uses the ESP32 command-list registers;
 the Arduino `Wire1` driver path is not covered by this evidence.
 
-The rank-1 microSD smoke is in
+The ESP32 rank-1 microSD filesystem-read smoke is in
 [`examples/esp32-devkitc-32e/microsd-smoke.yaml`](../../examples/esp32-devkitc-32e/microsd-smoke.yaml).
-It checks SPI responses for CMD0, CMD8, CMD55, and ACMD41. The MicroSD model
-only implements command initialization plus a zero-filled CMD17 read; no
-filesystem or persistent card image is modeled.
+Its copy-paste Arduino example in the
+[`DevKitC README`](../../examples/esp32-devkitc-32e/README.md) uses `SD.begin`
+and `SD.open("/README.TXT")`. The committed local smoke checks the file bytes
+and the GPIO16 pass edge. Hosted verification evidence under
+`examples/esp32-devkitc-32e/evidence/microsd/hosted-verification.md` covers the
+earlier initialization command profile; it does not validate this filesystem
+image.
 
 Live board, module, and sensor status is recorded in
 [`examples/esp32-devkitc-32e/evidence/vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/vendor-status.md).

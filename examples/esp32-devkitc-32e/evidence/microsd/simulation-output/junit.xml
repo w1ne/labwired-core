@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.367744">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="1.847413">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="AssertionsPassed"/>
-    <property name="firmware_hash" value="2bf629357fead881d87dd082f6cbdb84b7c9be03512b3c797ca10850ee79f499"/>
+    <property name="firmware_hash" value="3184f02b7c2424d6022cb9089033002c1af8e32e5273fe0ce295a11011cbc1c2"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.367744">
+  <testcase classname="labwired" name="run" time="1.847413">
   </testcase>
-  <testcase classname="labwired" name="assertion 1: uart_contains: ESP32_DEVKITC32E_MICROSD_INIT=PASS" time="0.000000">
+  <testcase classname="labwired" name="assertion 1: uart_contains: ESP32_DEVKITC32E_MICROSD_READ=PASS" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: gpio_edges: gpio:16 &gt;= 1 edges" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpio:17 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpio:16 &gt;= 1 edges" time="0.000000">
   </testcase>
 </testsuite>
