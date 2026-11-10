@@ -665,6 +665,18 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: stm32g491re
+    arch: cortex-m4
+    headline: "No tier-1 fixture. The local NUCLEO-G491RE + BME280 onboarding smoke boots bare-metal firmware, reads BME280 ID 0x60 and raw temperature 0x082DC0 over I2C1/PB8/PB9, and gates LD2 edges on those values; the exact smoke is included in the nightly onboarding workflow. This is a peripheral expansion on an existing board, not a new MCU demand pick. No hosted model_verified verdict or hardware capture is available."
+    functional:
+      - what: "NUCLEO-G491RE I2C1 reads BME280 ID 0x60 and raw temperature 0x082DC0 over PB8/PB9; LD2 toggles only after both values pass"
+        fw: firmware-nucleo-g491re-bme280-smoke
+        ev: "examples/nucleo-g491re-bme280/VALIDATION.md (bme280-smoke)"
+        gate: nightly
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: stm32h735
     arch: cortex-m7
     headline: "SIM-DERIVED first Cortex-M7 part. Its committed tier-1 fixture is PR-gated (`firmware_survival::test_stm32h735_tier1_survival`, Session builder) and drives clock/gpio/timer/pwm/i2c/spi/wdt/irq plus UART on USART3, leaving adc unrecorded and dma/rtc n/a (neither declared); the nightly h735-telematics-lab cell is the only other gated firmware (SPI1 TFT, USART1 BG770A modem, USART3 console), and its +QGPSLOC decode is not value-asserted — a parse failure falls back to a constant, so the transcript proves the stack ran, not the fix. Beyond the rubric, PWR (PwrH7) is driven only by the un-gated stm32h735-hal-demo/embassy-demo bring-up — no CI gate and no PwrH7 unit test — RNG is exercised only by the L073 kernel-clock unit tests over the L073 bus (rcc_kernel_clock_gate.rs:184-254 — no H735 behavioral test drives it, and rng.rs has no unit tests) and no firmware, DBGMCU is driven by nothing at all, FDCAN1/2 are pinned by fdcan.rs's 18 model unit tests plus the estate test's reset-value and CCCR-independence probes — no firmware touches them — CRC has the shared H563 bench oracle (h563_conformance.rs:144) and F103 sim-only thumb oracle (stm32f1_exec_oracle.rs:300) plus the IDR-width unit test, but no H7-specific computed-value check, and SYSCFG/WWDG are a seeded stub window and an inert register bank."

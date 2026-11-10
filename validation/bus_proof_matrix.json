@@ -990,6 +990,24 @@
         "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
       }
     },
+    "stm32g491re": {
+      "in_boards": false,
+      "uart": {
+        "state": "none",
+        "gap": "The narrow STM32G491RE descriptor does not declare a UART instance; the ST-LINK virtual COM path is outside this board model."
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The narrow STM32G491RE descriptor does not declare an SPI controller; no SPI path is claimed by the NUCLEO-G491RE profiles."
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "examples/nucleo-g491re-bme280/VALIDATION.md",
+        "test": "bme280-smoke",
+        "signal": "Committed bare-metal firmware reads BME280 ID 0x60 and the three raw-temperature bytes encoding 0x082DC0 through the I2C1 bus model at 0x77; PB8/PB9 activity and LD2 edges are asserted, and LD2 is entered only after both value comparisons pass.",
+        "lane": "Core Onboarding Smoke: nightly mainline run, main push, or workflow_dispatch; matrix target nucleo-g491re-bme280."
+      }
+    },
     "stm32h563": {
       "in_boards": true,
       "uart": {

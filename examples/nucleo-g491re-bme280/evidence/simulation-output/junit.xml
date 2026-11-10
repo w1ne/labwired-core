@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="15" failures="0" errors="0" time="0.037077">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="ec5a7a664263ae8b2c3a2c269e069313234e7b20fe257a62f508cb2705176540"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.037077">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: peripheral_log: i2c1.bus_trace contains &quot;addr 0x77 W ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: peripheral_log: i2c1.bus_trace contains &quot;data 0xd0 ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: peripheral_log: i2c1.bus_trace contains &quot;addr 0x77 R ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: peripheral_log: i2c1.bus_trace contains &quot;data 0x60 ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: peripheral_log: i2c1.bus_trace contains &quot;data 0xfa ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: peripheral_log: i2c1.bus_trace contains &quot;data 0xfb ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: peripheral_log: i2c1.bus_trace contains &quot;data 0xfc ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: peripheral_log: i2c1.bus_trace contains &quot;data 0x82 ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: peripheral_log: i2c1.bus_trace contains &quot;data 0xdc ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: peripheral_log: i2c1.bus_trace contains &quot;data 0x00 ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: gpio_edges: gpioa:5 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 12: gpio_edges: gpiob:8 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 13: gpio_edges: gpiob:9 &gt;= 2 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 14: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -2,7 +2,9 @@
 
 **Scope:** SIM-derived, board GPIO smoke. This is not a silicon capture or a
 hardware-confirmed result. The model claims only the STM32G4 RCC/GPIO subset
-used by the smoke and the board's LD2/B1 wiring.
+used by this smoke and the board's LD2/B1 wiring. The shared STM32G491RE chip
+descriptor also declares GPIOB and I2C1 for the separately scoped BME280 add-on
+profile; this base-board smoke does not exercise that path.
 
 ## Run
 

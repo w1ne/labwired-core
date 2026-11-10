@@ -1,4 +1,5 @@
-# Standalone mirror of configs/systems/nucleo-g491re.yaml.
+# Standalone mirror of configs/systems/nucleo-g491re.yaml; I2C1 is used by the
+# separately scoped BME280 add-on profile.
 name: "nucleo-g491re"
 chip: "../../configs/chips/stm32g491re.yaml"
 cpu_hz: 170_000_000

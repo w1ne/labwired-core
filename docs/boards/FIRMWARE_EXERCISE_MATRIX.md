@@ -96,11 +96,14 @@ _tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C 
 
 ### `esp32-devkitc-32e-gpio-smoke`
 
-_Narrow ESP32-DevKitC-32E onboarding profile (GPIO23, UART0, I2C0). Separate local receipts under `docs/receipts/2026-11-09-esp32-deep-sleep/` cover timer-wake deep sleep and light sleep; they are not a CI lane. This system attaches no external I2C device; see the separate BME280 profile below._
+_Narrow ESP32-DevKitC-32E onboarding profile (GPIO23, UART0, I2C0). docs/receipts/2026-11-09-esp32-deep-sleep records stock Arduino-ESP32 timer-wake deep sleep printing LW_DS_OK (bootCount 1→2→3 across DEEPSLEEP_RESET, RTC slow memory kept) and light sleep printing LW_LS_OK. Those receipts are local and not a required CI lane. Its system attaches no external I2C device; see the separate esp32-devkitc-32e-bme280 profile for the sensor smoke._
 
 ### `esp32-devkitc-32e-bme280`
 
-_ESP32 is demand rank #1. The exact ESP32-DevKitC-32E system attaches an Adafruit BME280 at `0x77` to I2C0 GPIO21/22. The committed PlatformIO smoke reads ID `0x60` and raw temperature `0x082DC0`; GPIO23 toggles only after both reads pass. The smoke requires eight GPIO edges and is wired into the nightly onboarding workflow. Evidence and a copy-paste Arduino example are in `examples/esp32-devkitc-32e-bme280/`. The classic model still installs a legacy BMP280 fixture at `0x76`; the smoke does not address or depend on it._
+_ESP32-DevKitC-32E profile: committed PlatformIO Arduino smoke explicitly attaches a BME280 on I2C0 GPIO21/22, reads its ID and raw temperature, then gates GPIO23 edges on those reads; nightly onboarding CI runs it. Wi-Fi/Bluetooth and physical pin voltages are outside this slice._
+
+**Functional firmware exercises** (including decoded device/protocol reads):
+- DevKitC-32E I2C0 reads BME280 ID 0x60 and raw temperature 0x082DC0 via GPIO21/22; GPIO23 toggles only after both reads pass — `PlatformIO Arduino: examples/esp32-devkitc-32e-bme280/firmware/src/main.cpp` · examples/esp32-devkitc-32e-bme280/bme280-smoke.yaml (nightly CI)
 
 ### `esp32-devkitc-32e-uart1`
 
@@ -209,14 +212,14 @@ _Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its decl
 
 ### `esp32c5`
 
-_ESP32 is demand rank #1 (38% survey use). The ESP32-C5-DevKitC-1-N8R8 smoke loads a base-IMAC ELF into HP SRAM, reads BME280 ID and raw temperature over I2C0 via the GPIO8/9 matrix route, checks ID=0x60/raw=0x082DC0, emits a UART0 success marker, and observes GPIO5 edges. The C5 I2C model uses the 240 MHz HP clock. PCR gating and IOMUX electrical routing are not enforced. ROM/flash boot, PSRAM, CLIC/LP core, radio, USB, other matrix functions, and the GPIO27 addressable LED remain outside this focused profile; no silicon confirmation is claimed._
+_ESP32 is demand rank #1 (38% survey use). The ESP32-C5-DevKitC-1-N8R8 profile loads a base-IMAC ELF into HP SRAM, reads BME280 ID and raw temperature over I2C0 through the GPIO8/9 matrix route, checks ID=0x60/raw=0x082DC0, emits a UART0 success marker, and observes GPIO5 edges. I2C pacing uses the C5 240 MHz core rate. PCR gating, IOMUX electrical routing, ROM/flash boot, PSRAM, CLIC/LP core, radio, USB, other matrix functions, and the GPIO27 addressable LED remain outside this focused profile; this is local simulator evidence, not silicon confirmation._
 
 **Functional firmware exercises** (including decoded device/protocol reads):
-- ESP32-C5-DevKitC-1-N8R8: BME280 ID/raw-temperature read on GPIO8/9 I2C0, UART0 success marker, and GPIO5 (J3 pin 9) edges — `firmware-esp32c5-devkitc-1-bme280-smoke` · examples/esp32c5-devkitc-1-bme280-smoke/evidence/ (nightly CI)
+- ESP32-C5-DevKitC-1-N8R8: BME280 I2C0 ID/temp read on GPIO8/9, UART0 success marker, and GPIO5 (J3 pin 9) edges — `firmware-esp32c5-devkitc-1-bme280-smoke` · examples/esp32c5-devkitc-1-bme280-smoke/evidence/ (nightly CI)
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `io_mux` (configs/chips/esp32c5.yaml (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: function-select writes are stored but pad routing is not electrically enforced; UART0 console output and GPIO model edges do not prove package-pin voltage.
-- `pcr` (ESP32-C5 PCR clock/reset window is outside the focused descriptor) — C5 models do not enforce PCR clock/reset gating; the local smoke verifies UART/I2C register behavior without PCR.
+- `pcr` (ESP32-C5 PCR clock/reset window is outside the focused descriptor) — Smoke does not enforce C5 PCR clock/reset gating; UART bytes and I2C transactions reach modeled controllers independently of PCR state.
 
 ### `esp32s3-zero`
 
@@ -462,6 +465,13 @@ _All 12 declared rubric classes are driven by its committed tier-1 fixture (test
 ### `stm32g474re`
 
 _All 12 declared rubric classes are driven by its committed tier-1 fixture (nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step (core-ci.yml:2087), fast_boot target, USART2 console), and the two PR-gated vendor firmwares cover the non-rubric blocks: the Zephyr hello's SoC init read-modify-writes DBGMCU_CR (the reason the descriptor declares DBGMCU) and the Arduino serial startup calls HAL_PWREx_ControlVoltageScaling (PWR_CR VOS + SR2.VOSF poll) plus HAL_CRC_Init (CRC_POL/INIT/CR — the reason that survival case exists), so PWR/CRC/DBGMCU are all firmware-driven and no non-rubric block is left unexercised. The CRC polynomial engine itself is still driven by no firmware: its always-run coverage is the H563 bench oracle (h563_conformance.rs:144) plus the F103 sim-only thumb oracle (stm32f1_exec_oracle.rs:300) and IDR-width masking (crc.rs:204), and no G4-specific test asserts a computed value._
+
+### `stm32g491re`
+
+_No tier-1 fixture. The local NUCLEO-G491RE + BME280 onboarding smoke boots bare-metal firmware, reads BME280 ID 0x60 and raw temperature 0x082DC0 over I2C1/PB8/PB9, and gates LD2 edges on those values; the exact smoke is included in the nightly onboarding workflow. This is a peripheral expansion on an existing board, not a new MCU demand pick. No hosted model_verified verdict or hardware capture is available._
+
+**Functional firmware exercises** (including decoded device/protocol reads):
+- NUCLEO-G491RE I2C1 reads BME280 ID 0x60 and raw temperature 0x082DC0 over PB8/PB9; LD2 toggles only after both values pass — `firmware-nucleo-g491re-bme280-smoke` · examples/nucleo-g491re-bme280/VALIDATION.md (bme280-smoke) (nightly CI)
 
 ### `stm32h735`
 

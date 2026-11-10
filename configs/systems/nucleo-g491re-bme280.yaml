@@ -1,0 +1,21 @@
+# ST NUCLEO-G491RE + Adafruit BME280 STEMMA QT (product 2652).
+# UM2505 maps Arduino D15/PB8 to I2C1_SCL and D14/PB9 to I2C1_SDA.
+name: "nucleo-g491re-bme280"
+chip: "../chips/stm32g491re.yaml"
+cpu_hz: 170_000_000
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    route:
+      scl: "PB8"
+      sda: "PB9"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

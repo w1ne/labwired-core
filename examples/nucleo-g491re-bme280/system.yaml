@@ -1,0 +1,20 @@
+# Standalone mirror of configs/systems/nucleo-g491re-bme280.yaml.
+name: "nucleo-g491re-bme280"
+chip: "../../configs/chips/stm32g491re.yaml"
+cpu_hz: 170_000_000
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    route:
+      scl: "PB8"
+      sda: "PB9"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

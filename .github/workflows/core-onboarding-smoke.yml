@@ -71,6 +71,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-g491re/io-smoke.yaml
             system: configs/systems/nucleo-g491re.yaml
+          - id: nucleo-g491re-bme280
+            crate: firmware-nucleo-g491re-bme280-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-g491re-bme280/bme280-smoke.yaml
+            system: configs/systems/nucleo-g491re-bme280.yaml
           - id: rp2040-pio
             crate: firmware-rp2040-pio-onboarding
             target: thumbv6m-none-eabi

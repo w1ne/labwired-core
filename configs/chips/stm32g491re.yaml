@@ -10,6 +10,8 @@
 # 96 KiB SRAM1+SRAM2. The separate 16 KiB CCM SRAM at 0x10000000 (aliased at
 # 0x20018000) is intentionally not declared. Peripheral addresses/register
 # layout follow RM0440; the reused schemas/model profiles are exercised G4 IP.
+# I2C1 is included for the explicit NUCLEO-G491RE + BME280 system profile; it
+# shares the G4 I2C-v2 controller profile already used on STM32G474RE.
 name: "stm32g491re"
 arch: "arm"
 core: "cortex-m4"
@@ -46,3 +48,21 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32g474re/gpioc.yaml"
       profile: "stm32v2"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x48000400
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 1 }
+    config:
+      debug_schema: "../peripherals/stm32g474re/gpiob.yaml"
+      profile: "stm32v2"
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    clock: { reg: "apb1enr", bit: 21 }
+    config:
+      debug_schema: "../peripherals/stm32g474re/i2c1.yaml"
+      irq_error: 32
+      profile: "stm32l4"

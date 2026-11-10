@@ -18,9 +18,10 @@ cargo run -q -p labwired-cli -- test \
   --output-dir out/nucleo-g491re/io-smoke --no-uart-stdout
 ```
 
-The smoke requires at least eight observed PA5 transitions. The descriptor
-models only the G4 RCC, GPIOA/GPIOC, LD2 and B1 mapping needed for this board
-path; it does not claim USB, ST-LINK, analog, or other G491 peripherals.
+The smoke requires at least eight observed PA5 transitions. This base system
+uses the G4 RCC, GPIOA/GPIOC, LD2 and B1 mapping. The chip descriptor also
+declares GPIOB/I2C1 for the separate [BME280 add-on profile](../nucleo-g491re-bme280/);
+USB, ST-LINK and analog behavior remain outside these profiles.
 
 ## Files
 
