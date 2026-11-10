@@ -9767,6 +9767,7 @@ boards:
       # claim for the corrected digest to invalidate — no ack is implied.
       - crates/core/src/peripherals/esp32/efuse.rs
       - crates/core/src/peripherals/esp32/gpio.rs
+      - crates/core/src/peripherals/esp32/rmt.rs
       - crates/core/src/peripherals/esp32/i2c.rs
       - crates/core/src/peripherals/esp32/ledc.rs
       - crates/core/src/peripherals/esp32/mcpwm.rs
@@ -11160,6 +11161,7 @@ boards:
       - configs/chips/esp32-devkitc-32e-gpio-smoke.yaml
       - crates/core/src/peripherals/esp32/efuse.rs
       - crates/core/src/peripherals/esp32/gpio.rs
+      - crates/core/src/peripherals/esp32/rmt.rs
       - crates/core/src/peripherals/esp32/i2c.rs
       - crates/core/src/peripherals/esp32/ledc.rs
       - crates/core/src/peripherals/esp32/mcpwm.rs
@@ -11190,6 +11192,7 @@ boards:
       - configs/chips/esp32-devkitc-32e-uart1.yaml
       - crates/core/src/peripherals/esp32/efuse.rs
       - crates/core/src/peripherals/esp32/gpio.rs
+      - crates/core/src/peripherals/esp32/rmt.rs
       - crates/core/src/peripherals/esp32/i2c.rs
       - crates/core/src/peripherals/esp32/ledc.rs
       - crates/core/src/peripherals/esp32/mcpwm.rs
