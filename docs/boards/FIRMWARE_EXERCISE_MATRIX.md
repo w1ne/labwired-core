@@ -136,7 +136,13 @@ _Shares the nRF52 model with nrf52840/nrf52832; tier-1 drives 12 rubric classes 
 
 ### `rp2040`
 
-_tier1 fixture drives clock/timer/gpio/spi/i2c (PL022/DW_apb); boots unmodified Zephyr. PIO0 is exercised by the required nightly PIO onboarding lane — not by a tier-1 fixture: firmware-rp2040-pio-onboarding boots through this descriptor and must reach PIO_OK (crates/core/tests/rp2040_pio_onboarding.rs:82-135), built and required by the core-full job's LABWIRED_REQUIRE_FIRMWARE (core-ci.yml:2014, :2034, run at :2062; cross-build-excluded from the PR shards)._
+_The tier1 fixture drives clock/timer/gpio/spi/i2c (PL022/DW_apb) and boots unmodified Zephyr. The required nightly PIO lane reaches PIO_OK (crates/core/tests/rp2040_pio_onboarding.rs:82-135). The Raspberry Pi Pico BME280 smoke adds a board-level I2C0 sensor read and GP25 LED transitions; the BME280 is attached directly to the I2C model, so this does not prove electrical pad routing or physical hardware._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- Raspberry Pi Pico I2C0 reads BME280 CHIP_ID 0x60 and raw temperature 0x082DC0 over GP4/GP5, then toggles the onboard GP25 LED four times — `firmware-rp2040-pico-bme280-smoke` · examples/rp2040-pico-bme280/bme280-smoke.yaml (nightly CI)
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `TBMAN` (configs/chips/rp2040.yaml:283 (type stub; crates/core/src/peripherals/stub.rs:12)) — STRUCTURAL: zero-answering TBMAN window. The Pico BME280 smoke and the RP2040 PIO lane do not access it.
 
 ### `stm32h563`
 
