@@ -60,7 +60,7 @@
           "dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok",
           "crc word=0xDF8A8A2B seed=1 std=1 ok",
           "adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok",
-          "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044 lr=",
+          "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=",
           " pc=",
           " exc_return=0xFFFFFFF9 sp=",
           " returned=1 ok",
@@ -112,12 +112,12 @@
       0,
       0,
       0,
-      0,
+      85,
       536887072,
-      134235159,
-      134235450
+      134235227,
+      134235520
     ],
-    "pc": 134235450,
+    "pc": 134235520,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -130,7 +130,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "2a79c03ede69ff8cc06c672f85daa99a2f4596822cebec2f197e3ad5f50cc977",
+  "firmware_hash": "887804625aff34795e652b630d175849f2c5d8e84ad794f80895dfb75b7a6e47",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072b_discovery.yaml",
@@ -617,7 +617,7 @@
         "end_cycle": 1220000
       },
       {
-        "text": "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044 lr=0x08002BD5 pc=0x080001D4 xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003EF8 returned=1 ok",
+        "text": "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x08002BDB pc=0x080001DA xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003EF8 returned=1 ok",
         "cycle_lo": 1220000,
         "cycle": 1230000,
         "end_cycle": 1230000
@@ -689,14 +689,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 19532,
+    "text_bytes": 19604,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 19532,
+    "flash_used_bytes": 19604,
     "ram_static_bytes": 0,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 14.9,
+    "flash_used_pct": 14.96,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -722,88 +722,88 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 36421,
-    "memory_writes": 1167,
-    "peripheral_accesses": 291685,
+    "memory_reads": 36442,
+    "memory_writes": 1177,
+    "peripheral_accesses": 291707,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134235450,
-        "count": 311,
+        "pc": 134235520,
+        "count": 341,
         "symbol": "firmware_stm32f072b_disco_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 134224060,
+        "pc": 134224068,
         "count": 157,
         "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
       },
       {
-        "pc": 134224056,
-        "count": 156,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134224058,
-        "count": 156,
-        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
-      },
-      {
-        "pc": 134224062,
-        "count": 156,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
         "pc": 134224064,
         "count": 156,
-        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
-      },
-      {
-        "pc": 134224074,
-        "count": 156,
-        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
-      },
-      {
-        "pc": 134224076,
-        "count": 156,
-        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
-      },
-      {
-        "pc": 134224178,
-        "count": 156,
         "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134224066,
+        "count": 156,
+        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
       },
       {
         "pc": 134224070,
-        "count": 118,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+        "count": 156,
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134224100,
-        "count": 118,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
-      },
-      {
-        "pc": 134224170,
-        "count": 118,
+        "pc": 134224072,
+        "count": 156,
         "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
       },
       {
-        "pc": 134224180,
+        "pc": 134224082,
+        "count": 156,
+        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
+      },
+      {
+        "pc": 134224084,
+        "count": 156,
+        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
+      },
+      {
+        "pc": 134224186,
+        "count": 156,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134224078,
+        "count": 118,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134224108,
+        "count": 118,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134224178,
         "count": 118,
         "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
       },
       {
         "pc": 134224188,
         "count": 118,
+        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
+      },
+      {
+        "pc": 134224196,
+        "count": 118,
         "symbol": "<i32>::overflowing_add"
       },
       {
-        "pc": 134224262,
+        "pc": 134224270,
         "count": 118,
         "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
       },
       {
-        "pc": 134224066,
+        "pc": 134224074,
         "count": 117,
         "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
       }

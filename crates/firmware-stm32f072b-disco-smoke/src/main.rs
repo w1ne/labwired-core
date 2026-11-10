@@ -260,6 +260,9 @@ unsafe extern "C" fn pend_exti0_1_irq_with_sentinels() {
         "movs r1, #0x22",
         "movs r2, #0x33",
         "movs r3, #0x44",
+        "movs r4, #0x55",
+        "mov r12, r4",
+        "movs r4, #0x20",
         "str r4, [r7]",
         "pop {{r4, r7}}",
         "bx lr",
@@ -314,6 +317,7 @@ fn check_exception_entry() -> bool {
     let frame_r1 = unsafe { read_volatile((IRQ_FRAME + 4) as *const u32) };
     let frame_r2 = unsafe { read_volatile((IRQ_FRAME + 8) as *const u32) };
     let frame_r3 = unsafe { read_volatile((IRQ_FRAME + 12) as *const u32) };
+    let frame_r12 = unsafe { read_volatile((IRQ_FRAME + 16) as *const u32) };
     let frame_lr = unsafe { read_volatile((IRQ_FRAME + 20) as *const u32) };
     let frame_pc = unsafe { read_volatile((IRQ_FRAME + 24) as *const u32) };
     let frame_xpsr = unsafe { read_volatile((IRQ_FRAME + 28) as *const u32) };
@@ -323,6 +327,7 @@ fn check_exception_entry() -> bool {
         && frame_r1 == 0x22
         && frame_r2 == 0x33
         && frame_r3 == 0x44
+        && frame_r12 == 0x55
         && frame_lr & 1 != 0
         && (0x0800_0000..0x0802_0000).contains(&frame_pc)
         && frame_xpsr & 0x0100_0000 != 0
@@ -358,6 +363,8 @@ fn check_exception_entry() -> bool {
     hex(frame_r2);
     puts(",");
     hex(frame_r3);
+    puts(",");
+    hex(frame_r12);
     puts(" lr=");
     hex(frame_lr);
     puts(" pc=");
