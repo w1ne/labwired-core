@@ -16,13 +16,16 @@
 //!   TIM2   PSC/ARR readback, up-counter advances, UIF latches and clears (W1C 0)
 //!   I2C1   OAR1 readback, START -> SB, address with no slave -> AF (NACK),
 //!          AF rc_w0 clear, STOP releases BUSY (the bare board has no I2C parts)
+//!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
 //! A summary word goes to RAM at 0x20017F00 (one bit per block passed).
 
 use core::ptr::{read_volatile, write_volatile};
 
 const RCC_AHB1ENR: u32 = 0x4002_3830;
 const RCC_APB1ENR: u32 = 0x4002_3840;
+const RCC_APB2ENR: u32 = 0x4002_3844;
 
+const GPIOA: u32 = 0x4002_0000;
 const GPIOC: u32 = 0x4002_0800;
 const MODER: u32 = 0x00;
 const ODR: u32 = 0x14;
@@ -51,6 +54,15 @@ const I2C_SR1: u32 = I2C1 + 0x14;
 const I2C_SR2: u32 = I2C1 + 0x18;
 const I2C_CCR: u32 = I2C1 + 0x1C;
 const I2C_TRISE: u32 = I2C1 + 0x20;
+
+const SPI1: u32 = 0x4001_3000;
+const SPI_CR1: u32 = SPI1;
+const SPI_CR2: u32 = SPI1 + 0x04;
+const SPI_SR: u32 = SPI1 + 0x08;
+const SPI_DR: u32 = SPI1 + 0x0C;
+const NVIC_ISPR1: u32 = 0xE000_E204;
+const NVIC_ICPR1: u32 = 0xE000_E284;
+const SPI1_IRQ_BIT: u32 = 1 << (35 - 32);
 
 const RESULT: u32 = 0x2001_7F00;
 
@@ -92,12 +104,13 @@ pub extern "C" fn Reset() -> ! {
 }
 
 fn main() -> ! {
-    // GPIOA + GPIOC on AHB1; TIM2, USART2, I2C1 on APB1.
+    // GPIOA + GPIOC on AHB1; TIM2, USART2, I2C1 on APB1; SPI1 on APB2.
     wr(RCC_AHB1ENR, rd(RCC_AHB1ENR) | (1 << 0) | (1 << 2));
     wr(
         RCC_APB1ENR,
         rd(RCC_APB1ENR) | (1 << 0) | (1 << 17) | (1 << 21),
     );
+    wr(RCC_APB2ENR, rd(RCC_APB2ENR) | (1 << 12));
     // HSI = 16 MHz, 115200 baud: USARTDIV 8.6875 -> 0x8B.
     wr(USART_BRR, 0x8B);
     wr(USART_CR1, (1 << 13) | (1 << 3)); // UE | TE
@@ -121,8 +134,11 @@ fn main() -> ! {
     line(b"i2c1 nack sr1=", nack_sr1, i2c_ok);
     passed |= (i2c_ok as u32) << 3;
 
+    let spi_ok = smoke_spi1();
+    passed |= (spi_ok as u32) << 4;
+
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0xF {
+    send(if passed == 0x1F {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
@@ -209,6 +225,78 @@ fn smoke_i2c1() -> (u32, bool) {
     let af_cleared = rd(I2C_SR1) & 0x0400 == 0;
     let idle = wait(I2C_SR2, 0x0002, 0);
     (sr1, nack_ok && af_cleared && idle)
+}
+
+/// The fixture MAX31855 is on SPI1 with PA4 as GPIO chip select. Check the
+/// idle TXE interrupt level, then the receive level before reading each DR
+/// byte and its release after the last byte is consumed.
+fn smoke_spi1() -> bool {
+    const TXE: u32 = 1 << 1;
+    const RXNE: u32 = 1;
+    const BSY: u32 = 1 << 7;
+
+    // PA4 as a push-pull output, initially deasserted (high).
+    wr(
+        GPIOA + MODER,
+        (rd(GPIOA + MODER) & !(0b11 << 8)) | (0b01 << 8),
+    );
+    wr(GPIOA + BSRR, 1 << 4);
+
+    // SPI1 master, software NSS, mode 0, 8-bit frames, PCLK2/8.
+    wr(SPI_CR1, (1 << 9) | (1 << 8) | (0b010 << 3) | (1 << 2));
+    wr(SPI_CR1, rd(SPI_CR1) | (1 << 6)); // SPE
+    wr(NVIC_ICPR1, SPI1_IRQ_BIT);
+    wr(SPI_CR2, 1 << 7); // TXEIE
+    let txe_pended = rd(SPI_SR) & TXE != 0 && rd(NVIC_ISPR1) & SPI1_IRQ_BIT != 0;
+    wr(SPI_CR2, 0);
+    let txe_released = rd(NVIC_ISPR1) & SPI1_IRQ_BIT == 0;
+    wr(NVIC_ICPR1, SPI1_IRQ_BIT);
+
+    wr(SPI_CR2, 1 << 6); // RXNEIE
+    wr(GPIOA + BSRR, 1 << (4 + 16)); // select MAX31855
+    let mut frame = 0u32;
+    let mut rxne_pended = true;
+    let mut transfer_ok = true;
+    for _ in 0..4 {
+        if !wait(SPI_SR, TXE, TXE) {
+            transfer_ok = false;
+            break;
+        }
+        wr(SPI_DR, 0);
+        if !wait(SPI_SR, RXNE, RXNE) {
+            transfer_ok = false;
+            break;
+        }
+        rxne_pended &= rd(NVIC_ISPR1) & SPI1_IRQ_BIT != 0;
+        frame = (frame << 8) | (rd(SPI_DR) & 0xFF);
+    }
+    let idle = wait(SPI_SR, BSY, 0);
+    wr(GPIOA + BSRR, 1 << 4); // deselect
+    let rxne_released = rd(NVIC_ISPR1) & SPI1_IRQ_BIT == 0 && rd(SPI_SR) & RXNE == 0;
+    wr(SPI_CR2, 0);
+    wr(SPI_CR1, 0);
+
+    let ok = transfer_ok
+        && idle
+        && frame == 0x0190_1600
+        && txe_pended
+        && txe_released
+        && rxne_pended
+        && rxne_released;
+    send(b"spi1 max31855=");
+    put_hex32(frame);
+    send(b" txe_irq=");
+    putc(if txe_pended { b'1' } else { b'0' });
+    send(b" rxne_irq=");
+    putc(if rxne_pended { b'1' } else { b'0' });
+    send(b" released=");
+    putc(if txe_released && rxne_released {
+        b'1'
+    } else {
+        b'0'
+    });
+    send(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
+    ok
 }
 
 fn wait(addr: u32, mask: u32, want: u32) -> bool {

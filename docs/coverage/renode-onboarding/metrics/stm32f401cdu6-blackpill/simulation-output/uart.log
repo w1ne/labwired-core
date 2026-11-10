@@ -3,4 +3,5 @@ rcc apb1=00220001 ok
 led pc13 odr=00002000 ok
 tim2 arr=00000040 ok
 i2c1 nack sr1=00000400 ok
+spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok
 BLACKPILL PASS
