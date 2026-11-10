@@ -116,6 +116,10 @@
       "how": "needs-build",
       "why": "Exact STM32F103RBT6 descriptor added after the current released CLI. Its NUCLEO-F103RB firmware smoke is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
     },
+    "stm32f103rb-nucleo-bme280-smoke": {
+      "how": "needs-build",
+      "why": "NUCLEO-F103RB + BME280 onboarding smoke is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF. Committed evidence under examples/nucleo-f103rb-bme280/evidence shows onboarding-smoke.yaml passed (NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 and >=32 LD2 edges on PA5)."
+    },
     "stm32f103r8": {
       "how": "needs-build",
       "why": "Exact STM32F103R8T6 descriptor added after the current released CLI. Its boot proof (examples/stm32f103r8-smoke) is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
