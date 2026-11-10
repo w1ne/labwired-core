@@ -293,6 +293,10 @@ const PLACEHOLDER_TYPES: &[&str] = &[
 /// register model must remove the profile from this list.
 const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
     (
+        "litex_vexriscv_smp",
+        "the simulation-only input_pin_bank has no firmware-visible LiteX SMP GPIO register",
+    ),
+    (
         "litex_vexriscv_linux",
         "the simulation-only input_pin_bank has no firmware-visible LiteX Linux GPIO register",
     ),
@@ -582,12 +586,12 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 230;
+const COVERED: usize = 231;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
 const SILICON_REGISTER: usize = 117;
 /// Profiles outside this input endpoint sweep: the three H7 profiles and
-/// CrossLink-NX have ADC coverage; eleven profiles have no analog endpoint.
-const NO_GPIO_ENDPOINT: usize = 15;
+/// CrossLink-NX have ADC coverage; ten profiles have no analog endpoint.
+const NO_GPIO_ENDPOINT: usize = 14;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -1056,6 +1060,7 @@ fn every_onboarding_profile_with_an_input_endpoint_takes_routed_ntc_and_diode_le
     }
     for board in [
         "ice40up5k-mdp-evn",
+        "litex_vexriscv_smp",
         "litex_vexriscv_linux",
         "litex_picorv32",
         "litex_nexys_video_vexriscv_linux",
