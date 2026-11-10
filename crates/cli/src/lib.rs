@@ -37,6 +37,7 @@ mod dispatch;
 /// `execute_test_loop` and the `TestExecutionContext` it takes.
 mod execute;
 mod gpio_observer;
+mod i2c_trace;
 mod inspect_export;
 /// `--log-timestamps` prefix state ([`log_ts::prefix`] / the `eventln!` macro).
 pub(crate) mod log_ts;
@@ -46,7 +47,6 @@ mod outputs;
 mod resource_report;
 mod size_limited_writer;
 mod stimuli;
-mod i2c_trace;
 mod uart_lines;
 mod vcd_trace;
 mod wifi_frames;
