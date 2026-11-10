@@ -62,6 +62,8 @@ peripherals:
     base_address: 0x40005800
     size: "1KB"
     irq: 33
+    config:
+      irq_error: 34
   - id: "i2c3"
     type: "stm32f1_i2c"
     base_address: 0x40005C00
