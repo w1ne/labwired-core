@@ -47,6 +47,9 @@ const NESTED_IRQ_BIT: u32 = 1 << 8;
 const NESTED_IRQN: i16 = 8;
 const NESTED_EXCEPTION_NUMBER: u32 = 16 + NESTED_IRQN as u32;
 const NESTED_CONTEXT: *mut u32 = 0x2000_0060 as *mut u32;
+const DEFERRED_IRQ_BIT: u32 = 1 << 9;
+const DEFERRED_IRQN: i16 = 9;
+const DEFERRED_CONTEXT: *mut u32 = 0x2000_0064 as *mut u32;
 const LPUART_VERID: usize = 0x00;
 const LPUART_PARAM: usize = 0x04;
 const LPUART_BAUD: usize = 0x10;
@@ -94,6 +97,12 @@ static NESTED_INNER_EXC_RETURN: AtomicU32 = AtomicU32::new(0);
 static NESTED_ACTIVE_DURING: AtomicU32 = AtomicU32::new(0);
 static NESTED_INNER_ORDER: AtomicU32 = AtomicU32::new(0);
 static NESTED_OUTER_RESUME_ORDER: AtomicU32 = AtomicU32::new(0);
+static DEFERRED_SEQUENCE: AtomicU32 = AtomicU32::new(0);
+static DEFERRED_OUTER_IPSR: AtomicU32 = AtomicU32::new(0);
+static DEFERRED_OUTER_EXC_RETURN: AtomicU32 = AtomicU32::new(0);
+static DEFERRED_ACTIVE_DURING: AtomicU32 = AtomicU32::new(0);
+static DEFERRED_EQUAL_ORDER: AtomicU32 = AtomicU32::new(0);
+static DEFERRED_LOWER_ORDER: AtomicU32 = AtomicU32::new(0);
 
 const PSP_STACK_WORDS: usize = 64;
 static mut PSP_STACK: [u32; PSP_STACK_WORDS] = [0; PSP_STACK_WORDS];
@@ -666,6 +675,144 @@ fn exercise_nested_irq_priority() -> bool {
     context == 0xFF
 }
 
+/// Equal- and lower-priority IRQs stay pending while IRQ 7 is active, then
+/// run in priority order after the outer handler returns to Thread mode.
+fn exercise_deferred_irq_priority() -> bool {
+    IRQ_CASE.store(7, Ordering::Relaxed);
+    DEFERRED_SEQUENCE.store(0, Ordering::SeqCst);
+    DEFERRED_OUTER_IPSR.store(0, Ordering::Relaxed);
+    DEFERRED_OUTER_EXC_RETURN.store(0, Ordering::Relaxed);
+    DEFERRED_ACTIVE_DURING.store(0, Ordering::Relaxed);
+    DEFERRED_EQUAL_ORDER.store(0, Ordering::Relaxed);
+    DEFERRED_LOWER_ORDER.store(0, Ordering::Relaxed);
+
+    unsafe {
+        write_volatile(
+            NVIC_ICER0 as *mut u32,
+            FLEXCOMM0_IRQ_BIT | NESTED_IRQ_BIT | DEFERRED_IRQ_BIT,
+        );
+        write_volatile(
+            NVIC_ICPR0 as *mut u32,
+            FLEXCOMM0_IRQ_BIT | NESTED_IRQ_BIT | DEFERRED_IRQ_BIT,
+        );
+        write_volatile((NVIC_IPR0 as *mut u8).add(7), 0x80);
+        write_volatile((NVIC_IPR0 as *mut u8).add(8), 0x80);
+        write_volatile((NVIC_IPR0 as *mut u8).add(9), 0xC0);
+        write_volatile(NVIC_ISPR0 as *mut u32, FLEXCOMM0_IRQ_BIT);
+    }
+
+    let psp_top = addr_of_mut!(PSP_STACK) as u32 + (PSP_STACK_WORDS as u32) * 4;
+    let msp_before: u32;
+    let psp_after: u32;
+    let msp_after: u32;
+    unsafe {
+        core::arch::asm!(
+            "msr psp, {top}",
+            "mrs {msp_before}, msp",
+            "movs {tmp}, #2",
+            "msr control, {tmp}",
+            "isb",
+            "str {irq_bits}, [{iser}]",
+            "movw {count}, #10000",
+            "1:",
+            "ldr {equal}, [{equal_order}]",
+            "ldr {lower}, [{lower_order}]",
+            "cmp {equal}, #0",
+            "beq 2f",
+            "cmp {lower}, #0",
+            "bne 3f",
+            "2:",
+            "subs {count}, #1",
+            "bne 1b",
+            "3:",
+            "mrs {psp_after}, psp",
+            "movs {tmp}, #0",
+            "msr control, {tmp}",
+            "isb",
+            "mrs {msp_after}, msp",
+            top = in(reg) psp_top,
+            msp_before = out(reg) msp_before,
+            psp_after = out(reg) psp_after,
+            msp_after = out(reg) msp_after,
+            tmp = out(reg) _,
+            irq_bits = in(reg) FLEXCOMM0_IRQ_BIT | NESTED_IRQ_BIT | DEFERRED_IRQ_BIT,
+            iser = in(reg) NVIC_ISER0 as u32,
+            count = out(reg) _,
+            equal = out(reg) _,
+            lower = out(reg) _,
+            equal_order = in(reg) addr_of!(DEFERRED_EQUAL_ORDER) as u32,
+            lower_order = in(reg) addr_of!(DEFERRED_LOWER_ORDER) as u32,
+            out("r0") _,
+            options(nostack),
+        );
+    }
+
+    unsafe {
+        write_volatile(
+            NVIC_ICER0 as *mut u32,
+            FLEXCOMM0_IRQ_BIT | NESTED_IRQ_BIT | DEFERRED_IRQ_BIT,
+        );
+        write_volatile(
+            NVIC_ICPR0 as *mut u32,
+            FLEXCOMM0_IRQ_BIT | NESTED_IRQ_BIT | DEFERRED_IRQ_BIT,
+        );
+    }
+    let outer_ipsr = DEFERRED_OUTER_IPSR.load(Ordering::Relaxed);
+    let outer_exc_return = DEFERRED_OUTER_EXC_RETURN.load(Ordering::Relaxed);
+    let active_during = DEFERRED_ACTIVE_DURING.load(Ordering::Relaxed);
+    let equal_order = DEFERRED_EQUAL_ORDER.load(Ordering::Relaxed);
+    let lower_order = DEFERRED_LOWER_ORDER.load(Ordering::Relaxed);
+    let priorities_ok = unsafe {
+        read_volatile((NVIC_IPR0 as *const u8).add(7)) == 0x80
+            && read_volatile((NVIC_IPR0 as *const u8).add(8)) == 0x80
+            && read_volatile((NVIC_IPR0 as *const u8).add(9)) == 0xC0
+    };
+    let outer_ok = outer_ipsr == FLEXCOMM0_EXCEPTION_NUMBER && outer_exc_return == 0xFFFF_FFFD;
+    let no_nested_activation = active_during == FLEXCOMM0_IRQ_BIT;
+    let deferred_order_ok = equal_order == 2 && lower_order == 3;
+    let handlers_returned = unsafe {
+        read_volatile(NVIC_IABR0 as *const u32)
+            & (FLEXCOMM0_IRQ_BIT | NESTED_IRQ_BIT | DEFERRED_IRQ_BIT)
+            == 0
+    };
+    let context = u32::from(priorities_ok)
+        | (u32::from(outer_ok) << 1)
+        | (u32::from(no_nested_activation) << 2)
+        | (u32::from(deferred_order_ok) << 3)
+        | (u32::from(handlers_returned) << 4)
+        | (u32::from(psp_after == psp_top) << 5)
+        | (u32::from(msp_after == msp_before) << 6);
+    unsafe { write_volatile(DEFERRED_CONTEXT, context) };
+
+    puts("\r\ndeferred=");
+    hex(context);
+    puts(" outer=");
+    hex(outer_ipsr);
+    puts(" exc=");
+    hex(outer_exc_return);
+    puts(" active=");
+    hex(active_during);
+    puts(" order=");
+    hex(equal_order);
+    putc(b',');
+    hex(lower_order);
+    puts(" after=");
+    hex(unsafe { read_volatile(NVIC_IABR0 as *const u32) });
+    puts(" stack=");
+    putc(if psp_after == psp_top { b'1' } else { b'0' });
+    putc(b',');
+    putc(if msp_after == msp_before { b'1' } else { b'0' });
+    puts(" priorities=");
+    hex(unsafe { read_volatile((NVIC_IPR0 as *const u8).add(7)) as u32 });
+    putc(b',');
+    hex(unsafe { read_volatile((NVIC_IPR0 as *const u8).add(8)) as u32 });
+    putc(b',');
+    hex(unsafe { read_volatile((NVIC_IPR0 as *const u8).add(9)) as u32 });
+    puts("\r\n");
+
+    context == 0x7F
+}
+
 fn wait_nvic_irq_pending(expected: bool) -> bool {
     for _ in 0..10_000 {
         if nvic_irq_pending() == expected {
@@ -737,6 +884,7 @@ fn smoke_lpuart_rx() -> bool {
     let irq_unaligned_psp_context_restored = exercise_irq_exception_without_stack_alignment();
     let irq_padded_msp_context_restored = exercise_irq_exception_on_misaligned_msp();
     let irq_nested_priority = exercise_nested_irq_priority();
+    let irq_deferred_priority = exercise_deferred_irq_priority();
 
     let first = rd(LPUART_DATA) & 0xFF;
     let second_still_queued = rd(LPUART_STAT) & STAT_RDRF != 0;
@@ -765,6 +913,7 @@ fn smoke_lpuart_rx() -> bool {
         && irq_unaligned_psp_context_restored
         && irq_padded_msp_context_restored
         && irq_nested_priority
+        && irq_deferred_priority
         && first == b'R' as u32
         && second_still_queued
         && rx_masked_with_data
@@ -912,6 +1061,9 @@ fn main() -> ! {
     if unsafe { read_volatile(NESTED_CONTEXT) } == 0xFF {
         pass |= 1 << 11;
     }
+    if unsafe { read_volatile(DEFERRED_CONTEXT) } == 0x7F {
+        pass |= 1 << 12;
+    }
 
     puts("flexcomm0 pselid=");
     hex(pselid_reset);
@@ -942,6 +1094,52 @@ fn main() -> ! {
 
 #[exception]
 unsafe fn DefaultHandler(irqn: i16) {
+    if IRQ_CASE.load(Ordering::Relaxed) == 7 {
+        let exc_return: u32;
+        let ipsr: u32;
+        unsafe {
+            core::arch::asm!(
+                "mov {exc_return}, lr",
+                exc_return = out(reg) exc_return,
+                options(nomem, nostack, preserves_flags),
+            );
+            core::arch::asm!(
+                "mrs {ipsr}, IPSR",
+                ipsr = out(reg) ipsr,
+                options(nomem, nostack, preserves_flags),
+            );
+        }
+        if irqn == FLEXCOMM0_IRQN {
+            DEFERRED_OUTER_IPSR.store(ipsr, Ordering::Relaxed);
+            DEFERRED_OUTER_EXC_RETURN.store(exc_return, Ordering::Relaxed);
+            DEFERRED_SEQUENCE.store(1, Ordering::SeqCst);
+            // Keep the UART's level-triggered IRQ masked after the software
+            // pending bit has entered. Equal and lower priorities must stay
+            // pending until this outer handler returns.
+            unsafe {
+                write_volatile(NVIC_ICER0 as *mut u32, FLEXCOMM0_IRQ_BIT);
+                write_volatile(NVIC_ISPR0 as *mut u32, NESTED_IRQ_BIT | DEFERRED_IRQ_BIT);
+            }
+            for _ in 0..128 {
+                unsafe { core::arch::asm!("nop", options(nomem, nostack)) };
+            }
+            DEFERRED_ACTIVE_DURING.store(
+                unsafe { read_volatile(NVIC_IABR0 as *const u32) },
+                Ordering::Relaxed,
+            );
+            DEFERRED_SEQUENCE.store(2, Ordering::SeqCst);
+        } else if irqn == NESTED_IRQN {
+            let phase = DEFERRED_SEQUENCE.load(Ordering::Relaxed);
+            DEFERRED_EQUAL_ORDER.store(if phase == 1 { 0x101 } else { 2 }, Ordering::Relaxed);
+            unsafe { write_volatile(NVIC_ICER0 as *mut u32, NESTED_IRQ_BIT) };
+        } else if irqn == DEFERRED_IRQN {
+            let phase = DEFERRED_SEQUENCE.load(Ordering::Relaxed);
+            DEFERRED_LOWER_ORDER.store(if phase == 1 { 0x101 } else { 3 }, Ordering::Relaxed);
+            unsafe { write_volatile(NVIC_ICER0 as *mut u32, DEFERRED_IRQ_BIT) };
+        }
+        return;
+    }
+
     if IRQ_CASE.load(Ordering::Relaxed) == 6 {
         let exc_return: u32;
         let ipsr: u32;
