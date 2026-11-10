@@ -127,6 +127,27 @@ struct Board {
 /// A chip added to the shipped catalog MUST be added here, or the cross-check at
 /// the bottom of this file fails — a shipped board can never bypass the ratchet.
 const SHIPPED: &[Board] = &[
+    // Public onboarding profiles carry the same reset + executing-fidelity
+    // requirements as catalog boards. Use exact aliases: a parent-family
+    // differential or a survival-only boot must not satisfy these rows.
+    Board {
+        chip: "esp32-devkitc-32e-gpio-smoke",
+        aliases: &["esp32-devkitc-32e-gpio-smoke"],
+        yaml_stem: "esp32-devkitc-32e-gpio-smoke",
+        display_lab: false,
+    },
+    Board {
+        chip: "esp32-devkitc-32e-uart1",
+        aliases: &["esp32-devkitc-32e-uart1"],
+        yaml_stem: "esp32-devkitc-32e-uart1",
+        display_lab: false,
+    },
+    Board {
+        chip: "stm32f103rb-nucleo-bme280-smoke",
+        aliases: &["stm32f103rb-nucleo-bme280-smoke"],
+        yaml_stem: "stm32f103rb-nucleo-bme280-smoke",
+        display_lab: false,
+    },
     Board {
         chip: "stm32f103",
         aliases: &["stm32f103", "f103", "stm32f1"],
@@ -321,6 +342,34 @@ fn generic_cpu_tests_do_not_supply_rv1103_board_coverage() {
     assert!(!corpus.covers(&board, Class::Exec));
     assert!(!is_allowlisted(board.chip, Class::Reset));
     assert!(!is_allowlisted(board.chip, Class::Exec));
+}
+
+#[test]
+fn onboarding_profiles_require_their_own_executing_fidelity() {
+    let corpus = Corpus {
+        files: vec![
+            ("stm32f1_exec_oracle.rs".into(), "chips/stm32f103.yaml".into()),
+            ("esp32_classic_walk_differential.rs".into(), "chips/esp32.yaml".into()),
+            ("firmware_survival.rs".into(),
+                "chips/esp32-devkitc-32e-gpio-smoke.yaml chips/esp32-devkitc-32e-uart1.yaml chips/stm32f103rb-nucleo-bme280-smoke.yaml".into()),
+        ],
+    };
+    for stem in [
+        "esp32-devkitc-32e-gpio-smoke",
+        "esp32-devkitc-32e-uart1",
+        "stm32f103rb-nucleo-bme280-smoke",
+    ] {
+        let board = SHIPPED
+            .iter()
+            .find(|board| board.yaml_stem == stem)
+            .unwrap();
+        assert_eq!(required_classes(board), vec![Class::Reset, Class::Exec]);
+        assert!(
+            !corpus.covers(board, Class::Exec),
+            "{stem}: parent/survival coverage is insufficient"
+        );
+        assert!(!is_allowlisted(board.chip, Class::Exec));
+    }
 }
 
 fn core_crate_root() -> PathBuf {
@@ -553,13 +602,6 @@ fn every_shipped_descriptor_is_ratcheted() {
         "atsamd21j16a",
         "atsamd21j17a",
         "atsamd21j18a",
-        // Narrow DevKitC-32E onboarding profiles: GPIO/RTC sleep and UART1 TX.
-        // Neither descriptor is registered in the Playground board catalog.
-        // Chip conformance and committed smoke receipts cover these slices,
-        // but neither has its own executing-fidelity differential. They must
-        // not inherit that credit from the parent ESP32 descriptor.
-        "esp32-devkitc-32e-gpio-smoke",
-        "esp32-devkitc-32e-uart1",
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
         "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)
         "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)
@@ -577,11 +619,6 @@ fn every_shipped_descriptor_is_ratcheted() {
         "stm32f103r6h",
         "stm32f103r8",
         "stm32f103rb",
-        // NUCLEO-F103RB + BME280 narrow USART2/LD2/I2C1 smoke profile.
-        // This descriptor is not registered in the Playground board catalog.
-        // Its committed onboarding receipt is functional evidence, not an
-        // executing-fidelity differential or a silicon reference.
-        "stm32f103rb-nucleo-bme280-smoke",
         "stm32f103t4",
         "stm32f103t6",
         // STM32G431RB (demand-ordered onboarding; JetBrains State of Embedded

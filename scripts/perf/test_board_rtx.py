@@ -63,6 +63,14 @@ def test_fixture_could_run_requires_a_matching_fixture(monkeypatch):
     assert br.fixture_could_run(DECLARED)
 
 
+def test_real_chip_tree_has_no_waiver_for_a_runnable_perf_fixture():
+    """A coverage-only pass must not conceal a guaranteed RTx startup failure."""
+    chips = br.bp.discover_chips()
+    _, waived = br.bp.plan_coverage(chips)
+    unprovable = sorted(board for board in waived if br.fixture_could_run(chips[board]))
+    assert not unprovable, f"runnable chips must be measured, not waived: {unprovable}"
+
+
 def _run_main(monkeypatch, tmp_path, chips, waived, status, fixture=None):
     cli = tmp_path / "labwired"
     cli.write_text("")

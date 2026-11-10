@@ -89,7 +89,7 @@
   },
   "esp32-devkitc-32e-uart1": {
     "batch": 1.4,
-    "step": 977.7
+    "step": 977.8
   },
   "esp32c3": {
     "batch": 2.5
