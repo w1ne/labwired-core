@@ -293,6 +293,34 @@ const PLACEHOLDER_TYPES: &[&str] = &[
 /// register model must remove the profile from this list.
 const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
     (
+        "riscv_virt",
+        "the simulation-only input_pin_bank has no firmware-visible RISC-V virt GPIO register",
+    ),
+    (
+        "tock_veer_el2_sim",
+        "the simulation-only input_pin_bank has no firmware-visible Tock VeeR GPIO register",
+    ),
+    (
+        "verilated_ibex",
+        "the simulation-only input_pin_bank has no firmware-visible Verilated Ibex GPIO register",
+    ),
+    (
+        "x86",
+        "the simulation-only input_pin_bank has no firmware-visible x86 GPIO register",
+    ),
+    (
+        "xtensa-sample-controller",
+        "the simulation-only input_pin_bank has no firmware-visible Xtensa sample GPIO register",
+    ),
+    (
+        "picosoc",
+        "the simulation-only input_pin_bank has no firmware-visible PicoSoC GPIO register",
+    ),
+    (
+        "riscv_verilated_uartlite",
+        "the simulation-only input_pin_bank has no firmware-visible Verilated UARTLite GPIO register",
+    ),
+    (
         "litex_vexriscv_verilated_liteuart",
         "the simulation-only input_pin_bank has no firmware-visible LiteUART GPIO register",
     ),
@@ -598,12 +626,12 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 234;
+const COVERED: usize = 241;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
 const SILICON_REGISTER: usize = 117;
 /// Profiles outside this input endpoint sweep: the three H7 profiles and
-/// CrossLink-NX have ADC coverage; seven profiles have no analog endpoint.
-const NO_GPIO_ENDPOINT: usize = 11;
+/// CrossLink-NX have ADC coverage.
+const NO_GPIO_ENDPOINT: usize = 4;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -1071,6 +1099,13 @@ fn every_onboarding_profile_with_an_input_endpoint_takes_routed_ntc_and_diode_le
         );
     }
     for board in [
+        "riscv_virt",
+        "tock_veer_el2_sim",
+        "verilated_ibex",
+        "x86",
+        "xtensa-sample-controller",
+        "picosoc",
+        "riscv_verilated_uartlite",
         "ice40up5k-mdp-evn",
         "litex_vexriscv_verilated_liteuart",
         "litex_vexriscv_verilated_cfu",
@@ -1085,7 +1120,7 @@ fn every_onboarding_profile_with_an_input_endpoint_takes_routed_ntc_and_diode_le
     ] {
         assert!(
             covered.iter().any(|covered_board| covered_board == board),
-            "the next uncovered onboarding profile {board} must have routed analog input coverage"
+            "simulation-only input-bank profile {board} must have routed analog input coverage"
         );
     }
     assert_eq!(
