@@ -41,6 +41,13 @@ boards:
     kind: sim-validate
     path: examples/esp32-devkitc-32e-gpio-smoke
     gate: true
+  # Narrow UART1-TX onboarding profile of the same DevKitC-32E SoC. Committed
+  # TIER1 ELF, no cross-toolchain. Proves the new chip descriptor through
+  # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).
+  - id: esp32-devkitc-32e-uart1
+    kind: sim-validate
+    path: examples/esp32-devkitc-32e-uart1
+    gate: true
   # Narrow NUCLEO-F103RB + BME280 onboarding profile. Builds the in-repo
   # firmware crate and runs onboarding-smoke.yaml on every PR (chip-coverage
   # ceiling forbids another waiver).
