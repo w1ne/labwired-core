@@ -17,6 +17,7 @@
 //!   I2C1   OAR1 readback, START -> SB, address with no slave -> AF (NACK),
 //!          AF rc_w0 clear, STOP releases BUSY (the bare board has no I2C parts)
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
+//!   USART1 TXEIE asserts and releases its own NVIC line
 //! A summary word goes to RAM at 0x20017F00 (one bit per block passed).
 
 use core::ptr::{read_volatile, write_volatile};
@@ -36,6 +37,9 @@ const USART_SR: u32 = USART2;
 const USART_DR: u32 = USART2 + 0x04;
 const USART_BRR: u32 = USART2 + 0x08;
 const USART_CR1: u32 = USART2 + 0x0C;
+const USART1: u32 = 0x4001_1000;
+const USART1_SR: u32 = USART1;
+const USART1_CR1: u32 = USART1 + 0x0C;
 
 const TIM2: u32 = 0x4000_0000;
 const TIM_CR1: u32 = TIM2;
@@ -63,6 +67,7 @@ const SPI_DR: u32 = SPI1 + 0x0C;
 const NVIC_ISPR1: u32 = 0xE000_E204;
 const NVIC_ICPR1: u32 = 0xE000_E284;
 const SPI1_IRQ_BIT: u32 = 1 << (35 - 32);
+const USART1_IRQ_BIT: u32 = 1 << (37 - 32);
 
 const RESULT: u32 = 0x2001_7F00;
 
@@ -104,7 +109,7 @@ pub extern "C" fn Reset() -> ! {
 }
 
 fn main() -> ! {
-    // GPIOA + GPIOC on AHB1; TIM2, USART2, I2C1 on APB1; SPI1 on APB2.
+    // GPIOA + GPIOC on AHB1; TIM2, USART2, I2C1 on APB1; USART1 + SPI1 on APB2.
     wr(RCC_AHB1ENR, rd(RCC_AHB1ENR) | (1 << 0) | (1 << 2));
     wr(
         RCC_APB1ENR,
@@ -137,8 +142,11 @@ fn main() -> ! {
     let spi_ok = smoke_spi1();
     passed |= (spi_ok as u32) << 4;
 
+    let usart1_irq_ok = smoke_usart1_txe_irq();
+    passed |= (usart1_irq_ok as u32) << 5;
+
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0x1F {
+    send(if passed == 0x3F {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
@@ -297,6 +305,35 @@ fn smoke_spi1() -> bool {
     });
     send(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
     ok
+}
+
+/// USART1 is imported with NVIC IRQ 37. Its idle TXE level must pend when
+/// TXEIE is enabled and release when firmware disables TXEIE.
+fn smoke_usart1_txe_irq() -> bool {
+    wr(RCC_APB2ENR, rd(RCC_APB2ENR) | (1 << 4)); // USART1EN
+    wr(NVIC_ICPR1, USART1_IRQ_BIT);
+    wr(USART1_CR1, (1 << 13) | (1 << 3) | (1 << 7)); // UE | TE | TXEIE
+
+    let txe_pended = rd(USART1_SR) & (1 << 7) != 0 && rd(NVIC_ISPR1) & USART1_IRQ_BIT != 0;
+    wr(USART1_CR1, (1 << 13) | (1 << 3)); // UE | TE, TXEIE off
+                                          // Clear the latched NVIC pending bit, then allow the level source to
+                                          // settle. A still-asserted USART line will immediately re-pend IRQ 37.
+    wr(NVIC_ICPR1, USART1_IRQ_BIT);
+    for _ in 0..64 {
+        let _ = rd(USART1_SR);
+    }
+    let txe_released = rd(NVIC_ISPR1) & USART1_IRQ_BIT == 0;
+
+    send(b"usart1 txe_irq=");
+    putc(if txe_pended { b'1' } else { b'0' });
+    send(b" released=");
+    putc(if txe_released { b'1' } else { b'0' });
+    send(if txe_pended && txe_released {
+        b" ok\r\n"
+    } else {
+        b" FAIL\r\n"
+    });
+    txe_pended && txe_released
 }
 
 fn wait(addr: u32, mask: u32, want: u32) -> bool {
