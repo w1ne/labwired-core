@@ -21,11 +21,13 @@ const USART_RDR: *const u32 = (USART3 + 0x24) as *const u32;
 const USART_TDR: *mut u32 = (USART3 + 0x28) as *mut u32;
 const USART_RXNEIE: u32 = 1 << 5;
 const USART_TXEIE: u32 = 1 << 7;
+const USART_TCIE: u32 = 1 << 6;
 const NVIC_ISPR1: *const u32 = 0xE000_E204 as *const u32;
 const NVIC_ICPR1: *mut u32 = 0xE000_E284 as *mut u32;
 const USART3_IRQ_BIT: u32 = 1 << (39 - 32);
 const TXE: u32 = 1 << 7;
 const RXNE: u32 = 1 << 5;
+const TC: u32 = 1 << 6;
 const USART_RECEIVER_ENABLE: u32 = if cfg!(feature = "nucleo-h753zi-rx") {
     1 << 2
 } else {
@@ -162,6 +164,52 @@ fn check_uart_txe_irq() {
     }
 }
 
+#[cfg(feature = "nucleo-h753zi-usart3-irq")]
+fn check_uart_tc_irq() {
+    let mut tc_ready = false;
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(USART_ISR) } & TC != 0 {
+            tc_ready = true;
+            break;
+        }
+    }
+
+    // Keep TXEIE off so this probe isolates the imported model's TC interrupt.
+    let cr1 = unsafe { read_volatile(USART_CR1) } & !(USART_TXEIE | USART_TCIE);
+    unsafe {
+        write_volatile(USART_CR1, cr1);
+        write_volatile(NVIC_ICPR1, USART3_IRQ_BIT);
+    }
+    let tc_irq_isolated = tc_ready && unsafe { read_volatile(NVIC_ISPR1) } & USART3_IRQ_BIT == 0;
+
+    unsafe { write_volatile(USART_CR1, cr1 | USART_TCIE) };
+    let mut tc_irq_asserted = false;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR1) } & USART3_IRQ_BIT != 0 {
+            tc_irq_asserted = true;
+            break;
+        }
+    }
+
+    unsafe {
+        write_volatile(USART_CR1, cr1);
+        write_volatile(NVIC_ICPR1, USART3_IRQ_BIT);
+    }
+    let mut tc_irq_released = true;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR1) } & USART3_IRQ_BIT != 0 {
+            tc_irq_released = false;
+            break;
+        }
+    }
+
+    if tc_irq_isolated && tc_irq_asserted && tc_irq_released {
+        send(b"usart3 tc_irq=isolated,asserted,released ok\r\n");
+    } else {
+        send(b"usart3 tc_irq=fail fail\r\n");
+    }
+}
+
 fn set_led(on: bool) {
     let bit = if on { LED } else { LED << 16 };
     unsafe { write_volatile((GPIOB + BSRR) as *mut u32, bit) };
@@ -205,6 +253,8 @@ fn main() -> ! {
     check_uart_rx();
     #[cfg(feature = "nucleo-h753zi-usart3-irq")]
     check_uart_txe_irq();
+    #[cfg(feature = "nucleo-h753zi-usart3-irq")]
+    check_uart_tc_irq();
     loop {
         let on = !led_is_on();
         set_led(on);

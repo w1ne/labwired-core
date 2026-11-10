@@ -14,6 +14,7 @@ assertions:
   - uart_contains: "STM32H7 register smoke"
   - uart_contains: "usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,released ok"
   - uart_contains: "usart3 txe_irq=isolated,asserted,released ok"
+  - uart_contains: "usart3 tc_irq=isolated,asserted,released ok"
   - gpio_edges:
       pin: "gpioPortB:0"
       min_edges: 1
