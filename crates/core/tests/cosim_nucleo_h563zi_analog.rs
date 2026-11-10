@@ -524,6 +524,116 @@ fn nucleo_h563zi_bjt_early_effect_reaches_pa2_pa3_gpio_inputs() {
 }
 
 #[test]
+fn nucleo_h563zi_bjt_early_effect_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-h563zi-demo.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-H563ZI profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-h563zi/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode ADC routes");
+    let bjt = SystemManifest::from_file(root(
+        "examples/nucleo-h563zi/analog-bjt-early-effect-adc-system.yaml",
+    ))
+    .expect("load matched generic BJT Early-effect branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(bjt.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32H563 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-H563ZI bus");
+    adc_power_up(&mut bus);
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixtures carry NTC, diode, and matched BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must bind to independent ADC1 channel endpoints"
+    );
+    for channel in 0..=3 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an injected analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_early.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut saw_early_effect = false;
+    for base_drive_v in [0.7_f64, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt_early.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched BJT branches");
+        assert_eq!(steps.len(), 4, "all four generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        assert!(
+            (signal_voltage(&session, "adc.adc1.0_volts") - ntc_v).abs() < 1e-9,
+            "unrelated Beta NTC remains isolated on ADC1 channel 0"
+        );
+        assert!(
+            (signal_voltage(&session, "adc.adc1.1_volts") - diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains isolated on ADC1 channel 1"
+        );
+
+        let early_v = signal_voltage(&session, "adc.adc1.2_volts");
+        let reference_v = signal_voltage(&session, "adc.adc1.3_volts");
+        let expected_early_v = bjt_collector_voltage(base_drive_v, Some(50.0));
+        let expected_reference_v = bjt_collector_voltage(base_drive_v, None);
+        assert!(
+            (early_v - expected_early_v).abs() < 5e-5,
+            "VAF=50 load line at base drive {base_drive_v} V should be {expected_early_v} V, got {early_v} V"
+        );
+        assert!(
+            (reference_v - expected_reference_v).abs() < 5e-5,
+            "no-Early-effect load line at base drive {base_drive_v} V should be {expected_reference_v} V, got {reference_v} V"
+        );
+        assert!(
+            early_v < reference_v - 0.005,
+            "finite VAF increases forward collector current and lowers collector voltage: {early_v} V vs {reference_v} V"
+        );
+        saw_early_effect |= reference_v - early_v > 0.005;
+
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v), (2, early_v), (3, reference_v)] {
+            let expected = expected_adc12_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected as u16,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                adc_convert(&mut bus, channel),
+                expected,
+                "firmware-visible ADC1 conversion follows the device on channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            u16::MAX,
+            "neighboring ADC1 channel 4 remains isolated"
+        );
+    }
+    assert!(
+        saw_early_effect,
+        "finite VAF's collector-current effect reaches ADC1"
+    );
+}
+
+#[test]
 fn nucleo_h563zi_ntc_diode_and_mosfet_netlists_reach_adc1_end_to_end() {
     let system_path = root("configs/systems/nucleo-h563zi-demo.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-H563ZI profile");
