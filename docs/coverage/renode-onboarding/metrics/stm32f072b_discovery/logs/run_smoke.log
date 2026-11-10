@@ -1,8 +1,11 @@
-[2m2026-11-09T06:12:14.758287Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f072b_discovery.yaml
-[2m2026-11-09T06:12:14.762042Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x80000c1
+2026-11-10T13:53:45.771581Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f072b_discovery.yaml
+2026-11-10T13:53:45.775080Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
 labwired-cli test: idle_ff=on (event_scheduler=on)
-[2m2026-11-09T06:12:14.981924Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
-[2m2026-11-09T06:12:15.072844Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
-[2m2026-11-09T06:12:15.256019Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
-[2m2026-11-09T06:12:15.390892Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
-PASS  5/5 checks · stm32f072b_discovery-smoke · 4000000 steps · 1.82s
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-10T13:53:45.777582Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-10T13:53:45.818681Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T13:53:45.834395Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T13:53:45.861146Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T13:53:45.937305Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+labwired-cli test: idle_ff skipped 2682866 of 4000000 device cycles (1317134 interpreted)
+PASS  5/5 checks · stm32f072b_discovery-smoke · 4000000 steps · 0.20s

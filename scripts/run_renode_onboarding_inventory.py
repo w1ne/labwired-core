@@ -800,6 +800,7 @@ SMOKE_MAPPINGS = {
     },
     "stm32f072b_discovery": {
         "crate": "firmware-stm32f072b-disco-smoke",
+        "features": "onboarding-rx-gate",
         "target": "thumbv6m-none-eabi",
         "script": "examples/renode-onboarding/stm32f072b_discovery-smoke.yaml",
     },

@@ -13,8 +13,10 @@
 //!
 //! The chip surface is the stm32f072 profile (Renode builds the board on
 //! `stm32f072.repl`), so besides the board IO this checks that the board row
-//! loads that surface: RCC clock gates, USART2..4 lines, the B1 edge through
-//! SYSCFG EXTICR into EXTI on the grouped vector, all nine timers on their own
+//! loads that surface: RCC clock gates, USART2..4 lines and, in the onboarding
+//! build, USART2 RX queued until both UE and RE are enabled. It also checks
+//! the B1 edge through SYSCFG EXTICR into EXTI on the grouped vector, all nine
+//! timers on their own
 //! lines, DMA1 memory-to-memory on channel 1, CRC and the ADC on its internal
 //! channels (the board wires no analog source). SPI1/2 and I2C1 have no
 //! on-board slave and are proven by the stm32f072 fixture smoke instead.
@@ -55,8 +57,10 @@ const USART4: u32 = 0x4000_4C00;
 const U_CR1: u32 = 0x00;
 const U_BRR: u32 = 0x0C;
 const U_ISR: u32 = 0x1C;
+const U_RDR: u32 = 0x24;
 const U_TDR: u32 = 0x28;
 const USART_ISR_TXE: u32 = 1 << 7;
+const USART_ISR_RXNE: u32 = 1 << 5;
 const USART_CR1_TXEIE: u32 = 1 << 7;
 
 // GPIO.
@@ -272,6 +276,46 @@ fn check_usart_irqs() -> bool {
         ok &= this;
     }
     verdict(ok);
+    ok
+}
+
+/// Start-injected USART2 bytes must stay on the wire until UE and RE are set.
+#[cfg(feature = "onboarding-rx-gate")]
+fn check_usart2_rx_enable_gates() -> bool {
+    // uart_init leaves UE|TE set and RE clear.
+    let re_off = rd(USART2 + U_ISR) & USART_ISR_RXNE == 0;
+
+    // RE alone must not expose the queued bytes while UE is clear.
+    wr(USART2 + U_CR1, (1 << 3) | (1 << 2)); // TE | RE
+    let ue_off = rd(USART2 + U_CR1) & 1 == 0 && rd(USART2 + U_ISR) & USART_ISR_RXNE == 0;
+
+    // Enabling both gates releases the injected bytes in order.
+    wr(USART2 + U_CR1, 1 | (1 << 3) | (1 << 2)); // UE | TE | RE
+    let mut received = [0u8; 2];
+    let mut count = 0;
+    for _ in 0..1_000_000 {
+        if count < received.len() && rd(USART2 + U_ISR) & USART_ISR_RXNE != 0 {
+            received[count] = rd(USART2 + U_RDR) as u8;
+            count += 1;
+        }
+        if count == received.len() {
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let released = rd(USART2 + U_ISR) & USART_ISR_RXNE == 0;
+    let data = (u32::from(received[0]) << 8) | u32::from(received[1]);
+    let ok = re_off && ue_off && count == 2 && received == *b"RS" && released;
+
+    puts("usart2 rx_gate re_off=");
+    puts(if re_off { "1" } else { "0" });
+    puts(" ue_off=");
+    puts(if ue_off { "1" } else { "0" });
+    puts(" data=");
+    hex(data);
+    puts(" released=");
+    puts(if released { "1" } else { "0" });
+    puts(if ok { " ok\r\n" } else { " FAIL\r\n" });
     ok
 }
 
@@ -557,6 +601,8 @@ fn main() -> ! {
     };
     mark(0, report_rcc(rcc_reset, rcc_gate));
     mark(1, check_usart_irqs());
+    #[cfg(feature = "onboarding-rx-gate")]
+    mark(16, check_usart2_rx_enable_gates());
     mark(2, check_leds());
     mark(3, check_button());
     for (i, &(name, base, irq, width)) in TIMERS.iter().enumerate() {

@@ -9,6 +9,9 @@ license = "MIT"
 cortex-m-rt = "0.7"
 panic-halt = "0.2"
 
+[features]
+onboarding-rx-gate = []
+
 [[bin]]
 name = "firmware-stm32f072b-disco-smoke"
 path = "src/main.rs"
