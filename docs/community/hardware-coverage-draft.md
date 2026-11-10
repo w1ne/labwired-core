@@ -19,7 +19,8 @@ share estimates. RP2350 has no separate row in that survey.
 
 This review draft covers ESP32, an active ATmega328PB sibling board, STM32F103,
 other STM32, and RP2040, with local smoke evidence and a copy-paste example for
-each entry. ATmega328P is excluded from new-design recommendations because it is
+each entry. It also includes Arduino-kit board examples from the separate kit-use
+measure. ATmega328P is excluded from new-design recommendations because it is
 NRND. The page remains unpublished pending Andrii's approval.
 
 ## Demand-ranked coverage
@@ -31,6 +32,7 @@ NRND. The page remains unpublished pending Andrii's approval.
 | **#3 STM32F103, 17%** | [NUCLEO-F103RB](../../examples/nucleo-f103rb/README.md) | USART2 output and LD2 on PA5 | [ST status and stock, checked 2026-11-03](../../examples/nucleo-f103rb/evidence/vendor-status.md) |
 | **#4 other STM32, 13%** | [STM32G071B-DISCO](../../examples/stm32g071b-disco/README.md); [NUCLEO-H723ZG + BME280](../../examples/nucleo-h723zg-bme280/README.md) | G071B-DISCO USART3 output on the ST-LINK virtual COM route; H723ZG reads BME280 ID `0x60` over I2C1 on PB8/PB9 and gates LD1 pulses on the read | [G071B-DISCO status and stock, checked 2026-11-03](../../examples/stm32g071b-disco/evidence/vendor-status.md); [H723ZG and BME280 status, checked 2026-11-09](../../examples/nucleo-h723zg-bme280/evidence/vendor-status.md) |
 | **#5 RP2040, 12%; RP2350 is the current successor in target #2** | [Raspberry Pi Pico](../../examples/pico/README.md); [Pico GP16 PWM servo](../../examples/pico-pwm-servo/README.md); [Pico 2 / RP2350](../../examples/pico2/README.md) | Pico: UART0, GP25 LED, internal temperature ADC, and an external servo driven by PWM0A on GP16. Pico 2: UART0, GP25 LED, and GP26/ADC0 conversion from a modeled potentiometer. RP2350 was not a separate survey row. | [Pico availability checked 2026-11-10](../../examples/pico-pwm-servo/evidence/vendor-status.md); [Pico 2 checked 2026-11-09](../../examples/pico2/evidence/adc/vendor-status.md) |
+| **Arduino kits, 37% (kit-use rank #3)** | [Arduino Nano Every + MCP9808](../../examples/arduino-nano-every-mcp9808/README.md) (ATmega4809; not a separate MCU survey row) | TWI0 reads the MCP9808 manufacturer ID `0x0054`, device ID `0x0400`, and temperature register; the local smoke gates its UART marker on those values | [Live part and board availability, checked 2026-11-10](../../examples/arduino-nano-every-mcp9808/evidence/vendor-status.md) |
 
 ### #1 — ESP32: ESP-Mosaico V1.2 / ESP32-S31
 
@@ -381,6 +383,103 @@ for the smoke command, model limits, and the [availability receipt](../../exampl
 The UNO R4 WiFi profile is also available, but its ESP32-S3 coprocessor and
 wireless features are outside the profile; see its [guide](../../examples/arduino-uno-r4-wifi/README.md)
 and [vendor receipt](../../examples/arduino-uno-r4-wifi/evidence/vendor-status.md).
+
+### Arduino kit use: Arduino Nano Every + MCP9808
+
+Arduino kits are used in 37% of respondents' main projects (kit-use rank #3).
+The Nano Every uses ATmega4809, which was not a separate MCU response in the
+survey. Connect an MCP9808 breakout to 3V3, GND, SDA/D20 (PA2), and SCL/D21
+(PA3). This stock `Wire` sketch checks the sensor IDs and reads ambient
+temperature:
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+
+namespace {
+constexpr uint8_t MCP9808_ADDRESS = 0x18;
+constexpr uint8_t MCP9808_TA = 0x05;
+constexpr uint8_t MCP9808_MANUFACTURER_ID = 0x06;
+constexpr uint8_t MCP9808_DEVICE_ID = 0x07;
+constexpr uint16_t TEMP_MIN_X16 = 24 * 16;
+constexpr uint16_t TEMP_MAX_X16 = 26 * 16;
+
+bool read_register16(uint8_t reg, uint16_t &value, uint8_t &wire_status) {
+  Wire.beginTransmission(MCP9808_ADDRESS);
+  Wire.write(reg);
+  // A STOP followed by a fresh START is supported by the Nano Every's
+  // ArduinoCore-megaavr transfer path; the device retains its register pointer.
+  wire_status = Wire.endTransmission();
+  if (wire_status != 0) {
+    return false;
+  }
+
+  delay(1);
+  wire_status = Wire.requestFrom(static_cast<int>(MCP9808_ADDRESS), 2);
+  if (wire_status != 2) {
+    while (Wire.available()) {
+      Wire.read();
+    }
+    return false;
+  }
+
+  const uint8_t msb = Wire.read();
+  const uint8_t lsb = Wire.read();
+  value = (static_cast<uint16_t>(msb) << 8) | lsb;
+  return true;
+}
+} // namespace
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin(); // Nano Every D20/SDA = PA2, D21/SCL = PA3
+
+  uint16_t manufacturer_id = 0;
+  uint16_t device_id = 0;
+  uint16_t temperature_x16 = 0;
+  uint8_t wire_status = 0;
+  const uint8_t registers[] = {
+      MCP9808_MANUFACTURER_ID, MCP9808_DEVICE_ID, MCP9808_TA};
+  uint16_t *values[] = {&manufacturer_id, &device_id, &temperature_x16};
+  for (uint8_t i = 0; i < 3; ++i) {
+    if (!read_register16(registers[i], *values[i], wire_status)) {
+      Serial.print("MCP9808_FAIL reg=");
+      Serial.print(registers[i], HEX);
+      Serial.print(" wire=");
+      Serial.println(wire_status);
+      return;
+    }
+  }
+
+  temperature_x16 &= 0x1FFF;
+  if (manufacturer_id != 0x0054 || device_id != 0x0400 ||
+      temperature_x16 < TEMP_MIN_X16 || temperature_x16 > TEMP_MAX_X16) {
+    Serial.print("MCP9808_FAIL id=");
+    Serial.print(manufacturer_id, HEX);
+    Serial.print(" dev=");
+    Serial.print(device_id, HEX);
+    Serial.print(" temp_x16=");
+    Serial.println(temperature_x16);
+    return;
+  }
+
+  Serial.print("NANO_EVERY_MCP9808_OK id=");
+  Serial.print(manufacturer_id, HEX);
+  Serial.print(" dev=");
+  Serial.print(device_id, HEX);
+  Serial.print(" temp_x16=");
+  Serial.println(temperature_x16);
+}
+
+void loop() {}
+```
+
+The committed [local CLI smoke](../../examples/arduino-nano-every-mcp9808/evidence/)
+builds the stock Arduino firmware and checks its UART pass marker. Its focused
+profile models TWI0 register transfers; it does not model SDA/SCL pad waveforms
+or the SAMD11 USB bridge, and it is not hosted `labwired_verify` evidence. See
+the [quickstart](../../examples/arduino-nano-every-mcp9808/README.md) and
+[availability receipt](../../examples/arduino-nano-every-mcp9808/evidence/vendor-status.md).
 
 ### RP2350: newer Raspberry Pi board
 
