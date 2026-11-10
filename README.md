@@ -171,6 +171,12 @@ See the [CLI reference](docs/cli_reference.md) and the
 
 ### From Python
 
+Install the SDK from PyPI with Python 3.9 or later:
+
+```sh
+python -m pip install 'labwired[test]==0.26.0'
+```
+
 Use `labwired.Sim` to run an ELF, wait for UART output, and write pytest checks:
 
 ```python
@@ -181,9 +187,9 @@ with Sim("tests/fixtures/uart-ok-thumbv7m.elf",
     sim.expect("OK", timeout="1ms")
 ```
 
-The SDK runs the Rust engine in your Python process. Start with the
-[Python SDK quickstart](docs/python-sdk.md) for source installation and a runnable
-pytest test. This SDK is not yet published to PyPI.
+The SDK runs the Rust engine in your Python process. See the
+[Python SDK quickstart](docs/python-sdk.md) for source-build instructions and a
+runnable pytest test using the repository's firmware fixture.
 
 ### In CI
 

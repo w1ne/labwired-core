@@ -81,7 +81,9 @@ jobs:
             exit 1
           fi
           notes="docs/releases/v$version.md"
-          git ls-files --error-unmatch "$notes" >/dev/null
+          # The Linux build container uses a different UID from checkout.
+          # Trust only this checked-out workspace for this one metadata read.
+          git -c safe.directory="$GITHUB_WORKSPACE" ls-files --error-unmatch "$notes" >/dev/null
           test -s "$notes"
           IFS= read -r title < "$notes"
           title=${title%$'\r'}

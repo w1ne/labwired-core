@@ -186,7 +186,7 @@ build_block=$(job_block build)
 require_block_literal "$build_block" 'name: Check release version and notes' 'release builds validate version and notes before compiling'
 require_block_literal "$build_block" 'if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then' 'release builds reject a tag that disagrees with the workspace version'
 require_block_literal "$build_block" 'notes="docs/releases/v$version.md"' 'release builds select notes for the workspace version'
-require_block_literal "$build_block" 'git ls-files --error-unmatch "$notes"' 'release builds require tracked release notes'
+require_block_literal "$build_block" 'git -c safe.directory="$GITHUB_WORKSPACE" ls-files --error-unmatch "$notes"' 'release builds require tracked notes with trust scoped to the checkout workspace'
 require_block_literal "$build_block" 'test -s "$notes"' 'release builds reject empty release notes'
 require_block_literal "$build_block" 'if [[ "$title" != "# Release v$version: "?* ]]; then' 'release builds require a versioned release title'
 require_literal "$workflow" 'cp "target/${{ matrix.target }}/release/labwired-dap${EXE}" "dist/labwired-dap${EXE}"' 'archive package copies the labwired-dap binary'
