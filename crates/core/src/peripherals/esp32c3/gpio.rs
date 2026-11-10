@@ -82,6 +82,8 @@ fn c3_out_signal_name(idx: u32) -> Option<&'static str> {
         64 => "FSPIQ", // FSPI MISO
         65 => "FSPID", // FSPI MOSI
         68 => "FSPICS0",
+        51 => "RMT_SIG_OUT0",
+        52 => "RMT_SIG_OUT1",
         SIG_LEDC_LS_OUT0..=50 => {
             crate::peripherals::esp32c3::ledc::LEDC_LINES[(idx - SIG_LEDC_LS_OUT0) as usize]
         }
@@ -372,6 +374,17 @@ impl Esp32c3Gpio {
     pub fn pads_for_output_signal(&self, signal_idx: u32) -> Vec<u8> {
         (0..PIN_COUNT)
             .filter(|&pin| self.out_sel[pin as usize] & 0x1FF == signal_idx)
+            .collect()
+    }
+
+    /// Pads where the output matrix selects `signal_idx` and GPIO output is
+    /// enabled. Used by the timed C3 RMT transmitter so a disabled pad cannot
+    /// receive a synthetic peripheral waveform.
+    pub fn enabled_pads_for_output_signal(&self, signal_idx: u32) -> Vec<u8> {
+        (0..PIN_COUNT)
+            .filter(|&pin| {
+                self.enable & (1u32 << pin) != 0 && self.out_sel[pin as usize] & 0x1FF == signal_idx
+            })
             .collect()
     }
 

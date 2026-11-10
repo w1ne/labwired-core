@@ -4,14 +4,12 @@
 
 //! ESP32-C3 RMT TX_END must reach the CPU on the SHIPPED (walk-deleted) bus.
 //!
-//! ## What this asserts, and why it is not the existing RMT test
+//! ## What this asserts
 //!
-//! `Esp32c3Rmt`'s own unit test (`logic_tap_sees_tx_start_pulse`) and the
-//! matrix L2 oracle both observe `tx_start_count` / the LogicTap edge. Both of
-//! those are produced *inside the `CONF0` write*, so they are walk-independent
-//! by construction: they are green whether or not the model is ever ticked.
-//! No test in this repo asserted RMT **interrupt delivery**, which was the one
-//! thing that depended on the walk.
+//! The board onboarding smoke writes a populated symbol frame and checks timed
+//! GPIO output. This test instead starts TX with empty symbol RAM, which the
+//! model completes immediately, so it can isolate C3 interrupt delivery from
+//! waveform timing and GPIO routing.
 //!
 //! The observable here is therefore `SystemBus::irq_fabric` → `esp32c3.irq_lines` — the routed
 //! CPU interrupt-line mask the RISC-V core reads at its instruction boundary.

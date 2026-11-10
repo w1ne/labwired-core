@@ -1,17 +1,18 @@
 # ESP32-C3-DevKitM-1-N4X
 
 **Demand rank:** ESP32 is rank 1 in the 2025 JetBrains State of Embedded MCU
-survey (38%). This round adds a smoke for Espressif's exact N4X DevKitM-1
-board SKU. The vendor guide marks the older unsuffixed board EOL; this N4X
-variant is listed as Active and in stock. See
+survey (38%). This round adds RMT output to Espressif's exact N4X DevKitM-1
+board SKU. DigiKey lists N4X as Active and in stock, and lists the older
+unsuffixed SKU as obsolete. See
 [`evidence/vendor-status.md`](evidence/vendor-status.md).
 
-The narrow profile loads the ESP32-C3 GPIO and IO_MUX models and attaches a
-protocol-level NeoPixel model to the board's built-in GPIO8 RGB LED (J3 pin 6,
-schematic reference D6, SK68XXMINI-HS). Firmware sends a red 24-bit GRB frame;
-the smoke checks the GPIO waveform and decoded red pixel. GPIO8 is also a boot
-strapping pin. Radio, USB, the USB-to-UART bridge, the boot button, and other
-peripherals are outside this profile.
+The narrow profile loads the ESP32-C3 GPIO, IO_MUX, and timed RMT TX models and
+attaches a protocol-level NeoPixel model to the board's built-in GPIO8 RGB LED
+(J3 pin 6, schematic reference D6, SK68XXMINI-HS). Firmware writes a red
+24-bit GRB frame to RMT TX0 and routes it to GPIO8; the smoke checks TX_END,
+the GPIO waveform, and the decoded red pixel. GPIO8 is also a boot strapping
+pin. Radio, USB, the USB-to-UART bridge, the boot button, and other peripherals
+are outside this profile.
 
 ## Copy-paste Arduino example
 

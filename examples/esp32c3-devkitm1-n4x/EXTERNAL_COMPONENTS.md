@@ -7,4 +7,6 @@ the decoded red pixel.
 
 This is a protocol-level model of the board's data path. It does not model the
 LED's power, analog thresholds, brightness/current, or exact die behavior. The
-firmware bit-bangs GPIO; the C3 RMT controller is omitted.
+firmware writes timed symbols to C3 RMT TX0 and routes the output through the
+GPIO matrix. The LED model validates the edge timing and decoded color; it does
+not model analog or optical behavior.

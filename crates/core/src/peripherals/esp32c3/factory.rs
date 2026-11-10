@@ -28,9 +28,19 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // numbering, interrupts, or the rest of the peripheral block.
         "esp32c2_gpio" => Box::new(super::gpio::Esp32c3Gpio::new()),
         "esp32c2_io_mux" => Box::new(super::io_mux::Esp32c3IoMux::new()),
-        // RMT TX model (Arduino RGB_BUILTIN / rgbLedWrite). Instant TX_END +
-        // LogicTap pulse on TX_START for matrix `led_watch: rmt:0`.
-        "esp32c3_rmt" => Box::new(super::rmt::Esp32c3Rmt::new_default()),
+        // RMT TX model (Arduino RGB_BUILTIN / rgbLedWrite). Timed symbol-RAM
+        // playback on the 80 MHz APB clock, routed through the C3 GPIO matrix.
+        "esp32c3_rmt" => {
+            let cpu_clock_hz = p_cfg
+                .config
+                .get("cpu_clock_hz")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(160_000_000) as u32;
+            Box::new(super::rmt::Esp32c3Rmt::new(
+                super::rmt::RMT_SOURCE_C3,
+                cpu_clock_hz,
+            ))
+        }
         // SYSTIMER (0x6002_3000): the C3 block is the same IP as the S3's (all
         // 30 C3 registers agree offset-for-offset), so the S3 model serves it —
         // a live 16 MHz counter with the UNITx_OP update / VALUE_VALID

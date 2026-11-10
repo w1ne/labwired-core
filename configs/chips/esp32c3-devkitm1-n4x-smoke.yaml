@@ -1,6 +1,6 @@
 # Narrow smoke profile for Espressif's ESP32-C3-DevKitM-1-N4X.
-# It exposes only GPIO8, IO_MUX GPIO8, and the 4 MiB flash / 400 KiB SRAM
-# needed by the firmware that drives the board's addressable RGB LED.
+# It exposes GPIO8, IO_MUX GPIO8, RMT TX0, and the 4 MiB flash / 400 KiB SRAM
+# needed by firmware that drives the board's addressable RGB LED.
 name: "esp32c3-devkitm1-n4x-smoke"
 arch: "riscv"
 core: "rv32imc"
@@ -31,3 +31,12 @@ peripherals:
     config:
       debug_schema: "../peripherals/esp32c3/io_mux.yaml"
       path: "../peripherals/esp32c3/io_mux.yaml"
+
+  - id: "rmt"
+    type: "esp32c3_rmt"
+    base_address: 0x60016000
+    size: "2KB"
+    irq: 28
+    config:
+      cpu_clock_hz: 160_000_000
+      debug_schema: "../peripherals/esp32c3/rmt.yaml"

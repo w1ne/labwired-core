@@ -6,6 +6,9 @@ inputs:
 limits:
   max_steps: 200000
 assertions:
+  - memory_value:
+      address: 0x60016038
+      expected_value: 1
   - gpio_edges:
       pin: "gpio:8"
       min_edges: 48

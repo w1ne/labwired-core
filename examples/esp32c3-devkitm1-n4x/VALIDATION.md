@@ -12,11 +12,12 @@ scripts/onboarding_smoke.sh \
   --out-dir examples/esp32c3-devkitm1-n4x/evidence
 ```
 
-The smoke passes only when the model observes at least 48 GPIO8 edges and
-decodes a red pixel (`RGB565 0xF800`) from the 24-bit GRB one-wire stream. It
-then stops at the configured step limit. The committed evidence is under
-`evidence/`. The smoke firmware reserves a 4 KiB stack; this is not a general
-application stack-size recommendation.
+The smoke passes only when RMT channel 0 sets `INT_RAW.TX_END_CH0`, the model
+observes at least 48 GPIO8 edges, and the NeoPixel decodes a red pixel
+(`RGB565 0xF800`) from the 24-bit GRB one-wire stream. It then stops at the
+configured step limit. The committed evidence is under `evidence/`. The smoke
+firmware reserves a 4 KiB stack; this is not a general application stack-size
+recommendation.
 
 GPIO8's waveform and the attached LED model are checked by the repository's
 local deterministic onboarding smoke. The hosted diagram validator accepted
