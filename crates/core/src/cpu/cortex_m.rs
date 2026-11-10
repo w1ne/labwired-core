@@ -2111,6 +2111,33 @@ impl CortexM {
         self.active_exception = exc;
         self.vectactive
             .store(exc & 0x1FF, std::sync::atomic::Ordering::Relaxed);
+        if exc >= 16 {
+            if let Some(nvic) = &self.nvic_state {
+                let irq = exc - 16;
+                let word = (irq / 32) as usize;
+                let bit = 1u32 << (irq % 32);
+                if word < nvic.iabr.len() {
+                    nvic.iabr[word].fetch_or(bit, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+        }
+    }
+
+    /// Clear the active bit for the exception that is returning. A nested
+    /// return then restores the previously active IRQ without clearing its
+    /// bit; `set_active_exception` keeps that outer activation visible.
+    fn clear_active_exception(&self) {
+        let exc = self.active_exception;
+        if exc >= 16 {
+            if let Some(nvic) = &self.nvic_state {
+                let irq = exc - 16;
+                let word = (irq / 32) as usize;
+                let bit = 1u32 << (irq % 32);
+                if word < nvic.iabr.len() {
+                    nvic.iabr[word].fetch_and(!bit, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+        }
     }
 
     fn xpsr_with_itstate(&self, xpsr: u32) -> u32 {
@@ -2486,6 +2513,7 @@ impl CortexM {
         // Restore active exception from stacked xPSR IPSR bits [8:0].
         // When taking an exception, we saved the previous active_exception in IPSR,
         // so restoring it here correctly handles both non-nested and nested cases.
+        self.clear_active_exception();
         self.set_active_exception(self.xpsr & 0x1FF);
 
         // On return to Thread mode, CONTROL.SPSEL takes EXC_RETURN[2].
@@ -2943,6 +2971,9 @@ impl Cpu for CortexM {
         self.event_register = false;
         if let Some(nvic) = &self.nvic_state {
             nvic.event_register.store(false, Ordering::Relaxed);
+            for active in &nvic.iabr {
+                active.store(0, Ordering::SeqCst);
+            }
         }
         self.set_active_exception(0);
         self.clear_decoded_state();

@@ -1,0 +1,1 @@
+The firmware compiled and booted, but the initial nested-IRQ UART assertion failed. This preserves the failure metric, UART output, JUnit, simulator result, snapshot, and logs. It is counted as a measured smoke failure in the generated scoreboard until a later target-only rerun replaces the current metric; the archived failure remains visible.

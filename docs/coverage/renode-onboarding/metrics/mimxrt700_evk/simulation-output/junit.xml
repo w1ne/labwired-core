@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="26" failures="0" errors="0" time="1.279991">
+<testsuite name="labwired" tests="28" failures="0" errors="0" time="1.740671">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="c7b81256ec43c9210b053d31f3f374e1f9fb3636e20d46e87ec943ddd1f317b1"/>
+    <property name="firmware_hash" value="5b1696f2361cee7f48f879ad651cba437f4c34ee79649078534148173533d3d1"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.279991">
+  <testcase classname="labwired" name="run" time="1.740671">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE" time="0.000000">
   </testcase>
@@ -19,42 +19,46 @@
   </testcase>
   <testcase classname="labwired" name="assertion 6: uart_contains: msp_noalign_context=0000001f msp_noalign_r0=2468ace0 msp_noalign_xpsr=01000000 msp_noalign_sp=200000dc m…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 7: uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ct…" time="0.000000">
+  <testcase classname="labwired" name="assertion 7: uart_contains: nested=000000ff outer=00000017 nested_ipsr=00000018 exc=fffffffd,fffffff1 order=00000002,00000003 active…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 8: memory_value: @0x20000008=0x143" time="0.000000">
+  <testcase classname="labwired" name="assertion 8: uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ct…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 9: memory_value: @0x2000000c=0x700007ff" time="0.000000">
+  <testcase classname="labwired" name="assertion 9: memory_value: @0x20000008=0x143" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 10: memory_value: @0x20000010=0xf" time="0.000000">
+  <testcase classname="labwired" name="assertion 10: memory_value: @0x2000000c=0x70000fff" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 11: memory_value: @0x20000014=0x12345678" time="0.000000">
+  <testcase classname="labwired" name="assertion 11: memory_value: @0x20000010=0xf" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 12: memory_value: @0x2000001c=0x1000000" time="0.000000">
+  <testcase classname="labwired" name="assertion 12: memory_value: @0x20000014=0x12345678" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 13: memory_value: @0x20000020=0x200000e0" time="0.000000">
+  <testcase classname="labwired" name="assertion 13: memory_value: @0x2000001c=0x1000000" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 14: memory_value: @0x20000024=0xf" time="0.000000">
+  <testcase classname="labwired" name="assertion 14: memory_value: @0x20000020=0x200000e0" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 15: memory_value: @0x20000028=0x1000200" time="0.000000">
+  <testcase classname="labwired" name="assertion 15: memory_value: @0x20000024=0xf" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 16: memory_value: @0x2000002c=0x200000d8" time="0.000000">
+  <testcase classname="labwired" name="assertion 16: memory_value: @0x20000028=0x1000200" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 17: memory_value: @0x20000030=0x200000fc" time="0.000000">
+  <testcase classname="labwired" name="assertion 17: memory_value: @0x2000002c=0x200000d8" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 18: memory_value: @0x20000034=0x1f" time="0.000000">
+  <testcase classname="labwired" name="assertion 18: memory_value: @0x20000030=0x200000fc" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 19: memory_value: @0x20000038=0x1000000" time="0.000000">
+  <testcase classname="labwired" name="assertion 19: memory_value: @0x20000034=0x1f" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 20: memory_value: @0x2000003c=0x200000dc" time="0.000000">
+  <testcase classname="labwired" name="assertion 20: memory_value: @0x20000038=0x1000000" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 21: memory_value: @0x20000040=0x200000fc" time="0.000000">
+  <testcase classname="labwired" name="assertion 21: memory_value: @0x2000003c=0x200000dc" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 22: memory_value: @0x20000044=0x3ff" time="0.000000">
+  <testcase classname="labwired" name="assertion 22: memory_value: @0x20000040=0x200000fc" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 23: memory_value: @0x20000048=0x9bdf1357" time="0.000000">
+  <testcase classname="labwired" name="assertion 23: memory_value: @0x20000044=0x3ff" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 24: memory_value: @0x2000004c=0x1000200" time="0.000000">
+  <testcase classname="labwired" name="assertion 24: memory_value: @0x20000048=0x9bdf1357" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 25: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 25: memory_value: @0x2000004c=0x1000200" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 26: memory_value: @0x20000060=0xff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 27: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

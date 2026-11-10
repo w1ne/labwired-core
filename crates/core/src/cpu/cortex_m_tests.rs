@@ -4377,3 +4377,48 @@ fn tt_reports_the_mpu_region() {
     run_test_instr(&mut plain, &mut bus, 0xE840_F300, true);
     assert_eq!(plain.r3 & (1 << 16), 0);
 }
+
+#[test]
+fn nvic_iabr_tracks_nested_external_exception_return() {
+    use crate::peripherals::nvic::NvicState;
+    use std::sync::atomic::Ordering;
+    use std::sync::Arc;
+
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    let nvic = Arc::new(NvicState::default());
+    cpu.set_shared_nvic_state(Arc::clone(&nvic));
+
+    // IRQ 7 is active when higher-priority IRQ 8 preempts it.
+    cpu.set_active_exception(23);
+    cpu.set_active_exception(24);
+    assert_eq!(nvic.iabr[0].load(Ordering::SeqCst), (1 << 7) | (1 << 8));
+
+    // The nested frame is on MSP and carries the outer active exception in
+    // stacked IPSR. Returning to it clears only IRQ 8's active bit.
+    cpu.msp = 0x2000_0100;
+    cpu.sp = cpu.msp;
+    for (index, value) in [0, 0, 0, 0, 0, 0x2000_0000, 0x2000_1000, 0x0100_0000 | 23]
+        .into_iter()
+        .enumerate()
+    {
+        bus.write_u32(cpu.msp as u64 + (index * 4) as u64, value)
+            .unwrap();
+    }
+    cpu.exception_return(0xFFFF_FFF1, &mut bus).unwrap();
+    assert_eq!(cpu.active_exception, 23);
+    assert_eq!(nvic.iabr[0].load(Ordering::SeqCst), 1 << 7);
+
+    // Returning from the outer IRQ to Thread/PSP clears its bit as well.
+    cpu.psp = 0x2000_0200;
+    for (index, value) in [0, 0, 0, 0, 0, 0x2000_0000, 0x2000_2000, 0x0100_0000]
+        .into_iter()
+        .enumerate()
+    {
+        bus.write_u32(cpu.psp as u64 + (index * 4) as u64, value)
+            .unwrap();
+    }
+    cpu.exception_return(0xFFFF_FFFD, &mut bus).unwrap();
+    assert_eq!(cpu.active_exception, 0);
+    assert_eq!(nvic.iabr[0].load(Ordering::SeqCst), 0);
+}

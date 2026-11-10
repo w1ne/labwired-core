@@ -1,0 +1,1 @@
+The target booted and passed the nested IRQ priority/preemption UART assertion. The run then failed a stale memory assertion for the pass bitmap, which had not yet been updated from 0x700007ff to 0x70000fff. This preserves its failure metric and full logs. It remains counted as a measured failure until the final target-only replay.
