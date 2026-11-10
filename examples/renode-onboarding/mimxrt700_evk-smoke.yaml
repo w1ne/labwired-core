@@ -1,13 +1,13 @@
 # Cortex-M33 CPU0, LP_FLEXCOMM0 selection/status, LPUART register readback,
 # TX, injected RX/NVIC, and PSP/MSP exception frames with CCR.STKALIGN enabled
-# and disabled on the exact imported MIMXRT700-EVK system.
+# and disabled on PSP and MSP stacks on the exact imported MIMXRT700-EVK system.
 # LPI2C/LPSPI transactions are not modelled or claimed.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke"
   system: "../../configs/systems/onboarding/mimxrt700_evk.yaml"
 limits:
-  max_steps: 10000000
+  max_steps: 12000000
 uart_injections:
   - uart: "flexcomm0"
     bytes: "RS"
@@ -16,7 +16,8 @@ assertions:
   - uart_contains: "rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc="
   - uart_contains: "padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8"
   - uart_contains: "unaligned_context=0000001f unaligned_xpsr="
-  - uart_contains: "msp_context=0000001f msp_r0=9bdf1357 msp_xpsr="
+  - uart_contains: "msp_context=000003ff msp_r0=9bdf1357 msp_xpsr="
+  - uart_contains: "msp_noalign_context=0000001f msp_noalign_r0=2468ace0 msp_noalign_xpsr=01000000 msp_noalign_sp=200000dc msp_noalign_after=200000fc restore=1"
   - uart_ordered:
       - "flexcomm0 pselid=00103070->00103071->00103079"
       - "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001"
@@ -80,7 +81,7 @@ assertions:
       size: 4
   - memory_value:
       address: 0x20000044
-      expected_value: 0x0000001f
+      expected_value: 0x000003ff
       size: 4
   - memory_value:
       address: 0x20000048

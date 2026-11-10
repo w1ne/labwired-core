@@ -358,8 +358,9 @@ fn exercise_irq_exception_without_stack_alignment() -> bool {
     handler_entered && context == 0b1_1111
 }
 
-/// Deliver FLEXCOMM0 from Thread mode on a four-byte-aligned MSP. The smoke
-/// inspects the frame after exception return, once the thread stack is restored.
+/// Deliver FLEXCOMM0 from Thread mode on a four-byte-aligned MSP with
+/// STKALIGN enabled and disabled. Inspect both frames after exception return,
+/// once the thread stack is restored.
 fn exercise_irq_exception_on_misaligned_msp() -> bool {
     IRQ_CASE.store(4, Ordering::Relaxed);
     IRQ_ENTRY.store(0, Ordering::Relaxed);
@@ -418,13 +419,13 @@ fn exercise_irq_exception_on_misaligned_msp() -> bool {
         && frame_xpsr & 0x0100_0200 == 0x0100_0200
         && frame_xpsr & 0x1FF == 0
         && padding_word == 0;
-    let context = u32::from(ccr_after & SCB_CCR_STKALIGN != 0)
+    let aligned_context = u32::from(ccr_after & SCB_CCR_STKALIGN != 0)
         | (u32::from(IRQ_EXC_RETURN.load(Ordering::Relaxed) == 0xFFFF_FFF9) << 1)
         | (u32::from(msp_after == msp_thread) << 2)
         | (u32::from(msp_restored == msp_before) << 3)
         | (u32::from(frame_ok) << 4);
     unsafe {
-        write_volatile(MSP_EXCEPTION_CONTEXT, context);
+        write_volatile(MSP_EXCEPTION_CONTEXT, aligned_context);
         write_volatile(MSP_EXCEPTION_FRAME_R0, frame_r0);
         write_volatile(MSP_EXCEPTION_FRAME_XPSR, frame_xpsr);
         write_volatile(MSP_EXCEPTION_FRAME_SP, frame_sp);
@@ -432,7 +433,94 @@ fn exercise_irq_exception_on_misaligned_msp() -> bool {
         write_volatile(MSP_EXCEPTION_RESTORED, msp_restored);
         write_volatile(MSP_EXCEPTION_PADDING, padding_word);
     }
-    IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_HANDLER_MARK && context == 0b1_1111
+
+    // Repeat from the same four-byte-aligned Thread-mode MSP with CCR.STKALIGN
+    // clear. This must leave an eight-word frame, with no xPSR alignment flag.
+    IRQ_CASE.store(5, Ordering::Relaxed);
+    IRQ_ENTRY.store(0, Ordering::Relaxed);
+    IRQ_EXC_RETURN.store(0, Ordering::Relaxed);
+    let msp_before: u32;
+    let msp_after: u32;
+    let msp_restored: u32;
+    let ccr_after: u32;
+    unsafe {
+        let ccr = read_volatile(SCB_CCR as *const u32);
+        write_volatile(SCB_CCR as *mut u32, ccr & !SCB_CCR_STKALIGN);
+        ccr_after = read_volatile(SCB_CCR as *const u32);
+        core::arch::asm!(
+            "mrs {saved_msp}, msp",
+            "msr msp, {thread_msp}",
+            "movw r0, #0xace0",
+            "movt r0, #0x2468",
+            "str {irq_bit}, [{iser}]",
+            "movw {count}, #10000",
+            "1:",
+            "ldr {seen}, [{entry}]",
+            "cmp {seen}, {mark}",
+            "beq 2f",
+            "subs {count}, #1",
+            "bne 1b",
+            "2:",
+            "mrs {msp_after}, msp",
+            "msr msp, {saved_msp}",
+            "isb",
+            "mrs {msp_restored}, msp",
+            saved_msp = out(reg) msp_before,
+            thread_msp = in(reg) msp_thread,
+            msp_after = out(reg) msp_after,
+            msp_restored = out(reg) msp_restored,
+            irq_bit = in(reg) FLEXCOMM0_IRQ_BIT,
+            iser = in(reg) NVIC_ISER0 as u32,
+            count = out(reg) _,
+            seen = out(reg) _,
+            entry = in(reg) addr_of!(IRQ_ENTRY) as u32,
+            mark = in(reg) FLEXCOMM0_HANDLER_MARK,
+            out("r0") _,
+            options(nostack),
+        );
+    }
+
+    let frame_sp = msp_thread - 8 * 4;
+    let frame = frame_sp as *const u32;
+    let frame_r0 = unsafe { read_volatile(frame) };
+    let frame_pc = unsafe { read_volatile(frame.add(6)) };
+    let frame_xpsr = unsafe { read_volatile(frame.add(7)) };
+    let frame_ok = frame_r0 == 0x2468_ACE0
+        && frame_pc & 1 == 0
+        && (0x3800_0000..0x4000_0000).contains(&frame_pc)
+        && frame_xpsr & (1 << 24) != 0
+        && frame_xpsr & 0x1FF == 0
+        && frame_xpsr & (1 << 9) == 0
+        && frame_sp == msp_thread - 8 * 4;
+    let unaligned_context = u32::from(ccr_after & SCB_CCR_STKALIGN == 0)
+        | (u32::from(IRQ_EXC_RETURN.load(Ordering::Relaxed) == 0xFFFF_FFF9) << 1)
+        | (u32::from(msp_after == msp_thread) << 2)
+        | (u32::from(msp_restored == msp_before) << 3)
+        | (u32::from(frame_ok) << 4);
+
+    puts("\r\nmsp_noalign_context=");
+    hex(unaligned_context);
+    puts(" msp_noalign_r0=");
+    hex(frame_r0);
+    puts(" msp_noalign_xpsr=");
+    hex(frame_xpsr & (0x0100_0000 | 0x0000_0200 | 0x0000_01FF));
+    puts(" msp_noalign_sp=");
+    hex(frame_sp);
+    puts(" msp_noalign_after=");
+    hex(msp_after);
+    puts(" restore=");
+    putc(if msp_restored == msp_before {
+        b'1'
+    } else {
+        b'0'
+    });
+    puts("\r\n");
+
+    let context = aligned_context | (unaligned_context << 5);
+    unsafe { write_volatile(MSP_EXCEPTION_CONTEXT, context) };
+    IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_HANDLER_MARK
+        && aligned_context == 0b1_1111
+        && unaligned_context == 0b1_1111
 }
 
 fn wait_nvic_irq_pending(expected: bool) -> bool {
@@ -673,7 +761,7 @@ fn main() -> ! {
     if unsafe { read_volatile(UNALIGNED_EXCEPTION_CONTEXT) } == 0b1_1111 {
         pass |= 1 << 9;
     }
-    if unsafe { read_volatile(MSP_EXCEPTION_CONTEXT) } == 0b1_1111 {
+    if unsafe { read_volatile(MSP_EXCEPTION_CONTEXT) } == 0b11_1111_1111 {
         pass |= 1 << 10;
     }
 
@@ -734,7 +822,7 @@ unsafe fn DefaultHandler(irqn: i16) {
         IRQ_EXC_RETURN.store(exc_return, Ordering::Relaxed);
         IRQ_ENTRY.store((ipsr << 16) | (irqn as u32 + 1), Ordering::Relaxed);
         let irq_case = IRQ_CASE.load(Ordering::Relaxed);
-        if irq_case == 4 {
+        if irq_case == 4 || irq_case == 5 {
             // MSP frames are inspected by the interrupted thread after return;
             // the Rust handler prologue itself uses MSP.
         } else {
