@@ -17,8 +17,15 @@ const BSRR: u32 = 0x18;
 const USART_CR1: *mut u32 = USART3 as *mut u32;
 const USART_BRR: *mut u32 = (USART3 + 0x0C) as *mut u32;
 const USART_ISR: *const u32 = (USART3 + 0x1C) as *const u32;
+const USART_RDR: *const u32 = (USART3 + 0x24) as *const u32;
 const USART_TDR: *mut u32 = (USART3 + 0x28) as *mut u32;
 const TXE: u32 = 1 << 7;
+const RXNE: u32 = 1 << 5;
+const USART_RECEIVER_ENABLE: u32 = if cfg!(feature = "nucleo-h753zi-rx") {
+    1 << 2
+} else {
+    0
+};
 const LED: u32 = 1;
 
 fn register_rmw(address: u32, clear: u32, set: u32) {
@@ -38,6 +45,30 @@ fn putc(byte: u8) {
 fn send(text: &[u8]) {
     for byte in text {
         putc(*byte);
+    }
+}
+
+#[cfg(feature = "nucleo-h753zi-rx")]
+fn check_uart_rx() {
+    let mut ready = false;
+    for _ in 0..1_000_000 {
+        if unsafe { read_volatile(USART_ISR) } & RXNE != 0 {
+            ready = true;
+            break;
+        }
+    }
+
+    let mut received = 0;
+    let mut cleared = false;
+    if ready {
+        received = unsafe { read_volatile(USART_RDR) } & 0xFF;
+        cleared = unsafe { read_volatile(USART_ISR) } & RXNE == 0;
+    }
+
+    if ready && received == b'R' as u32 && cleared {
+        send(b"usart3 rxne=1 data=00000052 rxne_after=0 ok\r\n");
+    } else {
+        send(b"usart3 rxne=0 data=00000000 rxne_after=0 fail\r\n");
     }
 }
 
@@ -75,11 +106,13 @@ fn main() -> ! {
     register_rmw(GPIOB + MODER, 0b11, 0b01);
     unsafe {
         write_volatile(USART_BRR, 555); // 64 MHz / 115200
-        write_volatile(USART_CR1, (1 << 0) | (1 << 3)); // UE | TE
+        write_volatile(USART_CR1, (1 << 0) | (1 << 3) | USART_RECEIVER_ENABLE); // UE | TE | optional RE
     }
 
     set_led(false);
     send(b"STM32H7 register smoke\r\n");
+    #[cfg(feature = "nucleo-h753zi-rx")]
+    check_uart_rx();
     loop {
         let on = !led_is_on();
         set_led(on);
