@@ -11,6 +11,8 @@ SCRIPT=""
 SYSTEM=""
 OUT_DIR=""
 PREBUILT_FIRMWARE=""
+FIRMWARE_BUILD_DIR=""
+FIRMWARE_BUILD_SCRIPT=""
 PROFILE="release"
 THRESHOLD_SECONDS="${ONBOARDING_SOFT_THRESHOLD_SECONDS:-3600}"
 INVENTORY_ONLY="false"
@@ -24,6 +26,8 @@ Usage: scripts/onboarding_smoke.sh --target-id ID --system PATH --out-dir DIR [o
 Smoke mode options:
   --crate NAME --target TRIPLE --script PATH
   --prebuilt-firmware PATH --script PATH
+  --firmware-build-dir DIR
+  --firmware-build-script PATH
   --features NAME[,NAME...]
   --cli-features NAME[,NAME...]
   --cli-profile PROFILE
@@ -90,6 +94,14 @@ while [[ $# -gt 0 ]]; do
       PREBUILT_FIRMWARE="$2"
       shift 2
       ;;
+    --firmware-build-dir)
+      FIRMWARE_BUILD_DIR="$2"
+      shift 2
+      ;;
+    --firmware-build-script)
+      FIRMWARE_BUILD_SCRIPT="$2"
+      shift 2
+      ;;
     --system)
       SYSTEM="$2"
       shift 2
@@ -125,8 +137,8 @@ if [[ "${INVENTORY_ONLY}" != "true" ]]; then
     echo "Missing required argument: SCRIPT" >&2
     exit 2
   fi
-  if [[ -z "${PREBUILT_FIRMWARE}" && ( -z "${CRATE}" || -z "${TARGET}" ) ]]; then
-    echo "Smoke mode requires --crate and --target, or --prebuilt-firmware." >&2
+  if [[ -z "${PREBUILT_FIRMWARE}" && -z "${FIRMWARE_BUILD_SCRIPT}" && ( -z "${CRATE}" || -z "${TARGET}" ) ]]; then
+    echo "Smoke mode requires --crate and --target, --firmware-build-script, or --prebuilt-firmware." >&2
     exit 2
   fi
   if [[ -n "${PREBUILT_FIRMWARE}" && ! -f "${PREBUILT_FIRMWARE}" ]]; then
@@ -311,10 +323,6 @@ infer_failure_hint() {
 run_smoke_output_dir="${OUT_DIR}/simulation-output"
 mkdir -p "${run_smoke_output_dir}"
 
-firmware_build_args=(cargo build -p "${CRATE}")
-if [[ -n "${CRATE_FEATURES}" ]]; then
-  firmware_build_args+=(--features "${CRATE_FEATURES}")
-fi
 cli_build_args=(cargo build -p labwired-cli)
 cli_run_args=(cargo run -q -p labwired-cli)
 if [[ -n "${CLI_PROFILE}" ]]; then
@@ -325,6 +333,26 @@ if [[ -n "${CLI_FEATURES}" ]]; then
   cli_build_args+=(--features "${CLI_FEATURES}")
   cli_run_args+=(--features "${CLI_FEATURES}")
 fi
+
+run_firmware_build() {
+  if [[ -n "${FIRMWARE_BUILD_SCRIPT}" ]]; then
+    "${FIRMWARE_BUILD_SCRIPT}"
+    return
+  fi
+
+  local args=(build -p "${CRATE}" --target "${TARGET}")
+  if [[ -n "${CRATE_FEATURES}" ]]; then
+    args+=(--features "${CRATE_FEATURES}")
+  fi
+  if [[ "${PROFILE}" == "release" ]]; then
+    args+=(--release)
+  fi
+  if [[ -n "${FIRMWARE_BUILD_DIR}" ]]; then
+    (cd "${FIRMWARE_BUILD_DIR}" && cargo "${args[@]}")
+  else
+    cargo "${args[@]}"
+  fi
+}
 
 # No RUSTFLAGS here. A firmware crate passes its own linker script from its
 # build.rs, so `cargo build -p <crate> --target <t>` links on its own.
@@ -348,8 +376,8 @@ elif [[ -n "${PREBUILT_FIRMWARE}" ]]; then
   if ! run_stage run_smoke "${cli_run_args[@]}" -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
     :
   fi
-elif [[ "${PROFILE}" == "release" ]]; then
-  if ! run_stage build_firmware "${firmware_build_args[@]}" --release --target "${TARGET}"; then
+else
+  if ! run_stage build_firmware run_firmware_build; then
     :
   else
     run_attempted="true"
@@ -357,14 +385,45 @@ elif [[ "${PROFILE}" == "release" ]]; then
       :
     fi
   fi
-else
-  if ! run_stage build_firmware "${firmware_build_args[@]}" --target "${TARGET}"; then
-    :
-  else
-    run_attempted="true"
-    if ! run_stage run_smoke "${cli_run_args[@]}" -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
-      :
-    fi
+fi
+
+# A successful CLI exit is insufficient if the structured smoke result records
+# a failed assertion. Publish a pass only when every assertion passed.
+if [[ "${status}" == "pass" && "${run_attempted}" == "true" ]]; then
+  result_file="${run_smoke_output_dir}/result.json"
+  if ! validation_output="$(python3 - "${result_file}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.exists():
+    print(f"missing smoke result: {path}")
+    raise SystemExit(1)
+try:
+    result = json.loads(path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError) as exc:
+    print(f"invalid smoke result {path}: {exc}")
+    raise SystemExit(1)
+
+failed = [
+    item.get("assertion", {})
+    for item in result.get("assertions", [])
+    if not item.get("passed", False)
+]
+if result.get("status") != "pass" or failed:
+    print(f"smoke result status: {result.get('status', 'missing')}")
+    if failed:
+        print(f"failed assertions: {json.dumps(failed, sort_keys=True)}")
+    raise SystemExit(1)
+print("structured smoke verdict: pass; all assertions passed")
+PY
+)"; then
+    status="fail"
+    failure_stage="run_smoke"
+    first_error_signature="${validation_output:-smoke result validation failed}"
+    failure_hint="Inspect the structured result in simulation-output/result.json and fix the failed assertion."
+    printf '%s\n' "${first_error_signature}" >>"${OUT_DIR}/logs/run_smoke.log"
   fi
 fi
 
@@ -384,7 +443,7 @@ if [[ "${status}" == "fail" ]]; then
   failure_hint="$(infer_failure_hint "${failure_stage}" "${first_error_signature}")"
 fi
 
-export TARGET_ID CRATE TARGET SCRIPT SYSTEM OUT_DIR PREBUILT_FIRMWARE PROFILE INVENTORY_ONLY run_attempted
+export TARGET_ID CRATE TARGET SCRIPT SYSTEM OUT_DIR PREBUILT_FIRMWARE FIRMWARE_BUILD_DIR FIRMWARE_BUILD_SCRIPT PROFILE INVENTORY_ONLY run_attempted
 export run_started_iso run_finished_iso elapsed_seconds elapsed_ms
 export status failure_stage first_error_signature threshold_met THRESHOLD_SECONDS
 export build_cli_ms build_firmware_ms run_smoke_ms
@@ -459,6 +518,10 @@ metrics = {
 }
 if os.environ.get("PREBUILT_FIRMWARE"):
     metrics["prebuilt_firmware"] = os.environ["PREBUILT_FIRMWARE"]
+if os.environ.get("FIRMWARE_BUILD_DIR"):
+    metrics["firmware_build_dir"] = os.environ["FIRMWARE_BUILD_DIR"]
+if os.environ.get("FIRMWARE_BUILD_SCRIPT"):
+    metrics["firmware_build_script"] = os.environ["FIRMWARE_BUILD_SCRIPT"]
 
 summary_lines = [
     f"# Onboarding Smoke: {metrics['target_id']}",

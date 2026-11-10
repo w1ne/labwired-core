@@ -95,6 +95,10 @@ _tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C 
 
 _Narrow ESP32-DevKitC-32E onboarding profile (GPIO23, UART0, I2C0). docs/receipts/2026-11-09-esp32-deep-sleep records stock Arduino-ESP32 timer-wake deep sleep printing LW_DS_OK (bootCount 1→2→3 across DEEPSLEEP_RESET, RTC slow memory kept) and light sleep printing LW_LS_OK. Firmware is PlatformIO-built, not a committed ELF; those receipts are not a required CI lane. The committed system attaches no external I2C device. No beyond-rubric block is listed for this slice._
 
+### `esp32-devkitc-32e-uart1`
+
+_Narrow ESP32-DevKitC-32E onboarding profile that routes UART1 TX to J3 pin 12 / GPIO16. Committed evidence at examples/esp32-devkitc-32e-uart1/evidence/run shows examples/esp32-devkitc-32e-uart1/uart1-smoke.yaml passed 3/3: UART0 printed ESP32_DEVKITC32E_UART1_TX_OK, GPIO16 (UART1 TX) saw at least 32 edges from Serial1 printing UUUUUUUU, and the run stopped at max_steps. Firmware is PlatformIO-built via scripts/build-esp32-devkitc-32e-uart1-smoke.sh, not a committed ELF; no required CI lane runs this script. No beyond-rubric block is listed for this slice._
+
 ### `nrf52840`
 
 _TWIM/PWM are firmware-proven via the rubric fixture; the PR-gated OBD2 scanner e2e drives the RADIO TXEN/READY/START/END handshake (asserts ble_tx > 0), and the #[ignore]d proximity e2e adds an on-demand radio path. The Zephyr BME280 temperature read runs in an external west build._

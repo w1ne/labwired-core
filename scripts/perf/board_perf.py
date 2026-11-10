@@ -500,6 +500,15 @@ WAIVED: dict[str, str] = {
         "No separate throughput claim is made. The parent `esp32` board "
         "already carries the measured classic-ESP32 baselines."
     ),
+    "esp32-devkitc-32e-uart1": (
+        "UART1-TX onboarding smoke twin of the classic ESP32 "
+        "(DevKitC-32E / WROOM-32E). It shares the ESP32 flash 0x400D0000 / "
+        "RAM 0x3FFB0000 map, so FIXTURES would match the stock Xtensa MMIO "
+        "spin; that fixture is not this yaml's UART1-to-GPIO16 smoke, "
+        "and no run has produced a throughput number for this descriptor. "
+        "No separate throughput claim is made. The parent `esp32` board "
+        "already carries the measured classic-ESP32 baselines."
+    ),
     "stm32f103rb-nucleo-bme280-smoke": (
         "Narrow NUCLEO-F103RB + BME280 onboarding profile (USART2, LD2/PA5, "
         "I2C1 on PB8/PB9). It shares the STM32F103 flash 0x08000000 / "
