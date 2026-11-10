@@ -381,6 +381,12 @@
   },
   {
     "buses": [
+      "I2C"
+    ],
+    "name": "stm32f103rb-nucleo-bme280-smoke"
+  },
+  {
+    "buses": [
       "I2C",
       "SPI",
       "UART"
