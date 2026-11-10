@@ -741,6 +741,10 @@ impl Peripheral for RaIic {
         true
     }
 
+    fn has_attached_time_devices(&self) -> bool {
+        !self.slaves.is_empty()
+    }
+
     fn advance_attached_device_time_us(&mut self, us: u64) {
         for slave in &mut self.slaves {
             slave.advance_time_us(us);
