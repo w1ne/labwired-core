@@ -143,6 +143,149 @@ fn f401_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
 }
 
 #[test]
+fn nucleo_f401re_bjt_terminal_resistances_reach_adc1_with_explicit_network_reference() {
+    let system_path = root("configs/systems/nucleo-f401re.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F401RE profile");
+    let diode = SystemManifest::from_file(root("examples/nucleo-f401re/analog-diode-system.yaml"))
+        .expect("load unrelated generic diode netlist");
+    let terminal_resistances = SystemManifest::from_file(root(
+        "examples/nucleo-f401re/analog-bjt-terminal-resistance.yaml",
+    ))
+    .expect("load matched generic BJT terminal-resistance netlists");
+    profile.cosim_models = diode.cosim_models;
+    profile
+        .cosim_models
+        .extend(terminal_resistances.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F401 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+        ("PA6", 6),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F401RE bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries one diode and six matched BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to ADC1 channels zero through six"
+    );
+    for channel in 0..=7 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.bjt_terminal.base_v", 0.0)
+        .expect("initialize all matched BJT base drives");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize the diode and matched BJT branches");
+    assert_eq!(initial_steps.len(), 7, "all seven analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    let mut settled = None;
+    for base_drive_v in [0.7_f64, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt_terminal.base_v", base_drive_v)
+            .expect("step all matched BJT base drives");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route diode and BJT terminal-resistance branches");
+        assert_eq!(
+            steps.len(),
+            7,
+            "all seven branches solve at each base drive"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let diode_v = signal_voltage(&session, "board.analog.pa0_volts");
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated Shockley diode stays on its independent load line"
+        );
+        let voltages = [
+            signal_voltage(&session, "board.analog.pa1_volts"),
+            signal_voltage(&session, "board.analog.pa2_volts"),
+            signal_voltage(&session, "board.analog.pa3_volts"),
+            signal_voltage(&session, "board.analog.pa4_volts"),
+            signal_voltage(&session, "board.analog.pa5_volts"),
+            signal_voltage(&session, "board.analog.pa6_volts"),
+        ];
+        assert!(
+            (voltages[0] - bjt_collector_voltage(base_drive_v)).abs() < 5e-5,
+            "zero-resistance Gummel–Poon branch must match the independent load line"
+        );
+        assert!(
+            (voltages[4] - voltages[5]).abs() < 1e-7,
+            "model-card RB/RC/RE must match explicit series resistors: {} V vs {} V",
+            voltages[4],
+            voltages[5]
+        );
+
+        if base_drive_v == 0.9 {
+            for (label, voltage) in [
+                ("RB", voltages[1]),
+                ("RC", voltages[2]),
+                ("RE", voltages[3]),
+                ("RB+RC+RE", voltages[4]),
+            ] {
+                assert!(
+                    (voltage - voltages[0]).abs() > 1e-3,
+                    "{label} must change the loaded collector voltage, zero-R={} V, actual={voltage} V",
+                    voltages[0]
+                );
+            }
+        }
+
+        settled = Some((diode_v, voltages));
+    }
+
+    let (diode_v, bjt_voltages) = settled.expect("final base-drive sample exists");
+    for (channel, voltage) in std::iter::once((0, diode_v)).chain(
+        bjt_voltages
+            .iter()
+            .enumerate()
+            .map(|(idx, voltage)| (idx as u8 + 1, *voltage)),
+    ) {
+        let expected = expected_adc_count(voltage);
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            expected,
+            "the solved voltage must seed descriptor-routed ADC1 channel {channel}"
+        );
+        assert_eq!(
+            f401_adc_convert(&mut bus, channel),
+            u32::from(expected),
+            "firmware-visible ADC1 channel {channel} must report its analog device"
+        );
+    }
+    assert_eq!(
+        adc_channel_count(&mut bus, 7),
+        0xFFFF,
+        "the neighboring ADC1 channel remains undriven"
+    );
+}
+
+#[test]
 fn nucleo_f401re_bjt_junction_and_transit_charge_reach_adc1_end_to_end() {
     let system_path = root("configs/systems/nucleo-f401re.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F401RE profile");
