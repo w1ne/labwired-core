@@ -11,7 +11,7 @@
 # EOS on line 12, both read 0 once CCR switches them off). SPI/I2C have no
 # on-board slave here; the stm32f072 fixture smoke covers them, and the ADC
 # pads. It does not claim the L3GD20, CAN, RTC, DAC, USB, TSC or the
-# watchdogs.
+# watchdogs. AIRCR.PRIGROUP writes are checked to read zero on ARMv6-M.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke"
@@ -39,6 +39,7 @@ assertions:
   - uart_ordered:
       - "cpu=cortex-m0 uart=usart1"
       - "rcc reset=1 gate=1 ok"
+      - "aircr prigroup=0 reserved=writes_ignored=1 ok"
       - "usart irq u2=1 u3=1 u4=1 ok"
       - "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 released=1 ok"
       - "led=ld3 odr=0x00000040"
@@ -59,11 +60,11 @@ assertions:
       - "dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok"
       - "crc word=0xDF8A8A2B seed=1 std=1 ok"
       - "adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok"
-      - "summary 0x0DC1FFFF"
+      - "summary 0x0DC3FFFF"
       - "DONE"
   - memory_value:
       address: 0x20003000
-      expected_value: 0x0DC1FFFF
+      expected_value: 0x0DC3FFFF
       size: 4
   - gpio_edges:
       pin: "gpioc:6"

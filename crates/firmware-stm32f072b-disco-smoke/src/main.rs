@@ -24,7 +24,7 @@
 //!
 //! Interrupts stay disabled in the NVIC: each check reads the line's ISPR
 //! bit. Every check prints one line and sets one bit of the summary word at
-//! `SUMMARY`.
+//! `SUMMARY`. AIRCR.PRIGROUP is also checked as reserved on this ARMv6-M core.
 
 #![no_std]
 #![no_main]
@@ -35,6 +35,8 @@ use cortex_m_rt::entry;
 use panic_halt as _;
 
 const SUMMARY: u32 = 0x2000_3000;
+const SCB_AIRCR: u32 = 0xE000_ED0C;
+const AIRCR_VECTKEY: u32 = 0x05FA << 16;
 
 // RCC (RM0091 §6.4).
 const RCC: u32 = 0x4002_1000;
@@ -178,6 +180,20 @@ fn pending(irq: u32) -> bool {
 
 fn unpend(irq: u32) {
     wr(NVIC_ICPR0, 1 << irq);
+}
+
+/// ARMv6-M reserves AIRCR.PRIGROUP. Even writes with VECTKEY must read back
+/// zero, leaving all implemented priority bits available for preemption.
+fn check_aircr_priority_group() -> bool {
+    wr(SCB_AIRCR, AIRCR_VECTKEY | (5 << 8));
+    let group_five = rd(SCB_AIRCR) & 0x700;
+    wr(SCB_AIRCR, AIRCR_VECTKEY | (7 << 8));
+    let group_seven = rd(SCB_AIRCR) & 0x700;
+    let ok = group_five == 0 && group_seven == 0;
+    puts("aircr prigroup=0 reserved=");
+    flag("writes_ignored", ok);
+    verdict(ok);
+    ok
 }
 
 /// 8 MHz HSI / 115200 = 69 = 0x45.
@@ -600,6 +616,7 @@ fn main() -> ! {
         }
     };
     mark(0, report_rcc(rcc_reset, rcc_gate));
+    mark(17, check_aircr_priority_group());
     mark(1, check_usart_irqs());
     #[cfg(feature = "onboarding-rx-gate")]
     mark(16, check_usart2_rx_enable_gates());
