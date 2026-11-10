@@ -2,6 +2,7 @@ BLACKPILL F401 SMOKE
 rcc apb1=00220001 ok
 led pc13 odr=00002000 ok
 tim2 arr=00000040 ok
+i2c1 sb_irq=1 ok
 i2c1 btf_irq=1 ok
 i2c1 rxne_buf_irq=1 release=1 ok
 i2c1 tmp102=00001900 nack=00000400 buf_irq=1 buf_release=1 ev_irq=1 ev_release=1 er_irq=1 irq_released=1 ok

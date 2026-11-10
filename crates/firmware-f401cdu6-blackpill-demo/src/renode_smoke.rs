@@ -245,9 +245,9 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
     if rd(I2C_OAR1) & 0xFFFF != 0x40AA {
         return (0xFFFF, 0, false, false, false, false, false, false, false);
     }
-    // FREQ = 16 MHz APB1 (HSI). Start with ITBUFEN alone so TXE must drive
-    // the shared EV line; event and error enables are checked separately.
-    wr(I2C_CR2, 16 | (1 << 8) | (1 << 10));
+    // FREQ = 16 MHz APB1 (HSI). Start with ITEVTEN alone so SB drives the
+    // shared EV line; buffer and error enables are checked separately.
+    wr(I2C_CR2, 16 | (1 << 8) | (1 << 9));
     wr(I2C_CCR, 80); // 100 kHz standard mode
     wr(I2C_TRISE, 17);
     wr(I2C_CR1, 1); // PE
@@ -256,9 +256,18 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
     // START to read its two-byte big-endian result. ACK both address phases;
     // after the first byte, clear ACK so the final byte is NACKed.
     wr(I2C_CR1, rd(I2C_CR1) | (1 << 8)); // START
+    let sb_irq =
+        wait(NVIC_ISPR0, I2C1_EV_IRQ_BIT, I2C1_EV_IRQ_BIT) && rd(I2C_SR1) & 0x0001 == 0x0001;
+    send(b"i2c1 sb_irq=");
+    putc(if sb_irq { b'1' } else { b'0' });
+    send(if sb_irq { b" ok\r\n" } else { b" FAIL\r\n" });
     if !wait(I2C_SR1, 0x0001, 0x0001) {
         return (0xFFFF, 0, false, false, false, false, false, false, false);
     }
+    // SB is cleared by the address write. Switch to ITBUFEN alone first so
+    // the next EV assertion can only come from TXE.
+    wr(I2C_CR2, 16 | (1 << 8) | (1 << 10));
+    wr(NVIC_ICPR0, I2C1_EV_IRQ_BIT);
     wr(I2C_DR, 0x90); // TMP102 7-bit address 0x48, write
     if !wait(I2C_SR1, 0x0002, 0x0002) {
         return (0xFFFF, 0, false, false, false, false, false, false, false);

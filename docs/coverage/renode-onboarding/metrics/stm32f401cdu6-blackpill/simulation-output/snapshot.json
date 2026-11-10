@@ -15,12 +15,12 @@
       1,
       192,
       63,
-      134235936,
+      134237068,
       536969040,
-      134233261,
-      134235444
+      134234411,
+      134236594
     ],
-    "pc": 134235444,
+    "pc": 134236594,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "604262ec661f8e72019cd354bf3fc9a684d8e547f96756ced97f38c5e84a651b",
+  "firmware_hash": "d854b5405f4e72bb08746139b73510b1582ba7daea0f3f88621cdeceecfba33e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
