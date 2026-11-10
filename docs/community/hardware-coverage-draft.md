@@ -477,8 +477,11 @@ void loop() {}
 The committed [local CLI smoke](../../examples/arduino-nano-every-mcp9808/evidence/)
 builds the stock Arduino firmware and checks its UART pass marker. Its focused
 profile models TWI0 register transfers; it does not model SDA/SCL pad waveforms
-or the SAMD11 USB bridge, and it is not hosted `labwired_verify` evidence. See
-the [quickstart](../../examples/arduino-nano-every-mcp9808/README.md) and
+or the SAMD11 USB bridge, and it is not hosted `labwired_verify` evidence. The
+tested path uses modeled TWI0 and MCP9808 blocks, with no zero-answering stub;
+MCP9808 ALERT behavior, conversion-time gating, and negative-temperature
+encoding remain out of scope. See the
+[quickstart](../../examples/arduino-nano-every-mcp9808/README.md) and
 [availability receipt](../../examples/arduino-nano-every-mcp9808/evidence/vendor-status.md).
 
 ### RP2350: newer Raspberry Pi board
