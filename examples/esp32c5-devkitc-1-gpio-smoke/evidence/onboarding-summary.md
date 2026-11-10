@@ -1,8 +1,8 @@
 # Onboarding Smoke: esp32c5-devkitc-1-n8r8-gpio-uart
 
 - status: `pass`
-- elapsed_seconds: `156`
-- elapsed_ms: `155255`
+- elapsed_seconds: `41`
+- elapsed_ms: `40380`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`
