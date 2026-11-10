@@ -183,8 +183,10 @@ const NOP_STUBS: &[&str] = &[
     // so the firmware's own driver runs against modelled registers and
     // initialises. Unstubbing them takes the profile from 71 installed thunks
     // to 53 and makes the e-reader lab boot with a clean log.
-    "esp_random",
-    "esp_fill_random",
+    //
+    // esp_random / esp_fill_random are not stubbed either: they read
+    // WDEV_RND_REG (0x6003_5144), which configure_xtensa_esp32 models. As nops
+    // they returned 0, so Arduino random(n) was 0 on every call.
     // log mutex (esp_log_impl_lock/unlock) — sim doesn't model the log
     // mutex queue, and the real impl calls xQueueGenericSend on an
     // uninitialized queue, tripping a NULL-pcHead assertion.
@@ -650,7 +652,9 @@ mod thunk_debt {
     ///     note in `NOP_STUBS` where those 18 symbols used to be: the sim already
     ///     modelled the SPI NOR command set they probe with, so the debt was
     ///     buying nothing and costing `nvs_flash_init()`.
-    const CEILING: usize = 56;
+    ///   * 56 → 54 when `esp_random` / `esp_fill_random` stopped being nop'd:
+    ///     WDEV_RND_REG is modelled, and the nops made Arduino `random(n)` 0.
+    const CEILING: usize = 54;
 
     #[test]
     fn thunk_debt_only_falls() {

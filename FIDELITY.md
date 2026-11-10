@@ -404,7 +404,8 @@ IPC, the SPI bus-lock, loopTask-on-APP_CPU, and the log mutex.
   Un-thunk `esp_perip_clk_init` (already nop-equivalent — clock gating not enforced). Drop
   the redundant RTC_APB_FREQ write in main.rs (rtc_cntl seeds it).
 - misc: un-thunk `esp_cpu_unstall` (real DPORT write, harmless), `core_intr_matrix_clear`
-  (route_intr already real), model classic RNG → `esp_random`/`esp_fill_random` real;
+  (route_intr already real), model classic RNG → `esp_random`/`esp_fill_random` real (done: `wdev_rnd` at
+  0x6003_5144, both thunks removed);
   reclassify `_esp_error_check_failed` nop→`abort_halt`.
 - FreeRTOS: `xQueueCreateMutexStatic` real (caller buffer, no heap), `xTaskGetCurrentTaskHandle`
   real (already reads real pxCurrentTCB under live SMP).
