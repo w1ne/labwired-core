@@ -10,8 +10,8 @@
 # RXNE with ITBUFEN alone and release after DR is read; a second read holds its
 # first byte in DR to check receive BTF with ITEVTEN alone, RXNE source
 # isolation, and the IRQ release when DR is read.
-# A second TMP102 on I2C2 checks SB isolation until ITEVTEN is enabled, its
-# event vector, and an independent repeated-start 25 °C read, including TXE
+# A second TMP102 on I2C2 checks SB and ADDR isolation until ITEVTEN is enabled,
+# its event vector, and an independent repeated-start 25 °C read, including TXE
 # isolation under ITEVTEN, TXE and
 # RXNE assertion/release under ITBUFEN. A second read uses the legacy POS
 # ACK-position bit, checks RXNE isolation and receive BTF IRQ assertion, then
@@ -45,7 +45,7 @@ assertions:
       - "i2c1 rxne_buf_irq=1 release=1 ok"
       - "i2c1 btf_rx_irq=1 rxne_isolated=1 release=1 data=00001980 ok"
       - "i2c1 tmp102=00001900 nack=00000400 buf_irq=1 buf_release=1 ev_irq=1 ev_release=1 er_irq=1 irq_released=1 ok"
-      - "i2c2 tmp102=00001900 sb_irq_gate=1 addr_irq=1 txe_isolated=1 txe_buf_irq=1 txe_buf_release=1 btf_irq=1 rxne_buf_irq=1 rxne_buf_release=1 ok"
+      - "i2c2 tmp102=00001900 sb_irq_gate=1 addr_irq_gate=1 txe_isolated=1 txe_buf_irq=1 txe_buf_release=1 btf_irq=1 rxne_buf_irq=1 rxne_buf_release=1 ok"
       - "pos=1 i2c2 btf_rx_irq=1 rxne_isolated=1 stop_before_dr=1 rxne_after_first=1 release=1 rxne_cleared=1 data=00001980 ok"
       - "i2c2 nack=00000400 no_addr=1 ev_isolated=1 er_isolated=1 er_irq=1 er_masked_release=1 af_cleared=1 idle=1 er_released=1 ok"
       - "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok"
