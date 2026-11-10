@@ -2,8 +2,8 @@
 
 This is a review draft for the community coverage page. It is intentionally not
 listed in `mkdocs.yml` and has not been published. The current draft covers the
-ESP32 family, RP2350, and STM32F103; the remaining demand-ranked entries need to
-be added and reviewed before publication.
+ESP32 family, RP2350, STM32F103, and the Tier C WCH CH32V003; the remaining
+demand-ranked entries need to be added and reviewed before publication.
 
 ## ESP32 — rank 1, 38% of reported MCU use
 
@@ -716,12 +716,70 @@ The connected hosted verifier could not execute this sketch because its
 connector schema rejects Arduino even though the ESP32 target lists Arduino as
 supported; the local result is not a physical-board run.
 
+## WCH CH32V003F4P6 — Tier C vendor bet, not a measured survey rank
+
+The CH32V003 is the lane's strategic WCH/RISC-V bet, not a ranked MCU in the
+JetBrains survey. It is already onboarded; this entry adds it to the community
+coverage draft rather than claiming a new chip or board model. Olimex lists the
+exact CH32V003F4P6 in a 10-piece pack and the WCH-CH32V003EVT board in stock.
+The WCH product page has no lifecycle label available in this check, so
+purchase availability is recorded separately from formal lifecycle
+classification in the
+[live receipt](../../examples/ch32v003-evt/evidence/vendor-status.md).
+
+The fresh local GPIO smoke boots the CH32V003F4P6 and exercises its PD0 GPIO
+output. A separate QingKe V2 profile exercises USART1 transmit and
+SysTick-paced delays. The fresh GPIO smoke passes both edge-count and
+stop-reason assertions. The board's USB-C connector is power-only, and this
+example connects an external LED and resistor between PD0 and GND; it does not
+claim a factory-installed LED on PD0. The separately committed unmodified WCH
+SDK `GPIO_Toggle` smoke passed its UART and GPIO assertions earlier; its
+evidence is in
+[`examples/ch32v003-evt/evidence/sdk-gpio-toggle-smoke/`](../../examples/ch32v003-evt/evidence/sdk-gpio-toggle-smoke/).
+
+Copy the official WCH SDK's
+[`GPIO_Toggle/User/main.c` example at the pinned revision](https://github.com/openwch/ch32v003/blob/4e1b7437ada5d3ae8831a6f4b811a6320e4e23c7/EVT/EXAM/GPIO/GPIO_Toggle/User/main.c)
+into its SDK project. The project provides `debug.h`, the GPIO definitions,
+and delay helpers:
+
+```c
+#include "debug.h"
+
+int main(void) {
+    u8 state = 0;
+    GPIO_InitTypeDef gpio = {0};
+
+    SystemCoreClockUpdate();
+    Delay_Init();
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE);
+    gpio.GPIO_Pin = GPIO_Pin_0;
+    gpio.GPIO_Mode = GPIO_Mode_Out_PP;
+    gpio.GPIO_Speed = GPIO_Speed_30MHz;
+    GPIO_Init(GPIOD, &gpio);
+
+    while (1) {
+        Delay_Ms(250);
+        GPIO_WriteBit(GPIOD, GPIO_Pin_0,
+                      (state == 0) ? (state = Bit_SET) : (state = Bit_RESET));
+    }
+}
+```
+
+The current local smoke uses the repo's Rust bare-metal fixture and is recorded
+with its generated metrics and scoreboard in
+[`examples/ch32v003-evt/evidence/community-quickstart-2026-11-10/`](../../examples/ch32v003-evt/evidence/community-quickstart-2026-11-10/).
+That smoke does not compile the C snippet. The earlier WCH SDK run did compile
+the unmodified vendor sample; rebuilding it on this host is currently blocked
+because `riscv64-unknown-elf-gcc` is unavailable. The narrow descriptors do not
+install zero-answering peripheral stubs; the factory system-area/chip-ID read
+returns zero, while unlisted blocks and PFIC interrupt delivery remain outside
+the tested profiles. This is local digital-twin evidence, not physical-board
+confirmation.
+
 ## Remaining demand-ranked entries
 
 Before this page is ready for publication, add reviewed coverage and a
 copy-paste example for an Arduino AVR board whose MCU is still actively
-recommended and purchasable, plus more current Nucleo/Discovery boards. WCH
-CH32V003 already has a local booting smoke and a
-copy-paste example in [`docs/community/hardware-coverage-draft.md`](../community/hardware-coverage-draft.md);
-consolidate that entry here before publication. Each entry must link to its
-exact board or part evidence and clearly identify any lifecycle status.
+recommended and purchasable, plus more current Nucleo/Discovery boards. The
+WCH Tier C entry is now included above. Each entry must link to its exact board
+or part evidence and clearly identify any lifecycle status.

@@ -1,0 +1,43 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 906,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 0.906
+  },
+  "targets": [
+    {
+      "target_id": "ch32v003f4p6-gpio",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/ch32v003-evt/onboarding-smoke.yaml",
+      "system": "configs/systems/ch32v003evt-gpio-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-10T14:08:17Z",
+      "finished_at_utc": "2026-11-10T14:08:18Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 906,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.375,
+        "build_firmware": 0.168,
+        "run_smoke": 0.33
+      },
+      "stages_ms": {
+        "build_cli": 375,
+        "build_firmware": 168,
+        "run_smoke": 330
+      },
+      "firmware_build_script": "examples/ch32v003-evt/build-firmware.sh",
+      "_artifact_path": "examples/ch32v003-evt/evidence/community-quickstart-2026-11-10"
+    }
+  ]
+}

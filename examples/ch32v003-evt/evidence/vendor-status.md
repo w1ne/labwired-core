@@ -1,5 +1,24 @@
 # CH32V003F4P6 live availability check
 
+## Community quickstart check — 2026-11-10 UTC
+
+- WCH's [CH32V003 product page](https://www.wch-ic.com/products/CH32V003.html)
+  remains the official family page. It is JavaScript-rendered and the live
+  check did not expose a lifecycle label, so no “Active”, “NRND”, or
+  “Obsolete” classification is inferred.
+- Olimex's [exact CH32V003F4P6 listing](https://www.olimex.com/Products/RISC-V/WCH/SMD-IC-CH32V003F4P6/)
+  identifies a WCH 32-bit RISC-V part in TSSOP-20 and showed a 10-piece pack
+  for €2.50, In Stock, and Add to basket on 2026-11-10.
+- Olimex's [exact WCH-CH32V003EVT board listing](https://www.olimex.com/Products/RISC-V/WCH-CH32V003EVT/)
+  identifies the board's MCU as CH32V003F4P6 and showed €3.95, In Stock, and
+  Add to basket on 2026-11-10. This is distributor availability, separate from
+  WCH's lack of a published lifecycle label.
+- The current quickstart GPIO smoke passed using the repo's Rust fixture; see
+  [`community-quickstart-2026-11-10/`](community-quickstart-2026-11-10/). A
+  rebuild of the separately pinned WCH C SDK example was attempted, but this
+  host has no `riscv64-unknown-elf-gcc`; the earlier committed WCH SDK smoke
+  pass remains at [`sdk-gpio-toggle-smoke/`](sdk-gpio-toggle-smoke/).
+
 Checked live on 2026-11-05 UTC for both the CH32V003F4P6 and CH32V003EVT.
 
 - WCH's live [CH32V003 product page](https://www.wch-ic.com/products/CH32V003.html)

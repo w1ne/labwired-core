@@ -1,0 +1,431 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 300018,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiod:0",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      0,
+      536872960,
+      0,
+      0,
+      1073812480,
+      65536,
+      46,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 134217758,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 0,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 100000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "6450e9f31d19483b8db4f041a972b0a355b1be1f7b04761508d5cfc17c739c7c",
+  "config": {
+    "firmware": "examples/ch32v003-evt/../../tests/fixtures/ch32v003f4p6-pd0-blinky.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-gpio-smoke.yaml",
+    "script": "examples/ch32v003-evt/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 100000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpiod",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 4010,
+            "value": 1
+          },
+          {
+            "cycle": 8013,
+            "value": 0
+          },
+          {
+            "cycle": 12017,
+            "value": 1
+          },
+          {
+            "cycle": 16020,
+            "value": 0
+          },
+          {
+            "cycle": 20024,
+            "value": 1
+          },
+          {
+            "cycle": 24027,
+            "value": 0
+          },
+          {
+            "cycle": 28031,
+            "value": 1
+          },
+          {
+            "cycle": 32034,
+            "value": 0
+          },
+          {
+            "cycle": 36038,
+            "value": 1
+          },
+          {
+            "cycle": 40041,
+            "value": 0
+          },
+          {
+            "cycle": 44045,
+            "value": 1
+          },
+          {
+            "cycle": 48048,
+            "value": 0
+          },
+          {
+            "cycle": 52052,
+            "value": 1
+          },
+          {
+            "cycle": 56055,
+            "value": 0
+          },
+          {
+            "cycle": 60059,
+            "value": 1
+          },
+          {
+            "cycle": 64062,
+            "value": 0
+          },
+          {
+            "cycle": 68066,
+            "value": 1
+          },
+          {
+            "cycle": 72069,
+            "value": 0
+          },
+          {
+            "cycle": 76073,
+            "value": 1
+          },
+          {
+            "cycle": 80076,
+            "value": 0
+          },
+          {
+            "cycle": 84080,
+            "value": 1
+          },
+          {
+            "cycle": 88083,
+            "value": 0
+          },
+          {
+            "cycle": 92087,
+            "value": 1
+          },
+          {
+            "cycle": 96090,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 7,
+            "state": "0"
+          },
+          {
+            "cycle": 4010,
+            "state": "1"
+          },
+          {
+            "cycle": 8013,
+            "state": "0"
+          },
+          {
+            "cycle": 12017,
+            "state": "1"
+          },
+          {
+            "cycle": 16020,
+            "state": "0"
+          },
+          {
+            "cycle": 20024,
+            "state": "1"
+          },
+          {
+            "cycle": 24027,
+            "state": "0"
+          },
+          {
+            "cycle": 28031,
+            "state": "1"
+          },
+          {
+            "cycle": 32034,
+            "state": "0"
+          },
+          {
+            "cycle": 36038,
+            "state": "1"
+          },
+          {
+            "cycle": 40041,
+            "state": "0"
+          },
+          {
+            "cycle": 44045,
+            "state": "1"
+          },
+          {
+            "cycle": 48048,
+            "state": "0"
+          },
+          {
+            "cycle": 52052,
+            "state": "1"
+          },
+          {
+            "cycle": 56055,
+            "state": "0"
+          },
+          {
+            "cycle": 60059,
+            "state": "1"
+          },
+          {
+            "cycle": 64062,
+            "state": "0"
+          },
+          {
+            "cycle": 68066,
+            "state": "1"
+          },
+          {
+            "cycle": 72069,
+            "state": "0"
+          },
+          {
+            "cycle": 76073,
+            "state": "1"
+          },
+          {
+            "cycle": 80076,
+            "state": "0"
+          },
+          {
+            "cycle": 84080,
+            "state": "1"
+          },
+          {
+            "cycle": 88083,
+            "state": "0"
+          },
+          {
+            "cycle": 92087,
+            "state": "1"
+          },
+          {
+            "cycle": 96090,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 24
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpiod",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 60,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 60,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 16384,
+    "ram_total_bytes": 2048,
+    "flash_used_pct": 0.37,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 300018,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 0,
+    "memory_writes": 0,
+    "peripheral_accesses": 26,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134217758,
+        "count": 117
+      },
+      {
+        "pc": 134217760,
+        "count": 117
+      },
+      {
+        "pc": 134217774,
+        "count": 78
+      },
+      {
+        "pc": 134217776,
+        "count": 78
+      }
+    ]
+  }
+}
