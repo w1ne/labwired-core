@@ -340,6 +340,136 @@ fn nucleo_f103rb_bjt_early_effect_reaches_pa2_pa3_adc1_alongside_ntc_and_diode()
     );
 }
 
+/// The same generic Gummel–Poon Early-effect pair also resolves through the
+/// bare STM32F103C8 profile's descriptor-driven ADC routes, alongside unrelated
+/// Beta NTC and Shockley diode netlists.
+#[test]
+fn stm32f103_bare_bjt_early_effect_reaches_pa2_pa3_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/stm32f103-bare.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load bare STM32F103");
+    assert_eq!(profile.name, "stm32f103-bare");
+    assert!(profile.external_devices.is_empty());
+    assert!(profile.board_io.is_empty());
+
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb-epaper/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode netlists");
+    let bjt = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb/analog-bjt-early-effect-system.yaml",
+    ))
+    .expect("load matched generic Gummel–Poon NPN branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(bjt.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc1");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build bare STM32F103 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries NTC, diode, and matched BJT netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all generic devices must resolve through PA0..PA3 ADC routes"
+    );
+    for channel in 0..=4 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC to nominal temperature");
+    session
+        .set_signal_number("ui.bjt.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut early_samples = Vec::new();
+    let mut reference_samples = Vec::new();
+
+    for base_drive_v in [0.0_f64, 0.7, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route all generic analog netlists");
+        assert_eq!(steps.len(), 4, "all four netlists cross the time boundary");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let early_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let reference_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let expected_early_v = bjt_collector_voltage(base_drive_v, Some(50.0));
+        let expected_reference_v = bjt_collector_voltage(base_drive_v, None);
+
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "the unrelated 25 °C NTC divider remains at 1.65 V, got {ntc_v} V"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated Shockley load line should be {expected_diode_v} V, got {diode_v} V"
+        );
+        assert!(
+            (early_v - expected_early_v).abs() < 5e-5,
+            "VAF=50 Gummel–Poon load line at base drive {base_drive_v} V should be {expected_early_v} V, got {early_v} V"
+        );
+        assert!(
+            (reference_v - expected_reference_v).abs() < 5e-5,
+            "no-Early-effect load line at base drive {base_drive_v} V should be {expected_reference_v} V, got {reference_v} V"
+        );
+        if base_drive_v >= 0.7 {
+            assert!(
+                early_v < reference_v - 0.005,
+                "finite VAF increases collector current and lowers collector voltage: {early_v} V vs {reference_v} V"
+            );
+        }
+
+        for (channel, volts) in [(0, ntc_v), (1, diode_v), (2, early_v), (3, reference_v)] {
+            let expected_count = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f103_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 channel {channel} must report its solved voltage"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            0xFFFF,
+            "the neighboring ADC1 channel remains undriven"
+        );
+        early_samples.push(early_v);
+        reference_samples.push(reference_v);
+    }
+
+    assert!(
+        early_samples[1] > early_samples[2] && early_samples[2] > early_samples[3],
+        "increasing base drive lowers the Early-effect collector voltage: {early_samples:?}"
+    );
+    assert!(
+        reference_samples[1] > reference_samples[2] && reference_samples[2] > reference_samples[3],
+        "increasing base drive lowers the reference collector voltage: {reference_samples:?}"
+    );
+}
+
 /// Reuse the generic Beta NTC divider and unrelated Shockley diode netlists on
 /// each STM32F103 profile, resolving through that profile's own chip routes.
 fn assert_stm32f103_generic_analog_profile(
