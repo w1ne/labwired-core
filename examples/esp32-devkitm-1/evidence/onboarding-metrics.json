@@ -1,0 +1,29 @@
+{
+  "target_id": "esp32-devkitm-1",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/esp32-devkitm-1/onboarding-smoke.yaml",
+  "system": "configs/systems/esp32-devkitm-1.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T04:51:40Z",
+  "finished_at_utc": "2026-11-10T04:52:11Z",
+  "elapsed_seconds": 32,
+  "elapsed_ms": 31335,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 27.024,
+    "build_firmware": 3.391,
+    "run_smoke": 0.884
+  },
+  "stages_ms": {
+    "build_cli": 27024,
+    "build_firmware": 3391,
+    "run_smoke": 884
+  },
+  "firmware_build_script": "examples/esp32-devkitm-1/build-firmware.sh"
+}
