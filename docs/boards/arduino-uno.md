@@ -128,8 +128,10 @@ sockets but carry no wire of their own.
 | GPIO ports B, C, D (D0-D13, A0-A5) | ✅ | Outputs reach canvas LEDs; buttons reach `digitalRead`. |
 | `INPUT_PULLUP` with nothing wired | ⚠️ | Reads LOW. A canvas button supplies the released HIGH level. |
 | Timer0 overflow (`millis`, `delay`, `micros`) | ✅ | |
-| Timer0 compare outputs, Timer1 | ❌ | `analogWrite` PWM and the Servo library do not drive their pins. |
-| Timer2 normal and CTC (`tone`, `noTone`) | ✅ | Compare-match A/B and overflow interrupts, with Timer2's prescalers. OC2A/OC2B PWM outputs are not driven, so `analogWrite` on D3 and D11 still does not. |
+| Timer1 (`Servo`, `analogWrite` on D9/D10) | ✅ | All WGM modes, compare-match A/B and overflow interrupts. `Servo.write(90)` gives a 50 Hz pulse that `pulseIn` reads as 1447 µs. |
+| Timer1 input capture (ICP1, D8) | ⚠️ | The selected edge copies TCNT1 into ICR1, sets ICF1 and fires `TIMER1_CAPT`. A driven D8 captures itself. Off where ICR1 is TOP. Not modelled: the noise-canceler delay, the analog-comparator source, and polling a falling edge with `ICIE1`, `ICES1` and `ICNC1` all clear. |
+| Timer2 normal and CTC (`tone`, `noTone`) | ✅ | Compare-match A/B and overflow interrupts, with Timer2's prescalers. `tone(5, 1000)` measures 1 kHz. |
+| PWM outputs (`analogWrite` on D3, D5, D6, D9, D10, D11) | ⚠️ | The waveform drives the pad in the PWM modes. Firmware that reads `PINx` of a PWM pin gets the `PORTx` latch, not the waveform. Timer0 phase-correct mode runs at twice the silicon period; Arduino uses fast PWM there. |
 | USART0 TX (`Serial.print`) | ✅ | Transmit completes immediately. |
 | USART0 RX (`Serial.read`) | ✅ | UDR0 returns what a peer on `usart0` sends or the host injects; RXC0 and the RX-complete interrupt work. A peer is an RS-485 transceiver with its slaves, or a UART device. No framing, parity or overrun errors. |
 | SPI master | ✅ | With devices attached from the parts catalog. |
@@ -138,11 +140,11 @@ sockets but carry no wire of their own.
 | ADC, channels A0-A5 | ✅ | Converts the millivolts a canvas analog part drives. Unconnected channels read 512. |
 | ADC bandgap (1.1 V) and REFS | ✅ | AREF is taken as 5 V; the internal 1.1 V reference is modeled. |
 | ADC conversion time | ⚠️ | A conversion completes as soon as ADSC is set. |
-| ADC temperature sensor | ❌ | Reads 0. |
-| External interrupts INT0/INT1, pin change | ❌ | `attachInterrupt` never fires. |
+| ADC temperature sensor | ⚠️ | Mux 0x08 gives the datasheet's typical 314 mV at +25 °C: 292 against the internal 1.1 V. The die stays at +25 °C and the part-to-part offset is not modelled. |
+| External interrupts INT0/INT1, pin change | ✅ | `attachInterrupt` in all four sense modes, and PCINT0..2. A pin the sketch drives raises its own interrupt, as on silicon. |
 | EEPROM | ❌ | No EECR/EEDR model and no persistence. |
 | Watchdog | ❌ | |
-| `SLEEP` | ⚠️ | Treated as a no-op. The CPU does not stop. |
+| `SLEEP` | ⚠️ | The CPU stops until an interrupt wakes it. Timer0 runs in idle and stops in power-down. Oscillator start-up time after a deep sleep is not modelled. |
 | ATmega16U2 USB bridge | ⚠️ | Not modeled as a chip. Its effect, USART0 on the cable, is what the serial pane shows. |
 | Potentiometer part on a 5 V board | ⚠️ | The part model runs from a 3.3 V rail, so full travel reads about 675. Wire its top leg to 3.3V on the bench to match. |
 
@@ -152,9 +154,10 @@ sockets but carry no wire of their own.
 
 **Sim is strong for:** sketch logic and state machines; digital I/O on every header pin;
 `millis`-based timing; Serial output; SPI and I2C driver bring-up against catalog parts;
-`analogRead` against a knob or sensor; deterministic CI runs.
+`analogRead` against a knob or sensor; `attachInterrupt`, pin-change and Timer1 capture interrupts;
+`tone`, `Servo` and PWM on the pads; deterministic CI runs.
 
-**Still use the bench for:** PWM (`analogWrite`) and the Servo library; interrupts on pins; serial input; EEPROM;
+**Still use the bench for:** EEPROM and the watchdog;
 power, brown-out and analog accuracy; the bootloader and USB enumeration.
 
 ---
