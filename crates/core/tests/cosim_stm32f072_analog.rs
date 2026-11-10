@@ -101,6 +101,68 @@ fn bjt_collector_voltage(base_drive_v: f64, early_voltage_v: Option<f64>) -> f64
     collector_for_vbe((low + high) / 2.0)
 }
 
+/// Independent Gummel–Poon load line with optional forward/reverse
+/// high-injection rolloff and the same Early voltages in both cases.
+fn bjt_high_injection_collector_voltage(base_drive_v: f64, high_injection: bool) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAF: f64 = 50.0;
+    const VAR: f64 = 75.0;
+    const IKF_A: f64 = 50e-6;
+    const IKR_A: f64 = 500e-6;
+    const NKF: f64 = 0.8;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let q2 = if high_injection {
+            IS_A * (forward - 1.0) / IKF_A + IS_A * (reverse - 1.0) / IKR_A
+        } else {
+            0.0
+        };
+        let qb = (1.0 + (1.0 + 4.0 * q2).max(0.0).powf(NKF)) / (2.0 * base_width);
+        let transport = IS_A * (forward - reverse) / qb;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = (low + high) / 2.0;
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        (low + high) / 2.0
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = (low + high) / 2.0;
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        if (base_drive_v - vbe) / BASE_OHMS > base_current {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe((low + high) / 2.0)
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -562,4 +624,147 @@ fn stm32f072b_disco_ntc_diode_and_bjt_reach_adc1_end_to_end() {
             "undriven ADC channels stay isolated"
         );
     }
+}
+
+#[test]
+fn stm32f072b_disco_bjt_high_injection_and_diode_reach_adc1_end_to_end() {
+    let system_path = root("configs/systems/stm32f072b-disco.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load F072B-DISCO profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/stm32f072b-disco/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load generic NTC divider and unrelated Shockley diode");
+    let high_injection = SystemManifest::from_file(root(
+        "examples/stm32f072b-disco/analog-bjt-high-injection-system.yaml",
+    ))
+    .expect("load matched Gummel–Poon high-injection and control branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(high_injection.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F072 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        let route = chip
+            .analog_pins
+            .get(pad)
+            .unwrap_or_else(|| panic!("descriptor must route {pad} to ADC1"));
+        assert_eq!(route.peripheral, "adc1", "{pad} resolves to ADC1");
+        assert_eq!(route.channel, channel, "{pad} resolves to ADC1_IN{channel}");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build F072B-DISCO bus");
+    let apb2enr = bus.read_u32(RCC_BASE + 0x18).expect("read RCC APB2ENR");
+    bus.write_u32(RCC_BASE + 0x18, apb2enr | (1 << 9))
+        .expect("enable ADC1 clock");
+    const EOCAL: u32 = 1 << 11;
+    const ADCAL: u32 = 1 << 31;
+    const ADEN: u32 = 1;
+    bus.write_u32(ADC1_BASE + 0x08, ADCAL)
+        .expect("calibrate F0 ADC");
+    assert_eq!(
+        bus.read_u32(ADC1_BASE + 0x08).unwrap() & ADCAL,
+        0,
+        "ADCAL self-clears"
+    );
+    assert_ne!(
+        bus.read_u32(ADC1_BASE).unwrap() & EOCAL,
+        0,
+        "calibration raises EOCAL"
+    );
+    bus.write_u32(ADC1_BASE, EOCAL)
+        .expect("clear calibration flag");
+    bus.write_u32(ADC1_BASE + 0x08, ADEN)
+        .expect("enable F0 ADC");
+    assert_ne!(bus.read_u32(ADC1_BASE).unwrap() & 1, 0, "ADC raises ADRDY");
+    bus.write_u32(ADC1_BASE + 0x0C, 0)
+        .expect("select 12-bit F0 resolution");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched BJT models");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices resolve through descriptor-routed ADC pads"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set generic NTC temperature");
+    session
+        .set_signal_number("ui.bjt.high_drive_v", 0.0)
+        .expect("initialize high-injection BJT base drive");
+    session
+        .set_signal_number("ui.bjt.control_drive_v", 0.0)
+        .expect("initialize no-rolloff control base drive");
+
+    let ntc_voltage = 1.65;
+    let diode_voltage = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut high_drive_rolloff_v = None;
+    let mut high_drive_control_v = None;
+    for base_drive_v in [0.8_f64, 1.5, 3.3] {
+        session
+            .set_signal_number("ui.bjt.high_drive_v", base_drive_v)
+            .expect("set high-injection BJT drive");
+        session
+            .set_signal_number("ui.bjt.control_drive_v", base_drive_v)
+            .expect("set matched control BJT drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched BJT branches");
+        assert_eq!(steps.len(), 3, "NTC, diode, and matched BJT models solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let high_v = bjt_high_injection_collector_voltage(base_drive_v, true);
+        let control_v = bjt_high_injection_collector_voltage(base_drive_v, false);
+        for (path, expected_v) in [
+            ("board.analog.pa0_volts", ntc_voltage),
+            ("board.analog.pa1_volts", diode_voltage),
+            ("board.analog.pa2_volts", high_v),
+            ("board.analog.pa3_volts", control_v),
+        ] {
+            let solved_v = signal_voltage(&session, path);
+            assert!(
+                (solved_v - expected_v).abs() < 5e-5,
+                "{path} should resolve to {expected_v} V, got {solved_v} V"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            u16::MAX,
+            "unrouted ADC1_IN4 remains isolated"
+        );
+
+        for (channel, voltage_v) in [
+            (0, ntc_voltage),
+            (1, diode_voltage),
+            (2, high_v),
+            (3, control_v),
+        ] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds ADC1_IN{channel}"
+            );
+            assert_eq!(
+                stm32f0_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion follows the solved device voltage"
+            );
+        }
+
+        if base_drive_v == 3.3 {
+            high_drive_rolloff_v = Some(high_v);
+            high_drive_control_v = Some(control_v);
+        }
+    }
+
+    let rolloff_v = high_drive_rolloff_v.expect("high-drive sample was recorded");
+    let control_v = high_drive_control_v.expect("high-drive control was recorded");
+    assert!(
+        rolloff_v - control_v > 0.05,
+        "IKF/NKF high-injection rolloff must lower collector current and raise collector voltage: {rolloff_v} V vs {control_v} V"
+    );
 }
