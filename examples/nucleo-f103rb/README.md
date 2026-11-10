@@ -47,8 +47,9 @@ edges) and `uart-smoke.yaml` (UART output).
 
 The board wiring follows ST UM1724 and the chip geometry follows ST DS5319.
 The board system uses the narrow
-`stm32f103rb-nucleo-smoke` chip profile: it models RCC, GPIOA, GPIOC and
-USART2. This omits the broader family descriptor's zero-answering USB and
-backup-register windows and does not claim untested F103 peripherals. The
-smoke is simulation-side evidence only; see [`ONBOARDING.md`](ONBOARDING.md),
+`stm32f103rb-nucleo-smoke` chip profile. Its base smoke uses RCC, GPIOA, GPIOC
+and USART2; the companion BME280 profile also uses GPIOB and I2C1. This omits
+the broader family descriptor's zero-answering USB and backup-register
+windows and does not claim untested F103 peripherals. The smokes are
+simulation-side evidence only; see [`ONBOARDING.md`](ONBOARDING.md),
 [`VALIDATION.md`](VALIDATION.md) and [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md).

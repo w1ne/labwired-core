@@ -1,0 +1,22 @@
+# STM32 NUCLEO-F103RB plus a BME280 STEMMA QT breakout on I2C1.
+# Default I2C1 pins are PB6/SCL and PB7/SDA; the smoke uses LD2 and USART2 VCP.
+name: "nucleo-f103rb-bme280"
+chip: "../chips/stm32f103rb-nucleo-smoke.yaml"
+debug_uart: "uart2"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+connectors:
+  - type: "uart"
+    peripheral: "uart2"
+    endpoint: "host_console"

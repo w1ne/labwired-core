@@ -25,7 +25,8 @@ Recorded result:
 - Smoke assertions: **3/3**; USART2 output contains `OK`, GPIOA pin 5 records
   **10 transitions**, and the run stops at the requested 200,000 steps.
 - The loaded chip descriptor is `stm32f103rb-nucleo-smoke`; it declares RCC,
-  GPIOA, GPIOC, and USART2 only.
+  GPIOA, GPIOB, GPIOC, USART2, and I2C1. This base smoke uses RCC, GPIOA,
+  GPIOC, and USART2. The companion BME280 smoke uses GPIOB and I2C1.
 
 The committed `evidence/` directory contains the build logs, UART transcript,
 simulation result, snapshot, metrics, and scoreboard. Physical UART and LED

@@ -2,8 +2,8 @@
 
 This is a review draft for the community coverage page. It is intentionally not
 listed in `mkdocs.yml` and has not been published. The current draft covers the
-ESP32 family and RP2350; the remaining demand-ranked entries need to be added
-and reviewed before publication.
+ESP32 family, RP2350, and STM32F103; the remaining demand-ranked entries need to
+be added and reviewed before publication.
 
 ## ESP32 — rank 1, 38% of reported MCU use
 
@@ -221,6 +221,53 @@ through at least January 2040 when checked on 2026-11-10. Mouser's [exact SC1631
 listing](https://www.mouser.com/en/c/embedded-solutions/?m=Raspberry+Pi&series=Pico+2)
 showed 3,515 in stock at $5.00. The saved availability receipt is
 [`vendor-status.md`](../../examples/pico2/evidence/community/vendor-status.md).
+
+## STM32F103 — MCU-use rank #3 (17%); Nucleo/Discovery kits 23%
+
+### NUCLEO-F103RB with a BME280 STEMMA QT breakout
+
+STM32F103 ranks **#3** in MCU use, and STM32 Nucleo/Discovery boards appear in
+23% of main-project kits. This adds an I²C sensor use case to the existing
+NUCLEO-F103RB board model. It reads the BME280 chip ID (`0x60`) on I2C1, reports
+it over the board's USART2/ST-LINK virtual COM port, and toggles the onboard
+LD2 LED. The local smoke is in
+[`examples/nucleo-f103rb-bme280/`](../../examples/nucleo-f103rb-bme280/); it is
+not a physical-board test or a hosted `model_verified` result.
+
+Wire a BME280 breakout at address `0x77` to 3V3, GND, PB6/SCL, and PB7/SDA.
+Adafruit PID 2652 is available with an Add to Cart control; Adafruit's library
+lists `0x77` as the primary BME280 I²C address. ST currently marks both the
+STM32F103RB and NUCLEO-F103RB Active; the board listing says In Stock. The dated
+stock and lifecycle record is in the
+[vendor receipt](../../examples/nucleo-f103rb-bme280/evidence/vendor-status.md).
+
+Copy-paste STM32 Arduino-core sketch to read the BME280 chip-ID register:
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+
+TwoWire bmeWire(PB7, PB6);  // SDA, SCL: default I2C1 pins on STM32F103
+
+void setup() {
+  Serial.begin(115200);
+  bmeWire.begin();
+  bmeWire.beginTransmission(0x77);
+  bmeWire.write(0xD0);
+  if (bmeWire.endTransmission(false) != 0 ||
+      bmeWire.requestFrom(0x77, static_cast<uint8_t>(1)) != 1) {
+    Serial.println("BME280 not found");
+    return;
+  }
+  Serial.printf("BME280_ID=0x%02X\n", bmeWire.read());
+}
+
+void loop() {}
+```
+
+The local simulator smoke uses bare-metal register-level firmware, not this
+Arduino sketch. The sketch is a community starting point and was not compiled
+as part of the smoke.
 
 ### ESP32-DevKitC-32E / ESP32-WROOM-32E
 
@@ -607,8 +654,9 @@ supported; the local result is not a physical-board run.
 ## Remaining demand-ranked entries
 
 Before this page is ready for publication, add reviewed coverage and a
-copy-paste example for the supported Arduino AVR path, STM32F103, and current
-Nucleo/Discovery boards. WCH CH32V003 already has a local booting smoke and a
+copy-paste example for an Arduino AVR board whose MCU is still actively
+recommended and purchasable, plus more current Nucleo/Discovery boards. WCH
+CH32V003 already has a local booting smoke and a
 copy-paste example in [`docs/community/hardware-coverage-draft.md`](../community/hardware-coverage-draft.md);
 consolidate that entry here before publication. Each entry must link to its
 exact board or part evidence and clearly identify any lifecycle status.

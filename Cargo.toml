@@ -155,6 +155,7 @@ members = [
     "crates/firmware-stm32h735g-dk-smoke",
     "crates/firmware-xiao-nrf54l15-smoke",
     "crates/firmware-nucleo-f103rb-smoke",
+    "crates/firmware-nucleo-f103rb-bme280-smoke",
     "crates/firmware-stm32f103c6-gpio-smoke",
     "crates/firmware-stm32f103r8-gpio-smoke",
     "crates/firmware-stm32f103r6-gpio-smoke",

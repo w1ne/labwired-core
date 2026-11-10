@@ -1,9 +1,9 @@
 # Narrow NUCLEO-F103RB onboarding profile.
 #
-# This keeps the exact STM32F103RBT6 geometry but declares only the paths used
-# by the board smoke: RCC, GPIOA/LD2, GPIOC/B1, and USART2/VCP. The full
-# stm32f103rb.yaml profile retains the wider family map; its USB and backup
-# register windows are zero-answering stubs and are intentionally absent here.
+# This keeps the exact STM32F103RBT6 geometry and the paths exercised by the
+# Nucleo smokes: RCC, GPIOA/LD2, GPIOC/B1, GPIOB, USART2/VCP, and I2C1. The
+# full stm32f103rb.yaml profile retains the wider family map; its USB and
+# backup-register windows are zero-answering stubs and are absent here.
 #
 # Sources:
 # - ST DS5319: https://www.st.com/resource/en/datasheet/stm32f103rb.pdf
@@ -38,6 +38,8 @@ pins:
   PA2: { gpio: "gpioa", bit: 2 }
   PA3: { gpio: "gpioa", bit: 3 }
   PA5: { gpio: "gpioa", bit: 5 }
+  PB6: { gpio: "gpiob", bit: 6 }
+  PB7: { gpio: "gpiob", bit: 7 }
   PC13: { gpio: "gpioc", bit: 13 }
 
 peripherals:
@@ -57,6 +59,15 @@ peripherals:
       debug_schema: "../peripherals/stm32f103/gpioa.yaml"
       profile: "stm32f1"
 
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40010C00
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 3 }
+    config:
+      debug_schema: "../peripherals/stm32f103/gpiob.yaml"
+      profile: "stm32f1"
+
   - id: "gpioc"
     type: "gpio"
     base_address: 0x40011000
@@ -74,3 +85,13 @@ peripherals:
     clock: { reg: "apb1enr", bit: 17 }
     config:
       debug_schema: "../peripherals/stm32f103/usart2.yaml"
+
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    clock: { reg: "apb1enr", bit: 21 }
+    config:
+      debug_schema: "../peripherals/stm32f103/i2c1.yaml"
+      irq_error: 32
