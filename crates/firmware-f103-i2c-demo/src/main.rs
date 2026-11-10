@@ -48,6 +48,7 @@ const USART2_SR: u32 = USART2_BASE + 0x00;
 const USART2_DR: u32 = USART2_BASE + 0x04;
 const USART2_BRR: u32 = USART2_BASE + 0x08;
 const USART2_CR1: u32 = USART2_BASE + 0x0C;
+const USART_SR_RXNE: u32 = 1 << 5;
 const NVIC_ISPR: *const u32 = 0xE000_E200 as *const u32;
 const NVIC_ICPR: *mut u32 = 0xE000_E280 as *mut u32;
 const USART2_IRQ: u32 = 38;
@@ -219,6 +220,7 @@ fn main() -> ! {
     }
     putline(b"F103 I2C");
     smoke_usart2_txe_irq();
+    smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
     unsafe {
         i2c1_init();
@@ -652,6 +654,59 @@ fn smoke_usart2_txe_irq() {
     } else {
         putline(b"USART2 TXEIRQ=0 REARM=1");
     }
+}
+
+/// Start-injected USART2 bytes must remain on the wire until both legacy
+/// receiver enables are set, then arrive in order and drain from DR.
+fn smoke_usart2_rx_enable_gate() {
+    // `usart2_init` leaves UE and TE set with RE clear.
+    let re_off = unsafe { read_volatile(USART2_SR as *const u32) } & USART_SR_RXNE == 0;
+
+    // Isolate UE as the second gate: RE alone must not expose the queued data.
+    unsafe { write_volatile(USART2_CR1 as *mut u32, (1 << 3) | (1 << 2)) };
+    let ue_off = unsafe {
+        read_volatile(USART2_CR1 as *const u32) & (1 << 13) == 0
+            && read_volatile(USART2_SR as *const u32) & USART_SR_RXNE == 0
+    };
+
+    // Re-enable the UART and receiver, then drain the two injected bytes.
+    unsafe { write_volatile(USART2_CR1 as *mut u32, (1 << 13) | (1 << 3) | (1 << 2)) };
+    let mut received = [0u8; 2];
+    let mut count = 0;
+    for _ in 0..1_000_000 {
+        if unsafe { read_volatile(USART2_SR as *const u32) } & USART_SR_RXNE != 0
+            && count < received.len()
+        {
+            received[count] = unsafe { read_volatile(USART2_DR as *const u32) } as u8;
+            count += 1;
+        }
+        if count == received.len() {
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let released = unsafe { read_volatile(USART2_SR as *const u32) } & USART_SR_RXNE == 0;
+    let passed = re_off && ue_off && count == 2 && received == *b"RS" && released;
+
+    putbytes(b"USART2 RX GATE re_off=");
+    put_flag(re_off);
+    putbytes(b" ue_off=");
+    put_flag(ue_off);
+    putbytes(b" data=");
+    putbytes(b"0000");
+    for byte in received {
+        for shift in [4, 0] {
+            let nibble = (byte >> shift) & 0x0F;
+            putbyte(if nibble < 10 {
+                b'0' + nibble
+            } else {
+                b'A' + nibble - 10
+            });
+        }
+    }
+    putbytes(b" released=");
+    put_flag(released);
+    putbytes(if passed { b" ok\n" } else { b" FAIL\n" });
 }
 
 fn smoke_spi1_irq_and_max31855() {
