@@ -491,15 +491,6 @@ WAIVED: dict[str, str] = {
         "RV1103 platform throughput claim. Vendor BSP/SD/ROM boot remains "
         "unimplemented and no representative perf fixture qualifies this board."
     ),
-    "esp32-devkitc-32e-gpio-smoke": (
-        "GPIO/UART0/RTC-sleep onboarding smoke twin of the classic ESP32 "
-        "(DevKitC-32E / WROOM-32E). It shares the ESP32 flash 0x400D0000 / "
-        "RAM 0x3FFB0000 map, so FIXTURES would match the stock Xtensa MMIO "
-        "spin; that fixture is not this yaml's deep/light-sleep GPIO smoke, "
-        "and no run has produced a throughput number for this descriptor. "
-        "No separate throughput claim is made. The parent `esp32` board "
-        "already carries the measured classic-ESP32 baselines."
-    ),
 }
 
 # Descriptors that are CI plumbing rather than a modelled part.

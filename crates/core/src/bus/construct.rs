@@ -1000,6 +1000,11 @@ impl SystemBus {
                 any.downcast_mut::<crate::peripherals::imxrt::lpuart::ImxrtLpuart>()
             {
                 uart.set_sink(None, false);
+            } else if let Some(uart) =
+                any.downcast_mut::<crate::peripherals::esp32::uart::Esp32Uart>()
+            {
+                // YAML `type: esp32_uart` installs this model (classic ESP32).
+                uart.set_sink(None);
             } else if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
                 uart.set_sink(None);
             } else if let Some(sercom) =
@@ -1040,6 +1045,15 @@ impl SystemBus {
             // The Espressif twin (S3 UART0/1/2, C3 UART0/1) decides at
             // construction whether it is a console, so `echo_stdout` can only
             // silence it here — same as the by-type `attach_uart_tx_sink` path.
+            // Real ESP32-classic UART (`type: esp32_uart`). The unnamed
+            // `attach_uart_tx_sink` path already knew this model; the named
+            // console path (Session `debug_uart: uart0`) did not, so a board
+            // whose YAML overlay replaced programmatic UART0 with Esp32Uart
+            // was reported as "no such UART".
+            if let Some(uart) = any.downcast_mut::<crate::peripherals::esp32::uart::Esp32Uart>() {
+                uart.set_sink(Some(sink));
+                return true;
+            }
             if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
                 uart.set_sink(Some(sink));
                 uart.silence_stdout_echo_if(echo_stdout);

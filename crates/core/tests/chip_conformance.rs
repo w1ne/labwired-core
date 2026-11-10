@@ -439,9 +439,7 @@ const CHIPS: &[ChipConf] = &[
         // The committed Tier-1 fixture runs through this descriptor/system so a
         // regression in the YAML pair's load/parse/dispatch fails here, not
         // only in the CLI cell. Same documented dma gap as parent `esp32`.
-        behavior_gate: Some(
-            "firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival",
-        ),
+        behavior_gate: Some("firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival"),
     },
     ChipConf {
         name: "stm32f401cdu6",
