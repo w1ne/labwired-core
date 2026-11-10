@@ -26,7 +26,7 @@ NRND. The page remains unpublished pending Andrii's approval.
 
 | Survey position | Representative board | What the local smoke exercises | Availability receipt |
 | --- | --- | --- | --- |
-| **#1 ESP32, 38%** | [ESP-Mosaico V1.2 / ESP32-S31](../../examples/esp-mosaico-v1-2/README.md); [Espressif ESP32-P4X Function EV](../../examples/esp32p4x-function-ev-board/README.md); [Waveshare ESP32-C3-Zero](../../examples/waveshare-esp32c3-zero/README.md); [ESP32-S3-DevKitC-1 N16R8 v1.0](../../examples/esp32-s3-devkitc-1-n16r8/README.md); [ESP32-S3-DevKitC-1 LEDC servo system](../../examples/esp32-s3-devkitc-servo/README.md) | S31 GPIO7 function-button input drives GPIO8 haptic-control transitions; P4X GPIO8 transitions at J1 pin 5; C3-Zero GPIO10 waveform decoded as a red WS2812 pixel; DevKitC v1.0 RMT drives the GPIO48 pixel; the servo profile captures a 49.92 Hz LEDC waveform on GPIO4 and decodes a lit RGB pixel | [S31 preorder listing, checked 2026-11-09](../../examples/esp-mosaico-v1-2/evidence/vendor-status.md); [P4X listing, checked 2026-11-06](../../examples/esp32p4x-function-ev-board/evidence/vendor-status.md); [Waveshare listing, checked 2026-11-06](../../examples/waveshare-esp32c3-zero/evidence/vendor-status.md); [Espressif status, checked 2026-11-06](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/vendor-status.md); [N16R8 stock, checked 2026-11-06](../../examples/esp32-s3-devkitc-servo/evidence/vendor-status.md) |
+| **#1 ESP32, 38%** | [ESP-Mosaico V1.2 / ESP32-S31](../../examples/esp-mosaico-v1-2/README.md); [Espressif ESP32-P4X Function EV + BME280](../../examples/esp32p4x-function-ev-board/README.md); [Waveshare ESP32-C3-Zero](../../examples/waveshare-esp32c3-zero/README.md); [ESP32-S3-DevKitC-1 N16R8 v1.0](../../examples/esp32-s3-devkitc-1-n16r8/README.md); [ESP32-S3-DevKitC-1 LEDC servo system](../../examples/esp32-s3-devkitc-servo/README.md) | S31 GPIO7 function-button input drives GPIO8 haptic-control transitions; P4X I2C0 reads BME280 ID `0x60` and gates GPIO8 transitions at J1 pin 5; C3-Zero GPIO10 waveform decoded as a red WS2812 pixel; DevKitC v1.0 RMT drives the GPIO48 pixel; the servo profile captures a 49.92 Hz LEDC waveform on GPIO4 and decodes a lit RGB pixel | [S31 preorder listing, checked 2026-11-09](../../examples/esp-mosaico-v1-2/evidence/vendor-status.md); [P4X listing, checked 2026-11-10](../../examples/esp32p4x-function-ev-board/evidence/vendor-status.md); [Waveshare listing, checked 2026-11-06](../../examples/waveshare-esp32c3-zero/evidence/vendor-status.md); [Espressif status, checked 2026-11-06](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/vendor-status.md); [N16R8 stock, checked 2026-11-06](../../examples/esp32-s3-devkitc-servo/evidence/vendor-status.md) |
 | **#2 ATmega328 family, 30%** | [ATmega328PB Xplained Mini](../../examples/atmega328pb-xplained-mini/README.md) (active sibling; the survey does not separate PB) | USART0 CDC transcript and the board's D200/PB5 LED transitions. ATmega328P remains excluded because it is NRND. | [Live MCU status and board stock, checked 2026-11-06](../../examples/atmega328pb-xplained-mini/evidence/vendor-status.md) |
 | **#3 STM32F103, 17%** | [NUCLEO-F103RB](../../examples/nucleo-f103rb/README.md) | USART2 output and LD2 on PA5 | [ST status and stock, checked 2026-11-03](../../examples/nucleo-f103rb/evidence/vendor-status.md) |
 | **#4 other STM32, 13%** | [STM32G071B-DISCO](../../examples/stm32g071b-disco/README.md); [NUCLEO-H723ZG + BME280](../../examples/nucleo-h723zg-bme280/README.md) | G071B-DISCO USART3 output on the ST-LINK virtual COM route; H723ZG reads BME280 ID `0x60` over I2C1 on PB8/PB9 and gates LD1 pulses on the read | [G071B-DISCO status and stock, checked 2026-11-03](../../examples/stm32g071b-disco/evidence/vendor-status.md); [H723ZG and BME280 status, checked 2026-11-09](../../examples/nucleo-h723zg-bme280/evidence/vendor-status.md) |
@@ -72,31 +72,58 @@ and [committed evidence](../../examples/esp-mosaico-v1-2/evidence/).
 
 ### #1 — ESP32: Espressif ESP32-P4X Function EV Board
 
-Set the project target to `esp32p4` in ESP-IDF. GPIO8 is at J1 pin 5; attach an
-LED in series with a current-limiting resistor from GPIO8 to GND, or use a
-logic analyzer to observe the pin:
+Set the project target to `esp32p4` in ESP-IDF. A BME280 breakout at address
+`0x77` connects SDA to GPIO21 (J1 pin 11), SCL to GPIO22 (J1 pin 12), plus 3V3
+and GND. The example checks its chip ID, then pulses GPIO8 (J1 pin 5):
 
 ```c
+#include <stdint.h>
+#include <stdlib.h>
+
 #include "driver/gpio.h"
+#include "driver/i2c_master.h"
+#include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 void app_main(void) {
-    gpio_reset_pin(GPIO_NUM_8);
-    gpio_set_direction(GPIO_NUM_8, GPIO_MODE_OUTPUT);
+    i2c_master_bus_config_t bus_config = {
+        .i2c_port = I2C_NUM_0,
+        .sda_io_num = GPIO_NUM_21,
+        .scl_io_num = GPIO_NUM_22,
+        .clk_source = I2C_CLK_SRC_DEFAULT,
+        .glitch_ignore_cnt = 7,
+    };
+    i2c_master_bus_handle_t bus;
+    ESP_ERROR_CHECK(i2c_new_master_bus(&bus_config, &bus));
+    i2c_device_config_t device_config = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = 0x77,
+        .scl_speed_hz = 100000,
+    };
+    i2c_master_dev_handle_t sensor;
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus, &device_config, &sensor));
+    uint8_t reg = 0xD0, id = 0;
+    ESP_ERROR_CHECK(i2c_master_transmit_receive(sensor, &reg, 1, &id, 1, 1000));
+    if (id != 0x60) abort();
+
+    ESP_ERROR_CHECK(gpio_reset_pin(GPIO_NUM_8));
+    ESP_ERROR_CHECK(gpio_set_direction(GPIO_NUM_8, GPIO_MODE_OUTPUT));
     for (;;) {
-        gpio_set_level(GPIO_NUM_8, 1);
+        ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_8, 1));
         vTaskDelay(pdMS_TO_TICKS(500));
-        gpio_set_level(GPIO_NUM_8, 0);
+        ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_8, 0));
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 ```
 
-The local profile directly loads a bare-metal RISC-V image and asserts GPIO8
-edges. It covers one HP execution context and GPIO8's output and IO_MUX path;
-it does not claim the second HP core, LP core, ESP32-C6 module, ROM boot, flash
-controller, USB, Ethernet, audio, camera, display, or other pads. See the
+The local profile directly loads a bare-metal RISC-V image and gates GPIO8
+edges on the BME280 ID read. Its bus model attaches the sensor to I2C0 directly;
+it does not model SDA/SCL pad routing or waveforms. The profile covers one HP
+execution context and GPIO8's output and IO_MUX path; it does not claim the
+second HP core, LP core, ESP32-C6 module, ROM boot, flash controller, USB,
+Ethernet, audio, camera, display, or other pads. See the
 [focused quickstart](../../examples/esp32p4x-function-ev-board/README.md),
 [availability receipt](../../examples/esp32p4x-function-ev-board/evidence/vendor-status.md),
 and [committed local evidence](../../examples/esp32p4x-function-ev-board/evidence/).

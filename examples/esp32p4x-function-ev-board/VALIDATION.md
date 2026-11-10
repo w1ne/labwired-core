@@ -14,7 +14,9 @@ CARGO_BUILD_RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
 ```
 
 Pass criteria: the local simulator result is `pass`, GPIO8 (`gpio:8`) produces
-at least 32 observed edges, and execution stops at the configured step limit.
+at least 32 observed edges after the BME280 register read, and execution stops
+at the configured step limit. The firmware only pulses GPIO8 when I2C0 reads
+the BME280 ID `0x60` from register `0xD0`.
 The image links into the P4 IROM window at `0x40000000` and HP RAM at
 `0x4ff40000`, with the low 256 KiB reserved for ROM. The smoke directly loads
 the RISC-V ELF entry point; this is not a ROM boot or flash-controller test.

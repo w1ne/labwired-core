@@ -1,4 +1,4 @@
-# Narrow P4X Function EV profile: one HP RISC-V core and GPIO8 only.
+# Narrow P4X Function EV profile: one HP RISC-V core, I2C0, and GPIO8.
 # ESP-IDF's ESP32-P4 memory map reserves the low 256 KiB of HP RAM for ROM use.
 name: "esp32p4"
 arch: "riscv"
@@ -23,6 +23,14 @@ pins:
   GPIO8: { gpio: "gpio", bit: 8 }
 
 peripherals:
+  - id: "i2c0"
+    type: "esp32p4_i2c"
+    irq: 44
+    base_address: 0x500C4000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32p4/i2c0.yaml"
+
   - id: "gpio"
     type: "esp32p4_gpio"
     base_address: 0x500E0000

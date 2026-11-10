@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Factory for the focused ESP32-P4 GPIO profile.
+//! Factory for the focused ESP32-P4 board profile.
 
 use crate::Peripheral;
 use labwired_config::PeripheralConfig;

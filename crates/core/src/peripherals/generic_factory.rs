@@ -154,6 +154,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c5_io_mux",
     "esp32c5_rmt",
     "esp32p4_gpio",
+    // Built by the from_config controller path so external slaves attach
+    // through the shared I2C bus loader.
+    "esp32p4_i2c",
     // S31's narrow GPIO7/GPIO8 board slice is built by the Espressif family
     // factory; keep these canonical so generic GPIO heuristics cannot claim it.
     "esp32s31_gpio",

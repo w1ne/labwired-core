@@ -728,6 +728,7 @@ impl SystemBus {
                     | "stm32f7_i2c"
                     | "efm32ggi2ccontroller"
                     | "esp32c3_i2c"
+                    | "esp32p4_i2c"
                     | "imxrt_lpi2c"
             ) {
                 let controller: Box<dyn Peripheral> = if canonical_type == "imxrt_lpi2c" {
@@ -749,6 +750,13 @@ impl SystemBus {
                         .irq
                         .unwrap_or(crate::peripherals::esp32c3::i2c::I2C0_INTR_SOURCE_ID);
                     Box::new(crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_intr_source(src))
+                } else if canonical_type == "esp32p4_i2c" {
+                    // P4 I2C0 uses the S3-compatible command-list register
+                    // block and source ordinal 44. External slaves are
+                    // attached at the controller boundary in this profile;
+                    // physical GPIO-matrix pads are not represented.
+                    let src = p_cfg.irq.unwrap_or(44);
+                    Box::new(crate::peripherals::esp32s3::i2c::Esp32s3I2c::with_intr_source(src))
                 } else {
                     let layout: crate::peripherals::i2c::I2cRegisterLayout =
                         Self::parse_profile_or_default(p_cfg, "I2C")?;

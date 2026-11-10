@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 200000,
-  "cycles": 400152,
+  "cycles": 400284,
   "instructions": 200000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -57,14 +57,14 @@
       0,
       0,
       0,
-      1343094784,
+      96,
       256,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
+      200000,
+      128,
+      200704,
+      208,
+      256,
+      1343094784,
       0,
       0,
       0,
@@ -80,7 +80,7 @@
       0,
       0
     ],
-    "pc": 1073742684,
+    "pc": 1073742892,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -116,7 +116,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "d238cc2edbc632eeb4710150ea061d337c41538fc05ad9a9e17266163647da36",
+  "firmware_hash": "c36ab5abbd2403d93f55d5a64adc222bd8073f858961c487bba401c27966b753",
   "config": {
     "firmware": "examples/esp32p4x-function-ev-board/../../target/riscv32imac-unknown-none-elf/release/firmware-esp32p4x-function-ev-board-smoke",
     "system": "examples/esp32p4x-function-ev-board/../../configs/systems/esp32p4x-function-ev-board.yaml",
@@ -124,6 +124,118 @@
   },
   "inspect": {
     "peripherals": [
+      {
+        "name": "i2c0",
+        "kind": "native",
+        "base": 1342980096,
+        "registers": [
+          {
+            "name": "CTR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SLAVE_ADDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FIFO_CONF",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATA",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "CMD0",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CMD1",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CMD2",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CMD3",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CMD4",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CMD5",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
       {
         "name": "gpio",
         "kind": "native",
@@ -263,9 +375,71 @@
         "artifacts": []
       }
     ],
-    "devices": []
+    "devices": [
+      {
+        "id": "bme280",
+        "device_type": "bme280",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c0",
+          "address": 119
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "bme280",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
   },
   "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (400000000 Hz); PLL reconfiguration is not tracked"
+    },
     {
       "kind": "unpowered_rail_assumed",
       "address": "0x0",
@@ -285,199 +459,199 @@
         "pin": 8,
         "transitions": [
           {
-            "cycle": 102,
+            "cycle": 106,
             "value": 0
           },
           {
-            "cycle": 103,
+            "cycle": 140,
             "value": 1
           },
           {
-            "cycle": 105,
+            "cycle": 142,
             "value": 0
           },
           {
-            "cycle": 107,
+            "cycle": 144,
             "value": 1
           },
           {
-            "cycle": 109,
+            "cycle": 146,
             "value": 0
           },
           {
-            "cycle": 111,
+            "cycle": 148,
             "value": 1
           },
           {
-            "cycle": 113,
+            "cycle": 150,
             "value": 0
           },
           {
-            "cycle": 115,
+            "cycle": 152,
             "value": 1
           },
           {
-            "cycle": 117,
+            "cycle": 154,
             "value": 0
           },
           {
-            "cycle": 119,
+            "cycle": 156,
             "value": 1
           },
           {
-            "cycle": 121,
+            "cycle": 158,
             "value": 0
           },
           {
-            "cycle": 123,
+            "cycle": 160,
             "value": 1
           },
           {
-            "cycle": 125,
+            "cycle": 162,
             "value": 0
           },
           {
-            "cycle": 127,
+            "cycle": 164,
             "value": 1
           },
           {
-            "cycle": 129,
+            "cycle": 166,
             "value": 0
           },
           {
-            "cycle": 131,
+            "cycle": 168,
             "value": 1
           },
           {
-            "cycle": 133,
+            "cycle": 170,
             "value": 0
           },
           {
-            "cycle": 135,
+            "cycle": 172,
             "value": 1
           },
           {
-            "cycle": 137,
+            "cycle": 174,
             "value": 0
           },
           {
-            "cycle": 139,
+            "cycle": 176,
             "value": 1
           },
           {
-            "cycle": 141,
+            "cycle": 178,
             "value": 0
           },
           {
-            "cycle": 143,
+            "cycle": 180,
             "value": 1
           },
           {
-            "cycle": 145,
+            "cycle": 182,
             "value": 0
           },
           {
-            "cycle": 147,
+            "cycle": 184,
             "value": 1
           },
           {
-            "cycle": 149,
+            "cycle": 186,
             "value": 0
           },
           {
-            "cycle": 151,
+            "cycle": 188,
             "value": 1
           },
           {
-            "cycle": 153,
+            "cycle": 190,
             "value": 0
           },
           {
-            "cycle": 155,
+            "cycle": 192,
             "value": 1
           },
           {
-            "cycle": 157,
+            "cycle": 194,
             "value": 0
           },
           {
-            "cycle": 159,
+            "cycle": 196,
             "value": 1
           },
           {
-            "cycle": 161,
+            "cycle": 198,
             "value": 0
           },
           {
-            "cycle": 163,
+            "cycle": 200,
             "value": 1
           },
           {
-            "cycle": 165,
+            "cycle": 202,
             "value": 0
           },
           {
-            "cycle": 167,
+            "cycle": 204,
             "value": 1
           },
           {
-            "cycle": 169,
+            "cycle": 206,
             "value": 0
           },
           {
-            "cycle": 171,
+            "cycle": 208,
             "value": 1
           },
           {
-            "cycle": 173,
+            "cycle": 210,
             "value": 0
           },
           {
-            "cycle": 175,
+            "cycle": 212,
             "value": 1
           },
           {
-            "cycle": 177,
+            "cycle": 214,
             "value": 0
           },
           {
-            "cycle": 179,
+            "cycle": 216,
             "value": 1
           },
           {
-            "cycle": 181,
+            "cycle": 218,
             "value": 0
           },
           {
-            "cycle": 183,
+            "cycle": 220,
             "value": 1
           },
           {
-            "cycle": 185,
+            "cycle": 222,
             "value": 0
           },
           {
-            "cycle": 187,
+            "cycle": 224,
             "value": 1
           },
           {
-            "cycle": 189,
+            "cycle": 226,
             "value": 0
           },
           {
-            "cycle": 191,
+            "cycle": 228,
             "value": 1
           },
           {
-            "cycle": 193,
+            "cycle": 230,
             "value": 0
           },
           {
-            "cycle": 195,
+            "cycle": 232,
             "value": 1
           },
           {
-            "cycle": 197,
+            "cycle": 234,
             "value": 0
           }
         ],
@@ -485,199 +659,199 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 102,
+            "cycle": 106,
             "state": "0"
           },
           {
-            "cycle": 103,
+            "cycle": 140,
             "state": "1"
           },
           {
-            "cycle": 105,
+            "cycle": 142,
             "state": "0"
           },
           {
-            "cycle": 107,
+            "cycle": 144,
             "state": "1"
           },
           {
-            "cycle": 109,
+            "cycle": 146,
             "state": "0"
           },
           {
-            "cycle": 111,
+            "cycle": 148,
             "state": "1"
           },
           {
-            "cycle": 113,
+            "cycle": 150,
             "state": "0"
           },
           {
-            "cycle": 115,
+            "cycle": 152,
             "state": "1"
           },
           {
-            "cycle": 117,
+            "cycle": 154,
             "state": "0"
           },
           {
-            "cycle": 119,
+            "cycle": 156,
             "state": "1"
           },
           {
-            "cycle": 121,
+            "cycle": 158,
             "state": "0"
           },
           {
-            "cycle": 123,
+            "cycle": 160,
             "state": "1"
           },
           {
-            "cycle": 125,
+            "cycle": 162,
             "state": "0"
           },
           {
-            "cycle": 127,
+            "cycle": 164,
             "state": "1"
           },
           {
-            "cycle": 129,
+            "cycle": 166,
             "state": "0"
           },
           {
-            "cycle": 131,
+            "cycle": 168,
             "state": "1"
           },
           {
-            "cycle": 133,
+            "cycle": 170,
             "state": "0"
           },
           {
-            "cycle": 135,
+            "cycle": 172,
             "state": "1"
           },
           {
-            "cycle": 137,
+            "cycle": 174,
             "state": "0"
           },
           {
-            "cycle": 139,
+            "cycle": 176,
             "state": "1"
           },
           {
-            "cycle": 141,
+            "cycle": 178,
             "state": "0"
           },
           {
-            "cycle": 143,
+            "cycle": 180,
             "state": "1"
           },
           {
-            "cycle": 145,
+            "cycle": 182,
             "state": "0"
           },
           {
-            "cycle": 147,
+            "cycle": 184,
             "state": "1"
           },
           {
-            "cycle": 149,
+            "cycle": 186,
             "state": "0"
           },
           {
-            "cycle": 151,
+            "cycle": 188,
             "state": "1"
           },
           {
-            "cycle": 153,
+            "cycle": 190,
             "state": "0"
           },
           {
-            "cycle": 155,
+            "cycle": 192,
             "state": "1"
           },
           {
-            "cycle": 157,
+            "cycle": 194,
             "state": "0"
           },
           {
-            "cycle": 159,
+            "cycle": 196,
             "state": "1"
           },
           {
-            "cycle": 161,
+            "cycle": 198,
             "state": "0"
           },
           {
-            "cycle": 163,
+            "cycle": 200,
             "state": "1"
           },
           {
-            "cycle": 165,
+            "cycle": 202,
             "state": "0"
           },
           {
-            "cycle": 167,
+            "cycle": 204,
             "state": "1"
           },
           {
-            "cycle": 169,
+            "cycle": 206,
             "state": "0"
           },
           {
-            "cycle": 171,
+            "cycle": 208,
             "state": "1"
           },
           {
-            "cycle": 173,
+            "cycle": 210,
             "state": "0"
           },
           {
-            "cycle": 175,
+            "cycle": 212,
             "state": "1"
           },
           {
-            "cycle": 177,
+            "cycle": 214,
             "state": "0"
           },
           {
-            "cycle": 179,
+            "cycle": 216,
             "state": "1"
           },
           {
-            "cycle": 181,
+            "cycle": 218,
             "state": "0"
           },
           {
-            "cycle": 183,
+            "cycle": 220,
             "state": "1"
           },
           {
-            "cycle": 185,
+            "cycle": 222,
             "state": "0"
           },
           {
-            "cycle": 187,
+            "cycle": 224,
             "state": "1"
           },
           {
-            "cycle": 189,
+            "cycle": 226,
             "state": "0"
           },
           {
-            "cycle": 191,
+            "cycle": 228,
             "state": "1"
           },
           {
-            "cycle": 193,
+            "cycle": 230,
             "state": "0"
           },
           {
-            "cycle": 195,
+            "cycle": 232,
             "state": "1"
           },
           {
-            "cycle": 197,
+            "cycle": 234,
             "state": "0"
           }
         ],
@@ -701,12 +875,12 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 1008,
+    "text_bytes": 1214,
     "data_bytes": 0,
     "bss_bytes": 524288,
-    "flash_used_bytes": 1008,
+    "flash_used_bytes": 1214,
     "ram_static_bytes": 524288,
-    "flash_total_bytes": 16000000,
+    "flash_total_bytes": 16777216,
     "ram_total_bytes": 524288,
     "flash_used_pct": 0.01,
     "ram_static_pct": 100.0,
@@ -721,16 +895,16 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 400152,
+    "cycles": 400284,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 1,
+    "memory_reads": 2,
     "memory_writes": 4,
-    "peripheral_accesses": 51,
+    "peripheral_accesses": 65,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1073742684,
+        "pc": 1073742892,
         "count": 781,
         "symbol": "main"
       }

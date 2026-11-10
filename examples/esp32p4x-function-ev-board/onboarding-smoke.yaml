@@ -1,4 +1,4 @@
-# ESP32-P4X Function EV board smoke: direct GPIO8 output at J1 pin 5.
+# ESP32-P4X Function EV: read BME280 ID before GPIO8 output.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32imac-unknown-none-elf/release/firmware-esp32p4x-function-ev-board-smoke"
@@ -6,6 +6,7 @@ inputs:
 limits:
   max_steps: 200000
 assertions:
+  # The firmware emits these transitions only after register 0xD0 returns 0x60.
   - gpio_edges:
       pin: "gpio:8"
       min_edges: 32

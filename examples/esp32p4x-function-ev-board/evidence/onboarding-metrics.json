@@ -6,23 +6,23 @@
   "script": "examples/esp32p4x-function-ev-board/onboarding-smoke.yaml",
   "system": "configs/systems/esp32p4x-function-ev-board.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T15:55:22Z",
-  "finished_at_utc": "2026-11-06T15:55:23Z",
+  "started_at_utc": "2026-11-10T06:58:00Z",
+  "finished_at_utc": "2026-11-10T06:58:02Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1238,
+  "elapsed_ms": 1246,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.357,
-    "build_firmware": 0.396,
-    "run_smoke": 0.443
+    "build_cli": 0.35,
+    "build_firmware": 0.416,
+    "run_smoke": 0.45
   },
   "stages_ms": {
-    "build_cli": 357,
-    "build_firmware": 396,
-    "run_smoke": 443
+    "build_cli": 350,
+    "build_firmware": 416,
+    "run_smoke": 450
   }
 }

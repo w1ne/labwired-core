@@ -1,0 +1,81 @@
+peripheral: I2C0 (focused command-list subset)
+version: 0.1.0
+registers:
+  - id: CTR
+    address_offset: 0x04
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x020B
+    fields:
+      - name: TRANS_START
+        bit_range: [5, 5]
+  - id: SR
+    address_offset: 0x08
+    size: 32
+    access: READ_WRITE
+    reset_value: 0xC000
+    fields:
+      - name: RESP_REC
+        bit_range: [0, 0]
+  - id: SLAVE_ADDR
+    address_offset: 0x10
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+  - id: FIFO_CONF
+    address_offset: 0x18
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x408B
+  - id: DATA
+    address_offset: 0x1C
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+  - id: INT_RAW
+    address_offset: 0x20
+    size: 32
+    access: READ_ONLY
+    reset_value: 0x2
+    fields:
+      - name: END_DETECT
+        bit_range: [3, 3]
+      - name: TRANS_COMPLETE
+        bit_range: [7, 7]
+      - name: NACK
+        bit_range: [10, 10]
+  - id: INT_CLR
+    address_offset: 0x24
+    size: 32
+    access: WRITE_ONLY
+    reset_value: 0
+  - id: CMD0
+    address_offset: 0x58
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+  - id: CMD1
+    address_offset: 0x5C
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+  - id: CMD2
+    address_offset: 0x60
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+  - id: CMD3
+    address_offset: 0x64
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+  - id: CMD4
+    address_offset: 0x68
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+  - id: CMD5
+    address_offset: 0x6C
+    size: 32
+    access: READ_WRITE
+    reset_value: 0

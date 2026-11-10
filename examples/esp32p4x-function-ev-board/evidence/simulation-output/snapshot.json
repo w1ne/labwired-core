@@ -13,14 +13,14 @@
       0,
       0,
       0,
-      1343094784,
+      96,
       256,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
+      200000,
+      128,
+      200704,
+      208,
+      256,
+      1343094784,
       0,
       0,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 1073742684,
+    "pc": 1073742892,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 200000,
-  "cycles": 400152,
+  "cycles": 400284,
   "instructions": 200000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "d238cc2edbc632eeb4710150ea061d337c41538fc05ad9a9e17266163647da36",
+  "firmware_hash": "c36ab5abbd2403d93f55d5a64adc222bd8073f858961c487bba401c27966b753",
   "config": {
     "firmware": "examples/esp32p4x-function-ev-board/../../target/riscv32imac-unknown-none-elf/release/firmware-esp32p4x-function-ev-board-smoke",
     "system": "examples/esp32p4x-function-ev-board/../../configs/systems/esp32p4x-function-ev-board.yaml",

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.102633">
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.070779">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="d238cc2edbc632eeb4710150ea061d337c41538fc05ad9a9e17266163647da36"/>
+    <property name="firmware_hash" value="c36ab5abbd2403d93f55d5a64adc222bd8073f858961c487bba401c27966b753"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.102633">
+  <testcase classname="labwired" name="run" time="0.070779">
   </testcase>
   <testcase classname="labwired" name="assertion 1: gpio_edges: gpio:8 &gt;= 32 edges" time="0.000000">
   </testcase>
