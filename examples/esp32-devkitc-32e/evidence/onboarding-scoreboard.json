@@ -1,12 +1,12 @@
 {
   "summary": {
-    "targets_total": 7,
-    "pass": 7,
+    "targets_total": 8,
+    "pass": 8,
     "fail": 0,
-    "median_elapsed_ms": 37367,
+    "median_elapsed_ms": 38488,
     "threshold_seconds": 3600,
-    "threshold_met": 7,
-    "median_elapsed_seconds": 37.367
+    "threshold_met": 8,
+    "median_elapsed_seconds": 38.488
   },
   "targets": [
     {
@@ -188,6 +188,36 @@
       },
       "firmware_build_script": "scripts/build-esp32-devkitc-32e-rmt-smoke.sh",
       "_artifact_path": "examples/esp32-devkitc-32e/evidence/rmt-neopixel"
+    },
+    {
+      "target_id": "esp32-devkitc-32e-spi-oled",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-devkitc-32e/spi-oled-smoke.yaml",
+      "system": "configs/systems/esp32-devkitc-32e-spi-oled.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-10T00:23:11Z",
+      "finished_at_utc": "2026-11-10T00:23:50Z",
+      "elapsed_seconds": 40,
+      "elapsed_ms": 39610,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 34.1,
+        "build_firmware": 4.6,
+        "run_smoke": 0.875
+      },
+      "stages_ms": {
+        "build_cli": 34100,
+        "build_firmware": 4600,
+        "run_smoke": 875
+      },
+      "firmware_build_script": "scripts/build-esp32-devkitc-32e-spi-oled-smoke.sh",
+      "_artifact_path": "examples/esp32-devkitc-32e/evidence/spi-oled"
     },
     {
       "target_id": "esp32-devkitc-32e-uart1",

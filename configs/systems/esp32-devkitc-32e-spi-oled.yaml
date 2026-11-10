@@ -1,0 +1,15 @@
+# ESP32-DevKitC-32E and a 128x64 SSD1306 SPI OLED breakout.
+# Stock VSPI pins are CLK=GPIO18, MISO=GPIO19, MOSI=GPIO23, CS=GPIO5;
+# GPIO17 drives the panel's D/C input. The optional hardware reset is omitted:
+# the selected Adafruit breakout has its own power-on reset circuit.
+name: "esp32-devkitc-32e-spi-oled"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "oled"
+    type: "oled-ssd1306-spi"
+    connection: "spi3"
+    config:
+      cs_pin: "GPIO5"
+      dc_pin: "GPIO17"

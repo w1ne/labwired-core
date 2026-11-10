@@ -10,7 +10,8 @@ reviewed before publication.
 ### ESP32-DevKitC-32E / ESP32-WROOM-32E
 
 The board profile boots Arduino firmware and exercises UART0, UART1 TX, GPIO,
-I2C with a BME280, RMT output, ADC1 channel 0, DAC, and LEDC PWM. The ADC smoke
+I2C with a BME280, SPI3 to an SSD1306 OLED, RMT output, ADC1 channel 0, DAC,
+and LEDC PWM. The ADC smoke
 checks `analogRead(36)` on GPIO36 / ADC1_CH0 with a potentiometer fixture; a
 1650 mV input returns 2047 at 12-bit resolution. The LEDC smoke uses stock
 `ledcAttach` / `ledcWrite` output on GPIO23 / J3 pin 2 for an external
@@ -89,6 +90,54 @@ void loop() {}
 The smoke sends repeated `U` bytes and checks GPIO16 edges. The exact board
 availability check for this round is in
 [`vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/uart1/vendor-status.md).
+
+This round adds stock Arduino VSPI/SPI3 output to a 128x64 SSD1306 OLED on
+SCK=GPIO18, MISO=GPIO19, MOSI=GPIO23, CS=GPIO5, and D/C=GPIO17. The local
+smoke runs the initialization sequence and asserts that the display model's
+top 8-pixel page is fully lit. The hosted verifier separately observes at
+least 16 GPIO18 clock transitions. This is master TX coverage; MISO slave
+responses and the panel reset input are not modeled.
+
+Copy-paste Arduino example for an Adafruit 128x64 SSD1306 breakout configured
+for 4-wire SPI (Adafruit PID 938; cut its two interface jumpers from I2C):
+
+```cpp
+#include <Arduino.h>
+#include <SPI.h>
+
+constexpr int kCs = 5;
+constexpr int kDc = 17;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(kCs, OUTPUT);
+  pinMode(kDc, OUTPUT);
+  digitalWrite(kCs, HIGH);
+  digitalWrite(kDc, LOW);
+  SPI.begin(18, 19, 23, kCs);  // SCK, MISO, MOSI, CS
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+
+  const uint8_t init[] = {0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40,
+                          0x8D, 0x14, 0x20, 0x00, 0xA1, 0xC8, 0xDA, 0x12,
+                          0x81, 0xCF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6,
+                          0xAF, 0x21, 0x00, 0x7F, 0x22, 0x00, 0x00};
+  digitalWrite(kCs, LOW);
+  for (uint8_t byte : init) SPI.transfer(byte);
+  digitalWrite(kDc, HIGH);
+  for (int i = 0; i < 128; ++i) SPI.transfer(0xFF);  // top 8-pixel page
+  digitalWrite(kCs, HIGH);
+  SPI.endTransaction();
+}
+
+void loop() {}
+```
+
+The exact board and display availability check is recorded in
+[`vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/spi-oled/vendor-status.md).
+The display framebuffer assertion, hosted SPI clock oracle, smoke logs, and
+scoreboard are in
+[`evidence/spi-oled/`](../../examples/esp32-devkitc-32e/evidence/spi-oled/)
+and [`onboarding-scoreboard.md`](../../examples/esp32-devkitc-32e/evidence/onboarding-scoreboard.md).
 
 Run it against the committed board profile with:
 

@@ -1,17 +1,18 @@
-# ESP32-DevKitC-32E GPIO, UART, BME280 I2C, RMT, ADC, DAC, and LEDC smokes
+# ESP32-DevKitC-32E GPIO, UART, BME280 I2C, SPI OLED, RMT, ADC, DAC, and LEDC smokes
 
 **Demand rank:** ESP32 is rank 1 in the standing list (38% of reported MCU
-use). This round adds the stock Arduino `Serial1` TX path, remapped to GPIO16 /
-J3 pin 12, to the exact DevKitC-32E board coverage. This is peripheral depth
-on the highest-demand family, not a new MCU target or board variant.
+use). This round adds a stock Arduino VSPI path to a 128x64 SSD1306 display on
+the exact DevKitC-32E board. This is peripheral depth on the highest-demand
+family, not a new MCU target or board variant.
 
 ## Board and modeled scope
 
 The board is Espressif's exact **ESP32-DevKitC-32E** with an ESP32-WROOM-32E
 module and 4 MB flash. The narrow board profile exposes classic ESP32 GPIO,
-UART0 console, UART1 TX routed to GPIO16, I2C0, and ADC1 channel 0. GPIO23 maps
-to J3 pin 2; it is a header pin, not a built-in LED. For a physical blink,
-connect an LED in series with a resistor from GPIO23 to GND.
+UART0 console, UART1 TX routed to GPIO16, I2C0, VSPI/SPI3, ADC1 channel 0,
+DAC1/2, LEDC, and RMT TX.
+GPIO23 maps to J3 pin 2; it is a header pin, not a built-in LED. For a physical
+blink, connect an LED in series with a resistor from GPIO23 to GND.
 
 | Board connection | MCU behavior | Smoke |
 | --- | --- | --- |
@@ -19,6 +20,7 @@ connect an LED in series with a resistor from GPIO23 to GND.
 | UART0 output | Serial console capture | Base smoke asserts `ESP32_DEVKITC32E_UART0_OK` |
 | J3 pin 12 | UART1 TX routed to GPIO16 | UART1 smoke sends `UUUUUUUU` at 115200 baud and requires GPIO16 edges |
 | J2 GPIO21/GPIO22 | I2C0 SDA/SCL | BME280 smoke reads sensor ID and temperature ADC data |
+| J3 GPIO18/19/23/5, GPIO17 | VSPI/SPI3 clock, MISO, MOSI, CS, and OLED D/C | SPI OLED smoke sends SSD1306 init commands and paints the first 8-row page |
 | J2 pin 3 / VP (GPIO36) | ADC1 channel 0 | ADC smoke reads a 1650 mV potentiometer through `analogRead(36)` and expects 2047 at 12-bit resolution |
 | J3 pin 2 (GPIO23) | LEDC high-speed channel 0 PWM output | LEDC smoke runs 50 Hz, 14-bit PWM to an external SG90-class servo twin and requires committed duty plus GPIO edges |
 | GPIO23 header | RMT channel 0 TX matrix output | RMT smoke sends red to an external WS2812 pixel and waits for TX_END |
@@ -55,7 +57,18 @@ external generic WS2812-compatible fixtures, not onboard DevKitC LEDs. The
 UART0 and UART1 TX controllers are modeled. UART1 RX and the board's
 USB-to-UART bridge are outside this profile; the UART1 test proves routed TX
 edges on GPIO16, while console capture does not prove USB serial behavior.
-Wi-Fi/Bluetooth, SPI, timers, flash
+The SPI profile covers VSPI/SPI3 master TX to an external 128x64 SSD1306 SPI
+breakout on SCK=GPIO18, MOSI=GPIO23, CS=GPIO5, and D/C=GPIO17; MISO is exposed
+on the header but unused by this display. The smoke asserts a fully inked top
+8-pixel page after stock Arduino `SPI` transfers. The panel reset input is not
+modeled; the selected breakout has an auto-reset circuit. This does not verify
+an external SPI slave's MISO path. The hosted verifier separately asserts at
+least 16 GPIO18 clock transitions; its catalog lacks the SPI OLED, so the
+local display-region assertion is the panel-model evidence. Details and the
+hosted rail assumption are in
+[`evidence/spi-oled/hosted-verification.md`](evidence/spi-oled/hosted-verification.md).
+
+Wi-Fi/Bluetooth, timers, flash
 boot behavior, and the 5 V power LED are outside these profiles. The LEDC
 profile does not claim general-purpose timer coverage. The base ESP32 descriptor
 still has zero-answering system stubs for I2S0, I2S1, and UHCI0; this board
@@ -294,3 +307,58 @@ external UART receiver or UART1 RX. The exact board availability check is in
 [`evidence/uart1/vendor-status.md`](evidence/uart1/vendor-status.md).
 Hosted oracle details, including the non-blocking assumed-power gap, are in
 [`evidence/uart1/hosted-verification.md`](evidence/uart1/hosted-verification.md).
+
+Run the SPI OLED smoke from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-devkitc-32e-spi-oled \
+  --script examples/esp32-devkitc-32e/spi-oled-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-spi-oled.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/spi-oled \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-spi-oled-smoke.sh
+```
+
+Copy-paste Arduino example for an Adafruit 128x64 SSD1306 breakout configured
+for 4-wire SPI (CS=GPIO5, D/C=GPIO17, SCK=GPIO18, MOSI=GPIO23):
+
+```cpp
+#include <Arduino.h>
+#include <SPI.h>
+
+constexpr int kCs = 5;
+constexpr int kDc = 17;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(kCs, OUTPUT);
+  pinMode(kDc, OUTPUT);
+  digitalWrite(kCs, HIGH);
+  digitalWrite(kDc, LOW);
+  SPI.begin(18, 19, 23, kCs);
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+
+  const uint8_t init[] = {0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40,
+                          0x8D, 0x14, 0x20, 0x00, 0xA1, 0xC8, 0xDA, 0x12,
+                          0x81, 0xCF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6,
+                          0xAF, 0x21, 0x00, 0x7F, 0x22, 0x00, 0x00};
+  digitalWrite(kDc, LOW);
+  digitalWrite(kCs, LOW);
+  for (uint8_t byte : init) SPI.transfer(byte);
+
+  digitalWrite(kDc, HIGH);
+  for (int i = 0; i < 128; ++i) SPI.transfer(0xFF);  // Solid top 8-pixel page
+  digitalWrite(kCs, HIGH);
+  SPI.endTransaction();
+  Serial.println("OLED page painted");
+}
+
+void loop() {}
+```
+
+Connect the breakout to 3V3/GND and the listed signal pins; MISO is unused.
+Adafruit PID 938 defaults to I2C, so cut its two interface jumpers to select SPI. The
+current exact-board and display availability check is in
+[`evidence/spi-oled/vendor-status.md`](evidence/spi-oled/vendor-status.md).
+The smoke log and deterministic local display assertion are committed under
+[`evidence/spi-oled/`](evidence/spi-oled/).

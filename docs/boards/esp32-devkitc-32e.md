@@ -12,7 +12,10 @@ ESP32-WROOM-32E module. The GPIO/UART profile is
   at I2C0 address `0x77`, with SDA=GPIO21 (J3 pin 6) and SCL=GPIO22 (J3 pin 3).
   The breakout uses 3V3/GND from J2/J3.
 - Demand rank: ESP32 is rank 1 in the standing list (38% MCU use). This round
-  adds a stock Arduino LEDC servo smoke on GPIO23 to the existing ESP32 board.
+  adds VSPI/SPI3 TX to an external 128x64 SSD1306 SPI OLED on the same board.
+- The SPI system uses SCK=GPIO18, MISO=GPIO19, MOSI=GPIO23, CS=GPIO5, and
+  D/C=GPIO17. Its smoke sends the controller initialization sequence and
+  paints the full top 8-pixel page, asserted from the OLED framebuffer.
 - The smoke asserts sensor ID `0x60` and temperature raw value `0x082DC0` over
   the local UART0 capture.
 - `configs/systems/esp32-devkitc-32e-ledc-servo.yaml` adds the classic LEDC
@@ -29,10 +32,10 @@ register window, RMTMEM, independent channels 0–7 transmit timing, GPIO-matrix
 outputs and per-channel TX_END. This smoke exercises channels 0 and 1; channels
 2–7 use the same path but are not exercised here. Receive mode remains outside
 the modeled scope.
-Wi-Fi/Bluetooth, SPI, general-purpose timer APIs, flash boot
-behavior, USB-to-UART hardware, pin-level UART waveforms, analog behavior, and
-the power LED also remain outside the profile. I2S0/1, UHCI0, PCNT, APB_CTRL
-and DPORT analog-AHB retain fallback windows.
+Wi-Fi/Bluetooth, general-purpose timer APIs, flash boot behavior,
+USB-to-UART hardware, pin-level UART waveforms, full analog behavior, and the
+power LED also remain outside the profile. I2S0/1, UHCI0, PCNT, APB_CTRL and
+DPORT analog-AHB retain fallback windows.
 
 The rank-1 RMT smoke is in
 [`examples/esp32-devkitc-32e/rmt-smoke.yaml`](../../examples/esp32-devkitc-32e/rmt-smoke.yaml)
@@ -43,6 +46,12 @@ The rank-1 LEDC servo smoke is in
 [`examples/esp32-devkitc-32e/ledc-smoke.yaml`](../../examples/esp32-devkitc-32e/ledc-smoke.yaml)
 and uses the Arduino APIs shown in
 [`ledc_servo_smoke.cpp`](../../examples/esp32-devkitc-32e/firmware/src/ledc_servo_smoke.cpp).
+
+The rank-1 SPI OLED smoke is in
+[`examples/esp32-devkitc-32e/spi-oled-smoke.yaml`](../../examples/esp32-devkitc-32e/spi-oled-smoke.yaml)
+with copy-paste Arduino code in the
+[`DevKitC README`](../../examples/esp32-devkitc-32e/README.md). It exercises
+only master TX to the panel; it does not claim SPI MISO slave coverage.
 
 Live board, module, and sensor status is recorded in
 [`examples/esp32-devkitc-32e/evidence/vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/vendor-status.md).

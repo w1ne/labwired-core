@@ -1,0 +1,17 @@
+# ESP32-DevKitC-32E VSPI drives an SSD1306 OLED and paints page 0.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/devkitc32e_spi_oled/firmware.elf"
+  system: "../../configs/systems/esp32-devkitc-32e-spi-oled.yaml"
+limits:
+  max_steps: 30000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "ESP32_DEVKITC32E_SPI_OLED_PAGE0=PAINTED"
+  - display_region:
+      id: "oled"
+      x: 0
+      y: 0
+      w: 128
+      h: 8
+      min_ink: 1.0
