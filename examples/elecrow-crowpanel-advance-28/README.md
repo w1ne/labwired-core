@@ -13,6 +13,8 @@ The sketch uses the official V1.1/V1.2 [Elecrow LovyanGFX pin configuration](htt
 | LCD backlight | 38 | Elecrow lesson-03 code |
 | UART0 TX/RX | 43 / 44 | [Elecrow wiki](https://www.elecrow.com/wiki/CrowPanel_Advance_2.8-HMI_ESP32_AI_Display.html) |
 
+![Actual LabWired ST7789 framebuffer, 320x240, produced by the ESP32-S3 test firmware](images/simulated-rgb-test.png)
+
 The ST7789 model has **240 × 320** controller RAM; physical panel is **320 × 240** in landscape. Firmware sets MADCTL.MV to swap axes. No `glass_crop` is configured: unlike the reused 170 × 320 example, this panel uses all controller columns. Rotation/inversion must still be checked on real V1.2 hardware.
 
 ## Build the real firmware
