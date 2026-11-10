@@ -102,6 +102,7 @@ members = [
     "crates/firmware-perf-spin",
     "crates/firmware-perf-spin-riscv",
     "crates/firmware-rp2040-demo",
+    "crates/firmware-rp2350-pico2-bme280-smoke",
     "crates/firmware-samd21-demo",
     "crates/firmware-samd21-lowram-smoke",
     "crates/firmware-arduino-zero-demo",
@@ -376,6 +377,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-rp2350-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-rp2350-pico2-bme280-smoke]
 codegen-units = 1
 opt-level = "s"
 

@@ -505,8 +505,12 @@
         "gap": "no fixture loads configs/chips/rp2350.yaml and moves SPI bytes; the descriptor reuses the RP2040 spi model on RP2350 bases but evidence does not transfer automatically - a pico2 SPI fixture is follow-up work"
       },
       "i2c": {
-        "state": "none",
-        "gap": "no fixture loads configs/chips/rp2350.yaml and completes an I2C transaction; the descriptor reuses the RP2040 i2c model on RP2350 bases but per-chip evidence does not transfer - a pico2 I2C fixture is follow-up work"
+        "state": "proven",
+        "file": "examples/pico2/bme280-smoke.yaml",
+        "test": "BME280_ID=0x60",
+        "signal": "source-built Cortex-M33 firmware on configs/chips/rp2350.yaml writes a BME280 register pointer to I2C0 at 0x40090000, repeated-start reads CHIP_ID 0x60 at address 0x77, then reads raw temperature 0x082DC0 from 0xFA..0xFC; after both reads, it toggles the Pico 2 LED on GP25 four times and the GPIO edge oracle requires those transitions",
+        "lane": "manual local onboarding smoke: scripts/onboarding_smoke.sh; committed evidence at examples/pico2/evidence/bme280/",
+        "note": "This proves the RP2350 I2C0 controller and attached BME280 model exchange register data, then drive GPIO25 through SIO. The manifest records GP4 SDA / GP5 SCL and firmware selects I2C0 on both pads, but this model attaches the sensor directly to the controller and does not electrically enforce pad routing, pull-ups, or voltage levels. UART text is simulator-only diagnostic output; physical UART initialization is not part of this smoke."
       }
     },
     "xck26-rpu": {

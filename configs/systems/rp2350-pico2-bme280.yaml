@@ -1,0 +1,22 @@
+# Raspberry Pi Pico 2 (RP2350) with an Adafruit BME280 STEMMA QT breakout.
+# The external device is attached to I2C0; GP4/GP5 are the board's I2C0 SDA/SCL pins.
+name: "rp2350-pico2-bme280"
+chip: "../chips/rp2350.yaml"
+cpu_hz: 150_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GP4"
+      scl: "GP5"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_gp25"
+    kind: "led"
+    peripheral: "sio"
+    pin: 25
+    signal: "output"
+    active_high: true

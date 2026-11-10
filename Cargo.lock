@@ -1761,6 +1761,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-rp2350-pico2-bme280-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-s32k388-evb-smoke"
 version = "0.1.0"
 dependencies = [
