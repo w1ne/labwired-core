@@ -1,0 +1,41 @@
+# Rain drop sensor MODULE (sensing plate + LM393 comparator board) —
+# declarative `analog_source`.
+#
+# Water on the plate raises conductivity across the interdigitated traces, which
+# pulls the AO divider toward ground. Wetter plate → LOWER analog output. The
+# module is powered from the same rail as the MCU ADC, so the curve is
+# ratiometric to that rail (authored at 5 V, the common USB/Uno supply):
+#
+#   V_out = V_supply * (1 - clamp(rain / 100, 0..1))
+#
+# Dry (rain=0) sits at the supply rail so an Uno AVcc=5 V dry baseline reads
+# near full scale (>= 700 counts). Soaked (rain=100) sits at ground. D0 (module
+# comparator trip) is not modelled — firmware that needs a digital threshold
+# compares AO in software (this twin leaves D0 unwired).
+type: rain-sensor
+
+behavior:
+  primitive: analog_source
+  analog:
+    ratiometric_ref_mv: 5000
+    curve:
+      - [0, 5000]
+      - [100, 0]
+    below_first: clamp
+    encode: trunc
+
+metadata:
+  label: Rain Drop Sensor
+  summary: Rain drop plate + LM393 module (AO on ADC; wetter → lower voltage).
+  detail: >-
+    Module-level model of the common rain-drop breakout (sensing plate + LM393
+    board): AO is a 0..Vsupply voltage that falls as the plate gets wetter.
+    Drive the `rain` channel (0..100 %) at runtime; starts at 0 % (dry → high
+    AO). D0 comparator output is not modelled — leave it unwired, or compare AO
+    in firmware.
+  category: analog
+  config_keys:
+    - { name: channel, ty: int, doc: "ADC channel index (0..N). Defaults to 0." }
+    - { name: supply_mv, ty: float, doc: "Module supply in millivolts (default 5000)." }
+  inputs:
+    - { key: rain, label: Rain level, unit: "%", min: 0, max: 100, default: 0 }

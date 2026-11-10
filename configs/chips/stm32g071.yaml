@@ -239,6 +239,9 @@ peripherals:
     irq: 15
     config:
       width: 32
+      # Channel outputs reach the pads through the G0 AF table (TIM2 AF2,
+      # TIM3 AF1; bus/attach.rs STM32G0_TIMER_PADS).
+      pad_map: "stm32g0"
     clock: { reg: "apbenr1", bit: 0 }
 
   - id: "tim3"
@@ -248,6 +251,9 @@ peripherals:
     irq: 16
     config:
       width: 16
+      # Channel outputs reach the pads through the G0 AF table (TIM2 AF2,
+      # TIM3 AF1; bus/attach.rs STM32G0_TIMER_PADS).
+      pad_map: "stm32g0"
     clock: { reg: "apbenr1", bit: 1 }
 
   - id: "tim6"

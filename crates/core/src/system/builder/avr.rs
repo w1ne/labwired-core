@@ -61,6 +61,8 @@ pub(super) fn build(
         parse_avr_elf_image(firmware).map_err(|e| anyhow!("Loader Error: {e:#}"))?;
     let mut cpu = crate::cpu::Avr::for_chip_name(&chip.name);
     cpu.load_program_image(&program_image);
+    // EEPROM programming time is in microseconds; count it in this clock.
+    cpu.set_cpu_hz(bus.cpu_hz);
     // USART TX is on the CPU, not a bus UART peripheral.
     cpu.set_serial_sink(uart_sink.clone());
     // SPI kits stay on the bus parking controller so inspect / display
@@ -71,6 +73,8 @@ pub(super) fn build(
             cpu.push_i2c_slave(dev);
         }
     }
+    // The watchdog's 128 kHz period is counted in core clocks.
+    cpu.set_wdt_cpu_hz(bus.cpu_hz);
     let boxed: Box<dyn Cpu> = Box::new(cpu);
     let machine = Machine::new(boxed, bus);
 

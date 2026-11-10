@@ -21,27 +21,54 @@
 //! the high byte stores it in `TEMP`, and writing the low byte commits both.
 //! Reading the low byte latches the high byte into `TEMP` for the next read.
 //!
-//! The counter counts up to TOP and wraps for every WGM. TOP is 0xFFFF,
-//! 0x00FF/0x01FF/0x03FF, OCR1A or ICR1, depending on the mode. A counter
-//! already past a lowered TOP runs on to 0xFFFF first. OCF1A/OCF1B are set
-//! when the counter reaches OCR1A/OCR1B. TOV1 is set on the wrap to 0, or
-//! at MAX in CTC. ICF1, input capture and double-buffered OCR1x are not
-//! modelled. OC1A (PB1) and OC1B (PB2) follow `oc_pins.rs` in the PWM modes.
+//! TOP is 0xFFFF, 0x00FF/0x01FF/0x03FF, OCR1A or ICR1, depending on the
+//! mode. The phase-correct modes (WGM 1-3, 8-11) count up to TOP and back
+//! down, so a cycle is `2 * TOP` clocks (Arduino's `analogWrite` on D9/D10:
+//! 16 MHz / 64 / 510 = 490 Hz). Every other mode counts up to TOP and wraps.
+//! A counter already past a lowered TOP runs on to 0xFFFF first. OCF1A/OCF1B
+//! are set when the counter reaches OCR1A/OCR1B (on either slope). TOV1 is
+//! set on the wrap to 0, at BOTTOM in phase-correct, or at MAX in CTC.
+//! Double-buffered OCR1x is not modelled. OC1A (PB1) and OC1B (PB2) follow
+//! `oc_pins.rs` in the PWM modes.
+//!
+//! Input capture (datasheet 16.6): an edge on ICP1 (PB0, Arduino D8) of the
+//! polarity `ICES1` selects copies `TCNT1` into `ICR1` and sets `ICF1`, and
+//! `TIMER1_CAPT` fires when `ICIE1` is set. The pad is sampled at instruction
+//! boundaries by `ext_int.rs`, as `PINB` reads it, so a pad the firmware drives
+//! itself captures too, as on silicon. In the modes where ICR1 is TOP
+//! (WGM 8, 10, 12, 14) the unit is off. Not modelled: the 4-clock delay of the
+//! noise canceler (`ICNC1`), the analog-comparator source (`ACSR.ACIC`), and
+//! ICP1 on the ATmega2560 (PD4). The pad is watched while `ICIE1`, `ICES1` or
+//! `ICNC1` is set: a firmware that polls `ICF1` for a falling edge with all
+//! three clear is not seen, because watching PB0 on every Arduino sketch
+//! (Timer1 runs from `init()`) would cost every sketch a pad read per
+//! instruction.
 
 use super::oc_pins::Waveform;
-use super::{t2_hits, Avr};
+use super::{dual_dist, dual_from_phase, dual_hits, dual_phase, t2_hits, Avr};
 
+/// `TIMER1_CAPT_vect` (`__vector_10`, byte 0x28).
+pub const VEC_TIMER1_CAPT: u32 = 11;
 /// `TIMER1_COMPA_vect` (`__vector_11`, byte 0x2C).
 pub const VEC_TIMER1_COMPA: u32 = 12;
 /// `TIMER1_COMPB_vect` (`__vector_12`, byte 0x30).
 pub const VEC_TIMER1_COMPB: u32 = 13;
 /// `TIMER1_OVF_vect` (`__vector_13`, byte 0x34).
 pub const VEC_TIMER1_OVF: u32 = 14;
-const T1_IRQ_MASK: u64 = (1 << VEC_TIMER1_COMPA) | (1 << VEC_TIMER1_COMPB) | (1 << VEC_TIMER1_OVF);
+const T1_IRQ_MASK: u64 = (1 << VEC_TIMER1_CAPT)
+    | (1 << VEC_TIMER1_COMPA)
+    | (1 << VEC_TIMER1_COMPB)
+    | (1 << VEC_TIMER1_OVF);
 
 const TOV1: u8 = 1 << 0;
 const OCF1A: u8 = 1 << 1;
 const OCF1B: u8 = 1 << 2;
+/// `ICF1` in `TIFR1`, and `ICIE1` at the same bit of `TIMSK1`.
+const ICF1: u8 = 1 << 5;
+/// `TCCR1B.ICES1`: capture on the rising edge (0: falling).
+const ICES1: u8 = 1 << 6;
+/// `TCCR1B.ICNC1`: input noise canceler.
+const ICNC1: u8 = 1 << 7;
 
 pub(super) const ADDR_TIFR1: u16 = 0x36;
 pub(super) const ADDR_TIMSK1: u16 = 0x6F;
@@ -59,6 +86,8 @@ pub struct Timer1 {
     pub icr: u16,
     pub timsk: u8,
     pub tifr: u8,
+    /// Counting down (phase-correct modes only).
+    pub down: bool,
     prescale_acc: u32,
     temp: std::cell::Cell<u8>,
 }
@@ -103,6 +132,30 @@ impl Timer1 {
         }
     }
 
+    /// The input capture unit is off where ICR1 is TOP.
+    fn capture_enabled(&self) -> bool {
+        !matches!(self.wgm(), 8 | 10 | 12 | 14)
+    }
+
+    /// Must ICP1 be sampled at every boundary? See the module doc for why the
+    /// polled-falling-edge case with every capture bit clear is left out.
+    pub(super) fn capture_watched(&self) -> bool {
+        self.capture_enabled() && (self.timsk & ICF1 != 0 || self.tccrb & (ICES1 | ICNC1) != 0)
+    }
+
+    /// An ICP1 edge: `rose` is its direction.
+    fn capture_edge(&mut self, rose: bool) {
+        if self.capture_enabled() && rose == (self.tccrb & ICES1 != 0) {
+            self.icr = self.tcnt;
+            self.tifr |= ICF1;
+        }
+    }
+
+    /// Dual-slope counting, with a TOP it can turn around at.
+    fn dual_slope(&self) -> bool {
+        self.waveform() == Waveform::PhaseCorrect && self.top() > 0
+    }
+
     fn tov_target(&self) -> u64 {
         if self.is_ctc() {
             0xFFFF
@@ -139,10 +192,23 @@ impl Timer1 {
             tcnt = (tcnt + n) & 0xFFFF;
             ticks -= n;
         }
-        if ticks > 0 {
+        if ticks > 0 && self.dual_slope() {
+            let phase = dual_phase(tcnt, self.down, top);
+            for (bit, target) in [(OCF1A, ocra), (OCF1B, ocrb), (TOV1, 0)] {
+                if dual_hits(phase, ticks, top, target) {
+                    flags |= bit;
+                }
+            }
+            let (t, down) = dual_from_phase((phase + ticks) % (2 * top), top);
+            tcnt = t;
+            self.down = down;
+        } else if ticks > 0 {
             let period = top + 1;
             hits(tcnt, ticks, period);
             tcnt = (tcnt + ticks) % period;
+        }
+        if !self.dual_slope() {
+            self.down = false;
         }
         self.tcnt = tcnt as u16;
         self.tifr |= flags;
@@ -152,6 +218,9 @@ impl Timer1 {
     fn irq_bits(&self) -> u64 {
         let on = self.tifr & self.timsk;
         let mut want = 0u64;
+        if on & ICF1 != 0 {
+            want |= 1 << VEC_TIMER1_CAPT;
+        }
         if on & OCF1A != 0 {
             want |= 1 << VEC_TIMER1_COMPA;
         }
@@ -172,6 +241,19 @@ impl Timer1 {
             // Conservative: wake at the wrap and look again from there.
             return Some(0x1_0000 - tcnt);
         }
+        let mask = self.timsk & (OCF1A | OCF1B | TOV1);
+        if self.dual_slope() {
+            let phase = dual_phase(tcnt, self.down, top);
+            return [
+                (OCF1A, u64::from(self.ocra)),
+                (OCF1B, u64::from(self.ocrb)),
+                (TOV1, 0),
+            ]
+            .into_iter()
+            .filter(|(bit, _)| mask & bit != 0)
+            .filter_map(|(_, target)| dual_dist(phase, top, target))
+            .min();
+        }
         let period = top + 1;
         let dist = |target: u64| {
             (target < period).then(|| match (target + period - tcnt) % period {
@@ -179,7 +261,6 @@ impl Timer1 {
                 d => d,
             })
         };
-        let mask = self.timsk & (OCF1A | OCF1B | TOV1);
         [
             (OCF1A, u64::from(self.ocra)),
             (OCF1B, u64::from(self.ocrb)),
@@ -222,9 +303,16 @@ impl Avr {
         Some((ticks * div - u64::from(self.t1.prescale_acc).min(div - 1)).max(1))
     }
 
+    /// An edge on ICP1 (PB0) seen at an instruction boundary.
+    pub(super) fn timer1_icp_edge(&mut self, rose: bool) {
+        self.t1.capture_edge(rose);
+        self.sync_timer1_irq();
+    }
+
     /// Entering a Timer1 vector clears its flag.
     pub(super) fn timer1_vector_entered(&mut self, vec: u32) {
         let bit = match vec {
+            VEC_TIMER1_CAPT => ICF1,
             VEC_TIMER1_COMPA => OCF1A,
             VEC_TIMER1_COMPB => OCF1B,
             VEC_TIMER1_OVF => TOV1,
@@ -322,6 +410,49 @@ mod tests {
         assert_eq!((t.tcnt, t.tifr & TOV1), (0, TOV1), "CTC passes MAX once");
     }
 
+    /// Arduino's `analogWrite` mode for D9/D10: WGM 1, 8-bit phase-correct.
+    /// Up to 0xFF and back down, OCF1A on both slopes, TOV1 at BOTTOM only.
+    #[test]
+    fn phase_correct_counts_up_and_back_down() {
+        let mut t = t1(1, 128);
+        t.apply_ticks(255);
+        assert_eq!((t.tcnt, t.down, t.tifr), (255, false, OCF1A));
+        t.tifr = 0;
+        t.apply_ticks(1);
+        assert_eq!((t.tcnt, t.down, t.tifr), (254, true, 0));
+        t.apply_ticks(126);
+        assert_eq!((t.tcnt, t.tifr), (128, OCF1A), "down-slope match");
+        t.tifr = 0;
+        t.apply_ticks(127);
+        assert_eq!((t.tcnt, t.down, t.tifr), (1, true, 0));
+        t.apply_ticks(1);
+        assert_eq!((t.tcnt, t.down, t.tifr), (0, false, TOV1 | OCF1B));
+        // 510 clocks per cycle: one more cycle lands back on BOTTOM.
+        t.tifr = 0;
+        t.apply_ticks(509);
+        assert_eq!((t.tcnt, t.tifr & TOV1), (1, 0));
+        t.apply_ticks(510 * 3 + 1);
+        assert_eq!((t.tcnt, t.tifr & TOV1), (0, TOV1));
+    }
+
+    #[test]
+    fn phase_correct_irq_distance_covers_both_slopes() {
+        let mut t = t1(1, 100);
+        t.timsk = OCF1A | TOV1;
+        assert_eq!(t.ticks_to_irq(), Some(100));
+        t.tcnt = 150;
+        assert_eq!(
+            t.ticks_to_irq(),
+            Some(105 + 155),
+            "up to TOP, then down to 100"
+        );
+        t.down = true;
+        t.tcnt = 50;
+        assert_eq!(t.ticks_to_irq(), Some(50), "BOTTOM first");
+        t.timsk = OCF1A;
+        assert_eq!(t.ticks_to_irq(), Some(150));
+    }
+
     #[test]
     fn sixteen_bit_registers_go_through_temp() {
         let mut cpu = Avr::new();
@@ -336,6 +467,52 @@ mod tests {
             Some(0xAB),
             "high byte latched at the low read"
         );
+    }
+
+    /// Datasheet 16.6: the selected edge copies TCNT1 into ICR1 and sets ICF1;
+    /// the other edge does nothing.
+    #[test]
+    fn rising_edge_capture_copies_the_counter_into_icr1() {
+        let mut t = t1(0, 0);
+        t.tccrb |= ICES1;
+        t.tcnt = 400;
+        t.capture_edge(false);
+        assert_eq!((t.icr, t.tifr & ICF1), (0, 0), "falling edge ignored");
+        t.capture_edge(true);
+        assert_eq!((t.icr, t.tifr & ICF1), (400, ICF1));
+        t.tcnt = 900;
+        t.capture_edge(true);
+        assert_eq!(t.icr, 900, "a new capture overwrites ICR1");
+    }
+
+    #[test]
+    fn falling_edge_is_the_default_and_icr1_as_top_turns_capture_off() {
+        let mut t = t1(0, 0);
+        t.tcnt = 77;
+        t.capture_edge(true);
+        assert_eq!(t.tifr & ICF1, 0);
+        t.capture_edge(false);
+        assert_eq!((t.icr, t.tifr & ICF1), (77, ICF1));
+        // WGM 14, fast PWM with TOP = ICR1: the unit is disconnected.
+        let mut t = t1(14, 0);
+        t.icr = 39_999;
+        t.tcnt = 5;
+        t.capture_edge(false);
+        assert_eq!((t.icr, t.tifr & ICF1), (39_999, 0));
+        assert!(!t.capture_watched());
+    }
+
+    #[test]
+    fn capture_interrupt_is_pending_with_icie1_and_cleared_on_entry() {
+        let mut cpu = Avr::new();
+        cpu.timer1_write(0x81, ICES1 | 0x02);
+        cpu.timer1_icp_edge(true);
+        assert_eq!(cpu.pending_irq & (1 << VEC_TIMER1_CAPT), 0, "ICIE1 clear");
+        cpu.timer1_write(ADDR_TIMSK1, ICF1);
+        assert_ne!(cpu.pending_irq & (1 << VEC_TIMER1_CAPT), 0);
+        cpu.timer1_vector_entered(VEC_TIMER1_CAPT);
+        assert_eq!(cpu.pending_irq & (1 << VEC_TIMER1_CAPT), 0);
+        assert_eq!(cpu.t1.tifr & ICF1, 0);
     }
 
     #[test]

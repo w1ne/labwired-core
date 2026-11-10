@@ -22,12 +22,14 @@
 //!
 //! * capacitor → conductance `C/h` in parallel with a current source
 //!   `(C/h)·v_prev`;
-//! * inductor → an extra row `v_a − v_b − (L/h)·i = −(L/h)·i_prev`.
+//! * inductor → an extra row `v_a − v_b − (L/h)·i = −(L/h)·i_prev`;
+//!   coupled inductors add the corresponding mutual terms `−(M/h)·i_other`.
 //!
 //! Trapezoidal (`integration: trap`):
 //!
 //! * capacitor → conductance `2C/h` with source `(2C/h)·v_prev + i_prev`;
-//! * inductor → `v_a − v_b − (2L/h)·i = −(2L/h)·i_prev − v_prev`.
+//! * inductor → `v_a − v_b − (2L/h)·i = −(2L/h)·i_prev − v_prev`;
+//!   coupled inductors add `−(2M/h)·i_other_prev` and the mutual matrix term.
 //!
 //! Trapezoidal is second-order accurate and roughly two orders of magnitude
 //! closer to the closed form at the same step; backward Euler is the default
@@ -52,7 +54,10 @@
 //! same input sequence produce bit-identical voltages on every host.
 
 use super::device;
-use super::netlist::{AnalogError, Circuit, Diode, NodeRef, POWER_SINK_VMIN};
+use super::netlist::{
+    AnalogError, BjtModel, Circuit, Diode, DiodeModel, MosChannelChargeModel, Mosfet, NodeRef,
+    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
+};
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
 /// currents. The bound accommodates routed-PCB resistor terminals while keeping
@@ -79,6 +84,186 @@ enum Stamp {
     Transient(f64, Integration),
 }
 
+/// Linearised total BJT charge for the B-E and B-C branches. Each branch may
+/// depend on both junction voltages through the Gummel–Poon base-charge factor.
+struct BjtChargeOp {
+    q: [f64; 2],
+    /// `[charge branch][Vbe or Vbc]`, in farads.
+    dq: [[f64; 2]; 2],
+}
+
+fn bjt_charge_op(vbe: f64, vbc: f64, model: BjtModel) -> BjtChargeOp {
+    let transit = device::bjt_transit_charge(vbe, vbc, model);
+    let (qbe, cbe) =
+        device::junction_depletion_charge(vbe, model.cje, model.vje, model.mje, model.fc);
+    let (qbc, cbc) =
+        device::junction_depletion_charge(vbc, model.cjc, model.vjc, model.mjc, model.fc);
+    BjtChargeOp {
+        q: [qbe + transit.qbe, qbc + transit.qbc],
+        dq: [
+            [cbe + transit.dqbe_dvbe, transit.dqbe_dvbc],
+            [transit.dqbc_dvbe, cbc + transit.dqbc_dvbc],
+        ],
+    }
+}
+
+fn bjt_charge_active(model: BjtModel, branch: usize) -> bool {
+    if branch == 0 {
+        model.cje != 0.0 || model.tf != 0.0
+    } else {
+        model.cjc != 0.0 || model.tr != 0.0
+    }
+}
+
+/// Level-1 Meyer gate-capacitance halves in netlist G-S, G-D, G-B order.
+/// The model's effective source/drain order follows the channel direction, but
+/// the returned history remains attached to the physical netlist terminals.
+fn mos_channel_capacitance_halves(
+    mosfet: &Mosfet,
+    vgs: f64,
+    vds: f64,
+    vbd: f64,
+    vbs: f64,
+) -> [f64; 3] {
+    if mosfet.model.channel_charge_model != MosChannelChargeModel::Meyer {
+        return [0.0; 3];
+    }
+    let Some(tox) = mosfet.model.tox else {
+        return [0.0; 3];
+    };
+    let sign = mosfet.model.polarity.sign();
+    let reversed = vds < 0.0;
+    let (vgs_eff, vds_eff, vbs_eff) = if reversed {
+        (vgs - vds, -vds, vbd)
+    } else {
+        (vgs, vds, vbs)
+    };
+    let cox = device::OXIDE_PERMITTIVITY_F_PER_M * mosfet.w * mosfet.l / tox;
+    let mut caps = device::mos_meyer_capacitance_halves(
+        vgs_eff,
+        vds_eff,
+        vbs_eff,
+        sign * mosfet.model.vto,
+        mosfet.model.gamma,
+        mosfet.model.phi,
+        cox,
+    );
+    if reversed {
+        caps.swap(0, 1);
+    }
+    caps
+}
+
+fn diode_model_op(voltage: f64, model: DiodeModel, breakdown: Option<f64>) -> device::DiodeOp {
+    let mut op = match breakdown {
+        None => device::diode_op(voltage, model.is, model.n),
+        Some(xbv) => device::diode_op_breakdown(
+            voltage,
+            model.is,
+            model.n,
+            xbv,
+            model.nbv.unwrap_or(model.n),
+        ),
+    };
+    let recombination =
+        device::diode_recombination_op(voltage, model.isr, model.nr, model.n, model.vj, model.m);
+
+    // ngspice's IK/IKR high-injection correction applies to the junction
+    // current (including recombination) but leaves GMIN outside the clamp.
+    // Preserve the old arithmetic exactly when the selected knee is omitted,
+    // or when the current is too small for the correction to apply.
+    let forward = voltage >= -3.0 * model.n * device::THERMAL_VOLTAGE;
+    let knee = if forward { model.ik } else { model.ikr };
+    let junction_current = op.id + recombination.id - device::GMIN * voltage;
+    let active_current = if forward {
+        junction_current > 1e-18
+    } else {
+        junction_current < -1e-18
+    };
+    if knee > 0.0 && active_current {
+        let root = (junction_current.abs() / knee).sqrt();
+        let denominator = 1.0 + root;
+        let junction_conductance = op.gd + recombination.gd - device::GMIN;
+        let conductance_scale = (1.0 + root / 2.0) / (denominator * denominator);
+        return device::DiodeOp {
+            id: junction_current / denominator + device::GMIN * voltage,
+            gd: junction_conductance * conductance_scale + device::GMIN,
+        };
+    }
+
+    op.id += recombination.id;
+    op.gd += recombination.gd;
+    op
+}
+
+fn diode_charge_op(voltage: f64, model: DiodeModel, op: device::DiodeOp) -> (f64, f64) {
+    let (q_depletion, c_depletion) =
+        device::diode_depletion_charge(voltage, model.cjo, model.vj, model.m, model.fc);
+    let (q_diffusion, c_diffusion) = if model.vp > 0.0 && model.tt > 0.0 {
+        (0.0, 0.0)
+    } else {
+        device::diode_diffusion_charge(voltage, op, model.tt)
+    };
+    (q_depletion + q_diffusion, c_depletion + c_diffusion)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DiodeRecoveryStep {
+    state: f64,
+    rate: f64,
+    current: f64,
+    conductance: f64,
+}
+
+/// One implicit step of ngspice's `TT`/`VP` soft reverse-recovery equation.
+/// `state` is the normalized charge variable `q` in `q + TT·VP·dq/dt =
+/// -TT·Id`; the diode current receives `-(1−VP)·dq/dt`. At `VP=0` this
+/// reduces to the ordinary `TT·dId/dt` diffusion current, so only positive
+/// `VP` uses this path.
+fn diode_recovery_step(
+    model: DiodeModel,
+    op: device::DiodeOp,
+    previous_state: f64,
+    previous_rate: f64,
+    h: f64,
+    rule: Integration,
+) -> DiodeRecoveryStep {
+    let tau = model.tt * model.vp;
+    let (state, rate, drate_dv) = match rule {
+        Integration::BackwardEuler => {
+            let ratio = tau / h;
+            let denominator = 1.0 + ratio;
+            let state = (-model.tt * op.id + ratio * previous_state) / denominator;
+            let dstate_dv = -model.tt * op.gd / denominator;
+            (state, (state - previous_state) / h, dstate_dv / h)
+        }
+        Integration::Trapezoidal => {
+            let ratio = tau / h;
+            let denominator = 1.0 + 2.0 * ratio;
+            let state = (-model.tt * op.id + 2.0 * ratio * previous_state + tau * previous_rate)
+                / denominator;
+            let dstate_dv = -model.tt * op.gd / denominator;
+            (
+                state,
+                2.0 * (state - previous_state) / h - previous_rate,
+                2.0 * dstate_dv / h,
+            )
+        }
+    };
+    let current = -(1.0 - model.vp) * rate;
+    let conductance = -(1.0 - model.vp) * drate_dv;
+    DiodeRecoveryStep {
+        state,
+        rate,
+        current,
+        conductance,
+    }
+}
+
+fn diode_charge_active(model: DiodeModel) -> bool {
+    model.cjo != 0.0 || model.tt != 0.0
+}
+
 /// One circuit and the state that carries between steps.
 #[derive(Debug, Clone)]
 pub struct Solver {
@@ -102,19 +287,67 @@ pub struct Solver {
     /// about. Carried across steps: the previous step's answer is the best
     /// first guess there is.
     diode_vj: Vec<f64>,
+    /// Depletion charge and current history for each diode, oriented anode to
+    /// cathode. Charge is sufficient for BE; trap also uses the current.
+    diode_q: Vec<f64>,
+    diode_i: Vec<f64>,
+    /// Ngspice's normalized soft-recovery charge state and its derivative.
+    /// These are active only when `VP > 0` and `TT > 0`.
+    diode_recovery_state: Vec<f64>,
+    diode_recovery_rate: Vec<f64>,
     /// Each BJT's base-emitter voltage in device coordinates.
     bjt_vbe: Vec<f64>,
     /// Each BJT's base-collector voltage in device coordinates.
     bjt_vbc: Vec<f64>,
+    /// Total depletion plus transit charge and current history for each BJT,
+    /// ordered B-E then B-C in normalized device coordinates.
+    bjt_q: Vec<[f64; 2]>,
+    bjt_i: Vec<[f64; 2]>,
     /// Each MOSFET's gate-source voltage in device coordinates, as the netlist
     /// names the terminals — not swapped for reverse mode.
     mos_vgs: Vec<f64>,
     /// Each MOSFET's drain-source voltage in device coordinates, as the
     /// netlist names the terminals. Negative means the device is reversed.
     mos_vds: Vec<f64>,
+    /// Each MOSFET's normalised bulk-drain junction voltage.
+    mos_vbd: Vec<f64>,
+    /// Each MOSFET's normalised bulk-source junction voltage.
+    mos_vbs: Vec<f64>,
+    /// Depletion charge and current history for each MOSFET bulk junction,
+    /// ordered bulk-drain then bulk-source in normalized device coordinates.
+    mos_bulk_q: Vec<[f64; 2]>,
+    mos_bulk_i: Vec<[f64; 2]>,
+    /// Linear overlap charge and current history for each MOSFET, ordered
+    /// gate-source, gate-drain, then gate-bulk in circuit coordinates.
+    mos_overlap_q: Vec<[f64; 3]>,
+    mos_overlap_i: Vec<[f64; 3]>,
+    /// Previous physical G-S, G-D and G-B voltages for intrinsic channel
+    /// charge, in circuit coordinates.
+    mos_channel_v: Vec<[f64; 3]>,
+    /// Integrated intrinsic channel charge and current, in the same order.
+    mos_channel_q: Vec<[f64; 3]>,
+    mos_channel_i: Vec<[f64; 3]>,
+    /// Previous endpoint Meyer capacitance halves, in the same order.
+    mos_channel_cap_half: Vec<[f64; 3]>,
+    /// Intrinsic Ward–Dutton terminal charges and currents, G-D-S-B order.
+    mos_conserving_q: Vec<[f64; 4]>,
+    mos_conserving_i: Vec<[f64; 4]>,
+    /// Each JFET's normalised gate-source and gate-drain junction voltages.
+    jfet_vgs: Vec<f64>,
+    jfet_vgd: Vec<f64>,
+    /// Each JFET's normalised drain-source voltage. Negative means reversed.
+    jfet_vds: Vec<f64>,
+    /// Depletion charge and current history for each JFET, ordered G-S then
+    /// G-D and oriented in normalized device coordinates.
+    jfet_q: Vec<[f64; 2]>,
+    jfet_i: Vec<[f64; 2]>,
     /// Each power sink's linearisation point: `(v(p) − v(n), v(op) − v(on),
     /// i(control))`.
     sink_point: Vec<[f64; 3]>,
+    /// Drive-to-output voltage for each op-amp output current limiter.
+    output_limit_point: Vec<f64>,
+    /// Input-referred error for each slew-limited op-amp gain stage.
+    slew_limit_point: Vec<f64>,
     /// The linearisation points at the start of the step in progress, for a
     /// retry with a cut step; see [`Solver::advance`].
     saved_diode_vj: Vec<f64>,
@@ -122,7 +355,14 @@ pub struct Solver {
     saved_bjt_vbc: Vec<f64>,
     saved_mos_vgs: Vec<f64>,
     saved_mos_vds: Vec<f64>,
+    saved_mos_vbd: Vec<f64>,
+    saved_mos_vbs: Vec<f64>,
+    saved_jfet_vgs: Vec<f64>,
+    saved_jfet_vgd: Vec<f64>,
+    saved_jfet_vds: Vec<f64>,
     saved_sink_point: Vec<[f64; 3]>,
+    saved_output_limit_point: Vec<f64>,
+    saved_slew_limit_point: Vec<f64>,
     /// Conductance from every node to ground, siemens; nonzero only inside
     /// [`Solver::gmin_stepping`].
     node_shunt: f64,
@@ -193,7 +433,10 @@ impl Solver {
         let diodes = circuit.diodes.len();
         let bjts = circuit.bjts.len();
         let mosfets = circuit.mosfets.len();
+        let jfets = circuit.jfets.len();
         let sinks = circuit.power_sinks.len();
+        let output_limits = circuit.output_current_limits.len();
+        let slew_limits = circuit.slew_limited_vccs.len();
 
         let mut solver = Self {
             circuit,
@@ -213,17 +456,49 @@ impl Solver {
             // circuit that has not been powered: the operating-point Newton
             // walks up from there.
             diode_vj: vec![0.0; diodes],
+            diode_q: vec![0.0; diodes],
+            diode_i: vec![0.0; diodes],
+            diode_recovery_state: vec![0.0; diodes],
+            diode_recovery_rate: vec![0.0; diodes],
             bjt_vbe: vec![0.0; bjts],
             bjt_vbc: vec![0.0; bjts],
+            bjt_q: vec![[0.0; 2]; bjts],
+            bjt_i: vec![[0.0; 2]; bjts],
             mos_vgs: vec![0.0; mosfets],
             mos_vds: vec![0.0; mosfets],
+            mos_vbd: vec![0.0; mosfets],
+            mos_vbs: vec![0.0; mosfets],
+            mos_bulk_q: vec![[0.0; 2]; mosfets],
+            mos_bulk_i: vec![[0.0; 2]; mosfets],
+            mos_overlap_q: vec![[0.0; 3]; mosfets],
+            mos_overlap_i: vec![[0.0; 3]; mosfets],
+            mos_channel_v: vec![[0.0; 3]; mosfets],
+            mos_channel_q: vec![[0.0; 3]; mosfets],
+            mos_channel_i: vec![[0.0; 3]; mosfets],
+            mos_channel_cap_half: vec![[0.0; 3]; mosfets],
+            mos_conserving_q: vec![[0.0; 4]; mosfets],
+            mos_conserving_i: vec![[0.0; 4]; mosfets],
+            jfet_vgs: vec![0.0; jfets],
+            jfet_vgd: vec![0.0; jfets],
+            jfet_vds: vec![0.0; jfets],
+            jfet_q: vec![[0.0; 2]; jfets],
+            jfet_i: vec![[0.0; 2]; jfets],
             sink_point: vec![[0.0; 3]; sinks],
+            output_limit_point: vec![0.0; output_limits],
+            slew_limit_point: vec![0.0; slew_limits],
             saved_diode_vj: vec![0.0; diodes],
             saved_bjt_vbe: vec![0.0; bjts],
             saved_bjt_vbc: vec![0.0; bjts],
             saved_mos_vgs: vec![0.0; mosfets],
             saved_mos_vds: vec![0.0; mosfets],
+            saved_mos_vbd: vec![0.0; mosfets],
+            saved_mos_vbs: vec![0.0; mosfets],
+            saved_jfet_vgs: vec![0.0; jfets],
+            saved_jfet_vgd: vec![0.0; jfets],
+            saved_jfet_vds: vec![0.0; jfets],
             saved_sink_point: vec![[0.0; 3]; sinks],
+            saved_output_limit_point: vec![0.0; output_limits],
+            saved_slew_limit_point: vec![0.0; slew_limits],
             node_shunt: 0.0,
             limiter_clamped: false,
             nonlinear,
@@ -270,6 +545,67 @@ impl Solver {
             .current_sources
             .iter()
             .position(|s| s.name.to_ascii_lowercase() == key)
+    }
+
+    /// Index of the named resistor, for routed resistance inputs.
+    pub fn resistor_index(&self, name: &str) -> Option<usize> {
+        let key = name.trim().to_ascii_lowercase();
+        self.circuit
+            .resistors
+            .iter()
+            .position(|r| r.name.to_ascii_lowercase() == key)
+    }
+
+    /// Set a positive, finite resistance in ohms for the next solver step.
+    pub fn set_resistance(&mut self, index: usize, ohms: f64) -> Result<(), AnalogError> {
+        if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+            return Err(AnalogError::Config(
+                "resistance must be positive and finite with finite conductance".to_string(),
+            ));
+        }
+        if self.circuit.resistors[index].ohms != ohms {
+            self.circuit.resistors[index].ohms = ohms;
+            self.cached_stamp = None;
+            self.restart = true;
+            self.settled = false;
+        }
+        Ok(())
+    }
+
+    /// Index of a named resistor that has an NTC Beta model.
+    pub fn thermistor_index(&self, name: &str) -> Option<usize> {
+        let key = name.trim().to_ascii_lowercase();
+        self.circuit.resistors.iter().position(|resistor| {
+            resistor.ntc.is_some() && resistor.name.to_ascii_lowercase() == key
+        })
+    }
+
+    /// Set an NTC's external temperature input in Celsius. A changed value
+    /// invalidates the linear stamp so its resistance is rebuilt next step.
+    /// Returns false for a non-NTC element, an invalid temperature or a model
+    /// whose resulting resistance is not finite and positive.
+    pub fn set_thermistor_temperature(&mut self, index: usize, celsius: f64) -> bool {
+        if !celsius.is_finite() || celsius <= -273.15 {
+            return false;
+        }
+        let Some(resistor) = self.circuit.resistors.get_mut(index) else {
+            return false;
+        };
+        let Some(mut ntc) = resistor.ntc else {
+            return false;
+        };
+        ntc.temperature_celsius = celsius;
+        let resistance = ntc.resistance_ohms(resistor.ohms);
+        if !resistance.is_finite() || resistance <= 0.0 {
+            return false;
+        }
+        if resistor.ntc != Some(ntc) {
+            resistor.ntc = Some(ntc);
+            self.cached_stamp = None;
+            self.restart = true;
+            self.settled = false;
+        }
+        true
     }
 
     /// Indices of every switch driven by the routed boolean input `ctrl`.
@@ -488,6 +824,88 @@ impl Solver {
                 self.branch_i[self.circuit.voltage_sources.len() + index] = ic;
             }
         }
+        for index in 0..self.circuit.diodes.len() {
+            let diode = &self.circuit.diodes[index];
+            if diode_charge_active(diode.model) {
+                self.diode_vj[index] = node_diff(&self.node_v, diode.junction_anode, diode.cathode);
+                let op = diode_model_op(self.diode_vj[index], diode.model, diode.breakdown);
+                self.diode_q[index] = diode_charge_op(self.diode_vj[index], diode.model, op).0;
+                self.diode_i[index] = 0.0;
+                if diode.model.vp > 0.0 && diode.model.tt > 0.0 {
+                    self.diode_recovery_state[index] = -diode.model.tt * op.id;
+                    self.diode_recovery_rate[index] = 0.0;
+                }
+            }
+        }
+        for index in 0..self.circuit.bjts.len() {
+            let bjt = &self.circuit.bjts[index];
+            let sign = bjt.model.polarity.sign();
+            let vbe = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_e);
+            let vbc = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_c);
+            let model = bjt.model;
+            self.bjt_q[index] = bjt_charge_op(vbe, vbc, model).q;
+            self.bjt_i[index] = [0.0; 2];
+        }
+        for index in 0..self.circuit.mosfets.len() {
+            let mosfet = &self.circuit.mosfets[index];
+            let sign = mosfet.model.polarity.sign();
+            let voltages = [
+                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d),
+                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s),
+            ];
+            self.mos_bulk_q[index] = core::array::from_fn(|junction| {
+                mosfet
+                    .bulk_junction_charge(voltages[junction], junction == 0)
+                    .0
+            });
+            self.mos_bulk_i[index] = [0.0; 2];
+
+            let voltages = [
+                node_diff(&self.node_v, mosfet.g, mosfet.junction_s),
+                node_diff(&self.node_v, mosfet.g, mosfet.junction_d),
+                node_diff(&self.node_v, mosfet.g, mosfet.bulk),
+            ];
+            let capacitances = mosfet.overlap_capacitances();
+            self.mos_overlap_q[index] =
+                core::array::from_fn(|junction| capacitances[junction] * voltages[junction]);
+            self.mos_overlap_i[index] = [0.0; 3];
+
+            let sign = mosfet.model.polarity.sign();
+            let channel_caps = mos_channel_capacitance_halves(
+                mosfet,
+                sign * voltages[0],
+                sign * node_diff(&self.node_v, mosfet.junction_d, mosfet.junction_s),
+                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d),
+                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s),
+            );
+            self.mos_channel_v[index] = voltages;
+            self.mos_channel_q[index] =
+                core::array::from_fn(|junction| 2.0 * channel_caps[junction] * voltages[junction]);
+            self.mos_channel_i[index] = [0.0; 3];
+            self.mos_channel_cap_half[index] = channel_caps;
+
+            if mosfet.model.channel_charge_model == MosChannelChargeModel::WardDutton {
+                let vgs = sign * node_diff(&self.node_v, mosfet.g, mosfet.junction_s);
+                let vds = sign * node_diff(&self.node_v, mosfet.junction_d, mosfet.junction_s);
+                let vbd = sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d);
+                let vbs = sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s);
+                self.mos_conserving_q[index] =
+                    device::mos_ward_dutton_channel_charge(mosfet, vgs, vds, vbd, vbs).q;
+                self.mos_conserving_i[index] = [0.0; 4];
+            }
+        }
+        for index in 0..self.circuit.jfets.len() {
+            let jfet = &self.circuit.jfets[index];
+            let sign = jfet.model.polarity.sign();
+            let model = jfet.model;
+            let vgs = sign * node_diff(&self.node_v, jfet.g, jfet.junction_s);
+            let vgd = sign * node_diff(&self.node_v, jfet.g, jfet.junction_d);
+            self.jfet_q[index] = [
+                device::junction_depletion_charge(vgs, model.cgs, model.pb, 0.5, model.fc).0,
+                device::junction_depletion_charge(vgd, model.cgd, model.pb, 0.5, model.fc).0,
+            ];
+            self.jfet_i[index] = [0.0; 2];
+        }
     }
 
     /// Integrate one internal step of `h` seconds.
@@ -562,7 +980,16 @@ impl Solver {
         self.saved_bjt_vbc.copy_from_slice(&self.bjt_vbc);
         self.saved_mos_vgs.copy_from_slice(&self.mos_vgs);
         self.saved_mos_vds.copy_from_slice(&self.mos_vds);
+        self.saved_mos_vbd.copy_from_slice(&self.mos_vbd);
+        self.saved_mos_vbs.copy_from_slice(&self.mos_vbs);
+        self.saved_jfet_vgs.copy_from_slice(&self.jfet_vgs);
+        self.saved_jfet_vgd.copy_from_slice(&self.jfet_vgd);
+        self.saved_jfet_vds.copy_from_slice(&self.jfet_vds);
         self.saved_sink_point.copy_from_slice(&self.sink_point);
+        self.saved_output_limit_point
+            .copy_from_slice(&self.output_limit_point);
+        self.saved_slew_limit_point
+            .copy_from_slice(&self.slew_limit_point);
     }
 
     fn restore_linearisation(&mut self) {
@@ -571,7 +998,16 @@ impl Solver {
         self.bjt_vbc.copy_from_slice(&self.saved_bjt_vbc);
         self.mos_vgs.copy_from_slice(&self.saved_mos_vgs);
         self.mos_vds.copy_from_slice(&self.saved_mos_vds);
+        self.mos_vbd.copy_from_slice(&self.saved_mos_vbd);
+        self.mos_vbs.copy_from_slice(&self.saved_mos_vbs);
+        self.jfet_vgs.copy_from_slice(&self.saved_jfet_vgs);
+        self.jfet_vgd.copy_from_slice(&self.saved_jfet_vgd);
+        self.jfet_vds.copy_from_slice(&self.saved_jfet_vds);
         self.sink_point.copy_from_slice(&self.saved_sink_point);
+        self.output_limit_point
+            .copy_from_slice(&self.saved_output_limit_point);
+        self.slew_limit_point
+            .copy_from_slice(&self.saved_slew_limit_point);
     }
 
     /// One step of exactly `h`, no retry.
@@ -624,6 +1060,220 @@ impl Solver {
                 && self.cap_i[index].to_bits() == i_new.to_bits();
             self.cap_v[index] = v_new;
             self.cap_i[index] = i_new;
+        }
+        for index in 0..self.circuit.diodes.len() {
+            let diode = &self.circuit.diodes[index];
+            if !diode_charge_active(diode.model) {
+                continue;
+            }
+            let v_new = node_diff(
+                &self.solution[..self.nodes],
+                diode.junction_anode,
+                diode.cathode,
+            );
+            let op = diode_model_op(v_new, diode.model, diode.breakdown);
+            let (q_new, _) = diode_charge_op(v_new, diode.model, op);
+            let i_new = match rule {
+                Integration::BackwardEuler => (q_new - self.diode_q[index]) / h,
+                Integration::Trapezoidal => {
+                    2.0 * (q_new - self.diode_q[index]) / h - self.diode_i[index]
+                }
+            };
+            self.settled &= self.diode_q[index].to_bits() == q_new.to_bits()
+                && self.diode_i[index].to_bits() == i_new.to_bits();
+            self.diode_q[index] = q_new;
+            self.diode_i[index] = i_new;
+        }
+        for index in 0..self.circuit.diodes.len() {
+            let diode = &self.circuit.diodes[index];
+            if diode.model.vp <= 0.0 || diode.model.tt <= 0.0 {
+                continue;
+            }
+            let v_new = node_diff(
+                &self.solution[..self.nodes],
+                diode.junction_anode,
+                diode.cathode,
+            );
+            let op = diode_model_op(v_new, diode.model, diode.breakdown);
+            let recovery = diode_recovery_step(
+                diode.model,
+                op,
+                self.diode_recovery_state[index],
+                self.diode_recovery_rate[index],
+                h,
+                rule,
+            );
+            self.settled &= self.diode_recovery_state[index].to_bits() == recovery.state.to_bits()
+                && self.diode_recovery_rate[index].to_bits() == recovery.rate.to_bits();
+            self.diode_recovery_state[index] = recovery.state;
+            self.diode_recovery_rate[index] = recovery.rate;
+        }
+        for index in 0..self.circuit.bjts.len() {
+            let bjt = &self.circuit.bjts[index];
+            let sign = bjt.model.polarity.sign();
+            let model = bjt.model;
+            let nodes = &self.solution[..self.nodes];
+            let voltages = [
+                sign * node_diff(nodes, bjt.junction_b, bjt.junction_e),
+                sign * node_diff(nodes, bjt.junction_b, bjt.junction_c),
+            ];
+            let charge = bjt_charge_op(voltages[0], voltages[1], model);
+            for junction in 0..2 {
+                if !bjt_charge_active(model, junction) {
+                    continue;
+                }
+                let q_new = charge.q[junction];
+                let i_new = match rule {
+                    Integration::BackwardEuler => (q_new - self.bjt_q[index][junction]) / h,
+                    Integration::Trapezoidal => {
+                        2.0 * (q_new - self.bjt_q[index][junction]) / h
+                            - self.bjt_i[index][junction]
+                    }
+                };
+                self.settled &= self.bjt_q[index][junction].to_bits() == q_new.to_bits()
+                    && self.bjt_i[index][junction].to_bits() == i_new.to_bits();
+                self.bjt_q[index][junction] = q_new;
+                self.bjt_i[index][junction] = i_new;
+            }
+        }
+        for index in 0..self.circuit.jfets.len() {
+            let jfet = &self.circuit.jfets[index];
+            let sign = jfet.model.polarity.sign();
+            let model = jfet.model;
+            let nodes = &self.solution[..self.nodes];
+            let voltages = [
+                sign * node_diff(nodes, jfet.g, jfet.junction_s),
+                sign * node_diff(nodes, jfet.g, jfet.junction_d),
+            ];
+            let capacitances = [model.cgs, model.cgd];
+            for junction in 0..2 {
+                let c0 = capacitances[junction];
+                if c0 == 0.0 {
+                    continue;
+                }
+                let q_new = device::junction_depletion_charge(
+                    voltages[junction],
+                    c0,
+                    model.pb,
+                    0.5,
+                    model.fc,
+                )
+                .0;
+                let i_new = match rule {
+                    Integration::BackwardEuler => (q_new - self.jfet_q[index][junction]) / h,
+                    Integration::Trapezoidal => {
+                        2.0 * (q_new - self.jfet_q[index][junction]) / h
+                            - self.jfet_i[index][junction]
+                    }
+                };
+                self.settled &= self.jfet_q[index][junction].to_bits() == q_new.to_bits()
+                    && self.jfet_i[index][junction].to_bits() == i_new.to_bits();
+                self.jfet_q[index][junction] = q_new;
+                self.jfet_i[index][junction] = i_new;
+            }
+        }
+        for index in 0..self.circuit.mosfets.len() {
+            let mosfet = &self.circuit.mosfets[index];
+            let nodes = &self.solution[..self.nodes];
+
+            let voltages = [self.mos_vbd[index], self.mos_vbs[index]];
+            for (junction, &voltage) in voltages.iter().enumerate() {
+                let drain = junction == 0;
+                if mosfet.bulk_junction_capacitances(drain) == [0.0, 0.0] {
+                    continue;
+                }
+                let q_new = mosfet.bulk_junction_charge(voltage, drain).0;
+                let i_new = match rule {
+                    Integration::BackwardEuler => (q_new - self.mos_bulk_q[index][junction]) / h,
+                    Integration::Trapezoidal => {
+                        2.0 * (q_new - self.mos_bulk_q[index][junction]) / h
+                            - self.mos_bulk_i[index][junction]
+                    }
+                };
+                self.settled &= self.mos_bulk_q[index][junction].to_bits() == q_new.to_bits()
+                    && self.mos_bulk_i[index][junction].to_bits() == i_new.to_bits();
+                self.mos_bulk_q[index][junction] = q_new;
+                self.mos_bulk_i[index][junction] = i_new;
+            }
+
+            let voltages = [
+                node_diff(nodes, mosfet.g, mosfet.junction_s),
+                node_diff(nodes, mosfet.g, mosfet.junction_d),
+                node_diff(nodes, mosfet.g, mosfet.bulk),
+            ];
+            let capacitances = mosfet.overlap_capacitances();
+            for junction in 0..3 {
+                let q_new = capacitances[junction] * voltages[junction];
+                let i_new = match rule {
+                    Integration::BackwardEuler => (q_new - self.mos_overlap_q[index][junction]) / h,
+                    Integration::Trapezoidal => {
+                        2.0 * (q_new - self.mos_overlap_q[index][junction]) / h
+                            - self.mos_overlap_i[index][junction]
+                    }
+                };
+                self.settled &= self.mos_overlap_q[index][junction].to_bits() == q_new.to_bits()
+                    && self.mos_overlap_i[index][junction].to_bits() == i_new.to_bits();
+                self.mos_overlap_q[index][junction] = q_new;
+                self.mos_overlap_i[index][junction] = i_new;
+            }
+
+            let channel_caps = mos_channel_capacitance_halves(
+                mosfet,
+                self.mos_vgs[index],
+                self.mos_vds[index],
+                self.mos_vbd[index],
+                self.mos_vbs[index],
+            );
+            let terminals = [mosfet.junction_s, mosfet.junction_d, mosfet.bulk];
+            for junction in 0..3 {
+                let voltage = node_diff(nodes, mosfet.g, terminals[junction]);
+                let capacitance =
+                    self.mos_channel_cap_half[index][junction] + channel_caps[junction];
+                let charge_delta = (voltage - self.mos_channel_v[index][junction]) * capacitance;
+                let q_new = self.mos_channel_q[index][junction] + charge_delta;
+                let i_new = match rule {
+                    Integration::BackwardEuler => charge_delta / h,
+                    Integration::Trapezoidal => {
+                        2.0 * charge_delta / h - self.mos_channel_i[index][junction]
+                    }
+                };
+                self.settled &= self.mos_channel_cap_half[index][junction].to_bits()
+                    == channel_caps[junction].to_bits()
+                    && self.mos_channel_v[index][junction].to_bits() == voltage.to_bits()
+                    && self.mos_channel_q[index][junction].to_bits() == q_new.to_bits()
+                    && self.mos_channel_i[index][junction].to_bits() == i_new.to_bits();
+                self.mos_channel_v[index][junction] = voltage;
+                self.mos_channel_q[index][junction] = q_new;
+                self.mos_channel_i[index][junction] = i_new;
+                self.mos_channel_cap_half[index][junction] = channel_caps[junction];
+            }
+
+            if mosfet.model.channel_charge_model == MosChannelChargeModel::WardDutton {
+                let charge = device::mos_ward_dutton_channel_charge(
+                    mosfet,
+                    self.mos_vgs[index],
+                    self.mos_vds[index],
+                    self.mos_vbd[index],
+                    self.mos_vbs[index],
+                );
+                for terminal in 0..4 {
+                    let q_new = charge.q[terminal];
+                    let i_new = match rule {
+                        Integration::BackwardEuler => {
+                            (q_new - self.mos_conserving_q[index][terminal]) / h
+                        }
+                        Integration::Trapezoidal => {
+                            2.0 * (q_new - self.mos_conserving_q[index][terminal]) / h
+                                - self.mos_conserving_i[index][terminal]
+                        }
+                    };
+                    self.settled &= self.mos_conserving_q[index][terminal].to_bits()
+                        == q_new.to_bits()
+                        && self.mos_conserving_i[index][terminal].to_bits() == i_new.to_bits();
+                    self.mos_conserving_q[index][terminal] = q_new;
+                    self.mos_conserving_i[index][terminal] = i_new;
+                }
+            }
         }
         for index in 0..self.circuit.inductors.len() {
             let inductor = &self.circuit.inductors[index];
@@ -695,8 +1345,77 @@ impl Solver {
                 dim,
                 resistor.a,
                 resistor.b,
-                1.0 / resistor.ohms,
+                1.0 / resistor.resistance_ohms(),
             );
+        }
+        for bjt in &self.circuit.bjts {
+            if bjt.model.rb > 0.0 && !device::bjt_has_bias_dependent_base_resistance(bjt.model) {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    bjt.b,
+                    bjt.junction_b,
+                    1.0 / bjt.model.rb,
+                );
+            }
+            if bjt.model.rc > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    bjt.c,
+                    bjt.junction_c,
+                    1.0 / bjt.model.rc,
+                );
+            }
+            if bjt.model.re > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    bjt.e,
+                    bjt.junction_e,
+                    1.0 / bjt.model.re,
+                );
+            }
+        }
+        for mosfet in &self.circuit.mosfets {
+            if mosfet.drain_resistance_ohms > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    mosfet.d,
+                    mosfet.junction_d,
+                    1.0 / mosfet.drain_resistance_ohms,
+                );
+            }
+            if mosfet.source_resistance_ohms > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    mosfet.junction_s,
+                    mosfet.s,
+                    1.0 / mosfet.source_resistance_ohms,
+                );
+            }
+        }
+        for jfet in &self.circuit.jfets {
+            if jfet.model.rd > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    jfet.d,
+                    jfet.junction_d,
+                    1.0 / jfet.model.rd,
+                );
+            }
+            if jfet.model.rs > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    jfet.junction_s,
+                    jfet.s,
+                    1.0 / jfet.model.rs,
+                );
+            }
         }
         for (index, switch) in self.circuit.switches.iter().enumerate() {
             let ohms = if self.switch_closed[index] {
@@ -747,6 +1466,22 @@ impl Solver {
             }
         }
         if let Stamp::Transient(h, rule) = stamp {
+            let scale = match rule {
+                Integration::BackwardEuler => 1.0 / h,
+                Integration::Trapezoidal => 2.0 / h,
+            };
+            let branch_base = self.nodes + self.circuit.voltage_sources.len();
+            for mutual in &self.circuit.mutual_inductors {
+                let first = branch_base + mutual.first;
+                let second = branch_base + mutual.second;
+                let coefficient = -scale * mutual.mutual_henries;
+                self.matrix[first * dim + second] += coefficient;
+                self.matrix[second * dim + first] += coefficient;
+                self.rhs[first] -= scale * mutual.mutual_henries * self.ind_i[mutual.second];
+                self.rhs[second] -= scale * mutual.mutual_henries * self.ind_i[mutual.first];
+            }
+        }
+        if let Stamp::Transient(h, rule) = stamp {
             for (index, capacitor) in self.circuit.capacitors.iter().enumerate() {
                 let (geq, ieq) = match rule {
                     Integration::BackwardEuler => {
@@ -764,7 +1499,7 @@ impl Solver {
             }
         }
         self.stamp_dependent_sources();
-        self.stamp_devices();
+        self.stamp_devices(stamp);
         if self.node_shunt != 0.0 {
             for node in 0..self.nodes {
                 self.matrix[node * dim + node] += self.node_shunt;
@@ -869,6 +1604,17 @@ impl Solver {
                         -(2.0 * inductor.henries / h) * self.ind_i[index] - self.ind_v[index]
                     }
                 };
+            }
+            let scale = match rule {
+                Integration::BackwardEuler => 1.0 / h,
+                Integration::Trapezoidal => 2.0 / h,
+            };
+            let branch_base = self.nodes + self.circuit.voltage_sources.len();
+            for mutual in &self.circuit.mutual_inductors {
+                let first = branch_base + mutual.first;
+                let second = branch_base + mutual.second;
+                self.rhs[first] -= scale * mutual.mutual_henries * self.ind_i[mutual.second];
+                self.rhs[second] -= scale * mutual.mutual_henries * self.ind_i[mutual.first];
             }
             for (index, capacitor) in self.circuit.capacitors.iter().enumerate() {
                 let ieq = match rule {
@@ -1121,8 +1867,8 @@ impl Solver {
             let bjt = &self.circuit.bjts[index];
             let sign = bjt.model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
-            let raw_be = sign * node_diff(nodes, bjt.b, bjt.e);
-            let raw_bc = sign * node_diff(nodes, bjt.b, bjt.c);
+            let raw_be = sign * node_diff(nodes, bjt.junction_b, bjt.junction_e);
+            let raw_bc = sign * node_diff(nodes, bjt.junction_b, bjt.junction_c);
             let vtf = bjt.model.nf * device::THERMAL_VOLTAGE;
             let vtr = bjt.model.nr * device::THERMAL_VOLTAGE;
             let crit_f = device::pn_critical_voltage(bjt.model.is, bjt.model.nf);
@@ -1138,8 +1884,10 @@ impl Solver {
             let mosfet = &self.circuit.mosfets[index];
             let sign = mosfet.model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
-            let raw_gs = sign * node_diff(nodes, mosfet.g, mosfet.s);
-            let raw_ds = sign * node_diff(nodes, mosfet.d, mosfet.s);
+            let raw_gs = sign * node_diff(nodes, mosfet.g, mosfet.junction_s);
+            let raw_ds = sign * node_diff(nodes, mosfet.junction_d, mosfet.junction_s);
+            let raw_bd = sign * node_diff(nodes, mosfet.bulk, mosfet.junction_d);
+            let raw_bs = sign * node_diff(nodes, mosfet.bulk, mosfet.junction_s);
 
             // The limiters are SPICE's and assume the channel's own source, so
             // they are applied to the EFFECTIVE voltages — the ones a reversed
@@ -1175,6 +1923,58 @@ impl Solver {
             self.limiter_clamped |= gs != raw_gs || ds != raw_ds;
             self.mos_vgs[index] = gs;
             self.mos_vds[index] = ds;
+
+            let vte = device::THERMAL_VOLTAGE;
+            let critical = device::pn_critical_voltage(mosfet.model.is, 1.0);
+            let bd = device::pn_limit(raw_bd, self.mos_vbd[index], vte, critical);
+            let bs = device::pn_limit(raw_bs, self.mos_vbs[index], vte, critical);
+            self.limiter_clamped |= bd != raw_bd || bs != raw_bs;
+            self.mos_vbd[index] = bd;
+            self.mos_vbs[index] = bs;
+        }
+
+        for index in 0..self.circuit.jfets.len() {
+            let jfet = &self.circuit.jfets[index];
+            let sign = jfet.model.polarity.sign();
+            let nodes = &self.solution[..self.nodes];
+            let raw_gs = sign * node_diff(nodes, jfet.g, jfet.junction_s);
+            let raw_gd = sign * node_diff(nodes, jfet.g, jfet.junction_d);
+            let raw_ds = sign * node_diff(nodes, jfet.junction_d, jfet.junction_s);
+            let critical = device::pn_critical_voltage(jfet.model.is, 1.0);
+            let gs = device::pn_limit(
+                raw_gs,
+                self.jfet_vgs[index],
+                device::THERMAL_VOLTAGE,
+                critical,
+            );
+            let gd = device::pn_limit(
+                raw_gd,
+                self.jfet_vgd[index],
+                device::THERMAL_VOLTAGE,
+                critical,
+            );
+
+            // The lower-potential channel terminal is the effective source.
+            // Gate junctions keep their physical terminal identities; only
+            // the channel control voltage changes when current reverses.
+            let reversed_now = raw_ds < 0.0;
+            let reversed_before = self.jfet_vds[index] < 0.0;
+            let old_effective_ds = if reversed_before == reversed_now {
+                self.jfet_vds[index].abs()
+            } else {
+                0.0
+            };
+            let effective_ds = device::vds_limit(raw_ds.abs(), old_effective_ds);
+            let ds = if reversed_now {
+                -effective_ds
+            } else {
+                effective_ds
+            };
+
+            self.limiter_clamped |= gs != raw_gs || gd != raw_gd || ds != raw_ds;
+            self.jfet_vgs[index] = gs;
+            self.jfet_vgd[index] = gd;
+            self.jfet_vds[index] = ds;
         }
 
         // A power sink is smooth (a product over a floored quotient), so it
@@ -1188,6 +1988,22 @@ impl Solver {
                 self.solution[self.nodes + sink.control_branch],
             ];
         }
+
+        for (index, limit) in self.circuit.output_current_limits.iter().enumerate() {
+            self.output_limit_point[index] =
+                node_diff(&self.solution[..self.nodes], limit.drive, limit.output);
+        }
+        for (index, source) in self.circuit.slew_limited_vccs.iter().enumerate() {
+            let nodes = &self.solution[..self.nodes];
+            let common_mode = 0.5
+                * (node_diff(nodes, source.input_plus, None)
+                    + node_diff(nodes, source.input_minus, None)
+                    - node_diff(nodes, source.vcc, None)
+                    - node_diff(nodes, source.vee, None));
+            self.slew_limit_point[index] = node_diff(nodes, source.input_plus, source.input_minus)
+                + source.cm_gain * common_mode
+                + source.vos;
+        }
     }
 
     /// Stamp every nonlinear device's companion model at its current
@@ -1200,10 +2016,10 @@ impl Solver {
     /// the currents, never in the conductances, because negating both the
     /// controlling voltage and the current leaves `∂I/∂u` alone.
     ///
-    /// Nothing here runs for a circuit with no such device: all three vectors
+    /// Nothing here runs for a circuit with no such device: all four vectors
     /// are empty, so a linear netlist takes the same floating-point operations
     /// in the same order it took before this existed.
-    fn stamp_devices(&mut self) {
+    fn stamp_devices(&mut self, stamp: Stamp) {
         let dim = self.dim();
         let matrix = &mut self.matrix;
         let rhs = &mut self.rhs;
@@ -1219,41 +2035,179 @@ impl Solver {
                 );
             }
             let vj = self.diode_vj[index];
-            let op = diode_operating_point(diode, vj);
+            let op = diode_model_op(vj, diode.model, diode.breakdown);
             let control = [(op.gd, diode.junction_anode, diode.cathode, vj)];
             stamp_linearised(matrix, rhs, dim, diode.junction_anode, op.id, &control);
             stamp_linearised(matrix, rhs, dim, diode.cathode, -op.id, &negate(&control));
+
+            if diode_charge_active(diode.model) {
+                if let Stamp::Transient(h, rule) = stamp {
+                    let (charge, capacitance) = diode_charge_op(vj, diode.model, op);
+                    let (geq, current) = match rule {
+                        Integration::BackwardEuler => {
+                            (capacitance / h, (charge - self.diode_q[index]) / h)
+                        }
+                        Integration::Trapezoidal => (
+                            2.0 * capacitance / h,
+                            2.0 * (charge - self.diode_q[index]) / h - self.diode_i[index],
+                        ),
+                    };
+                    let charge_control = [(geq, diode.junction_anode, diode.cathode, vj)];
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        diode.junction_anode,
+                        current,
+                        &charge_control,
+                    );
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        diode.cathode,
+                        -current,
+                        &negate(&charge_control),
+                    );
+                }
+            }
+
+            if diode.model.vp > 0.0 && diode.model.tt > 0.0 {
+                if let Stamp::Transient(h, rule) = stamp {
+                    let recovery = diode_recovery_step(
+                        diode.model,
+                        op,
+                        self.diode_recovery_state[index],
+                        self.diode_recovery_rate[index],
+                        h,
+                        rule,
+                    );
+                    let recovery_control = [(
+                        recovery.conductance,
+                        diode.junction_anode,
+                        diode.cathode,
+                        vj,
+                    )];
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        diode.junction_anode,
+                        recovery.current,
+                        &recovery_control,
+                    );
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        diode.cathode,
+                        -recovery.current,
+                        &negate(&recovery_control),
+                    );
+                }
+            }
         }
 
         for (index, bjt) in self.circuit.bjts.iter().enumerate() {
             let sign = bjt.model.polarity.sign();
             let model = bjt.model;
             let (vbe, vbc) = (self.bjt_vbe[index], self.bjt_vbc[index]);
-            let op = device::bjt_op(vbe, vbc, model.is, model.bf, model.br, model.nf, model.nr);
+            let op = device::bjt_op_with_nkf(
+                vbe, vbc, model.is, model.bf, model.br, model.nf, model.nr, model.vaf, model.var,
+                model.ikf, model.ikr, model.ise, model.ne, model.isc, model.nc, model.nkf,
+            );
+
+            // The Gummel–Poon base resistance is updated from the transistor's
+            // base current on each Newton pass, following ngspice's RBM/IRB
+            // conductance stamp. Fixed RB remains in the linear build path.
+            if device::bjt_has_bias_dependent_base_resistance(model) {
+                let resistance = device::bjt_base_resistance(model, op.ib);
+                conductance(matrix, dim, bjt.b, bjt.junction_b, 1.0 / resistance);
+            }
 
             // GMIN across both junctions. Without it a transistor that is fully
             // off leaves its base and collector tied to the rest of the circuit
             // by nothing at all, and the matrix is singular on a netlist the
             // user can see is connected.
-            conductance(matrix, dim, bjt.b, bjt.e, device::GMIN);
-            conductance(matrix, dim, bjt.b, bjt.c, device::GMIN);
+            conductance(matrix, dim, bjt.junction_b, bjt.junction_e, device::GMIN);
+            conductance(matrix, dim, bjt.junction_b, bjt.junction_c, device::GMIN);
 
             // Controlling voltages in circuit coordinates: u1 = v(b) − v(e),
             // u2 = v(b) − v(c). The device sees sign·u1 and sign·u2.
             let u1 = sign * vbe;
             let u2 = sign * vbc;
             let collector = [
-                (op.gif, bjt.b, bjt.e, u1),
-                (-op.gir - op.gmu, bjt.b, bjt.c, u2),
+                (op.gif, bjt.junction_b, bjt.junction_e, u1),
+                (-op.gir - op.gmu, bjt.junction_b, bjt.junction_c, u2),
             ];
-            let base = [(op.gpi, bjt.b, bjt.e, u1), (op.gmu, bjt.b, bjt.c, u2)];
+            let base = [
+                (op.gpi, bjt.junction_b, bjt.junction_e, u1),
+                (op.gmu, bjt.junction_b, bjt.junction_c, u2),
+            ];
             let emitter = [
-                (-op.gif - op.gpi, bjt.b, bjt.e, u1),
-                (op.gir, bjt.b, bjt.c, u2),
+                (-op.gif - op.gpi, bjt.junction_b, bjt.junction_e, u1),
+                (op.gir, bjt.junction_b, bjt.junction_c, u2),
             ];
-            stamp_linearised(matrix, rhs, dim, bjt.c, sign * op.ic, &collector);
-            stamp_linearised(matrix, rhs, dim, bjt.b, sign * op.ib, &base);
-            stamp_linearised(matrix, rhs, dim, bjt.e, -sign * (op.ic + op.ib), &emitter);
+            stamp_linearised(matrix, rhs, dim, bjt.junction_c, sign * op.ic, &collector);
+            stamp_linearised(matrix, rhs, dim, bjt.junction_b, sign * op.ib, &base);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                bjt.junction_e,
+                -sign * (op.ic + op.ib),
+                &emitter,
+            );
+
+            if let Stamp::Transient(h, rule) = stamp {
+                let charge = bjt_charge_op(vbe, vbc, model);
+                for junction in 0..2 {
+                    if !bjt_charge_active(model, junction) {
+                        continue;
+                    }
+                    let (positive, negative) = if junction == 0 {
+                        (bjt.junction_b, bjt.junction_e)
+                    } else {
+                        (bjt.junction_b, bjt.junction_c)
+                    };
+                    let factor = match rule {
+                        Integration::BackwardEuler => 1.0 / h,
+                        Integration::Trapezoidal => 2.0 / h,
+                    };
+                    let current = match rule {
+                        Integration::BackwardEuler => {
+                            (charge.q[junction] - self.bjt_q[index][junction]) / h
+                        }
+                        Integration::Trapezoidal => {
+                            2.0 * (charge.q[junction] - self.bjt_q[index][junction]) / h
+                                - self.bjt_i[index][junction]
+                        }
+                    };
+                    let control = [
+                        (
+                            charge.dq[junction][0] * factor,
+                            bjt.junction_b,
+                            bjt.junction_e,
+                            u1,
+                        ),
+                        (
+                            charge.dq[junction][1] * factor,
+                            bjt.junction_b,
+                            bjt.junction_c,
+                            u2,
+                        ),
+                    ];
+                    stamp_linearised(matrix, rhs, dim, positive, sign * current, &control);
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        negative,
+                        -sign * current,
+                        &negate(&control),
+                    );
+                }
+            }
         }
 
         for (index, mosfet) in self.circuit.mosfets.iter().enumerate() {
@@ -1261,13 +2215,16 @@ impl Solver {
             let model = mosfet.model;
             let (vgs, vds) = (self.mos_vgs[index], self.mos_vds[index]);
 
-            // Below Vto every conductance in the device is zero, so the drain
-            // node would float; the bulk terminal is connected by nothing else
-            // at all. GMIN is what makes an off MOSFET a very large resistor
-            // instead of an open circuit the matrix cannot invert.
-            conductance(matrix, dim, mosfet.d, mosfet.s, device::GMIN);
-            conductance(matrix, dim, mosfet.bulk, mosfet.d, device::GMIN);
-            conductance(matrix, dim, mosfet.bulk, mosfet.s, device::GMIN);
+            // Below Vto the channel is off, so GMIN connects drain to source.
+            // The two bulk pn junctions include their own GMIN through
+            // diode_op, and use the model's bulk-junction saturation current.
+            conductance(
+                matrix,
+                dim,
+                mosfet.junction_d,
+                mosfet.junction_s,
+                device::GMIN,
+            );
 
             // A MOSFET is symmetric: when Vds goes negative the terminal the
             // netlist calls the drain IS the source, and the level-1 equations
@@ -1275,14 +2232,19 @@ impl Solver {
             // whole of "reverse mode".
             let reversed = vds < 0.0;
             let (drain, source) = if reversed {
-                (mosfet.s, mosfet.d)
+                (mosfet.junction_s, mosfet.junction_d)
             } else {
-                (mosfet.d, mosfet.s)
+                (mosfet.junction_d, mosfet.junction_s)
             };
             let (vgs_eff, vds_eff) = if reversed {
                 (vgs - vds, -vds)
             } else {
                 (vgs, vds)
+            };
+            let vbs_eff = if reversed {
+                self.mos_vbd[index]
+            } else {
+                self.mos_vbs[index]
             };
             let op = device::mos_op(
                 vgs_eff,
@@ -1290,11 +2252,19 @@ impl Solver {
                 sign * model.vto,
                 mosfet.beta,
                 model.lambda,
+                model.gamma,
+                model.phi,
+                vbs_eff,
             );
 
             let u1 = sign * vgs_eff;
             let u2 = sign * vds_eff;
-            let drain_terms = [(op.gm, mosfet.g, source, u1), (op.gds, drain, source, u2)];
+            let u3 = sign * vbs_eff;
+            let drain_terms = [
+                (op.gm, mosfet.g, source, u1),
+                (op.gds, drain, source, u2),
+                (op.gmb, mosfet.bulk, source, u3),
+            ];
             stamp_linearised(matrix, rhs, dim, drain, sign * op.id, &drain_terms);
             stamp_linearised(
                 matrix,
@@ -1304,8 +2274,283 @@ impl Solver {
                 -sign * op.id,
                 &negate(&drain_terms),
             );
-            // The gate and the bulk carry no DC current in this model, so they
-            // need no stamp of their own beyond the GMIN ties above.
+
+            if let Stamp::Transient(h, rule) = stamp {
+                let capacitances = mosfet.overlap_capacitances();
+                let terminals = [
+                    (mosfet.g, mosfet.junction_s),
+                    (mosfet.g, mosfet.junction_d),
+                    (mosfet.g, mosfet.bulk),
+                ];
+                for junction in 0..3 {
+                    let capacitance = capacitances[junction];
+                    if capacitance == 0.0 {
+                        continue;
+                    }
+                    let (positive, negative) = terminals[junction];
+                    let voltage = node_diff(&self.solution[..self.nodes], positive, negative);
+                    let charge = capacitance * voltage;
+                    let (geq, current) = match rule {
+                        Integration::BackwardEuler => (
+                            capacitance / h,
+                            (charge - self.mos_overlap_q[index][junction]) / h,
+                        ),
+                        Integration::Trapezoidal => (
+                            2.0 * capacitance / h,
+                            2.0 * (charge - self.mos_overlap_q[index][junction]) / h
+                                - self.mos_overlap_i[index][junction],
+                        ),
+                    };
+                    let control = [(geq, positive, negative, voltage)];
+                    stamp_linearised(matrix, rhs, dim, positive, current, &control);
+                    stamp_linearised(matrix, rhs, dim, negative, -current, &negate(&control));
+                }
+
+                if model.channel_charge_model == MosChannelChargeModel::WardDutton {
+                    let charge = device::mos_ward_dutton_channel_charge(
+                        mosfet,
+                        vgs,
+                        vds,
+                        self.mos_vbd[index],
+                        self.mos_vbs[index],
+                    );
+                    let terminals = [mosfet.g, mosfet.junction_d, mosfet.junction_s, mosfet.bulk];
+                    let controls = [
+                        (mosfet.g, mosfet.junction_s),
+                        (mosfet.junction_d, mosfet.junction_s),
+                        (mosfet.bulk, mosfet.junction_s),
+                    ];
+                    let voltages = controls.map(|(positive, negative)| {
+                        node_diff(&self.solution[..self.nodes], positive, negative)
+                    });
+                    let scale = match rule {
+                        Integration::BackwardEuler => 1.0 / h,
+                        Integration::Trapezoidal => 2.0 / h,
+                    };
+                    for (terminal, &node) in terminals.iter().enumerate() {
+                        let charge_delta =
+                            charge.q[terminal] - self.mos_conserving_q[index][terminal];
+                        let current = match rule {
+                            Integration::BackwardEuler => charge_delta / h,
+                            Integration::Trapezoidal => {
+                                2.0 * charge_delta / h - self.mos_conserving_i[index][terminal]
+                            }
+                        };
+                        let control: [(f64, NodeRef, NodeRef, f64); 3] =
+                            core::array::from_fn(|control| {
+                                (
+                                    scale * charge.dq_dv[terminal][control],
+                                    controls[control].0,
+                                    controls[control].1,
+                                    voltages[control],
+                                )
+                            });
+                        stamp_linearised(matrix, rhs, dim, node, current, &control);
+                    }
+                } else {
+                    let channel_caps = mos_channel_capacitance_halves(
+                        mosfet,
+                        vgs,
+                        vds,
+                        self.mos_vbd[index],
+                        self.mos_vbs[index],
+                    );
+                    let terminals = [mosfet.junction_s, mosfet.junction_d, mosfet.bulk];
+                    for junction in 0..3 {
+                        let capacitance =
+                            self.mos_channel_cap_half[index][junction] + channel_caps[junction];
+                        if capacitance == 0.0 {
+                            continue;
+                        }
+                        let positive = mosfet.g;
+                        let negative = terminals[junction];
+                        let voltage = node_diff(&self.solution[..self.nodes], positive, negative);
+                        let charge_delta =
+                            (voltage - self.mos_channel_v[index][junction]) * capacitance;
+                        let factor = match rule {
+                            Integration::BackwardEuler => 1.0 / h,
+                            Integration::Trapezoidal => 2.0 / h,
+                        };
+                        let geq = factor * capacitance;
+                        let current = match rule {
+                            Integration::BackwardEuler => charge_delta / h,
+                            Integration::Trapezoidal => {
+                                2.0 * charge_delta / h - self.mos_channel_i[index][junction]
+                            }
+                        };
+                        let control = [(geq, positive, negative, voltage)];
+                        stamp_linearised(matrix, rhs, dim, positive, current, &control);
+                        stamp_linearised(matrix, rhs, dim, negative, -current, &negate(&control));
+                    }
+                }
+            }
+
+            // Level-1 MOSFETs have two bulk pn junctions. In NMOS coordinates
+            // the bulk is the anode and drain/source are the cathodes; the
+            // polarity sign reverses that orientation for PMOS.
+            let bd = device::diode_op(self.mos_vbd[index], model.is, 1.0);
+            let bd_terms = [(
+                bd.gd,
+                mosfet.bulk,
+                mosfet.junction_d,
+                sign * self.mos_vbd[index],
+            )];
+            stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * bd.id, &bd_terms);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                mosfet.junction_d,
+                -sign * bd.id,
+                &negate(&bd_terms),
+            );
+
+            let bs = device::diode_op(self.mos_vbs[index], model.is, 1.0);
+            let bs_terms = [(
+                bs.gd,
+                mosfet.bulk,
+                mosfet.junction_s,
+                sign * self.mos_vbs[index],
+            )];
+            stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * bs.id, &bs_terms);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                mosfet.junction_s,
+                -sign * bs.id,
+                &negate(&bs_terms),
+            );
+
+            for (history, (junction, voltage)) in [
+                (mosfet.junction_d, self.mos_vbd[index]),
+                (mosfet.junction_s, self.mos_vbs[index]),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let drain = history == 0;
+                if mosfet.bulk_junction_capacitances(drain) == [0.0, 0.0] {
+                    continue;
+                }
+                if let Stamp::Transient(h, rule) = stamp {
+                    let (charge, capacitance) = mosfet.bulk_junction_charge(voltage, drain);
+                    let (geq, current) = match rule {
+                        Integration::BackwardEuler => (
+                            capacitance / h,
+                            (charge - self.mos_bulk_q[index][history]) / h,
+                        ),
+                        Integration::Trapezoidal => (
+                            2.0 * capacitance / h,
+                            2.0 * (charge - self.mos_bulk_q[index][history]) / h
+                                - self.mos_bulk_i[index][history],
+                        ),
+                    };
+                    let charge_terms = [(geq, mosfet.bulk, junction, sign * voltage)];
+                    stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * current, &charge_terms);
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        junction,
+                        -sign * current,
+                        &negate(&charge_terms),
+                    );
+                }
+            }
+            // The gate carries no DC current in this model.
+        }
+
+        for (index, jfet) in self.circuit.jfets.iter().enumerate() {
+            let sign = jfet.model.polarity.sign();
+            let reversed = self.jfet_vds[index] < 0.0;
+            let (drain, source, vgs) = if reversed {
+                (jfet.junction_s, jfet.junction_d, self.jfet_vgd[index])
+            } else {
+                (jfet.junction_d, jfet.junction_s, self.jfet_vgs[index])
+            };
+            let vds = self.jfet_vds[index].abs();
+            let op = device::jfet_op_with_b(
+                vgs,
+                vds,
+                sign * jfet.model.vto,
+                jfet.model.beta,
+                jfet.model.lambda,
+                jfet.model.b,
+                jfet.model.pb,
+            );
+
+            // The channel's GMIN keeps a cut-off device connected. The gate
+            // junctions below each carry their own SPICE GMIN as part of the
+            // diode equation.
+            conductance(matrix, dim, jfet.junction_d, jfet.junction_s, device::GMIN);
+
+            let channel_terms = [
+                (op.gm, jfet.g, source, sign * vgs),
+                (op.gds, drain, source, sign * vds),
+            ];
+            stamp_linearised(matrix, rhs, dim, drain, sign * op.id, &channel_terms);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                source,
+                -sign * op.id,
+                &negate(&channel_terms),
+            );
+
+            for (junction, (cathode, voltage, c0)) in [
+                (jfet.junction_s, self.jfet_vgs[index], jfet.model.cgs),
+                (jfet.junction_d, self.jfet_vgd[index], jfet.model.cgd),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let gate = device::diode_op(voltage, jfet.model.is, 1.0);
+                let gate_voltage = sign * voltage;
+                let gate_terms = [(gate.gd, jfet.g, cathode, gate_voltage)];
+                stamp_linearised(matrix, rhs, dim, jfet.g, sign * gate.id, &gate_terms);
+                stamp_linearised(
+                    matrix,
+                    rhs,
+                    dim,
+                    cathode,
+                    -sign * gate.id,
+                    &negate(&gate_terms),
+                );
+
+                if c0 > 0.0 {
+                    if let Stamp::Transient(h, rule) = stamp {
+                        let (charge, capacitance) = device::junction_depletion_charge(
+                            voltage,
+                            c0,
+                            jfet.model.pb,
+                            0.5,
+                            jfet.model.fc,
+                        );
+                        let (geq, current) = match rule {
+                            Integration::BackwardEuler => {
+                                (capacitance / h, (charge - self.jfet_q[index][junction]) / h)
+                            }
+                            Integration::Trapezoidal => (
+                                2.0 * capacitance / h,
+                                2.0 * (charge - self.jfet_q[index][junction]) / h
+                                    - self.jfet_i[index][junction],
+                            ),
+                        };
+                        let charge_terms = [(geq, jfet.g, cathode, sign * voltage)];
+                        stamp_linearised(matrix, rhs, dim, jfet.g, sign * current, &charge_terms);
+                        stamp_linearised(
+                            matrix,
+                            rhs,
+                            dim,
+                            cathode,
+                            -sign * current,
+                            &negate(&charge_terms),
+                        );
+                    }
+                }
+            }
         }
 
         // Power sinks: I = −vo·ib / (eff·d), d = max(vin, POWER_SINK_VMIN),
@@ -1332,6 +2577,84 @@ impl Solver {
                 let equivalent = current - g_vin * vin - g_vo * vo - g_ib * ib;
                 rhs[row] -= sign * equivalent;
             }
+        }
+
+        // Op-amp output stages use a Norton current whose small-signal slope is
+        // 1/ROUT. IOLIM clips that current symmetrically; on the flat part its
+        // derivative is zero, so the output settles to the load's voltage at
+        // the limited current instead of asking the gain node to supply more.
+        for (index, limit) in self.circuit.output_current_limits.iter().enumerate() {
+            let delta = self.output_limit_point[index];
+            let unconstrained = delta / limit.rout;
+            let current = unconstrained.clamp(-limit.ilim, limit.ilim);
+            let conductance = if unconstrained.abs() < limit.ilim {
+                1.0 / limit.rout
+            } else {
+                0.0
+            };
+            let control = [(-conductance, limit.drive, limit.output, delta)];
+            stamp_linearised(matrix, rhs, dim, limit.output, -current, &control);
+        }
+
+        // A finite SR limits only the gain-node capacitor current. The Rg
+        // current is excluded so the settled open-loop gain remains AOL. The
+        // same input error carries offset and CMRR through the limiter.
+        for (index, source) in self.circuit.slew_limited_vccs.iter().enumerate() {
+            let error = self.slew_limit_point[index];
+            let nodes = &self.solution[..self.nodes];
+            let gain_voltage = node_diff(nodes, source.n, source.p);
+            let capacitor_current = source.gm * error - gain_voltage / MACRO_GAIN_RESISTANCE;
+            // Slew rate constrains dV/dt, not the operating point. At t=0 the
+            // capacitor is open, so preserve the unconstrained AOL equation.
+            let saturated =
+                !matches!(stamp, Stamp::OperatingPoint) && capacitor_current.abs() >= source.ilim;
+            let current = if matches!(stamp, Stamp::OperatingPoint) {
+                source.gm * error
+            } else {
+                gain_voltage / MACRO_GAIN_RESISTANCE
+                    + capacitor_current.clamp(-source.ilim, source.ilim)
+            };
+            let gm = if saturated { 0.0 } else { source.gm };
+            let cm_half = 0.5 * source.cm_gain;
+            let gain_node_slope = if saturated {
+                -1.0 / MACRO_GAIN_RESISTANCE
+            } else {
+                0.0
+            };
+            let control = [
+                (
+                    gm * (1.0 + cm_half),
+                    source.input_plus,
+                    None,
+                    node_diff(nodes, source.input_plus, None),
+                ),
+                (
+                    gm * (-1.0 + cm_half),
+                    source.input_minus,
+                    None,
+                    node_diff(nodes, source.input_minus, None),
+                ),
+                (
+                    -gm * cm_half,
+                    source.vcc,
+                    None,
+                    node_diff(nodes, source.vcc, None),
+                ),
+                (
+                    -gm * cm_half,
+                    source.vee,
+                    None,
+                    node_diff(nodes, source.vee, None),
+                ),
+                (
+                    gain_node_slope,
+                    source.p,
+                    source.n,
+                    node_diff(nodes, source.p, source.n),
+                ),
+            ];
+            stamp_linearised(matrix, rhs, dim, source.p, current, &control);
+            stamp_linearised(matrix, rhs, dim, source.n, -current, &negate(&control));
         }
     }
 }

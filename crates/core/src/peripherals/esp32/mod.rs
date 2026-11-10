@@ -22,6 +22,7 @@ pub mod gpio;
 pub mod i2c;
 pub mod ledc;
 pub mod mcpwm;
+pub mod pcnt;
 pub mod rmt;
 pub mod rtc_cntl;
 pub mod sar_adc;

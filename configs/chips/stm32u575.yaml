@@ -358,6 +358,9 @@ peripherals:
     size: "1KB"
     irq: 45
     config:
+      # Channel outputs reach the pads through the U5 AF table
+      # (bus/attach.rs STM32U5_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32u5"
       debug_schema: "../peripherals/stm32u575/tim2.yaml"
       width: 32
     # TIM2/3/6/7 are clocked from RCC_APB1ENR1 bits 0/1/4/5; TIM1 from
@@ -370,6 +373,9 @@ peripherals:
     size: "1KB"
     irq: 46
     config:
+      # Channel outputs reach the pads through the U5 AF table
+      # (bus/attach.rs STM32U5_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32u5"
       debug_schema: "../peripherals/stm32u575/tim3.yaml"
     clock: { reg: "apb1enr1", bit: 1 }
   - id: "tim6"
@@ -396,6 +402,9 @@ peripherals:
     size: "1KB"
     irq: 42
     config:
+      # Channel outputs reach the pads through the U5 AF table
+      # (bus/attach.rs STM32U5_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32u5"
       debug_schema: "../peripherals/stm32u575/tim1.yaml"
       advanced: true
     clock: { reg: "apb2enr", bit: 11 }

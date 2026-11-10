@@ -1,0 +1,31 @@
+# ATSAMD21J18A boots the family smoke image (firmware-samd21-lowram-smoke) on its own
+# exact descriptor. Assertions are the family smoke's, unchanged.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-samd21-lowram-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "OK"
+  - uart_contains: "samd21 sercom0 up"
+  - uart_contains: "led on"
+
+  - memory_value:
+      address: 0x41004400
+      mask: 0x00020000
+      expected_value: 0x00020000
+
+  - memory_value:
+      address: 0x4100444A
+      size: 1
+      mask: 0x03
+      expected_value: 0x03
+
+  - memory_value:
+      address: 0x41004435
+      size: 1
+      mask: 0x0F
+      expected_value: 0x02
+
+  - expected_stop_reason: max_steps

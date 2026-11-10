@@ -450,6 +450,23 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Clock-controller capability: a live mirror of register `name`, kept
+    /// current on every firmware write, for a model whose SOURCE-clock select
+    /// lives in the controller rather than in its own window (the ESP32-C6
+    /// LEDC is clocked from `PCR.LEDC_SCLK_CONF`). Resolved by name, like
+    /// [`Self::clock_gate_reg_offset`], so no concrete-type downcast is
+    /// needed. `None` for every other peripheral and unknown name.
+    fn clock_select_cell(&mut self, _name: &str) -> Option<Arc<std::sync::atomic::AtomicU32>> {
+        None
+    }
+
+    /// Accept the mirror from [`Self::clock_select_cell`] named by this
+    /// peripheral's `config.clock_select`. Returns `false` (a hard config
+    /// error in `resolve_clock_selects`) if the model has no use for one.
+    fn attach_clock_select_cell(&mut self, _cell: Arc<std::sync::atomic::AtomicU32>) -> bool {
+        false
+    }
+
     /// Cortex-M7 L1 cache capability: the I/D cache geometry this peripheral
     /// declares (`cortex_m7_cache`). `configure_cortex_m` asks every
     /// peripheral and hands the answer to the SCB's CLIDR/CTR/CCSIDR, so the
@@ -674,6 +691,18 @@ pub trait Peripheral: std::fmt::Debug + Send {
         Vec::new()
     }
 
+    /// GPIO capability: feed GPIO-matrix INPUT signals to the peripheral at
+    /// bus index `sink`, as its timer inputs. `taps` pairs a signal index
+    /// (the `GPIO_FUNCn_IN_SEL_CFG` it is routed by) with the input number the
+    /// sink's [`Self::timer_input_edge`] takes it as. From then on every level
+    /// change the signal sees — an outside edge on the selected pad, the pad's
+    /// own output, a routing write — is reported through
+    /// [`Self::take_timer_input_edges`]. The ESP32 pulse counter's inputs
+    /// arrive this way. `false`: this port has no input matrix.
+    fn bind_matrix_input_taps(&mut self, _taps: &[(u32, u8)], _sink: usize) -> bool {
+        false
+    }
+
     /// GPIO capability: drain the outside levels that reached pads routed to
     /// a peripheral line (an SPI MISO, an I²C SDA) since the last drain. Each
     /// names the line cell, which the bus maps back to the peripheral owning
@@ -770,6 +799,20 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// An STM32 general-purpose or advanced timer, whose counter runs on the
+    /// APB timer kernel clock (TIMxCLK) rather than on HCLK. The bus feeds it
+    /// through [`Self::set_timer_kernel_clock_div`]. `false` by default.
+    fn has_timer_kernel_clock(&self) -> bool {
+        false
+    }
+
+    /// Set the timer kernel clock to HCLK / `div` (0 is taken as 1). The
+    /// timer is already synced to now. Returns whether the divider changed,
+    /// so the bus re-arms the timer's scheduled events. No-op by default.
+    fn set_timer_kernel_clock_div(&mut self, _div: u32) -> bool {
+        false
+    }
+
     /// Timer capability: the pads its output wires are tabled to, for a timer
     /// whose pad table is chip data rather than a bus-side datasheet table
     /// (Renesas RA GPT `gtioc_pads`): `(line, GPIO port name, pin)`. Empty by
@@ -780,12 +823,15 @@ pub trait Peripheral: std::fmt::Debug + Send {
 
     /// GPIO capability: bind pad `pin` CONDITIONALLY to `line` of a timer's
     /// channel-output wire `cell` — live while the pad is an alternate-function
-    /// output and the timer drives that line (STM32 F1 fixed mapping). A port
-    /// whose register layout is not F1 refuses it and returns `false`.
+    /// output and the timer drives that line. `af` is the STM32 V2 AFR nibble
+    /// that selects the channel; `None` is the STM32 F1 fixed mapping (and
+    /// the families whose port knows its own timer selector). A port whose
+    /// register layout is not the row's shape refuses it and returns `false`.
     fn bind_timer_output_pad(
         &mut self,
         _cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
         _pin: u8,
+        _af: Option<u8>,
         _line: usize,
         _func: &'static str,
     ) -> bool {
@@ -1267,6 +1313,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// `value` (little-endian, `transform.src_width` bytes) from its source:
     /// the data now enters the controller's FIFO. Default: not a FIFO DMA.
     fn dma_load_data(&mut self, _item: &DmaRequest, _value: u32) {}
+    /// A DMA item this controller issued completed its bus access. Called
+    /// after the destination write, before the CPU can observe the next
+    /// transfer count or completion flag. Return true to reconcile IRQ levels
+    /// and collect newly scheduled work. Legacy controllers commit when
+    /// issuing the item and retain the original no-callback path.
+    fn dma_transfer_complete(&mut self, _item: &DmaRequest) -> bool {
+        false
+    }
     /// A DMA item this controller issued faulted on the bus (an unmapped
     /// address: the bus error a DMA reports as a transfer error, STM32
     /// `TEIF` / GPDMA `DTEF`). The bus calls it on the issuer right after
@@ -1758,6 +1812,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// session is built rather than written nowhere for the whole run.
     fn adc_channel_count(&self) -> Option<u8> {
         None
+    }
+
+    /// Whether this peripheral accepts a routed `VREF+`/`VDDA` voltage.
+    fn supports_adc_reference_voltage(&self) -> bool {
+        false
+    }
+
+    /// Set the ADC's positive full-scale reference voltage, in volts. Returns
+    /// false for a peripheral without a configurable analog reference.
+    fn set_adc_reference_voltage_v(&mut self, _volts: f64) -> bool {
+        false
     }
 
     /// A live view of one of this peripheral's analog outputs (a DAC

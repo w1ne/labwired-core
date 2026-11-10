@@ -1,0 +1,3 @@
+name: ch32v003f4p6-gpio-blink
+chip: ../../configs/chips/ch32v003f4p6.yaml
+cpu_hz: 48000000

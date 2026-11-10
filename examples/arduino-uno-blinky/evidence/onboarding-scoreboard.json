@@ -1,0 +1,43 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 1727,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 1.727
+  },
+  "targets": [
+    {
+      "target_id": "arduino-uno-blinky-existing",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/arduino-uno-blinky/io-smoke.yaml",
+      "system": "configs/systems/arduino-uno.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-05T22:08:14Z",
+      "finished_at_utc": "2026-11-05T22:08:15Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1727,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.32,
+        "build_firmware": 0.661,
+        "run_smoke": 0.736
+      },
+      "stages_ms": {
+        "build_cli": 320,
+        "build_firmware": 661,
+        "run_smoke": 736
+      },
+      "firmware_build_script": "examples/arduino-uno-blinky/build-firmware.sh",
+      "_artifact_path": "examples/arduino-uno-blinky/evidence"
+    }
+  ]
+}

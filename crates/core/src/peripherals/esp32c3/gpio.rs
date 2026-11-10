@@ -101,8 +101,8 @@ pub(crate) struct MatrixLayout {
     pub(crate) fspiq: u32,
     pub(crate) fspid: u32,
     pub(crate) fspics0: u32,
-    /// `LEDC_LS_SIG_OUT0_IDX`, or `None` where this model does not bind the
-    /// LEDC outputs (the C6 numbers its matrix differently; its 45/46 are I²C).
+    /// `LEDC_LS_SIG_OUT0_IDX` (45 on the C3, 0 on the C6), or `None` where
+    /// this model does not bind the LEDC outputs.
     pub(crate) ledc_ls_out0: Option<u32>,
     pub(crate) in_sel: crate::peripherals::esp_gpio_net::InSelLayout,
 }
@@ -130,7 +130,8 @@ pub(crate) const C6_MATRIX: MatrixLayout = MatrixLayout {
     fspiq: 64,
     fspid: 65,
     fspics0: 68,
-    ledc_ls_out0: None,
+    // `soc/esp32c6/include/soc/gpio_sig_map.h`: LEDC_LS_SIG_OUT0..5_IDX = 0..5.
+    ledc_ls_out0: Some(0),
     in_sel: crate::peripherals::esp_gpio_net::InSelLayout {
         pad_mask: 0x3F,
         sel_bit: 1 << 7,
@@ -152,6 +153,10 @@ impl MatrixLayout {
             i if i == self.fspiq => "FSPIQ",
             i if i == self.fspid => "FSPID",
             i if i == self.fspics0 => "FSPICS0",
+            i if self.ledc_ls_out0.is_some_and(|f| (f..f + 6).contains(&i)) => {
+                crate::peripherals::esp32c3::ledc::LEDC_LINES
+                    [(i - self.ledc_ls_out0.unwrap_or(0)) as usize]
+            }
             _ => return None,
         })
     }
@@ -346,18 +351,18 @@ impl Esp32c3Gpio {
         }
     }
 
-    /// Whether this layout numbers LEDC outputs at all (the C3 does; the C6's
-    /// 45/46 are I²C), so the bus can skip creating an LEDC wire cell.
+    /// Whether this layout numbers LEDC outputs at all (C3: 45..50, C6: 0..5),
+    /// so the bus can skip creating an LEDC wire cell.
     pub(crate) fn has_ledc_signals(&self) -> bool {
         self.layout.ledc_ls_out0.is_some()
     }
 
     /// Bind the LEDC controller's six channel outputs to every pad the output
-    /// matrix can route them to (`LEDC_LS_SIG_OUT0..5`, 45..50) — what
+    /// matrix can route them to (`LEDC_LS_SIG_OUT0..5`: C3 45..50, C6 0..5) — what
     /// `ledc_channel_config` / `ledcAttach` programs into `FUNCn_OUT_SEL_CFG`.
     /// Which pad is live at any moment is then decided by that register,
     /// through the shared routing seam, as for SPI and UART above. A no-op on
-    /// a layout without LEDC signal numbers (the C6).
+    /// a layout without LEDC signal numbers.
     pub(crate) fn bind_ledc_lines(
         &mut self,
         lines: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,

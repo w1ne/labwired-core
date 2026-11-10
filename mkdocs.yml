@@ -171,6 +171,7 @@ nav:
     - Multiplexed LED matrix: parts/led-matrix-mux.md
     - 74HC4051: parts/74hc4051.md
     - MAX485: parts/max485.md
+    - TIOL112: parts/tiol112.md
     - XY-MD02: parts/xy-md02.md
     - SHT40: parts/sht40.md
     - BME680: parts/bme680.md

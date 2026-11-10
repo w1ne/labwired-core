@@ -1,0 +1,18 @@
+# NUCLEO-F103RB with an external BME280 on the Arduino I2C1 pins.
+# UM1724 maps D15/SCL to PB8 and D14/SDA to PB9; firmware sets AFIO.I2C1_REMAP.
+name: "nucleo-f103rb-bme280"
+chip: "../chips/stm32f103rb-nucleo-bme280-smoke.yaml"
+debug_uart: "uart2"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

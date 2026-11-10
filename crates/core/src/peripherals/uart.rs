@@ -1049,6 +1049,9 @@ pub struct Uart {
     /// MAX485 is wired to it. See [`crate::peripherals::rs485`].
     #[serde(skip)]
     rs485: Option<Box<crate::peripherals::rs485::Rs485Gate>>,
+    /// TI single-wire CQ transceiver. Separate from the RS-485 gate.
+    #[serde(skip)]
+    tiol112: Option<super::components::tiol112::Tiol112>,
     /// AVR layout: UCSR0A as the CPU last wrote it (U2X is bit 1).
     avr_ucsra: u8,
     /// AVR layout: UBRR0 and whether firmware wrote it.
@@ -1159,6 +1162,7 @@ impl Uart {
             wave_cursor_rx: 0,
             timed: None,
             rs485: None,
+            tiol112: None,
             avr_ucsra: 0,
             avr_ubrr: 0,
             avr_baud_set: false,
@@ -1621,11 +1625,13 @@ impl Uart {
             // One lock for the whole catch-up run, not one per tick-equivalent.
             // Disjoint field borrows: the guard borrows `rx_buf`, the poll loop
             // borrows `attached_streams` and `elapsed_us`.
+            let tiol_rx_enabled = self.cr1 & (1 | (1 << 2)) == (1 | (1 << 2));
             let Self {
                 rx_buf,
                 attached_streams,
                 elapsed_us,
                 rs485,
+                tiol112,
                 stream_clock,
                 trace_name,
                 ..
@@ -1662,6 +1668,12 @@ impl Uart {
                             let Some(byte) = stream.poll(credit) else {
                                 break;
                             };
+                            if let Some(phy) = tiol112.as_ref() {
+                                if !tiol_rx_enabled || !phy.accept_peer_byte() {
+                                    credit = 0;
+                                    continue;
+                                }
+                            }
                             if rs485.is_some() {
                                 on_bus.push((peer, byte));
                             } else {
@@ -2230,6 +2242,14 @@ impl Uart {
         // driver is enabled; see `peripherals::rs485`.
         let mut echo = false;
         let mut on_bus = true;
+        if let Some(phy) = &self.tiol112 {
+            if self.cr1 & (1 | (1 << 3)) != (1 | (1 << 3)) || self.presc != 0 {
+                return;
+            }
+            on_bus = phy.allow_tx();
+            // TI RX is always active; the MCU must disable RE to reject echo.
+            echo = on_bus && self.cr1 & (1 | (1 << 2)) == (1 | (1 << 2));
+        }
         if self.rs485.is_some() {
             let now = self.stream_clock.as_ref().map_or(0, |c| c.now());
             let gap = self.bit_time_cycles().map_or(0, |bit| bit * 35);
@@ -2242,7 +2262,7 @@ impl Uart {
                 }
             }
         }
-        self.last_tx_on_bus = self.rs485.is_some() && on_bus;
+        self.last_tx_on_bus = (self.rs485.is_some() || self.tiol112.is_some()) && on_bus;
         // A byte the driver put on the bus is a frame, not console text: it
         // is in the `rs485` bus log instead.
         if !self.last_tx_on_bus {
@@ -2293,6 +2313,31 @@ impl Uart {
     /// The transceiver gate, when one is wired.
     pub fn rs485_gate(&self) -> Option<&crate::peripherals::rs485::Rs485Gate> {
         self.rs485.as_deref()
+    }
+
+    /// Attach the exact TI digital model; sharing one UART with another
+    /// transceiver would hide conflicting wire ownership, so reject it.
+    pub fn set_tiol112(&mut self, phy: super::components::tiol112::Tiol112) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.rs485.is_none() && self.tiol112.is_none(),
+            "UART already has a transceiver attached"
+        );
+        anyhow::ensure!(
+            matches!(self.layout, UartRegisterLayout::Stm32V2),
+            "TIOL112 currently requires a modern STM32 USART"
+        );
+        if let Some(t) = &self.timed {
+            t.port
+                .set_path_delays(phy.driver_delay_ps, phy.receiver_delay_ps);
+            phy.bind_timed_port(t.port.clone());
+        }
+        self.set_sink(None, false);
+        self.tiol112 = Some(phy);
+        Ok(())
+    }
+
+    pub fn tiol112(&self) -> Option<&super::components::tiol112::Tiol112> {
+        self.tiol112.as_ref()
     }
 
     pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>, echo_stdout: bool) {
@@ -2631,8 +2676,11 @@ impl crate::Peripheral for Uart {
     fn tick(&mut self) -> crate::PeripheralTickResult {
         if self.timed.is_some() {
             let now = self.timed_now();
+            let irq = self.timed_service(now);
+            let dma_signals = self.timed_dma_signals();
             return crate::PeripheralTickResult {
-                irq: self.timed_service(now),
+                irq,
+                dma_signals: (!dma_signals.is_empty()).then_some(dma_signals),
                 ..Default::default()
             };
         }
@@ -2775,10 +2823,12 @@ impl crate::Peripheral for Uart {
         }
         if self.timed.is_some() {
             let now = bus.current_cycle();
+            self.timed_event_fired();
             let raise = self.timed_service(now);
             let next = self.timed_claim_wake(now);
             return crate::sched::EventResult {
                 raise_own_irq: raise,
+                dma_signals: self.timed_dma_signals(),
                 reschedule_delay: next.map(|t| t - now),
                 ..Default::default()
             };
