@@ -68,8 +68,11 @@ analog capture claimed.
 routes matched diode branches with depletion charge, transit-time charge, both,
 and neither to ADC1 IN10–IN13. Its deliberately large capacitance and transit
 time make transient charge effects visible at the 1 us boundary; they are a
-physics stress case rather than a typical diode parameter set. Run the
-end-to-end proofs from `core/` with:
+physics stress case rather than a typical diode parameter set.
+[`analog-bjt-recombination-adc-system.yaml`](analog-bjt-recombination-adc-system.yaml)
+compares generic Gummel–Poon branches with base-emitter recombination, base-
+collector recombination, both, and neither on ADC1 IN8–IN11, alongside the
+independent NTC and diode routes. Run the end-to-end proofs from `core/` with:
 
 ```bash
 cargo test -p labwired-core --test cosim_nucleo_g071rb_analog
