@@ -290,6 +290,34 @@ fn check_usart3_tx_irq() -> bool {
         }
     }
 
+    let both = cr1 | USART_TXEIE | USART_TCIE;
+    wr(USART3_CR1, both);
+    let mut both_irq_asserted = false;
+    for _ in 0..10_000 {
+        if pending(USART3_IRQ) {
+            both_irq_asserted = true;
+            break;
+        }
+    }
+    wr(USART3_CR1, both & !USART_TXEIE);
+    unpend(USART3_IRQ);
+    let mut tc_irq_survives_txe_disable = false;
+    for _ in 0..10_000 {
+        if pending(USART3_IRQ) {
+            tc_irq_survives_txe_disable = true;
+            break;
+        }
+    }
+    wr(USART3_CR1, cr1);
+    unpend(USART3_IRQ);
+    let mut combined_irq_released = true;
+    for _ in 0..10_000 {
+        if pending(USART3_IRQ) {
+            combined_irq_released = false;
+            break;
+        }
+    }
+
     let ok = txe_irq_isolated
         && txe_irq_asserted
         && txe_irq_reasserted
@@ -297,7 +325,10 @@ fn check_usart3_tx_irq() -> bool {
         && tc_irq_isolated
         && tc_irq_asserted
         && tc_irq_reasserted
-        && tc_irq_released;
+        && tc_irq_released
+        && both_irq_asserted
+        && tc_irq_survives_txe_disable
+        && combined_irq_released;
     puts("usart3 tx_irq ");
     flag(
         "txe",
@@ -306,6 +337,10 @@ fn check_usart3_tx_irq() -> bool {
     flag(
         "tc",
         tc_irq_isolated && tc_irq_asserted && tc_irq_reasserted && tc_irq_released,
+    );
+    flag(
+        "both",
+        both_irq_asserted && tc_irq_survives_txe_disable && combined_irq_released,
     );
     verdict(ok);
     ok
