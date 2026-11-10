@@ -511,6 +511,9 @@ fn every_shipped_descriptor_is_ratcheted() {
     // Chip descriptors that exist in configs/chips but are NOT in the canonical
     // shipped catalog (bundled-configs.ts). They are intentionally not ratcheted.
     const NOT_SHIPPED: &[&str] = &[
+        // ESP32-C5 has a local DevKitC-1 UART/GPIO smoke, but no hosted catalog
+        // entry or executing-fidelity differential yet.
+        "esp32c5",
         // ATmega328PB has a CPU-level USART1/PB5 smoke but no catalog board,
         // package-pad map, or executing-fidelity differential yet.
         "atmega328pb",
@@ -580,6 +583,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // Promote when a NUCLEO-G431RB catalog board and a bench differential
         // exist.
         "stm32g431rb",
+        // NUCLEO-G491RE has a local LD2 GPIO smoke but is not registered in
+        // the bundled Playground catalog and has no executing-fidelity
+        // differential or silicon capture. Keep it outside SHIPPED until
+        // those catalog and differential requirements are met.
+        "stm32g491re",
         "stm32f401cb",
         "stm32f401cc",
         "stm32f401cd",

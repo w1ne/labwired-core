@@ -1,0 +1,48 @@
+# LabWired — STM32G491RE (STM32G491RET6, NUCLEO-G491RE target).
+# Demand rank #4: the MCU is in the “other STM32” group (13%); the board class
+# is rank #4 among kit types, STM32 Nucleo/Discovery (23%). See
+# examples/nucleo-g491re/vendor-status.md for live availability evidence.
+#
+# This descriptor deliberately covers the board smoke path only: G4 RCC,
+# GPIOA/GPIOC, and their attached board LED/button. Other MCU peripherals and
+# the board's ST-LINK/USB circuitry are not claimed here.
+# Geometry: ST UM2505 lists STM32G491RET6 at 170 MHz, 512 KiB flash, and
+# 96 KiB SRAM1+SRAM2. The separate 16 KiB CCM SRAM at 0x10000000 (aliased at
+# 0x20018000) is intentionally not declared. Peripheral addresses/register
+# layout follow RM0440; the reused schemas/model profiles are exercised G4 IP.
+name: "stm32g491re"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 170_000_000
+io_voltage_v: 3.3
+
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "96KB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    config:
+      debug_schema: "../peripherals/stm32g474re/rcc.yaml"
+      profile: "stm32g4"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 0 }
+    config:
+      debug_schema: "../peripherals/stm32g474re/gpioa.yaml"
+      profile: "stm32v2"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x48000800
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 2 }
+    config:
+      debug_schema: "../peripherals/stm32g474re/gpioc.yaml"
+      profile: "stm32v2"

@@ -66,6 +66,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-u575zi/star-catcher-smoke.yaml
             system: examples/nucleo-u575zi/star-catcher-system.yaml
+          - id: nucleo-g491re
+            crate: firmware-nucleo-g491re-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-g491re/io-smoke.yaml
+            system: configs/systems/nucleo-g491re.yaml
           - id: rp2040-pio
             crate: firmware-rp2040-pio-onboarding
             target: thumbv6m-none-eabi
