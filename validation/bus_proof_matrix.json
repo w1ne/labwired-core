@@ -206,6 +206,26 @@
         "lane": "none"
       }
     },
+    "esp32-devkitc-32e-uart1": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "examples/esp32-devkitc-32e-uart1/uart1-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "committed onboarding evidence (examples/esp32-devkitc-32e-uart1/evidence/run) shows the script PASSES: UART0 printed ESP32_DEVKITC32E_UART1_TX_OK and GPIO16 (UART1 TX) recorded >=32 edges. Firmware is PlatformIO-built, not a committed ELF, and no required CI lane invokes this script, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare or prove a SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare an I2C controller or attach an external I2C device.",
+        "lane": "none"
+      }
+    },
     "esp32c3": {
       "in_boards": true,
       "uart": {

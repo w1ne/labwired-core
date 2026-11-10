@@ -39,6 +39,10 @@
       "expect": "TIER1 clock PASS",
       "note": "Narrow DevKitC-32E onboarding profile of the same LX6 SoC as `esp32`. Runs the committed classic-ESP32 TIER1 image (docs-runnable expect matches parent `esp32`). The PlatformIO deep/light-sleep sketches under docs/receipts/2026-11-09-esp32-deep-sleep/sketch are not committed ELFs."
     },
+    "esp32-devkitc-32e-uart1": {
+      "how": "needs-build",
+      "why": "UART1 TX onboarding smoke is PlatformIO-built (examples/esp32-devkitc-32e-uart1/firmware), not a committed ELF. Committed evidence under examples/esp32-devkitc-32e-uart1/evidence/run shows uart1-smoke.yaml passed (ESP32_DEVKITC32E_UART1_TX_OK and >=32 GPIO16 edges)."
+    },
     "esp32s3": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/esp32s3.elf",
