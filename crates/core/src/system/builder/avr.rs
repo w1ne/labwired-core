@@ -73,6 +73,8 @@ pub(super) fn build(
             cpu.push_i2c_slave(dev);
         }
     }
+    // The watchdog's 128 kHz period is counted in core clocks.
+    cpu.set_wdt_cpu_hz(bus.cpu_hz);
     let boxed: Box<dyn Cpu> = Box::new(cpu);
     let machine = Machine::new(boxed, bus);
 
