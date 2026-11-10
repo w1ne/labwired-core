@@ -507,6 +507,10 @@ pub const AVR_MEGA_ADC_INPUT_BASE: u64 = 0x0001_0200;
 /// AVcc on the 5 V boards this part is modelled for, and the internal bandgap.
 const AVR_AVCC_MV: u32 = 5000;
 const AVR_BANDGAP_MV: u32 = 1100;
+/// ATmega328P temperature sensor output at +25 °C, typical (table 24-2).
+const AVR_TEMP_SENSOR_25C_MV: u32 = 314;
+/// `adc_convert`'s channel marker for the temperature sensor (mux 0x08).
+const AVR_ADC_TEMP_SENSOR: u8 = 0xFE;
 
 pub const VEC_TIMER0_OVF: u32 = 17; // datasheet 1-based; @0x40 = __vector_16
 /// TWI_vect is `_VECTOR(24)` → PC 0x60; pending bit uses vec=25 (`(vec-1)*4`).
@@ -1186,6 +1190,12 @@ impl Avr {
             | timer1::ADDR_TCCR1A..=0x0082
             | 0x0084..=timer1::ADDR_OCR1BH => {
                 self.timer1_write(addr, value);
+                // TCCR1A/B and TIMSK1 decide whether ICP1 must be watched.
+                if !self.is_mega()
+                    && matches!(addr, timer1::ADDR_TIMSK1 | timer1::ADDR_TCCR1A | 0x0081)
+                {
+                    self.ext_config_changed(bus);
+                }
                 Ok(())
             }
             0x00C0 => {
@@ -1504,8 +1514,11 @@ impl Avr {
     /// One 10-bit conversion of the channel ADMUX selects.
     ///
     /// MUX 0..7 are the input pins, whose millivolts come from the bus-side
-    /// `avr_adc` model; 0x0E is the 1.1 V bandgap and 0x0F is GND. The other mux
-    /// codes (the temperature sensor at 0x08) are not modelled and read 0.
+    /// `avr_adc` model; 0x08 is the temperature sensor, 0x0E is the 1.1 V
+    /// bandgap and 0x0F is GND. The reserved mux codes read 0. The temperature
+    /// sensor gives the datasheet's typical 314 mV at +25 °C (ATmega328P
+    /// table 24-2, with the 1.1 V reference: 292). The die is held at +25 °C,
+    /// and the part-to-part offset (about ±10 °C uncalibrated) is not modelled.
     /// REFS selects the reference: 11 is the internal 1.1 V, anything else is
     /// taken as 5 V AVcc (AREF is not a modelled pin).
     ///
@@ -1524,12 +1537,14 @@ impl Avr {
         } else {
             match self.admux & 0x0F {
                 m @ 0..=7 => Some(m),
+                0x08 => Some(AVR_ADC_TEMP_SENSOR),
                 0x0E => None,
                 _ => Some(0xFF),
             }
         };
         let input_mv: u32 = match channel {
             Some(0xFF) => 0,
+            Some(AVR_ADC_TEMP_SENSOR) => AVR_TEMP_SENSOR_25C_MV,
             Some(ch) => {
                 let base = self.model.adc_input_base() + u64::from(ch) * 2;
                 let lo = bus.read_u8(base)?;
@@ -3062,6 +3077,15 @@ mod tests {
             cpu.step(&mut bus, &[], &cfg).unwrap();
         }
         assert_eq!(u16::from(cpu.adch) << 8 | u16::from(cpu.adcl), 225);
+
+        // REFS=11, MUX=0x08 is the temperature sensor against 1.1 V: the
+        // typical 314 mV at +25 °C, 314 * 1024 / 1100 = 292.
+        cpu.load_words(0, &[0xEC08, 0x9300, 0x007C, 0xEC10, 0x9310, 0x007A, 0xCFFF]);
+        cpu.set_pc(0);
+        for _ in 0..4 {
+            cpu.step(&mut bus, &[], &cfg).unwrap();
+        }
+        assert_eq!(u16::from(cpu.adch) << 8 | u16::from(cpu.adcl), 292);
     }
 
     #[test]
