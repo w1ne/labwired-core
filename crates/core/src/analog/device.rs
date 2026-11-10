@@ -43,11 +43,13 @@
 //! equations. BJT transit times use `TTF*`/`TTR*`, and terminal resistances use
 //! `TRB*`/`TRBM*`/`TIRB*`/`TRC*`/`TRE*`. JFET level-1 channel `VTO`/`BETA`
 //! use `VTOTC`/`TCV` and `BETATCE`/`BEX` when an instance `TEMP` is supplied,
-//! and its gate junctions use the diode `EG`/`XTI` and depletion laws;
-//! MOSFET temperature laws are not modeled. Other parameters are taken at [`TEMPERATURE_K`] as written. A `.model`
-//! line may carry unmodelled
-//! parameters (real vendor models do) and they are accepted and ignored; see
-//! [`super::netlist`]. Diode soft recovery covers the
+//! and its gate junctions use the diode `EG`/`XTI` and depletion laws. MOSFET
+//! instance `TEMP` applies the level-1 `KP`, `PHI`, `VTO`, bulk `IS`, `PB`, and
+//! junction-capacitance temperature laws. Parameters without a documented
+//! temperature law are taken at [`TEMPERATURE_K`] as written. Self-heating is
+//! not modeled. A `.model` line may carry unmodelled parameters (real vendor
+//! models do) and they are accepted and ignored; see [`super::netlist`]. Diode
+//! soft recovery covers the
 //! first-order `VP` charge state. Other recovery models and stored charge in
 //! unsupported junctions still require `adapter: external_process` with ngspice.
 //!

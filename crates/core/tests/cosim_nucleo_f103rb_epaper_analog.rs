@@ -46,6 +46,59 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+/// Independent level-1 NMOS load line using the ngspice `mos1temp` laws for
+/// KP, PHI, and VTO. Source and bulk are both grounded, so this isolates the
+/// model's temperature adjustment from body bias.
+fn mosfet_drain_voltage_at_temperature(temperature_c: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const GATE_V: f64 = 3.0;
+    const VTO: f64 = 1.0;
+    const KP_A_PER_V2: f64 = 20e-6;
+    const GAMMA: f64 = 0.4;
+    const PHI: f64 = 0.65;
+    const W_M: f64 = 100e-6;
+    const L_M: f64 = 10e-6;
+    const LAMBDA_PER_V: f64 = 0.02;
+    const TNOM_C: f64 = 25.0;
+
+    let bandgap = |temperature_k: f64| {
+        1.16 - 7.02e-4 * temperature_k * temperature_k / (temperature_k + 1108.0)
+    };
+    let kelvin = temperature_c + 273.15;
+    let nominal_kelvin = TNOM_C + 273.15;
+    let ratio = kelvin / nominal_kelvin;
+    let vt = 1.380_649e-23 * kelvin / 1.602_176_634e-19;
+    let nominal_vt = 1.380_649e-23 * nominal_kelvin / 1.602_176_634e-19;
+    let phi_t = PHI * ratio
+        - vt * (3.0 * ratio.ln() + bandgap(nominal_kelvin) / nominal_vt - bandgap(kelvin) / vt);
+    let vto_t = VTO
+        + GAMMA * (phi_t.sqrt() - PHI.sqrt())
+        + 0.5 * (phi_t - PHI)
+        + 0.5 * (bandgap(nominal_kelvin) - bandgap(kelvin));
+    let kp_t = KP_A_PER_V2 / ratio.powf(1.5);
+    let overdrive = GATE_V - vto_t;
+    let beta = kp_t * W_M / L_M;
+    let drain_current = |vds: f64| {
+        if vds < overdrive {
+            beta * (1.0 + LAMBDA_PER_V * vds) * vds * (overdrive - 0.5 * vds)
+        } else {
+            0.5 * beta * (1.0 + LAMBDA_PER_V * vds) * overdrive * overdrive
+        }
+    };
+    let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * drain_current(vds);
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    (low + high) / 2.0
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -219,6 +272,120 @@ fn nucleo_f103rb_epaper_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
         "the analog overlay must retain the panel's chip-select wiring"
     );
     assert_stm32f103_generic_analog_profile(profile, &system_path, "nucleo-f103rb-epaper", &[]);
+}
+
+/// The NUCLEO-F103RB e-paper profile routes generic level-1 MOSFET
+/// temperature behavior through PA2/PA3 while its unrelated NTC and diode
+/// remain on PA0/PA1. The two MOSFETs share one model and bias but carry
+/// distinct instance temperatures, so omitting `mos1temp` cannot pass.
+#[test]
+fn nucleo_f103rb_epaper_mosfet_temperature_reaches_pa2_pa3_adc1_end_to_end() {
+    let system_path = root("configs/systems/nucleo-f103rb-epaper.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load NUCLEO-F103RB e-paper profile");
+    assert_eq!(profile.name, "nucleo-f103rb-epaper");
+    assert_eq!(profile.external_devices.len(), 1);
+    assert_eq!(profile.external_devices[0].id, "epaper");
+    let analog = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb-epaper/analog-mosfet-temperature-system.yaml",
+    ))
+    .expect("load generic NTC, diode, and temperature-paired MOSFET netlists");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build e-paper board bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries the generic NTC, diode, and MOSFET models");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "each netlist output must resolve through its STM32F103 PA0..PA3 ADC route"
+    );
+    for channel in 0..=4 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set the unrelated NTC to its nominal temperature");
+    let cycles = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve the generic NTC, diode, and MOSFET netlists");
+    assert_eq!(steps.len(), 3, "all three netlists cross the 1 us boundary");
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+    let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+    assert!(
+        (ntc_v - 1.65).abs() < 1e-9,
+        "the NTC divider is half scale: {ntc_v} V"
+    );
+    let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+    let expected_diode_v = diode_load_line_voltage();
+    assert!(
+        (diode_v - expected_diode_v).abs() < 2e-5,
+        "the unrelated Shockley branch is {expected_diode_v} V, got {diode_v} V"
+    );
+
+    let mosfet_samples = [
+        (2, 25.0, "board.analog.pa2_volts"),
+        (3, 85.0, "board.analog.pa3_volts"),
+    ]
+    .map(|(channel, temperature_c, path)| {
+        let volts = signal_voltage(&session, path);
+        let expected = mosfet_drain_voltage_at_temperature(temperature_c);
+        assert!(
+            (volts - expected).abs() < 1e-3,
+            "the {temperature_c} °C MOSFET load line should be {expected} V, got {volts} V"
+        );
+        let expected_count = expected_adc_count(expected);
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            expected_count,
+            "the solved MOSFET drain voltage must seed ADC1 channel {channel}"
+        );
+        assert_eq!(
+            stm32f103_adc_convert(&mut bus, channel),
+            u32::from(expected_count),
+            "firmware-visible ADC1 channel {channel} must report the MOSFET load line"
+        );
+        (temperature_c, volts, expected_count)
+    });
+    assert!(
+        mosfet_samples[1].1 > mosfet_samples[0].1 + 0.04,
+        "reduced hot-channel mobility must raise the drain voltage: {mosfet_samples:?}"
+    );
+    assert!(
+        mosfet_samples[1].2 > mosfet_samples[0].2 + 40,
+        "the hot MOSFET must produce a distinct firmware ADC result: {mosfet_samples:?}"
+    );
+    for (channel, volts) in [(0, ntc_v), (1, diode_v)] {
+        let expected_count = expected_adc_count(volts);
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            expected_count,
+            "the unrelated netlist must stay on ADC1 channel {channel}"
+        );
+        assert_eq!(
+            stm32f103_adc_convert(&mut bus, channel),
+            u32::from(expected_count),
+            "firmware-visible ADC1 channel {channel} must retain its own analog result"
+        );
+    }
+    assert_eq!(
+        adc_channel_count(&mut bus, 4),
+        0xFFFF,
+        "the neighboring ADC1 channel remains undriven"
+    );
 }
 
 /// The same unrelated analog devices and F1 ADC route must work on the bare
