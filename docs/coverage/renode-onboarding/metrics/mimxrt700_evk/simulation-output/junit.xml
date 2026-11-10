@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.466512">
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.466322">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="7500362d2feb7248589baa53b96fba6e7274c0c100e3cfb4e16ec8f975c6a1de"/>
+    <property name="firmware_hash" value="b69c59bb1ff623a30b0ee3089de6d34dc471b54d7e5466ee62e8bd737d4f0c57"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.466512">
+  <testcase classname="labwired" name="run" time="0.466322">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE" time="0.000000">
   </testcase>
@@ -13,9 +13,9 @@
   </testcase>
   <testcase classname="labwired" name="assertion 3: uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ct…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 4: memory_value: @0x20000000=0x143" time="0.000000">
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x20000008=0x143" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 5: memory_value: @0x20000004=0x7000001f" time="0.000000">
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x2000000c=0x7000003f" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>

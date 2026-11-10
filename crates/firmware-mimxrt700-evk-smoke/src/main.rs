@@ -2,16 +2,20 @@
 #![no_main]
 
 use core::ptr::{read_volatile, write_volatile};
-use cortex_m_rt::entry;
+use core::sync::atomic::{AtomicU32, Ordering};
+use cortex_m_rt::{entry, exception};
 use panic_halt as _;
 
-const RESULT: *mut u32 = 0x2000_0000 as *mut u32;
-const PASS: *mut u32 = 0x2000_0004 as *mut u32;
+const RESULT: *mut u32 = 0x2000_0008 as *mut u32;
+const PASS: *mut u32 = 0x2000_000C as *mut u32;
 
 const FLEXCOMM0: usize = 0x4011_0000;
+const NVIC_ISER0: usize = 0xE000_E100;
+const NVIC_ICER0: usize = 0xE000_E180;
 const NVIC_ISPR0: usize = 0xE000_E200;
 const NVIC_ICPR0: usize = 0xE000_E280;
 const FLEXCOMM0_IRQ_BIT: u32 = 1 << 7;
+const FLEXCOMM0_IRQN: i16 = 7;
 const LPUART_VERID: usize = 0x00;
 const LPUART_PARAM: usize = 0x04;
 const LPUART_BAUD: usize = 0x10;
@@ -36,6 +40,8 @@ const FIFO_RXFE: u32 = 1 << 3;
 const WATER_RXCOUNT_SHIFT: u32 = 24;
 const ISTAT_UARTRX: u32 = 1 << 1;
 
+static IRQ_ENTRY: AtomicU32 = AtomicU32::new(0);
+
 fn rd(off: usize) -> u32 {
     unsafe { read_volatile((FLEXCOMM0 + off) as *const u32) }
 }
@@ -50,6 +56,10 @@ fn nvic_irq_pending() -> bool {
 
 fn clear_nvic_irq_pending() {
     unsafe { write_volatile(NVIC_ICPR0 as *mut u32, FLEXCOMM0_IRQ_BIT) }
+}
+
+fn enable_nvic_irq() {
+    unsafe { write_volatile(NVIC_ISER0 as *mut u32, FLEXCOMM0_IRQ_BIT) }
 }
 
 fn wait_nvic_irq_pending(expected: bool) -> bool {
@@ -79,8 +89,8 @@ fn hex(v: u32) {
     }
 }
 
-/// Exercise the imported LPUART RX FIFO, LP_FLEXCOMM receive status, and its
-/// CPU0 NVIC pending line (FLEXCOMM0 IRQ 7).
+/// Exercise the imported LPUART RX FIFO, LP_FLEXCOMM receive status, CPU0
+/// NVIC pending line, and exception delivery (FLEXCOMM0 IRQ 7).
 fn smoke_lpuart_rx() -> bool {
     // Leave TE on for the later console output, but disable TIE so the shared
     // FLEXCOMM line reflects the receive interrupt only. Clear the earlier TX
@@ -112,6 +122,13 @@ fn smoke_lpuart_rx() -> bool {
     clear_nvic_irq_pending();
     let rx_repend = wait_nvic_irq_pending(true);
 
+    // Enable the already-pending external IRQ and require the Cortex-M
+    // exception path to call DefaultHandler. The handler disables IRQ 7
+    // before returning so the still-asserted RX level cannot retrigger it.
+    enable_nvic_irq();
+    let irq_handler_entered =
+        (0..10_000).any(|_| IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_IRQN as u32 + 1);
+
     let first = rd(LPUART_DATA) & 0xFF;
     let second_still_queued = rd(LPUART_STAT) & STAT_RDRF != 0;
     wr(LPUART_CTRL, CTRL_TE | CTRL_RE);
@@ -133,6 +150,7 @@ fn smoke_lpuart_rx() -> bool {
         && rx_masked
         && rx_asserted
         && rx_repend
+        && irq_handler_entered
         && first == b'R' as u32
         && second_still_queued
         && rx_masked_with_data
@@ -165,6 +183,8 @@ fn smoke_lpuart_rx() -> bool {
     putc(if irq_masked_released { b'1' } else { b'0' });
     putc(if rx_unmasked { b'1' } else { b'0' });
     putc(if irq_released { b'1' } else { b'0' });
+    puts(" handler=");
+    putc(if irq_handler_entered { b'1' } else { b'0' });
     puts(if ok { " ok\r\n" } else { " FAIL\r\n" });
     ok
 }
@@ -219,6 +239,9 @@ fn main() -> ! {
     if smoke_lpuart_rx() {
         pass |= 1 << 4;
     }
+    if IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_IRQN as u32 + 1 {
+        pass |= 1 << 5;
+    }
 
     puts("flexcomm0 pselid=");
     hex(pselid_reset);
@@ -244,5 +267,13 @@ fn main() -> ! {
 
     loop {
         unsafe { core::arch::asm!("nop", options(nomem, nostack)) };
+    }
+}
+
+#[exception]
+unsafe fn DefaultHandler(irqn: i16) {
+    if irqn == FLEXCOMM0_IRQN {
+        IRQ_ENTRY.store(irqn as u32 + 1, Ordering::Relaxed);
+        unsafe { write_volatile(NVIC_ICER0 as *mut u32, FLEXCOMM0_IRQ_BIT) };
     }
 }
