@@ -51,6 +51,57 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+/// Independent forward-active Gummel–Poon load line, with optional Early effect.
+fn bjt_collector_voltage(base_drive_v: f64, early_voltage_v: Option<f64>) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-15;
+    const BF: f64 = 100.0;
+    const BR: f64 = 4.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let early_factor = early_voltage_v.map_or(1.0, |vaf| 1.0 - vbc / vaf);
+        let transport = IS_A * (forward - reverse) * early_factor;
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = (low + high) / 2.0;
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        (low + high) / 2.0
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = (low + high) / 2.0;
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe((low + high) / 2.0)
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -156,5 +207,130 @@ fn nucleo_g071rb_ntc_and_diode_netlists_reach_pa0_pa1_gpio_inputs() {
             "PA0 must follow the solved NTC voltage and retain threshold state"
         );
         assert_eq!(gpioa_idr & 2, 0, "PA1 must read low below the assumed VIL");
+    }
+}
+
+#[test]
+fn nucleo_g071rb_bjt_early_effect_reaches_pa2_pa3_gpio_inputs() {
+    let system_path = root("configs/systems/nucleo-g071rb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-G071RB profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-g071rb/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC divider and Shockley diode");
+    let bjt =
+        SystemManifest::from_file(root("examples/nucleo-g071rb/analog-bjt-early-effect.yaml"))
+            .expect("load matched generic Gummel–Poon NPN branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(bjt.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let mut chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G071 descriptor");
+    // Simulation assumptions only: no G071 threshold values are claimed.
+    chip.io_voltage_v = Some(3.3);
+    chip.gpio_input_thresholds = Some(GpioInputThresholds { vil: 0.3, vih: 0.7 });
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-G071RB bus");
+    for (pad, bit) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(
+            SystemBus::resolve_pin_idr_pub(&bus, pad),
+            Some((GPIOA_IDR, bit)),
+            "{pad} must resolve to its modeled GPIOA IDR bit"
+        );
+    }
+    bus.write_u32(RCC_IOPENR, 1).expect("enable GPIOA clock");
+    let moder = bus.read_u32(GPIOA_MODER).expect("read GPIOA mode");
+    bus.write_u32(GPIOA_MODER, moder & !0xFF)
+        .expect("configure PA0-PA3 as digital inputs");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched BJT models");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must route independently to PA0 through PA3"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", -10.0)
+        .expect("set independent NTC source");
+    session
+        .set_signal_number("ui.bjt.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    let vil_v = 0.3 * 3.3;
+    let vih_v = 0.7 * 3.3;
+    let mut early_high = false;
+    let mut reference_high = false;
+    let mut cycles = 0;
+    for base_drive_v in [0.0_f64, 0.7, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the unrelated and matched device netlists");
+        assert_eq!(steps.len(), 4, "all four analog branches solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.gpio_in.pa0");
+        let diode_v = signal_voltage(&session, "board.gpio_in.pa1");
+        let early_v = signal_voltage(&session, "board.gpio_in.pa2");
+        let reference_v = signal_voltage(&session, "board.gpio_in.pa3");
+        let ntc_resistance = ntc_resistance_ohms(-10.0);
+        let expected_ntc_v = 3.3 * ntc_resistance / (10_000.0 + ntc_resistance);
+        let expected_diode_v = diode_load_line_voltage();
+        let expected_early_v = bjt_collector_voltage(base_drive_v, Some(50.0));
+        let expected_reference_v = bjt_collector_voltage(base_drive_v, None);
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "unrelated NTC voltage is stable"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated diode load line is stable"
+        );
+        assert!(
+            (early_v - expected_early_v).abs() < 5e-5,
+            "VAF=50 Gummel–Poon load line at base drive {base_drive_v} V should be {expected_early_v} V, got {early_v} V"
+        );
+        assert!(
+            (reference_v - expected_reference_v).abs() < 5e-5,
+            "no-Early-effect Gummel–Poon load line at base drive {base_drive_v} V should be {expected_reference_v} V, got {reference_v} V"
+        );
+        if base_drive_v >= 0.7 {
+            assert!(
+                early_v < reference_v - 0.005,
+                "finite VAF increases forward collector current and lowers collector voltage: {early_v} V vs {reference_v} V"
+            );
+        }
+
+        if early_v >= vih_v {
+            early_high = true;
+        } else if early_v <= vil_v {
+            early_high = false;
+        }
+        if reference_v >= vih_v {
+            reference_high = true;
+        } else if reference_v <= vil_v {
+            reference_high = false;
+        }
+        let idr = bus.read_u32(GPIOA_IDR).expect("read GPIOA input levels");
+        assert_ne!(idr & 1, 0, "the cold NTC remains above assumed VIH on PA0");
+        assert_eq!(
+            idr & 2,
+            0,
+            "the Shockley diode remains below assumed VIL on PA1"
+        );
+        assert_eq!(
+            idr & 4 != 0,
+            early_high,
+            "PA2 follows the Early-effect collector voltage"
+        );
+        assert_eq!(
+            idr & 8 != 0,
+            reference_high,
+            "PA3 follows the no-Early-effect collector voltage"
+        );
     }
 }
