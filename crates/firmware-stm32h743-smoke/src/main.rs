@@ -20,6 +20,7 @@ const USART_ISR: *const u32 = (USART3 + 0x1C) as *const u32;
 const USART_RDR: *const u32 = (USART3 + 0x24) as *const u32;
 const USART_TDR: *mut u32 = (USART3 + 0x28) as *mut u32;
 const USART_RXNEIE: u32 = 1 << 5;
+const USART_TXEIE: u32 = 1 << 7;
 const NVIC_ISPR1: *const u32 = 0xE000_E204 as *const u32;
 const NVIC_ICPR1: *mut u32 = 0xE000_E284 as *mut u32;
 const USART3_IRQ_BIT: u32 = 1 << (39 - 32);
@@ -119,6 +120,48 @@ fn check_uart_rx() {
     }
 }
 
+#[cfg(feature = "nucleo-h753zi-usart3-irq")]
+fn check_uart_txe_irq() {
+    let mut txe_ready = false;
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(USART_ISR) } & TXE != 0 {
+            txe_ready = true;
+            break;
+        }
+    }
+
+    // USART3_IRQn is 39 on STM32H753; the imported profile wires this line.
+    unsafe { write_volatile(NVIC_ICPR1, USART3_IRQ_BIT) };
+    let txe_irq_isolated = txe_ready && unsafe { read_volatile(NVIC_ISPR1) } & USART3_IRQ_BIT == 0;
+    let cr1 = unsafe { read_volatile(USART_CR1) };
+    unsafe { write_volatile(USART_CR1, cr1 | USART_TXEIE) };
+    let mut txe_irq_asserted = false;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR1) } & USART3_IRQ_BIT != 0 {
+            txe_irq_asserted = true;
+            break;
+        }
+    }
+
+    unsafe {
+        write_volatile(USART_CR1, cr1 & !USART_TXEIE);
+        write_volatile(NVIC_ICPR1, USART3_IRQ_BIT);
+    }
+    let mut txe_irq_released = true;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR1) } & USART3_IRQ_BIT != 0 {
+            txe_irq_released = false;
+            break;
+        }
+    }
+
+    if txe_irq_isolated && txe_irq_asserted && txe_irq_released {
+        send(b"usart3 txe_irq=isolated,asserted,released ok\r\n");
+    } else {
+        send(b"usart3 txe_irq=fail fail\r\n");
+    }
+}
+
 fn set_led(on: bool) {
     let bit = if on { LED } else { LED << 16 };
     unsafe { write_volatile((GPIOB + BSRR) as *mut u32, bit) };
@@ -160,6 +203,8 @@ fn main() -> ! {
     send(b"STM32H7 register smoke\r\n");
     #[cfg(feature = "nucleo-h753zi-rx")]
     check_uart_rx();
+    #[cfg(feature = "nucleo-h753zi-usart3-irq")]
+    check_uart_txe_irq();
     loop {
         let on = !led_is_on();
         set_led(on);

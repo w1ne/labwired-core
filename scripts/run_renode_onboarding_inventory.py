@@ -896,7 +896,7 @@ SMOKE_MAPPINGS = {
     "nucleo_h753zi": {
         "crate": "firmware-stm32h743-smoke",
         "target": "thumbv7em-none-eabi",
-        "features": "nucleo-h753zi-rx",
+        "features": "nucleo-h753zi-usart3-irq",
         "script": "examples/renode-onboarding/nucleo_h753zi-smoke.yaml",
     },
     "stm32l071": {

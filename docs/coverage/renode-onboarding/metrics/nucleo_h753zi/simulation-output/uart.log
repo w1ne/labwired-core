@@ -1,5 +1,6 @@
 STM32H7 register smoke
 usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,released ok
+usart3 txe_irq=isolated,asserted,released ok
 gpiob0=high
 gpiob0=low
 gpiob0=high
