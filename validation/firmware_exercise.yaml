@@ -84,6 +84,10 @@ chips:
         fw: esp32s3-devkitc-1-n16r8-bme280
         ev: "examples/esp32s3-devkitc-1-n16r8-bme280/evidence (committed local onboarding smoke)"
         gate: nightly
+      - what: "Arduino Nano ESP32 (ABX00092) + BME280: chip ID and raw temperature read over I2C0 (A4/A5 = GPIO11/GPIO12)"
+        fw: arduino-nano-esp32-bme280
+        ev: "examples/arduino-nano-esp32-bme280/evidence (committed local onboarding smoke)"
+        gate: nightly
     advanced_unit_only: [aes, ds, hmac, rsa, rng, sha, i2s, lcd_cam, sdmmc, usb_otg, gpspi,
                          pcnt, io_mux, extmem, spi_mem_flash, sens, system,
                          core1_control, crosscore_ipi]
@@ -219,8 +223,12 @@ chips:
   # ── esp32s3 board variant (same die + wiring) and shares its row.
   - id: esp32c6
     arch: riscv32imac
-    headline: "Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its declared classes. clock and irq are real engines, not register stand-ins — the native PCR enforces CLK_EN (gated UART0 reads back 0, then recovers) and interrupt_core0+intpri route both the software doorbell and UART0's peripheral source into real mcause traps. Beyond the rubric only io_mux and hp_sys remain — SVD-derived declarative register files with no behavioural engine."
-    functional: []
+    headline: "Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its declared classes. The ESP32-C6-DevKitC-1-N8 BME280 smoke reads sensor ID and raw temperature on the board model's GPIO6/7 I2C0 route; this pin mapping is not silicon-compared. clock and irq are real engines, not register stand-ins — the native PCR enforces CLK_EN (gated UART0 reads back 0, then recovers) and interrupt_core0+intpri route both the software doorbell and UART0's peripheral source into real mcause traps. Beyond the rubric only io_mux and hp_sys remain — SVD-derived declarative register files with no behavioural engine."
+    functional:
+      - what: "ESP32-C6-DevKitC-1-N8 BME280 ID and raw-temperature read on the model's GPIO6/7 I2C0 route"
+        fw: esp32c6-devkitc-1-n8-bme280
+        ev: "examples/esp32c6-devkitc-1-n8-bme280/evidence/"
+        gate: nightly
     advanced_unit_only: []
     advanced_dead: []
     shim:

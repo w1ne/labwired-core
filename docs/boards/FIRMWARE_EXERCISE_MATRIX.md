@@ -187,7 +187,10 @@ _No tier1 fixture. The strict-onboarding snake lab is the only firmware: SPIM22 
 
 ### `esp32c6`
 
-_Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its declared classes. clock and irq are real engines, not register stand-ins — the native PCR enforces CLK_EN (gated UART0 reads back 0, then recovers) and interrupt_core0+intpri route both the software doorbell and UART0's peripheral source into real mcause traps. Beyond the rubric only io_mux and hp_sys remain — SVD-derived declarative register files with no behavioural engine._
+_Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its declared classes. The ESP32-C6-DevKitC-1-N8 BME280 smoke reads sensor ID and raw temperature on the board model's GPIO6/7 I2C0 route; this pin mapping is not silicon-compared. clock and irq are real engines, not register stand-ins — the native PCR enforces CLK_EN (gated UART0 reads back 0, then recovers) and interrupt_core0+intpri route both the software doorbell and UART0's peripheral source into real mcause traps. Beyond the rubric only io_mux and hp_sys remain — SVD-derived declarative register files with no behavioural engine._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- ESP32-C6-DevKitC-1-N8 BME280 ID and raw-temperature read on the model's GPIO6/7 I2C0 route — `esp32c6-devkitc-1-n8-bme280` · examples/esp32c6-devkitc-1-n8-bme280/evidence/ (nightly CI)
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `io_mux` (configs/chips/esp32c6.yaml:491 (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path.

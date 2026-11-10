@@ -1,0 +1,27 @@
+# Espressif ESP32-C6-DevKitC-1-N8 with Adafruit BME280 STEMMA QT breakout.
+# Board revision 1.2: UART0 reaches the USB-to-UART bridge on GPIO16/17;
+# BME280 is attached to I2C0 on exposed GPIO6 (SDA) / GPIO7 (SCL).
+# SIM-DERIVED. Wi-Fi/802.15.4, native USB, and the WS2812 LED are outside this
+# smoke's modelled scope. The addressable LED is intentionally not declared as
+# a plain GPIO LED.
+
+name: "esp32c6-devkitc-1-n8-bme280"
+chip: "../chips/esp32c6.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO6"
+      scl: "GPIO7"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "button_boot"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 9
+    signal: "input"
+    active_high: false
