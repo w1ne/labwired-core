@@ -690,6 +690,28 @@
       "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
       "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
     },
+    "stm32f103rb-nucleo-bme280-smoke": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "examples/nucleo-f103rb-bme280/onboarding-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "committed onboarding evidence (examples/nucleo-f103rb-bme280/evidence) shows the script PASSES: USART2 printed NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 and gpioa:5 (LD2) recorded >=32 edges. Firmware is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF, and no required CI lane invokes this script, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare or prove a SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "shallow",
+        "file": "examples/nucleo-f103rb-bme280/onboarding-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "the smoke firmware reads BME280.CHIP_ID (register 0xD0) over I2C1 at 0x77 (Arduino D15/D14, PB8/PB9) and prints ID=0x60 on USART2. That is a firmware-driven I2C transaction observed via the UART marker, not a dedicated I2C capture assertion, and no required CI lane runs the script.",
+        "lane": "none"
+      }
+    },
     "stm32f103r8": {
       "in_boards": false,
       "uart": {
