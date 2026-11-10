@@ -96,7 +96,11 @@ _tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C 
 
 ### `esp32-devkitc-32e-gpio-smoke`
 
-_Narrow ESP32-DevKitC-32E onboarding profile (GPIO23, UART0, I2C0). docs/receipts/2026-11-09-esp32-deep-sleep records stock Arduino-ESP32 timer-wake deep sleep printing LW_DS_OK (bootCount 1→2→3 across DEEPSLEEP_RESET, RTC slow memory kept) and light sleep printing LW_LS_OK. Firmware is PlatformIO-built, not a committed ELF; those receipts are not a required CI lane. The committed system attaches no external I2C device. No beyond-rubric block is listed for this slice._
+_Narrow ESP32-DevKitC-32E onboarding profile (GPIO23, UART0, I2C0). Separate local receipts under `docs/receipts/2026-11-09-esp32-deep-sleep/` cover timer-wake deep sleep and light sleep; they are not a CI lane. This system attaches no external I2C device; see the separate BME280 profile below._
+
+### `esp32-devkitc-32e-bme280`
+
+_ESP32 is demand rank #1. The exact ESP32-DevKitC-32E system attaches an Adafruit BME280 at `0x77` to I2C0 GPIO21/22. The committed PlatformIO smoke reads ID `0x60` and raw temperature `0x082DC0`; GPIO23 toggles only after both reads pass. The smoke requires eight GPIO edges and is wired into the nightly onboarding workflow. Evidence and a copy-paste Arduino example are in `examples/esp32-devkitc-32e-bme280/`. The classic model still installs a legacy BMP280 fixture at `0x76`; the smoke does not address or depend on it._
 
 ### `esp32-devkitc-32e-uart1`
 

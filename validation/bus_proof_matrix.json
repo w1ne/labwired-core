@@ -202,7 +202,7 @@
       },
       "i2c": {
         "state": "none",
-        "gap": "The chip yaml declares I2C0, but configs/systems/esp32-devkitc-32e-gpio-smoke.yaml attaches no external device and the committed sleep receipts do not perform an I2C transaction.",
+        "gap": "This GPIO/sleep profile attaches no external I2C device; see the separate esp32-devkitc-32e-bme280 profile for an I2C transaction.",
         "lane": "none"
       }
     },
@@ -224,6 +224,27 @@
         "state": "none",
         "gap": "This onboarding slice does not declare an I2C controller or attach an external I2C device.",
         "lane": "none"
+      }
+    },
+    "esp32-devkitc-32e-bme280": {
+      "in_boards": false,
+      "uart": {
+        "state": "none",
+        "gap": "This smoke does not assert serial output.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This smoke does not declare or exercise SPI.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "examples/esp32-devkitc-32e-bme280/bme280-smoke.yaml",
+        "test": "gpio_edges",
+        "signal": "The PlatformIO Arduino firmware performs an I2C0 write-pointer/repeated-start read of BME280 register 0xD0 (requires ID 0x60), then reads 0xFA..0xFC (requires raw 0x082DC0). It toggles GPIO23 only after both checks; the CLI smoke requires at least eight GPIO23 edges.",
+        "lane": "core-onboarding-smoke / onboarding-esp32-devkitc-32e-bme280 (nightly + main push; local committed evidence)",
+        "note": "The system explicitly attaches BME280 at 0x77 via GPIO21/22. The classic ESP32 builder also retains a legacy BMP280 fixture at 0x76; this smoke does not address or depend on it."
       }
     },
     "esp32c3": {

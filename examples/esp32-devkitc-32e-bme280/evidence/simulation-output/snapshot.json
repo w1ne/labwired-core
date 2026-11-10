@@ -1,0 +1,61 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      2148503481,
+      1073469424,
+      0,
+      181,
+      3007315967,
+      1061207168,
+      0,
+      181,
+      2148396638,
+      1073469360,
+      0,
+      0,
+      1073472884,
+      0,
+      262176,
+      1073469391
+    ],
+    "pc": 1074289414,
+    "ps": 262176,
+    "window_base": 14,
+    "window_start": 22008,
+    "vecbase": 1074266112
+  },
+  "steps_executed": 50000000,
+  "cycles": 50000000,
+  "instructions": 50000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 50000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 50000000
+    }
+  },
+  "limits": {
+    "max_steps": 50000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "b3474dfa055f94a5a8990571e524009aa86fc34de803c6e7fde8ec9410b69441",
+  "config": {
+    "firmware": "examples/esp32-devkitc-32e-bme280/firmware/.pio/build/devkitc32e_bme280/firmware.elf",
+    "system": "examples/esp32-devkitc-32e-bme280/../../configs/systems/esp32-devkitc-32e-bme280.yaml",
+    "script": "examples/esp32-devkitc-32e-bme280/bme280-smoke.yaml"
+  }
+}

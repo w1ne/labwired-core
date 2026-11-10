@@ -1,0 +1,12 @@
+# A successful BME280 ID + raw-temperature read gates GPIO23 transitions.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/devkitc32e_bme280/firmware.elf"
+  system: "../../configs/systems/esp32-devkitc-32e-bme280.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - gpio_edges:
+      pin: "gpio:23"
+      min_edges: 8
+  - expected_stop_reason: max_steps

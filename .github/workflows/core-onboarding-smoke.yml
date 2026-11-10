@@ -103,6 +103,10 @@ jobs:
             firmware_build_script: examples/arduino-nano-esp32-bme280/firmware/build-firmware.sh
             script: examples/arduino-nano-esp32-bme280/bme280-smoke.yaml
             system: configs/systems/arduino-nano-esp32-bme280.yaml
+          - id: esp32-devkitc-32e-bme280
+            firmware_build_script: examples/esp32-devkitc-32e-bme280/firmware/build-firmware.sh
+            script: examples/esp32-devkitc-32e-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32-devkitc-32e-bme280.yaml
 
     steps:
       - uses: actions/checkout@v4

@@ -112,8 +112,20 @@ chips:
 
   - id: esp32-devkitc-32e-gpio-smoke
     arch: xtensa-lx6
-    headline: "Narrow ESP32-DevKitC-32E onboarding profile (GPIO23, UART0, I2C0). docs/receipts/2026-11-09-esp32-deep-sleep records stock Arduino-ESP32 timer-wake deep sleep printing LW_DS_OK (bootCount 1→2→3 across DEEPSLEEP_RESET, RTC slow memory kept) and light sleep printing LW_LS_OK. Firmware is PlatformIO-built, not a committed ELF; those receipts are not a required CI lane. The committed system attaches no external I2C device. No beyond-rubric block is listed for this slice."
+    headline: "Narrow ESP32-DevKitC-32E onboarding profile (GPIO23, UART0, I2C0). docs/receipts/2026-11-09-esp32-deep-sleep records stock Arduino-ESP32 timer-wake deep sleep printing LW_DS_OK (bootCount 1→2→3 across DEEPSLEEP_RESET, RTC slow memory kept) and light sleep printing LW_LS_OK. Those receipts are local and not a required CI lane. Its system attaches no external I2C device; see the separate esp32-devkitc-32e-bme280 profile for the sensor smoke."
     functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32-devkitc-32e-bme280
+    arch: xtensa-lx6
+    headline: "ESP32-DevKitC-32E profile: committed PlatformIO Arduino smoke explicitly attaches a BME280 on I2C0 GPIO21/22, reads its ID and raw temperature, then gates GPIO23 edges on those reads; nightly onboarding CI runs it. Wi-Fi/Bluetooth and physical pin voltages are outside this slice."
+    functional:
+      - what: "DevKitC-32E I2C0 reads BME280 ID 0x60 and raw temperature 0x082DC0 via GPIO21/22; GPIO23 toggles only after both reads pass"
+        fw: "PlatformIO Arduino: examples/esp32-devkitc-32e-bme280/firmware/src/main.cpp"
+        ev: examples/esp32-devkitc-32e-bme280/bme280-smoke.yaml
+        gate: nightly
     advanced_unit_only: []
     advanced_dead: []
     shim: []
