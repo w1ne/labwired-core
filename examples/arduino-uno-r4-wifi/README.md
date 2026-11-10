@@ -18,8 +18,10 @@ scripts/onboarding_smoke.sh \
 ```
 
 The committed smoke log and UART/GPIO simulator output are under `evidence/`.
-The profile is intentionally limited to RA4M1 SCI2, P102 GPIO, its pin function
-select block, and reset-clock readiness. The UNO R4 WiFi's ESP32-S3
-coprocessor, Wi-Fi/Bluetooth, 12x8 LED matrix, Qwiic connector, USBFS/HID, and
-other MCU peripherals are not described as working here. See
+The base profile is intentionally limited to RA4M1 SCI2, P102 GPIO, its pin
+function select block, and reset-clock readiness. The separate
+[Qwiic BME280 profile](../arduino-uno-r4-wifi-qwiic-bme280/README.md) exercises
+IIC0 through `Wire1`. The UNO R4 WiFi's ESP32-S3 coprocessor, Wi-Fi/Bluetooth,
+12x8 LED matrix, USBFS/HID, and other MCU peripherals remain outside these
+profiles. See
 [`VALIDATION.md`](VALIDATION.md) for the model boundary and sources.

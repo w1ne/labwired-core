@@ -1,0 +1,23 @@
+Processing qwiic (platform: renesas-ra@1.9.0; board: uno_r4_wifi; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/renesas-ra/uno_r4_wifi.html
+PLATFORM: Renesas RA (1.9.0) > Arduino Uno R4 WiFi
+HARDWARE: RA4M1 48MHz, 32KB RAM, 256KB Flash
+DEBUG: Current (cmsis-dap) On-board (cmsis-dap) External (jlink)
+PACKAGES: 
+ - framework-arduinorenesas-uno @ 1.6.0 
+ - tool-bossac @ 1.10901.0 (1.9.1) 
+ - toolchain-gccarmnoneeabi @ 1.70201.0 (7.2.1)
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 22 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Wire
+Building in release mode
+Checking size .pio/build/qwiic/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]  14.4% (used 4732 bytes from 32768 bytes)
+Flash: [==        ]  15.6% (used 41024 bytes from 262144 bytes)
+========================= [SUCCESS] Took 0.58 seconds =========================

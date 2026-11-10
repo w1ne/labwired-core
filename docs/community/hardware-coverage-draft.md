@@ -33,6 +33,7 @@ NRND. The page remains unpublished pending Andrii's approval.
 | **#4 other STM32, 13%** | [STM32G071B-DISCO](../../examples/stm32g071b-disco/README.md); [NUCLEO-H723ZG + BME280](../../examples/nucleo-h723zg-bme280/README.md) | G071B-DISCO USART3 output on the ST-LINK virtual COM route; H723ZG reads BME280 ID `0x60` over I2C1 on PB8/PB9 and gates LD1 pulses on the read | [G071B-DISCO status and stock, checked 2026-11-03](../../examples/stm32g071b-disco/evidence/vendor-status.md); [H723ZG and BME280 status, checked 2026-11-09](../../examples/nucleo-h723zg-bme280/evidence/vendor-status.md) |
 | **#5 RP2040, 12%; RP2350 is the current successor in target #2** | [Raspberry Pi Pico](../../examples/pico/README.md); [Pico GP16 PWM servo](../../examples/pico-pwm-servo/README.md); [Pico 2 / RP2350](../../examples/pico2/README.md) | Pico: UART0, GP25 LED, internal temperature ADC, and an external servo driven by PWM0A on GP16. Pico 2: UART0, GP25 LED, and GP26/ADC0 conversion from a modeled potentiometer. RP2350 was not a separate survey row. | [Pico availability checked 2026-11-10](../../examples/pico-pwm-servo/evidence/vendor-status.md); [Pico 2 checked 2026-11-09](../../examples/pico2/evidence/adc/vendor-status.md) |
 | **Arduino kits, 37% (kit-use rank #3)** | [Arduino Nano Every + MCP9808](../../examples/arduino-nano-every-mcp9808/README.md) (ATmega4809; not a separate MCU survey row) | TWI0 reads the MCP9808 manufacturer ID `0x0054`, device ID `0x0400`, and temperature register; the local smoke gates its UART marker on those values | [Live part and board availability, checked 2026-11-10](../../examples/arduino-nano-every-mcp9808/evidence/vendor-status.md) |
+| **Arduino kits, 37% (kit-use rank #3)** | [Arduino UNO R4 WiFi + Qwiic BME280](../../examples/arduino-uno-r4-wifi-qwiic-bme280/README.md) (Renesas RA4M1; kit-use signal, not an MCU survey rank) | Wire1/IIC0 on Qwiic reads BME280 ID `0x60`, idle status, and raw temperature before printing the pass marker | [Live board and sensor availability, checked 2026-11-10](../../examples/arduino-uno-r4-wifi-qwiic-bme280/evidence/vendor-status.md) |
 
 ### #1 — ESP32: ESP-Mosaico V1.2 / ESP32-S31
 
@@ -380,9 +381,70 @@ void loop() {
 
 See the [UNO R4 Minima guide](../../examples/arduino-uno-r4-minima/README.md)
 for the smoke command, model limits, and the [availability receipt](../../examples/arduino-uno-r4-minima/README.md#vendor-status-checked-2026-11-03).
-The UNO R4 WiFi profile is also available, but its ESP32-S3 coprocessor and
-wireless features are outside the profile; see its [guide](../../examples/arduino-uno-r4-wifi/README.md)
-and [vendor receipt](../../examples/arduino-uno-r4-wifi/evidence/vendor-status.md).
+The UNO R4 WiFi's focused smoke also supports its Qwiic connector through
+RA4M1 IIC0; its ESP32-S3 coprocessor, wireless features, USB, and LED matrix
+remain outside the profiles. See the [base guide](../../examples/arduino-uno-r4-wifi/README.md),
+[Qwiic BME280 quickstart](../../examples/arduino-uno-r4-wifi-qwiic-bme280/README.md),
+and [live board receipt](../../examples/arduino-uno-r4-wifi-qwiic-bme280/evidence/vendor-status.md).
+
+### Arduino kit use: UNO R4 WiFi Qwiic BME280
+
+Arduino kits are used by 37% of survey respondents' main projects (kit-use
+rank #3). This board uses a Renesas RA4M1, which has no separate MCU survey
+rank. Plug an Adafruit BME280 STEMMA QT breakout into the UNO R4 WiFi's Qwiic
+connector. The board routes Qwiic SDA=P401 and SCL=P400 to IIC0, available as
+`Wire1`; the connector is 3.3 V only.
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+
+constexpr uint8_t BME280_ADDRESS = 0x77;
+
+bool readRegister(uint8_t reg, uint8_t *data, size_t length) {
+  Wire1.beginTransmission(BME280_ADDRESS);
+  Wire1.write(reg);
+  if (Wire1.endTransmission(false) != 0) return false;
+  if (Wire1.requestFrom(BME280_ADDRESS, static_cast<uint8_t>(length)) != length)
+    return false;
+  for (size_t i = 0; i < length; ++i) data[i] = Wire1.read();
+  return true;
+}
+
+void setup() {
+  Serial.begin(115200);
+  Wire1.begin();
+  uint8_t id = 0, status = 0xFF, temperature[3] = {};
+  if (!readRegister(0xD0, &id, 1) || id != 0x60 ||
+      !readRegister(0xF3, &status, 1) || status != 0x00 ||
+      !readRegister(0xFA, temperature, sizeof(temperature))) {
+    Serial.println("BME280 read failed");
+    return;
+  }
+  Serial.print("BME280 id=0x");
+  Serial.print(id, HEX);
+  Serial.print(" status=0x");
+  Serial.print(status, HEX);
+  Serial.print(" temp_raw=0x");
+  for (uint8_t byte : temperature) {
+    if (byte < 0x10) Serial.print('0');
+    Serial.print(byte, HEX);
+  }
+  Serial.println();
+}
+
+void loop() {}
+```
+
+The committed local smoke builds this Arduino sketch and accepts its pass
+marker only after the BME280 ID, idle status, and raw temperature read succeed.
+It models the RA4M1 IIC0 transaction path and the BME280 register device, not
+Qwiic waveforms or electrical behavior. The focused chip profile declares
+zero-answering stubs for MSTP, flash cache, stack monitoring, and the reserved
+ADC unit 1 window; those blocks are outside the sensor claim. See the
+[quickstart](../../examples/arduino-uno-r4-wifi-qwiic-bme280/README.md),
+[availability receipt](../../examples/arduino-uno-r4-wifi-qwiic-bme280/evidence/vendor-status.md),
+and [committed smoke evidence](../../examples/arduino-uno-r4-wifi-qwiic-bme280/evidence/).
 
 ### Arduino kit use: Arduino Nano Every + MCP9808
 

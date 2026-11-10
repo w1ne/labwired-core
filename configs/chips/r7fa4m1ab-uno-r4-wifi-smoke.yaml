@@ -23,6 +23,10 @@
 # ADPRC), GPT0-7 (saw-wave PWM; only GTIOC2B is bound to a pad), PORT1/3 and
 # PFS. See each model's header for its limits.
 #
+# P400/P401 route the board's Qwiic connector to IIC0 (Wire1). The existing
+# base board system does not attach a sensor there; the focused Qwiic profile
+# uses these pins with the modeled RA IIC0 controller.
+#
 # Declared stubs (reads 0, writes dropped): MSTP (module stop is not
 # enforced), FCACHE, the SP monitor (no stack-overflow NMI), and the reserved
 # 0x4005C200 window the core opens as an ADC unit 1. The USBFS, the
@@ -54,6 +58,8 @@ pins:
   P302: { gpio: port3, bit: 2, functions: [{ type: uart, peripheral: sci2, role: tx }] }
   P109: { gpio: port1, bit: 9, functions: [{ type: uart, peripheral: sci9, role: tx }] }
   P110: { gpio: port1, bit: 10, functions: [{ type: uart, peripheral: sci9, role: rx }] }
+  P400: { gpio: port4, bit: 0, functions: [{ type: i2c, peripheral: iic0, role: scl }] }
+  P401: { gpio: port4, bit: 1, functions: [{ type: i2c, peripheral: iic0, role: sda }] }
 peripherals:
   - id: "ra_sysc"
     type: "ra4_sysc"
@@ -86,6 +92,15 @@ peripherals:
       profile: "ra_port"
       pad_control: "pfs"
       pad_control_port: 3
+      swapped_half_aliases: true
+  - id: "port4"
+    type: "gpio"
+    base_address: 0x40040080
+    size: "32B"
+    config:
+      profile: "ra_port"
+      pad_control: "pfs"
+      pad_control_port: 4
       swapped_half_aliases: true
   - id: "pfs"
     type: "ra_pfs"

@@ -1,6 +1,7 @@
-# Arduino UNO R4 WiFi (ABX00087), narrowed to the RA4M1 paths exercised by
-# examples/arduino-uno-r4-wifi. The ESP32-S3 module, LED matrix, USBFS, and
-# Qwiic connector are not part of this simulator profile.
+# Base Arduino UNO R4 WiFi (ABX00087) profile, narrowed to the RA4M1 paths
+# exercised by examples/arduino-uno-r4-wifi. The separate
+# arduino-uno-r4-wifi-qwiic-bme280 profile exercises the Qwiic/IIC0 path. The
+# ESP32-S3 module, LED matrix, and USBFS remain outside both profiles.
 name: "arduino-uno-r4-wifi"
 chip: "../chips/r7fa4m1ab-uno-r4-wifi-smoke.yaml"
 debug_uart: "sci2"
