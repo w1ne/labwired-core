@@ -2,8 +2,8 @@
 //
 // Task 4: a master chip running the phased service-script firmware
 // (`master-fw-svc`) drives a service-rich device chip (`device-fw-svc`) over the
-// one shared UART wire and, after reaching OPERATE, exercises the full iolinki-master
-// feature surface on the wire: ISDU read (vendor name), cyclic PD output echo,
+// one shared UART wire and, after reaching OPERATE, exercises these iolinki-master
+// services on the wire: ISDU read (vendor name), cyclic PD output echo,
 // event trigger + read, and data-storage write/readback. Every result is
 // mirrored into `volatile` master globals that this test reads by ELF symbol.
 
@@ -70,7 +70,9 @@ fn master_u8(world: &World, addr: u64) -> u8 {
 // interconnects.
 fn corrupt_device_to_master(world: &World, n: u32) {
     let link = world.uart_links().first().expect("station has a C/Q link");
-    world.uart_wires().corrupt_next(link.id, 1, n);
+    world
+        .uart_wires()
+        .corrupt_next_with_mask(link.id, 1, n, 0x01);
 }
 
 // Step every chip to OPERATE (raw master state 3). Returns the iteration it hit.
@@ -92,6 +94,23 @@ fn finish_services(world: &mut World, mb: &[u8]) {
     for _ in 0..10_000_000u64 {
         world.step_all();
         if master_u8(world, done) == 1 {
+            for name in ["g_isdu_ok", "g_pd_echo_ok", "g_event_ok", "g_ds_ok"] {
+                assert_eq!(
+                    master_u8(world, sym(mb, name)),
+                    1,
+                    "service setup failed before fault injection: {name}"
+                );
+            }
+            assert_eq!(
+                master_u8(world, sym(mb, "g_master_state")),
+                3,
+                "service setup left OPERATE before fault injection"
+            );
+            assert_eq!(
+                master_u8(world, sym(mb, "g_error_seen")),
+                0,
+                "service setup reached ERROR before fault injection"
+            );
             return;
         }
     }
@@ -104,7 +123,7 @@ fn finish_services(world: &mut World, mb: &[u8]) {
 
 // Fault test 1 — a single CRC-corrupted device->master frame must be counted as a
 // checksum error AND survived in place: the master retries and stays in OPERATE,
-// it does NOT fall through to ERROR. (Corrupting exactly 2 bytes flips one frame.)
+// it does NOT fall through to ERROR. Flip one bit in exactly one response octet.
 #[test]
 fn master_survives_single_crc_corrupted_frame() {
     let Some((mut world, mb)) = build_station_or_skip() else {
@@ -112,6 +131,7 @@ fn master_survives_single_crc_corrupted_frame() {
     };
     let a_state = sym(&mb, "g_master_state");
     let a_ck = sym(&mb, "g_diag_ck_errors");
+    let a_retry = sym(&mb, "g_diag_rx_retry_count");
     let a_err = sym(&mb, "g_error_seen");
 
     let op_at = step_to_operate(&mut world, a_state, 10_000_000);
@@ -122,15 +142,16 @@ fn master_survives_single_crc_corrupted_frame() {
     // bytes the device sends before the first cyclic exchange.
     finish_services(&mut world, &mb);
 
-    // A cyclic WRITE reply is [PD-in, CKS]. Corrupt both octets of exactly
-    // one reply so the checksum cannot hide a flipped payload octet.
-    corrupt_device_to_master(&world, 2);
+    // Flip one bit in one octet. An all-bits (0xFF) payload flip is invisible
+    // to IO-Link's 8-to-6 checksum compression, so it cannot prove CRC handling.
+    let ck_before = master_u8(&world, a_ck);
+    corrupt_device_to_master(&world, 1);
 
     const MAX_AFTER: u64 = 2_000_000;
     let mut ck_at = None;
     for i in 0..MAX_AFTER {
         world.step_all();
-        if master_u8(&world, a_ck) >= 1 {
+        if master_u8(&world, a_ck).wrapping_sub(ck_before) > 0 {
             ck_at = Some(i);
             break;
         }
@@ -142,8 +163,8 @@ fn master_survives_single_crc_corrupted_frame() {
     eprintln!("[crc] after corruption: ck_errors={ck} state={state} error_seen={err} counted_at={ck_at:?}");
 
     assert!(
-        ck >= 1,
-        "checksum error was never counted after a corrupt frame (g_diag_ck_errors={ck}, ran {MAX_AFTER} steps)"
+        ck.wrapping_sub(ck_before) > 0,
+        "checksum error counter did not increase after a corrupt frame (before={ck_before}, after={ck}, ran {MAX_AFTER} steps)"
     );
     assert_eq!(
         state, 3,
@@ -153,6 +174,42 @@ fn master_survives_single_crc_corrupted_frame() {
         err, 0,
         "master fell through to ERROR on a single corrupt frame (g_error_seen={err}); expected survival"
     );
+    assert_eq!(
+        master_u8(&world, a_retry),
+        1,
+        "corrupt frame did not enter retry"
+    );
+
+    // A checksum-valid response clears the retry counter. Keep stepping to
+    // prove recovery, rather than only observing OPERATE at error detection.
+    let mut recovered_at = None;
+    for i in 0..MAX_AFTER {
+        world.step_all();
+        assert_eq!(
+            master_u8(&world, a_state),
+            3,
+            "master left OPERATE during retry"
+        );
+        assert_eq!(
+            master_u8(&world, a_err),
+            0,
+            "master reached ERROR during retry"
+        );
+        if master_u8(&world, a_retry) == 0 {
+            recovered_at = Some(i);
+            break;
+        }
+    }
+    assert!(
+        recovered_at.is_some(),
+        "master never received a clean response after retry"
+    );
+    assert_eq!(
+        master_u8(&world, a_ck).wrapping_sub(ck_before),
+        1,
+        "one bit fault must produce exactly one checksum error"
+    );
+    eprintln!("[crc] clean response cleared retry at iteration {recovered_at:?}");
 }
 
 // Fault test 2 — sustained CRC corruption on the device->master direction must
@@ -176,6 +233,8 @@ fn sustained_crc_corruption_drives_master_to_reinitiate_link() {
 
     finish_services(&mut world, &mb);
 
+    let ck_before = master_u8(&world, a_ck);
+
     // Corrupt a long run of device->master bytes: spans several response frames,
     // so the retry budget (rx_retry_count < 2, then re-initiation on the 3rd bad
     // frame) is exhausted.
@@ -187,7 +246,7 @@ fn sustained_crc_corruption_drives_master_to_reinitiate_link() {
     let mut left_at = None;
     for i in 0..MAX_AFTER {
         world.step_all();
-        if master_u8(&world, a_ck) >= 1 {
+        if master_u8(&world, a_ck).wrapping_sub(ck_before) > 0 {
             saw_ck = true;
         }
         if master_u8(&world, a_state) != 3 {
@@ -205,7 +264,7 @@ fn sustained_crc_corruption_drives_master_to_reinitiate_link() {
 
     assert!(
         saw_ck,
-        "the port left OPERATE without ever counting a checksum error; the corruption was not the cause"
+        "the port left OPERATE without increasing the checksum error count; the corruption was not the cause"
     );
     assert!(
         left_operate,
@@ -241,6 +300,8 @@ fn master_detects_muted_device_via_response_timeout() {
     // the response-timeout tick), which is a separate concern.
     finish_services(&mut world, &mb);
 
+    let timeouts_before = master_u8(&world, a_timeouts);
+
     // Mute the device: advance ONLY the master. The device CPU never steps, so
     // it emits no response frames.
     const MAX_MUTE: u64 = 5_000_000;
@@ -249,7 +310,7 @@ fn master_detects_muted_device_via_response_timeout() {
     let mut left_at = None;
     for i in 0..MAX_MUTE {
         world.machines.get_mut("master").unwrap().step().unwrap();
-        if master_u8(&world, a_timeouts) >= 1 {
+        if master_u8(&world, a_timeouts).wrapping_sub(timeouts_before) > 0 {
             saw_timeout = true;
         }
         if master_u8(&world, a_state) != 3 {
@@ -268,7 +329,7 @@ fn master_detects_muted_device_via_response_timeout() {
 
     assert!(
         saw_timeout,
-        "the port left OPERATE without ever counting a response timeout; the mute was not the cause"
+        "the port left OPERATE without increasing the response timeout count; the mute was not the cause"
     );
     assert!(
         left_operate,

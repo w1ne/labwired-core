@@ -62,10 +62,9 @@ to observe progress; they skip with a message if the ELFs are not built.
 
 ## Full service coverage (`svc` pair)
 
-`world_station_services` drives the **whole** `iolinki-master` service surface on
-the wire, not just startup + cyclic PD. A `master-fw-svc` chip runs a phased
-script against a service-rich `device-fw-svc` chip and proves each service after
-OPERATE:
+`world_station_services` exercises ISDU, cyclic PD output, event and data-storage
+exchanges on the modeled wire. A `master-fw-svc` chip runs a phased script
+against a service-rich `device-fw-svc` chip and checks each result after OPERATE:
 
 The service pair uses `TYPE_2_2`: one PD byte in each direction and one OD
 byte. READ requests omit OD and WRITE requests include it. Build both sides
@@ -109,5 +108,5 @@ a failure in that gate.
 
 This is **functional** simulation evidence: real master and device firmware
 exchanging real IO-Link process data over a modeled C/Q wire. It is **not**
-IO-Link electrical/PHY-timing conformance. Line speed is irrelevant in the
-cycle-stepped model.
+IO-Link electrical/PHY-timing conformance. UART transmission uses the configured
+clock and baud divisor; these tests do not measure electrical C/Q levels.

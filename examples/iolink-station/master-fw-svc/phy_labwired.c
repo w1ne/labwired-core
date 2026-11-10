@@ -1,9 +1,9 @@
 /* MASTER-side PHY over the simulated STM32L476 USART2, driven through the CMSIS
  * register definitions (USART2->CR1/ISR/RDR/TDR).
  *
- * Same register seam as the device firmware's phy: the simulator transmits on
- * any TDR write (TXE always ready) and exposes RX bytes via RXNE/RDR. Line
- * speed is irrelevant in the cycle-stepped sim, so baudrate/mode are no-ops.
+ * Same register seam as the device firmware's phy: TDR writes enter the modeled
+ * wire and RXNE/RDR expose received bytes. Initialization programs COM2 in BRR;
+ * this fixed-rate fixture's later baudrate/mode callbacks are no-ops.
  *
  * The master config callbacks (set_mode_checked, set_baudrate_checked, flush_rx,
  * prepare_tx, prepare_rx, wake_up) are the contract iolink-master requires for

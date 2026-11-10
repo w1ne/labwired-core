@@ -5,7 +5,7 @@
 # `cooling_fault_at_s`), so the hotspot first settles NORMAL, then runs away. The
 # firmware's fingerprint detects COOLING_FAILURE then OVERTEMP purely from the
 # decoded frames, publishes the fault verdict as IO-Link process data, and
-# raises an IO-Link TEMPERATURE diagnostic event (iolink_event_trigger). The
+# raises an IO-Link application-fault diagnostic event (iolink_event_trigger). The
 # native master must read the fault-verdict PD (state=FAULT) AND observe the
 # operate-status EVENT bit → `MASTER EVENT=...`.
 #

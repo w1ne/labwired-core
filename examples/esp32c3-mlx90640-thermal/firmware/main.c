@@ -251,13 +251,14 @@ int main(void) {
         pack_pd(&v, pd);
         iolink_device_pd_input_update(&g_iol_device, pd, 9, true);
 
-        /* On the first fault, raise an IO-Link TEMPERATURE diagnostic event. The
-         * iolinki DLL sets the operate-status EVENT bit while events are pending,
-         * so the master observes it on the next cyclic read. OVERTEMP → APP temp
-         * overflow; a rate runaway (COOLING_FAILURE) → temp shock. */
+        /* Raise one diagnostic event for the first fault. OVERTEMP uses the
+         * standardized temperature-overload Error; rate/shape diagnoses use
+         * application-fault Error. The exact classification remains in PD.
+         * The DLL sets the operate-status EVENT bit while the event is pending. */
         if (!event_raised && v.fault != TFS_FAULT_NONE) {
-            uint16_t code = (v.fault == TFS_FAULT_OVERTEMP) ? IOLINK_EVENT_APP_TEMP_OVERFLOW
-                                                            : IOLINK_EVENT_APP_TEMP_SHOCK;
+            uint16_t code = (v.fault == TFS_FAULT_OVERTEMP)
+                                ? IOLINK_EVENTCODE_TEMPERATURE_OVERLOAD
+                                : IOLINK_EVENTCODE_APPLICATION_FAULT;
             iolink_event_trigger(events, code, IOLINK_EVENT_TYPE_ERROR);
             event_raised = 1;
             uart_puts("IOLINK EVENT TRIGGERED code=");

@@ -74,8 +74,10 @@ MASTER VERDICT state=<S> health=<n> fault=<NAME>
 MASTER EVENT pending (device diagnostic event)
 ```
 
-When the fingerprint trips, the firmware raises an IO-Link **TEMPERATURE
-diagnostic event** (`iolink_event_trigger`); the device DLL sets the
+On the first fault, the firmware raises an IO-Link diagnostic Error event
+(`iolink_event_trigger`). `OVERTEMP` maps to temperature overload (`0x4000`);
+rate and shape diagnoses map to application fault (`0x8C00`). The exact
+classification remains in the process data. The device DLL sets the
 operate-status EVENT bit, which the master observes on its next cyclic read.
 
 This is the money shot: the **master side** reads the correct verdict over
@@ -86,6 +88,9 @@ IO-Link — `STABLE / fault=NONE` in NORMAL, `FAULT / COOLING_FAILURE` then
 
 Needs the Espressif RISC-V GCC (`riscv32-esp-elf-gcc`, from PlatformIO or
 ESP-IDF). The Makefile auto-discovers it on `PATH` or under `~/.platformio`.
+It selects `rv32imc_zicsr_zifencei/ilp32` explicitly so GCC 15 uses the C3
+soft-float libraries rather than its default multilib with floating-point CSR
+instructions.
 
 ```sh
 make -C firmware     # → firmware/thermal_fingerprint.elf (rv32imc, bare ELF)

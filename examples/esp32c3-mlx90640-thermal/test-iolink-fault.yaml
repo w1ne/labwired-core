@@ -3,7 +3,7 @@
 # Same firmware, same IO-Link wiring; only the thermal scene differs (cooling
 # collapses). The firmware first behaves NORMAL, then the fingerprint detects the
 # runaway from the frames alone, publishes the fault verdict as IO-Link process
-# data, and raises an IO-Link TEMPERATURE diagnostic event (iolink_event_trigger
+# data, and raises an IO-Link application-fault diagnostic event (iolink_event_trigger
 # → operate-status EVENT bit). The native MASTER must read the fault-verdict PD
 # AND observe the event.
 #
@@ -31,6 +31,6 @@ assertions:
   # ...then read the FAULT verdict (state=FAULT, health collapses, cooling fault).
   - uart_contains: "MASTER VERDICT state=FAULT health=0 fault=COOLING_FAILURE"
   - uart_contains: "MASTER VERDICT state=FAULT health=0 fault=OVERTEMP"
-  # MASTER side: the device raised an IO-Link TEMPERATURE diagnostic event and
+  # MASTER side: the device raised an IO-Link application-fault diagnostic event and
   # the master observed it via the operate-status EVENT bit.
   - uart_contains: "MASTER EVENT"

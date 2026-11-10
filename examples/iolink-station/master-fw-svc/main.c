@@ -68,6 +68,7 @@ volatile uint8_t g_ds_ok = 0u;           /* 1 DS write+readback round-trip, 0xEE
 volatile uint8_t g_svc_done = 0u;        /* 1 once the whole script finished */
 volatile uint8_t g_error_seen = 0u;      /* 1 once the port was observed in ERROR */
 volatile uint8_t g_restart_count = 0u;   /* number of ERROR->restart recoveries */
+volatile uint8_t g_diag_rx_retry_count = 0u; /* current consecutive RX retry count */
 volatile uint8_t g_diag_ck_errors = 0u;  /* low byte of diagnostics.checksum_errors */
 volatile uint8_t g_diag_timeouts = 0u;   /* low byte of diagnostics.response_timeouts */
 volatile uint8_t g_diag_event_pending = 0u;
@@ -139,8 +140,8 @@ int main(void) {
          * device is invisible (the port spins in OPERATE forever). Once the
          * cycle's response_deadline has passed while still awaiting a reply,
          * issue a RESPONSE_TIMEOUT tick so a muted device is detected, counted
-         * (diagnostics.response_timeouts), and eventually drives the port to
-         * ERROR after the retry budget. The stack self-gates on awaiting_response
+         * (diagnostics.response_timeouts), and returns the port to STARTUP
+         * after the retry budget. The stack self-gates on awaiting_response
          * so this is a no-op when a reply already arrived. */
         {
             iolink_master_timing_t t;
@@ -265,6 +266,7 @@ int main(void) {
         {
             iolink_master_diagnostics_t d;
             if (iolink_master_get_diagnostics(&port, &d) == 0) {
+                g_diag_rx_retry_count = d.rx_retry_count;
                 g_diag_ck_errors = (uint8_t)d.checksum_errors;
                 g_diag_timeouts = (uint8_t)d.response_timeouts;
                 if (d.event_pending) {
