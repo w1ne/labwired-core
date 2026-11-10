@@ -12,6 +12,11 @@ external_devices:
     connection: spi1
     config:
       cs_pin: PA4
+  - id: tmp102_i2c1
+    type: tmp102
+    connection: i2c1
+    config:
+      i2c_address: 0x48
 board_io:
   - id: "led_pc13"
     kind: "led"

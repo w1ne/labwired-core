@@ -35,7 +35,7 @@
           "rcc apb1=00220001 ok",
           "led pc13 odr=00002000 ok",
           "tim2 arr=00000040 ok",
-          "i2c1 nack sr1=00000400 ok",
+          "i2c1 tmp102=00001900 nack=00000400 ok",
           "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok",
           "usart1 txe_irq=1 released=1 ok",
           "usart1 rxne_irq=1 data=00000052 released=1 ok",
@@ -79,19 +79,19 @@
       536968960,
       53,
       82,
-      1,
+      0,
       1073759232,
       536969208,
       63,
+      1,
       192,
-      0,
       3758154244,
-      134228936,
+      134229346,
       536969192,
-      134226391,
-      134228574
+      134226803,
+      134228986
     ],
-    "pc": 134228574,
+    "pc": 134228986,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -104,7 +104,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "cf61b7c4ce044cd3e2f43937c435951ccdec165b621b8bad728aa51dfd4834de",
+  "firmware_hash": "5e0b52e0ec4d6d654307111981263096efde4bd103a71a7b3ebd8e4bed90ceb4",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
@@ -166,7 +166,23 @@
         "kind": "i2c",
         "base": 1073763328,
         "registers": [],
-        "artifacts": []
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x48",
+            "meta": {
+              "inputs": {},
+              "powered": true,
+              "registers": {
+                "CONFIG": 24736,
+                "TEMP": 6528,
+                "T_HIGH": 20480,
+                "T_LOW": 19200
+              },
+              "supply_generation": null
+            }
+          }
+        ]
       },
       {
         "name": "i2c2",
@@ -339,6 +355,33 @@
     ],
     "devices": [
       {
+        "id": "tmp102_i2c1",
+        "device_type": "tmp102",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c1",
+          "address": 72
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "tmp102_i2c1",
+            "meta": {
+              "inputs": {},
+              "powered": true,
+              "registers": {
+                "CONFIG": 24736,
+                "TEMP": 6528,
+                "T_HIGH": 20480,
+                "T_LOW": 19200
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      },
+      {
         "id": "tc_spi1",
         "device_type": "max31855",
         "declared": true,
@@ -381,23 +424,23 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 329,
+            "cycle": 328,
             "value": 1
           },
           {
-            "cycle": 332,
+            "cycle": 331,
             "value": 0
           },
           {
-            "cycle": 334,
+            "cycle": 333,
             "value": 1
           },
           {
-            "cycle": 336,
+            "cycle": 335,
             "value": 0
           },
           {
-            "cycle": 339,
+            "cycle": 338,
             "value": 1
           }
         ],
@@ -405,27 +448,27 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 323,
+            "cycle": 322,
             "state": "0"
           },
           {
-            "cycle": 329,
+            "cycle": 328,
             "state": "1"
           },
           {
-            "cycle": 332,
+            "cycle": 331,
             "state": "0"
           },
           {
-            "cycle": 334,
+            "cycle": 333,
             "state": "1"
           },
           {
-            "cycle": 336,
+            "cycle": 335,
             "state": "0"
           },
           {
-            "cycle": 339,
+            "cycle": 338,
             "state": "1"
           }
         ],
@@ -474,7 +517,7 @@
         "end_cycle": 10000
       },
       {
-        "text": "i2c1 nack sr1=00000400 ok",
+        "text": "i2c1 tmp102=00001900 nack=00000400 ok",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -508,14 +551,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 11237,
+    "text_bytes": 11647,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 11237,
+    "flash_used_bytes": 11647,
     "ram_static_bytes": 0,
     "flash_total_bytes": 393216,
     "ram_total_bytes": 98304,
-    "flash_used_pct": 2.86,
+    "flash_used_pct": 2.96,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -541,13 +584,13 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 2003,
-    "memory_writes": 42,
-    "peripheral_accesses": 942,
+    "memory_reads": 2265,
+    "memory_writes": 41,
+    "peripheral_accesses": 1771,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134228574,
+        "pc": 134228986,
         "count": 781,
         "symbol": "firmware_f401cdu6_blackpill_renode_smoke::main"
       }

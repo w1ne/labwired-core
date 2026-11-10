@@ -14,8 +14,8 @@
 //!   GPIOC  PC13 (active-low user LED) as push-pull output, toggled via BSRR,
 //!          ODR read back after each write
 //!   TIM2   PSC/ARR readback, up-counter advances, UIF latches and clears (W1C 0)
-//!   I2C1   OAR1 readback, START -> SB, address with no slave -> AF (NACK),
-//!          AF rc_w0 clear, STOP releases BUSY (the bare board has no I2C parts)
+//!   I2C1   TMP102 temperature-register pointer write + repeated-start read
+//!          (25 °C = 0x1900), plus an absent-address AF (NACK) and STOP
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
 //!   USART1 TXEIE and RXNEIE assert and release their NVIC line
 //! A summary word goes to RAM at 0x20017F00 (one bit per block passed).
@@ -136,8 +136,12 @@ fn main() -> ! {
     let tim_ok = smoke_tim2();
     passed |= (tim_ok as u32) << 2;
 
-    let (nack_sr1, i2c_ok) = smoke_i2c1();
-    line(b"i2c1 nack sr1=", nack_sr1, i2c_ok);
+    let (temperature, nack_sr1, i2c_ok) = smoke_i2c1();
+    send(b"i2c1 tmp102=");
+    put_hex32(u32::from(temperature));
+    send(b" nack=");
+    put_hex32(nack_sr1);
+    send(if i2c_ok { b" ok\r\n" } else { b" FAIL\r\n" });
     passed |= (i2c_ok as u32) << 3;
 
     let spi_ok = smoke_spi1();
@@ -207,26 +211,70 @@ fn smoke_tim2() -> bool {
     ok
 }
 
-/// Bare Black Pill: nothing sits on I2C1, so an addressed write must NACK.
-/// Silicon (RM0368 §18.6.6) sets SR1.AF after the address phase with no ADDR,
-/// keeps MSL|BUSY until STOP, and AF is rc_w0. Returns SR1 captured at the NACK
-/// (0 when a step timed out) and whether the whole sequence matched.
-fn smoke_i2c1() -> (u32, bool) {
+/// Read the fixture TMP102 through the legacy STM32 I2C controller, then probe
+/// an absent address. The exact imported system wires TMP102 at 0x48.
+fn smoke_i2c1() -> (u16, u32, bool) {
     wr(I2C_OAR1, 0x4000 | 0xAA); // bit 14 must be kept at 1 by software
     if rd(I2C_OAR1) & 0xFFFF != 0x40AA {
-        return (0, false);
+        return (0xFFFF, 0, false);
     }
     wr(I2C_CR2, 16); // FREQ = 16 MHz APB1 (HSI)
     wr(I2C_CCR, 80); // 100 kHz standard mode
     wr(I2C_TRISE, 17);
     wr(I2C_CR1, 1); // PE
+
+    // Write TMP102's temperature-register pointer (0), then use a repeated
+    // START to read its two-byte big-endian result. ACK both address phases;
+    // after the first byte, clear ACK so the final byte is NACKed.
     wr(I2C_CR1, rd(I2C_CR1) | (1 << 8)); // START
     if !wait(I2C_SR1, 0x0001, 0x0001) {
-        return (0, false);
+        return (0xFFFF, 0, false);
     }
-    wr(I2C_DR, 0xA0); // EEPROM-style address, write
+    wr(I2C_DR, 0x90); // TMP102 7-bit address 0x48, write
+    if !wait(I2C_SR1, 0x0002, 0x0002) {
+        return (0xFFFF, 0, false);
+    }
+    let _ = rd(I2C_SR1);
+    let _ = rd(I2C_SR2); // clear ADDR
+    wr(I2C_DR, 0x00); // temperature register pointer
+    if !wait(I2C_SR1, 0x0004, 0x0004) {
+        // BTF: pointer byte sent
+        return (0xFFFF, 0, false);
+    }
+
+    wr(I2C_CR1, 1 | (1 << 8) | (1 << 10)); // PE | START | ACK
+    if !wait(I2C_SR1, 0x0001, 0x0001) {
+        return (0xFFFF, 0, false);
+    }
+    wr(I2C_DR, 0x91); // TMP102 address, read
+    if !wait(I2C_SR1, 0x0002, 0x0002) {
+        return (0xFFFF, 0, false);
+    }
+    let _ = rd(I2C_SR1);
+    let _ = rd(I2C_SR2); // clear ADDR; receiver starts clocking
+    if !wait(I2C_SR1, 0x0040, 0x0040) {
+        // RXNE
+        return (0xFFFF, 0, false);
+    }
+    let msb = rd(I2C_DR) as u8;
+    wr(I2C_CR1, 1); // PE; NACK the final byte
+    wr(I2C_CR1, 1 | (1 << 9)); // request STOP after the final byte
+    if !wait(I2C_SR1, 0x0040, 0x0040) {
+        return (0xFFFF, 0, false);
+    }
+    let lsb = rd(I2C_DR) as u8;
+    let temperature = u16::from_be_bytes([msb, lsb]);
+    let idle = wait(I2C_SR2, 0x0002, 0);
+
+    // The system has no device at 0x50. Silicon sets AF, no ADDR, and keeps
+    // MSL|BUSY until STOP; AF is rc_w0.
+    wr(I2C_CR1, rd(I2C_CR1) | (1 << 8)); // START
+    if !wait(I2C_SR1, 0x0001, 0x0001) {
+        return (temperature, 0, false);
+    }
+    wr(I2C_DR, 0xA0); // absent EEPROM-style address 0x50, write
     if !wait(I2C_SR1, 0x0400, 0x0400) {
-        return (0, false);
+        return (temperature, 0, false);
     }
     let sr1 = rd(I2C_SR1);
     let sr2 = rd(I2C_SR2);
@@ -234,8 +282,12 @@ fn smoke_i2c1() -> (u32, bool) {
     wr(I2C_CR1, rd(I2C_CR1) | (1 << 9)); // STOP
     wr(I2C_SR1, !0x0400 & 0xFFFF); // clear AF (rc_w0)
     let af_cleared = rd(I2C_SR1) & 0x0400 == 0;
-    let idle = wait(I2C_SR2, 0x0002, 0);
-    (sr1, nack_ok && af_cleared && idle)
+    let nack_idle = wait(I2C_SR2, 0x0002, 0);
+    (
+        temperature,
+        sr1,
+        temperature == 0x1900 && idle && nack_ok && af_cleared && nack_idle,
+    )
 }
 
 /// The fixture MAX31855 is on SPI1 with PA4 as GPIO chip select. Check the
