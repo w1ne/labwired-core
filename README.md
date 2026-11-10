@@ -129,9 +129,13 @@ sh install.sh
 
 ### Windows
 
-There is a native Windows build — `labwired.exe` and `labwired-dap.exe` — but
-no install script for it; the archive is unpacked by hand. PowerShell 5.1 and
-later have `tar` built in.
+The native Windows archive contains `labwired.exe` and `labwired-dap.exe`.
+Install the current [x64 Microsoft Visual C++ v14 Redistributable](https://aka.ms/vc14/vc_redist.x64.exe)
+first; both executables require `VCRUNTIME140.dll`. See Microsoft's
+[runtime requirements](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+for supported Windows versions.
+
+Download and extract the archive in PowerShell with `tar` available:
 
 ```powershell
 $v = "v0.26.0"
