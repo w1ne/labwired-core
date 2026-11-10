@@ -61,12 +61,16 @@ const LPUART_BRR: *mut u32 = (LPUART1 + 0x0C) as *mut u32;
 const LPUART_ISR: *const u32 = (LPUART1 + 0x1C) as *const u32;
 const LPUART_RDR: *const u32 = (LPUART1 + 0x24) as *const u32;
 const LPUART_TDR: *mut u32 = (LPUART1 + 0x28) as *mut u32;
+const NVIC_ISPR2: *const u32 = 0xE000_E208 as *const u32;
+const NVIC_ICPR2: *mut u32 = 0xE000_E288 as *mut u32;
+const NVIC_LPUART1_PENDING: u32 = 1 << 2; // IRQ 66, from the full STM32L552 profile.
 
 const USART_ISR_TXE: u32 = 1 << 7;
 const USART_ISR_RXNE: u32 = 1 << 5;
 const USART_CR1_UE: u32 = 1 << 0;
 const USART_CR1_RE: u32 = 1 << 2;
 const USART_CR1_TE: u32 = 1 << 3;
+const USART_CR1_RXNEIE: u32 = 1 << 5;
 
 #[derive(Clone, Copy)]
 struct Led {
@@ -174,16 +178,39 @@ fn button_level() -> u32 {
 
 fn smoke_lpuart_rx() {
     let rxne_before = unsafe { read_volatile(LPUART_ISR) & USART_ISR_RXNE != 0 };
+    let irq_isolated = unsafe { read_volatile(NVIC_ISPR2) & NVIC_LPUART1_PENDING == 0 };
+    unsafe {
+        let cr1 = read_volatile(LPUART_CR1);
+        write_volatile(LPUART_CR1, cr1 | USART_CR1_RXNEIE);
+    }
+    spin(4);
+    let irq_asserted = unsafe { read_volatile(NVIC_ISPR2) & NVIC_LPUART1_PENDING != 0 };
     let data = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
     let rxne_after = unsafe { read_volatile(LPUART_ISR) & USART_ISR_RXNE != 0 };
-    let ok = rxne_before && data == b'R' && !rxne_after;
+    // NVIC pending is sticky: clear the captured interrupt and make sure an
+    // empty RX buffer does not raise it again while RXNEIE remains enabled.
+    unsafe { write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING) };
+    spin(4);
+    let irq_released = unsafe { read_volatile(NVIC_ISPR2) & NVIC_LPUART1_PENDING == 0 };
+    unsafe {
+        let cr1 = read_volatile(LPUART_CR1);
+        write_volatile(LPUART_CR1, cr1 & !USART_CR1_RXNEIE);
+    }
+    let ok =
+        rxne_before && irq_isolated && irq_asserted && data == b'R' && !rxne_after && irq_released;
 
     puts(b"rx=lpuart1 rxne_before=");
     putc(if rxne_before { b'1' } else { b'0' });
+    puts(b" irq_isolated=");
+    putc(if irq_isolated { b'1' } else { b'0' });
+    puts(b" irq_asserted=");
+    putc(if irq_asserted { b'1' } else { b'0' });
     puts(b" data=");
     put_hex32(u32::from(data));
     puts(b" rxne_after=");
     putc(if rxne_after { b'1' } else { b'0' });
+    puts(b" irq_released=");
+    putc(if irq_released { b'1' } else { b'0' });
     puts(if ok { b" ok\n" } else { b" FAIL\n" });
 }
 

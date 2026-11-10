@@ -70,6 +70,8 @@ peripherals:
     type: uart
     base_address: 0x40008000
     size: 1KB
+    # LPUART1_IRQn = 66, consistent with the full STM32L552 chip profile.
+    irq: 66
     clock: { reg: apb1enr2, bit: 0 }
     config:
       profile: stm32v2
