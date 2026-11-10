@@ -699,8 +699,15 @@ fn zener_regulator(card: &str, card_line: Option<&str>) -> Case {
 /// moves the edge by ~8 ns. 2 ns catches that with 4× margin.
 const EDGE_TOLERANCE: f64 = 2e-9;
 
+/// An independently built ngspice-47 shifts the push-pull comparator crossing
+/// by 9.33 fs while preserving its edge count and the 1e-9 full-scale voltage
+/// bound. Allow 100 fs of solver rounding, still 20,000 times tighter than the
+/// engine differential above; the trace controls below reject a 1 ps shift.
+const REFERENCE_EDGE_TOLERANCE: f64 = 1e-13;
+
 /// One engine's view of a case: the value at every sample boundary and, for a
 /// switching case, the interpolated time of every mid-level crossing.
+#[derive(Clone)]
 struct Trace {
     samples: Vec<f64>,
     edges: Vec<f64>,
@@ -981,6 +988,12 @@ impl Comparison {
         self.worst < TOLERANCE && self.worst_edge < EDGE_TOLERANCE && self.edges.0 == self.edges.1
     }
 
+    fn matches_reference(&self) -> bool {
+        self.worst < 1e-9
+            && self.worst_edge < REFERENCE_EDGE_TOLERANCE
+            && self.edges.0 == self.edges.1
+    }
+
     fn describe(&self, case: &Case, ours: &Trace, theirs: &Trace) -> String {
         let mut text = format!(
             "{:<28} {:>4} samples  worst {:.3e} % of {} V (sample {}: in-core {} V vs ngspice {} V)",
@@ -994,7 +1007,7 @@ impl Comparison {
         );
         if case.edge_level.is_some() {
             text += &format!(
-                "; {} vs {} edges, worst edge time {:.3} ns, {} edge samples excluded",
+                "; {} vs {} edges, worst edge time {:.3e} ns, {} edge samples excluded",
                 self.edges.0,
                 self.edges.1,
                 self.worst_edge * 1e9,
@@ -1071,13 +1084,50 @@ fn committed_references_are_what_ngspice_produces_today() {
         let (_, committed) = read_golden(&case);
         let verdict = compare(&case, &fresh, &committed);
         assert!(
-            verdict.worst < 1e-9
-                && verdict.worst_edge < 1e-15
-                && verdict.edges.0 == verdict.edges.1,
+            verdict.matches_reference(),
             "{}: ngspice today disagrees with the committed reference ({}); regenerate with \
              LABWIRED_REGEN_NGSPICE_GOLDEN=1",
             case.name,
             verdict.describe(&case, &fresh, &committed)
+        );
+    }
+}
+
+#[test]
+fn reference_freshness_detects_trace_changes() {
+    let case = cases()
+        .into_iter()
+        .find(|case| case.name == "comparator_pushpull_vhys")
+        .expect("switching reference case");
+    let (_, reference) = read_golden(&case);
+    assert!(reference.edges.len() >= 2);
+
+    let mut roundoff = reference.clone();
+    roundoff.edges[0] += 1e-14;
+    let verdict = compare(&case, &roundoff, &reference);
+    assert!(
+        verdict.matches_reference(),
+        "10 fs of cross-build rounding must fit the freshness bound: {}",
+        verdict.describe(&case, &roundoff, &reference)
+    );
+
+    let mut shifted_edge = reference.clone();
+    shifted_edge.edges[0] += 1e-12;
+    let mut missing_edge = reference.clone();
+    missing_edge.edges.pop();
+    let mut changed_voltage = reference.clone();
+    // A settled sample midway through this trace is outside the edge exclusion.
+    changed_voltage.samples[case.samples / 2] += case.full_scale * 1e-7;
+    for (label, changed) in [
+        ("1 ps edge shift", shifted_edge),
+        ("missing edge", missing_edge),
+        ("1e-7 full-scale voltage corruption", changed_voltage),
+    ] {
+        let verdict = compare(&case, &changed, &reference);
+        assert!(
+            !verdict.matches_reference(),
+            "freshness must reject {label}: {}",
+            verdict.describe(&case, &changed, &reference)
         );
     }
 }
