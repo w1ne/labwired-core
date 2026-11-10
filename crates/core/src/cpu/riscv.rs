@@ -187,6 +187,24 @@ pub struct RiscV {
     waiting_for_interrupt: bool,
     decode_cache: Box<[Option<RiscVDecodeCacheEntry>; 4096]>,
 
+    /// WCH QingKe V2 PFIC state (CH32V003), shared with the `wch_pfic`
+    /// register bank and the bus's pend path. `Some` makes this a QingKe core:
+    /// interrupts come from the PFIC's pending & enabled bits instead of
+    /// `mip`/`mie`, `mtvec` mode bit 1 selects an absolute-address vector
+    /// table, and the vendor CSR INTSYSCR (0x804) exists.
+    pfic: Option<Arc<crate::peripherals::nvic::NvicState>>,
+    /// QingKe INTSYSCR (CSR 0x804): HWSTKEN(0), INESTEN(1). HWSTKEN turns on
+    /// the hardware prologue/epilogue (`hpe_stack`). INESTEN is stored only:
+    /// with MIE cleared on entry no second interrupt is taken in a handler.
+    intsyscr: u32,
+    /// QingKe HPE: with INTSYSCR.HWSTKEN set, taking a PFIC interrupt saves
+    /// [`HPE_REGS`] in hardware and its `mret` restores them. WCH GCC's
+    /// `interrupt("WCH-Interrupt-fast")` handlers rely on it and save none of
+    /// those registers themselves. Kept as a register shadow stack: the
+    /// values come back exactly, but the stack bytes silicon may use for
+    /// them are not written.
+    hpe_stack: Vec<[u32; HPE_REGS.len()]>,
+
     /// Side-effect-free instruction-fetch window over flash-XIP and linear
     /// code memories (`extra_mem` IRAM/ROM). Avoids per-instruction
     /// `find_peripheral_index` + dyn dispatch — the post-XIP-opt profile
@@ -233,6 +251,12 @@ pub struct RiscV {
     jit_engine: Option<crate::cpu::jit_framework::riscv::RiscvJitEngine>,
 }
 
+/// The registers QingKe HPE saves: ra, t0-t2, a0-a5. Derived from WCH GCC
+/// 12.2.0 (`-march=rv32ecxw -mabi=ilp32e`): a handler clobbering every GPR
+/// saves exactly these ten under plain `interrupt`, and none of them under
+/// `interrupt("WCH-Interrupt-fast")`, which keeps only s0/s1.
+const HPE_REGS: [u8; 10] = [1, 5, 6, 7, 10, 11, 12, 13, 14, 15];
+
 /// Bytes of guest code held in the interpreter fetch window (power of two).
 const FETCH_WINDOW_BYTES: usize = 256;
 
@@ -267,6 +291,9 @@ impl RiscV {
             triggers: trigger::TriggerModule::default(),
             waiting_for_interrupt: false,
             decode_cache: Box::new([None; 4096]),
+            pfic: None,
+            intsyscr: 0,
+            hpe_stack: Vec::new(),
             fetch_base: 0,
             fetch_len: 0,
             fetch_bytes: [0; FETCH_WINDOW_BYTES],
@@ -276,6 +303,60 @@ impl RiscV {
             #[cfg(feature = "jit")]
             jit_engine: None,
         }
+    }
+
+    /// Attach a WCH QingKe PFIC (see the `pfic` field).
+    pub fn set_pfic(&mut self, state: Arc<crate::peripherals::nvic::NvicState>) {
+        self.pfic = Some(state);
+    }
+
+    /// The PFIC interrupt the core would take next: pending, enabled and not
+    /// already active, lowest IPRIOR byte first (lower is more urgent), then
+    /// lowest number. `None` without a PFIC.
+    fn pfic_next_irq(&self) -> Option<u32> {
+        use std::sync::atomic::Ordering;
+        let pfic = self.pfic.as_ref()?;
+        let mut best: Option<(u8, u32)> = None;
+        for word in 0..8 {
+            let mut bits = pfic.ispr[word].load(Ordering::SeqCst)
+                & pfic.iser[word].load(Ordering::SeqCst)
+                & !pfic.iabr[word].load(Ordering::SeqCst);
+            while bits != 0 {
+                let irq = word as u32 * 32 + bits.trailing_zeros();
+                bits &= bits - 1;
+                let key = (pfic.ipr_priority(irq as usize), irq);
+                if best.is_none_or(|b| key < b) {
+                    best = Some(key);
+                }
+            }
+        }
+        best.map(|(_, irq)| irq)
+    }
+
+    /// Take PFIC interrupt `irq` with `epc` as the return address: IPSR→IACTR,
+    /// the standard trap entry, then the QingKe vector. `mtvec` bit 0 selects
+    /// vectored entry; bit 1 makes each table slot an absolute handler
+    /// address rather than a jump instruction (WCH `startup_ch32v00x.S` writes
+    /// `_start | 3`, and its table at `_start` holds `.word` addresses).
+    ///
+    /// A vector slot that does not read back is a bus fault, returned as such.
+    fn take_pfic_irq(&mut self, bus: &mut dyn Bus, irq: u32, epc: u32) -> SimResult<()> {
+        use std::sync::atomic::Ordering;
+        if let Some(pfic) = &self.pfic {
+            let (word, bit) = ((irq / 32) as usize, 1u32 << (irq % 32));
+            pfic.ispr[word].fetch_and(!bit, Ordering::SeqCst);
+            pfic.iabr[word].fetch_or(bit, Ordering::SeqCst);
+        }
+        if self.intsyscr & 1 != 0 {
+            let saved = HPE_REGS.map(|r| self.read_reg(r));
+            self.hpe_stack.push(saved);
+        }
+        self.handle_trap(0x8000_0000 | irq, epc);
+        if self.mtvec & 3 == 3 {
+            let slot = (self.mtvec & !3).wrapping_add(irq.wrapping_mul(4));
+            self.pc = bus.read_u32(slot as u64)?;
+        }
+        Ok(())
     }
 
     /// Fetch a little-endian u32 instruction word at `self.pc`, preferring the
@@ -806,6 +887,8 @@ impl RiscV {
             // ROM. The observed writes discard the old values; any silicon
             // side effects are not modeled.
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
+            // QingKe INTSYSCR (see the `intsyscr` field).
+            0x804 if self.pfic.is_some() => self.intsyscr,
             // This emulator exposes one hart, whose architectural ID is zero.
             0xF14 => 0,
             // Debug trigger module (hardware breakpoints / watchpoints).
@@ -872,6 +955,7 @@ impl RiscV {
             0x000 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             // See read_csr: accept the ROM-init writes and discard their values.
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            0x804 if self.pfic.is_some() => self.intsyscr = val & 0x3,
             0x7A0..=0x7A5 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 return self.triggers.write_csr(csr, val)
             }
@@ -1068,7 +1152,10 @@ impl RiscV {
         }
         // Something is already pending (or an external line is asserted): the
         // interpreter would trap within one instruction. Do not batch past it.
-        if (self.mip & self.mie) != 0 || bus.external_irq_lines() != 0 {
+        if (self.mip & self.mie) != 0
+            || bus.external_irq_lines() != 0
+            || self.pfic_next_irq().is_some()
+        {
             return true;
         }
         // Internal timer edge inside the block's mtime span.
@@ -1221,6 +1308,7 @@ impl RiscV {
 impl Cpu for RiscV {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
         self.pc = 0;
+        self.hpe_stack.clear();
         self.invalidate_fetch_window();
         Ok(())
     }
@@ -1262,8 +1350,18 @@ impl Cpu for RiscV {
         let (instruction, inst_len) = if let Some(entry) = cached {
             (entry.instruction, entry.inst_len as u32)
         } else {
-            let instruction = decode_rv32(opcode);
+            let mut instruction = decode_rv32(opcode);
             let inst_len = if (opcode & 0x3) == 0x3 { 4 } else { 2 };
+            // A QingKe core also runs WCH's XW compressed loads/stores, which
+            // sit in RVC slots the base decoder leaves undecoded.
+            if self.pfic.is_some()
+                && inst_len == 2
+                && matches!(instruction, Instruction::Unknown(_))
+            {
+                if let Some(xw) = crate::decoder::riscv::decode_wch_xw(opcode as u16) {
+                    instruction = xw;
+                }
+            }
             if _config.decode_cache_enabled {
                 self.decode_cache[cache_idx] = Some(RiscVDecodeCacheEntry {
                     tag: self.pc,
@@ -1523,6 +1621,18 @@ impl Cpu for RiscV {
                 // Return from trap. Per the privileged spec:
                 //   MIE <- MPIE, MPIE <- 1 (privilege <- MPP, but we stay M-mode).
                 self.pc = self.mepc;
+                // QingKe: leaving a PFIC interrupt handler clears its IACTR bit.
+                // HPE restores what the matching entry saved.
+                if let (Some(pfic), true) = (&self.pfic, self.mcause & 0x8000_0000 != 0) {
+                    let irq = self.mcause & 0xFF;
+                    pfic.iabr[(irq / 32) as usize]
+                        .fetch_and(!(1 << (irq % 32)), std::sync::atomic::Ordering::SeqCst);
+                    if let Some(saved) = self.hpe_stack.pop() {
+                        for (r, v) in HPE_REGS.into_iter().zip(saved) {
+                            self.write_reg(r, v);
+                        }
+                    }
+                }
                 let mpie = (self.mstatus >> 7) & 1;
                 self.mstatus &= !(1 << 3); // clear MIE
                 self.mstatus |= mpie << 3; // MIE <- MPIE
@@ -1860,7 +1970,23 @@ impl Cpu for RiscV {
         // lines level-sensitively via `external_irq_lines()` after routing
         // asserted sources through the interrupt matrix. OR them into the local
         // mip view so a line stays asserted only while its source does.
-        if (self.mstatus & (1 << 3)) != 0 {
+        if (self.mstatus & (1 << 3)) != 0 && self.pfic.is_some() {
+            // QingKe: the PFIC is the only interrupt source; `mip`/`mie` are
+            // not consulted.
+            if let Some(irq) = self.pfic_next_irq() {
+                if !observers.is_empty() {
+                    crate::emit_trace_event(
+                        observers,
+                        labwired_hw_trace::TraceEvent::InstructionRetired {
+                            pc: retired_pc,
+                            opcode,
+                        },
+                    );
+                }
+                // Async interrupt: mepc is the NEXT instruction (see below).
+                return self.take_pfic_irq(bus, irq, next_pc);
+            }
+        } else if (self.mstatus & (1 << 3)) != 0 {
             // Standard machine sources are masked by `mie`; ESP32-C3 external
             // lines arrive already gated (enable + priority/threshold) by the
             // bus, so they bypass `mie` (which the C3 firmware leaves at 0).
@@ -2084,6 +2210,11 @@ impl Cpu for RiscV {
         self.write_reg(2, val); // x2 is SP
     }
     fn set_exception_pending(&mut self, _exception_num: u32) {
+        // A QingKe core reads the PFIC's own pending bits, which the bus has
+        // already set; a generic MEIP would mean nothing to it.
+        if self.pfic.is_some() {
+            return;
+        }
         // For RISC-V Machine mode, external interrupts are routed to MEIP (bit 11).
         // The specific 'exception_num' (IRQ) would be tracked by a PLIC.
         // Since we don't have a PLIC yet, we pend a generic external interrupt.
@@ -2094,7 +2225,8 @@ impl Cpu for RiscV {
         if !self.waiting_for_interrupt {
             return None;
         }
-        if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 {
+        if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 || self.pfic_next_irq().is_some()
+        {
             return None;
         }
         if self.mtimecmp == u64::MAX {

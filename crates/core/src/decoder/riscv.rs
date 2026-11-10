@@ -99,6 +99,84 @@ pub enum Instruction {
     Unknown(u32),
 }
 
+/// WCH QingKe "XW" compressed byte/halfword loads and stores (CH32V003,
+/// `-march=rv32ecxw`). They sit in RVC slots that RV32EC leaves free (the
+/// C.FLD/C.FSD/C.FLDSP/C.FSDSP slots and quadrant 0 funct3 = 100), and each
+/// one is a 2-byte encoding of a base load or store, so it decodes to that
+/// base instruction. `None` for any other halfword.
+///
+/// The bit layout is read off WCH's own assembler (`riscv-wch-elf-as`
+/// 12.2.0, `-march=rv32ecxw`), by assembling each mnemonic across its whole
+/// offset range and every operand register. The unit tests below pin those
+/// assembler outputs.
+///
+/// | insn                     | op | f3  | offset bits                                   |
+/// |--------------------------|----|-----|-----------------------------------------------|
+/// | c.lbu rd', o(rs1')       | 00 | 001 | o[0]=12 o[4:3]=11:10 o[2]=6 o[1]=5            |
+/// | c.sb  rs2', o(rs1')      | 00 | 101 | as c.lbu                                      |
+/// | c.lhu rd', o(rs1')       | 10 | 001 | o[5]=12 o[4:3]=11:10 o[2]=6 o[1]=5            |
+/// | c.sh  rs2', o(rs1')      | 10 | 101 | as c.lhu                                      |
+/// | c.{lbu,lhu,sb,sh}sp r', o(sp) | 00 | 100 | bits 6:5 = 00/01/10/11; bits 12:11 = 0; byte o[3:0]=10:7; half o[3:1]=10:8 o[4]=7 |
+pub fn decode_wch_xw(inst: u16) -> Option<Instruction> {
+    let inst = inst as u32;
+    let op = inst & 0x3;
+    let f3 = (inst >> 13) & 0x7;
+    let r_lo = (((inst >> 2) & 0x7) + 8) as u8; // rd' / rs2'
+    let r_hi = (((inst >> 7) & 0x7) + 8) as u8; // rs1'
+    let mid = ((inst >> 5) & 0x1) << 1 | ((inst >> 6) & 0x1) << 2 | ((inst >> 10) & 0x3) << 3;
+    let byte_imm = (mid | (inst >> 12) & 0x1) as i32;
+    let half_imm = (mid | ((inst >> 12) & 0x1) << 5) as i32;
+    Some(match (op, f3) {
+        (0b00, 0b001) => Instruction::Lbu {
+            rd: r_lo,
+            rs1: r_hi,
+            imm: byte_imm,
+        },
+        (0b00, 0b101) => Instruction::Sb {
+            rs1: r_hi,
+            rs2: r_lo,
+            imm: byte_imm,
+        },
+        (0b10, 0b001) => Instruction::Lhu {
+            rd: r_lo,
+            rs1: r_hi,
+            imm: half_imm,
+        },
+        (0b10, 0b101) => Instruction::Sh {
+            rs1: r_hi,
+            rs2: r_lo,
+            imm: half_imm,
+        },
+        (0b00, 0b100) if (inst >> 11) & 0x3 == 0 => {
+            let byte_sp = ((inst >> 7) & 0xF) as i32;
+            let half_sp = (((inst >> 8) & 0x7) << 1 | ((inst >> 7) & 0x1) << 4) as i32;
+            match (inst >> 5) & 0x3 {
+                0b00 => Instruction::Lbu {
+                    rd: r_lo,
+                    rs1: 2,
+                    imm: byte_sp,
+                },
+                0b01 => Instruction::Lhu {
+                    rd: r_lo,
+                    rs1: 2,
+                    imm: half_sp,
+                },
+                0b10 => Instruction::Sb {
+                    rs1: 2,
+                    rs2: r_lo,
+                    imm: byte_sp,
+                },
+                _ => Instruction::Sh {
+                    rs1: 2,
+                    rs2: r_lo,
+                    imm: half_sp,
+                },
+            }
+        }
+        _ => return None,
+    })
+}
+
 pub fn decode_rv32(inst: u32) -> Instruction {
     if (inst & 0x3) != 0x3 {
         return decode_rv32c((inst & 0xFFFF) as u16);
@@ -741,5 +819,291 @@ mod compressed_jump_tests {
             Instruction::CJ { imm } => assert_eq!(imm, 0, "c.j 0 (to self)"),
             other => panic!("expected CJ, got {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod wch_xw_tests {
+    use super::{decode_rv32, decode_wch_xw, Instruction::*};
+
+    /// Encodings produced by `riscv-wch-elf-as -march=rv32ecxw` (WCH GCC
+    /// 12.2.0 toolchain shipped with PlatformIO `ch32v`). a0 = x10, a1 = x11.
+    #[test]
+    fn matches_the_wch_assembler() {
+        let cases = [
+            (
+                0x2188,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 0,
+                },
+            ),
+            (
+                0x3188,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 1,
+                },
+            ),
+            (
+                0x21a8,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 2,
+                },
+            ),
+            (
+                0x21c8,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 4,
+                },
+            ),
+            (
+                0x2588,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 8,
+                },
+            ),
+            (
+                0x2988,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 16,
+                },
+            ),
+            (
+                0x3de8,
+                Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 31,
+                },
+            ),
+            (
+                0x218a,
+                Lhu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 0,
+                },
+            ),
+            (
+                0x21aa,
+                Lhu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 2,
+                },
+            ),
+            (
+                0x2dea,
+                Lhu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 30,
+                },
+            ),
+            (
+                0x3dea,
+                Lhu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 62,
+                },
+            ),
+            (
+                0xa188,
+                Sb {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 0,
+                },
+            ),
+            (
+                0xb188,
+                Sb {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 1,
+                },
+            ),
+            (
+                0xbde8,
+                Sb {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 31,
+                },
+            ),
+            (
+                0xa18a,
+                Sh {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 0,
+                },
+            ),
+            (
+                0xb18a,
+                Sh {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 32,
+                },
+            ),
+            (
+                0xbdea,
+                Sh {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 62,
+                },
+            ),
+            (
+                0x8008,
+                Lbu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 0,
+                },
+            ),
+            (
+                0x8088,
+                Lbu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 1,
+                },
+            ),
+            (
+                0x8788,
+                Lbu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 15,
+                },
+            ),
+            (
+                0x801c,
+                Lbu {
+                    rd: 15,
+                    rs1: 2,
+                    imm: 0,
+                },
+            ),
+            (
+                0x8000,
+                Lbu {
+                    rd: 8,
+                    rs1: 2,
+                    imm: 0,
+                },
+            ),
+            (
+                0x80c8,
+                Sb {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 1,
+                },
+            ),
+            (
+                0x87c8,
+                Sb {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 15,
+                },
+            ),
+            (
+                0x8128,
+                Lhu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 2,
+                },
+            ),
+            (
+                0x80a8,
+                Lhu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 16,
+                },
+            ),
+            (
+                0x87a8,
+                Lhu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 30,
+                },
+            ),
+            (
+                0x8168,
+                Sh {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 2,
+                },
+            ),
+            (
+                0x80e8,
+                Sh {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 16,
+                },
+            ),
+            (
+                0x87e8,
+                Sh {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 30,
+                },
+            ),
+            // The first XW instruction the WCH Arduino L0 image executes:
+            // `c.lhusp a1, 24(sp)` at 0x736.
+            (
+                0x84ac,
+                Lhu {
+                    rd: 11,
+                    rs1: 2,
+                    imm: 24,
+                },
+            ),
+        ];
+        for (raw, want) in cases {
+            assert_eq!(decode_wch_xw(raw), Some(want), "{raw:#06x}");
+        }
+    }
+
+    /// The XW slots are not base RV32C on their own: the generic decoder
+    /// leaves them undecoded, so only a QingKe core (which asks for XW
+    /// explicitly) runs them.
+    #[test]
+    fn base_decoder_leaves_the_xw_slots_alone() {
+        for raw in [0x2188u32, 0x218a, 0xa188, 0xa18a, 0x84ac] {
+            assert!(matches!(decode_rv32(raw), Unknown(_)), "{raw:#06x}");
+        }
+    }
+
+    #[test]
+    fn rvc_words_outside_the_xw_slots_are_not_xw() {
+        // c.lw a0, 0(a1); c.addi4spn s0, sp, 4; c.sw a0, 0(a1); c.mv a0, a1.
+        for raw in [0x4188u16, 0x0040, 0xc188, 0x852e] {
+            assert_eq!(decode_wch_xw(raw), None, "{raw:#06x}");
+        }
+        // Quadrant 0 funct3 = 100 with bits 12:11 set is still reserved.
+        assert_eq!(decode_wch_xw(0x8808), None);
     }
 }

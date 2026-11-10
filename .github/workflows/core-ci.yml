@@ -588,6 +588,7 @@ jobs:
             scripts/ci/test_chip_coverage.py \
             scripts/ci/test_part_coverage.py \
             scripts/ci/test_matrix_external_cache.py \
+            scripts/ci/test_matrix_pio_extras.py \
             scripts/ci/test_matrix_verdict.py \
             scripts/ci/test_cheat_ratchet.py \
             scripts/ci/test_ignore_reasons.py \

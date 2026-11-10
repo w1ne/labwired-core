@@ -4,7 +4,7 @@
 //   * two completed samples
 //   * deterministic pair (v0 == v1) — twin sources are fixed, not noise
 //   * family exact codes where the Arduino path is known to hit the model:
-//       AVR mid-scale 512; RP2040 unseeded channels 0
+//       AVR mid-scale 512; RP2040 and CH32V00x unseeded channels 0
 //   * values printed on OK for scoreboard audit
 //
 // Note: several STM32/nRF Arduino HAL paths still return 0 even when the
@@ -56,6 +56,11 @@ static bool samples_ok(int v0, int v1) {
 
 #elif defined(ARDUINO_ARCH_RP2040)
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).
+  return v0 == 0 && v1 == 0;
+
+#elif defined(CH32V00x)
+  // adc.rs `ch32v00x` profile: unseeded pads convert 0 (the F1 profile's
+  // DR+1 feedback is not inherited). Exact.
   return v0 == 0 && v1 == 0;
 
 #else

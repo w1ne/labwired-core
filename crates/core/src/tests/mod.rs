@@ -11,6 +11,10 @@ pub mod bus_trace_one_home;
 #[cfg(test)]
 pub mod chip_memory_sizes;
 
+/// CH32V003 TIM2 outputs on the WCH pads (stock Arduino analogWrite values).
+#[cfg(test)]
+pub mod ch32v003_timer_outputs;
+
 #[cfg(test)]
 pub mod cortex_m_fault_escalation;
 #[cfg(all(test, any(feature = "jit", feature = "jit-framework")))]

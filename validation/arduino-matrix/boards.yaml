@@ -132,6 +132,46 @@ boards:
     sketches_skip_reason:
       L8_can: "No on-chip CAN model"
 
+  - id: ch32v003
+    chip: ch32v003f4p6
+    system: systems/ch32v003.yaml
+    # WCH's official core (openwch/arduino_core_ch32) via the community ch32v
+    # platform; the build provenance file records exact revisions. The ELF is
+    # built in CI, used for the smoke, and excluded from artifacts because the
+    # upstream Arduino core has no redistribution license.
+    pio:
+      # Not in the PlatformIO registry; pinned to the fixture's revisions.
+      platform: https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7
+      board: genericCH32V003F4P6
+      framework: arduino
+      # platform.json names the framework by branch, so pin it here too.
+      platform_packages:
+        - "framework-arduino-openwch-ch32 @ https://github.com/Community-PIO-CH32V/arduino_core_ch32.git#3820604346d0a9f0ee9a72cab8b7583e488e6674"
+      # The CH32V003F4 variant leaves LED_BUILTIN as PNUM_NOT_DEFINED, and
+      # digitalWrite() on it compiles to a trap. PD0 is a pin choice (the
+      # ch32v003fun blink pin), not a board fact.
+      # PD0 is TIM1_CH1N, and TIM1 is not modelled; L6 drives TIM2_CH1 on its
+      # default pad PD4 (variant PeripheralPins.c PinMap_TIM) instead.
+      build_flags: ["-DLED_BUILTIN=PD0", "-DLW_PWM_PIN=PD4"]
+    max_steps: 3000000
+    budget_reason: "48 MHz RV32EC; L0 ~1M steps to LW_L0_OK in ch32v003_arduino.rs"
+    led_watch: "gpiod:0"
+    led_min_edges: 2
+    # Stock analogWrite(PD4, 128) must toggle the pad. A pin that falls back to
+    # digitalWrite (no TIM route) holds one level and fails this.
+    pwm_watch: "gpiod:4"
+    pwm_min_edges: 4
+    family: wch
+    notes: "QingKe V2A RV32EC: PFIC, STK, HPE, XW compressed insns"
+    sketches_skip: [L7_timer, L8_can]
+    sketches_skip_reason:
+      # Measured 2026-11-07: LW_L7_FAIL t0=1991 t1=3999 t2=3778 t3=4999.
+      L7_timer: >-
+        Upstream core bug, not a model gap: getCurrentMicros() (ch32/clock.c)
+        computes (CMP+1-CNT), which assumes a down-counter, but the V2 STK
+        counts up (WCH's own Delay_Ms polls CNTIF from CNT=0), so micros()
+        runs backwards inside each millisecond
+      L8_can: "No CAN on CH32V003"
   - id: rp2350
     chip: rp2350
     system: systems/rp2350.yaml

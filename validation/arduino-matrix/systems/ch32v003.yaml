@@ -1,0 +1,20 @@
+# Arduino matrix system — CH32V003F4P6 bare chip plus the L3 I2C and L4 SPI kits.
+name: "arduino-matrix-ch32v003"
+chip: "../../../configs/chips/ch32v003f4p6.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on the variant's default Wire bus
+  # (i2c1; SDA PC1, SCL PC2).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on the variant's default SPI (spi1).
+  # PIN_SPI_SS is PC4 (variant_CH32V003F4.h). Single-device bus: CS is
+  # soft-ignored by SpiDevice v1 broadcast.
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PC4"
+board_io: []

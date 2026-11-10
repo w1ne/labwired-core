@@ -476,6 +476,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// WCH QingKe PFIC capability: the enable/pending/active/priority state of
+    /// a `wch_pfic` block. `configure_riscv` hands it to the core (which takes
+    /// interrupts from it) and to the bus's pend path. `None` for every other
+    /// peripheral.
+    fn wch_pfic_state(&self) -> Option<std::sync::Arc<crate::peripherals::nvic::NvicState>> {
+        None
+    }
+
     /// Cortex-M FP extension capability: the FP context control state
     /// (FPCCR/FPCAR/FPDSCR) of a `cortex_m_fpu` block. `configure_cortex_m`
     /// hands it to the core, which then tracks CONTROL.FPCA and stacks
@@ -621,6 +629,16 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Pin resolution and co-simulation ask this instead of downcasting to each
     /// port model they know about.
     fn gpio_port_offsets(&self) -> Option<crate::peripherals::gpio::GpioPortOffsets> {
+        None
+    }
+
+    /// GPIO capability: the register layout of a [`GpioPort`] (STM32 F1-style,
+    /// WCH, STM32v2, nRF, ...), so pad tables keyed by layout can tell a
+    /// CH32V003 port from an STM32F103 one without downcasting. `None` for
+    /// every other peripheral.
+    ///
+    /// [`GpioPort`]: crate::peripherals::gpio::GpioPort
+    fn gpio_register_layout(&self) -> Option<crate::peripherals::gpio::GpioRegisterLayout> {
         None
     }
 

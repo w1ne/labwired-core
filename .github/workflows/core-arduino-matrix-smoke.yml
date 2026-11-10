@@ -64,6 +64,7 @@ jobs:
           - stm32wb55
           - stm32wba52
           - atmega328p
+          - ch32v003
 
     steps:
       - uses: actions/checkout@v4
@@ -134,6 +135,8 @@ jobs:
             esp32c6)     platform=espressif32@8.0.0 ;;
             esp32*)      platform=espressif32@7.0.1 ;;
             atmega328p)  platform=atmelavr@5.3.0 ;;
+            # Not in the registry; same pin as boards.yaml (fixture revision).
+            ch32v003)    platform=https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7 ;;
             *)
               echo "::error::no PlatformIO platform mapped for board '${{ matrix.board }}'"
               exit 1
@@ -170,12 +173,26 @@ jobs:
             --sketches L0_serial_boot,L1_serial_loop,L2_blink_serial,L3_i2c_sensor,L4_spi_sensor,L5_adc,L6_pwm,L7_timer,L8_can \
             --out "$OUT"
 
+      - name: Verify WCH Arduino L0 through the PFIC model
+        if: matrix.board == 'ch32v003'
+        env:
+          CH32V003_ARDUINO_L0_ELF: ${{ github.workspace }}/validation/arduino-matrix/out-ci/ch32v003/ch32v003/L0_serial_boot/firmware.elf
+          # Keep this targeted integration test optimized without paying the
+          # workspace-wide LTO memory cost on the matrix runner.
+          CARGO_PROFILE_RELEASE_LTO: "false"
+        run: cargo test --release -p labwired-core --test ch32v003_arduino --features ch32v003-arduino-l0-smoke
+
       - name: Upload board artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: arduino-matrix-${{ matrix.board }}
-          path: validation/arduino-matrix/out-ci/${{ matrix.board }}/
+          path: |
+            validation/arduino-matrix/out-ci/${{ matrix.board }}/
+            !validation/arduino-matrix/out-ci/ch32v003/**/*.elf
+            !validation/arduino-matrix/out-ci/ch32v003/**/*.bin
+            !validation/arduino-matrix/out-ci/ch32v003/**/*.hex
+            !validation/arduino-matrix/out-ci/ch32v003/**/*.map
           retention-days: 2
           if-no-files-found: ignore
 
