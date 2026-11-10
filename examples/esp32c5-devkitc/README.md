@@ -3,13 +3,13 @@
 This focused board profile runs a bare-metal RISC-V smoke on the ESP32-C5 HP
 core. Firmware writes `ESP32_C5_UART0_OK` through UART0, reads the BME280 chip
 ID and raw temperature ADC over I2C0 on GPIO6/GPIO10, and sends a red GRB
-WS2812 frame to the onboard RGB LED on GPIO27. The C5-specific GPIO matrix,
-IO_MUX and PCR clock gate are modeled for these paths. UART0 TX/RX are
-GPIO11/GPIO12 on J3 pins 2/3.
+WS2812 frame through RMT TX0 to the onboard RGB LED on GPIO27. The C5-specific
+GPIO matrix, IO_MUX, PCR clock controls and timed RMT TX path are modeled for
+these paths. UART0 TX/RX are GPIO11/GPIO12 on J3 pins 2/3.
 
 Demand rank: **ESP32 family #1** in the 2025 JetBrains MCU-use survey (38%).
-This extends the existing ESP32-C5-DevKitC-1 v1.2 coverage with a common
-environmental sensor breakout.
+This round adds modeled RMT TX for the existing board's onboard RGB LED. It is
+coverage depth in the top-ranked family, not a new MCU or board demand pick.
 
 ## Wiring
 
@@ -56,6 +56,19 @@ void setup() {
 void loop() {}
 ```
 
+For the onboard RGB LED, install the Espressif Arduino core for ESP32-C5-DevKitC-1
+and upload this sketch:
+
+```cpp
+#include <Arduino.h>
+
+void setup() {
+  rgbLedWrite(27, 64, 0, 0);
+}
+
+void loop() {}
+```
+
 ## Quick run
 
 From the repository root:
@@ -72,13 +85,13 @@ cargo run -q -p labwired-cli -- test \
 The committed [`evidence/`](evidence/) directory contains the onboarding
 runner's build logs, smoke transcript, simulation output, and metrics. The
 fixture checks UART output, the BME280 ID (`0x60`), the modeled raw temperature
-sample (`0x082DC0`), GPIO27 edges, and the decoded red LED frame. To run the
-bare-metal firmware, use
+sample (`0x082DC0`), RMT TX completion, GPIO27 edges, and the decoded red LED
+frame. To run the bare-metal firmware, use
 [`src/main.rs`](../../crates/firmware-esp32c5-devkitc-smoke/src/main.rs) with
 the Cargo command above.
 
-This profile does not model a ROM boot, RMT, the other board peripherals,
-general-purpose behavior on unlisted GPIO pads, or the USB-UART bridge's
-electrical propagation. The repository smoke is local runner evidence; the
-external `labwired_verify` service does not yet list ESP32-C5 as a supported
-target. See [known limitations](KNOWN_LIMITATIONS.md).
+This profile does not model a ROM boot, RMT receive/carrier/DMA, the other
+board peripherals, general-purpose behavior on unlisted GPIO pads, or the
+USB-UART bridge's electrical propagation. The repository smoke is local runner
+evidence; the external `labwired_verify` service does not yet list ESP32-C5 as a
+supported target. See [known limitations](KNOWN_LIMITATIONS.md).

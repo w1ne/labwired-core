@@ -5,8 +5,8 @@
 //! Narrow ESP32-C5 peripheral support for the current DevKitC-1 board profile.
 //!
 //! The board slice models UART0 TX, GPIO6/GPIO10's I2C0 matrix route to a BME280,
-//! and the direct GPIO27 output used by its addressable RGB LED. Other GPIO/RMT
-//! paths, radios, USB and the LP core are not claimed.
+//! and RMT TX0 on GPIO27 for its addressable RGB LED. Other GPIO/RMT paths,
+//! radios, USB and the LP core are not claimed.
 
 pub mod factory;
 pub mod gpio;

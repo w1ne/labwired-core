@@ -1,23 +1,23 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 1500000,
-  "cycles": 3168754,
-  "instructions": 1500000,
+  "steps_executed": 2500000,
+  "cycles": 5168908,
+  "instructions": 2500000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 1500000
+      "value": 2500000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 1500000
+      "value": 2500000
     }
   },
   "limits": {
-    "max_steps": 1500000,
+    "max_steps": 2500000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -43,6 +43,12 @@
     {
       "assertion": {
         "uart_contains": "BME280_TEMP_RAW=0x082DC0"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "ESP32_C5_RMT_TX_END=PASS"
       },
       "passed": true
     },
@@ -79,39 +85,39 @@
     "type": "risc_v",
     "registers": [
       0,
-      1107311648,
-      1082523600,
+      1107296588,
+      1082523584,
       1082132480,
       0,
-      536870912,
-      1611202560,
-      3221225472,
-      1107311856,
-      61,
-      0,
-      134217728,
-      6144,
-      1280,
-      1107311868,
-      120,
-      1611210752,
-      238,
-      56,
-      73,
-      2049,
+      77,
+      82,
+      67,
+      80,
+      80,
+      83,
+      10,
+      95,
+      1610612736,
+      83,
+      95,
       68,
-      48,
+      78,
+      88,
+      69,
+      51,
+      84,
+      84,
+      53,
+      83,
+      95,
       0,
       0,
-      0,
-      0,
-      0,
-      4294938623,
-      4096,
-      50,
-      95
+      95,
+      65,
+      61,
+      50
     ],
-    "pc": 1107311648,
+    "pc": 1107298338,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -120,7 +126,7 @@
     "mepc": 0,
     "mcause": 0,
     "mtval": 0,
-    "mtime": 1500000,
+    "mtime": 2500000,
     "mtimecmp": 0,
     "triggers": {
       "tselect": 0,
@@ -147,7 +153,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "827929a538226e353201e98d1bbe1b38be6dc03498deb7a4fa93e469c4dd3ba4",
+  "firmware_hash": "cfdfa0f72ed08763b7169857aaee20cee8032bfd5b6084790b1766ca1279e84d",
   "config": {
     "firmware": "examples/esp32c5-devkitc/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c5-devkitc-smoke",
     "system": "examples/esp32c5-devkitc/../../configs/systems/esp32c5-devkitc.yaml",
@@ -316,7 +322,7 @@
             "name": "GPIO_FUNC27_OUT_SEL_CFG",
             "offset": 2880,
             "size": 32,
-            "value": 1280,
+            "value": 1088,
             "fields": [
               {
                 "name": "OUT_SEL",
@@ -811,6 +817,262 @@
             }
           }
         ]
+      },
+      {
+        "name": "rmt",
+        "kind": "native",
+        "base": 1610637312,
+        "registers": [
+          {
+            "name": "CH0DATA",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH1DATA",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH2DATA",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH3DATA",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH0_TX_CONF0",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH1_TX_CONF0",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH2_RX_CONF0",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH2_RX_CONF1",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH3_RX_CONF0",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH3_RX_CONF1",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH0_TX_STATUS",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH1_TX_STATUS",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH2_RX_STATUS",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH3_RX_STATUS",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ST",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ENA",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH0CARRIER_DUTY",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH1CARRIER_DUTY",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH2_RX_CARRIER_RM",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH3_RX_CARRIER_RM",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH0_TX_LIM",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH1_TX_LIM",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH2_RX_LIM",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CH3_RX_LIM",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SYS_CONF",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TX_SIM",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "REF_CNT_RST",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 204,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "rmt_tx",
+            "id": "tx_start",
+            "meta": {
+              "count": 1
+            }
+          }
+        ]
       }
     ],
     "devices": [
@@ -912,7 +1174,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 1500000,
+    "now_cycle": 2500000,
     "channels": [
       {
         "ch": 0,
@@ -922,195 +1184,195 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 236038,
+            "cycle": 236086,
             "value": 1
           },
           {
-            "cycle": 236099,
+            "cycle": 236170,
             "value": 0
-          },
-          {
-            "cycle": 236325,
-            "value": 1
           },
           {
             "cycle": 236386,
-            "value": 0
-          },
-          {
-            "cycle": 236612,
             "value": 1
           },
           {
-            "cycle": 236673,
+            "cycle": 236470,
             "value": 0
           },
           {
-            "cycle": 236899,
+            "cycle": 236686,
             "value": 1
           },
           {
-            "cycle": 236960,
+            "cycle": 236770,
             "value": 0
           },
           {
-            "cycle": 237186,
+            "cycle": 236986,
             "value": 1
           },
           {
-            "cycle": 237247,
+            "cycle": 237070,
             "value": 0
           },
           {
-            "cycle": 237473,
+            "cycle": 237286,
             "value": 1
           },
           {
-            "cycle": 237534,
+            "cycle": 237370,
             "value": 0
           },
           {
-            "cycle": 237760,
+            "cycle": 237586,
             "value": 1
           },
           {
-            "cycle": 237821,
+            "cycle": 237670,
             "value": 0
           },
           {
-            "cycle": 238047,
+            "cycle": 237886,
             "value": 1
           },
           {
-            "cycle": 238108,
+            "cycle": 237970,
             "value": 0
           },
           {
-            "cycle": 238334,
+            "cycle": 238186,
             "value": 1
           },
           {
-            "cycle": 238479,
+            "cycle": 238270,
             "value": 0
           },
           {
-            "cycle": 238621,
+            "cycle": 238486,
             "value": 1
           },
           {
-            "cycle": 238766,
+            "cycle": 238654,
             "value": 0
           },
           {
-            "cycle": 238908,
+            "cycle": 238786,
             "value": 1
           },
           {
-            "cycle": 239053,
+            "cycle": 238954,
             "value": 0
           },
           {
-            "cycle": 239195,
+            "cycle": 239086,
             "value": 1
           },
           {
-            "cycle": 239340,
+            "cycle": 239254,
             "value": 0
           },
           {
-            "cycle": 239482,
+            "cycle": 239386,
             "value": 1
           },
           {
-            "cycle": 239627,
+            "cycle": 239554,
             "value": 0
           },
           {
-            "cycle": 239769,
+            "cycle": 239686,
             "value": 1
           },
           {
-            "cycle": 239914,
+            "cycle": 239854,
             "value": 0
           },
           {
-            "cycle": 240056,
+            "cycle": 239986,
             "value": 1
           },
           {
-            "cycle": 240201,
+            "cycle": 240154,
             "value": 0
           },
           {
-            "cycle": 240343,
+            "cycle": 240286,
             "value": 1
           },
           {
-            "cycle": 240488,
+            "cycle": 240454,
             "value": 0
           },
           {
-            "cycle": 240630,
+            "cycle": 240586,
             "value": 1
           },
           {
-            "cycle": 240691,
+            "cycle": 240754,
             "value": 0
           },
           {
-            "cycle": 240917,
+            "cycle": 240886,
             "value": 1
           },
           {
-            "cycle": 240978,
+            "cycle": 240970,
             "value": 0
           },
           {
-            "cycle": 241204,
+            "cycle": 241186,
             "value": 1
           },
           {
-            "cycle": 241265,
+            "cycle": 241270,
             "value": 0
           },
           {
-            "cycle": 241491,
+            "cycle": 241486,
             "value": 1
           },
           {
-            "cycle": 241552,
+            "cycle": 241570,
             "value": 0
           },
           {
-            "cycle": 241778,
+            "cycle": 241786,
             "value": 1
           },
           {
-            "cycle": 241839,
+            "cycle": 241870,
             "value": 0
           },
           {
-            "cycle": 242065,
+            "cycle": 242086,
             "value": 1
           },
           {
-            "cycle": 242126,
+            "cycle": 242170,
             "value": 0
           },
           {
-            "cycle": 242352,
+            "cycle": 242386,
             "value": 1
           },
           {
-            "cycle": 242413,
+            "cycle": 242470,
             "value": 0
           },
           {
-            "cycle": 242639,
+            "cycle": 242686,
             "value": 1
           },
           {
-            "cycle": 242700,
+            "cycle": 242770,
+            "value": 0
+          },
+          {
+            "cycle": 242986,
+            "value": 1
+          },
+          {
+            "cycle": 243070,
             "value": 0
           }
         ],
@@ -1118,203 +1380,204 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 236037,
+            "cycle": 236057,
             "state": "0"
           },
           {
-            "cycle": 236038,
+            "cycle": 236086,
             "state": "1"
           },
           {
-            "cycle": 236099,
+            "cycle": 236170,
             "state": "0"
-          },
-          {
-            "cycle": 236325,
-            "state": "1"
           },
           {
             "cycle": 236386,
-            "state": "0"
-          },
-          {
-            "cycle": 236612,
             "state": "1"
           },
           {
-            "cycle": 236673,
+            "cycle": 236470,
             "state": "0"
           },
           {
-            "cycle": 236899,
+            "cycle": 236686,
             "state": "1"
           },
           {
-            "cycle": 236960,
+            "cycle": 236770,
             "state": "0"
           },
           {
-            "cycle": 237186,
+            "cycle": 236986,
             "state": "1"
           },
           {
-            "cycle": 237247,
+            "cycle": 237070,
             "state": "0"
           },
           {
-            "cycle": 237473,
+            "cycle": 237286,
             "state": "1"
           },
           {
-            "cycle": 237534,
+            "cycle": 237370,
             "state": "0"
           },
           {
-            "cycle": 237760,
+            "cycle": 237586,
             "state": "1"
           },
           {
-            "cycle": 237821,
+            "cycle": 237670,
             "state": "0"
           },
           {
-            "cycle": 238047,
+            "cycle": 237886,
             "state": "1"
           },
           {
-            "cycle": 238108,
+            "cycle": 237970,
             "state": "0"
           },
           {
-            "cycle": 238334,
+            "cycle": 238186,
             "state": "1"
           },
           {
-            "cycle": 238479,
+            "cycle": 238270,
             "state": "0"
           },
           {
-            "cycle": 238621,
+            "cycle": 238486,
             "state": "1"
           },
           {
-            "cycle": 238766,
+            "cycle": 238654,
             "state": "0"
           },
           {
-            "cycle": 238908,
+            "cycle": 238786,
             "state": "1"
           },
           {
-            "cycle": 239053,
+            "cycle": 238954,
             "state": "0"
           },
           {
-            "cycle": 239195,
+            "cycle": 239086,
             "state": "1"
           },
           {
-            "cycle": 239340,
+            "cycle": 239254,
             "state": "0"
           },
           {
-            "cycle": 239482,
+            "cycle": 239386,
             "state": "1"
           },
           {
-            "cycle": 239627,
+            "cycle": 239554,
             "state": "0"
           },
           {
-            "cycle": 239769,
+            "cycle": 239686,
             "state": "1"
           },
           {
-            "cycle": 239914,
+            "cycle": 239854,
             "state": "0"
           },
           {
-            "cycle": 240056,
+            "cycle": 239986,
             "state": "1"
           },
           {
-            "cycle": 240201,
+            "cycle": 240154,
             "state": "0"
           },
           {
-            "cycle": 240343,
+            "cycle": 240286,
             "state": "1"
           },
           {
-            "cycle": 240488,
+            "cycle": 240454,
             "state": "0"
           },
           {
-            "cycle": 240630,
+            "cycle": 240586,
             "state": "1"
           },
           {
-            "cycle": 240691,
+            "cycle": 240754,
             "state": "0"
           },
           {
-            "cycle": 240917,
+            "cycle": 240886,
             "state": "1"
           },
           {
-            "cycle": 240978,
+            "cycle": 240970,
             "state": "0"
           },
           {
-            "cycle": 241204,
+            "cycle": 241186,
             "state": "1"
           },
           {
-            "cycle": 241265,
+            "cycle": 241270,
             "state": "0"
           },
           {
-            "cycle": 241491,
+            "cycle": 241486,
             "state": "1"
           },
           {
-            "cycle": 241552,
+            "cycle": 241570,
             "state": "0"
           },
           {
-            "cycle": 241778,
+            "cycle": 241786,
             "state": "1"
           },
           {
-            "cycle": 241839,
+            "cycle": 241870,
             "state": "0"
           },
           {
-            "cycle": 242065,
+            "cycle": 242086,
             "state": "1"
           },
           {
-            "cycle": 242126,
+            "cycle": 242170,
             "state": "0"
           },
           {
-            "cycle": 242352,
+            "cycle": 242386,
             "state": "1"
           },
           {
-            "cycle": 242413,
+            "cycle": 242470,
             "state": "0"
           },
           {
-            "cycle": 242639,
+            "cycle": 242686,
             "state": "1"
           },
           {
-            "cycle": 242700,
+            "cycle": 242770,
+            "state": "0"
+          },
+          {
+            "cycle": 242986,
+            "state": "1"
+          },
+          {
+            "cycle": 243070,
             "state": "0"
           }
         ],
-        "mode": "output",
+        "mode": "af",
+        "func": "RMT_SIG_OUT0",
         "edge_count": 48
       }
     ]
@@ -1324,8 +1587,8 @@
       "pin": "CH0",
       "peripheral": "gpio",
       "number": 27,
-      "mode": "output",
-      "func": null,
+      "mode": "af",
+      "func": "RMT_SIG_OUT0",
       "output": false,
       "input": false,
       "pad": false,
@@ -1336,35 +1599,41 @@
     "lines": [
       {
         "text": "ESP32_C5_UART0_OK",
-        "cycle_lo": 20940,
-        "cycle": 20941,
-        "end_cycle": 374880
+        "cycle_lo": 20942,
+        "cycle": 20943,
+        "end_cycle": 374882
       },
       {
         "text": "BME280_ID=0x60",
-        "cycle_lo": 395699,
-        "cycle": 395700,
-        "end_cycle": 687180
+        "cycle_lo": 395701,
+        "cycle": 395702,
+        "end_cycle": 687182
       },
       {
         "text": "BME280_TEMP_RAW=0x082DC0",
-        "cycle_lo": 707999,
-        "cycle": 708000,
-        "end_cycle": 1207680
+        "cycle_lo": 708001,
+        "cycle": 708002,
+        "end_cycle": 1207682
+      },
+      {
+        "text": "ESP32_C5_RMT_TX_END=PASS",
+        "cycle_lo": 1228501,
+        "cycle": 1228502,
+        "end_cycle": 1728182
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 15726,
+    "text_bytes": 2414,
     "data_bytes": 0,
     "bss_bytes": 393216,
-    "flash_used_bytes": 15726,
+    "flash_used_bytes": 2414,
     "ram_static_bytes": 393216,
     "flash_total_bytes": 8388608,
     "ram_total_bytes": 393216,
-    "flash_used_pct": 0.19,
+    "flash_used_pct": 0.03,
     "ram_static_pct": 100.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -1377,91 +1646,91 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 3168754,
-    "instructions": 1500000,
-    "steps_executed": 1500000,
-    "memory_reads": 60,
-    "memory_writes": 12,
-    "peripheral_accesses": 33849,
+    "cycles": 5168908,
+    "instructions": 2500000,
+    "steps_executed": 2500000,
+    "memory_reads": 7,
+    "memory_writes": 14,
+    "peripheral_accesses": 35060,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1107311648,
-        "count": 4770,
+        "pc": 1107298338,
+        "count": 8815,
         "symbol": "main"
       },
       {
-        "pc": 1107296902,
-        "count": 47,
+        "pc": 1107297236,
+        "count": 33,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 1107296904,
-        "count": 47,
-        "symbol": "firmware_esp32c5_devkitc_smoke::ws2812_reset_gap"
-      },
-      {
-        "pc": 1107296906,
-        "count": 47,
+        "pc": 1107297238,
+        "count": 33,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
         "pc": 1107297242,
         "count": 33,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 1107297244,
-        "count": 33,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+        "symbol": "core::ptr::read_volatile"
       },
       {
         "pc": 1107297248,
         "count": 33,
+        "symbol": "firmware_esp32c5_devkitc_smoke::read_bme280_register"
+      },
+      {
+        "pc": 1107297252,
+        "count": 33,
+        "symbol": "firmware_esp32c5_devkitc_smoke::read_bme280_register"
+      },
+      {
+        "pc": 1107297256,
+        "count": 33,
+        "symbol": "firmware_esp32c5_devkitc_smoke::read_bme280_register"
+      },
+      {
+        "pc": 1107297432,
+        "count": 33,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 1107297434,
+        "count": 33,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 1107297436,
+        "count": 33,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 1107297250,
-        "count": 33,
-        "symbol": "firmware_esp32c5_devkitc_smoke::read_bme280_register"
-      },
-      {
-        "pc": 1107297254,
-        "count": 33,
-        "symbol": "firmware_esp32c5_devkitc_smoke::read_bme280_register"
-      },
-      {
-        "pc": 1107297262,
+        "pc": 1107297438,
         "count": 33,
         "symbol": "firmware_esp32c5_devkitc_smoke::read_bme280_register"
       },
       {
         "pc": 1107297444,
         "count": 33,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 1107297446,
-        "count": 33,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+        "symbol": "firmware_esp32c5_devkitc_smoke::read_bme280_register"
       },
       {
         "pc": 1107297448,
         "count": 33,
+        "symbol": "firmware_esp32c5_devkitc_smoke::read_bme280_register"
+      },
+      {
+        "pc": 1107297618,
+        "count": 33,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 1107297622,
+        "count": 33,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 1107297450,
-        "count": 33,
-        "symbol": "firmware_esp32c5_devkitc_smoke::read_bme280_register"
-      },
-      {
-        "pc": 1107297454,
-        "count": 33,
-        "symbol": "firmware_esp32c5_devkitc_smoke::read_bme280_register"
-      },
-      {
-        "pc": 1107297456,
+        "pc": 1107297624,
         "count": 33,
         "symbol": "firmware_esp32c5_devkitc_smoke::read_bme280_register"
       }

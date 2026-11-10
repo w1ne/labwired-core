@@ -2,12 +2,12 @@
 #![no_main]
 #![allow(clippy::empty_loop)]
 
-//! ESP32-C5-DevKitC-1 v1.2 UART0, BME280 I2C, and GPIO27 RGB LED smoke.
+//! ESP32-C5-DevKitC-1 v1.2 UART0, BME280 I2C, and GPIO27 RMT RGB LED smoke.
 //!
 //! This bare-metal image runs on the HP RISC-V core, reads the BME280 ID and
 //! temperature ADC through the GPIO6/GPIO10 I2C0 route, sends a UART0 marker,
-//! and bit-bangs one red WS2812 frame to the GPIO27 RGB LED. It does not start
-//! the ESP-IDF ROM/bootloader.
+//! and transmits one red WS2812 frame through RMT TX0 on GPIO27. It does not
+//! start the ESP-IDF ROM/bootloader.
 
 use panic_halt as _;
 use riscv_rt::entry;
@@ -18,11 +18,13 @@ const UART0_FIFO: *mut u32 = 0x6000_0000 as *mut u32;
 const PCR_UART0_CONF: *mut u32 = 0x6009_6000 as *mut u32;
 const PCR_UART0_SCLK_CONF: *mut u32 = 0x6009_6004 as *mut u32;
 const PCR_I2C0_CONF: *mut u32 = 0x6009_6020 as *mut u32;
+const PCR_RMT_CONF: *mut u32 = 0x6009_603C as *mut u32;
+const PCR_RMT_SCLK_CONF: *mut u32 = 0x6009_6040 as *mut u32;
+const PCR_RMT_PD_CTRL: *mut u32 = 0x6009_6044 as *mut u32;
 /// UART0_CLKDIV_SYNC at UART0 base + 0x14. PLL_F80M / 694 gives approximately
 /// 115,200 baud for 8N1.
 const UART0_CLKDIV_SYNC: *mut u32 = 0x6000_0014 as *mut u32;
-/// GPIO27 direct output path from ESP-IDF C5 `gpio_reg.h` and the C5 TRM.
-const GPIO_OUT_W1TS: *mut u32 = 0x6009_1008 as *mut u32;
+/// GPIO27 output-enable and matrix selector from ESP-IDF C5 `gpio_reg.h`.
 const GPIO_OUT_W1TC: *mut u32 = 0x6009_100C as *mut u32;
 const GPIO_ENABLE_W1TS: *mut u32 = 0x6009_1038 as *mut u32;
 const GPIO_FUNC6_OUT_SEL_CFG: *mut u32 = 0x6009_1AEC as *mut u32;
@@ -32,6 +34,12 @@ const GPIO_FUNC10_OUT_SEL_CFG: *mut u32 = 0x6009_1AFC as *mut u32;
 const GPIO_FUNC27_OUT_SEL_CFG: *mut u32 = 0x6009_1B40 as *mut u32;
 const GPIO_FUNC46_IN_SEL_CFG: *mut u32 = 0x6009_138C as *mut u32;
 const GPIO_FUNC47_IN_SEL_CFG: *mut u32 = 0x6009_1390 as *mut u32;
+/// C5 RMT register window and channel-0 shared symbol RAM.
+const RMT_SYS_CONF: *mut u32 = 0x6000_6068 as *mut u32;
+const RMT_CH0_CONF0: *mut u32 = 0x6000_6010 as *mut u32;
+const RMT_INT_RAW: *const u32 = 0x6000_6038 as *const u32;
+const RMT_INT_CLR: *mut u32 = 0x6000_6044 as *mut u32;
+const RMT_RAM: *mut u32 = 0x6000_6400 as *mut u32;
 /// ESP32-C5 IO_MUX registers for GPIO6, GPIO10 and GPIO27.
 const IO_MUX_GPIO6: *mut u32 = 0x6009_0018 as *mut u32;
 const IO_MUX_GPIO10: *mut u32 = 0x6009_0028 as *mut u32;
@@ -57,28 +65,8 @@ const INT_END_DETECT: u32 = 1 << 3;
 const INT_TRANS_COMPLETE: u32 = 1 << 7;
 const INT_NACK: u32 = 1 << 10;
 const GPIO27_MASK: u32 = 1 << 27;
-
-// At 240 MHz these keep the WS2812B high phase below/above the model's 500 ns
-// zero/one threshold while keeping each bit cell near 1.25 us.
-#[inline(always)]
-fn short_high() {
-    unsafe { core::arch::asm!(".rept 60\n nop\n .endr", options(nomem, nostack)) }
-}
-
-#[inline(always)]
-fn long_high() {
-    unsafe { core::arch::asm!(".rept 144\n nop\n .endr", options(nomem, nostack)) }
-}
-
-#[inline(always)]
-fn short_low() {
-    unsafe { core::arch::asm!(".rept 225\n nop\n .endr", options(nomem, nostack)) }
-}
-
-#[inline(always)]
-fn long_low() {
-    unsafe { core::arch::asm!(".rept 141\n nop\n .endr", options(nomem, nostack)) }
-}
+const RMT_TX_END: u32 = 1;
+const RMT_CONF0_DIV2_MEM1_IDLE_LOW: u32 = (2 << 8) | (1 << 16) | (1 << 6);
 
 fn uart_byte(byte: u8) {
     unsafe { core::ptr::write_volatile(UART0_FIFO, u32::from(byte)) }
@@ -202,29 +190,57 @@ unsafe fn smoke_bme280() {
 }
 
 #[inline(always)]
-unsafe fn send_ws2812_byte(byte: u8) {
-    for bit in (0..8).rev() {
-        let one = (byte & (1 << bit)) != 0;
-        core::ptr::write_volatile(GPIO_OUT_W1TS, GPIO27_MASK);
-        if one {
-            long_high();
-        } else {
-            short_high();
-        }
-        core::ptr::write_volatile(GPIO_OUT_W1TC, GPIO27_MASK);
-        if one {
-            long_low();
-        } else {
-            short_low();
-        }
-    }
+fn ws2812_symbol(high_ticks: u32, low_ticks: u32) -> u32 {
+    // RMT symbol layout: duration0[14:0], level0[15], duration1[30:16],
+    // level1[31]. Both phases use the 80 MHz source divided by two (25 ns).
+    high_ticks | (1 << 15) | (low_ticks << 16)
 }
 
-#[inline(never)]
-fn ws2812_reset_gap() {
-    for _ in 0..12_000 {
-        unsafe { core::arch::asm!("nop", options(nomem, nostack)) }
+unsafe fn smoke_rmt_ws2812() {
+    // Enable RMT's PCR function clock, select PLL_F80M, and power up the
+    // memory. SYS_CONF selects direct symbol-RAM access and keeps its clock on.
+    core::ptr::write_volatile(PCR_RMT_CONF, 1);
+    core::ptr::write_volatile(PCR_RMT_SCLK_CONF, (2 << 20) | (1 << 22));
+    core::ptr::write_volatile(PCR_RMT_PD_CTRL, 1 << 2);
+    core::ptr::write_volatile(RMT_SYS_CONF, 0x0500_001B);
+
+    // Route GPIO27 from RMT TX0 (GPIO matrix signal 64) and enable its output.
+    let mux = core::ptr::read_volatile(IO_MUX_GPIO27);
+    core::ptr::write_volatile(IO_MUX_GPIO27, (mux & !(0b111 << 12)) | (1 << 12));
+    core::ptr::write_volatile(GPIO_FUNC27_OUT_SEL_CFG, 64 | (1 << 10));
+    core::ptr::write_volatile(GPIO_OUT_W1TC, GPIO27_MASK);
+    core::ptr::write_volatile(GPIO_ENABLE_W1TS, GPIO27_MASK);
+
+    // WS2812B uses GRB byte order. Zero is 350 ns high / 900 ns low and one
+    // is 700 ns high / 550 ns low at the selected 40 MHz RMT tick rate.
+    let mut word_index = 0usize;
+    for byte in [0x00u8, 0xFF, 0x00] {
+        for bit in (0..8).rev() {
+            let (high, low) = if byte & (1 << bit) == 0 {
+                (14, 36)
+            } else {
+                (28, 22)
+            };
+            core::ptr::write_volatile(RMT_RAM.add(word_index), ws2812_symbol(high, low));
+            word_index += 1;
+        }
     }
+    // A zero-duration symbol terminates playback after the 24 data symbols.
+    core::ptr::write_volatile(RMT_RAM.add(word_index), 0);
+
+    core::ptr::write_volatile(RMT_CH0_CONF0, RMT_CONF0_DIV2_MEM1_IDLE_LOW);
+    core::ptr::write_volatile(RMT_CH0_CONF0, RMT_CONF0_DIV2_MEM1_IDLE_LOW | (1 << 1));
+    core::ptr::write_volatile(RMT_CH0_CONF0, RMT_CONF0_DIV2_MEM1_IDLE_LOW | 1);
+
+    for _ in 0..250_000 {
+        if core::ptr::read_volatile(RMT_INT_RAW) & RMT_TX_END != 0 {
+            core::ptr::write_volatile(RMT_INT_CLR, RMT_TX_END);
+            uart_str("ESP32_C5_RMT_TX_END=PASS\n");
+            return;
+        }
+        core::arch::asm!("nop", options(nomem, nostack));
+    }
+    uart_str("ESP32_C5_RMT_TX_END=ERROR\n");
 }
 
 #[entry]
@@ -242,19 +258,7 @@ fn main() -> ! {
         setup_i2c();
         smoke_bme280();
 
-        // GPIO27's IO_MUX Function 1 is GPIO27. GPIO_FUNC27_OUT_SEL selects
-        // the GPIO_OUT latch and OE_SEL selects GPIO_ENABLE_REG[27].
-        let mux = core::ptr::read_volatile(IO_MUX_GPIO27);
-        core::ptr::write_volatile(IO_MUX_GPIO27, (mux & !(0b111 << 12)) | (1 << 12));
-        core::ptr::write_volatile(GPIO_FUNC27_OUT_SEL_CFG, 256 | (1 << 10));
-        core::ptr::write_volatile(GPIO_OUT_W1TC, GPIO27_MASK);
-        core::ptr::write_volatile(GPIO_ENABLE_W1TS, GPIO27_MASK);
-
-        // The onboard pixel expects GRB wire order; 00 FF 00 is red.
-        send_ws2812_byte(0x00);
-        send_ws2812_byte(0xFF);
-        send_ws2812_byte(0x00);
-        ws2812_reset_gap();
+        smoke_rmt_ws2812();
     }
 
     loop {}

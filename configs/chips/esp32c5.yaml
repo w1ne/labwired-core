@@ -1,4 +1,4 @@
-# ESP32-C5 HP-core profile for the ESP32-C5-DevKitC-1 v1.2 UART, GPIO/I2C and
+# ESP32-C5 HP-core profile for the ESP32-C5-DevKitC-1 v1.2 UART, GPIO/I2C, and
 # onboard RGB LED smoke. Only GPIO6, GPIO10 and GPIO27 are exposed.
 name: "esp32c5"
 arch: "riscv"
@@ -37,7 +37,7 @@ peripherals:
   - id: "pcr"
     type: "esp32c5_pcr"
     base_address: 0x60096000
-    size: "40"
+    size: "72"
   - id: "uart0"
     type: "esp32c5_uart"
     irq: 47
@@ -47,7 +47,7 @@ peripherals:
     config:
       echo_stdout: true
   # The narrow C5 GPIO model covers GPIO6/10 I2C matrix routing and GPIO27's
-  # direct output path to the onboard addressable RGB LED.
+  # RMT TX0 output path to the onboard addressable RGB LED.
   - id: "gpio"
     type: "esp32c5_gpio"
     base_address: 0x60091000
@@ -71,3 +71,15 @@ peripherals:
     clock: { controller: "pcr", reg: "I2C0_CONF", bit: 0 }
     config:
       debug_schema: "../peripherals/esp32c6/i2c0.yaml"
+  # RMT TX0 drives GPIO27 through the C5 GPIO matrix signal 64. The model
+  # covers timed TX playback and the shared 192-word symbol RAM; RX, carrier,
+  # DMA and fractional clock changes remain outside this board profile.
+  - id: "rmt"
+    type: "esp32c5_rmt"
+    irq: 55 # ETS_RMT_INTR_SOURCE (ESP-IDF C5 interrupts.h)
+    base_address: 0x60006000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "RMT_CONF", bit: 0 }
+    config:
+      cpu_clock_hz: 240000000
+      debug_schema: "../peripherals/esp32c3/rmt.yaml"

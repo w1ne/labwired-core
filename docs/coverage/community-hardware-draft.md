@@ -7,6 +7,38 @@ reviewed before publication.
 
 ## ESP32 — rank 1, 38% of reported MCU use
 
+### ESP32-C5-DevKitC-1 v1.2 / ESP32-C5-WROOM-1-N8R8
+
+This is more coverage within the already top-ranked ESP32 family, not a new
+board or MCU demand pick. The v1.2 board guide lists the N8R8 variant with
+8 MB flash and 8 MB PSRAM, and DigiKey currently lists the exact board as
+Active and in stock. The focused LabWired profile exercises UART0, a BME280 on
+I2C0 (GPIO6/GPIO10), and the onboard GPIO27 addressable RGB LED through RMT
+TX0. The committed local smoke checks the BME280 ID and temperature register,
+RMT TX completion, GPIO edges, and a decoded red LED pixel. It does not claim a
+ROM/ESP-IDF boot, physical-board result, or hosted `model_verified` result.
+
+Copy-paste Arduino example for the onboard GPIO27 RGB LED with the Espressif
+Arduino core for ESP32-C5:
+
+```cpp
+#include <Arduino.h>
+
+void setup() {
+  rgbLedWrite(27, 64, 0, 0);  // red
+}
+
+void loop() {}
+```
+
+The [ESP32-C5-DevKitC-1 v1.2 guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c5/esp32-c5-devkitc-1/user_guide.html)
+identifies the N8R8 module and GPIO27 LED. [DigiKey's exact N8R8 listing](https://www.digikey.com/en/products/detail/espressif-systems/ESP32-C5-DEVKITC-1-N8R8/28718162)
+showed Active status and 312 in stock when checked on 2026-11-10. The local
+smoke, wiring notes and run instructions are in
+[`examples/esp32c5-devkitc/`](../../examples/esp32c5-devkitc/); its detailed
+availability record is in
+[`evidence/vendor-status.md`](../../examples/esp32c5-devkitc/evidence/vendor-status.md).
+
 ### ESP32-DevKitC-32E / ESP32-WROOM-32E
 
 The board profile boots Arduino firmware and exercises UART0, UART1 TX, GPIO,

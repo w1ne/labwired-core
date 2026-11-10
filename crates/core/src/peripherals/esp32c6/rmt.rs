@@ -2,14 +2,14 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! ESP32-C6 RMT transmitter model.
+//! ESP32-C5/C6 RMT transmitter model.
 //!
-//! The model covers the C6's two TX channels, shared symbol RAM, the TX
+//! The model covers the C5/C6 two-channel TX path, shared symbol RAM, the TX
 //! configuration/status/interrupt registers, and timed GPIO-matrix output.
 //! It does not model RX sampling, carrier modulation, DMA, or the fractional
-//! RMT clock divider. The register layout is from Espressif's `esp32c6.svd`
-//! v9 (vendor claim); GPIO output signal indices 71 and 72 come from the
-//! Espressif ESP-IDF C6 `gpio_sig_map.h`.
+//! RMT clock divider. The C6 register layout is from Espressif's `esp32c6.svd`
+//! v9; C5 uses the matching TX/RAM layout in its TRM and `rmt_struct.h`. GPIO
+//! output signal indices differ: 71/72 on C6 and 64/65 on C5.
 
 use crate::bus::SystemBus;
 use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
@@ -26,6 +26,13 @@ const TX_WT_MASK: u32 = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 23) | (1 << 24);
 const RX_CONF1_WT_MASK: u32 = (1 << 1) | (1 << 2) | (1 << 14) | (1 << 15);
 const ENTRY_DURATION_MASK: u32 = 0x7FFF;
 const RMT_SOURCE_C6: u32 = 49;
+const RMT_SOURCE_HZ: u64 = 80_000_000;
+
+#[derive(Debug, Clone, Copy)]
+enum GpioProfile {
+    C5,
+    C6,
+}
 
 #[derive(Debug)]
 struct Playback {
@@ -43,6 +50,9 @@ struct Playback {
 #[derive(Debug)]
 pub struct Esp32c6Rmt {
     source_id: u32,
+    gpio_profile: GpioProfile,
+    output_signal_base: u32,
+    cpu_cycles_per_source_tick: u64,
     tx_conf0: [u32; TX_CHANNELS],
     rx_conf0: [u32; 2],
     rx_conf1: [u32; 2],
@@ -59,6 +69,21 @@ pub struct Esp32c6Rmt {
 
 impl Esp32c6Rmt {
     pub fn new(source_id: u32) -> Self {
+        Self::new_with_profile(source_id, GpioProfile::C6, 71, 160_000_000)
+    }
+
+    /// Construct the same TX/RAM IP for ESP32-C5's distinct GPIO model and
+    /// signal numbering. C5 board profiles use the fixed 80 MHz PLL source.
+    pub fn new_for_c5(source_id: u32, cpu_clock_hz: u32) -> Self {
+        Self::new_with_profile(source_id, GpioProfile::C5, 64, cpu_clock_hz)
+    }
+
+    fn new_with_profile(
+        source_id: u32,
+        gpio_profile: GpioProfile,
+        output_signal_base: u32,
+        cpu_clock_hz: u32,
+    ) -> Self {
         let mut regs = [0; 0x34];
         // SVD-stated reset for SYS_CONF (APB FIFO mode, memory clock on,
         // divider 1, 80 MHz source active). Other inherited reset values are
@@ -66,6 +91,9 @@ impl Esp32c6Rmt {
         regs[0x68 / 4] = 0x0500_0010;
         Self {
             source_id,
+            gpio_profile,
+            output_signal_base,
+            cpu_cycles_per_source_tick: (u64::from(cpu_clock_hz) / RMT_SOURCE_HZ).max(1),
             tx_conf0: [0x0071_0200; TX_CHANNELS],
             rx_conf0: [0x30FF_FF02; 2],
             rx_conf1: [0x0000_01E8; 2],
@@ -121,10 +149,11 @@ impl Esp32c6Rmt {
     fn decode_edges(&self, channel: usize) -> (Vec<(u64, bool)>, u64) {
         let base = channel * BLOCK_WORDS;
         let len = self.tx_mem_words(channel);
-        // The C6 RMT clock is 80 MHz, while the modeled HP CPU is 160 MHz.
-        // DIV_CNT is integer-only here; fractional divider and source changes
-        // are outside this model.
-        let cycles_per_tick = (((self.tx_conf0[channel] >> 8) & 0xFF).max(1) as u64) * 2;
+        // The C5/C6 board profiles use an 80 MHz RMT source. DIV_CNT is
+        // integer-only here; fractional divider and source changes are outside
+        // this model.
+        let cycles_per_tick = (((self.tx_conf0[channel] >> 8) & 0xFF).max(1) as u64)
+            * self.cpu_cycles_per_source_tick;
         let mut edges = Vec::new();
         let mut level = false;
         let mut cycle = 0u64;
@@ -157,7 +186,7 @@ impl Esp32c6Rmt {
         if !edges.is_empty() {
             self.playback = Some(Playback {
                 channel,
-                signal: 71 + channel as u32,
+                signal: self.output_signal_base + channel as u32,
                 edges,
                 duration_cycles,
                 next: 0,
@@ -254,7 +283,7 @@ impl Esp32c6Rmt {
         }
     }
 
-    fn with_gpio<R>(bus: &mut dyn Bus, f: impl FnOnce(&mut Esp32c3Gpio) -> R) -> Option<R> {
+    fn with_c6_gpio<R>(bus: &mut dyn Bus, f: impl FnOnce(&mut Esp32c3Gpio) -> R) -> Option<R> {
         let system = bus.as_any_mut()?.downcast_mut::<SystemBus>()?;
         let index = system.find_peripheral_index_by_name("gpio")?;
         let gpio = system.peripherals[index]
@@ -262,6 +291,46 @@ impl Esp32c6Rmt {
             .as_any_mut()?
             .downcast_mut::<Esp32c3Gpio>()?;
         Some(f(gpio))
+    }
+
+    fn with_c5_gpio<R>(
+        bus: &mut dyn Bus,
+        f: impl FnOnce(&mut crate::peripherals::esp32c5::gpio::Esp32c5Gpio) -> R,
+    ) -> Option<R> {
+        let system = bus.as_any_mut()?.downcast_mut::<SystemBus>()?;
+        let index = system.find_peripheral_index_by_name("gpio")?;
+        let gpio = system.peripherals[index]
+            .dev
+            .as_any_mut()?
+            .downcast_mut::<crate::peripherals::esp32c5::gpio::Esp32c5Gpio>()?;
+        Some(f(gpio))
+    }
+
+    fn output_pads(&self, bus: &mut dyn Bus, signal: u32) -> Vec<u8> {
+        match self.gpio_profile {
+            GpioProfile::C5 => Self::with_c5_gpio(bus, |gpio| gpio.pads_for_output_signal(signal)),
+            GpioProfile::C6 => Self::with_c6_gpio(bus, |gpio| gpio.pads_for_output_signal(signal)),
+        }
+        .unwrap_or_default()
+    }
+
+    fn drive_output_at(&self, bus: &mut dyn Bus, pads: &[u8], level: bool, cycle: u64) {
+        match self.gpio_profile {
+            GpioProfile::C5 => {
+                Self::with_c5_gpio(bus, |gpio| {
+                    for &pad in pads {
+                        gpio.drive_pad_output_at(pad, level, cycle);
+                    }
+                });
+            }
+            GpioProfile::C6 => {
+                Self::with_c6_gpio(bus, |gpio| {
+                    for &pad in pads {
+                        gpio.drive_pad_output_at(pad, level, cycle);
+                    }
+                });
+            }
+        }
     }
 }
 
@@ -312,8 +381,7 @@ impl Peripheral for Esp32c6Rmt {
 
         if !self.playback.as_ref().unwrap().resolved {
             let signal = self.playback.as_ref().unwrap().signal;
-            let pads = Self::with_gpio(bus, |gpio| gpio.pads_for_output_signal(signal))
-                .unwrap_or_default();
+            let pads = self.output_pads(bus, signal);
             let playback = self.playback.as_mut().unwrap();
             playback.resolved = true;
             playback.pads = pads;
@@ -339,13 +407,9 @@ impl Peripheral for Esp32c6Rmt {
             )
         };
         if !edges.is_empty() {
-            Self::with_gpio(bus, |gpio| {
-                for (offset, level) in edges {
-                    for &pad in &pads {
-                        gpio.drive_pad_output_at(pad, level, started_cycle.saturating_add(offset));
-                    }
-                }
-            });
+            for (offset, level) in edges {
+                self.drive_output_at(bus, &pads, level, started_cycle.saturating_add(offset));
+            }
         }
         if done {
             self.int_raw |= 1 << channel;

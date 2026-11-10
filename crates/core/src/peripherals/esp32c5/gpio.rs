@@ -5,8 +5,8 @@
 //! Narrow ESP32-C5 GPIO slice for DevKitC I2C sensors and the onboard RGB LED.
 //!
 //! GPIO6 and GPIO10 carry the modeled I2C0 GPIO-matrix route. GPIO27 carries
-//! direct GPIO output to the onboard WS2812 LED. Other pads and GPIO features
-//! are outside this profile.
+//! either direct GPIO output or RMT channel 0 to the onboard WS2812 LED. Other
+//! pads and GPIO features are outside this profile.
 
 use crate::peripherals::esp32c3::i2c::{C3I2cMatrixRoute, C3I2cMatrixRouteState};
 use crate::peripherals::gpio::{GpioMode, GpioRouting};
@@ -42,6 +42,8 @@ const FUNC47_IN_SEL: u64 = 0x390; // I2CEXT0_SDA
 
 const SIG_I2CEXT0_SCL: u32 = 46;
 const SIG_I2CEXT0_SDA: u32 = 47;
+const SIG_RMT_OUT0: u32 = 64;
+const SIG_RMT_OUT1: u32 = 65;
 const SIG_GPIO_OUT: u32 = 256;
 const OE_SEL: u32 = 1 << 10;
 const INPUT_MATRIX_SELECT: u32 = 1 << 8;
@@ -65,6 +67,7 @@ pub struct Esp32c5Gpio {
     func6_out_sel: u32,
     func10_out_sel: u32,
     func27_out_sel: u32,
+    rmt27_level: Option<bool>,
     func46_in_sel: u32,
     func47_in_sel: u32,
     io_mux_gpio6: Option<super::io_mux::PadControl>,
@@ -86,6 +89,7 @@ impl Esp32c5Gpio {
             func6_out_sel: SIG_GPIO_OUT,
             func10_out_sel: SIG_GPIO_OUT,
             func27_out_sel: SIG_GPIO_OUT,
+            rmt27_level: None,
             // C5 GPIO_FUNCn_IN_SEL_CFG resets to constant-low input (0x60).
             func46_in_sel: 0x60,
             func47_in_sel: 0x60,
@@ -165,12 +169,44 @@ impl Esp32c5Gpio {
     fn gpio27_output_selected(&self) -> bool {
         self.enable & GPIO27_MASK != 0
             && self.io_mux_selects_gpio(GPIO27)
-            && self.func27_out_sel & 0x1FF == SIG_GPIO_OUT
             && self.func27_out_sel & OE_SEL != 0
     }
 
     fn gpio27_level(&self) -> bool {
-        self.gpio27_output_selected() && self.out & GPIO27_MASK != 0
+        if !self.gpio27_output_selected() {
+            return false;
+        }
+        match self.func27_out_sel & 0x1FF {
+            SIG_GPIO_OUT => self.out & GPIO27_MASK != 0,
+            SIG_RMT_OUT0 | SIG_RMT_OUT1 => self.rmt27_level.unwrap_or(false),
+            _ => false,
+        }
+    }
+
+    /// Resolve an active C5 GPIO-matrix signal to the modeled board pad.
+    pub(crate) fn pads_for_output_signal(&self, signal: u32) -> Vec<u8> {
+        if self.matrix_output_selected(GPIO27, signal) {
+            vec![GPIO27]
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Deliver a timed peripheral edge through the selected GPIO27 matrix
+    /// route, then notify attached board devices such as the WS2812 model.
+    pub(crate) fn drive_pad_output_at(&mut self, pin: u8, level: bool, sim_cycle: u64) -> bool {
+        if pin != GPIO27
+            || !self.gpio27_output_selected()
+            || !matches!(self.func27_out_sel & 0x1FF, SIG_RMT_OUT0 | SIG_RMT_OUT1)
+        {
+            return false;
+        }
+        let before = self.pin_level(GPIO27);
+        self.rmt27_level = Some(level);
+        self.cycle = sim_cycle;
+        let after = self.pin_level(GPIO27);
+        self.notify_gpio27_transition(before, after);
+        true
     }
 
     fn i2c_pad_level(&self, pin: u8) -> Option<bool> {
@@ -249,9 +285,7 @@ impl Esp32c5Gpio {
     }
 
     fn write_word(&mut self, offset: u64, value: u32) {
-        let before_gpio27 = self
-            .gpio27_output_selected()
-            .then(|| self.out & GPIO27_MASK != 0);
+        let before_gpio27 = self.gpio27_output_selected().then(|| self.gpio27_level());
         match offset {
             OUT => self.out = value & MODELED_PINS_MASK,
             OUT_W1TS => self.out |= value & MODELED_PINS_MASK,
@@ -267,9 +301,7 @@ impl Esp32c5Gpio {
             _ => return,
         }
         self.refresh_i2c_matrix_route();
-        let after_gpio27 = self
-            .gpio27_output_selected()
-            .then(|| self.out & GPIO27_MASK != 0);
+        let after_gpio27 = self.gpio27_output_selected().then(|| self.gpio27_level());
         self.notify_gpio27_transition(before_gpio27, after_gpio27);
     }
 }
@@ -354,6 +386,8 @@ impl Peripheral for Esp32c5Gpio {
             let func = match signal {
                 SIG_I2CEXT0_SCL => Some("I2CEXT0_SCL".to_owned()),
                 SIG_I2CEXT0_SDA => Some("I2CEXT0_SDA".to_owned()),
+                SIG_RMT_OUT0 => Some("RMT_SIG_OUT0".to_owned()),
+                SIG_RMT_OUT1 => Some("RMT_SIG_OUT1".to_owned()),
                 _ => None,
             };
             GpioRouting {
@@ -385,6 +419,7 @@ impl Peripheral for Esp32c5Gpio {
             "gpio6_out": self.out & GPIO6_MASK != 0,
             "gpio10_out": self.out & GPIO10_MASK != 0,
             "gpio27_out": self.out & GPIO27_MASK != 0,
+            "gpio27_rmt_level": self.rmt27_level,
             "enable": self.enable,
             "func6_out_sel": self.func6_out_sel,
             "func10_out_sel": self.func10_out_sel,
@@ -408,6 +443,9 @@ impl Peripheral for Esp32c5Gpio {
                 }
             }
         }
+        self.rmt27_level = state
+            .get("gpio27_rmt_level")
+            .and_then(serde_json::Value::as_bool);
         if let Some(value) = state.get("enable").and_then(serde_json::Value::as_u64) {
             self.enable = value as u32 & MODELED_PINS_MASK;
         }
@@ -433,6 +471,7 @@ impl Peripheral for Esp32c5Gpio {
             self.func6_out_sel,
             self.func10_out_sel,
             self.func27_out_sel,
+            self.rmt27_level,
             self.func46_in_sel,
             self.func47_in_sel,
             self.cycle,
@@ -442,12 +481,13 @@ impl Peripheral for Esp32c5Gpio {
 
     fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
         if !bytes.is_empty() {
-            let (out, enable, func6, func10, func27, in46, in47, cycle): (
+            let (out, enable, func6, func10, func27, rmt27_level, in46, in47, cycle): (
                 u32,
                 u32,
                 u32,
                 u32,
                 u32,
+                Option<bool>,
                 u32,
                 u32,
                 u64,
@@ -461,6 +501,7 @@ impl Peripheral for Esp32c5Gpio {
             self.func6_out_sel = func6;
             self.func10_out_sel = func10;
             self.func27_out_sel = func27;
+            self.rmt27_level = rmt27_level;
             self.func46_in_sel = in46;
             self.func47_in_sel = in47;
             self.cycle = cycle;
@@ -490,7 +531,7 @@ impl PinPort for Esp32c5Gpio {
     fn driver(&self, pin: u8) -> Option<PadDriver> {
         match pin {
             GPIO27 => Some(if self.gpio27_output_selected() {
-                PadDriver::output(self.out & GPIO27_MASK != 0, false)
+                PadDriver::output(self.gpio27_level(), false)
             } else {
                 PadDriver::released(Pull::None)
             }),

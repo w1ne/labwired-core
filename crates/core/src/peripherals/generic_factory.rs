@@ -152,6 +152,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c5_pcr",
     "esp32c5_gpio",
     "esp32c5_io_mux",
+    "esp32c5_rmt",
     "esp32p4_gpio",
     // S31's narrow GPIO7/GPIO8 board slice is built by the Espressif family
     // factory; keep these canonical so generic GPIO heuristics cannot claim it.
