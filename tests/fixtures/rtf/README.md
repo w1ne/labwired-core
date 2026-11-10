@@ -3,7 +3,9 @@
 One realistic stock-Arduino sketch per main board, timed by
 `scripts/perf/board_rtf.py` (run from `scripts/perf/board_rtx.py`, which the
 Core Perf `board-throughput` job already runs). Each sketch runs forever and
-prints `RTF_READY <id>` once, so a dead boot cannot pass as a fast run.
+prints `RTF_READY <id>` once. Every measured run must reach that marker and
+the complete cycle budget. The Pico workload also proves continued display
+progress; a startup marker alone did not detect its old ROM stall.
 
 | id | board | parts | guest time |
 |----|-------|-------|-----------:|
@@ -33,9 +35,31 @@ cargo build --release -p labwired-cli --features event-scheduler
 python3 scripts/perf/board_rtx.py --boards atmega328p,rp2040,esp32c3,stm32f411ceu6
 ```
 
-This writes `rtf.json` (board, workload, guest_s, wall_s, Mcycles/s, rtf,
-commit, runner). The gate compares `index = best workload RTF / best spin RTx of the same chip`
-against `scripts/perf/rtf_baselines.json`, so a faster or slower runner does
-not move it; a drop of more than 25% (`--rtf-tolerance`) fails. The
-deterministic Ir/step gate (`board_perf.py`) stays the fine-grained detector. After an intended change,
-re-baseline with `--update-rtf`.
+This writes `rtf.json`, including each workload sample, the long-spin samples
+and denominator, and hashes of the CLI, firmware, ROM, configurations and
+harness. The checkout identity is recorded separately; it does not prove
+which source built a supplied CLI.
+
+The gate compares `index = best workload RTF / best spin RTx of the same chip`
+against `scripts/perf/rtf_baselines.json`. This normalization cancels a common
+host-speed factor. Different instruction mixes, host contention and independent
+spin optimizations can still move the ratio. A drop of more than 25%
+(`--rtf-tolerance`) fails. The deterministic Ir/step gate (`board_perf.py`)
+remains the finer detector.
+
+For `pico_oled_pwm`, each eight-second sample must contain at least 75 distinct
+nonblank OLED frames and a final frame at or after 7.5 seconds. The sketch
+redraws every 100 ms; this allows five updates for startup or missed draws.
+The guard checks the existing result's declared I2C0/0x3C display, dimensions,
+power state, frame hashes and increasing timestamps. It adds no execution
+observer. Missing or malformed evidence fails the measurement.
+
+The former Pico baseline used a ROM without the floating-point table required
+by the committed ELF. Replaying that ROM produces one display frame and then
+stalls after the ready marker. The corrected ROM produces 79 frames. Its replacement
+measurement and positive/negative controls are recorded in
+[`2026-11-10-rp2040-rtf-progress.json`](../../../scripts/perf/receipts/2026-11-10-rp2040-rtf-progress.json).
+
+Use `--update-rtf` only after verifying equivalent useful work, reviewing the
+reason for a baseline change, and retaining the raw measurement and build
+provenance. A failing progress check must never be re-baselined as a fast run.

@@ -873,9 +873,24 @@ def build_fixtures(fixtures: set[str]) -> tuple[dict[str, Path], dict[str, str]]
             print(f"SKIPPING fixture '{name}': build failed\n{proc.stderr[-2000:]}", file=sys.stderr)
             continue
 
-        elf = cwd / f"target/{spec.target}/release/{spec.crate}"
-        if not elf.exists():
-            elf = REPO_ROOT / f"target/{spec.target}/release/{spec.crate}"
+        target_override = env.get("CARGO_TARGET_DIR")
+        if target_override is not None:
+            # Cargo resolves an environment override relative to its build
+            # cwd. Never substitute a stale default-target ELF for this build.
+            target_dir = Path(target_override)
+            if not target_dir.is_absolute():
+                target_dir = cwd / target_dir
+            elf = target_dir / spec.target / "release" / spec.crate
+        else:
+            elf = cwd / f"target/{spec.target}/release/{spec.crate}"
+            if not elf.exists():
+                elf = REPO_ROOT / f"target/{spec.target}/release/{spec.crate}"
+        if not elf.is_file():
+            selected = f" (CARGO_TARGET_DIR={target_override!r})" if target_override is not None else ""
+            raise RuntimeError(
+                f"fixture '{name}': Cargo succeeded but the expected ELF{selected} "
+                f"is missing or not a file: {elf}"
+            )
         shutil.copy2(elf, out)
         built[name] = out
     return built, skipped
