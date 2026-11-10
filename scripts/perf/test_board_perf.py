@@ -127,6 +127,92 @@ def test_only_optional_fixtures_may_be_skipped():
             assert spec.optional, f"{spec.crate} needs {spec.toolchain} but is not optional"
 
 
+def _mock_cargo_fixture(monkeypatch, tmp_path, override, output_root):
+    """Only Cargo is mocked; fixture output selection and copying are real."""
+    root = tmp_path / "repo"
+    cwd = root / "standalone"
+    cwd.mkdir(parents=True)
+    spec = bp.Spin("perf-spin-test", "thumbv7m-none-eabi", directory="standalone")
+    monkeypatch.setattr(bp, "REPO_ROOT", root)
+    monkeypatch.setattr(bp, "FIXTURE_DIR", root / "collected")
+    monkeypatch.setattr(bp, "fixture_spec", lambda _name: spec)
+    monkeypatch.setattr(bp, "fixture_origins", lambda _name: (0x08000000, 0x20000000))
+    monkeypatch.setattr(bp, "toolchain_available", lambda _spec: True)
+    if override is None:
+        monkeypatch.delenv("CARGO_TARGET_DIR", raising=False)
+    else:
+        monkeypatch.setenv("CARGO_TARGET_DIR", str(override))
+
+    def cargo(cmd, **kwargs):
+        assert cmd == ["cargo", "build", "--release", "--target", spec.target]
+        assert kwargs["cwd"] == cwd
+        assert kwargs["env"].get("CARGO_TARGET_DIR") == (
+            None if override is None else str(override)
+        )
+        if output_root is not None:
+            elf = output_root / spec.target / "release" / spec.crate
+            elf.parent.mkdir(parents=True, exist_ok=True)
+            elf.write_bytes(b"fresh Cargo ELF")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(bp.subprocess, "run", cargo)
+    return spec, cwd
+
+
+def _seed_default_fixture_outputs(spec, cwd):
+    for target in (cwd / "target", bp.REPO_ROOT / "target"):
+        elf = target / spec.target / "release" / spec.crate
+        elf.parent.mkdir(parents=True, exist_ok=True)
+        elf.write_bytes(b"stale default ELF")
+
+
+def test_build_fixtures_honors_absolute_cargo_target_dir(monkeypatch, tmp_path):
+    target = tmp_path / "shared-target"
+    _mock_cargo_fixture(monkeypatch, tmp_path, target, target)
+    built, skipped = bp.build_fixtures({"test"})
+    assert skipped == {}
+    assert built["test"].read_bytes() == b"fresh Cargo ELF"
+
+
+@pytest.mark.parametrize("override", ["local-target", "../shared-target"])
+def test_build_fixtures_resolves_relative_target_from_build_cwd(monkeypatch, tmp_path, override):
+    cwd = tmp_path / "repo/standalone"
+    _mock_cargo_fixture(monkeypatch, tmp_path, override, cwd / override)
+    monkeypatch.chdir(tmp_path)  # Neither the harness cwd nor REPO_ROOT is the build cwd.
+    built, skipped = bp.build_fixtures({"test"})
+    assert skipped == {}
+    assert built["test"].read_bytes() == b"fresh Cargo ELF"
+
+
+def test_build_fixtures_override_wins_over_stale_default_elf(monkeypatch, tmp_path):
+    target = tmp_path / "shared-target"
+    spec, cwd = _mock_cargo_fixture(monkeypatch, tmp_path, target, target)
+    _seed_default_fixture_outputs(spec, cwd)
+    built, skipped = bp.build_fixtures({"test"})
+    assert skipped == {}
+    assert built["test"].read_bytes() == b"fresh Cargo ELF"
+
+
+@pytest.mark.parametrize("relative", [False, True])
+def test_build_fixtures_missing_override_output_cannot_fall_back(monkeypatch, tmp_path, relative):
+    override = "selected-target" if relative else tmp_path / "selected-target"
+    spec, cwd = _mock_cargo_fixture(monkeypatch, tmp_path, override, None)
+    _seed_default_fixture_outputs(spec, cwd)
+    expected = (cwd / override if relative else override) / spec.target / "release" / spec.crate
+    with pytest.raises(RuntimeError, match="CARGO_TARGET_DIR") as exc:
+        bp.build_fixtures({"test"})
+    assert str(expected) in str(exc.value)
+    assert not (bp.FIXTURE_DIR / "perf-spin-test").exists()
+
+
+@pytest.mark.parametrize("location", ["standalone/target", "target"])
+def test_build_fixtures_preserves_unset_target_lookup(monkeypatch, tmp_path, location):
+    _mock_cargo_fixture(monkeypatch, tmp_path, None, tmp_path / "repo" / location)
+    built, skipped = bp.build_fixtures({"test"})
+    assert skipped == {}
+    assert built["test"].read_bytes() == b"fresh Cargo ELF"
+
+
 def test_unclassified_chip_is_an_error_not_a_silent_skip():
     with pytest.raises(bp.CoverageError) as exc:
         bp.plan_coverage({"newchip": _chip(0x60000000, 0x24000000)})

@@ -22,7 +22,7 @@ pins:
 
 peripherals:
   - id: "uart0"
-    type: "uart"
+    type: "esp32_uart"
     base_address: 0x3FF40000
     size: "256B"
     config:
