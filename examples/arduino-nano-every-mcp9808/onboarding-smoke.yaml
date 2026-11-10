@@ -1,0 +1,10 @@
+# Nano Every stock Arduino Wire read of the MCP9808 identity and TA registers.
+schema_version: "1.0"
+inputs:
+  firmware: "./firmware/.pio/build/nano_every/firmware.elf"
+  system: "../../configs/systems/arduino-nano-every-mcp9808.yaml"
+limits:
+  max_steps: 500000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "NANO_EVERY_MCP9808_OK id=54 dev=400 temp_x16="

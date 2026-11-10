@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="2" failures="0" errors="0" time="0.055559">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="AssertionsPassed"/>
+    <property name="firmware_hash" value="2487eb8972e937b64252aba40797c1d914df21a9b4600b14148e1f1fe757ccb2"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.055559">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NANO_EVERY_MCP9808_OK id=54 dev=400 temp_x16=" time="0.000000">
+  </testcase>
+</testsuite>

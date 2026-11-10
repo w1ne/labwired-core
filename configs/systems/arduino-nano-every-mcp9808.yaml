@@ -1,0 +1,21 @@
+# Arduino Nano Every (ATmega4809) with an MCP9808 temperature sensor breakout.
+# The physical board exposes SDA on D20 / PA2 and SCL on D21 / PA3. The current
+# megaAVR twin attaches this sensor at the TWI0 controller boundary; it does
+# not model TWI0 pad muxing or SDA/SCL waveforms.
+name: arduino-nano-every-mcp9808
+chip: ../chips/atmega4809.yaml
+cpu_hz: 16000000
+debug_uart: usart3
+external_devices:
+  - id: mcp9808
+    type: mcp9808
+    connection: twi0
+    config:
+      i2c_address: 0x18
+board_io:
+  - id: status_led
+    kind: led
+    peripheral: porte
+    pin: 2 # PE2 / Arduino D13 / LED_BUILTIN
+    signal: output
+    active_high: true

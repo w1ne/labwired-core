@@ -33,7 +33,7 @@ void setup() {
   uint16_t temperature_x16 = 0;
   if (!read_register16(0x06, manufacturer_id) ||
       !read_register16(0x07, device_id) ||
-      !read_register16(0x00, temperature_x16)) {
+      !read_register16(0x05, temperature_x16)) {
     Serial.println("MCP9808_FAIL i2c_read");
     return;
   }

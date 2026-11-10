@@ -1,6 +1,6 @@
 # Microchip MCP9808 I²C temperature sensor — declarative register-pointer
-# device (MCP9808 datasheet DS20005095). Pointer decodes the low three bits.
-# TA (0x00) is 13-bit, 1 LSB = 0.0625 °C (raw = °C × 16 for positive temps);
+# device (MCP9808 datasheet DS20005095). Pointer decodes the low four bits.
+# TA (0x05) is 13-bit, 1 LSB = 0.0625 °C (raw = °C × 16 for positive temps);
 # reads are sourced from the `temperature` input channel with datasheet-grade
 # noise (σ = 0.0625 °C, ±0.25 °C typical accuracy) and a τ≈1 s first-order
 # thermal lag (effective only on buses with an honest µs source).
@@ -17,18 +17,20 @@ behavior:
   primitive: i2c_device
   i2c:
     default_address: 0x18
-    pointer_mask: 0x07
+    pointer_mask: 0x0F
     registers:
+      # RFU (0x00) is read-only and returns zero.
+      - { name: RFU, addr: 0x00, width: 2, endian: be, access: r, reset: 0x0000 }
       # TA: 13-bit left-aligned in the low 13 bits, big-endian, sourced+noisy.
-      - { name: TA, addr: 0x00, width: 2, endian: be, access: r, reset: 0x0000, source: temperature, encode: { scale: 16.0, clamp_min: 0, clamp_max: 8191 } }
+      - { name: TA, addr: 0x05, width: 2, endian: be, access: r, reset: 0x0000, source: temperature, encode: { scale: 16.0, clamp_min: 0, clamp_max: 8191 } }
       # CONFIG: shutdown / alert bits; rw storage, reset 0x0000.
       - { name: CONFIG, addr: 0x01, width: 2, endian: be, access: rw, reset: 0x0000 }
       # Alert limits: rw storage.
       - { name: T_UPPER, addr: 0x02, width: 2, endian: be, access: rw, reset: 0x0000 }
       - { name: T_LOWER, addr: 0x03, width: 2, endian: be, access: rw, reset: 0x0000 }
       - { name: T_CRIT, addr: 0x04, width: 2, endian: be, access: rw, reset: 0x0000 }
-      # Resolution: stored, but conversion timing is not gated (see header).
-      - { name: RESOLUTION, addr: 0x05, width: 1, endian: be, access: rw, reset: 0x03 }
+      # Resolution (0x08): stored, but conversion timing is not gated (see header).
+      - { name: RESOLUTION, addr: 0x08, width: 1, endian: be, access: rw, reset: 0x03 }
       # Identification (datasheet fixed values).
       - { name: MANUF_ID, addr: 0x06, width: 2, endian: be, access: r, reset: 0x0054 }
       - { name: DEV_ID, addr: 0x07, width: 2, endian: be, access: r, reset: 0x0400 }

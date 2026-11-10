@@ -6,23 +6,23 @@
   "script": "examples/nucleo-f411re-mcp9808/onboarding-smoke.yaml",
   "system": "configs/systems/nucleo-f411re-mcp9808.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T01:15:32Z",
-  "finished_at_utc": "2026-11-05T01:15:50Z",
-  "elapsed_seconds": 18,
-  "elapsed_ms": 17767,
+  "started_at_utc": "2026-11-10T14:33:47Z",
+  "finished_at_utc": "2026-11-10T14:33:50Z",
+  "elapsed_seconds": 4,
+  "elapsed_ms": 3129,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 15.209,
-    "build_firmware": 2.047,
+    "build_cli": 0.362,
+    "build_firmware": 2.226,
     "run_smoke": 0.5
   },
   "stages_ms": {
-    "build_cli": 15209,
-    "build_firmware": 2047,
+    "build_cli": 362,
+    "build_firmware": 2226,
     "run_smoke": 500
   },
   "firmware_build_script": "scripts/build_nucleo_f411re_mcp9808_smoke.sh"

@@ -1,0 +1,69 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "avr",
+    "registers": [
+      22,
+      0,
+      0,
+      5,
+      76,
+      13,
+      0,
+      1,
+      142,
+      1,
+      0,
+      0,
+      0,
+      1,
+      84,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      10,
+      85,
+      2,
+      0,
+      100,
+      8,
+      236,
+      63,
+      96,
+      8
+    ],
+    "pc": 4970,
+    "sp": 16364,
+    "sreg": 130
+  },
+  "steps_executed": 140980,
+  "cycles": 199634,
+  "instructions": 140957,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 500000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "2487eb8972e937b64252aba40797c1d914df21a9b4600b14148e1f1fe757ccb2",
+  "config": {
+    "firmware": "examples/arduino-nano-every-mcp9808/./firmware/.pio/build/nano_every/firmware.elf",
+    "system": "examples/arduino-nano-every-mcp9808/../../configs/systems/arduino-nano-every-mcp9808.yaml",
+    "script": "examples/arduino-nano-every-mcp9808/onboarding-smoke.yaml"
+  }
+}

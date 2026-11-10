@@ -1,8 +1,8 @@
 # Onboarding Smoke: nucleo-f411re-mcp9808
 
 - status: `pass`
-- elapsed_seconds: `18`
-- elapsed_ms: `17767`
+- elapsed_seconds: `4`
+- elapsed_ms: `3129`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

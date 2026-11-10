@@ -53,7 +53,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "24299c4f38d484d8b7b9e30f892dd58d5c99f1ca80b3f28c43bf5ad4c854e551",
+  "firmware_hash": "d6d34f406c3595bf101a94a3dc27ae31390bf622fe27b7bb93f88a8998cf6d7d",
   "config": {
     "firmware": "examples/nucleo-f411re-mcp9808/./.pio/build/nucleo_f411re/firmware.elf",
     "system": "examples/nucleo-f411re-mcp9808/../../configs/systems/nucleo-f411re-mcp9808.yaml",

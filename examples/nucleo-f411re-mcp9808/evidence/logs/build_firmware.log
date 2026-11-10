@@ -19,8 +19,10 @@ Dependency Graph
 |-- Wire @ 1.0.0
 Building in release mode
 Compiling .pio/build/nucleo_f411re/src/main.ino.cpp.o
+Linking .pio/build/nucleo_f411re/firmware.elf
 Checking size .pio/build/nucleo_f411re/firmware.elf
 Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
 RAM:   [          ]   1.2% (used 1520 bytes from 131072 bytes)
 Flash: [          ]   4.3% (used 22432 bytes from 524288 bytes)
-========================= [SUCCESS] Took 1.83 seconds =========================
+Building .pio/build/nucleo_f411re/firmware.bin
+========================= [SUCCESS] Took 2.02 seconds =========================

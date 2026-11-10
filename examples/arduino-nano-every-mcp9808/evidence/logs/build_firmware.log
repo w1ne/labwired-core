@@ -1,0 +1,25 @@
+Processing nano_every (platform: platformio/atmelmegaavr@1.10.0; board: nano_every; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/atmelmegaavr/nano_every.html
+PLATFORM: Atmel megaAVR (1.10.0) > Arduino Nano Every
+HARDWARE: ATMEGA4809 16MHz, 6KB RAM, 47.50KB Flash
+PACKAGES:
+ - framework-arduino-megaavr @ 1.8.8
+ - tool-avrdude-megaavr @ 1.60300.191015 (6.3.0)
+ - toolchain-atmelavr @ 1.70300.191015 (7.3.0)
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 4 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Wire @ 1.0
+Building in release mode
+Compiling .pio/build/nano_every/src/main.cpp.o
+Linking .pio/build/nano_every/firmware.elf
+Checking size .pio/build/nano_every/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]   7.9% (used 484 bytes from 6144 bytes)
+Flash: [=         ]  11.4% (used 5543 bytes from 48640 bytes)
+Building .pio/build/nano_every/firmware.hex
+========================= [SUCCESS] Took 0.56 seconds =========================

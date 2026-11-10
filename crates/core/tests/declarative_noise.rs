@@ -140,8 +140,15 @@ fn read_reg16(dev: &mut GenericI2cDevice, ptr: u8) -> u16 {
 #[test]
 fn mcp9808_identity_registers() {
     let mut dev = build_mcp9808();
+    assert_eq!(read_reg16(&mut dev, 0x00), 0x0000, "RFU");
     assert_eq!(read_reg16(&mut dev, 0x06), 0x0054, "MANUF_ID");
     assert_eq!(read_reg16(&mut dev, 0x07), 0x0400, "DEV_ID");
+
+    dev.start();
+    dev.write(0x08); // RESOLUTION, low four pointer bits
+    dev.start();
+    assert_eq!(dev.read(), 0x03, "default 0.0625 C resolution");
+    dev.stop();
 }
 
 #[test]
@@ -150,7 +157,7 @@ fn mcp9808_temp_tracks_channel_with_noise() {
     dev.set_component_id("mcp".into());
     dev.set_input("temperature", 25.0).unwrap();
     let ideal = 25.0_f64 * 16.0; // 400 = 0x0190
-    let reads: Vec<u16> = (0..8).map(|_| read_reg16(&mut dev, 0x00)).collect();
+    let reads: Vec<u16> = (0..8).map(|_| read_reg16(&mut dev, 0x05)).collect();
     for &r in &reads {
         let delta = (r as f64 - ideal).abs();
         assert!(delta < 16.0, "reading {r:#06x} too far from {ideal}"); // <1 °C
@@ -176,7 +183,7 @@ fn mcp9808_noise_replays_per_component() {
     b.set_component_id("mcp".into());
     a.set_input("temperature", 25.0).unwrap();
     b.set_input("temperature", 25.0).unwrap();
-    let ra: Vec<u16> = (0..6).map(|_| read_reg16(&mut a, 0x00)).collect();
-    let rb: Vec<u16> = (0..6).map(|_| read_reg16(&mut b, 0x00)).collect();
+    let ra: Vec<u16> = (0..6).map(|_| read_reg16(&mut a, 0x05)).collect();
+    let rb: Vec<u16> = (0..6).map(|_| read_reg16(&mut b, 0x05)).collect();
     assert_eq!(ra, rb, "same component id must replay bit-identically");
 }
