@@ -8,8 +8,8 @@
  * The master config callbacks (set_mode_checked, set_baudrate_checked, flush_rx,
  * prepare_tx, prepare_rx, wake_up) are the contract iolink-master requires for
  * an IO-Link port. wake_up sends the 0x55 wake-up byte the device firmware's
- * detect_wakeup scans for. The config matches the iolink-dido device firmware:
- * M-sequence type 1_1, 1-byte PD in, no PD out.
+ * detect_wakeup scans for. The service fixtures use TYPE_2_2 with one-byte PD in and out and one
+ * OD byte. READ requests omit OD, while WRITE requests carry it.
  */
 #include "stm32l476xx.h"
 #include "phy_labwired.h"
@@ -127,7 +127,7 @@ const iolink_phy_api_t *phy_labwired_master_phy(void) { return &PHY; }
 iolink_master_config_t phy_labwired_master_config(void) {
     iolink_master_config_t c = {0};
     c.port_mode = IOLINK_MASTER_PORT_MODE_IOLINK;
-    c.m_seq_type = IOLINK_MASTER_M_SEQ_TYPE_1_1; /* match iolink-dido device */
+    c.m_seq_type = IOLINK_MASTER_M_SEQ_TYPE_2_2; /* one PD octet each way, one OD */
     c.baudrate = IOLINK_BAUDRATE_COM2;
     c.min_cycle_time = 100;
     c.pd_in_len = 1;

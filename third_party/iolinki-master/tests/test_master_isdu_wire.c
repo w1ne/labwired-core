@@ -56,7 +56,7 @@ static uint8_t wire_chkpdu(const uint8_t* octets, uint16_t len)
 }
 
 static int g_send_calls;
-static uint8_t g_sent[128][8];
+static uint8_t g_sent[128][64];
 static size_t g_sent_len[128];
 
 static int wire_send(void* user, const uint8_t* data, size_t len)
@@ -108,9 +108,10 @@ static void feed_operate_ack(iolink_master_port_t* port)
     assert_int_equal(iolink_master_on_rx(port, ack, sizeof(ack)), IOLINK_MASTER_STATUS_OK);
 }
 
-static void enter_type0_operate(iolink_master_port_t* port)
+static void enter_operate_cfg(iolink_master_port_t* port,
+                             const iolink_master_config_t* config)
 {
-    assert_int_equal(iolink_master_init(port, &g_phy, &g_config), IOLINK_MASTER_STATUS_OK);
+    assert_int_equal(iolink_master_init(port, &g_phy, config), IOLINK_MASTER_STATUS_OK);
     assert_int_equal(iolink_master_tick_event(port, IOLINK_MASTER_TICK_CYCLE_DUE),
                      IOLINK_MASTER_STATUS_OK);
     assert_int_equal(iolink_master_tick_event(port, IOLINK_MASTER_TICK_CYCLE_DUE),
@@ -120,6 +121,11 @@ static void enter_type0_operate(iolink_master_port_t* port)
                      IOLINK_MASTER_STATUS_OK);
     feed_operate_ack(port);
     assert_int_equal(iolink_master_get_state(port), IOLINK_MASTER_STATE_OPERATE);
+}
+
+static void enter_type0_operate(iolink_master_port_t* port)
+{
+    enter_operate_cfg(port, &g_config);
 }
 
 /** @brief Assert the last emitted frame equals @p expected byte for byte. */
@@ -407,6 +413,70 @@ static void test_wire_event_ack_writes_status_code(void** state)
     assert_int_equal(event_code, 0x4210U);
 }
 
+static void test_wire_2v_read_poll_has_no_od(void** state)
+{
+    iolink_master_port_t port;
+    uint8_t data[4] = {0U};
+    uint8_t len = sizeof(data);
+    iolink_master_config_t config = g_config;
+    uint8_t poll[4] = {0xF0U, IOLINK_MSEQ_TYPE_2, 0x00U, 0x00U};
+
+    (void) state;
+
+    config.m_seq_type = IOLINK_MASTER_M_SEQ_TYPE_2_V;
+    config.pd_in_len = 2U;
+    config.pd_out_len = 2U;
+    enter_operate_cfg(&port, &config);
+    assert_int_equal(iolink_master_read_isdu(&port, 0x0010U, 0U, data, &len), 1);
+
+    /* Three write frames carry the 3-octet ISDU read request, then the poll is
+       a read M-sequence: MC + CKT + PD-out(2); a read request carries no OD. */
+    for (int i = 0; i < 3; i++) {
+        assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE),
+                         IOLINK_MASTER_STATUS_OK);
+    }
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE),
+                     IOLINK_MASTER_STATUS_OK);
+    poll[1] = (uint8_t) (poll[1] | wire_ck6(poll, sizeof(poll)));
+    assert_last_frame(poll, sizeof(poll));
+}
+
+static void test_wire_1v_write_request_uses_eight_od_octets(void** state)
+{
+    iolink_master_port_t port;
+    const uint8_t payload[1] = {0x12U};
+    iolink_master_config_t config = g_config;
+
+    (void) state;
+
+    config.m_seq_type = IOLINK_MASTER_M_SEQ_TYPE_1_V;
+    config.pd_in_len = 0U;
+    config.pd_out_len = 0U;
+    enter_operate_cfg(&port, &config);
+    assert_int_equal(iolink_master_write_isdu(&port, 0x0010U, 0x01U, payload, sizeof(payload)), 1);
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE),
+                     IOLINK_MASTER_STATUS_OK);
+    assert_int_equal(g_sent_len[g_send_calls - 1], 2U + 8U); /* MC+CKT+OD(8) */
+}
+
+static void test_wire_1_2_write_request_uses_two_od_octets(void** state)
+{
+    iolink_master_port_t port;
+    const uint8_t payload[1] = {0x12U};
+    iolink_master_config_t config = g_config;
+
+    (void) state;
+
+    config.m_seq_type = IOLINK_MASTER_M_SEQ_TYPE_1_2;
+    config.pd_in_len = 0U;
+    config.pd_out_len = 0U;
+    enter_operate_cfg(&port, &config);
+    assert_int_equal(iolink_master_write_isdu(&port, 0x0010U, 0x01U, payload, sizeof(payload)), 1);
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE),
+                     IOLINK_MASTER_STATUS_OK);
+    assert_int_equal(g_sent_len[g_send_calls - 1], 2U + 2U); /* MC+CKT+OD(2) */
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
@@ -417,6 +487,9 @@ int main(void)
         cmocka_unit_test_setup(test_wire_64_octet_read_uses_extended_length, reset_wire),
         cmocka_unit_test_setup(test_wire_event_details_reads_diagnosis_memory, reset_wire),
         cmocka_unit_test_setup(test_wire_event_ack_writes_status_code, reset_wire),
+        cmocka_unit_test_setup(test_wire_2v_read_poll_has_no_od, reset_wire),
+        cmocka_unit_test_setup(test_wire_1v_write_request_uses_eight_od_octets, reset_wire),
+        cmocka_unit_test_setup(test_wire_1_2_write_request_uses_two_od_octets, reset_wire),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

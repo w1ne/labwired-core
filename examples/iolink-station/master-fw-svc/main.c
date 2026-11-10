@@ -15,21 +15,14 @@
  * (1) RESTART API: iolink_master_restart(port) recovers a port from ERROR
  *     (master.h:206, "Returns OK or INVALID_ARG"). Re-init is NOT required.
  *
- * (2) M-SEQ PD-OUT: M_SEQ_TYPE_1_1 carries pd_out_len=1 on BOTH stacks. The
- *     master encodes PD-out for any non-TYPE_0 config via
- *     iolink_frame_encode_type1_cycle(pd_out, pd_out_len,...)
- *     (master_port.c:639); only TYPE_0 with zero PD is special-cased. The
- *     device consumes pd_out whenever pd_out_len_current>0 (dll.c:155-158),
- *     independent of m_seq_type. So TYPE_1_1 stays; only pd_out_len changes to 1
- *     (this firmware's phy config + device-fw-svc cfg.stack.pd_out_len).
+ * (2) M-SEQ: TYPE_2_2 carries one PD octet in each direction and one
+ *     on-request-data octet. READ requests omit OD; WRITE requests carry it.
+ *     Both fixtures use the same type and the pinned device supports this
+ *     direction-aware stream framing. TYPE_1_1 retains a legacy device layout.
  *
- * (3) EVENT DETAILS @ 0x001C: iolink_master_read_event_details reads ISDU index
- *     0x001C = IOLINK_IDX_DETAILED_DEVICE_STATUS (protocol.h:59). The device
- *     serves it in handle_detailed_device_status() (isdu.c:583) by emitting
- *     count*3 bytes, each a {qualifier, code_hi, code_lo} record built straight
- *     from the event FIFO — EXACTLY the 3-byte layout the master decodes. There
- *     is NO collision with device_info.function_id at 0x1C in this stack; 0x1C
- *     serves events, so the real event path is exercised end-to-end.
+ * (3) EVENT DETAILS: iolink_master_read_event_details reads event memory on
+ *     the DIAGNOSIS channel. The result contains qualifier and EventCode
+ *     fields, which the firmware exposes to the integration test.
  *
  * (4) pd_output_read RETURN: iolink_device_pd_output_read returns the byte
  *     count copied (device.c:202 returns read_len), NOT 0-for-success (that is

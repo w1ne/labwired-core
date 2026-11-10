@@ -266,6 +266,9 @@ static int iolink_master_build_isdu_frame(iolink_master_port_t* port, uint8_t mc
         pos = (size_t) IOLINK_M_SEQ_HEADER_LEN + state->od_len;
     }
     else {
+        /* Annex A: a read request has no OD; a write request appends it after
+           the PD-out octets. */
+        const uint8_t od_octets = (od != NULL) ? state->od_len : 0U;
         state->tx_buf[0] = mc;
         state->tx_buf[1] = iolink_master_ckt_type_bits(state->config.m_seq_type);
         if (state->pd_out_len > 0U) {
@@ -273,10 +276,10 @@ static int iolink_master_build_isdu_frame(iolink_master_port_t* port, uint8_t mc
                           state->pd_out_len);
         }
         pos = (size_t) IOLINK_M_SEQ_HEADER_LEN + state->pd_out_len;
-        for (i = 0U; i < state->od_len; i++) {
-            state->tx_buf[pos + i] = (od != NULL) ? od[i] : 0x00U;
+        for (i = 0U; i < od_octets; i++) {
+            state->tx_buf[pos + i] = od[i];
         }
-        pos += state->od_len;
+        pos += od_octets;
     }
 
     state->tx_buf[1] = (uint8_t) (state->tx_buf[1] |
@@ -382,15 +385,20 @@ static bool iolink_master_send_event(iolink_master_port_t* port)
         uint8_t i;
 
         mc = iolink_master_encode_master_command(read, IOLINK_MASTER_MC_CHANNEL_DIAGNOSIS, addr);
-        frame_len = (int) (IOLINK_M_SEQ_HEADER_LEN + state->pd_out_len + od_len);
+        /* Annex A: a read request has no OD; only the write confirmation data
+           follows the PD-out octets. */
+        frame_len = (int) (IOLINK_M_SEQ_HEADER_LEN + state->pd_out_len +
+                           (read ? 0U : od_len));
         state->tx_buf[0] = mc;
         state->tx_buf[1] = 0x00U;
         if (state->pd_out_len > 0U) {
             (void) memcpy(&state->tx_buf[IOLINK_M_SEQ_HEADER_LEN], state->pd_out, state->pd_out_len);
         }
         od_pos = (size_t) IOLINK_M_SEQ_HEADER_LEN + state->pd_out_len;
-        for (i = 0U; i < od_len; i++) {
-            state->tx_buf[od_pos + i] = 0x00U;
+        if (!read) {
+            for (i = 0U; i < od_len; i++) {
+                state->tx_buf[od_pos + i] = 0x00U;
+            }
         }
         /* A.1.6: the CKT octet enters the checksum with its M-sequence type bits
            in place and the checksum bits zero. */

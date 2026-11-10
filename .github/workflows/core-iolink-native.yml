@@ -94,15 +94,19 @@ jobs:
       - name: Native C master compile check
         run: cargo check -p labwired-core --features iolink-native
 
-      - name: Multi-chip world tests skip cleanly without prebuilt station ELFs
-        run: cargo test -p labwired-core --test world_multichip -- --nocapture
+      - name: Fetch STM32L4 firmware device pack
+        uses: ./.github/actions/fetch-pack
+        with:
+          pack: stm32cubel4@v1.18.2
 
-      # Service-coverage world test: skips cleanly here (station ELFs are built
-      # only in the iolinki-master repo's labwired-real-firmware-model job, which
-      # runs it with a fidelity-clean assertion over the full ISDU/PD/event/DS
-      # surface). This step guards the path filter + that it still compiles.
-      - name: Station service-coverage world test skips cleanly without ELFs
-        run: cargo test -p labwired-core --test world_station_services -- --nocapture
+      - name: Build the real station master and device firmware
+        run: bash examples/iolink-station/ci/build.sh
+
+      # The script requires every ELF. Protocol drift between the pinned device,
+      # vendored master and service fixtures must fail here instead of skipping
+      # until a downstream repository overlays its current master sources.
+      - name: Run station, DIDO and full service tests with real firmware
+        run: bash examples/iolink-station/ci/test.sh
 
       - name: Upload LabWired IO-Link simulation artifacts
         if: always()

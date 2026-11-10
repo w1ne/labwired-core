@@ -84,6 +84,24 @@ fn step_to_operate(world: &mut World, a_state: u64, max_steps: u64) -> u64 {
     panic!("master never reached OPERATE (state 3) within {max_steps} steps");
 }
 
+// A fault must start from completed services and steady cyclic traffic. A
+// stalled ISDU exchange otherwise makes all three fault tests fail for the
+// wrong reason while their setup silently ignores the unfinished script.
+fn finish_services(world: &mut World, mb: &[u8]) {
+    let done = sym(mb, "g_svc_done");
+    for _ in 0..10_000_000u64 {
+        world.step_all();
+        if master_u8(world, done) == 1 {
+            return;
+        }
+    }
+    panic!(
+        "service setup did not finish before fault injection: phase={} state={}",
+        master_u8(world, sym(mb, "g_phase")),
+        master_u8(world, sym(mb, "g_master_state"))
+    );
+}
+
 // Fault test 1 — a single CRC-corrupted device->master frame must be counted as a
 // checksum error AND survived in place: the master retries and stays in OPERATE,
 // it does NOT fall through to ERROR. (Corrupting exactly 2 bytes flips one frame.)
@@ -95,7 +113,6 @@ fn master_survives_single_crc_corrupted_frame() {
     let a_state = sym(&mb, "g_master_state");
     let a_ck = sym(&mb, "g_diag_ck_errors");
     let a_err = sym(&mb, "g_error_seen");
-    let a_done = sym(&mb, "g_svc_done");
 
     let op_at = step_to_operate(&mut world, a_state, 10_000_000);
     eprintln!("[crc] reached OPERATE at iteration {op_at}");
@@ -103,18 +120,11 @@ fn master_survives_single_crc_corrupted_frame() {
     // Let the service script run to completion first: the corruption must land
     // on a reply the master checksum-verifies, not on the transition handshake
     // bytes the device sends before the first cyclic exchange.
-    for _ in 0..10_000_000u64 {
-        world.step_all();
-        if master_u8(&world, a_done) == 1 {
-            break;
-        }
-    }
+    finish_services(&mut world, &mb);
 
-    // Corrupt a whole 3-octet reply, CKS included. The A.1.6 checksum is a
-    // lossy 8->6 fold of an XOR sum, so a single flipped data octet can land on
-    // a colliding checksum (E7^FF compresses like the original); flipping the
-    // data and the CKS together cannot be masked that way.
-    corrupt_device_to_master(&world, 3);
+    // A cyclic WRITE reply is [PD-in, CKS]. Corrupt both octets of exactly
+    // one reply so the checksum cannot hide a flipped payload octet.
+    corrupt_device_to_master(&world, 2);
 
     const MAX_AFTER: u64 = 2_000_000;
     let mut ck_at = None;
@@ -160,17 +170,11 @@ fn sustained_crc_corruption_drives_master_to_reinitiate_link() {
     let a_state = sym(&mb, "g_master_state");
     let a_ck = sym(&mb, "g_diag_ck_errors");
     let a_err = sym(&mb, "g_error_seen");
-    let a_done = sym(&mb, "g_svc_done");
 
     let op_at = step_to_operate(&mut world, a_state, 10_000_000);
     eprintln!("[error] reached OPERATE at iteration {op_at}");
 
-    for _ in 0..10_000_000u64 {
-        world.step_all();
-        if master_u8(&world, a_done) == 1 {
-            break;
-        }
-    }
+    finish_services(&mut world, &mb);
 
     // Corrupt a long run of device->master bytes: spans several response frames,
     // so the retry budget (rx_retry_count < 2, then re-initiation on the 3rd bad
@@ -180,7 +184,7 @@ fn sustained_crc_corruption_drives_master_to_reinitiate_link() {
     const MAX_AFTER: u64 = 2_000_000;
     let mut saw_ck = false;
     let mut left_operate = false;
-    let mut left_at = 0u64;
+    let mut left_at = None;
     for i in 0..MAX_AFTER {
         world.step_all();
         if master_u8(&world, a_ck) >= 1 {
@@ -188,14 +192,14 @@ fn sustained_crc_corruption_drives_master_to_reinitiate_link() {
         }
         if master_u8(&world, a_state) != 3 {
             left_operate = true;
-            left_at = i;
+            left_at = Some(i);
             break;
         }
     }
 
     let err = master_u8(&world, a_err);
     eprintln!(
-        "[error] left OPERATE at iteration {left_at}; error_seen={err} saw_ck={saw_ck} state={}",
+        "[error] left OPERATE at iteration {left_at:?}; error_seen={err} saw_ck={saw_ck} state={}",
         master_u8(&world, a_state)
     );
 
@@ -228,7 +232,6 @@ fn master_detects_muted_device_via_response_timeout() {
     };
     let a_state = sym(&mb, "g_master_state");
     let a_timeouts = sym(&mb, "g_diag_timeouts");
-    let a_done = sym(&mb, "g_svc_done");
 
     let op_at = step_to_operate(&mut world, a_state, 10_000_000);
     eprintln!("[mute] reached OPERATE at iteration {op_at}");
@@ -236,19 +239,14 @@ fn master_detects_muted_device_via_response_timeout() {
     // Let the service script finish so the link is in steady cyclic traffic; a
     // mute mid-ISDU stalls the acyclic transport (its retries are not driven by
     // the response-timeout tick), which is a separate concern.
-    for _ in 0..10_000_000u64 {
-        world.step_all();
-        if master_u8(&world, a_done) == 1 {
-            break;
-        }
-    }
+    finish_services(&mut world, &mb);
 
     // Mute the device: advance ONLY the master. The device CPU never steps, so
     // it emits no response frames.
     const MAX_MUTE: u64 = 5_000_000;
     let mut saw_timeout = false;
     let mut left_operate = false;
-    let mut left_at = 0u64;
+    let mut left_at = None;
     for i in 0..MAX_MUTE {
         world.machines.get_mut("master").unwrap().step().unwrap();
         if master_u8(&world, a_timeouts) >= 1 {
@@ -256,13 +254,13 @@ fn master_detects_muted_device_via_response_timeout() {
         }
         if master_u8(&world, a_state) != 3 {
             left_operate = true;
-            left_at = i;
+            left_at = Some(i);
             break;
         }
     }
 
     eprintln!(
-        "[mute] left OPERATE at iteration {left_at}; saw_timeout={saw_timeout} timeouts_now={} \
+        "[mute] left OPERATE at iteration {left_at:?}; saw_timeout={saw_timeout} timeouts_now={} \
          state={}",
         master_u8(&world, a_timeouts),
         master_u8(&world, a_state)

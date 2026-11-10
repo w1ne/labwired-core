@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Streaming M-sequence request framing (wire change).** Read requests now
+  carry no On-request Data octets: a typed read is `MC + CKT + PD-out`, while a
+  write is `MC + CKT + PD-out + OD`. This fixes ISDU and diagnosis reads that
+  previously appended zero OD octets, and aligns the master with the device
+  stack and Annex A.
+- The per-type OD width now follows Table A.10: TYPE_1_2 uses 2 OD octets,
+  TYPE_1_V uses 8, TYPE_2_V uses 2, and the remaining types use 1.
 ## [1.1.0] - 2026-10-17
 
 ### Added
