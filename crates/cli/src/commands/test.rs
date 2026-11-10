@@ -2258,7 +2258,7 @@ pub(crate) fn run_test(
                                 // C6: stay below ROM-reserved HP SRAM so the
                                 // boot stack cannot smash heap_tlsf_table_ptr
                                 // @ 0x4087_ffd8 (and friends).
-                                if chip.name.to_ascii_lowercase().contains("esp32c6") {
+                                if labwired_core::boot::esp32c6_rom::is_esp32c6(&chip) {
                                     sp_top = labwired_core::boot::esp32c6_rom::app_stack_top();
                                 }
                                 machine.cpu.set_sp(sp_top & !0xF);

@@ -1,0 +1,40 @@
+# Narrow first ESP32-C61 profile: HP-core flash/SRAM map, UART0, and UART0's
+# PCR clock gate. Other MMIO is intentionally unmapped so unsupported firmware
+# faults instead of reading zeros from descriptors that claim no behavior.
+name: "esp32c61"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 160_000_000
+
+flash:
+  # The external flash window starts at 0x4200_0000. The N8R2 module has 8 MiB;
+  # use KB because this config parser treats MB as decimal.
+  base: 0x42000000
+  size: "8192KB"
+ram:
+  # ESP32-C61 HP SRAM: 320 KiB at 0x4080_0000.
+  base: 0x40800000
+  size: "320KB"
+
+peripherals:
+  # C61 UART0 head matches the existing Espressif UART model at FIFO@0x00,
+  # INT_RAW@0x04, INT_ENA@0x0C, INT_CLR@0x10, CLKDIV@0x14, STATUS@0x1C,
+  # CONF0@0x20 and CONF1@0x24 (ESP-IDF C61 uart_reg.h). Interrupt source 40
+  # is UART0_INTR in the C61 TRM. The pin mux and USB bridge are not modeled;
+  # the UART FIFO stream is captured by debug_uart.
+  - id: "uart0"
+    type: "esp32c6_uart"
+    irq: 40
+    base_address: 0x60000000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
+    config:
+      echo_stdout: true
+  # C61 PCR UART0_CONF (+0x00) and UART0_SCLK_CONF (+0x04) use the same
+  # clock-enable offsets and bits as the C6. The shared model enforces CLK_EN
+  # at the bus gate; reset and clock-frequency behavior remain partial.
+  - id: "pcr"
+    type: "esp32c6_pcr"
+    base_address: 0x60096000
+    size: "4KB"
