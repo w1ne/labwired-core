@@ -2,8 +2,8 @@
 
 This is a review draft for the community coverage page. It is intentionally not
 listed in `mkdocs.yml` and has not been published. The current draft covers the
-ESP32 family entry; additional demand-ranked entries need to be added and
-reviewed before publication.
+ESP32 family and RP2350; the remaining demand-ranked entries need to be added
+and reviewed before publication.
 
 ## ESP32 — rank 1, 38% of reported MCU use
 
@@ -144,6 +144,51 @@ logs, and dated availability receipt are in
 [the SHT40 evidence directory](../../examples/esp32-s3-devkitc-1-n16r8/evidence/sht40/).
 The hosted catalog does not contain an SHT40 entry, so this has no hosted
 model_verified result.
+
+## RP2040 / RP2350 — demand target #2
+
+### Raspberry Pi Pico 2 / RP2350 (SC1631)
+
+RP2040 is MCU-use rank **#5 at 12%** in the JetBrains survey. RP2350 is the
+current flagship successor and is included in target #2, but was not measured
+as a separate survey row. The Pico 2 was already onboarded before this round;
+this is community-coverage maintenance and a refreshed local smoke record, not
+a new MCU onboarding.
+
+The narrow Pico 2 profile boots Cortex-M33 firmware, captures a UART0 marker,
+and toggles the on-board LED at GP25 through SIO. The local smoke passed all
+three assertions (`PICO2_SMOKE_OK`, at least eight GP25 edges, and the expected
+step-limit stop). It does not exercise the optional Hazard3/RISC-V cores,
+TrustZone, USB, or ROM boot. There is no physical-board capture. The external
+hosted verifier has no Pico 2 target, so no hosted `labwired_verify` verdict is
+claimed. The dated run and complete local artifacts are in
+[`examples/pico2/evidence/community/`](../../examples/pico2/evidence/community/).
+
+Copy-paste Arduino-Pico sketch for the Pico 2's on-board LED on GP25:
+
+```cpp
+void setup() {
+  pinMode(25, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(25, HIGH);
+  delay(250);
+  digitalWrite(25, LOW);
+  delay(250);
+}
+```
+
+The committed simulation run uses the repository's bare-metal Rust firmware to
+exercise the same GP25 output; this Arduino sketch itself was not compiled in
+that run.
+
+Raspberry Pi's [live Pico 2 product page](https://www.raspberrypi.com/products/raspberry-pi-pico-2/)
+said **“Available now from $5”** and committed the Pico 2 series to production
+through at least January 2040 when checked on 2026-11-10. Mouser's [exact SC1631
+listing](https://www.mouser.com/en/c/embedded-solutions/?m=Raspberry+Pi&series=Pico+2)
+showed 3,515 in stock at $5.00. The saved availability receipt is
+[`vendor-status.md`](../../examples/pico2/evidence/community/vendor-status.md).
 
 ### ESP32-DevKitC-32E / ESP32-WROOM-32E
 
@@ -530,7 +575,8 @@ supported; the local result is not a physical-board run.
 ## Remaining demand-ranked entries
 
 Before this page is ready for publication, add reviewed coverage and a
-copy-paste example for RP2040/RP2350, the supported Arduino AVR path, STM32F103
-and current Nucleo/Discovery boards, and the WCH CH32V003 community target. Each
-entry must link to its exact board or part evidence and clearly identify any
-legacy lifecycle status.
+copy-paste example for the supported Arduino AVR path, STM32F103, and current
+Nucleo/Discovery boards. WCH CH32V003 already has a local booting smoke and a
+copy-paste example in [`docs/community/hardware-coverage-draft.md`](../community/hardware-coverage-draft.md);
+consolidate that entry here before publication. Each entry must link to its
+exact board or part evidence and clearly identify any lifecycle status.
