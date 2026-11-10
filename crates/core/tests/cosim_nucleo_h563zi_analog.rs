@@ -1029,3 +1029,147 @@ fn nucleo_h563zi_bjt_high_injection_reaches_adc1_alongside_ntc_and_diode() {
         "IKF/NKF rolloff lowers collector current and raises collector voltage: {rolloff_v} V vs {control_v} V"
     );
 }
+
+#[test]
+fn nucleo_h563zi_bjt_junction_and_transit_charge_reach_adc1_end_to_end() {
+    let system_path = root("configs/systems/nucleo-h563zi-demo.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-H563ZI profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-h563zi/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and diode ADC routes");
+    let charge = SystemManifest::from_file(root(
+        "examples/nucleo-h563zi/analog-bjt-charge-adc-system.yaml",
+    ))
+    .expect("load matched generic BJT charge comparison branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(charge.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32H563 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-H563ZI bus");
+    adc_power_up(&mut bus);
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixtures carry NTC, diode, and five matched BJT charge cases");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must bind to independent ADC1 channels 0 through 6"
+    );
+    for channel in 0..=6 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an injected analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_charge.base_v", 0.0)
+        .expect("initialize all BJT base-drive sources");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize independent branches before the base-drive step");
+    assert_eq!(initial_steps.len(), 7, "all seven analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    session
+        .set_signal_number("ui.bjt_charge.base_v", 0.8)
+        .expect("step the matched BJT base-drive sources");
+    let mut samples = Vec::new();
+    for step in 0..8_000 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and BJT charge branches");
+        assert_eq!(steps.len(), 7, "all seven branches solve at each 1 us step");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "adc.adc1.0_volts");
+        let diode_v = signal_voltage(&session, "adc.adc1.1_volts");
+        let bjt_voltages = [
+            signal_voltage(&session, "adc.adc1.2_volts"),
+            signal_voltage(&session, "adc.adc1.3_volts"),
+            signal_voltage(&session, "adc.adc1.4_volts"),
+            signal_voltage(&session, "adc.adc1.5_volts"),
+            signal_voltage(&session, "adc.adc1.6_volts"),
+        ];
+        assert!((ntc_v - 1.65).abs() < 1e-9, "unrelated NTC stays isolated");
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated diode stays at its independent DC load line"
+        );
+
+        let expected_dc = bjt_collector_voltage(0.8, Some(50.0));
+        assert!(
+            (bjt_voltages[0] - expected_dc).abs() < 5e-5,
+            "uncharged branch must match the independent Gummel–Poon load line {expected_dc} V, got {} V",
+            bjt_voltages[0]
+        );
+        for (label, channel, voltage) in [
+            ("NTC", 0, ntc_v),
+            ("diode", 1, diode_v),
+            ("uncharged BJT", 2, bjt_voltages[0]),
+            ("CJE BJT", 3, bjt_voltages[1]),
+            ("CJC BJT", 4, bjt_voltages[2]),
+            ("TF BJT", 5, bjt_voltages[3]),
+            ("combined-charge BJT", 6, bjt_voltages[4]),
+        ] {
+            let expected = expected_adc12_count(voltage);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected as u16,
+                "solved {label} voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                adc_convert(&mut bus, channel),
+                expected,
+                "firmware-visible ADC1 channel {channel} must report the {label} voltage"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 7),
+            u16::MAX,
+            "neighboring ADC1 channel 7 remains undriven"
+        );
+
+        if step == 0 {
+            for (label, voltage) in [
+                ("CJE depletion", bjt_voltages[1]),
+                ("CJC depletion", bjt_voltages[2]),
+                ("TF transit", bjt_voltages[3]),
+                ("combined junction and transit", bjt_voltages[4]),
+            ] {
+                assert!(
+                    (voltage - bjt_voltages[0]).abs() > 0.01,
+                    "{label} must change the first routed transient: reference={} V, charged={voltage} V",
+                    bjt_voltages[0]
+                );
+            }
+        }
+        samples.push(bjt_voltages);
+    }
+
+    let settled = samples.last().expect("transient samples exist");
+    for (label, voltage) in [
+        ("CJE depletion", settled[1]),
+        ("CJC depletion", settled[2]),
+        ("TF transit", settled[3]),
+        ("combined junction and transit", settled[4]),
+    ] {
+        assert!(
+            (voltage - settled[0]).abs() < 2e-4,
+            "{label} must converge to the same DC Gummel–Poon load line, got {voltage} V vs {} V",
+            settled[0]
+        );
+    }
+}

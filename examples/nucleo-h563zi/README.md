@@ -109,6 +109,13 @@ reads each branch through ADC1 channels 2–5 alongside isolated NTC and diode i
 channels 0–1. These are explicit co-simulation routes; they do not claim physical pad aliases
 or silicon ADC parity.
 
+`analog-bjt-charge-adc-system.yaml` routes matched generic BJT branches with CJE, CJC, TF,
+and combined junction/transit charge to ADC1 channels 2–6 beside the NTC and diode on
+channels 0–1. The transient regression checks the first-step charge response, ADC data-register
+readback, isolation, and convergence to the same DC load line. Enlarged junction capacitances
+make this a solver-physics stress case at the fixture's 1 us step; it is not a device-rating
+claim.
+
 ## References
 
 - Chip config: `../../configs/chips/stm32h563.yaml`
