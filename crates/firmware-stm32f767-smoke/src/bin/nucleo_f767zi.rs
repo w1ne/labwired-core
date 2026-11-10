@@ -53,6 +53,7 @@ const USART3_RDR: u32 = USART3 + 0x24;
 const USART3_ISR: u32 = USART3 + 0x1C;
 const USART3_CR1: u32 = USART3;
 const USART3_IRQ: u32 = 39;
+const USART_UE: u32 = 1 << 0;
 const USART_RXNE: u32 = 1 << 5;
 const USART_RXNEIE: u32 = 1 << 5;
 const USART_RE: u32 = 1 << 2;
@@ -131,10 +132,15 @@ fn check_b1() -> bool {
 }
 
 /// Receive the two start-injected bytes on the board's USART3 VCP. First
-/// verify RXNE does not pend the NVIC line while RXNEIE is clear, then enable
-/// it and check assertion, re-pending while the second byte remains queued,
-/// and release after both bytes are drained.
+/// verify they remain on the wire while RE is clear, then enable RE and check
+/// RXNE isolation, assertion, re-pending, and release after both bytes drain.
 fn check_usart3_rx() -> bool {
+    let receiver_disabled = rd(USART3_CR1) & (USART_UE | USART_RE) == USART_UE;
+    unpend(USART3_IRQ);
+    let rxne_held_while_disabled = rd(USART3_ISR) & USART_RXNE == 0;
+    let irq_held_while_disabled = !pending(USART3_IRQ);
+    wr(USART3_CR1, rd(USART3_CR1) | USART_RE);
+
     let mut first_ready = false;
     for _ in 0..100_000 {
         if rd(USART3_ISR) & USART_RXNE != 0 {
@@ -195,11 +201,18 @@ fn check_usart3_rx() -> bool {
         && second == b'S' as u32
         && cleared
         && rxne_irq_isolated
+        && receiver_disabled
+        && rxne_held_while_disabled
+        && irq_held_while_disabled
         && rxne_irq_asserted
         && second_still_pending
         && second_irq_reasserted
         && rxne_irq_released;
     puts("usart3 rxne ");
+    flag(
+        "re_off",
+        receiver_disabled && rxne_held_while_disabled && irq_held_while_disabled,
+    );
     flag("isolated", rxne_irq_isolated);
     flag("asserted", rxne_irq_asserted);
     flag("reasserted", second_irq_reasserted);
@@ -357,9 +370,8 @@ fn main() -> ! {
     for &(_, base, _) in &UARTS {
         uart_init(base);
     }
-    // The imported smoke injects bytes directly into the USART3 receive path;
-    // enable RE while leaving RXNEIE clear for the isolation check below.
-    wr(USART3_CR1, rd(USART3_CR1) | USART_RE);
+    // The imported smoke injects two bytes before firmware starts. USART3 is
+    // left with RE clear here so the RX check can verify receiver gating.
     puts("NUCLEO-F767ZI SMOKE\r\n");
     send(UARTS[2].1, b"usart3 vcp ok\r\n");
 

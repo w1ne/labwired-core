@@ -3,7 +3,7 @@ usart3 vcp ok
 rcc reset=1 gate=1 mask=1 ok
 geometry flash_last=0xFFFFFFFF sram2=1 ok
 usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok
-usart3 rxne isolated=1 asserted=1 reasserted=1 released=1 data=1 ok
+usart3 rxne re_off=1 isolated=1 asserted=1 reasserted=1 released=1 data=1 ok
 usart3 tx_irq txe=1 tc=1 both=1 ok
 leds ld1=1 ld2=1 ld3=1 ok
 syscfg memrmp=0x00000D00 pmc=0x008700FF fields=1 cmpcr=1 ok

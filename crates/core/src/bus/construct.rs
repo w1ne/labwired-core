@@ -1137,8 +1137,9 @@ impl SystemBus {
         sources
     }
 
-    /// Push `bytes` into the named UART's external RX queue and re-arm its
-    /// scheduler wake.
+    /// Deliver `bytes` from the named UART's external peer and re-arm its
+    /// scheduler wake. STM32v2 UARTs keep input on the wire until UE and RE
+    /// are both enabled; other UART models keep their established queue path.
     ///
     /// Test-script `uart_injections` (and interactive serial) used to only
     /// `extend` the shared queue. Under the event-scheduler an idle EspUart
@@ -1151,17 +1152,25 @@ impl SystemBus {
         let index = self.find_peripheral_index_by_name(name).ok_or_else(|| {
             format!("uart_injection: UART peripheral '{name}' not found on the bus")
         })?;
-        let rx = self.attach_uart_rx_source_named(name).ok_or_else(|| {
-            format!("uart_injection: UART peripheral '{name}' not found on the bus")
-        })?;
+        let delivered = if let Some(uart) = self.peripherals[index]
+            .dev
+            .as_any_mut()
+            .and_then(|dev| dev.downcast_mut::<crate::peripherals::uart::Uart>())
         {
+            uart.inject_rx_bytes(bytes)
+                .map_err(|e| format!("uart_injection '{name}': {e}"))?
+        } else {
+            let rx = self.attach_uart_rx_source_named(name).ok_or_else(|| {
+                format!("uart_injection: UART peripheral '{name}' not found on the bus")
+            })?;
             let mut guard = rx
                 .lock()
                 .map_err(|e| format!("uart_injection '{name}': RX buffer poisoned: {e}"))?;
             guard.extend(bytes.iter().copied());
-        }
+            bytes.len()
+        };
         self.collect_scheduled_events(index);
-        Ok(bytes.len())
+        Ok(delivered)
     }
 
     /// Give `bytes` to the far side of the external device `device` that is

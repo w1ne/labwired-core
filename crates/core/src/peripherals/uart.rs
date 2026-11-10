@@ -954,6 +954,11 @@ pub struct Uart {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     #[serde(skip)]
     rx_buf: Arc<Mutex<VecDeque<u8>>>,
+    /// Scripted host input waiting for an STM32v2 receiver to be enabled.
+    /// It is kept separate from `rx_buf` so bytes injected before UE|RE do
+    /// not appear in RDR/ISR until the guest enables the receiver.
+    #[serde(skip)]
+    rx_wire_buf: Arc<Mutex<VecDeque<u8>>>,
     echo_stdout: bool,
     /// Optional prefix emitted at the start of each echoed line (used to label
     /// per-device output when several machines share one stdout, e.g. the
@@ -1225,6 +1230,7 @@ impl Uart {
             tx_console_af: None,
             sink: None,
             rx_buf: Arc::new(Mutex::new(VecDeque::new())),
+            rx_wire_buf: Arc::new(Mutex::new(VecDeque::new())),
             echo_stdout: !matches!(layout, UartRegisterLayout::Avr),
             stdout_prefix: None,
             stdout_line_buf: String::new(),
@@ -1730,6 +1736,27 @@ impl Uart {
         self.rx_buf.clone()
     }
 
+    /// Deliver bytes from a scripted or interactive UART peer. On STM32v2,
+    /// the peer bytes sit on the wire until both UE and RE are enabled; other
+    /// layouts retain their established input-queue behavior.
+    pub fn inject_rx_bytes(&mut self, bytes: &[u8]) -> Result<usize, String> {
+        let queue = if matches!(self.layout, UartRegisterLayout::Stm32V2) {
+            &self.rx_wire_buf
+        } else {
+            &self.rx_buf
+        };
+        let mut guard = queue
+            .lock()
+            .map_err(|e| format!("UART RX queue poisoned: {e}"))?;
+        guard.extend(bytes.iter().copied());
+        Ok(bytes.len())
+    }
+
+    fn stm32v2_receiver_enabled(&self) -> bool {
+        matches!(self.layout, UartRegisterLayout::Stm32V2)
+            && self.cr1 & ((1 << 0) | (1 << 2)) == ((1 << 0) | (1 << 2))
+    }
+
     /// Phase 2B.3b (issue #192): does the UART have anything that needs a
     /// per-tick wakeup? Level-triggered TXEIE/TCIE, an attached RX stream, or
     /// a pending DMA TX. Drives both the initial scheduler arm and the
@@ -1760,6 +1787,12 @@ impl Uart {
         let rxftie_armed = matches!(self.layout, UartRegisterLayout::Stm32V2)
             && self.cr1 & (1 << 29) != 0
             && self.cr3 & (1 << 28) != 0;
+        let rx_wire_ready = self.stm32v2_receiver_enabled()
+            && self
+                .rx_wire_buf
+                .lock()
+                .map(|g| !g.is_empty())
+                .unwrap_or(false);
         let sam_irq_armed =
             matches!(self.layout, UartRegisterLayout::Sam) && self.sam_irq_asserted();
         // RXNEIE is a level enable with no local producer: the byte arrives
@@ -1785,6 +1818,7 @@ impl Uart {
             && sci_b_irq::SciBIrq::rx_armed(self.sci_irq_ctrl())
             && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
         level_irq_observable
+            || rx_wire_ready
             || sci_b_rx_armed
             || !self.attached_streams.is_empty()
             || self.dma_tx_pending
@@ -1808,6 +1842,11 @@ impl Uart {
     /// default), so `n` polls is the only way to produce the `n` bytes the
     /// per-cycle path would have produced, in the same order.
     fn advance_ticks(&mut self, n: u32) -> (bool, Vec<u32>) {
+        if self.stm32v2_receiver_enabled() {
+            if let (Ok(mut wire), Ok(mut rx)) = (self.rx_wire_buf.lock(), self.rx_buf.lock()) {
+                rx.append(&mut wire);
+            }
+        }
         // Publish any burst the wire has now had time to carry. Cheap and
         // inert when nothing is buffered, which is every tick on a UART that
         // has no routed pads.

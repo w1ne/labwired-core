@@ -1,6 +1,6 @@
-2026-11-10T12:31:23.999353Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32l552.yaml
-2026-11-10T12:31:24.001583Z  INFO labwired_loader: ELF Entry Point: 0x8000801
+2026-11-10T12:48:43.291478Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32l552.yaml
+2026-11-10T12:48:43.293406Z  INFO labwired_loader: ELF Entry Point: 0x8000801
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-2026-11-10T12:31:24.003221Z  INFO labwired_cli::execute: uart_injection: 8 byte(s) delivered to 'lpuart1'
-PASS  4/4 checks · stm32l552-smoke · 2000000 steps · 0.54s
+2026-11-10T12:48:43.294941Z  INFO labwired_cli::execute: uart_injection: 8 byte(s) delivered to 'lpuart1'
+PASS  4/4 checks · stm32l552-smoke · 2000000 steps · 0.75s

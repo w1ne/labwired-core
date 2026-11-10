@@ -52,7 +52,7 @@
           "rcc reset=1 gate=1 mask=1 ok",
           "geometry flash_last=0xFFFFFFFF sram2=1 ok",
           "usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok",
-          "usart3 rxne isolated=1 asserted=1 reasserted=1 released=1 data=1 ok",
+          "usart3 rxne re_off=1 isolated=1 asserted=1 reasserted=1 released=1 data=1 ok",
           "usart3 tx_irq txe=1 tc=1 both=1 ok",
           "leds ld1=1 ld2=1 ld3=1 ok",
           "syscfg memrmp=0x00000D00 pmc=0x008700FF fields=1 cmpcr=1 ok",
@@ -133,15 +133,15 @@
       4294867296,
       537395184,
       1,
-      1073762332,
+      32,
       1,
       1073764352,
       70,
       537395136,
       70,
-      134231528
+      134232064
     ],
-    "pc": 134231528,
+    "pc": 134232064,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -154,7 +154,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "c9eb129ff28d31d1626eac8b5e6b985b7ca5c75a91c7a94db6e18e1f1c63f12e",
+  "firmware_hash": "3381f391b16bb2935b0e78e4ada295ac39214cc5175dc18d90f0193b02d24773",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nucleo-f767zi-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nucleo_f767zi.yaml",
@@ -574,35 +574,35 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 153775,
+            "cycle": 153870,
             "value": 1
           },
           {
-            "cycle": 153786,
+            "cycle": 153881,
             "value": 0
           },
           {
-            "cycle": 153795,
+            "cycle": 153890,
             "value": 1
           },
           {
-            "cycle": 153802,
+            "cycle": 153897,
             "value": 0
           },
           {
-            "cycle": 153810,
+            "cycle": 153905,
             "value": 1
           },
           {
-            "cycle": 153817,
+            "cycle": 153912,
             "value": 0
           },
           {
-            "cycle": 153827,
+            "cycle": 153922,
             "value": 1
           },
           {
-            "cycle": 153832,
+            "cycle": 153927,
             "value": 0
           }
         ],
@@ -610,39 +610,39 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 153771,
+            "cycle": 153866,
             "state": "0"
           },
           {
-            "cycle": 153775,
+            "cycle": 153870,
             "state": "1"
           },
           {
-            "cycle": 153786,
+            "cycle": 153881,
             "state": "0"
           },
           {
-            "cycle": 153795,
+            "cycle": 153890,
             "state": "1"
           },
           {
-            "cycle": 153802,
+            "cycle": 153897,
             "state": "0"
           },
           {
-            "cycle": 153810,
+            "cycle": 153905,
             "state": "1"
           },
           {
-            "cycle": 153817,
+            "cycle": 153912,
             "state": "0"
           },
           {
-            "cycle": 153827,
+            "cycle": 153922,
             "state": "1"
           },
           {
-            "cycle": 153832,
+            "cycle": 153927,
             "state": "0"
           }
         ],
@@ -657,35 +657,35 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 153925,
+            "cycle": 154020,
             "value": 1
           },
           {
-            "cycle": 153936,
+            "cycle": 154031,
             "value": 0
           },
           {
-            "cycle": 153945,
+            "cycle": 154040,
             "value": 1
           },
           {
-            "cycle": 153952,
+            "cycle": 154047,
             "value": 0
           },
           {
-            "cycle": 153960,
+            "cycle": 154055,
             "value": 1
           },
           {
-            "cycle": 153967,
+            "cycle": 154062,
             "value": 0
           },
           {
-            "cycle": 153977,
+            "cycle": 154072,
             "value": 1
           },
           {
-            "cycle": 153982,
+            "cycle": 154077,
             "value": 0
           }
         ],
@@ -693,39 +693,39 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 153921,
+            "cycle": 154016,
             "state": "0"
           },
           {
-            "cycle": 153925,
+            "cycle": 154020,
             "state": "1"
           },
           {
-            "cycle": 153936,
+            "cycle": 154031,
             "state": "0"
           },
           {
-            "cycle": 153945,
+            "cycle": 154040,
             "state": "1"
           },
           {
-            "cycle": 153952,
+            "cycle": 154047,
             "state": "0"
           },
           {
-            "cycle": 153960,
+            "cycle": 154055,
             "state": "1"
           },
           {
-            "cycle": 153967,
+            "cycle": 154062,
             "state": "0"
           },
           {
-            "cycle": 153977,
+            "cycle": 154072,
             "state": "1"
           },
           {
-            "cycle": 153982,
+            "cycle": 154077,
             "state": "0"
           }
         ],
@@ -740,35 +740,35 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 154075,
+            "cycle": 154170,
             "value": 1
           },
           {
-            "cycle": 154086,
+            "cycle": 154181,
             "value": 0
           },
           {
-            "cycle": 154095,
+            "cycle": 154190,
             "value": 1
           },
           {
-            "cycle": 154102,
+            "cycle": 154197,
             "value": 0
           },
           {
-            "cycle": 154110,
+            "cycle": 154205,
             "value": 1
           },
           {
-            "cycle": 154117,
+            "cycle": 154212,
             "value": 0
           },
           {
-            "cycle": 154127,
+            "cycle": 154222,
             "value": 1
           },
           {
-            "cycle": 154132,
+            "cycle": 154227,
             "value": 0
           }
         ],
@@ -776,39 +776,39 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 154071,
+            "cycle": 154166,
             "state": "0"
           },
           {
-            "cycle": 154075,
+            "cycle": 154170,
             "state": "1"
           },
           {
-            "cycle": 154086,
+            "cycle": 154181,
             "state": "0"
           },
           {
-            "cycle": 154095,
+            "cycle": 154190,
             "state": "1"
           },
           {
-            "cycle": 154102,
+            "cycle": 154197,
             "state": "0"
           },
           {
-            "cycle": 154110,
+            "cycle": 154205,
             "state": "1"
           },
           {
-            "cycle": 154117,
+            "cycle": 154212,
             "state": "0"
           },
           {
-            "cycle": 154127,
+            "cycle": 154222,
             "state": "1"
           },
           {
-            "cycle": 154132,
+            "cycle": 154227,
             "state": "0"
           }
         ],
@@ -885,7 +885,7 @@
         "end_cycle": 10000
       },
       {
-        "text": "usart3 rxne isolated=1 asserted=1 reasserted=1 released=1 data=1 ok",
+        "text": "usart3 rxne re_off=1 isolated=1 asserted=1 reasserted=1 released=1 data=1 ok",
         "cycle_lo": 40000,
         "cycle": 50000,
         "end_cycle": 50000
@@ -1131,14 +1131,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 22752,
+    "text_bytes": 23816,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 22752,
+    "flash_used_bytes": 23816,
     "ram_static_bytes": 0,
     "flash_total_bytes": 2097152,
     "ram_total_bytes": 524288,
-    "flash_used_pct": 1.08,
+    "flash_used_pct": 1.14,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -1164,88 +1164,88 @@
     "cycles": 6000000,
     "instructions": 6000000,
     "steps_executed": 6000000,
-    "memory_reads": 8157,
+    "memory_reads": 8247,
     "memory_writes": 1257,
-    "peripheral_accesses": 267745,
+    "peripheral_accesses": 267743,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134231528,
+        "pc": 134232064,
         "count": 727,
         "symbol": "firmware_nucleo_f767zi_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 134233120,
+        "pc": 134234168,
         "count": 157,
-        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134233036,
+        "pc": 134234094,
         "count": 156,
         "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
       },
       {
-        "pc": 134233046,
+        "pc": 134234104,
         "count": 156,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134233058,
+        "pc": 134234126,
         "count": 156,
         "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
       },
       {
-        "pc": 134233078,
-        "count": 156,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134233100,
+        "pc": 134234148,
         "count": 156,
         "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
       },
       {
-        "pc": 134233068,
+        "pc": 134234178,
+        "count": 156,
+        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
+      },
+      {
+        "pc": 134234116,
         "count": 118,
         "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
       },
       {
-        "pc": 134233090,
+        "pc": 134234136,
+        "count": 117,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234158,
         "count": 117,
         "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
       },
       {
-        "pc": 134233110,
-        "count": 117,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134228156,
+        "pc": 134228688,
         "count": 79,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134228174,
+        "pc": 134228708,
         "count": 79,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait_level"
       },
       {
-        "pc": 134222534,
+        "pc": 134222526,
         "count": 78,
-        "symbol": "firmware_nucleo_f767zi_smoke::check_usart3_rx"
+        "symbol": "<i32>::overflowing_add"
       },
       {
-        "pc": 134223814,
+        "pc": 134224362,
+        "count": 78,
+        "symbol": "<i32>::overflowing_add"
+      },
+      {
+        "pc": 134224600,
         "count": 78,
         "symbol": "firmware_nucleo_f767zi_smoke::check_usart3_tx_irq"
       },
       {
-        "pc": 134224050,
-        "count": 78,
-        "symbol": "firmware_nucleo_f767zi_smoke::check_usart3_tx_irq"
-      },
-      {
-        "pc": 134228150,
+        "pc": 134228680,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       }
