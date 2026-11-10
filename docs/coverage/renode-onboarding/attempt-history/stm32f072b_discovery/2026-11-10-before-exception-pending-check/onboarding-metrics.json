@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f072b_discovery",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-stm32f072b-disco-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/renode-onboarding/stm32f072b_discovery-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f072b_discovery.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T21:01:28Z",
+  "finished_at_utc": "2026-11-10T21:01:30Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1787,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.297,
+    "build_firmware": 0.96,
+    "run_smoke": 0.49
+  },
+  "stages_ms": {
+    "build_cli": 297,
+    "build_firmware": 960,
+    "run_smoke": 490
+  }
+}

@@ -1,0 +1,1 @@
+Passing first version of the Cortex-M0 external exception smoke before adding direct pending-bit checks inside the handler and before manual cleanup. It already observed IRQ 5 at IPSR 21 with IABR bit 5 set and successful return.

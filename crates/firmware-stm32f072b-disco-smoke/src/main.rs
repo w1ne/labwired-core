@@ -22,9 +22,11 @@
 //! on-board slave and are proven by the stm32f072 fixture smoke instead.
 //! Bases and IRQ numbers are RM0091 and ST's CMSIS `stm32f072xb.h`.
 //!
-//! Interrupts stay disabled in the NVIC: each check reads the line's ISPR
-//! bit. Every check prints one line and sets one bit of the summary word at
-//! `SUMMARY`. AIRCR.PRIGROUP is also checked as reserved on this ARMv6-M core.
+//! Peripheral IRQ checks read each line's ISPR bit without enabling it. The
+//! final software-pended IRQ 5 takes a real Cortex-M0 exception through a RAM
+//! vector table and checks IPSR, IABR, and exception return. Every check prints
+//! one line and sets one bit of the summary word at `SUMMARY`. AIRCR.PRIGROUP
+//! is also checked as reserved on this ARMv6-M core.
 
 #![no_std]
 #![no_main]
@@ -36,7 +38,15 @@ use panic_halt as _;
 
 const SUMMARY: u32 = 0x2000_3000;
 const SCB_AIRCR: u32 = 0xE000_ED0C;
+const SCB_VTOR: u32 = 0xE000_ED08;
 const AIRCR_VECTKEY: u32 = 0x05FA << 16;
+const RAM_VECTOR_BASE: u32 = 0x2000_1000;
+const VECTOR_TABLE_WORDS: usize = 48;
+const EXTI0_1_VECTOR_INDEX: usize = 16 + EXTI0_1_IRQ as usize;
+const IRQ_HIT: u32 = SUMMARY + 4;
+const IRQ_IPSR: u32 = SUMMARY + 8;
+const IRQ_ACTIVE: u32 = SUMMARY + 12;
+const IRQ_PENDING: u32 = SUMMARY + 16;
 
 // RCC (RM0091 §6.4).
 const RCC: u32 = 0x4002_1000;
@@ -164,7 +174,10 @@ const ADC_CCR_TSEN: u32 = 1 << 23;
 const ADC_WANT: [u32; 2] = [1801, 1526];
 
 const NVIC_ISPR0: u32 = 0xE000_E200;
+const NVIC_ISER0: u32 = 0xE000_E100;
+const NVIC_ICER0: u32 = 0xE000_E180;
 const NVIC_ICPR0: u32 = 0xE000_E280;
+const NVIC_IABR0: u32 = 0xE000_E300;
 
 fn rd(addr: u32) -> u32 {
     unsafe { read_volatile(addr as *const u32) }
@@ -180,6 +193,97 @@ fn pending(irq: u32) -> bool {
 
 fn unpend(irq: u32) {
     wr(NVIC_ICPR0, 1 << irq);
+}
+
+/// RAM vector used by `check_exception_entry`. Keep the handler free of UART
+/// work so the evidence comes from exception entry and return themselves.
+unsafe extern "C" fn smoke_exti0_1_handler() {
+    let ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {ipsr}, IPSR",
+            ipsr = out(reg) ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        write_volatile(IRQ_IPSR as *mut u32, ipsr);
+        write_volatile(
+            IRQ_ACTIVE as *mut u32,
+            read_volatile(NVIC_IABR0 as *const u32) & (1 << EXTI0_1_IRQ),
+        );
+        write_volatile(
+            IRQ_PENDING as *mut u32,
+            read_volatile(NVIC_ISPR0 as *const u32) & (1 << EXTI0_1_IRQ),
+        );
+        write_volatile(NVIC_ICER0 as *mut u32, 1 << EXTI0_1_IRQ);
+        write_volatile(IRQ_HIT as *mut u32, 1);
+    }
+}
+
+/// Take a software-pended IRQ 5 through the imported Cortex-M0's exception
+/// path, then check that the active and pending state clears on return.
+fn check_exception_entry() -> bool {
+    let source_vtor = rd(SCB_VTOR);
+    let table = RAM_VECTOR_BASE as *mut u32;
+    let irq_bit = 1 << EXTI0_1_IRQ;
+    unsafe {
+        wr(NVIC_ICER0, irq_bit);
+        unpend(EXTI0_1_IRQ);
+        write_volatile(IRQ_HIT as *mut u32, 0);
+        write_volatile(IRQ_IPSR as *mut u32, 0);
+        write_volatile(IRQ_ACTIVE as *mut u32, 0);
+        write_volatile(IRQ_PENDING as *mut u32, 0);
+        for index in 0..VECTOR_TABLE_WORDS {
+            write_volatile(table.add(index), 0);
+        }
+        let handler = (smoke_exti0_1_handler as *const () as usize as u32) | 1;
+        write_volatile(table.add(EXTI0_1_VECTOR_INDEX), handler);
+        wr(SCB_VTOR, RAM_VECTOR_BASE);
+    }
+    let vtor_installed = rd(SCB_VTOR) == RAM_VECTOR_BASE;
+    let vector_installed = unsafe {
+        read_volatile(table.add(EXTI0_1_VECTOR_INDEX))
+            == ((smoke_exti0_1_handler as *const () as usize as u32) | 1)
+    };
+
+    wr(NVIC_ISPR0, irq_bit);
+    wr(NVIC_ISER0, irq_bit);
+    for _ in 0..100_000 {
+        if rd(IRQ_HIT) != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let active_after = rd(NVIC_IABR0) & irq_bit;
+    let pending_after = rd(NVIC_ISPR0) & irq_bit;
+    wr(NVIC_ICER0, irq_bit);
+    unpend(EXTI0_1_IRQ);
+    wr(SCB_VTOR, source_vtor);
+    let vtor_restored = rd(SCB_VTOR) == source_vtor;
+    let hit = rd(IRQ_HIT) == 1;
+    let ipsr = rd(IRQ_IPSR);
+    let active_during = rd(IRQ_ACTIVE);
+    let pending_during = rd(IRQ_PENDING);
+    let returned = active_after == 0 && pending_after == 0 && vtor_restored;
+    let ok = vtor_installed
+        && vector_installed
+        && hit
+        && ipsr == 16 + EXTI0_1_IRQ
+        && active_during == irq_bit
+        && pending_during == 0
+        && returned;
+
+    puts("irq exception hit=");
+    puts(if hit { "1" } else { "0" });
+    puts(" ipsr=");
+    hex(ipsr);
+    puts(" active=");
+    hex(active_during);
+    puts(" pending=");
+    hex(pending_during);
+    puts(" returned=");
+    puts(if returned { "1 " } else { "0 " });
+    verdict(ok);
+    ok
 }
 
 /// ARMv6-M reserves AIRCR.PRIGROUP. Even writes with VECTKEY must read back
@@ -628,6 +732,7 @@ fn main() -> ! {
     mark(13, check_dma_m2m());
     mark(14, check_crc());
     mark(15, check_adc());
+    mark(18, check_exception_entry());
     let summary = summary | 0x0DC0_0000;
     wr(SUMMARY, summary);
     puts("summary ");
