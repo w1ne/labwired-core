@@ -15,9 +15,9 @@ package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/
 workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
    Compiling firmware-stm32h743-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-stm32h743-smoke)
 warning: unnecessary `unsafe` block
-   --> crates/firmware-stm32h743-smoke/src/main.rs:200:18
+   --> crates/firmware-stm32h743-smoke/src/main.rs:241:18
     |
-200 |     let record = unsafe { core::ptr::addr_of_mut!(EXCEPTION_RECORD).cast::<u32>() };
+241 |     let record = unsafe { core::ptr::addr_of_mut!(EXCEPTION_RECORD).cast::<u32>() };
     |                  ^^^^^^ unnecessary `unsafe` block
     |
     = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
@@ -85,4 +85,4 @@ warning: constant `TC` is never used
    |       ^^
 
 warning: `firmware-stm32h743-smoke` (bin "firmware-stm32h743-smoke") generated 11 warnings
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.39s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.55s

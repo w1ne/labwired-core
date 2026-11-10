@@ -131,18 +131,21 @@ fn send_hex32(value: u32) {
 }
 
 /// Capture the hardware-created Cortex-M7 frame before a compiler prologue
-/// changes MSP. r4 is saved because it is not part of the basic exception
-/// frame; caller-saved registers are restored by exception return.
+/// changes the active stack. r4 is saved because it is not part of the basic
+/// exception frame; caller-saved registers are restored by exception return.
 #[cfg(feature = "stm32h743-exception-frame")]
 #[unsafe(naked)]
 unsafe extern "C" fn smoke_exception_handler() {
     core::arch::naked_asm!(
-        "mrs r0, msp",
+        "mov r2, lr",
+        "tst r2, #4",
+        "ite eq",
+        "mrseq r0, msp",
+        "mrsne r0, psp",
         "push {{r4}}",
         "ldr r1, ={record}",
-        "str r0, [r1, #36]",
-        "mov r2, lr",
         "str r2, [r1, #32]",
+        "str r0, [r1, #36]",
         "mov r4, r0",
         "movs r2, #8",
         "2:",
@@ -168,14 +171,18 @@ unsafe extern "C" fn smoke_exception_handler() {
 }
 
 /// Pend IRQ 5 after setting sentinels in every caller-saved register which
-/// Cortex-M stacks automatically. The recorded pre-exception MSP is eight
-/// bytes below the Rust caller's MSP because r4/r7 are saved here.
+/// Cortex-M stacks automatically. The recorded pre-exception stack includes
+/// the r4/r7 save on MSP, or is the unchanged PSP when Thread mode uses PSP.
 #[cfg(feature = "stm32h743-exception-frame")]
 #[unsafe(naked)]
 unsafe extern "C" fn pend_exception_irq_with_sentinels() {
     core::arch::naked_asm!(
         "push {{r4, r7}}",
-        "mrs r7, msp",
+        "mrs r7, control",
+        "tst r7, #2",
+        "ite eq",
+        "mrseq r7, msp",
+        "mrsne r7, psp",
         "ldr r4, ={record}",
         "str r7, [r4, #52]",
         "ldr r7, =0xE000E200",
@@ -189,6 +196,40 @@ unsafe extern "C" fn pend_exception_irq_with_sentinels() {
         "movs r4, #0x20",
         "str r4, [r7]",
         "pop {{r4, r7}}",
+        "bx lr",
+        record = sym EXCEPTION_RECORD,
+    );
+}
+
+/// Switch Thread mode to a dedicated PSP, pend IRQ 5, then restore the
+/// caller's CONTROL and callee-saved registers after exception return.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[unsafe(naked)]
+unsafe extern "C" fn pend_exception_irq_with_psp_sentinels() {
+    core::arch::naked_asm!(
+        "push {{r4-r7}}",
+        "mrs r6, control",
+        "ldr r7, =0x2001F000",
+        "msr psp, r7",
+        "movs r7, #2",
+        "msr control, r7",
+        "isb",
+        "mrs r7, psp",
+        "ldr r5, ={record}",
+        "str r7, [r5, #52]",
+        "ldr r7, =0xE000E200",
+        "movs r4, #0x20",
+        "movs r0, #0x11",
+        "movs r1, #0x22",
+        "movs r2, #0x33",
+        "movs r3, #0x44",
+        "movs r4, #0x55",
+        "mov r12, r4",
+        "movs r4, #0x20",
+        "str r4, [r7]",
+        "msr control, r6",
+        "isb",
+        "pop {{r4-r7}}",
         "bx lr",
         record = sym EXCEPTION_RECORD,
     );
@@ -243,14 +284,8 @@ fn check_cortex_m7_exception_frame() -> bool {
     let pending_during = read_record(12);
     let msp_before_irq = read_record(13);
 
-    unsafe {
-        write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT);
-        write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT);
-        write_volatile(SCB_VTOR, source_vtor);
-    }
     let returned = unsafe { read_volatile(NVIC_ISPR0) } & EXCEPTION_IRQ_BIT == 0
         && unsafe { read_volatile(NVIC_IABR0) } & EXCEPTION_IRQ_BIT == 0;
-    let vtor_restored = unsafe { read_volatile(SCB_VTOR) } == source_vtor;
     let frame_ok = frame_r0 == 0x11
         && frame_r1 == 0x22
         && frame_r2 == 0x33
@@ -267,12 +302,77 @@ fn check_cortex_m7_exception_frame() -> bool {
     let active_and_pending_ok = ipsr == 16 + EXCEPTION_IRQ
         && active_during & EXCEPTION_IRQ_BIT != 0
         && pending_during & EXCEPTION_IRQ_BIT == 0;
+
+    // Reuse the installed vector for a second entry from Thread/PSP. The
+    // helper keeps its own saved registers on MSP and uses a dedicated
+    // doubleword-aligned PSP inside the imported H743 RAM window.
+    unsafe {
+        for index in 0..14 {
+            write_volatile(record.add(index), 0);
+        }
+    }
+    let msp_before_psp_irq: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_before_psp_irq,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    unsafe { pend_exception_irq_with_psp_sentinels() };
+    let msp_after_psp_irq: u32;
+    let psp_after: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            "mrs {}, psp",
+            out(reg) msp_after_psp_irq,
+            out(reg) psp_after,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    let psp_exc_return = read_record(8);
+    let psp_frame_sp = read_record(9);
+    let psp_ipsr = read_record(10);
+    let psp_active_during = read_record(11);
+    let psp_pending_during = read_record(12);
+    let psp_before_irq = read_record(13);
+    let psp_frame_ok = read_record(0) == 0x11
+        && read_record(1) == 0x22
+        && read_record(2) == 0x33
+        && read_record(3) == 0x44
+        && read_record(4) == 0x55
+        && read_record(5) & 1 != 0
+        && (0x0800_0000..0x0810_0000).contains(&read_record(6))
+        && read_record(7) & 0x0100_0000 != 0
+        && psp_exc_return == 0xffff_fffd
+        && psp_frame_sp & 7 == 0
+        && psp_frame_sp == psp_before_irq.wrapping_sub(32)
+        && (0x2000_0000..0x2002_0000).contains(&psp_frame_sp);
+    let psp_active_and_pending_ok = psp_ipsr == 16 + EXCEPTION_IRQ
+        && psp_active_during & EXCEPTION_IRQ_BIT != 0
+        && psp_pending_during & EXCEPTION_IRQ_BIT == 0;
+    let psp_returned = unsafe { read_volatile(NVIC_ISPR0) } & EXCEPTION_IRQ_BIT == 0
+        && unsafe { read_volatile(NVIC_IABR0) } & EXCEPTION_IRQ_BIT == 0;
+    let psp_ok = psp_frame_ok
+        && psp_active_and_pending_ok
+        && psp_returned
+        && psp_after == psp_before_irq
+        && msp_after_psp_irq == msp_before_psp_irq;
+
+    unsafe {
+        write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT);
+        write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT);
+        write_volatile(SCB_VTOR, source_vtor);
+    }
+    let vtor_restored = unsafe { read_volatile(SCB_VTOR) } == source_vtor;
     let ok = vector_installed
         && vtor_installed
         && frame_ok
         && active_and_pending_ok
         && returned
-        && vtor_restored;
+        && vtor_restored
+        && psp_ok;
 
     send(b"cortex-m7 irq ipsr=");
     send_hex32(ipsr);
@@ -302,6 +402,28 @@ fn check_cortex_m7_exception_frame() -> bool {
     } else {
         b"0"
     });
+    send(b"\r\ncortex-m7 psp exception=");
+    send(if psp_frame_ok && psp_active_and_pending_ok {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b" stack=");
+    send(if psp_after == psp_before_irq {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b" msp=");
+    send(if msp_after_psp_irq == msp_before_psp_irq {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b" return=");
+    send(if psp_returned { b"1" } else { b"0" });
+    send(b" exc_return=");
+    send_hex32(psp_exc_return);
     send(b"\r\n");
     ok
 }
