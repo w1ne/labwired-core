@@ -15,7 +15,7 @@
 //!          ODR read back after each write
 //!   TIM2   PSC/ARR readback, up-counter advances, UIF latches and clears (W1C 0)
 //!   I2C1   TMP102 temperature-register pointer write + repeated-start read
-//!          (25 °C = 0x1900), plus TXE/RXNE buffer IRQs, ADDR event IRQ,
+//!          (25 °C = 0x1900), plus TXE/RXNE buffer IRQs, ADDR/BTF event IRQs,
 //!          absent-address NACK and error IRQ checks
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
 //!   USART1 TXEIE and RXNEIE assert and release their NVIC line
@@ -292,6 +292,9 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
         event_irq_released &= rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT == 0;
     }
 
+    // ITEVTEN remains enabled while ITBUFEN is off. TXE alone must not
+    // pend EV; BTF is an event source and must assert the same line.
+    wr(NVIC_ICPR0, I2C1_EV_IRQ_BIT);
     wr(I2C_DR, 0x00); // temperature register pointer
     if !wait(I2C_SR1, 0x0004, 0x0004) {
         // BTF: pointer byte sent
@@ -307,6 +310,10 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
             false,
         );
     }
+    let btf_irq = rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT != 0;
+    send(b"i2c1 btf_irq=");
+    putc(if btf_irq { b'1' } else { b'0' });
+    send(if btf_irq { b" ok\r\n" } else { b" FAIL\r\n" });
 
     // For the receiver phase, leave only ITBUFEN set. The subsequent RXNE
     // flag must assert EV by itself, then DR must clear the level source.
@@ -466,6 +473,7 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
             && rxne_ok
             && event_irq
             && event_irq_released
+            && btf_irq
             && er_irq
             && irq_released,
     )
