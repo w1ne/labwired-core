@@ -36,6 +36,10 @@
 //! - INT0/INT1 edge detection needs the I/O clock, so while the core sleeps in
 //!   power-down, power-save or (extended) standby only a low level wakes it
 //!   through INT0/INT1; pin-change interrupts are asynchronous and always do.
+//!
+//! Port B is also watched for Timer1's input capture pin ICP1 (PB0) while
+//! `timer1.rs` asks for it; the edge goes to `timer1_icp_edge`. Its edge
+//! detector runs on clk_I/O, so it sees nothing in the deeper sleep modes.
 
 use super::{Avr, AVR_IO_MIRROR_BASE, AVR_PINB, AVR_PINC, AVR_PIND};
 use crate::Bus;
@@ -67,6 +71,9 @@ pub(super) const ADDR_PCMSK2: u16 = 0x6D;
 
 /// `PINx` of port B, C, D: the index is the PCINT group.
 const PORT_PIN: [u16; 3] = [AVR_PINB, AVR_PINC, AVR_PIND];
+/// ICP1 is PB0.
+const PORT_B: usize = 0;
+const ICP1_PAD: u8 = 1 << 0;
 /// INT0 is PD2, INT1 is PD3.
 const PORT_D: usize = 2;
 const INT_PAD_SHIFT: u32 = 2;
@@ -110,8 +117,9 @@ impl Avr {
     }
 
     /// Which ports must be sampled at every boundary: a group with any PCMSK
-    /// bit set, and port D while INT0/INT1 sense an edge (flags are kept even
-    /// when masked) or are enabled (a low level must be tracked).
+    /// bit set, port D while INT0/INT1 sense an edge (flags are kept even
+    /// when masked) or are enabled (a low level must be tracked), and port B
+    /// while Timer1's input capture wants ICP1.
     fn compute_ext_watch(&self) -> u8 {
         let mut watch = 0u8;
         for (group, mask) in self.pcmsk.iter().enumerate() {
@@ -122,10 +130,14 @@ impl Avr {
         if self.eicra & 0x0F != 0 || self.eimsk & 0x03 != 0 {
             watch |= 1 << PORT_D;
         }
+        if !self.is_mega() && self.t1.capture_watched() {
+            watch |= 1 << PORT_B;
+        }
         watch
     }
 
-    /// Re-arm after a write to `EICRA`, `EIMSK`, `PCICR` or `PCMSKx`. A port
+    /// Re-arm after a write to `EICRA`, `EIMSK`, `PCICR`, `PCMSKx`, or the
+    /// Timer1 registers that turn input capture on or off. A port
     /// that starts being watched takes its present level as the reference,
     /// so configuring an interrupt never invents an edge.
     pub(super) fn ext_config_changed(&mut self, bus: &dyn Bus) {
@@ -162,6 +174,9 @@ impl Avr {
             }
             if changed & self.pcmsk[group] != 0 {
                 self.pcifr |= 1 << group;
+            }
+            if group == PORT_B && changed & ICP1_PAD != 0 && self.io_clock_running() {
+                self.timer1_icp_edge(now & ICP1_PAD != 0);
             }
             if group == PORT_D && self.io_clock_running() {
                 for n in 0..2 {
@@ -546,6 +561,54 @@ mod tests {
         write(&mut cpu, &mut bus, PD + 2, 1 << 5); // PORTD5 high
         run(&mut cpu, &mut bus, 4);
         assert_eq!(entries(&cpu), [0, 0, 0, 0, 1]);
+    }
+
+    /// Timer1 input capture: a rising edge on ICP1 (PB0) from outside copies
+    /// the running TCNT1 into ICR1 and enters `TIMER1_CAPT` at the next
+    /// boundary. Arming capture on a pad that is already high invents nothing.
+    #[test]
+    fn icp1_edge_captures_tcnt1_and_enters_the_capture_vector() {
+        use crate::cpu::avr::timer1::VEC_TIMER1_CAPT;
+        let (mut cpu, mut bus) = rig();
+        cpu.load_words((VEC_TIMER1_CAPT - 1) * 4, &[0x9403 | (26 << 4), 0x9518]);
+        hold(&mut bus, PB, 0xFE);
+        write(&mut cpu, &mut bus, 0x81, 0x41); // TCCR1B: ICES1 | clk/1
+        write(&mut cpu, &mut bus, 0x6F, 0x20); // TIMSK1: ICIE1
+        run(&mut cpu, &mut bus, 20);
+        assert_eq!(cpu.r[26], 0, "no edge yet");
+        let before = cpu.t1.tcnt;
+        hold(&mut bus, PB, 0xFF);
+        run(&mut cpu, &mut bus, 1);
+        let icr = cpu.t1.icr;
+        assert!(
+            icr >= before && icr <= cpu.t1.tcnt,
+            "ICR1 {icr} is TCNT1 at the edge"
+        );
+        run(&mut cpu, &mut bus, 4);
+        assert_eq!(cpu.r[26], 1, "TIMER1_CAPT entered once");
+        assert_eq!(read(&cpu, &bus, 0x36) & 0x20, 0, "ICF1 cleared on entry");
+        // The falling edge does not match ICES1.
+        hold(&mut bus, PB, 0xFE);
+        run(&mut cpu, &mut bus, 6);
+        assert_eq!(cpu.r[26], 1);
+    }
+
+    /// Driving ICP1 as an output captures as on silicon, polled through ICF1
+    /// with the interrupt off.
+    #[test]
+    fn a_driven_icp1_captures_without_the_interrupt() {
+        let (mut cpu, mut bus) = rig();
+        write(&mut cpu, &mut bus, PB + 1, 0x01); // DDRB0
+        write(&mut cpu, &mut bus, 0x81, 0x42); // TCCR1B: ICES1 | clk/8
+        run(&mut cpu, &mut bus, 40);
+        assert_eq!(read(&cpu, &bus, 0x36) & 0x20, 0);
+        write(&mut cpu, &mut bus, PB + 2, 0x01); // PORTB0 high
+        run(&mut cpu, &mut bus, 1);
+        assert_ne!(read(&cpu, &bus, 0x36) & 0x20, 0, "ICF1 set");
+        assert!(cpu.t1.icr > 0);
+        // Writing 1 clears it.
+        write(&mut cpu, &mut bus, 0x36, 0x20);
+        assert_eq!(read(&cpu, &bus, 0x36) & 0x20, 0);
     }
 
     #[test]
