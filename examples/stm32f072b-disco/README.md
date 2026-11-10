@@ -56,8 +56,10 @@ generic Beta NTC divider and a separate Shockley diode load line to GPIOA input
 pins PA0 and PA9. The NTC voltage changes with its temperature input; the diode
 uses its own solved load line. The board-specific co-simulation test checks both
 voltages against independent calculations and observes the thresholded GPIOA
-IDR values. This exercises GPIO threshold routing; the current F072 ADC profile
-still does not convert external analog inputs.
+IDR values. The same netlists also route to ADC1_IN0 on PA0 and ADC1_IN1 on PA1.
+The BJT Early-effect fixture sends matched finite-VAF and no-Early branches to
+ADC1_IN2/IN3. The integration test checks all four channels against independent
+load-line calculations through the F0 `CHSELR` and data-register path.
 
 ## What the chip models
 
@@ -70,7 +72,7 @@ still does not convert external analog inputs.
 | USART1–4 (v2) + clock gates | modelled — USART1 output is captured by the simulator; ST-LINK/V2 is SWD-only |
 | SPI1/2 (legacy), I2C1/2 (legacy), TIM1/2/3/14/15/16/17 | modelled |
 | DMA1, EXTI, SYSCFG, PWR, CRC, bxCAN1, DAC1, RTC, IWDG/WWDG | modelled |
-| ADC1 | modelled — `stm32l4`-family profile (not exercised) |
+| ADC1 | modelled — `stm32f0` v2 profile; external pad routes and single conversions are covered by co-simulation tests |
 | USB FS, TSC, CRS | `type: stub` — zeros |
 | Silicon capture / executing-fidelity differential | **none** — SIM-DERIVED |
 

@@ -1,4 +1,5 @@
-# Generic matched Gummel–Poon NPN load lines for the STM32F072B-DISCO GPIO route.
+# Generic matched Gummel–Poon NPN load lines for the STM32F072B-DISCO.
+# Each collector reaches both its GPIO input and the same pad's ADC channel.
 # The pair differs only by finite forward Early voltage and shares one stimulus.
 name: stm32f072b-disco-analog-bjt-early-effect
 chip: ../../configs/chips/stm32f072.yaml
@@ -12,6 +13,7 @@ cosim_models:
       base_drive: ui.bjt.base_v
     outputs:
       collector_voltage: board.gpio_in.pa2
+      collector_adc: board.analog.pa2_volts
     config:
       netlist_text: |
         Vcc supply 0 dc 3.3
@@ -22,6 +24,7 @@ cosim_models:
         .model NPN_EARLY NPN(IS=1e-15 BF=100 BR=4 VAF=50)
       probes:
         collector_voltage: v(collector)
+        collector_adc: v(collector)
       sources:
         base_drive: Vbase
       vdd: 3.3
@@ -32,6 +35,7 @@ cosim_models:
       base_drive: ui.bjt.base_v
     outputs:
       collector_voltage: board.gpio_in.pa3
+      collector_adc: board.analog.pa3_volts
     config:
       netlist_text: |
         Vcc supply 0 dc 3.3
@@ -42,6 +46,7 @@ cosim_models:
         .model NPN_REFERENCE NPN(IS=1e-15 BF=100 BR=4)
       probes:
         collector_voltage: v(collector)
+        collector_adc: v(collector)
       sources:
         base_drive: Vbase
       vdd: 3.3
