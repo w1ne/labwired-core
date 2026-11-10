@@ -22,6 +22,9 @@ const USART_TDR: *mut u32 = (USART3 + 0x28) as *mut u32;
 const USART_RXNEIE: u32 = 1 << 5;
 const USART_TXEIE: u32 = 1 << 7;
 const USART_TCIE: u32 = 1 << 6;
+const USART_UE: u32 = 1 << 0;
+const USART_TE: u32 = 1 << 3;
+const USART_RE: u32 = 1 << 2;
 const NVIC_ISPR1: *const u32 = 0xE000_E204 as *const u32;
 const NVIC_ICPR1: *mut u32 = 0xE000_E284 as *mut u32;
 const USART3_IRQ_BIT: u32 = 1 << (39 - 32);
@@ -34,6 +37,33 @@ const USART_RECEIVER_ENABLE: u32 = if cfg!(feature = "nucleo-h753zi-rx") {
     0
 };
 const LED: u32 = 1;
+
+#[cfg(feature = "nucleo-h753zi-rx")]
+fn check_uart_rx_enable_gates() -> bool {
+    // Start-injected bytes are still queued on the wire. UE alone cannot
+    // receive them while RE is clear, and RE alone cannot receive them while
+    // UE is clear. Keep TE enabled so the UART remains otherwise configured.
+    unsafe { write_volatile(USART_CR1, USART_UE | USART_TE) };
+    let mut re_off_clear = true;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(USART_ISR) } & RXNE != 0 {
+            re_off_clear = false;
+            break;
+        }
+    }
+
+    unsafe { write_volatile(USART_CR1, USART_TE | USART_RE) };
+    let mut ue_off_clear = true;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(USART_ISR) } & RXNE != 0 {
+            ue_off_clear = false;
+            break;
+        }
+    }
+
+    unsafe { write_volatile(USART_CR1, USART_UE | USART_TE | USART_RE) };
+    re_off_clear && ue_off_clear
+}
 
 fn register_rmw(address: u32, clear: u32, set: u32) {
     unsafe {
@@ -278,19 +308,35 @@ fn main() -> ! {
     register_rmw(GPIOD + MODER, 0b11 << 16, 0b10 << 16);
     register_rmw(GPIOD + AFRH, 0xF << 0, 7);
     register_rmw(GPIOB + MODER, 0b11, 0b01);
-    // Neither individual enable is sufficient to emit TDR data. The smoke's
-    // anchored UART regex below requires the banner to be the first output.
     unsafe {
         write_volatile(USART_BRR, 555); // 64 MHz / 115200
-        write_volatile(USART_CR1, (1 << 0) | USART_RECEIVER_ENABLE); // UE without TE
+    }
+
+    #[cfg(feature = "nucleo-h753zi-rx")]
+    unsafe {
+        // Neither single enable can transmit these bytes. The profile's
+        // receive-gate probe also starts with RE clear, so queued RX bytes
+        // remain on the wire until both UE and RE are enabled below.
+        write_volatile(USART_CR1, USART_UE);
         write_volatile(USART_TDR, b'!' as u32);
-        write_volatile(USART_CR1, (1 << 3) | USART_RECEIVER_ENABLE); // TE without UE
+        write_volatile(USART_CR1, USART_TE);
         write_volatile(USART_TDR, b'?' as u32);
-        write_volatile(USART_CR1, (1 << 0) | (1 << 3) | USART_RECEIVER_ENABLE); // UE | TE | optional RE
+    }
+    #[cfg(feature = "nucleo-h753zi-rx")]
+    let rx_enable_gates_ok = check_uart_rx_enable_gates();
+    #[cfg(not(feature = "nucleo-h753zi-rx"))]
+    unsafe {
+        write_volatile(USART_CR1, USART_UE | USART_TE | USART_RECEIVER_ENABLE);
     }
 
     set_led(false);
     send(b"STM32H7 register smoke\r\n");
+    #[cfg(feature = "nucleo-h753zi-rx")]
+    send(if rx_enable_gates_ok {
+        b"usart3 rx_gate re_off=1 ue_off=1 ok\r\n"
+    } else {
+        b"usart3 rx_gate fail fail\r\n"
+    });
     #[cfg(feature = "nucleo-h753zi-rx")]
     check_uart_rx();
     #[cfg(feature = "nucleo-h753zi-usart3-irq")]
