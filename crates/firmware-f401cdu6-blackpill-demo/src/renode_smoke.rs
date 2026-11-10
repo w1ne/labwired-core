@@ -15,8 +15,9 @@
 //!          ODR read back after each write
 //!   TIM2   PSC/ARR readback, up-counter advances, UIF latches and clears (W1C 0)
 //!   I2C1   TMP102 temperature-register pointer write + repeated-start read
-//!          (25 °C = 0x1900), plus TXE/RXNE buffer IRQs, ADDR/BTF event IRQs,
-//!          absent-address NACK and error IRQ checks
+//!          (25 °C = 0x1900), plus TXE/RXNE buffer IRQs, master-transmit and
+//!          master-receive BTF event IRQs, absent-address NACK and error IRQ
+//!          checks
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
 //!   USART1 TXEIE and RXNEIE assert and release their NVIC line
 //! A summary word goes to RAM at 0x20017F00 (one bit per block passed).
@@ -463,6 +464,24 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
     send(b" release=");
     putc(if rxne_released { b'1' } else { b'0' });
     send(if rxne_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+
+    // Repeat the TMP102 read without consuming the first byte. The second
+    // byte then waits behind it in the receive shift register, setting BTF.
+    // ITEVTEN alone must report BTF while RXNE alone remains disabled.
+    let (rx_btf_data, rx_btf_irq, rxne_isolated, rx_btf_released) = smoke_i2c1_receive_btf();
+    // The TMP102 fixture advances by 0.5 °C after each complete temperature
+    // read, so the second transaction returns 25.5 °C (0x1980).
+    let rx_btf_ok = rx_btf_data == 0x1980 && rx_btf_irq && rxne_isolated && rx_btf_released;
+    send(b"i2c1 btf_rx_irq=");
+    putc(if rx_btf_irq { b'1' } else { b'0' });
+    send(b" rxne_isolated=");
+    putc(if rxne_isolated { b'1' } else { b'0' });
+    send(b" release=");
+    putc(if rx_btf_released { b'1' } else { b'0' });
+    send(b" data=");
+    put_hex32(u32::from(rx_btf_data));
+    send(if rx_btf_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+
     (
         temperature,
         sr1,
@@ -480,12 +499,81 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
             && buffer_irq
             && buffer_irq_released
             && rxne_ok
+            && rx_btf_ok
             && event_irq
             && event_irq_released
             && btf_irq
             && er_irq
             && irq_released,
     )
+}
+
+/// Read two TMP102 bytes while leaving the first in DR until the second has
+/// arrived. With ITEVTEN enabled and ITBUFEN disabled, RXNE must not assert EV;
+/// the full receive pipeline must assert BTF and release it when DR is read.
+fn smoke_i2c1_receive_btf() -> (u16, bool, bool, bool) {
+    const PE: u32 = 1;
+    const ACK: u32 = 1 << 10;
+    const START: u32 = 1 << 8;
+    const STOP: u32 = 1 << 9;
+    const SB: u32 = 1;
+    const ADDR: u32 = 1 << 1;
+    const BTF: u32 = 1 << 2;
+    const RXNE: u32 = 1 << 6;
+
+    // ITERREN | ITEVTEN; ITBUFEN stays clear for the receive phase.
+    wr(I2C_CR2, 16 | (1 << 8) | (1 << 9));
+    wr(I2C_CR1, PE | ACK | START);
+    if !wait(I2C_SR1, SB, SB) {
+        return (0xFFFF, false, false, false);
+    }
+    wr(I2C_DR, 0x90);
+    if !wait(I2C_SR1, ADDR, ADDR) {
+        return (0xFFFF, false, false, false);
+    }
+    let _ = rd(I2C_SR1);
+    let _ = rd(I2C_SR2);
+    wr(I2C_DR, 0); // TMP102 temperature register pointer
+    if !wait(I2C_SR1, BTF, BTF) {
+        return (0xFFFF, false, false, false);
+    }
+
+    wr(I2C_CR1, PE | ACK | START); // repeated START
+    if !wait(I2C_SR1, SB, SB) {
+        return (0xFFFF, false, false, false);
+    }
+    wr(I2C_DR, 0x91);
+    if !wait(I2C_SR1, ADDR, ADDR) {
+        return (0xFFFF, false, false, false);
+    }
+    let _ = rd(I2C_SR1);
+    let _ = rd(I2C_SR2);
+    wr(NVIC_ICPR0, I2C1_EV_IRQ_BIT);
+
+    // RXNE is a buffer source and must stay out of EV with ITBUFEN disabled.
+    if !wait(I2C_SR1, RXNE, RXNE) {
+        return (0xFFFF, false, false, false);
+    }
+    let rxne_isolated = rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT == 0;
+    wr(I2C_CR1, PE); // NACK the second (final) byte while the first stays in DR
+    if !wait(I2C_SR1, BTF, BTF) {
+        return (0xFFFF, false, rxne_isolated, false);
+    }
+    let btf_irq = rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT != 0;
+
+    let msb = rd(I2C_DR) as u8; // second byte moves from shift register into DR
+    wr(NVIC_ICPR0, I2C1_EV_IRQ_BIT);
+    let mut btf_released = true;
+    for _ in 0..16 {
+        btf_released &= rd(I2C_SR1) & BTF == 0;
+        btf_released &= rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT == 0;
+    }
+
+    wr(I2C_CR1, PE | STOP);
+    let idle = wait(I2C_SR2, 0x0002, 0);
+    let lsb = rd(I2C_DR) as u8;
+    let data = u16::from_be_bytes([msb, lsb]);
+    (data, btf_irq, rxne_isolated, btf_released && idle)
 }
 
 /// The fixture MAX31855 is on SPI1 with PA4 as GPIO chip select. Check the

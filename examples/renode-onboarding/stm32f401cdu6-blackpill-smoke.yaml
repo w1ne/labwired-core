@@ -6,8 +6,10 @@
 # a MAX31855 reset frame and checks TXE/RXNE interrupt levels. The I2C1
 # start phase checks SB with ITEVTEN alone; the write-address phase checks TXE
 # with ITBUFEN alone and ADDR with ITEVTEN alone;
-# the pointer byte checks BTF with ITEVTEN alone, and the read phase checks
-# RXNE with ITBUFEN alone and release after DR is read.
+# the pointer byte checks BTF with ITEVTEN alone. The first TMP102 read checks
+# RXNE with ITBUFEN alone and release after DR is read; a second read holds its
+# first byte in DR to check receive BTF with ITEVTEN alone, RXNE source
+# isolation, and the IRQ release when DR is read.
 # A later absent-address probe checks ER IRQ 32. Results print on
 # USART2; USART1 checks TXEIE and RXNEIE assertion/release on IRQ 37, with an
 # injected RX byte. The summary word lands at 0x20017F00 and is 0xB1AC007F on
@@ -31,6 +33,7 @@ assertions:
       - "i2c1 sb_irq=1 ok"
       - "i2c1 btf_irq=1 ok"
       - "i2c1 rxne_buf_irq=1 release=1 ok"
+      - "i2c1 btf_rx_irq=1 rxne_isolated=1 release=1 data=00001980 ok"
       - "i2c1 tmp102=00001900 nack=00000400 buf_irq=1 buf_release=1 ev_irq=1 ev_release=1 er_irq=1 irq_released=1 ok"
       - "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok"
       - "usart1 txe_irq=1 released=1 ok"
