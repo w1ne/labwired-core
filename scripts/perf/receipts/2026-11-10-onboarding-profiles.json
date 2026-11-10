@@ -1,0 +1,162 @@
+{
+  "date": "2026-11-10",
+  "scope": "CPU ALU spin overhead for three runnable onboarding profiles",
+  "base_commit": "9f9a5d89cee48abb7d18d33d16cc2a7b23ae60f9",
+  "cli_source_tree": "bd337da4cdd1269491f7c75614ab35f2362da8ee",
+  "cli_source_note": "Same source tree as Core PR1808; cycle-result correction changes the test command, not this interactive run path.",
+  "cli_build": "cargo build --locked --release -p labwired-cli -j 2",
+  "host": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "rust": "1.95.0 (59807616e 2026-04-14)",
+  "espup": "0.19.0; installed Xtensa Rust 1.97.0.0",
+  "valgrind": "3.24.0",
+  "fixture_sha256": {
+    "esp32": "0cf1bf708a0ebfbddcb3563f435546e255eaf13ec948280b063af5e5dc00f2f0",
+    "stm32": "ce21bd59ba91c14223339281c550e12e85360ab5cbe20cbbe6b4c0383b72be06"
+  },
+  "cli_sha256": "630ad89e3e2d4501430f1aa730d0a2400ca04a160a1e8c0f5cb67d6643f5a62f",
+  "commands": [
+    "python scripts/perf/board_perf.py --cli <built-cli> --boards esp32-devkitc-32e-gpio-smoke,esp32-devkitc-32e-uart1,stm32f103rb-nucleo-bme280-smoke --update --require-all",
+    "python scripts/perf/board_perf.py --cli <built-cli> --boards esp32-devkitc-32e-gpio-smoke,esp32-devkitc-32e-uart1,stm32f103rb-nucleo-bme280-smoke --require-all",
+    "python scripts/perf/board_rtx.py --cli <built-cli> --boards esp32-devkitc-32e-gpio-smoke,esp32-devkitc-32e-uart1,stm32f103rb-nucleo-bme280-smoke",
+    "python -m pytest -q scripts/perf/test_board_perf.py scripts/perf/test_board_rtx.py"
+  ],
+  "measurement": {
+    "contract_failures": [],
+    "matched": {
+      "esp32-devkitc-32e-gpio-smoke": {
+        "fixture": "esp32",
+        "modes": [
+          "step",
+          "batch"
+        ]
+      },
+      "esp32-devkitc-32e-uart1": {
+        "fixture": "esp32",
+        "modes": [
+          "step",
+          "batch"
+        ]
+      },
+      "stm32f103rb-nucleo-bme280-smoke": {
+        "fixture": "stm32",
+        "modes": [
+          "step",
+          "batch"
+        ]
+      }
+    },
+    "measured": {
+      "esp32-devkitc-32e-gpio-smoke": {
+        "batch": 1.4,
+        "step": 977.8
+      },
+      "esp32-devkitc-32e-uart1": {
+        "batch": 1.4,
+        "step": 977.8
+      },
+      "stm32f103rb-nucleo-bme280-smoke": {
+        "batch": 1.5,
+        "step": 921.9
+      }
+    },
+    "never_measured": [],
+    "ok": true,
+    "regressions": [],
+    "skipped": {},
+    "stale": [],
+    "unmeasurable": [],
+    "waived": {}
+  },
+  "regression_check": {
+    "contract_failures": [],
+    "matched": {
+      "esp32-devkitc-32e-gpio-smoke": {
+        "fixture": "esp32",
+        "modes": [
+          "step",
+          "batch"
+        ]
+      },
+      "esp32-devkitc-32e-uart1": {
+        "fixture": "esp32",
+        "modes": [
+          "step",
+          "batch"
+        ]
+      },
+      "stm32f103rb-nucleo-bme280-smoke": {
+        "fixture": "stm32",
+        "modes": [
+          "step",
+          "batch"
+        ]
+      }
+    },
+    "measured": {
+      "esp32-devkitc-32e-gpio-smoke": {
+        "batch": 1.4,
+        "step": 977.8
+      },
+      "esp32-devkitc-32e-uart1": {
+        "batch": 1.4,
+        "step": 977.7
+      },
+      "stm32f103rb-nucleo-bme280-smoke": {
+        "batch": 1.5,
+        "step": 921.9
+      }
+    },
+    "never_measured": [],
+    "ok": true,
+    "regressions": [],
+    "skipped": {},
+    "stale": [],
+    "unmeasurable": [],
+    "waived": {}
+  },
+  "absolute_spin_gate": {
+    "failures": [],
+    "measured": {
+      "esp32-devkitc-32e-gpio-smoke": {
+        "clock_hz": 240000000,
+        "max_rtx": 29.595408568485155,
+        "median_rtx": 22.523200247748452,
+        "min_rtx": 20.678067753716,
+        "repeats": 3,
+        "steps": 240000000,
+        "steps_per_batch": 1023.8
+      },
+      "esp32-devkitc-32e-uart1": {
+        "clock_hz": 240000000,
+        "max_rtx": 27.865025494520946,
+        "median_rtx": 27.584430839693866,
+        "min_rtx": 26.539654250868516,
+        "repeats": 3,
+        "steps": 240000000,
+        "steps_per_batch": 1023.8
+      },
+      "stm32f103rb-nucleo-bme280-smoke": {
+        "clock_hz": 8000000,
+        "max_rtx": 165.20774461494975,
+        "median_rtx": 164.5339501816635,
+        "min_rtx": 162.47513318077523,
+        "repeats": 3,
+        "steps": 8000000,
+        "steps_per_batch": 1023.8
+      }
+    },
+    "minimum_required_rtx": 1.0,
+    "not_measured": {},
+    "ok": true,
+    "rtf": null
+  },
+  "test_result": {
+    "passed": 57,
+    "failed": 0
+  },
+  "limits": [
+    "Synthetic CPU spin only; no application or peripheral-fidelity throughput claim.",
+    "Only these three profiles were remeasured. All pre-existing baseline values remain unchanged.",
+    "No performance threshold or executable-mode requirement was relaxed."
+  ]
+}
