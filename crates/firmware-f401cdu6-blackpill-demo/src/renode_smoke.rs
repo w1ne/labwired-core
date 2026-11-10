@@ -140,13 +140,29 @@ fn main() -> ! {
     let tim_ok = smoke_tim2();
     passed |= (tim_ok as u32) << 2;
 
-    let (temperature, nack_sr1, i2c_ev_irq, i2c_er_irq, i2c_irq_released, i2c_ok) = smoke_i2c1();
+    let (
+        temperature,
+        nack_sr1,
+        i2c_buf_irq,
+        i2c_buf_released,
+        i2c_ev_irq,
+        i2c_ev_released,
+        i2c_er_irq,
+        i2c_irq_released,
+        i2c_ok,
+    ) = smoke_i2c1();
     send(b"i2c1 tmp102=");
     put_hex32(u32::from(temperature));
     send(b" nack=");
     put_hex32(nack_sr1);
+    send(b" buf_irq=");
+    send(if i2c_buf_irq { b"1" } else { b"0" });
+    send(b" buf_release=");
+    send(if i2c_buf_released { b"1" } else { b"0" });
     send(b" ev_irq=");
     send(if i2c_ev_irq { b"1" } else { b"0" });
+    send(b" ev_release=");
+    send(if i2c_ev_released { b"1" } else { b"0" });
     send(b" er_irq=");
     send(if i2c_er_irq { b"1" } else { b"0" });
     send(b" irq_released=");
@@ -223,13 +239,14 @@ fn smoke_tim2() -> bool {
 
 /// Read the fixture TMP102 through the legacy STM32 I2C controller, then probe
 /// an absent address. The exact imported system wires TMP102 at 0x48.
-fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool) {
+fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
     wr(I2C_OAR1, 0x4000 | 0xAA); // bit 14 must be kept at 1 by software
     if rd(I2C_OAR1) & 0xFFFF != 0x40AA {
-        return (0xFFFF, 0, false, false, false, false);
+        return (0xFFFF, 0, false, false, false, false, false, false, false);
     }
-    // FREQ = 16 MHz APB1 (HSI); enable ITERREN, ITEVTEN and ITBUFEN.
-    wr(I2C_CR2, 16 | (1 << 8) | (1 << 9) | (1 << 10));
+    // FREQ = 16 MHz APB1 (HSI). Start with ITBUFEN alone so TXE must drive
+    // the shared EV line; event and error enables are checked separately.
+    wr(I2C_CR2, 16 | (1 << 8) | (1 << 10));
     wr(I2C_CCR, 80); // 100 kHz standard mode
     wr(I2C_TRISE, 17);
     wr(I2C_CR1, 1); // PE
@@ -239,39 +256,116 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool) {
     // after the first byte, clear ACK so the final byte is NACKed.
     wr(I2C_CR1, rd(I2C_CR1) | (1 << 8)); // START
     if !wait(I2C_SR1, 0x0001, 0x0001) {
-        return (0xFFFF, 0, false, false, false, false);
+        return (0xFFFF, 0, false, false, false, false, false, false, false);
     }
     wr(I2C_DR, 0x90); // TMP102 7-bit address 0x48, write
     if !wait(I2C_SR1, 0x0002, 0x0002) {
-        return (0xFFFF, 0, false, false, false, false);
+        return (0xFFFF, 0, false, false, false, false, false, false, false);
+    }
+
+    // ADDR and TXE are both set. With ITEVTEN clear, TXE alone must assert
+    // I2C1_EV through ITBUFEN. Disabling ITBUFEN must release the level even
+    // while TXE remains set.
+    let buffer_irq = rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT != 0;
+    wr(I2C_CR2, 16 | (1 << 8)); // ITERREN only; ITBUFEN off, ITEVTEN off
+    wr(NVIC_ICPR0, I2C1_EV_IRQ_BIT);
+    let mut buffer_irq_released = true;
+    for _ in 0..16 {
+        let _ = rd(I2C_SR1);
+        buffer_irq_released &= rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT == 0;
+    }
+
+    // Now enable ITEVTEN alone. ADDR must assert the same EV line; the
+    // SR1-to-SR2 sequence clears ADDR and releases it while TXE stays set.
+    wr(I2C_CR2, 16 | (1 << 8) | (1 << 9));
+    let mut event_irq = false;
+    for _ in 0..16 {
+        event_irq |= rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT != 0;
     }
     let _ = rd(I2C_SR1);
     let _ = rd(I2C_SR2); // clear ADDR
+    wr(NVIC_ICPR0, I2C1_EV_IRQ_BIT);
+    let mut event_irq_released = true;
+    for _ in 0..16 {
+        let _ = rd(I2C_SR1);
+        event_irq_released &= rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT == 0;
+    }
+
     wr(I2C_DR, 0x00); // temperature register pointer
     if !wait(I2C_SR1, 0x0004, 0x0004) {
         // BTF: pointer byte sent
-        return (0xFFFF, 0, false, false, false, false);
+        return (
+            0xFFFF,
+            0,
+            buffer_irq,
+            buffer_irq_released,
+            event_irq,
+            event_irq_released,
+            false,
+            false,
+            false,
+        );
     }
 
     wr(I2C_CR1, 1 | (1 << 8) | (1 << 10)); // PE | START | ACK
     if !wait(I2C_SR1, 0x0001, 0x0001) {
-        return (0xFFFF, 0, false, false, false, false);
+        return (
+            0xFFFF,
+            0,
+            buffer_irq,
+            buffer_irq_released,
+            event_irq,
+            event_irq_released,
+            false,
+            false,
+            false,
+        );
     }
     wr(I2C_DR, 0x91); // TMP102 address, read
     if !wait(I2C_SR1, 0x0002, 0x0002) {
-        return (0xFFFF, 0, false, false, false, false);
+        return (
+            0xFFFF,
+            0,
+            buffer_irq,
+            buffer_irq_released,
+            event_irq,
+            event_irq_released,
+            false,
+            false,
+            false,
+        );
     }
     let _ = rd(I2C_SR1);
     let _ = rd(I2C_SR2); // clear ADDR; receiver starts clocking
     if !wait(I2C_SR1, 0x0040, 0x0040) {
         // RXNE
-        return (0xFFFF, 0, false, false, false, false);
+        return (
+            0xFFFF,
+            0,
+            buffer_irq,
+            buffer_irq_released,
+            event_irq,
+            event_irq_released,
+            false,
+            false,
+            false,
+        );
     }
     let msb = rd(I2C_DR) as u8;
     wr(I2C_CR1, 1); // PE; NACK the final byte
     wr(I2C_CR1, 1 | (1 << 9)); // request STOP after the final byte
     if !wait(I2C_SR1, 0x0040, 0x0040) {
-        return (0xFFFF, 0, false, false, false, false);
+        return (
+            0xFFFF,
+            0,
+            buffer_irq,
+            buffer_irq_released,
+            event_irq,
+            event_irq_released,
+            false,
+            false,
+            false,
+        );
     }
     let lsb = rd(I2C_DR) as u8;
     let temperature = u16::from_be_bytes([msb, lsb]);
@@ -289,16 +383,35 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool) {
     }
     wr(I2C_CR1, rd(I2C_CR1) | (1 << 8)); // START
     if !wait(I2C_SR1, 0x0001, 0x0001) {
-        return (temperature, 0, false, false, irq_released, false);
+        return (
+            temperature,
+            0,
+            buffer_irq,
+            buffer_irq_released,
+            event_irq,
+            event_irq_released,
+            false,
+            irq_released,
+            false,
+        );
     }
     wr(I2C_DR, 0xA0); // absent EEPROM-style address 0x50, write
     if !wait(I2C_SR1, 0x0400, 0x0400) {
-        return (temperature, 0, false, false, irq_released, false);
+        return (
+            temperature,
+            0,
+            buffer_irq,
+            buffer_irq_released,
+            event_irq,
+            event_irq_released,
+            false,
+            irq_released,
+            false,
+        );
     }
     let sr1 = rd(I2C_SR1);
     let sr2 = rd(I2C_SR2);
     let nack_ok = sr1 & 0x0002 == 0 && sr2 & 0x3 == 0x3; // no ADDR; MSL|BUSY
-    let ev_irq = rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT != 0;
     let er_irq = rd(NVIC_ISPR1) & I2C1_ER_IRQ_BIT != 0;
     wr(I2C_CR1, rd(I2C_CR1) | (1 << 9)); // STOP
     wr(I2C_SR1, !0x0400 & 0xFFFF); // clear AF (rc_w0)
@@ -316,7 +429,10 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool) {
     (
         temperature,
         sr1,
-        ev_irq,
+        buffer_irq,
+        buffer_irq_released,
+        event_irq,
+        event_irq_released,
         er_irq,
         irq_released,
         temperature == 0x1900
@@ -324,7 +440,10 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool) {
             && nack_ok
             && af_cleared
             && nack_idle
-            && ev_irq
+            && buffer_irq
+            && buffer_irq_released
+            && event_irq
+            && event_irq_released
             && er_irq
             && irq_released,
     )
