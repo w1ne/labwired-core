@@ -241,8 +241,8 @@ impl WasmSimulator {
             "esp_log_timestamp",
             "esp_log_early_timestamp",
             "esp_log_writev",
-            "esp_random",
-            "esp_fill_random",
+            // esp_random / esp_fill_random run for real: WDEV_RND_REG is
+            // modelled, and as nops they made Arduino random(n) always 0.
             // The Arduino serial nops that used to sit here are GONE, and so
             // is the fidelity debt they represented. They existed to dodge an
             // Xtensa divide-by-zero in _get_effective_baudrate, whose real
