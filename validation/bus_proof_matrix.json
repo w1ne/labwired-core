@@ -186,6 +186,26 @@
         "note": "the arduino-matrix INA219 cell is a second, independent proof on this chip."
       }
     },
+    "esp32-devkitc-32e-gpio-smoke": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "docs/receipts/2026-11-09-esp32-deep-sleep/sketch/deep_sleep_timer.test.yaml",
+        "test": "uart_contains",
+        "gap": "the receipt PASSES locally via `labwired test --script docs/receipts/2026-11-09-esp32-deep-sleep/sketch/deep_sleep_timer.test.yaml` (stock Arduino-ESP32 timer-wake firmware prints LW_DS_OK over UART0 after three boots; the sibling light-sleep script prints LW_LS_OK) but runs in NO CI lane — no workflow invokes it, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare or prove a SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The chip yaml declares I2C0, but configs/systems/esp32-devkitc-32e-gpio-smoke.yaml attaches no external device and the committed sleep receipts do not perform an I2C transaction.",
+        "lane": "none"
+      }
+    },
     "esp32c3": {
       "in_boards": true,
       "uart": {
