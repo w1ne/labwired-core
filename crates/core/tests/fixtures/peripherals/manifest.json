@@ -4146,6 +4146,63 @@
       ]
     },
     {
+      "device_type": "rain-sensor",
+      "label": "Rain Drop Sensor",
+      "summary": "Rain drop plate + LM393 module (AO on ADC; wetter → lower voltage).",
+      "detail": "Module-level model of the common rain-drop breakout (sensing plate + LM393 board): AO is a 0..Vsupply voltage that falls as the plate gets wetter. Drive the `rain` channel (0..100 %) at runtime; starts at 0 % (dry → high AO). D0 comparator output is not modelled — leave it unwired, or compare AO in firmware.",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        },
+        {
+          "name": "supply_mv",
+          "ty": "float",
+          "doc": "Module supply in millivolts (default 5000)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "rain",
+          "label": "Rain level",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "lm393-moisture",
+      "label": "LM393 Moisture Module",
+      "summary": "Resistive soil/moisture module with LM393 comparator DOUT (LOW=wet, HIGH=dry).",
+      "detail": "Module-level model of the common resistive soil-moisture breakout with an onboard LM393: DOUT is HIGH when the soil is drier than the (fixed 50 %) threshold and LOW when wetter. Drive the `moisture` channel (0..100 %) at runtime; starts at 0 % (dry → DOUT HIGH). AOUT is not modelled — compare DOUT in firmware, or use the capacitive `soil-moisture` part for AOUT.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "dout_pin",
+          "ty": "str",
+          "doc": "DOUT GPIO pin (e.g. \"PA0\" / \"8\"). Defaults to PA0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "moisture",
+          "label": "Moisture",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
       "device_type": "dc-motor",
       "label": "Brushed DC motor",
       "summary": "Configurable deterministic brushed DC motor plant",
