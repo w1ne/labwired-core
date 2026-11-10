@@ -50,13 +50,20 @@ cargo run -q -p labwired-cli -- test \
   --no-uart-stdout
 ```
 
-## Analog GPIO example
+## Analog examples
 
 [`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) routes a generic
 Beta NTC divider and Shockley diode netlist into the modeled PA0/PA1 GPIO inputs.
 This verifies voltage solving and GPIO threshold routing; the threshold ratios
-are test assumptions, and the current ADC model has no external input path. Run
-the end-to-end proof from `core/` with:
+are test assumptions.
+
+[`analog-ntc-diode-adc-system.yaml`](analog-ntc-diode-adc-system.yaml) routes
+the same generic devices to explicit ADC1 IN4/IN5 endpoints.
+[`analog-jfet-terminal-resistance-adc-system.yaml`](analog-jfet-terminal-resistance-adc-system.yaml)
+adds matched level-1 NJF branches with RD/RS on ADC1 IN6–IN9. These fixtures
+prove ADC routing and firmware-visible conversion in the model; their channel
+indices are explicit co-simulation endpoints, with no PAx alias or silicon
+analog capture claimed. Run the end-to-end proofs from `core/` with:
 
 ```bash
 cargo test -p labwired-core --test cosim_nucleo_g071rb_analog
