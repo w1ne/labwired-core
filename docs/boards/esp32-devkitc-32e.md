@@ -8,12 +8,16 @@ ESP32-WROOM-32E module. The GPIO/UART profile is
 
 - The base smoke in `examples/esp32-devkitc-32e/io-smoke.yaml` checks GPIO23
   transitions on J3 pin 2 and the UART0 console marker.
+- Demand rank: ESP32 is rank 1 in the standing list (38% MCU use). This round
+  adds PCNT unit 0 counting rising edges routed from GPIO23 through the classic
+  GPIO input matrix. The smoke drives eight pulses and sets GPIO16 high only
+  when the PCNT readback is eight. ESP32 is rank 1; this is low-cost integration
+  of an existing PCNT model on the same board, not a new board/MCU demand pick.
 - `configs/systems/esp32-devkitc-32e-bme280.yaml` adds an external BME280 model
   at I2C0 address `0x77`, with SDA=GPIO21 (J3 pin 6) and SCL=GPIO22 (J3 pin 3).
   The breakout uses 3V3/GND from J2/J3.
-- Demand rank: ESP32 is rank 1 in the standing list (38% MCU use). This round
-  adds VSPI/SPI3 TX to an external 128x64 SSD1306 SPI OLED on the same board.
-- The SPI system uses SCK=GPIO18, MISO=GPIO19, MOSI=GPIO23, CS=GPIO5, and
+- The earlier SPI addition connects an external 128x64 SSD1306 OLED using
+  SCK=GPIO18, MISO=GPIO19, MOSI=GPIO23, CS=GPIO5, and
   D/C=GPIO17. Its smoke sends the controller initialization sequence and
   paints the full top 8-pixel page, asserted from the OLED framebuffer.
 - The smoke asserts sensor ID `0x60` and temperature raw value `0x082DC0` over
@@ -34,8 +38,10 @@ outputs and per-channel TX_END. This smoke exercises channels 0 and 1; channels
 the modeled scope.
 Wi-Fi/Bluetooth, general-purpose timer APIs, flash boot behavior,
 USB-to-UART hardware, pin-level UART waveforms, full analog behavior, and the
-power LED also remain outside the profile. I2S0/1, UHCI0, PCNT, APB_CTRL and
-DPORT analog-AHB retain fallback windows.
+power LED also remain outside the profile. PCNT is modeled; this smoke covers
+unit 0 channel 0 rising-edge counting. The glitch filter is not modeled, and
+external encoders and pulse sensors are not attached. I2S0/1, UHCI0, APB_CTRL,
+and DPORT analog-AHB retain fallback windows.
 
 The rank-1 RMT smoke is in
 [`examples/esp32-devkitc-32e/rmt-smoke.yaml`](../../examples/esp32-devkitc-32e/rmt-smoke.yaml)
@@ -52,6 +58,12 @@ The rank-1 SPI OLED smoke is in
 with copy-paste Arduino code in the
 [`DevKitC README`](../../examples/esp32-devkitc-32e/README.md). It exercises
 only master TX to the panel; it does not claim SPI MISO slave coverage.
+
+The rank-1 PCNT smoke is in
+[`examples/esp32-devkitc-32e/pcnt-smoke.yaml`](../../examples/esp32-devkitc-32e/pcnt-smoke.yaml)
+with copy-paste Arduino code in the
+[`DevKitC README`](../../examples/esp32-devkitc-32e/README.md). It counts eight
+GPIO23 rising edges and drives GPIO16 high after a matching count.
 
 Live board, module, and sensor status is recorded in
 [`examples/esp32-devkitc-32e/evidence/vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/vendor-status.md).

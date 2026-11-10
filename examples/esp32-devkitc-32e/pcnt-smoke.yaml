@@ -1,0 +1,18 @@
+# ESP32-DevKitC-32E: boot Arduino firmware and require PCNT to count 8 GPIO23 edges.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/devkitc32e_pcnt/firmware.elf"
+  system: "../../configs/systems/esp32-devkitc-32e-pcnt.yaml"
+limits:
+  max_steps: 5000000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_min_steps: 650000
+  stop_when_assertions_pass_settle_steps: 1000
+assertions:
+  - uart_contains: "ESP32_DEVKITC32E_PCNT_UNIT0=8"
+  - gpio_edges:
+      pin: "gpio:23"
+      min_edges: 16
+  - gpio_edges:
+      pin: "gpio:16"
+      min_edges: 1

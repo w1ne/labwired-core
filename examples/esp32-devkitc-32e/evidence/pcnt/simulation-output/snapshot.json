@@ -1,0 +1,55 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      2148492937,
+      1073469424,
+      0,
+      181,
+      3007315967,
+      1061159388,
+      0,
+      181,
+      2148387686,
+      1073469360,
+      0,
+      0,
+      1073472788,
+      0,
+      262176,
+      1073469391
+    ],
+    "pc": 1074288582,
+    "ps": 262176,
+    "window_base": 14,
+    "window_start": 22008,
+    "vecbase": 1074266112
+  },
+  "steps_executed": 1070000,
+  "cycles": 1070000,
+  "instructions": 1070000,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 5000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 1000,
+    "stop_when_assertions_pass_min_steps": 650000
+  },
+  "firmware_hash": "9c1afccdf09e24beed9e72ae408cbfd120b5422b730f36a112c2e9afb4561e3d",
+  "config": {
+    "firmware": "examples/esp32-devkitc-32e/firmware/.pio/build/devkitc32e_pcnt/firmware.elf",
+    "system": "examples/esp32-devkitc-32e/../../configs/systems/esp32-devkitc-32e-pcnt.yaml",
+    "script": "examples/esp32-devkitc-32e/pcnt-smoke.yaml"
+  }
+}

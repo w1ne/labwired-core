@@ -1,0 +1,11 @@
+# ESP32-DevKitC-32E with PCNT unit 0 counting GPIO23 rising edges.
+# Firmware drives GPIO23 and routes that same pad through the GPIO input matrix
+# back into PCNT. This self-loop exercises the on-chip counter without a
+# separate pulse generator; external encoders and sensors are outside this
+# board fixture.
+name: "esp32-devkitc-32e-pcnt"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices: []
+board_io: []

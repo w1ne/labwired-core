@@ -1,22 +1,26 @@
-# ESP32-DevKitC-32E GPIO, UART, BME280 I2C, SPI OLED, RMT, ADC, DAC, and LEDC smokes
+# ESP32-DevKitC-32E GPIO, PCNT, UART, BME280 I2C, SPI OLED, RMT, ADC, DAC, and LEDC smokes
 
 **Demand rank:** ESP32 is rank 1 in the standing list (38% of reported MCU
-use). This round adds a stock Arduino VSPI path to a 128x64 SSD1306 display on
-the exact DevKitC-32E board. This is peripheral depth on the highest-demand
-family, not a new MCU target or board variant.
+use). This round maps PCNT unit 0 to this board profile. Arduino firmware
+generates eight rising edges on GPIO23 / J3 pin 2, counts them through PCNT,
+and sets GPIO16 / J3 pin 12 high only after reading back 8. This is low-cost
+coverage integration of an existing model on the same customer board, not a
+new board/MCU demand pick. An earlier round added the stock Arduino VSPI path
+to a 128x64 SSD1306 display.
 
 ## Board and modeled scope
 
 The board is Espressif's exact **ESP32-DevKitC-32E** with an ESP32-WROOM-32E
 module and 4 MB flash. The narrow board profile exposes classic ESP32 GPIO,
-UART0 console, UART1 TX routed to GPIO16, I2C0, VSPI/SPI3, ADC1 channel 0,
-DAC1/2, LEDC, and RMT TX.
+PCNT unit 0, UART0 console, UART1 TX routed to GPIO16, I2C0, VSPI/SPI3, ADC1
+channel 0, DAC1/2, LEDC, and RMT TX.
 GPIO23 maps to J3 pin 2; it is a header pin, not a built-in LED. For a physical
 blink, connect an LED in series with a resistor from GPIO23 to GND.
 
 | Board connection | MCU behavior | Smoke |
 | --- | --- | --- |
 | J3 pin 2 | GPIO23 | Base smoke toggles the output and requires at least 16 edges |
+| J3 pin 2 | PCNT unit 0, channel 0 | Counts eight rising edges routed from GPIO23; GPIO16 goes high on the exact count |
 | UART0 output | Serial console capture | Base smoke asserts `ESP32_DEVKITC32E_UART0_OK` |
 | J3 pin 12 | UART1 TX routed to GPIO16 | UART1 smoke sends `UUUUUUUU` at 115200 baud and requires GPIO16 edges |
 | J2 GPIO21/GPIO22 | I2C0 SDA/SCL | BME280 smoke reads sensor ID and temperature ADC data |
@@ -67,6 +71,15 @@ least 16 GPIO18 clock transitions; its catalog lacks the SPI OLED, so the
 local display-region assertion is the panel-model evidence. Details and the
 hosted rail assumption are in
 [`evidence/spi-oled/hosted-verification.md`](evidence/spi-oled/hosted-verification.md).
+
+The PCNT acceptance firmware is [`firmware/src/pcnt_smoke.cpp`](firmware/src/pcnt_smoke.cpp).
+It configures PCNT unit 0 channel 0 for rising-edge increments on GPIO23,
+generates eight 100 µs high/low pulses, and reads the counter. GPIO16 is driven
+high only when the count is exactly eight. The local smoke checks the count
+marker, GPIO23 pulse edges, and GPIO16 pass edge. The hosted verifier checks
+GPIO16 high as its behavioral oracle. The PCNT glitch filter is not modeled;
+external pulse sources, encoder decoding, and other units/channels are outside
+this smoke.
 
 Wi-Fi/Bluetooth, timers, flash
 boot behavior, and the 5 V power LED are outside these profiles. The LEDC
@@ -202,6 +215,22 @@ RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
 
 The current board availability check for this profile is in
 [`evidence/ledc/vendor-status.md`](evidence/ledc/vendor-status.md).
+
+Run the PCNT pulse-count smoke from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-devkitc-32e-pcnt \
+  --script examples/esp32-devkitc-32e/pcnt-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-pcnt.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/pcnt \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-pcnt-smoke.sh
+```
+
+This smoke is a GPIO23-to-PCNT input-matrix self-loop. It does not model an
+external encoder or pulse sensor. The local logs and hosted GPIO oracle are in
+[`evidence/pcnt/`](evidence/pcnt/), and live availability is in
+[`evidence/pcnt/vendor-status.md`](evidence/pcnt/vendor-status.md).
 
 Run the RMT + pixel smoke from the repository root:
 

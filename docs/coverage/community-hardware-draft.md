@@ -158,6 +158,64 @@ The deterministic ADC fixture models an injected 1650 mV level. It does not
 model ADC noise, calibration, or the analog attenuation curve, and the
 potentiometer is an external fixture rather than an onboard board component.
 
+This round adds coverage for the existing classic ESP32 PCNT model in the exact
+DevKitC profile. The local smoke counts eight rising edges from GPIO23 / J3 pin
+2 through the GPIO input matrix. GPIO16 / J3 pin 12 is set high only when PCNT reads eight; the
+hosted verifier asserts that output. ESP32 is rank 1; this is low-cost coverage
+integration of an existing model on the same board, not a new board/MCU demand
+pick. It does not model the PCNT glitch filter, encoder decoding,
+or an external encoder/pulse sensor. Board and module availability was checked
+live; see [`PCNT vendor status`](../../examples/esp32-devkitc-32e/evidence/pcnt/vendor-status.md).
+
+Copy-paste Arduino example for eight GPIO23 pulses counted by PCNT unit 0:
+
+```cpp
+#include <Arduino.h>
+#include "driver/pcnt.h"
+
+constexpr gpio_num_t kPulsePin = GPIO_NUM_23;
+constexpr gpio_num_t kPassPin = GPIO_NUM_16;
+
+void setup() {
+  pcnt_config_t config = {};
+  config.pulse_gpio_num = kPulsePin;
+  config.ctrl_gpio_num = PCNT_PIN_NOT_USED;
+  config.channel = PCNT_CHANNEL_0;
+  config.unit = PCNT_UNIT_0;
+  config.pos_mode = PCNT_COUNT_INC;
+  config.neg_mode = PCNT_COUNT_DIS;
+  config.lctrl_mode = PCNT_MODE_KEEP;
+  config.hctrl_mode = PCNT_MODE_KEEP;
+  config.counter_h_lim = 1000;
+  config.counter_l_lim = -1000;
+
+  pinMode(static_cast<uint8_t>(kPassPin), OUTPUT);
+  digitalWrite(static_cast<uint8_t>(kPassPin), LOW);
+  if (pcnt_unit_config(&config) != ESP_OK) return;
+
+  // The driver configures the pulse input, so re-enable its output afterward.
+  pinMode(static_cast<uint8_t>(kPulsePin), OUTPUT);
+  digitalWrite(static_cast<uint8_t>(kPulsePin), LOW);
+  pcnt_counter_pause(PCNT_UNIT_0);
+  pcnt_counter_clear(PCNT_UNIT_0);
+  pcnt_counter_resume(PCNT_UNIT_0);
+
+  for (int i = 0; i < 8; ++i) {
+    digitalWrite(static_cast<uint8_t>(kPulsePin), HIGH);
+    delayMicroseconds(100);
+    digitalWrite(static_cast<uint8_t>(kPulsePin), LOW);
+    delayMicroseconds(100);
+  }
+
+  int16_t count = 0;
+  if (pcnt_get_counter_value(PCNT_UNIT_0, &count) == ESP_OK && count == 8) {
+    digitalWrite(static_cast<uint8_t>(kPassPin), HIGH);
+  }
+}
+
+void loop() {}
+```
+
 ## Remaining demand-ranked entries
 
 Before this page is ready for publication, add reviewed coverage and a

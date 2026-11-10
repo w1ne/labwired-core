@@ -1,7 +1,7 @@
 # Narrow ESP32-DevKitC-32E onboarding profile.
 #
-# The profiles exercise classic ESP32 GPIO23, UART0 console output, remapped
-# UART1 TX on GPIO16, I2C0 with an external BME280, ADC1 channel 0 on GPIO36,
+# The profiles exercise classic ESP32 GPIO23, PCNT unit 0, and UART0 console
+# output, remapped UART1 TX on GPIO16, I2C0 with an external BME280, ADC1 on GPIO36,
 # DAC1/2 on GPIO25/26, LEDC PWM on GPIO23, and VSPI (SPI3) to an external OLED.
 # UART RX, the USB-to-UART bridge, Wi-Fi/Bluetooth, general timers, and the 5 V
 # power LED are outside this profile.
@@ -112,3 +112,11 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/esp32/ledc.yaml"
+
+  - id: "pcnt"
+    type: "esp32_pcnt"
+    base_address: 0x3FF57000
+    size: "4KB"
+    irq: 48
+    config:
+      debug_schema: "../peripherals/esp32/pcnt.yaml"
