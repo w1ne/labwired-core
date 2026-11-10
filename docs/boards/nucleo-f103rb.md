@@ -22,6 +22,13 @@ See the [F103RB example](../../examples/nucleo-f103rb/README.md),
 The additional [BME280 example](../../examples/nucleo-f103rb-bme280/README.md)
 includes wiring, a copy-paste Arduino sketch, and committed smoke evidence.
 
+The narrow BME280 profile also retains the Cortex-M3 SysTick core timer.
+`systick_walk_differential::nucleo_bme280_profile_systick_irq_is_byte_identical`
+loads that exact descriptor and system, then compares 3,000 instruction
+boundaries against the legacy walk. It requires repeated SysTick ISR entries
+and main-loop progress. This engine comparison does not extend the sensor
+smoke or silicon claims.
+
 ## Chip and board files
 
 - Exact chip descriptor: [`stm32f103rb.yaml`](../../configs/chips/stm32f103rb.yaml)

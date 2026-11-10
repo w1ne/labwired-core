@@ -41,6 +41,7 @@ mod common;
 use common::walk_differential::{
     assert_modes_differ, assert_walk_differential, probe_at, run_probed, WalkMode,
 };
+use labwired_config::{Arch, ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
 use labwired_core::peripherals::scb::Scb;
@@ -74,7 +75,10 @@ fn write_word(bus: &mut SystemBus, addr: u64, word: u32) {
 /// the legacy walk (`force_legacy_walk`) to form the reference lane from the
 /// same assembly.
 fn build_machine(scheduler: bool, tick_interval: u32) -> Machine<CortexM> {
-    let mut bus = SystemBus::new();
+    configure_machine(SystemBus::new(), scheduler, tick_interval)
+}
+
+fn configure_machine(mut bus: SystemBus, scheduler: bool, tick_interval: u32) -> Machine<CortexM> {
     let (cpu, _nvic) = configure_cortex_m(&mut bus);
 
     // Mirror the production attach choke for the hand-built SysTick entry.
@@ -104,6 +108,15 @@ fn build_machine(scheduler: bool, tick_interval: u32) -> Machine<CortexM> {
             .downcast_mut::<Scb>()
             .unwrap()
             .force_legacy_walk();
+    }
+    // A from_config bus may have proved its walk deletable before the oracle
+    // pins SysTick/SCB back to the reference mode. Refresh that derived policy.
+    bus.recompute_walk_deletable();
+    if !scheduler {
+        assert!(
+            !bus.legacy_walk_disabled,
+            "reference must retain the legacy walk"
+        );
     }
 
     let mut machine = Machine::new(cpu, bus);
@@ -282,6 +295,74 @@ fn systick_irq_firmware_is_byte_identical_at_interval_1() {
         last.extra("isr_count")
     );
     assert!(last.extra("main_count") > 500, "main loop must run");
+}
+
+/// The narrow NUCLEO-F103RB profile must retain the core timer/IRQ contract.
+/// Load its exact descriptor and system; the generic family bus is not a proxy.
+#[test]
+fn nucleo_bme280_profile_systick_irq_is_byte_identical() {
+    let chip_path = common::root("configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml");
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    assert_eq!(chip.arch, Arch::Arm);
+    assert_eq!(chip.core.as_deref(), Some("cortex-m3"));
+    let system_path = common::root("configs/systems/nucleo-f103rb-bme280.yaml");
+    let mut system = SystemManifest::from_file(&system_path).unwrap();
+    assert_eq!(
+        system_path
+            .parent()
+            .unwrap()
+            .join(&system.chip)
+            .canonicalize()
+            .unwrap(),
+        chip_path.canonicalize().unwrap(),
+        "the system must select the exact profile under test",
+    );
+    system.chip = chip_path.to_string_lossy().into_owned();
+    let build = |mode: WalkMode| {
+        let bus = SystemBus::from_config(&chip, &system).unwrap();
+        let mut machine = configure_machine(bus, !mode.is_legacy_walk(), 1);
+        machine.cpu.sp = (chip.ram.base + chip.ram.size) as u32;
+        load_firmware_systick_counter(&mut machine.bus);
+        machine
+    };
+    assert_modes_differ(
+        uses_scheduler(&build(WalkMode::LegacyWalk)),
+        uses_scheduler(&build(WalkMode::Scheduler)),
+        "NUCLEO-F103RB BME280 SysTick",
+    );
+
+    // Negative control: keep SysTick running but mask TICKINT in the actual
+    // firmware instruction (MOVS r1,#5 instead of #7). The main loop must
+    // execute while the ISR counter stays zero.
+    let mut masked = build(WalkMode::Scheduler);
+    masked.bus.write_u16(0x4A, 0x2105).unwrap();
+    let masked_trace = run_probed(&mut masked, 0x40, 3_000, &extra);
+    let masked_last = masked_trace.last().unwrap();
+    assert_eq!(
+        masked_last.extra("isr_count"),
+        0,
+        "masked SysTick must not enter the ISR"
+    );
+    assert!(
+        masked_last.extra("main_count") > 500,
+        "masked control must execute the main loop"
+    );
+
+    let reference =
+        assert_walk_differential("NUCLEO-F103RB BME280 SysTick", 0x40, 3_000, build, extra);
+    let last = reference.last().unwrap();
+    assert!(
+        last.extra("isr_count") >= 25,
+        "SysTick ISR must execute repeatedly"
+    );
+    assert!(last.extra("main_count") > 500, "main loop must run");
+    eprintln!(
+        "NUCLEO-F103RB BME280: 3000 equal walk/scheduler boundaries; ISR={}, main={}; TICKINT-disabled ISR={}, main={}",
+        last.extra("isr_count"),
+        last.extra("main_count"),
+        masked_last.extra("isr_count"),
+        masked_last.extra("main_count"),
+    );
 }
 
 /// Gate 2: scheduler @ interval 64 vs the walk-on interval-1 golden
