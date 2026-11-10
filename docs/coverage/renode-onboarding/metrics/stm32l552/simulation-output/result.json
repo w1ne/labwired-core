@@ -44,6 +44,7 @@
       "assertion": {
         "uart_ordered": [
           "cpu=cortex-m33 uart=lpuart1",
+          "rxft=lpuart1 threshold=6 isolated=1 asserted=1 repended=1 cleared=1 released=1 ok",
           "rx=lpuart1 rxne_before=1 irq_isolated=1 irq_asserted=1 reasserted=1 data=00000052,00000053 rxne_after=0 irq_released=1 ok",
           "tx_irq lpuart1 txe=1 tc=1 both=1 ok",
           "led=ld1 odr=00000080",
@@ -68,7 +69,7 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      172000,
+      172237,
       24,
       8,
       6554,
@@ -80,12 +81,12 @@
       537067492,
       98,
       429496730,
-      134231221,
+      134233305,
       537067440,
-      134228693,
-      134230116
+      134230777,
+      134232200
     ],
-    "pc": 134230116,
+    "pc": 134232200,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -98,7 +99,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "ecd6d53264589219d1e0054a22936d8b8a6fba9a57ec805ae8670ad01efbd111",
+  "firmware_hash": "9b0818f39110e1b07795a1017ae7074ced0f5f93c9d77ecd4a9758c7f98fd442",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-l552ze-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l552.yaml",
@@ -220,6 +221,12 @@
         "end_cycle": 10000
       },
       {
+        "text": "rxft=lpuart1 threshold=6 isolated=1 asserted=1 repended=1 cleared=1 released=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
         "text": "rx=lpuart1 rxne_before=1 irq_isolated=1 irq_asserted=1 reasserted=1 data=00000052,00000053 rxne_after=0 irq_released=1 ok",
         "cycle_lo": 0,
         "cycle": 10000,
@@ -302,14 +309,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 13604,
+    "text_bytes": 15720,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 13604,
+    "flash_used_bytes": 15720,
     "ram_static_bytes": 0,
     "flash_total_bytes": 524288,
     "ram_total_bytes": 196608,
-    "flash_used_pct": 2.59,
+    "flash_used_pct": 3.0,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -335,68 +342,68 @@
     "cycles": 2000000,
     "instructions": 2000000,
     "steps_executed": 2000000,
-    "memory_reads": 2289,
-    "memory_writes": 100,
-    "peripheral_accesses": 30990,
+    "memory_reads": 2750,
+    "memory_writes": 118,
+    "peripheral_accesses": 31176,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134230118,
+        "pc": 134232202,
         "count": 2462,
         "symbol": "firmware_l552ze_smoke::spin"
       },
       {
-        "pc": 134230120,
+        "pc": 134232204,
         "count": 2461,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134230116,
+        "pc": 134232200,
         "count": 2460,
         "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134226598,
+        "pc": 134228670,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134226786,
+        "pc": 134228888,
         "count": 78,
-        "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
+        "symbol": "<i32>::overflowing_add"
       },
       {
-        "pc": 134226244,
-        "count": 39,
-        "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
-      },
-      {
-        "pc": 134226254,
+        "pc": 134228326,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134226266,
+        "pc": 134228336,
         "count": 39,
         "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
       },
       {
-        "pc": 134226588,
+        "pc": 134228346,
+        "count": 39,
+        "symbol": "<i32>::overflowing_add"
+      },
+      {
+        "pc": 134228680,
         "count": 39,
         "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
       },
       {
-        "pc": 134226608,
+        "pc": 134228690,
         "count": 39,
-        "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
+        "symbol": "<i32>::overflowing_add"
       },
       {
-        "pc": 134226796,
+        "pc": 134228868,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134226806,
+        "pc": 134228878,
         "count": 39,
         "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
       }

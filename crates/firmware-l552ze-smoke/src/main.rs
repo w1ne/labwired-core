@@ -57,6 +57,7 @@ const GPIOG: u32 = 0x4202_1800;
 // TDR @ 0x28.
 const LPUART1: u32 = 0x4000_8000;
 const LPUART_CR1: *mut u32 = LPUART1 as *mut u32;
+const LPUART_CR3: *mut u32 = (LPUART1 + 0x08) as *mut u32;
 const LPUART_BRR: *mut u32 = (LPUART1 + 0x0C) as *mut u32;
 const LPUART_ISR: *const u32 = (LPUART1 + 0x1C) as *const u32;
 const LPUART_RDR: *const u32 = (LPUART1 + 0x24) as *const u32;
@@ -74,6 +75,10 @@ const USART_CR1_TE: u32 = 1 << 3;
 const USART_CR1_TCIE: u32 = 1 << 6;
 const USART_CR1_TXEIE: u32 = 1 << 7;
 const USART_CR1_RXNEIE: u32 = 1 << 5;
+const USART_CR1_FIFOEN: u32 = 1 << 29;
+const USART_CR3_RXFTIE: u32 = 1 << 28;
+const USART_CR3_RXFTCFG: u32 = 0b111 << 25;
+const USART_ISR_RXFT: u32 = 1 << 26;
 
 #[derive(Clone, Copy)]
 struct Led {
@@ -177,6 +182,71 @@ fn report(on: bool, led: Led) {
 
 fn button_level() -> u32 {
     unsafe { (read_volatile((GPIOC + IDR) as *const u32) >> 13) & 1 }
+}
+
+/// Exercise the STM32v2 RX FIFO threshold status and interrupt on the
+/// imported LPUART1 profile. The injected stream starts with six bytes for
+/// this check and leaves `R`, `S` for the separate RXNE smoke below.
+fn smoke_lpuart_rx_fifo_threshold() {
+    let cr1 = unsafe { read_volatile(LPUART_CR1) };
+    unsafe { write_volatile(LPUART_CR1, cr1 | USART_CR1_FIFOEN) };
+
+    let cr3 = unsafe { read_volatile(LPUART_CR3) } & !(USART_CR3_RXFTCFG | USART_CR3_RXFTIE);
+    // RXFTCFG=3 selects the six-byte threshold in the STM32v2 model.
+    unsafe { write_volatile(LPUART_CR3, cr3 | (3 << 25)) };
+    spin(4);
+    let threshold_before = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT != 0;
+    unsafe { write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING) };
+    spin(4);
+    let irq_isolated = unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING == 0;
+
+    unsafe { write_volatile(LPUART_CR3, cr3 | (3 << 25) | USART_CR3_RXFTIE) };
+    spin(4);
+    let irq_asserted = unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING != 0;
+    unsafe { write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING) };
+    spin(4);
+    let irq_repended = unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING != 0;
+
+    let mut first_three = [0u8; 3];
+    for byte in &mut first_three {
+        *byte = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
+    }
+    spin(4);
+    let threshold_cleared = unsafe { read_volatile(LPUART_ISR) } & USART_ISR_RXFT == 0;
+    unsafe {
+        write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING);
+        write_volatile(LPUART_CR3, cr3);
+    }
+    spin(4);
+    let irq_released = unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING == 0;
+
+    // Drain the remaining threshold-test bytes so the following RXNE check
+    // sees exactly the injected `R`, `S` pair.
+    let mut last_three = [0u8; 3];
+    for byte in &mut last_three {
+        *byte = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
+    }
+    unsafe { write_volatile(LPUART_CR1, cr1 & !USART_CR1_FIFOEN) };
+
+    let bytes_ok = first_three == *b"abc" && last_three == *b"def";
+    let ok = threshold_before
+        && irq_isolated
+        && irq_asserted
+        && irq_repended
+        && threshold_cleared
+        && irq_released
+        && bytes_ok;
+    puts(b"rxft=lpuart1 threshold=6 isolated=");
+    putc(if irq_isolated { b'1' } else { b'0' });
+    puts(b" asserted=");
+    putc(if irq_asserted { b'1' } else { b'0' });
+    puts(b" repended=");
+    putc(if irq_repended { b'1' } else { b'0' });
+    puts(b" cleared=");
+    putc(if threshold_cleared { b'1' } else { b'0' });
+    puts(b" released=");
+    putc(if irq_released { b'1' } else { b'0' });
+    puts(if ok { b" ok\n" } else { b" FAIL\n" });
 }
 
 fn smoke_lpuart_rx() {
@@ -429,6 +499,7 @@ fn main() -> ! {
 
     puts(b"NUCLEO-L552ZE-Q SMOKE\n");
     puts(b"cpu=cortex-m33 uart=lpuart1\n");
+    smoke_lpuart_rx_fifo_threshold();
     smoke_lpuart_rx();
     smoke_lpuart_tx_irq();
 
