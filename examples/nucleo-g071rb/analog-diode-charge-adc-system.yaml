@@ -1,0 +1,82 @@
+# Four generic Shockley diode branches isolate depletion and diffusion charge
+# while routing their solved terminal voltages to STM32G071 ADC1 channels. The
+# synthetic 1 uF CJO is intentionally oversized to make the effect measurable
+# at this fixture's 1 us timestep; this is a physics stress case, not a typical
+# small-signal diode card.
+name: nucleo-g071rb-diode-charge-adc
+chip: ../../configs/chips/stm32g071.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: diode_charge_reference_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      supply_v: ui.diode_charge.supply_v
+    outputs:
+      v_sense: adc.adc1.10_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_sense: v(sense)
+      sources:
+        supply_v: Vdrive
+      vdd: 3.3
+  - id: diode_depletion_charge_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      supply_v: ui.diode_charge.supply_v
+    outputs:
+      v_sense: adc.adc1.11_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 CJO=1u VJ=0.7 M=0.5 FC=0.5 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_sense: v(sense)
+      sources:
+        supply_v: Vdrive
+      vdd: 3.3
+  - id: diode_transit_charge_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      supply_v: ui.diode_charge.supply_v
+    outputs:
+      v_sense: adc.adc1.12_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TT=10u TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_sense: v(sense)
+      sources:
+        supply_v: Vdrive
+      vdd: 3.3
+  - id: diode_depletion_and_transit_charge_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      supply_v: ui.diode_charge.supply_v
+    outputs:
+      v_sense: adc.adc1.13_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 CJO=1u VJ=0.7 M=0.5 FC=0.5 TT=10u TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_sense: v(sense)
+      sources:
+        supply_v: Vdrive
+      vdd: 3.3

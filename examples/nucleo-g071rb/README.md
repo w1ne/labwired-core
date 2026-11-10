@@ -63,7 +63,13 @@ the same generic devices to explicit ADC1 IN4/IN5 endpoints.
 adds matched level-1 NJF branches with RD/RS on ADC1 IN6–IN9. These fixtures
 prove ADC routing and firmware-visible conversion in the model; their channel
 indices are explicit co-simulation endpoints, with no PAx alias or silicon
-analog capture claimed. Run the end-to-end proofs from `core/` with:
+analog capture claimed.
+[`analog-diode-charge-adc-system.yaml`](analog-diode-charge-adc-system.yaml)
+routes matched diode branches with depletion charge, transit-time charge, both,
+and neither to ADC1 IN10–IN13. Its deliberately large capacitance and transit
+time make transient charge effects visible at the 1 us boundary; they are a
+physics stress case rather than a typical diode parameter set. Run the
+end-to-end proofs from `core/` with:
 
 ```bash
 cargo test -p labwired-core --test cosim_nucleo_g071rb_analog

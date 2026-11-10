@@ -847,3 +847,156 @@ fn nucleo_g071rb_jfet_terminal_resistances_reach_adc1_alongside_ntc_and_diode() 
         "combined RD and RS increase the external drain voltage beyond either terminal alone: {both} V, {drain} V, {source} V"
     );
 }
+
+#[test]
+fn nucleo_g071rb_diode_depletion_and_transit_charge_reach_adc1_end_to_end() {
+    let system_path = root("configs/systems/nucleo-g071rb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-G071RB profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode netlists");
+    let charge = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-diode-charge-adc-system.yaml",
+    ))
+    .expect("load generic diode depletion/transit charge comparisons");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(charge.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G071 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-G071RB bus");
+
+    const ADCEN: u32 = 1 << 20;
+    bus.write_u32(RCC_APBENR2, ADCEN)
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC1_CR, 0)
+        .expect("leave ADC deep power-down");
+    bus.write_u32(ADC1_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC1_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(bus.read_u32(ADC1_ISR).unwrap() & 1, 0, "ADC1 reports ADRDY");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and four diode charge variants");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic models bind to independent ADC1 channels"
+    );
+    for channel in 4..=13 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.diode_charge.supply_v", 0.0)
+        .expect("initialize diode charge branches at zero volts");
+
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC and diode charge branches before the supply step");
+    assert_eq!(initial_steps.len(), 6, "all six analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected initial ADC route errors: {initial_errors:?}"
+    );
+
+    session
+        .set_signal_number("ui.diode_charge.supply_v", 3.3)
+        .expect("apply a supply step to the four diode branches");
+    let mut samples = Vec::new();
+    for step in 0..800 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the NTC and all four diode branches");
+        assert_eq!(steps.len(), 6, "all six analog branches solve at each step");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "adc.adc1.4_volts");
+        let unrelated_diode_v = signal_voltage(&session, "adc.adc1.5_volts");
+        let reference_v = signal_voltage(&session, "adc.adc1.10_volts");
+        let depletion_v = signal_voltage(&session, "adc.adc1.11_volts");
+        let transit_v = signal_voltage(&session, "adc.adc1.12_volts");
+        let combined_v = signal_voltage(&session, "adc.adc1.13_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "the unrelated 25 °C NTC stays isolated on ADC1_IN4"
+        );
+        assert!(
+            (unrelated_diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated DC diode stays isolated on ADC1_IN5"
+        );
+        assert!(
+            (reference_v - diode_load_line_voltage()).abs() < 2e-5,
+            "uncharged reference should sit at the DC load line {} V, got {reference_v} V at step {step}",
+            diode_load_line_voltage()
+        );
+
+        for (channel, volts) in [
+            (4, ntc_v),
+            (5, unrelated_diode_v),
+            (10, reference_v),
+            (11, depletion_v),
+            (12, transit_v),
+            (13, combined_v),
+        ] {
+            let expected = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32g0_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 conversion must report the voltage on channel {channel}"
+            );
+        }
+        for channel in [6, 7, 8, 9, 14] {
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                u16::MAX,
+                "unrelated ADC1_IN{channel} remains undriven"
+            );
+        }
+
+        samples.push((reference_v, depletion_v, transit_v, combined_v));
+        if step == 0 {
+            assert!(
+                (depletion_v - reference_v).abs() > 0.001,
+                "CJO depletion charge must change the first routed transient: {samples:?}"
+            );
+            assert!(
+                (transit_v - reference_v).abs() > 0.01,
+                "TT diffusion charge must change the first routed transient: {samples:?}"
+            );
+            assert!(
+                (combined_v - reference_v).abs() > 0.01,
+                "combined junction and transit charge must change the first routed transient: {samples:?}"
+            );
+        }
+    }
+
+    let settled = samples.last().expect("transient samples exist");
+    for (label, voltage) in [
+        ("depletion", settled.1),
+        ("transit", settled.2),
+        ("combined", settled.3),
+    ] {
+        assert!(
+            (voltage - settled.0).abs() < 2e-4,
+            "{label} charge branch must settle to the same DC diode load line, got {voltage} V vs {} V",
+            settled.0
+        );
+    }
+}
