@@ -7,7 +7,7 @@ the same mechanism PlatformIO documents for
 and QEMU, pointed at LabWired.
 
 ```
-pio test -e nrf52840_dk
+pio test --without-uploading -e nrf52840_dk
 ```
 
 ```
@@ -18,6 +18,8 @@ test/test_smoke/test_main.c:52: test_string_length    [PASSED]
 -------------- nrf52840_dk:test_smoke [PASSED] Took 2.12 seconds --------------
 ================== 3 test cases: 3 succeeded in 00:00:02.122 ==================
 ```
+
+Use `--without-uploading` because the simulator runs the ELF directly; no J-Link or physical board is needed. This follows PlatformIO's documented Renode/QEMU test workflow.
 
 ## How it works
 
@@ -89,5 +91,5 @@ routed to the UART that the chip model mirrors to stdout (UART0 here).
 The run is deterministic and headless, so it drops straight into CI:
 
 ```yaml
-- run: pio test -e nrf52840_dk
+- run: pio test --without-uploading -e nrf52840_dk
 ```
