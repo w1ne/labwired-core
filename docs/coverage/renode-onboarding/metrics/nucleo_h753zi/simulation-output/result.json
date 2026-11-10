@@ -107,7 +107,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "fe62c6169671e838e1e542c062cad997a70a215f02e5a53913247cbbec8d9aee",
+  "firmware_hash": "5c1500b5a63e814f008f7f01667d507a84145ad50f51c8f9fdd7720f68e64698",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nucleo_h753zi.yaml",
