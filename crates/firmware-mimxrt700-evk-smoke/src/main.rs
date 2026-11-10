@@ -9,6 +9,9 @@ const RESULT: *mut u32 = 0x2000_0000 as *mut u32;
 const PASS: *mut u32 = 0x2000_0004 as *mut u32;
 
 const FLEXCOMM0: usize = 0x4011_0000;
+const NVIC_ISPR0: usize = 0xE000_E200;
+const NVIC_ICPR0: usize = 0xE000_E280;
+const FLEXCOMM0_IRQ_BIT: u32 = 1 << 7;
 const LPUART_VERID: usize = 0x00;
 const LPUART_PARAM: usize = 0x04;
 const LPUART_BAUD: usize = 0x10;
@@ -26,6 +29,7 @@ const STAT_TDRE: u32 = 1 << 23;
 const STAT_TC: u32 = 1 << 22;
 const STAT_RDRF: u32 = 1 << 21;
 const CTRL_TIE_TE: u32 = (1 << 23) | (1 << 19);
+const CTRL_TE: u32 = 1 << 19;
 const CTRL_RE: u32 = 1 << 18;
 const CTRL_RIE: u32 = 1 << 21;
 const FIFO_RXFE: u32 = 1 << 3;
@@ -38,6 +42,23 @@ fn rd(off: usize) -> u32 {
 
 fn wr(off: usize, value: u32) {
     unsafe { write_volatile((FLEXCOMM0 + off) as *mut u32, value) }
+}
+
+fn nvic_irq_pending() -> bool {
+    unsafe { read_volatile(NVIC_ISPR0 as *const u32) & FLEXCOMM0_IRQ_BIT != 0 }
+}
+
+fn clear_nvic_irq_pending() {
+    unsafe { write_volatile(NVIC_ICPR0 as *mut u32, FLEXCOMM0_IRQ_BIT) }
+}
+
+fn wait_nvic_irq_pending(expected: bool) -> bool {
+    for _ in 0..10_000 {
+        if nvic_irq_pending() == expected {
+            return true;
+        }
+    }
+    false
 }
 
 fn putc(b: u8) {
@@ -58,16 +79,22 @@ fn hex(v: u32) {
     }
 }
 
-/// Exercise the imported LPUART RX FIFO and LP_FLEXCOMM receive status.
-/// This checks ISTAT only; the imported profile does not route FLEXCOMM0 to
-/// an NVIC input.
+/// Exercise the imported LPUART RX FIFO, LP_FLEXCOMM receive status, and its
+/// CPU0 NVIC pending line (FLEXCOMM0 IRQ 7).
 fn smoke_lpuart_rx() -> bool {
-    let receiver_off = rd(LPUART_STAT) & STAT_RDRF == 0 && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0;
+    // Leave TE on for the later console output, but disable TIE so the shared
+    // FLEXCOMM line reflects the receive interrupt only. Clear the earlier TX
+    // pending bit before checking the receive gates.
+    wr(LPUART_CTRL, CTRL_TE);
+    clear_nvic_irq_pending();
+    let irq_isolated = wait_nvic_irq_pending(false);
+    let receiver_off =
+        rd(LPUART_STAT) & STAT_RDRF == 0 && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0 && irq_isolated;
 
     // Two injected bytes need the modeled four-entry FIFO enabled. Keep RIE
     // clear while receiving so data-ready and interrupt status are distinct.
     wr(LPUART_FIFO, rd(LPUART_FIFO) | FIFO_RXFE);
-    wr(LPUART_CTRL, CTRL_TIE_TE | CTRL_RE);
+    wr(LPUART_CTRL, CTRL_TE | CTRL_RE);
     let mut queued = false;
     for _ in 0..1_000_000 {
         if rd(LPUART_WATER) >> WATER_RXCOUNT_SHIFT >= 2 {
@@ -76,29 +103,40 @@ fn smoke_lpuart_rx() -> bool {
         }
     }
 
-    let rx_masked =
-        queued && rd(LPUART_STAT) & STAT_RDRF != 0 && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0;
-    wr(LPUART_CTRL, CTRL_TIE_TE | CTRL_RE | CTRL_RIE);
-    let rx_asserted = rd(LPFC_ISTAT) & ISTAT_UARTRX != 0;
+    let rx_masked = queued
+        && rd(LPUART_STAT) & STAT_RDRF != 0
+        && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0
+        && wait_nvic_irq_pending(false);
+    wr(LPUART_CTRL, CTRL_TE | CTRL_RE | CTRL_RIE);
+    let rx_asserted = rd(LPFC_ISTAT) & ISTAT_UARTRX != 0 && wait_nvic_irq_pending(true);
+    clear_nvic_irq_pending();
+    let rx_repend = wait_nvic_irq_pending(true);
 
     let first = rd(LPUART_DATA) & 0xFF;
     let second_still_queued = rd(LPUART_STAT) & STAT_RDRF != 0;
-    wr(LPUART_CTRL, CTRL_TIE_TE | CTRL_RE);
+    wr(LPUART_CTRL, CTRL_TE | CTRL_RE);
     let rx_masked_with_data = second_still_queued
         && rd(LPUART_STAT) & STAT_RDRF != 0
         && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0;
-    wr(LPUART_CTRL, CTRL_TIE_TE | CTRL_RE | CTRL_RIE);
-    let rx_unmasked = rd(LPFC_ISTAT) & ISTAT_UARTRX != 0;
+    clear_nvic_irq_pending();
+    let irq_masked_released = rx_masked_with_data && wait_nvic_irq_pending(false);
+    wr(LPUART_CTRL, CTRL_TE | CTRL_RE | CTRL_RIE);
+    let rx_unmasked = rd(LPFC_ISTAT) & ISTAT_UARTRX != 0 && wait_nvic_irq_pending(true);
 
     let second = rd(LPUART_DATA) & 0xFF;
-    let released = rd(LPUART_STAT) & STAT_RDRF == 0 && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0;
+    clear_nvic_irq_pending();
+    let irq_released = wait_nvic_irq_pending(false);
+    let released =
+        rd(LPUART_STAT) & STAT_RDRF == 0 && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0 && irq_released;
     let ok = receiver_off
         && queued
         && rx_masked
         && rx_asserted
+        && rx_repend
         && first == b'R' as u32
         && second_still_queued
         && rx_masked_with_data
+        && irq_masked_released
         && rx_unmasked
         && second == b'S' as u32
         && released;
@@ -121,6 +159,12 @@ fn smoke_lpuart_rx() -> bool {
     hex(second);
     puts(" released=");
     putc(if released { b'1' } else { b'0' });
+    puts(" irq=");
+    putc(if rx_asserted { b'1' } else { b'0' });
+    putc(if rx_repend { b'1' } else { b'0' });
+    putc(if irq_masked_released { b'1' } else { b'0' });
+    putc(if rx_unmasked { b'1' } else { b'0' });
+    putc(if irq_released { b'1' } else { b'0' });
     puts(if ok { " ok\r\n" } else { " FAIL\r\n" });
     ok
 }
@@ -130,7 +174,7 @@ fn main() -> ! {
     let product: u32;
     unsafe {
         core::arch::asm!(
-            "muls {product}, {right}",
+            "mul {product}, {product}, {right}",
             product = inout(reg) 17u32 => product,
             right = in(reg) 19u32,
             options(nomem, nostack),

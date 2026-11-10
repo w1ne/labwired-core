@@ -27,11 +27,13 @@ peripherals:
   # Renode mimxrt798s.repl flexcomm0 has aliased mappings at 0x40110000 and
   # 0x50110000. The imported CPU0 non-secure profile uses the former. This
   # bounded model implements LP_FLEXCOMM selection/status and its LPUART
-  # function; LPI2C and LPSPI transactions are not modelled.
+  # function; Renode connects FLEXCOMM0 to CPU0 NVIC IRQ 7. LPI2C and LPSPI
+  # transactions are not modelled.
   - id: flexcomm0
     type: imxrt_lpuart
     base_address: 0x40110000
     size: 4KB
+    irq: 7
     config:
       clock_hz: 80000000
       lp_flexcomm: true
