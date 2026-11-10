@@ -328,15 +328,6 @@ pub struct StepProfile {
 /// event-scheduler fast-forward path consults the medium poll quantum.
 #[cfg(feature = "event-scheduler")]
 const WIFI_MEDIUM_IDLE_POLL_QUANTUM: u64 = 8192;
-#[cfg(feature = "event-scheduler")]
-/// When timer-poll coalesce is eligible but nothing is on the scheduler
-/// heap. A remaining-sized (or 1M-cycle) leap jumped past `sleep_until`'s
-/// not-yet-armed alarm, so pico_oled_pwm never printed RTF_READY. Refusing
-/// the skip entirely blocked SYSTIMER/millis busy-polls that never arm an
-/// alarm (C3 loop that also samples a GPIO). 8192 cycles is 65 µs at
-/// 125 MHz: large enough for a poll loop to skip, small enough not to
-/// overshoot a typical `sleep_ms` deadline.
-const TIMER_POLL_UNARMED_QUANTUM: u64 = 8192;
 
 pub struct Machine<C: Cpu> {
     pub cpu: C,
@@ -1727,8 +1718,10 @@ impl<C: Cpu> Machine<C> {
                 // arms the alarm pool entry. A remaining-sized leap here
                 // jumped past that pending WFE wake. Cap the skip instead
                 // of refusing it, so a SYSTIMER/millis busy-poll still
-                // advances when no alarm is ever armed.
-                budget = budget.min(TIMER_POLL_UNARMED_QUANTUM);
+                // advances when no alarm is ever armed. Reuse the existing
+                // 8192-cycle medium-poll quantum (65 µs at 125 MHz) rather
+                // than adding another event-scheduler cfg site.
+                budget = budget.min(WIFI_MEDIUM_IDLE_POLL_QUANTUM);
             }
 
             // Tiny windows are not worth the skip bookkeeping on the timer-poll
