@@ -575,7 +575,7 @@ fn ram_base(chip: &str) -> u64 {
     match chip {
         "esp32c3" => 0x3FC8_0000,
         "esp32c6" => 0x4080_0000,
-        "esp32" | "esp32s3" | "esp32s3-zero" | "esp32-devkitc-32e-gpio-smoke" => 0x3FFC_0000,
+        "esp32" | "esp32s3" | "esp32s3-zero" | "esp32-devkitc-32e-gpio-smoke" | "esp32-devkitc-32e-uart1" => 0x3FFC_0000,
         _ => 0x2000_0000,
     }
 }
@@ -904,7 +904,7 @@ fn family_of(chip: &str) -> Family {
         Family::Esp32c3
     } else if chip == "esp32c6" {
         Family::Esp32c6
-    } else if chip == "esp32" || chip == "esp32-devkitc-32e-gpio-smoke" {
+    } else if chip == "esp32" || chip == "esp32-devkitc-32e-gpio-smoke" || chip == "esp32-devkitc-32e-uart1" {
         Family::Esp32
     } else if chip.starts_with("efr32") {
         Family::Efr32s2

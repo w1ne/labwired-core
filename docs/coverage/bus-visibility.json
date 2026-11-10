@@ -130,6 +130,12 @@
   },
   {
     "buses": [
+      "UART"
+    ],
+    "name": "esp32-devkitc-32e-uart1"
+  },
+  {
+    "buses": [
       "I2C",
       "SPI",
       "UART"

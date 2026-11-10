@@ -442,6 +442,18 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival"),
     },
     ChipConf {
+        name: "esp32-devkitc-32e-uart1",
+        yaml: "configs/chips/esp32-devkitc-32e-uart1.yaml",
+        reset_oracle: None,
+        // Narrow DevKitC-32E UART1 onboarding profile of the same LX6 SoC as
+        // `esp32`. The boards.yml cell runs the committed Tier-1 ELF
+        // (docs-runnable expects TIER1 clock PASS). There is no dedicated
+        // firmware_survival rust test yet — this profile only models
+        // UART0/UART1/GPIO, so claiming the gpio-smoke TIER1-done gate would
+        // be dishonest. Honest L0 until that gate exists. No silicon capture.
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32f401cdu6",
         yaml: "configs/chips/stm32f401cdu6.yaml",
         reset_oracle: None,
