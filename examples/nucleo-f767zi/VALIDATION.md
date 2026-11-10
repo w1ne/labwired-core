@@ -42,6 +42,21 @@ Pass criteria: exit `0`, UART contains `OK`.
 
 Pass criteria: exit `0`, report exists.
 
+## 4) Run analog transient integration proof
+
+```bash
+cargo test -p labwired-core --test cosim_nucleo_f767zi_analog \
+  nucleo_f767zi_diode_depletion_and_transit_charge_reach_adc1_end_to_end -- --nocapture
+```
+
+The proof drives four generic diode netlists from a shared supply step. It compares
+otherwise-identical reference, CJO-only, TT-only, and combined CJO+TT branches, checks
+their first-step voltages through ADC1 channels 2–5, and verifies that all four return
+to the same DC load line. The existing Beta NTC remains on channel 0 as an unrelated
+analog device and channel 6 is asserted undriven. The synthetic 1 µF CJO is deliberately
+oversized to make its effect visible at the fixture's 1 µs step. This is model/routing
+coverage, not silicon validation.
+
 ## Validation record
 
 - 2026-08-05: UART smoke exit 0 (`OK` received) on the feat/stm32f767 branch;

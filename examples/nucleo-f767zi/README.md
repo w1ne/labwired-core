@@ -33,3 +33,4 @@ across F4/F7. What this proves and what it cannot: VALIDATION.md.
 4. `EXTERNAL_COMPONENTS.md`: external component declaration.
 5. `analog-zener-breakdown.yaml`: generic reverse-breakdown diode netlist routed to PA5 / ADC1_IN5.
 6. `analog-jfet-gate-thermometer.yaml`: matched NJF gate-junction thermometers at 25 °C and 85 °C routed to PA6 / PA7 (ADC1_IN6 / ADC1_IN7).
+7. `analog-diode-charge.yaml`: matched diode branches isolate CJO depletion and TT diffusion charge on PA2–PA5 / ADC1_IN2–IN5; the integration test checks transient ADC samples and DC settling beside the independent NTC route. Its synthetic 1 µF CJO is intentionally oversized for visibility at a 1 µs step, not a representative small-signal diode card.
