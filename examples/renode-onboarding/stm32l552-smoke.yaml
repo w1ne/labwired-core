@@ -9,6 +9,7 @@ uart_injections:
   - uart: "lpuart1"
     bytes: "R"
 assertions:
+  - uart_regex: "^NUCLEO-L552ZE-Q SMOKE"
   - uart_contains: "NUCLEO-L552ZE-Q SMOKE"
   - uart_ordered:
       - "cpu=cortex-m33 uart=lpuart1"

@@ -262,6 +262,8 @@ fn main() -> ! {
 
         // MSI 4 MHz / 115200 with the LPUART 256x divider.
         write_volatile(LPUART_BRR, 0x22B9);
+        // The UART model must not capture a TDR write until UE and TE are set.
+        write_volatile(LPUART_TDR, b'!' as u32);
         write_volatile(LPUART_CR1, USART_CR1_UE | USART_CR1_TE | USART_CR1_RE);
     }
 

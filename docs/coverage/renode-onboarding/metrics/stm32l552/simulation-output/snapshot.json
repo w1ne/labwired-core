@@ -17,10 +17,10 @@
       3,
       429496730,
       537067464,
-      134225871,
-      134227236
+      134225875,
+      134227242
     ],
-    "pc": 134227236,
+    "pc": 134227242,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "873351d49da35398d578a3e8d33a7ad2a0cdfdd69aa35f2f6fcbe701a4a10c66",
+  "firmware_hash": "b4def9d845d7bca957c95a3c1e1441c1f7a7f2388adc3a7e85e42b783285676e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-l552ze-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l552.yaml",

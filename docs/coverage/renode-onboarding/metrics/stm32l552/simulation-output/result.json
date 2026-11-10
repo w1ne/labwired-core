@@ -30,6 +30,12 @@
   "assertions": [
     {
       "assertion": {
+        "uart_regex": "^NUCLEO-L552ZE-Q SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "NUCLEO-L552ZE-Q SMOKE"
       },
       "passed": true
@@ -75,10 +81,10 @@
       3,
       429496730,
       537067464,
-      134225871,
-      134227236
+      134225875,
+      134227242
     ],
-    "pc": 134227236,
+    "pc": 134227242,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -91,7 +97,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "873351d49da35398d578a3e8d33a7ad2a0cdfdd69aa35f2f6fcbe701a4a10c66",
+  "firmware_hash": "b4def9d845d7bca957c95a3c1e1441c1f7a7f2388adc3a7e85e42b783285676e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-l552ze-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l552.yaml",
@@ -289,10 +295,10 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 10724,
+    "text_bytes": 10728,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 10724,
+    "flash_used_bytes": 10728,
     "ram_static_bytes": 0,
     "flash_total_bytes": 524288,
     "ram_total_bytes": 196608,
@@ -322,25 +328,25 @@
     "cycles": 2000000,
     "instructions": 2000000,
     "steps_executed": 2000000,
-    "memory_reads": 1658,
+    "memory_reads": 1660,
     "memory_writes": 85,
-    "peripheral_accesses": 842,
+    "peripheral_accesses": 843,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134227236,
+        "pc": 134227240,
         "count": 2617,
         "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134227240,
+        "pc": 134227242,
         "count": 2617,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+        "symbol": "firmware_l552ze_smoke::spin"
       },
       {
-        "pc": 134227238,
+        "pc": 134227244,
         "count": 2578,
-        "symbol": "firmware_l552ze_smoke::spin"
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       }
     ]
   }
