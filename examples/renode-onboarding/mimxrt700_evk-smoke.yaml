@@ -3,7 +3,9 @@
 # and disabled on PSP and MSP stacks, plus nested external IRQ preemption, on
 # the exact imported MIMXRT700-EVK system. The smoke checks nested external IRQ
 # preemption and equal/lower-priority deferral until the active handler returns.
-# BASEPRI allows a higher IRQ through. PRIMASK holds all three priority levels
+# BASEPRI and BASEPRI_MAX exercise priority masking and threshold updates;
+# BASEPRI_MAX may tighten, but not loosen or clear, an active threshold.
+# PRIMASK holds all three priority levels
 # pending until unmasking dispatches them in priority order. FAULTMASK also
 # holds all three levels until released, after which the priorities are honored.
 # LPI2C/LPSPI transactions are not modelled or claimed.
@@ -25,7 +27,7 @@ assertions:
   - uart_contains: "msp_noalign_context=0000001f msp_noalign_r0=2468ace0 msp_noalign_xpsr=01000000 msp_noalign_sp=200000dc msp_noalign_after=200000fc restore=1"
   - uart_contains: "nested=000000ff outer=00000017 nested_ipsr=00000018 exc=fffffffd,fffffff1 order=00000002,00000003 active=00000180->00000000 stack=1,1 priorities=00000080,00000020"
   - uart_contains: "deferred=0000007f outer=00000017 exc=fffffffd active=00000080 order=00000002,00000003 after=00000000 stack=1,1 priorities=00000080,00000080,000000c0"
-  - uart_contains: "basepri=000003ff high=00000018/fffffff9 threshold=00000080 active=00000100 pending=00000280 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0"
+  - uart_contains: "basepri=000007ff max=00000080 high=00000018/fffffff9 threshold=00000080 active=00000100 pending=00000280 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0"
   - uart_contains: "primask=000003ff mask=00000001/00000000 pending=00000380/00000280 active=00000000/00000100 high=00000018/fffffff9/00000000 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0"
   - uart_contains: "faultmask=000003ff mask=00000001/00000000 pending=00000380/00000280 active=00000000/00000100 high=00000018/fffffff9/00000000 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0"
   - uart_ordered:
@@ -113,7 +115,7 @@ assertions:
       size: 4
   - memory_value:
       address: 0x20000068
-      expected_value: 0x000003ff
+      expected_value: 0x000007ff
       size: 4
   - memory_value:
       address: 0x2000006c

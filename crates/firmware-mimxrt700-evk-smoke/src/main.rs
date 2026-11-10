@@ -865,6 +865,7 @@ fn exercise_basepri_masking() -> bool {
 
     let msp_before: u32;
     let msp_after: u32;
+    let basepri_after_max: u32;
     let basepri_after: u32;
     unsafe {
         core::arch::asm!(
@@ -873,8 +874,17 @@ fn exercise_basepri_masking() -> bool {
             options(nostack),
         );
         core::arch::asm!(
-            "movs {tmp}, #128",
+            // Start at the weaker threshold, tighten it with BASEPRI_MAX,
+            // then try to loosen and clear it. BASEPRI_MAX must keep 0x80.
+            "movs {tmp}, #192",
             "msr basepri, {tmp}",
+            "movs {tmp}, #128",
+            "msr basepri_max, {tmp}",
+            "movs {tmp}, #160",
+            "msr basepri_max, {tmp}",
+            "movs {tmp}, #0",
+            "msr basepri_max, {tmp}",
+            "mrs {basepri_after_max}, basepri",
             "isb",
             "movw {tmp}, #0x380",
             "str {tmp}, [{pending}]",
@@ -907,6 +917,7 @@ fn exercise_basepri_masking() -> bool {
             high_order = in(reg) addr_of!(BASEPRI_HIGH_IPSR) as u32,
             equal_order = in(reg) addr_of!(BASEPRI_EQUAL_ORDER) as u32,
             lower_order = in(reg) addr_of!(BASEPRI_LOWER_ORDER) as u32,
+            basepri_after_max = out(reg) basepri_after_max,
             count = out(reg) _,
             count_after = out(reg) _,
             seen = out(reg) _,
@@ -954,11 +965,14 @@ fn exercise_basepri_masking() -> bool {
         | (u32::from(equal_order == 2) << 6)
         | (u32::from(lower_order == 3) << 7)
         | (u32::from(active_after == 0 && pending_after == 0) << 8)
-        | (u32::from(msp_after == msp_before) << 9);
+        | (u32::from(msp_after == msp_before) << 9)
+        | (u32::from(basepri_after_max == 0x80) << 10);
     unsafe { write_volatile(BASEPRI_CONTEXT, context) };
 
     puts("\r\nbasepri=");
     hex(context);
+    puts(" max=");
+    hex(basepri_after_max);
     puts(" high=");
     hex(high_ipsr);
     putc(b'/');
@@ -987,7 +1001,7 @@ fn exercise_basepri_masking() -> bool {
     hex(unsafe { read_volatile((NVIC_IPR0 as *const u8).add(9)) as u32 });
     puts("\r\n");
 
-    context == 0x3FF
+    context == 0x7FF
 }
 
 /// PRIMASK holds every configurable priority pending, then release dispatches
@@ -1514,7 +1528,7 @@ fn main() -> ! {
     if unsafe { read_volatile(DEFERRED_CONTEXT) } == 0x7F {
         pass |= 1 << 12;
     }
-    if unsafe { read_volatile(BASEPRI_CONTEXT) } == 0x3FF {
+    if unsafe { read_volatile(BASEPRI_CONTEXT) } == 0x7FF {
         pass |= 1 << 13;
     }
     if unsafe { read_volatile(PRIMASK_CONTEXT) } == 0x3FF {

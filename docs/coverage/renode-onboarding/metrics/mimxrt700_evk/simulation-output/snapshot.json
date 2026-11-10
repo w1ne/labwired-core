@@ -15,12 +15,12 @@
       67174403,
       536870928,
       1074855956,
-      542637816,
+      0,
       542638000,
-      939571327,
-      939571450
+      939571559,
+      939571680
     ],
-    "pc": 939571450,
+    "pc": 939571680,
     "xpsr": 2701131776,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "4baa2d9953b579077c0b46a93e5d5e40d4b96553c2b420a7c03b510405f86793",
+  "firmware_hash": "207da7a8e72e0d8b83b87bf67cf878a11c8569138ae63c814b6ed7f983d3e855",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml",

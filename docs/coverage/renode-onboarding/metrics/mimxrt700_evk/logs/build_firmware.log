@@ -14,24 +14,24 @@ warning: profiles for the non root package will be ignored, specify profiles at 
 package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
 warning: unused variable: `stacked_r0`
-    --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:1819:13
+    --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:1833:13
      |
-1819 |         let stacked_r0 = unsafe { read_volatile(frame) };
+1833 |         let stacked_r0 = unsafe { read_volatile(frame) };
      |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_stacked_r0`
      |
      = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
 
 warning: unused variable: `stacked_pc`
-    --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:1820:13
+    --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:1834:13
      |
-1820 |         let stacked_pc = unsafe { read_volatile(frame.add(6)) };
+1834 |         let stacked_pc = unsafe { read_volatile(frame.add(6)) };
      |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_stacked_pc`
 
 warning: unused variable: `stacked_xpsr`
-    --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:1821:13
+    --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:1835:13
      |
-1821 |         let stacked_xpsr = unsafe { read_volatile(frame.add(7)) };
+1835 |         let stacked_xpsr = unsafe { read_volatile(frame.add(7)) };
      |             ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_stacked_xpsr`
 
 warning: `firmware-mimxrt700-evk-smoke` (bin "firmware-mimxrt700-evk-smoke") generated 3 warnings (run `cargo fix --bin "firmware-mimxrt700-evk-smoke" -p firmware-mimxrt700-evk-smoke` to apply 3 suggestions)
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.15s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.13s
