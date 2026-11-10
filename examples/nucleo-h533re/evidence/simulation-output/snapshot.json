@@ -3,10 +3,10 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1107427352,
-      928,
       537149416,
+      905,
       537149420,
+      2097152,
       0,
       0,
       0,
@@ -15,12 +15,12 @@
       0,
       0,
       0,
-      32,
+      1107427352,
       537149416,
-      2097152,
-      134219946
+      32,
+      134220484
     ],
-    "pc": 134219946,
+    "pc": 134220484,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "172aa63b0959efaebb5a9a145d7299ff784d8c1c946e8bf5ae0f0eb0a5c39680",
+  "firmware_hash": "96eea3fd0658aa0b59765a0fa13a8a872b8cc96babc5e68321ae4f3031026d53",
   "config": {
     "firmware": "examples/nucleo-h533re/../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-h533re-smoke",
     "system": "examples/nucleo-h533re/../../configs/systems/nucleo-h533re.yaml",

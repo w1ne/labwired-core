@@ -6,6 +6,7 @@ inputs:
 limits:
   max_steps: 200000
 assertions:
+  - uart_contains: "H533_USART2_OK"
   - gpio_edges:
       pin: "gpioa:5"
       min_edges: 8

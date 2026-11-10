@@ -9,5 +9,8 @@ Checked live on 2026-11-10 against ST's product pages:
   https://estore.st.com/en/products/evaluation-tools/product-evaluation-tools/mcu-mpu-eval-tools/stm32-mcu-mpu-eval-tools/stm32-nucleo-boards/nucleo-h533re.html
 
 Board wiring is taken from ST UM3121 (MB1814): LD2 is PA5, active high, and
-the user button B1 is PC13, active high by default.
+the user button B1 is PC13, active high by default. UM3121 Table 13's H533RE
+row identifies the default STLINK-V3EC virtual COM route as USART2 on PA2/PA3;
+the simulator captures the USART2 register model and does not emulate the
+STLINK bridge or the pad-level waveform.
 https://www.st.com/resource/en/user_manual/um3121-stm32h5-nucleo64-board-mb1814-stmicroelectronics.pdf
